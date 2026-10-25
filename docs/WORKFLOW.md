@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-22
+updated: 2026-10-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -895,7 +895,7 @@ implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. For the other foreign CLIs,
+not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
 isolation settings are configured on every call, not measured
 by these Pi contracts (the maintainer's decision of 2026-09-30, ADR 0007).
 The loop's Pi flags were first measured by hand on the pinned version;

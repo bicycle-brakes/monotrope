@@ -143,6 +143,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -223,8 +224,9 @@ def _pi_pin() -> str:
 
 PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
-# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
-REVIEWER_MINUTES = 30
+# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15);
+# raised from 30 by the maintainer on 2026-10-24.
+REVIEWER_MINUTES = 45
 # The exit code of a loop that finished, told apart from the refusal's 2 (R-11 of the review-swarm review).
 CLEAN_CODE = 3
 # `pi --version` that has not ended after this many seconds is a Pi off the pin (spec, criterion 27).
@@ -2235,6 +2237,26 @@ def recorded_2a_session(text: str) -> str | None:
     return found.group(1) if found else None
 
 
+def rejected_review_block(answer: str, thread: str) -> str:
+    """The evidence of a phase-6 answer that is neither six-cell findings nor exactly `No finding.`.
+
+    The block stands beside the authoritative phase-6 records, never inside them: its heading does
+    not start `## Phase 6`, so the next review is no re-check because of it, and the runner writes
+    no verdict line and no no-finding claim of its own here. The answer stands quoted, so control
+    text it carries - a verdict line, a heading, table rows - stays the reviewer's words; an empty
+    answer is said so plainly. Nothing was released: the loop record stands for the next attempt.
+    """
+    kept = quote_reviewer(answer) if answer.strip() else "The answer was empty or whitespace only."
+    return "\n\n".join(
+        [
+            f"## Rejected phase-6 answer — Codex, {today()}",
+            "The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict "
+            f"was recorded and nothing was released (Codex thread: {thread}). The answer, as it came:",
+            kept,
+        ]
+    )
+
+
 def review(root: Path, change: str) -> None:
     """Phase 6: verdict first, then release and mark the loop rows.
 
@@ -2259,6 +2281,12 @@ def review(root: Path, change: str) -> None:
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
+    # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
+    # boundary): six-cell findings, or exactly `No finding.`. An empty, refused or malformed answer
+    # records no verdict, releases nothing, and stands as rejected evidence for the next attempt.
+    if not rows and answer.strip() != "No finding.":
+        append(ctx.findings, rejected_review_block(answer, thread))
+        raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
@@ -3024,6 +3052,9 @@ VERIFY_SECONDS = 30 * 60
 GIT_SECONDS = 2 * 60
 
 
+UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
+
+
 def tool_state(root: Path) -> dict[str, str]:
     """The digest of the worktree's `.venv/` tree, taken before the model runs (R-21).
 
@@ -3034,7 +3065,24 @@ def tool_state(root: Path) -> dict[str, str]:
     """
     state: dict[str, str] = {}
     venv = root / ".venv"
-    for directory, names, files in os.walk(venv):
+    try:
+        info = venv.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            # Record the root link AND digest its tools: an unchanged link must not hide
+            # overwritten target bytes. os.walk traverses its root even with followlinks=False;
+            # nested directory links remain opaque, and _unlink_cache still rejects this root.
+            state[".venv"] = "link:" + str(venv.readlink())
+    except FileNotFoundError:
+        return state
+    except OSError:
+        return {".venv": UNREADABLE}
+
+    def unreadable_directory(error: OSError) -> None:
+        # os.walk otherwise silently skips failed scandir calls, hiding newly planted caches.
+        path = Path(error.filename) if error.filename is not None else venv
+        state[path.relative_to(root).as_posix()] = UNREADABLE
+
+    for directory, names, files in os.walk(venv, onerror=unreadable_directory):
         for name in sorted([*names, *files]):
             path = Path(directory) / name
             relative = path.relative_to(root).as_posix()
@@ -3044,18 +3092,92 @@ def tool_state(root: Path) -> dict[str, str]:
                 elif path.is_file():
                     state[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
             except OSError:
-                state[relative] = "unreadable"
+                state[relative] = UNREADABLE
     return state
 
 
+def _is_cache_path(relative: str) -> bool:
+    """True for a worktree-relative path below an exact `__pycache__` component inside `.venv/`.
+
+    The component must lie strictly between `.venv/` and the file itself, so a file named
+    `__pycache__` is not its own cache directory. The suffix is irrelevant: the import machinery
+    names `.pyc` today, and pytest's assertion rewriting may not tomorrow.
+    """
+    parts = relative.split("/")
+    return len(parts) > 2 and parts[0] == ".venv" and "__pycache__" in parts[1:-1]
+
+
+def _unlink_cache(root: Path, relative: str) -> bool | None:
+    """Unlink one cache candidate, reached only through real directories; say what happened.
+
+    Every component from `.venv/` down is checked with `lstat`, rejecting a linked root, parent,
+    cache directory or file in the inspected tree (spec criterion 6). This is a check-then-act
+    sequence: a concurrent directory replacement between inspection and `unlink` could redirect
+    deletion outside the tree. It assumes no concurrent filesystem writer; it does not provide
+    race-safe no-follow deletion. Returns `True` when the file was unlinked, `False` when an eligible
+    regular file could not be deleted, and `None` when the path is not a deletable cache file - a symlink, a
+    directory, or already gone - which stays an ordinary difference for the refusal.
+    """
+    parts = relative.split("/")
+    path = root
+    try:
+        for index, part in enumerate(parts):
+            path = path / part
+            info = path.lstat()
+            if index == len(parts) - 1:
+                if not stat.S_ISREG(info.st_mode):
+                    return None
+            elif not stat.S_ISDIR(info.st_mode):
+                return None
+    except OSError:
+        return None  # a component that cannot be stat-ed is not a proven cache file
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
-    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is."""
+    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is.
+
+    A new or content-changed regular file below an exact `__pycache__` component inside `.venv/` is
+    deleted before any runner-owned step: pytest's assertion rewriting writes bytecode there during
+    an attempt, and a deleted cache is rebuilt, so that write is normalized instead of refused (bead
+    coding-harness-q94b). Every other difference keeps the refusal with the first path named. The
+    baseline bookkeeping stays narrow: each successful unlink immediately removes that path's old
+    entry from the shared `before` dictionary, even if a later check fails. This records only the
+    runner's own deletions. Nothing that survives is rebaselined; recreated caches are deleted again.
+    """
     if before is None:
         return None
+
+    def differences(now: dict[str, str]) -> list[str]:
+        return sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+
     now = tool_state(root)
+    cleaned = False
+    for path in sorted(before.keys() | now.keys()):
+        if UNREADABLE in (before.get(path), now.get(path)):
+            return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
+        if not _is_cache_path(path):
+            continue  # retain the difference, but still clean eligible caches that sort later
+        if before.get(path) == now.get(path):
+            continue
+        if before.get(path, "").startswith("link:"):
+            continue  # removing a baseline symlink is never a cache-byte change
+        deleted = _unlink_cache(root, path)
+        if deleted is None:
+            continue  # a linked or non-regular cache-looking path stays a difference
+        if not deleted:
+            return f"`{path}` cannot be deleted, and a tool the attempt wrote is not run"
+        before.pop(path, None)  # record each runner-owned deletion even if a later check fails
+        cleaned = True
+    if cleaned:
+        now = tool_state(root)  # the tree changed through the runner's own deletions
     if now == before:
         return None
-    changed = sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+    changed = differences(now)
     return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"
 
 
@@ -4639,12 +4761,76 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
             parent.unlink()
         parent.mkdir(exist_ok=True)
-    if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+    replace = path.is_symlink() or not path.is_file()
+    if not replace:
+        try:
+            # Matching bytes do not make a hard link safe: a later date stamp would
+            # still write through it to the external target. Detach before reading.
+            replace = path.stat().st_nlink > 1 or path.read_bytes() != content
+        except OSError:
+            # A readable parent can replace an unreadable model-written input. Recovery
+            # uses trusted bytes, so a failed comparison must not prevent that replacement.
+            replace = True
+    if replace:
         if path.is_symlink() or path.is_file():
             path.unlink()
         elif path.is_dir():
             shutil.rmtree(path)
         path.write_bytes(content)
+
+
+def persist_time_entry(
+    root: Path,
+    plan: Path,
+    entry: str,
+    prior: str,
+    inputs_before: dict[Path, bytes],
+    *,
+    accepted: bool,
+    retry: bool,
+    original: BaseException | None = None,
+) -> None:
+    """Persist one completed attempt's entry - the one writer for normal and exceptional departures.
+
+    `retry` persists the entry on the pre-call plan and updates `inputs_before`, so even a failed
+    input restore cannot lose it; every other attempt writes the plan here too. A rejected entry whose
+    destination is missing, unreadable or aliased recovers the pre-call plan safely first: parents
+    are rebuilt and aliases detach from the worktree outward, so a linked external target never
+    receives the write, and model bytes are never restored for it. A failed write fails closed -
+    beside the attempt's own failure when one stands - and never retries, checkpoints or turns a
+    refusal into success. The span must already have ended at the last check that ran; this
+    function only persists it.
+    """
+    try:
+        if retry:
+            # Persist before restoring any other input: that restoration can fail before reaching
+            # the plan. Keep the same trusted bytes in the retry snapshot for a successful restore.
+            content = with_time_entry(prior, entry).encode("utf-8")
+            restore_work_input(root, plan, content)
+            stamp_updated(plan)
+            inputs_before[plan] = content
+            return
+        try:
+            # A parent alias cannot safely be repaired by unlinking the document: that would
+            # remove a path in the alias target. Refuse before reading or writing through it.
+            if plan.parent.resolve() != root.resolve() / plan.relative_to(root).parent:
+                raise Refused("refusing an aliased plan parent")
+            if plan.is_symlink() or plan.stat().st_nlink > 1:
+                raise Refused("refusing an aliased or hard-linked plan")
+            text = with_time_entry(plan.read_text(encoding="utf-8"), entry, prior=prior)
+            plan.write_text(text, encoding="utf-8")
+        except (Refused, OSError, UnicodeDecodeError, RuntimeError):
+            if accepted:
+                raise
+            # A rejected attempt left the plan missing, unreadable or aliased: the trusted pre-call
+            # plan takes the entry, aliases detached, parents repaired, never through a link.
+            restore_work_input(root, plan, with_time_entry(prior, entry).encode("utf-8"))
+        stamp_updated(plan)
+    except (Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
+        message = f"the runner could not write the attempt's time entry to {plan}: {logging_error}"
+        if original is None:
+            raise CallFailed(message) from logging_error
+        raise CallFailed(f"{message}; the attempt's own failure stands: {original}") from original
 
 
 def run_attempts(
@@ -4677,6 +4863,13 @@ def run_attempts(
     every route, the keyless ones included; the block in findings.md and the retry prompt both take that
     one safe text, so a fixture secret a check printed blocks neither the next attempt's leak check nor
     its prompt (bead coding-harness-8hr).
+
+    A completed call keeps its measured time whatever stops the run afterwards: every post-call exit
+    - a refusal, an unreadable or moved HEAD, an unstartable or refusing verifier, diagnostic
+    protection - passes one finalization boundary that persists the attempt's one rejected entry
+    through `persist_time_entry`, then lets the original refusal or failure stand (bead
+    coding-harness-9wp). A call that never completed - a `CallFailed` result, an empty Codex answer
+    included - gets no entry, as preflight refusals get none.
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
@@ -4730,220 +4923,248 @@ def run_attempts(
         call_error: CallFailed | None = None
         answer = ""
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
+        # A completed call keeps its measured entry whatever post-call check then stops the run; a
+        # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
         started_wall, started_mono = utc_now(), monotonic_now()
+        completed = False
+        logged = False
         try:
-            if endpoint == CODEX:
-                # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
-                answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
-                if not answer.strip():
-                    raise CallFailed("codex: the answer is empty")
-            else:
-                answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
-        except CallFailed as error:
-            call_error = error
-        if endpoint == CODEX:
+            # The completion boundary: from here to the verdict, every departure of a completed
+            # attempt - the HEAD checks, both scans, verification, the answer check and diagnostic
+            # protection included - passes the handler below, which persists the attempt's one
+            # rejected entry through the one writer and then lets the original refusal or failure
+            # stand. The boundary never starts a model call, a retry or a checkpoint of its own,
+            # and never resets HEAD.
             try:
-                head_now = _git_output(root, "rev-parse", "HEAD").strip()
-            except Refused as error:
-                raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
-            if head_now != baseline:
-                # A moved HEAD stops the run without a rewrite: resetting a commit the model made
-                # would rewrite history, and the decision is a person's (ADR 0017). Measure its
-                # files before restoring findings alone, so its own statuses go and the audit stays.
-                problem = (
-                    f"the {verb} call moved HEAD from {baseline[:12]} to {head_now[:12]}; "
-                    "history was not rewritten and no runner checkpoint was made"
-                )
-                if unmeasured is None:
-                    try:
-                        moved_files: list[str] | str = attempt_files(root, before, worktree_tree(root))
-                    except (Refused, OSError) as error:
-                        moved_files = str(error)
+                if endpoint == CODEX:
+                    # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
+                    answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
+                    if not answer.strip():
+                        raise CallFailed("codex: the answer is empty")
                 else:
-                    moved_files = unmeasured
+                    answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+            except CallFailed as error:
+                call_error = error
+            else:
+                completed = True
+            if endpoint == CODEX:
+                try:
+                    head_now = _git_output(root, "rev-parse", "HEAD").strip()
+                except Refused as error:
+                    raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
+                if head_now != baseline:
+                    # A moved HEAD stops the run without a rewrite: resetting a commit the model made
+                    # would rewrite history, and the decision is a person's (ADR 0017). Measure its
+                    # files before restoring findings alone, so its own statuses go and the audit stays.
+                    problem = (
+                        f"the {verb} call moved HEAD from {baseline[:12]} to {head_now[:12]}; "
+                        "history was not rewritten and no runner checkpoint was made"
+                    )
+                    if unmeasured is None:
+                        try:
+                            moved_files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                        except (Refused, OSError) as error:
+                            moved_files = str(error)
+                    else:
+                        moved_files = unmeasured
+                    if kept is not None:
+                        restore_findings(kept)
+                    listing = f"- {problem}"
+                    if call_error is not None:
+                        listing += f"\n- {call_error}"
+                    append(
+                        ctx.findings,
+                        quote_block(
+                            attempt_block(
+                                attempt,
+                                route,
+                                protect_diagnostics(listing, key),
+                                protect_files(moved_files, key),
+                                moved_head=True,
+                            ),
+                            key,
+                        ),
+                    )
+                    raise CallFailed(problem) from call_error
+            if call_error is not None:
+                error = call_error
                 if kept is not None:
                     restore_findings(kept)
-                listing = f"- {problem}"
-                if call_error is not None:
-                    listing += f"\n- {call_error}"
-                append(
-                    ctx.findings,
-                    quote_block(
-                        attempt_block(
-                            attempt,
-                            route,
-                            protect_diagnostics(listing, key),
-                            protect_files(moved_files, key),
-                            moved_head=True,
-                        ),
-                        key,
-                    ),
-                )
-                raise CallFailed(problem) from call_error
-        if call_error is not None:
-            error = call_error
-            if kept is not None:
-                restore_findings(kept)
+                exposed = []
+                if key is not None:
+                    # Scrub before the snapshot writes the changed files into the object store.
+                    exposed = remove_changed_credential(root, key, ignored_before)
+                try:
+                    saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+                except OSError as save_error:
+                    saved = f"saving the attempt failed ({save_error})"
+                restored = restore_baseline(root, baseline, allowed, ignored_before)
+                leaked = f"; {credential_message(exposed)}" if exposed else ""
+                raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
+            if key is not None:
+                # Every route scans with the key read in this run - the Sonnet fallback included - before
+                # the second snapshot can write the changed files into the object store (spec, criterion 9).
+                exposed = remove_changed_credential(root, key, ignored_before)
+                if exposed:
+                    if kept is not None:
+                        restore_findings(kept)
+                    raise Refused(credential_message(exposed))
+            if unmeasured is None:
+                # Both snapshots stand around the model call alone: the runner's own writes - the audit
+                # line, the route block, the preparation, the block below - fall outside both of them.
+                try:
+                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                except (Refused, OSError) as error:
+                    files = str(error)
+            else:
+                files = unmeasured
+            cannot_start: CallFailed | None = None
+            formatted: list[str] = []
+            try:
+                problems = verify_attempt(root, ctx.plan, key, formatted, tools)
+            except Refused:
+                if kept is not None:
+                    restore_findings(kept)
+                raise
+            except CallFailed as error:
+                # `make verify` could not be started: no model can repair that, so this attempt's block
+                # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+                if kept is not None:
+                    restore_findings(kept)
+                cannot_start = error
+                lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
+                problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+            # An unchanged hard-linked plan can escape changed-document preparation. Validate the
+            # logging destination independently before deciding the result, even in that case.
+            try:
+                if ctx.plan.resolve() != root.resolve() / ctx.plan.relative_to(root):
+                    raise Refused("refusing an aliased plan destination")
+                if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
+                    raise Refused("refusing an aliased or hard-linked plan destination")
+            except (Refused, OSError, RuntimeError) as error:
+                problems.append(f"The time entry destination is unsafe or unreadable: {error}")
+            try:
+                aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
+            except (OSError, RuntimeError):
+                aliased_parent = True
+            if aliased_parent or not ctx.plan.parent.is_dir():
+                # Detach an alias itself, never a document in its target; recreate missing parents too.
+                # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
+                for path, content in {**inputs_before, ctx.findings: findings_before}.items():
+                    restore_work_input(root, path, content)
+            if not problems and answer_check is not None:
+                problems = answer_check(answer)
+            if problems:
+                # The format line stands first: the step ran before `make verify`, and the next model
+                # learns that the runner formats and whether ruff left findings it could not fix.
+                problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
+                if kept is not None:
+                    # Before the block is appended, so the quoted diagnostics stand beside the rows as
+                    # they were, not beside the model's edits of them.
+                    restore_findings(kept)
+                # The block lands below this attempt's audit line, before the next attempt starts or the
+                # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
+                # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
+                listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
+                files = protect_files(files, key)
+                diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
+                append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+            record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
             exposed = []
             if key is not None:
-                # Scrub before the snapshot writes the changed files into the object store.
+                # The gate runs repository code the model just edited: scan again after it and the
+                # diagnostic block, before finalizing either the verdict or its measured endpoint.
                 exposed = remove_changed_credential(root, key, ignored_before)
-            try:
-                saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
-            except OSError as save_error:
-                saved = f"saving the attempt failed ({save_error})"
-            restored = restore_baseline(root, baseline, allowed, ignored_before)
-            leaked = f"; {credential_message(exposed)}" if exposed else ""
-            raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
-        if key is not None:
-            # Every route scans with the key read in this run - the Sonnet fallback included - before
-            # the second snapshot can write the changed files into the object store (spec, criterion 9).
-            exposed = remove_changed_credential(root, key, ignored_before)
+                if exposed:
+                    if kept is not None and not problems:
+                        restore_findings(kept)
+                    problems.append(credential_message(exposed))
+            # The verdict is in: the runner writes the attempt's span, accepted or rejected,
+            # through the one writer - so a later refusal cannot meet an inline writer and
+            # produce a duplicate. A rejected attempt that will be retried gets its plan back
+            # at the pre-call bytes plus this entry, so the restore below keeps the entry and
+            # drops the model's other plan edits.
+            ended_wall, ended_mono = utc_now(), monotonic_now()
+            terminal_failure: Refused | CallFailed | None = None
             if exposed:
-                if kept is not None:
-                    restore_findings(kept)
-                raise Refused(credential_message(exposed))
-        if unmeasured is None:
-            # Both snapshots stand around the model call alone: the runner's own writes - the audit
-            # line, the route block, the preparation, the block below - fall outside both of them.
-            try:
-                files: list[str] | str = attempt_files(root, before, worktree_tree(root))
-            except (Refused, OSError) as error:
-                files = str(error)
-        else:
-            files = unmeasured
-        cannot_start: CallFailed | None = None
-        formatted: list[str] = []
-        try:
-            problems = verify_attempt(root, ctx.plan, key, formatted, tools)
-        except Refused:
-            if kept is not None:
-                restore_findings(kept)
-            raise
-        except CallFailed as error:
-            # `make verify` could not be started: no model can repair that, so this attempt's block
-            # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
-            if kept is not None:
-                restore_findings(kept)
-            cannot_start = error
-            lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
-            problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
-        # An unchanged hard-linked plan can escape changed-document preparation. Validate the
-        # logging destination independently before deciding the result, even in that case.
-        try:
-            if ctx.plan.resolve() != root.resolve() / ctx.plan.relative_to(root):
-                raise Refused("refusing an aliased plan destination")
-            if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
-                raise Refused("refusing an aliased or hard-linked plan destination")
-        except (Refused, OSError, RuntimeError) as error:
-            problems.append(f"The time entry destination is unsafe or unreadable: {error}")
-        try:
-            aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
-        except (OSError, RuntimeError):
-            aliased_parent = True
-        if aliased_parent or not ctx.plan.parent.is_dir():
-            # Detach an alias itself, never a document in its target; recreate missing parents too.
-            # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
-            for path, content in {**inputs_before, ctx.findings: findings_before}.items():
-                restore_work_input(root, path, content)
-        if not problems and answer_check is not None:
-            problems = answer_check(answer)
-        if problems:
-            # The format line stands first: the step ran before `make verify`, and the next model
-            # learns that the runner formats and whether ruff left findings it could not fix.
-            problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
-            if kept is not None:
-                # Before the block is appended, so the quoted diagnostics stand beside the rows as
-                # they were, not beside the model's edits of them.
-                restore_findings(kept)
-            # The block lands below this attempt's audit line, before the next attempt starts or the
-            # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
-            # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
-            listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
-            files = protect_files(files, key)
-            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-            append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
-        record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
-        exposed = []
-        if key is not None:
-            # The gate runs repository code the model just edited: scan again after it and the
-            # diagnostic block, before finalizing either the verdict or its measured endpoint.
-            exposed = remove_changed_credential(root, key, ignored_before)
-            if exposed:
-                if kept is not None and not problems:
-                    restore_findings(kept)
-                problems.append(credential_message(exposed))
-        # The verdict is in: the runner writes the attempt's span, accepted or rejected. A rejected
-        # attempt that will be retried gets its plan back at the pre-call bytes plus this entry, so the
-        # restore below keeps the entry and drops the model's other plan edits.
-        ended_wall, ended_mono = utc_now(), monotonic_now()
-        entry = time_entry(
-            verb,
-            attempt,
-            route,
-            endpoint[1],
-            not problems,
-            started_wall,
-            ended_wall,
-            max(0, round(ended_mono - started_mono)),
-        )
-        retry_follows = bool(problems) and attempt < len(routes) and cannot_start is None and not exposed
-        try:
-            if retry_follows:
-                # Written by the restore loop below, which never writes through whatever stands there.
-                inputs_before[ctx.plan] = with_time_entry(baseline_time, entry).encode("utf-8")
-            else:
-                # A parent alias cannot safely be repaired by unlinking the document: that would
-                # remove a path in the alias target. Refuse before reading or writing through it.
-                if ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent:
-                    raise Refused("refusing an aliased plan parent")
-                try:
-                    if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
-                        raise Refused("refusing an aliased or hard-linked plan")
-                    text = with_time_entry(ctx.plan.read_text(encoding="utf-8"), entry, prior=baseline_time)
-                    ctx.plan.write_text(text, encoding="utf-8")
-                except (Refused, OSError, UnicodeDecodeError):
-                    if not problems:
-                        raise
-                    # A final rejected attempt left the plan missing, unreadable or without its
-                    # heading: the pre-call plan takes the entry, and the rejection stays as it was.
-                    if ctx.plan.is_symlink() or ctx.plan.is_file():
-                        ctx.plan.unlink()
-                    elif ctx.plan.is_dir():
-                        shutil.rmtree(ctx.plan)
-                    ctx.plan.write_text(with_time_entry(baseline_time, entry), encoding="utf-8")
+                terminal_failure = Refused(credential_message(exposed))
+            elif cannot_start is not None:
+                terminal_failure = CallFailed(
+                    "`make verify` could not be started; why, and the files this attempt changed: "
+                    f"{ctx.findings.relative_to(root)}"
+                )
+                terminal_failure.__cause__ = cannot_start
+            logged = True
+            persist_time_entry(
+                root,
+                ctx.plan,
+                time_entry(
+                    verb,
+                    attempt,
+                    route,
+                    endpoint[1],
+                    not problems,
+                    started_wall,
+                    ended_wall,
+                    max(0, round(ended_mono - started_mono)),
+                ),
+                baseline_time,
+                inputs_before,
+                accepted=not problems,
+                retry=bool(problems) and attempt < len(routes) and cannot_start is None and not exposed,
+                original=terminal_failure,
+            )
+            if terminal_failure is not None:
+                raise terminal_failure
+            if not problems:
+                if before_commit is not None:
+                    before_commit()
+                message = commit_message
+                if record:
+                    # The subject stays the subject; the format line of every attempt that ran the step
+                    # stands below the heading, in the commit that holds the formatted bytes.
+                    message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
+                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                if after_commit is not None:
+                    after_commit()
+                print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
+                return
+            if attempt < len(routes):
+                # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
+                # before the next attempt, comparing bytes so undecodable files are restored too.
+                # The plan comes back at its pre-call bytes plus this attempt's runner entry.
+                # Restoration never writes through a worktree path: whatever stands there (a symlink, a
+                # directory or a file) is removed without being followed, then the bytes are written anew.
+                for path, content in inputs_before.items():
+                    restore_work_input(root, path, content)
                 stamp_updated(ctx.plan)
-        except (Refused, OSError, UnicodeDecodeError) as error:
-            raise CallFailed(f"the runner could not write the attempt's time entry to {ctx.plan}: {error}") from error
-        if exposed:
-            raise Refused(credential_message(exposed))
-        if cannot_start is not None:
-            raise CallFailed(
-                f"`make verify` could not be started; why, and the files this attempt changed: "
-                f"{ctx.findings.relative_to(root)}"
-            ) from cannot_start
-        if not problems:
-            if before_commit is not None:
-                before_commit()
-            message = commit_message
-            if record:
-                # The subject stays the subject; the format line of every attempt that ran the step
-                # stands below the heading, in the commit that holds the formatted bytes.
-                message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
-            if after_commit is not None:
-                after_commit()
-            print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
-            return
-        if attempt < len(routes):
-            # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
-            # before the next attempt, comparing bytes so undecodable files are restored too.
-            # The plan comes back at its pre-call bytes plus this attempt's runner entry.
-            # Restoration never writes through a worktree path: whatever stands there (a symlink, a
-            # directory or a file) is removed without being followed, then the bytes are written anew.
-            for path, content in inputs_before.items():
-                restore_work_input(root, path, content)
-            stamp_updated(ctx.plan)
+        except BaseException as error:
+            # Include interrupts: an exceptional departure of a completed attempt logs first,
+            # rejected, unless the verdict's own write already ran - and the original refusal
+            # or failure then stands as it was. Logging itself failing fails closed, with the
+            # attempt's own failure as the cause.
+            if completed and not logged:
+                ended_wall, ended_mono = utc_now(), monotonic_now()
+                persist_time_entry(
+                    root,
+                    ctx.plan,
+                    time_entry(
+                        verb,
+                        attempt,
+                        route,
+                        endpoint[1],
+                        False,
+                        started_wall,
+                        ended_wall,
+                        max(0, round(ended_mono - started_mono)),
+                    ),
+                    baseline_time,
+                    inputs_before,
+                    accepted=False,
+                    retry=False,
+                    original=error,
+                )
+            raise
     raise CallFailed(closing)
 
 
@@ -5879,7 +6100,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
         elif args.verb == "review-loop":
-            # The three verbs that write the loop record hold it for their whole run (R-14).
+            # The four verbs that own the loop record hold it for their whole run (R-14): review
+            # reads it and releases it too (bead coding-harness-751).
             with holding_record(args.change, Path(args.root)):
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
@@ -5888,6 +6110,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
+        elif args.verb == "review":
+            folder_of(Path(args.root), args.change)
+            # The verdict reads the record and its release removes it, so review owns the record's
+            # lock from its first read through the release (R-14, bead coding-harness-751).
+            with holding_record(args.change, Path(args.root)):
+                review(Path(args.root), args.change)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except CleanStop as error:
