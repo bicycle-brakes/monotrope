@@ -214,3 +214,39 @@ stands; whichever of each pair merges second needs `main` merged in.
 ## CI at 15:10 UTC
 
 Green on #228, #229 and #234 to #246.
+
+# Addendum, 2026-10-25 about 16:40 UTC: pre-review of the eleven pull requests
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed each of
+#234 to #244 before phase 6. Each row was reproduced, then fixed red-first:
+by this session, or by a Sonnet 5.5 subagent whose diff this session read
+before committing. Each change folder's `findings.md` has a section
+"Pre-review by an Opus 5.5 subagent, 2026-10-25" with every row. **This
+stands in for nothing: phase 6 (Codex) is still owed on every pull request.**
+
+| PR | Heaviest rows | Head after the fixes |
+|---|---|---|
+| #234 | 1 minor (a test that could not fail) | `69a3cd7` |
+| #235 | 4 minor; 1 on the not-now list | `90399c6` |
+| #236 | 1 major (named a skipped header line, against decision Q-1 (2)), 6 minor | `25a126a` |
+| #237 | 2 minor (an unquoted interpreter path) | `22627f8` |
+| #238 | 1 major (spec missed the R-2 behaviour), 4 minor | `9d3d25a` |
+| #239 | 4 minor | `30c7d7e` |
+| #240 | 1 minor, 1 nit | `b1693d7` |
+| #241 | 3 major (absolute paths, a trailing full stop, an echoed refusal), 4 minor | `04cf97d` |
+| #242 | 2 minor (argument-list overflow, names read as patterns) | `18d46c1` |
+| #243 | 2 major (line endings let a whole-file change pass, or refused a real stamp), 5 minor | `82a91c9` |
+| #244 | 2 minor (a CRLF fence never closed), 4 nits | `fec1046` |
+
+- **The stack #235, #236, #238** carries the fixes forward by merge commits.
+  The merge into #238 adjusted one planted test line that #238 now rightly
+  refuses; the commit message says why.
+- **When #240 and #228 are both merged,** the `restore_findings(kept)` call
+  from #240 should become #228's `put_findings_back(original=error)`, or
+  that one findings write skips the alias preflight. #240's `findings.md`
+  says so.
+- **Known limits written into the specs** rather than fixed:
+  - #238: a finding without its ID column; phases 6 and 2a do not use the
+    check.
+  - #241: the file check is a heuristic.
+- Hosted CI was green on every head above at 16:37 UTC.
