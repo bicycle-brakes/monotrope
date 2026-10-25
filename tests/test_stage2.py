@@ -13504,3 +13504,35 @@ def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World
     assert "| taken — test_a |" in text
     rows_before = stage2.findings_rows(before)[1]
     assert stage2.findings_rows(text)[1] == rows_before
+
+
+@pytest.mark.parametrize("failure", ["after-commit", "refused"])
+def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # Runner review R-4 (2026-10-25). Planted fault: findings.md is rewound after a failure raised once the
+    # commit exists (HEAD keeps the fixed statuses), or after a Refused stop that must write nothing.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    real = stage2.checkpoint
+
+    def failing(*args, **kwargs):
+        if failure == "refused":
+            raise stage2.Refused("a decided stop that writes nothing")
+        real(*args, **kwargs)
+        raise stage2.CallFailed("the runner checkpoint left a dirty worktree")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") in (1, 2)
+    text = world.text()
+    if failure == "after-commit":
+        committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+        assert "fixed — tests/test_fix.py::test_fix" in committed
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was rewound behind the commit"
+    else:
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was written after a Refused stop"

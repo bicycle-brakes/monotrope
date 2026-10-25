@@ -5126,11 +5126,18 @@ def run_attempts(
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
                 try:
                     checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
-                except (Refused, CallFailed):
+                except CallFailed:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
-                    # restore, so it goes back here (bead coding-harness-rcyf).
-                    if kept is not None:
+                    # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
+                    # exists: after one, HEAD holds those statuses. A `Refused` stop (a credential, a
+                    # recovery the maintainer decided writes nothing) is never followed by a write
+                    # (runner review R-4).
+                    try:
+                        moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    if kept is not None and not moved:
                         restore_findings(kept)
                     raise
                 if after_commit is not None:

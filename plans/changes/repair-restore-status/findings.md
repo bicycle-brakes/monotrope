@@ -35,3 +35,16 @@ Read by the implementing session, so it is no independent review.
   there and their behaviour is unchanged.
 - This change and pull request #228 (restore-symlink-parent) both touch
   `run_attempts`; a merge of the second will need a look at that hunk.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change:
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-4 | MINOR | The handler around `checkpoint` caught `Refused` too, so together with #228 it wrote `findings.md` after the decided no-write `RestorationRefused` stop (reproduced), and it rewound `findings.md` after failures raised once the commit existed, while HEAD kept the `fixed` statuses (read only). | fixed — tests/test_stage2.py::test_findings_stay_when_the_checkpoint_fails_without_a_rollback |
+
+The restore now runs only for a `CallFailed` while HEAD is still the
+baseline; a `Refused` stop is re-raised untouched.
