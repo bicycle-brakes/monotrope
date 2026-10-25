@@ -61,6 +61,7 @@ OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 # A stand-in: one template for both programs, the standard library only.
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
+import fcntl
 import json
 import os
 import sys
@@ -84,7 +85,18 @@ name = Path(sys.argv[0]).name
 alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
-previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def locked(shared):
+    # Parallel members append records larger than one atomic write; every read and append of the log
+    # takes this lock, so no member reads half a line (2026-10-25: JSONDecodeError under the full suite).
+    handle = (here / "calls.lock").open("a")
+    fcntl.flock(handle, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+    return handle
+
+
+with locked(True):
+    previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
@@ -128,7 +140,7 @@ if alias == "pi" and argv == ["--version"]:
 if alias == "pi" and "update" in argv and "--models" in argv:
     # The forced catalog refresh: logged with its scratch environment, never a
     # scripted step.
-    with log.open("a") as handle:
+    with locked(False), log.open("a") as handle:
         handle.write(
             json.dumps(
                 {
@@ -164,7 +176,7 @@ if alias == "pi" and "update" in argv and "--models" in argv:
 if alias == "pi" and "--list-models" in argv:
     # The catalog listing: logged like the refresh, fed from the scenario's
     # catalog so a test can plant a new model or a different provider.
-    with log.open("a") as handle:
+    with locked(False), log.open("a") as handle:
         handle.write(
             json.dumps(
                 {
@@ -219,7 +231,7 @@ record = {
     "marker_paths": found,
     "findings": findings.read_text() if findings.exists() else None,
 }
-with log.open("a") as handle:
+with locked(False), log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
 barrier = step.get("barrier")
 if barrier:
@@ -659,7 +671,8 @@ def test_a_stand_in_contacts_nothing() -> None:
     imported = {
         alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
     } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-    assert imported <= {"json", "os", "sys", "time", "pathlib"}
+    # `fcntl` locks the stand-in's own call log against parallel members; it opens no connection.
+    assert imported <= {"fcntl", "json", "os", "sys", "time", "pathlib"}
 
 
 @pytest.mark.usefixtures("world")
@@ -13570,6 +13583,38 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+def test_the_stand_in_log_survives_parallel_members(world: World) -> None:
+    """A stand-in reads calls.jsonl while parallel members append large records to it; no read may see half a line.
+
+    Seen 2026-10-25 under the full suite: a Flash member failed with `JSONDecodeError: Unterminated string` from
+    the stand-in itself, so a round failed for the test harness, not for the runner. Unlocked, about half of the
+    single rounds below failed; three rounds make the planted fault show almost every time.
+    """
+    members = 64
+    env = {**os.environ, **{f"STAND_IN_BULK_{n}": "x" * 60_000 for n in range(4)}}
+    failures = []
+    for _round in range(3):
+        world.script(pi=[{"stdout": "No finding."}] * members)
+        started = [
+            subprocess.Popen(
+                [str(world.bin / "pi"), "--model", f"opencode-go/m{n}", "-p", "review"],
+                cwd=world.root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for n in range(members)
+        ]
+        for process in started:
+            _out, err = process.communicate(timeout=120)
+            if process.returncode != 0:
+                failures.append(err[-300:])
+    assert failures == [], failures[:2]
+    assert len(world.calls("pi")) == 3 * members
 
 
 # ---------------------------------------------------------------------------
