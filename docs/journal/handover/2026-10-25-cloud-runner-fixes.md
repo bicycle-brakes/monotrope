@@ -166,3 +166,51 @@ model trials:
 
 coding-harness-6ie and coding-harness-83e each hold an open question in
 their bead text, so they were left for the maintainer.
+
+# Addendum, 2026-10-25 about 15:15 UTC
+
+## Whole-runner review and its fixes
+
+An Opus 5.5 subagent reviewed the stage-2 runner read-only, over `main`
+`f8a6b33` with #228 and #234 to #244 merged together. It found six rows,
+each reproduced. Each is fixed red-first in the pull request it came from:
+
+| Row | Severity | Pull request | What it fixes |
+|---|---|---|---|
+| R-1 | MAJOR | #239 | an aliased plan is refused before its ledger marker is cleared, so no write leaves the worktree |
+| R-2 | MAJOR | #238 | an unclosed finding-shaped line alone refuses the round, so it cannot end the loop clean |
+| R-3 | MINOR | #243 | a stamp-only leftover is judged on masked file versions, not by diff line prefixes |
+| R-4 | MINOR | #240 | `findings.md` goes back only before a commit, never after a refused restoration |
+| R-5 | MINOR | #242 | the intent-to-add entries are dropped right after `make verify` |
+| R-6 | MINOR | #241 | an over-long word cannot crash explore's repository-file check |
+
+## A twelfth pull request
+
+**#246** locks the `pi` test stand-in's call log, so parallel swarm members
+no longer race on it. This was the side finding above (the `JSONDecodeError`
+from the stand-in). Its bead was created in this container only; the
+replay commands are in #246's body. Run them with the others above.
+
+## Integration
+
+All thirteen runner pull requests (#228, #234 to #244, #246) were merged
+together on a scratch branch. The conflicts were mechanical: tests appended
+at the end of `tests/test_stage2.py`, and functions inserted next to each
+other in `scripts/stage2.py`. No logic conflict. The merge order above
+stands; whichever of each pair merges second needs `main` merged in.
+
+## #229 (loop-state-block)
+
+- **L3-1 and L3-5: repaired.** The maintainer took both rows in the
+  conversation. A Sonnet 5.5 subagent repaired them instead of Codex
+  (`53e9dda`, then `3b2f1a4` for the frontmatter date). The change folder's
+  `findings.md` records the deviation from ADR 0017.
+- **L3-4: already done** on 2026-10-24 (`72979ad`).
+- **L3-2 and L3-3 (two docstrings): open.** Their wording lives only in the
+  loop record on the maintainer's machine.
+- The loop record still lists L3-1 and L3-5 as open. Mark them there.
+- Hosted CI is green on `3b2f1a4`. Phase 6 is owed.
+
+## CI at 15:10 UTC
+
+Green on #228, #229 and #234 to #246.
