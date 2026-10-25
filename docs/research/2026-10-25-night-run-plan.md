@@ -101,7 +101,8 @@ merges with `--match-head-commit` only when all of the following hold:
 6. #228: re-check of the F6-4 repair. Then #229: phase 6.
 7. #249 and #250: merge `main` in and resolve conflicts (agent), then the
    review loop and phase 6.
-8. Handover pull request in the morning.
+8. #158, if time is left (answer 8).
+9. Handover pull request in the morning.
 
 ## Stop rules
 
