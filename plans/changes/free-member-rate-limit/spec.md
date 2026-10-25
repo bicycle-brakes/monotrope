@@ -53,8 +53,10 @@ Flash swarm (bead coding-harness-pj98; decisions.md Q-1).
   option 2). So the drop does not survive a call in which the next stage
   fails too, and a round whose members all failed, only some of them with a
   rate limit, fails as today: the rate-limited member is called again on the
-  next call. This narrows the maintainer's answer (decisions.md, Q-1) and is
-  put to the maintainer (pre-review row P247-2).
+  next call. This narrows the maintainer's answer (decisions.md, Q-1). The
+  maintainer answered on 2026-10-25 that this change ships the all-rate-limited
+  case and the mixed case moves to bead coding-harness-pj98, with an
+  ADR 0021 amendment and its own interview (decisions.md, Q-2).
 - The Flash round after a drop gets its own `REVIEWER_MINUTES` deadline, so
   one call can take up to two round limits.
 - Retrying a rate-limited member, or treating a paid member's 429 any

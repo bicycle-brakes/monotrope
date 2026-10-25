@@ -59,3 +59,16 @@ loop, accepting that the change then gets no free review. — 2026-10-24
   When every member failed and only some failures count, the attempt fails
   as today: the drop needs a completed round, and an ordinary failure gives
   none. Reason: no new record kind (research, option 2 rejected).
+
+## Q-2 · Where the mixed case goes
+
+**Asked 2026-10-25, in the night run.** Phase 6 (F6-1) found that the spec
+leaves out the mixed case, a round where one free member is rate-limited
+and another fails another way. The maintainer had answered "also solve the
+mixed case".
+
+**Answer (maintainer, conversation, 2026-10-25):** "Ja, Teil 1 jetzt". This
+change ships the case where every free member is rate-limited. The mixed
+case, which remembers a dropped member without a written round, moves to
+bead coding-harness-pj98. It needs an ADR 0021 amendment with its own
+interview.
