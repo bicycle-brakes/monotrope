@@ -102,3 +102,15 @@ Stage-2 call, 2026-10-25: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 553 files, 2140 commits, 12 rules.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 563 files, 2144 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3241–3265 | Stage a substantive document edit, then replace its working copy with HEAD plus only an `updated:` date change. Admission passes because the classifier compares HEAD with disk but never examines the staged contents, although `changed_paths` includes staged changes. A successful checkpoint's `git add -A` then overwrites the staged human edit. The guard must also reject substantive staged differences. [Acceptance criterion 2; non-goal: tolerate no other change.] | Codex | open | — |
+| F-4 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3238–3239; tests/test_stage2.py:13667–13669 | With only an existing `docs/adr/` document's `updated:` date changed, the new protected-prefix check rejects the leftover before comparing its contents. Consequently, `implement`, `draft` and `repair` still refuse this stamp-only tree. The added regression test requires that refusal, whereas the unchanged specification promises admission for stamp-only leftovers without excluding protected documents. The earlier successful-retry gap remains unresolved. [Acceptance criterion 1.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1750d-9433-7b70-8dcd-712b1e0a4a2b, 2026-10-25
+Reviewer session: codex 01a1750d-9433-7b70-8dcd-712b1e0a4a2b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
