@@ -5124,7 +5124,15 @@ def run_attempts(
                     # The subject stays the subject; the format line of every attempt that ran the step
                     # stands below the heading, in the commit that holds the formatted bytes.
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                try:
+                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                except (Refused, CallFailed):
+                    # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
+                    # refused commit's restore just undid the work for; findings.md is kept by that
+                    # restore, so it goes back here (bead coding-harness-rcyf).
+                    if kept is not None:
+                        restore_findings(kept)
+                    raise
                 if after_commit is not None:
                     after_commit()
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")

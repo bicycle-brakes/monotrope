@@ -13484,3 +13484,23 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World) -> None:
+    # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
+    # the refusal, although the restore removed the test it names.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    before = world.text()
+    step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
+    step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 1
+    assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    text = world.text()
+    assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
+    assert "| taken — test_a |" in text
+    rows_before = stage2.findings_rows(before)[1]
+    assert stage2.findings_rows(text)[1] == rows_before
