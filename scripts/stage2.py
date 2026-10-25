@@ -489,7 +489,25 @@ class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
 
 
-class MalformedTable(CallFailed):
+class UnreadableAnswer(CallFailed):
+    """A reviewer answer with no readable row that is not exactly `No finding.` (bead coding-harness-2i9j).
+
+    It carries the scrubbed answer, so the round or `findings.md` can keep it, and names the first
+    non-blank line in its message, so the failure says what the runner could not read.
+    """
+
+    def __init__(self, answer: str, message: str | None = None) -> None:
+        self.answer = answer
+        first = next((line.strip() for line in answer.splitlines() if line.strip()), "")
+        if len(first) > 200:
+            first = first[:200] + "…"
+        super().__init__(
+            message
+            or f"malformed finding output: expected six-cell findings or exactly 'No finding.'; first unrecognised line: '{first}'"
+        )
+
+
+class MalformedTable(UnreadableAnswer):
     """A reviewer answered in table lines and none of them is a six-cell row (bead coding-harness-6jg).
 
     Such an answer is a finding nobody can read, not a failed call: it refuses the whole round, before any
@@ -497,9 +515,31 @@ class MalformedTable(CallFailed):
     `lines` are the offending lines of the already scrubbed answer, as they came.
     """
 
-    def __init__(self, lines: list[str]) -> None:
+    def __init__(self, lines: list[str], answer: str = "") -> None:
         self.lines = lines
-        super().__init__(f"malformed finding table: {len(lines)} table line(s) that are not six-cell rows")
+        super().__init__(answer, f"malformed finding table: {len(lines)} table line(s) that are not six-cell rows")
+
+
+def keep_rejected_answers(ctx: Context, answers: dict[str, str | Exception]) -> None:
+    """Before a refused attempt, append each unreadable answer to `findings.md`, quoted (bead coding-harness-2i9j).
+
+    A refused attempt writes no record (ADR 0021 decision 6), so `findings.md` is where the answer
+    survives, as phase 6 keeps its rejected answer (`rejected_review_block`). The heading starts neither
+    `## Round` nor `## Phase 6`, and every line is quoted, so nothing in it reads as a round or a row.
+    """
+    for member, outcome in answers.items():
+        if isinstance(outcome, UnreadableAnswer) and outcome.answer.strip():
+            append(
+                ctx.findings,
+                "\n\n".join(
+                    [
+                        f"## Rejected review-loop answer — {member}, {today()}",
+                        f"{member} failed: {outcome}. The attempt was refused and wrote no round; "
+                        "the answer, as it came:",
+                        quote_reviewer(outcome.answer),
+                    ]
+                ),
+            )
 
 
 def malformed_refusal(failed: dict[str, MalformedTable]) -> CallFailed:
@@ -824,6 +864,22 @@ def split_row(line: str) -> list[str] | None:
     return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
 
 
+def open_row(line: str) -> list[str] | None:
+    """A finding line that lacks only its closing pipe, as six cells; else None (bead coding-harness-2i9j).
+
+    The one accepted shape: a leading `|`, no closing `|`, exactly six cells, a severity in cell 2. Every
+    other line without a closing pipe stays text, so the six-cell rule stays strict (decision Q-1 (3)).
+    Only reviewer answers go through `parse_rows`; the runner's own tables keep `split_row`'s rule.
+    """
+    stripped = line.strip()
+    if not stripped.startswith("|") or stripped.endswith("|"):
+        return None
+    cells = [cell.strip() for cell in _PIPE.split(stripped[1:])]
+    if len(cells) != 6 or cells[1].upper() not in SEVERITIES:
+        return None
+    return cells
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table."""
     return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
@@ -844,7 +900,10 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
     for line in answer.splitlines():
         cells = split_row(line)
         if cells is None:
-            if line.strip():
+            opened = open_row(line)
+            if opened is not None:
+                rows.append(opened)
+            elif line.strip():
                 rest.append(line)
         elif _furniture(cells) or not any(cell.strip() for cell in cells):
             continue
@@ -2076,9 +2135,9 @@ def run_swarm(
             # can certify a clean round. Commentary beside findings is kept.
             table = [line.strip() for line in rest.splitlines() if split_row(line) is not None]
             if not rows and table:
-                raise MalformedTable(table)
+                raise MalformedTable(table, answer)
             if not rows and answer.strip() != "No finding.":
-                raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+                raise UnreadableAnswer(answer)
             answers[member] = answer
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error
@@ -5822,6 +5881,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
     malformed = {m: answers[m] for m in members if isinstance(answers[m], MalformedTable)}
     if malformed:
+        keep_rejected_answers(ctx, answers)
         raise malformed_refusal(malformed)  # before any replacement or write (bead coding-harness-6jg)
     replaced: list[str] = []
     if stage["kind"] == "paid-swarm":
@@ -5856,12 +5916,14 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
                 answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
                 if isinstance(answers[nxt], MalformedTable):
+                    keep_rejected_answers(ctx, answers)
                     raise malformed_refusal({nxt: answers[nxt]})
                 replaced.append(nxt)
                 current = nxt
         members = [*members, *replaced]
     succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
     if not succeeded:
+        keep_rejected_answers(ctx, answers)
         raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
     numbered: list[list[str]] = []
     statements: list[str] = []
@@ -5906,6 +5968,14 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             "the change needs a round of its own."
         )
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
+    for member in members:
+        outcome = answers[member]
+        if isinstance(outcome, UnreadableAnswer) and outcome.answer.strip():
+            # The answer the runner could not read stands quoted beside its failure line (bead
+            # coding-harness-2i9j), so a table line of it never becomes a row of the round.
+            parts.append(
+                f"{member}'s answer, which the runner could not read, as it came:\n\n{quote_reviewer(outcome.answer)}"
+            )
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
     path = record_dir(change, root) / "loop.md"
