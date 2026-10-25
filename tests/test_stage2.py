@@ -13543,6 +13543,96 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
 
 
+@pytest.mark.parametrize("nested_repository", [False, True])
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(
+    world: World, monkeypatch: pytest.MonkeyPatch, nested_repository: bool
+) -> None:
+    # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
+    # the refusal, although the restore removed the test it names.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    before = world.text()
+    step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
+    step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    real_checkpoint = stage2.checkpoint
+
+    def checkpoint(*args, **kwargs):
+        if nested_repository:
+            # Plant the leftover at the guard boundary; git clean -fd must leave it alone.
+            nested = world.root / "leftover"
+            nested.mkdir()
+            git(nested, "init", "--quiet")
+        return real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 1
+    assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    assert (world.root / "src" / "app.py").read_text() == "value = 1\n", "the refused fix survived"
+    if nested_repository:
+        assert (world.root / "leftover" / ".git").is_dir(), "the fixture lost the nested repository"
+    text = world.text()
+    assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
+    assert "| taken — test_a |" in text
+    rows_before = stage2.findings_rows(before)[1]
+    assert stage2.findings_rows(text)[1] == rows_before
+
+
+def test_findings_stay_when_the_commit_fails_without_a_rollback(world: World) -> None:
+    # Pre-review row P240-1 (2026-10-25). Planted fault: findings.md is rewound after `git commit` itself
+    # failed; the fix and its test stay in the tree, so the `fixed` status naming that test must stay too.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    hook = world.root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\necho hook says no >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD").strip() == head, "the hook did not stop the commit"
+    assert (world.root / "tests" / "test_fix.py").exists(), "the fixture lost the attempt's test"
+    assert "fixed — tests/test_fix.py::test_fix" in world.text(), "findings.md was rewound beside the kept fix"
+
+
+@pytest.mark.parametrize("failure", ["after-commit", "refused"])
+def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # Runner review R-4 (2026-10-25). Planted fault: findings.md is rewound after a failure raised once the
+    # commit exists (HEAD keeps the fixed statuses), or after a Refused stop that must write nothing.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    real = stage2.checkpoint
+
+    def failing(*args, **kwargs):
+        if failure == "refused":
+            raise stage2.Refused("a decided stop that writes nothing")
+        real(*args, **kwargs)
+        raise stage2.CallFailed("the runner checkpoint left a dirty worktree")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") == (2 if failure == "refused" else 1)
+    text = world.text()
+    if failure == "after-commit":
+        committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+        assert "fixed — tests/test_fix.py::test_fix" in committed
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was rewound behind the commit"
+    else:
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was written after a Refused stop"
+
+
 def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
     # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that exists.
     world.plan.write_text(

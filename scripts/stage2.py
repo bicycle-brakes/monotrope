@@ -490,6 +490,10 @@ class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
 
 
+class CheckpointRolledBack(CallFailed):
+    """The commit guard refused the attempt and ran its baseline restore."""
+
+
 class StepTimedOut(CallFailed):
     """A started program ran into its time limit and its whole process group was killed (R-20)."""
 
@@ -4079,13 +4083,13 @@ def checkpoint(
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
         # first, so nothing the runner could not classify stays in the tree (O192-5).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(f"{error}; {restored}") from error
+        raise CheckpointRolledBack(f"{error}; {restored}") from error
     if blocked:
         # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
         # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
         # refused attempt's to lose (P1 and P2 of the #192 review).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(
+        raise CheckpointRolledBack(
             "the attempt changed paths a stage-2 run does not commit: "
             + ", ".join(f"`{path}`" for path in blocked)
             + f"; {restored}"
@@ -5147,7 +5151,24 @@ def run_attempts(
                     # The subject stays the subject; the format line of every attempt that ran the step
                     # stands below the heading, in the commit that holds the formatted bytes.
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                try:
+                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                except CheckpointRolledBack:
+                    # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
+                    # refused commit's restore just undid the work for; findings.md is kept by that
+                    # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
+                    # exists: after one, HEAD holds those statuses. A `Refused` stop (a credential, a
+                    # recovery the maintainer decided writes nothing) is never followed by a write
+                    # (runner review R-4). The explicit rollback signal excludes a failed `git commit`
+                    # that left the fix in place (P240-1). Unrelated leftovers, such as nested Git
+                    # repositories skipped by git clean, do not preserve statuses for removed fixes.
+                    try:
+                        moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    if kept is not None and not moved:
+                        restore_findings(kept)
+                    raise
                 if after_commit is not None:
                     after_commit()
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
