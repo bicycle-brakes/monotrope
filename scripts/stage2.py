@@ -4733,10 +4733,11 @@ def names_a_repository_file(root: Path, answer: str) -> bool:
             continue
         try:
             path = (root / token).resolve()
-        except (OSError, RuntimeError):
+            # exists() raises on a component over the file system's name limit (runner review R-6).
+            if path != base and path.is_relative_to(base) and path.exists():
+                return True
+        except (OSError, RuntimeError, ValueError):
             continue
-        if path != base and path.is_relative_to(base) and path.exists():
-            return True
     return False
 
 

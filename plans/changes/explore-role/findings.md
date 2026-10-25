@@ -36,3 +36,13 @@ Read by the implementing session, so it is no independent review.
 - Risk: research that cites only symbols and no path now fails. The
   phase prompt asks for source paths, so such an answer already misses
   the prompt's form.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change:
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-6 | MINOR | In `names_a_repository_file`, `path.exists()` stood outside the `try`; on Python 3.12 a path-like token with a component over 255 bytes raises "File name too long", so `explore` died with a traceback and the answer was neither appended nor shown (reproduced). | fixed — tests/test_stage2.py::test_an_over_long_word_in_an_exploration_answer_fails_cleanly |

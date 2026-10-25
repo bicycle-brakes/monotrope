@@ -13518,3 +13518,13 @@ def test_an_exploration_answer_without_a_repository_path_fails_and_appends_nothi
     assert "seed fact" in text and text.count("## ") == before.count("## "), "research.md lost what it held"
     err = capsys.readouterr().err
     assert "names no file of the repository" in err and "Bash tool is disabled" in err
+
+
+def test_an_over_long_word_in_an_exploration_answer_fails_cleanly(world: World) -> None:
+    # Runner review R-6 (2026-10-25). Planted fault: path.exists() outside the try raises "File name too long"
+    # for a path-like token with a component over 255 bytes, so explore dies with a traceback.
+    word = "a" * 300 + ".md"
+    assert stage2.names_a_repository_file(world.root, f"see {word} and nothing else") is False
+    assert stage2.names_a_repository_file(world.root, f"see {word} and `src/app.py`") is True
+    world.script(claude=[{"stdout": f"see {word}"}])
+    assert world.run("explore") == 1
