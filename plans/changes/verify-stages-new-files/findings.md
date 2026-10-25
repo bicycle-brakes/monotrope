@@ -67,3 +67,11 @@ Sonnet 5.5 subagent at the orchestrator's direction.
 | P242-3 | NIT | The `intend_new_files` docstring said `restore_baseline` drops the entry. | fixed — docstring now names `verify_attempt` right after `make verify`; no test |
 | P242-4 | NIT | spec.md lacked the criterion that no entry outlives `make verify`, and plan.md lacked ledger rows for the later tests. | fixed — spec.md criterion 3, plan.md ledger rows; checked by scripts/check_criterion_ledger.py |
 | P242-5 | NIT | A nested repository without a commit makes `git add --intent-to-add` fail, so the attempt gets a diagnostic before `make verify` instead of failing later at the checkpoint's `git add -A`. The outcome barely changes; no code change. | accepted — no test |
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
