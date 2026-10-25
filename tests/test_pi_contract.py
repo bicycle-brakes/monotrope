@@ -486,6 +486,8 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
     monkeypatch.setattr(
         stage2, "free_rule", lambda _root: {"provider": "opencode-go", "id_suffix": "", "include": [{"id": model_id}]}
     )
+    # Discovery reads the exclusions of the declaration (DL-B-2) and drops every id when it cannot.
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", tmp_path / "model-endpoints.yaml")
     discovery = stage2.discover_free(tmp_path)
     assert discovery["selected"] == [model_id]
     assert discovery["models_store"] == store
