@@ -80,3 +80,11 @@ the rows below test-first, except P247-2, which goes to the maintainer.
 - **P247-6 (NIT), fixed.** `test_a_time_out_is_never_a_rate_limit` pins the
   time-out exclusion; the drop prints to stdout like the no-diff skip;
   WORKFLOW names the second deadline.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
