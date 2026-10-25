@@ -88,7 +88,7 @@ Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | impl | scripts/stage2.py:5139 | A refused repair that creates an untracked nested Git repository can still leave its rows marked fixed after rollback removes their test and reverts the fix. `git clean -fd` skips the nested repository, so `changed_paths()` remains nonempty, `undone` becomes false, and the findings snapshot is never restored. An unrelated leftover must not preserve statuses for fixes already removed. [Acceptance criterion 1] | Codex | open | — |
+| F-1 | MAJOR | SPEC | impl | scripts/stage2.py:5139 | A refused repair that creates an untracked nested Git repository can still leave its rows marked fixed after rollback removes their test and reverts the fix. `git clean -fd` skips the nested repository, so `changed_paths()` remains nonempty, `undone` becomes false, and the findings snapshot is never restored. An unrelated leftover must not preserve statuses for fixes already removed. [Acceptance criterion 1] | Codex | taken — test: a refused repair that also leaves an untracked nested Git repository gets its findings.md snapshot back, so no row stays marked fixed after the rollback (orchestrator, 2026-10-25) | — |
 
 Phase 6 verdict: codex 01a174b8-3a0f-75a2-ab40-6e23fd6f76b8, 2026-10-25
 Reviewer session: codex 01a174b8-3a0f-75a2-ab40-6e23fd6f76b8 — a fresh session reviewed: no phase-2a session was recorded
