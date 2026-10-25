@@ -44,6 +44,8 @@ PYTHON=.venv/bin/python3 make verify
 
 - 1: tests/test_ci.py::test_the_runner_exports_a_relative_python_as_an_absolute_path — a gate sees a relative or wrongly resolved path.
 - 2: tests/test_ci.py::test_the_runner_prefers_the_checkouts_own_environment — the interpreter choice without `$PYTHON` changed.
+- 2: tests/test_ci.py::test_an_absolute_or_bare_python_reaches_the_gate_unchanged — an absolute or bare `$PYTHON` is rewritten.
+- 2: tests/test_ci.py::test_a_python_path_with_a_space_still_starts_the_gate — a gate starting with `python3` breaks under a directory with a space.
 
 ## Route
 

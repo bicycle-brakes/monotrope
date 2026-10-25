@@ -34,3 +34,23 @@ Read by the implementing session, so it is no independent review.
 - Calling `scripts/kit/probe.py` directly with a relative `PYTHON` still
   hands that path to the foreign repository; only runs through
   `verify_all.sh` are fixed. The non-goal keeps the probe unchanged.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change before the phase-6 Codex review, which this container cannot reach.
+It stands in for nothing: phase 6 is still owed. It found no blocker and
+two minor rows, both reproduced and both fixed by the orchestrating session.
+
+- **P237-1 (MINOR), fixed.** `scripts/verify_all.sh` pasted the now absolute
+  `$PYTHON` unquoted into a gate command for `sh -c`. Under a directory with
+  a space, a gate starting with `python3` failed, where the relative path
+  had worked. The path is now single-quoted, with a quote inside it escaped.
+  Test: `tests/test_ci.py::test_a_python_path_with_a_space_still_starts_the_gate`,
+  red before the fix.
+- **P237-2 (MINOR), fixed.** Criterion 2 cited only the unset case. The new
+  `tests/test_ci.py::test_an_absolute_or_bare_python_reaches_the_gate_unchanged`
+  pins the absolute and bare-name cases; it passed before and after, as
+  criterion 2 expects. The ledger names both new tests.
+- Not now: the runner echoes the literal word `lauf_cmd` instead of the
+  command (`── [<gate>] $ lauf_cmd`). Present on `main` before this change.
