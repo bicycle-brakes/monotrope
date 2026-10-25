@@ -13570,6 +13570,48 @@ def test_a_content_edit_behind_dash_lines_is_no_derived_leftover(world: World) -
 
 _FM = "---\ntitle: T\nupdated: 2026-01-01\n---\n\nBody\n"
 _FM_NEW = _FM.replace("2026-01-01", "2026-10-25")
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_derived_leftover_refuses_a_stamp_with_a_mode_change(world: World, staged: bool) -> None:
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "regular document fixture")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    doc.chmod(0o755)
+    if staged:
+        git(world.root, "add", str(relative))
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("substantive", [False, True])
+def test_derived_leftover_refuses_a_human_decided_document(world: World, substantive: bool) -> None:
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected document fixture")
+    doc.write_text(_FM_NEW + ("Substantive edit\n" if substantive else ""), encoding="utf-8")
+    # Admission must agree with the checkpoint's committed provenance guard.
+    assert relative.as_posix() in stage2.uncommittable(world.root, "demo")
+    # Assert the classification first so the baseline proves the fault by AssertionError.
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
 _LEFTOVER_CASES = [
     # (id, path, HEAD bytes, worktree bytes, tolerated)
     ("lf-stamp", "n.md", _FM, _FM_NEW, True),

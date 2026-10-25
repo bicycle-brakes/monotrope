@@ -3230,6 +3230,15 @@ def derived_leftover(root: Path, relative: Path) -> bool:
     verify), a file whose only difference from `HEAD` is its `updated:` line (the date stamp), and Python
     bytecode under `__pycache__` that the runner's own renderer wrote. A content edit is never one.
     """
+    if any(relative.as_posix().casefold().startswith(prefix) for prefix in _held_prefixes(root)):
+        return False
+    # A stamp or rendered file never accounts for a tracked permission/type change.
+    raw = _git_output(root, "diff", "--raw", "--no-renames", "-z", "HEAD", "--", relative.as_posix())
+    for metadata in raw.split("\0")[::2]:
+        if metadata:
+            modes = metadata.split()[:2]
+            if modes[0] != ":000000" and modes[0][1:] != modes[1]:
+                return False
     if relative.as_posix() == "plans/INDEX.md":
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
@@ -4079,15 +4088,8 @@ RUNNER_HELD = (
 )
 
 
-def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
-    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
-
-    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
-    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
-    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
-    `docs/adr/` prefix is exactly that (P1 of the #192 review).
-    """
-    spared = {path.as_posix() for path in keep or ()}
+def _held_prefixes(root: Path) -> list[str]:
+    """Committed human-decided and runner-held prefixes, shared by admission and checkpoint guards."""
     try:
         data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
         # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
@@ -4099,9 +4101,21 @@ def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> lis
         ]
     except (Refused, KeyError, TypeError, AttributeError, yaml.YAMLError) as error:
         raise Refused(f"the committed provenance map cannot be read; no attempt is committed ({error})") from error
-    folder = f"plans/changes/{change}/"
     # Case-folded on both sides: on a case-insensitive checkout `.Claude/Rules/` is `.claude/rules/` (O192-2).
-    held = [path.casefold() for path in [*decided, *RUNNER_HELD]]
+    return [path.casefold() for path in [*decided, *RUNNER_HELD]]
+
+
+def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
+    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
+
+    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
+    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
+    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
+    `docs/adr/` prefix is exactly that (P1 of the #192 review).
+    """
+    spared = {path.as_posix() for path in keep or ()}
+    folder = f"plans/changes/{change}/"
+    held = _held_prefixes(root)
     return sorted(
         relative.as_posix()
         for relative in changed_paths(root)
