@@ -204,3 +204,26 @@ stand in the loop record on the maintainer's machine, not in this file.
 
 The loop record still lists L3-1 and L3-5 as open. Marking them taken and
 fixed there is the maintainer's step on their machine.
+
+## L3-2 and L3-3, worked by the orchestrator, 2026-10-25 (night run)
+
+The maintainer answered on 2026-10-25: "search and repair yourself". The
+wording of both rows was read from the loop record on the maintainer's
+machine (`loop-state-block@8bc04613`), so the match with L3-2 and L3-3 is
+certain. What was measured is not certain in the same way; see L3-2.
+
+- **L3-3, fixed.** The last sentence of the `answer_parts` docstring said
+  the phase-2a block keeps its unquoted contract. Both callers, phase 2a
+  and phase 6, pass `quote=True`. The sentence now says so. No test: this
+  is a docstring.
+- **L3-2, partly refuted.** The row said the release in
+  `test_phase6_forged_snapshot_cannot_steer_resume` keeps the runner's
+  no-finding statement under the kept marker. Measured at `3b2f1a4` with a
+  probe of the same steps: the release block carries the owned state
+  block, the row table and `Rounds run: 1`, and no `Kept from the loop
+  record:` line. So the docstring ("keeps no words of its own") matches the
+  built release, and it stays unchanged. The second half of the row stands:
+  the plan's verification names a phase-6 exercise after a release **with**
+  kept evidence, and no test runs it. That exercise is still owed, and it
+  goes to the repair verb with phase 6.
+- Other docstrings this change touches were not re-read one by one.

@@ -875,7 +875,7 @@ def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str, 
     six-cell rows is a finding somebody has to read, so it is passed through and said to be one. With
     `quote`, the retained non-row lines are written quoted - the phase-6 verdict's words, which may copy
     headings, state lines or block markers, never stand at a line start of their own in findings.md
-    (bead coding-harness-i70). The phase-2a block keeps its unquoted contract.
+    (bead coding-harness-i70). The phase-2a and phase-6 calls both pass `quote`.
     """
     rest = parse_rows(answer)[1]
     if rows:
