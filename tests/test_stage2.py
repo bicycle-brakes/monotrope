@@ -13525,8 +13525,12 @@ def test_a_rate_limited_free_round_moves_on_to_the_flash_swarm(
 
 @pytest.mark.parametrize(
     "other",
-    [{"exit": 1, "stderr": "boom"}, {"stdout": "  \n", "exit": 0}],
-    ids=["other-exit", "empty-answer"],
+    [
+        {"exit": 1, "stderr": "boom"},
+        {"stdout": "  \n", "exit": 0},
+        {"stdout": "  \n", "exit": 0, "stderr": RATE_LIMITED},
+    ],
+    ids=["other-exit", "empty-answer", "empty-answer-with-429-warning"],
 )
 def test_a_free_round_with_an_ordinary_failure_still_writes_nothing(world: World, other: dict) -> None:
     # Criterion 2. Planted fault: one 429 beside an ordinary failure skips the free stage.
@@ -13555,3 +13559,55 @@ def test_a_rate_limited_member_beside_an_answer_keeps_the_free_round(world: Worl
     assert f"## Round 1 — {', '.join(TEST_FREE)}, " in record
     assert f"{TEST_FREE[0]} failed: pi call failed" in record and "429" in record
     assert "free stage skipped" not in record
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("pi call failed: exit 1 (429: Upstream request failed: Endpoint is unavailable.)", True),
+        ("pi call failed: exit 1 (Too Many Requests)", True),
+        ("pi call failed: exit 1 (RateLimitError: slow down)", True),
+        ("pi call failed: exit 1 (rate_limit_exceeded)", True),
+        ("pi call failed: exit 1 (rate_limit_error)", True),
+        ("pi call failed: exit 1 (503 Service Unavailable)", True),
+        ("pi call failed: exit 1 (request id 7f3-429-ab: invalid api key)", False),
+        ("pi call failed: exit 1 (boom)", False),
+        ("pi call failed: the answer is empty (warn: 429 retry disabled)", False),
+    ],
+)
+def test_rate_limited_reads_only_a_failed_exit_with_a_rate_limit(message: str, expected: bool) -> None:
+    # Pre-review rows P247-1 and P247-5. Planted fault: an empty answer with a 429 warning, or an id holding
+    # 429, reads as a rate limit; an `_` spelling of rate limit does not.
+    assert stage2.rate_limited(stage2.CallFailed(message)) is expected
+
+
+def test_a_time_out_is_never_a_rate_limit() -> None:
+    # Pre-review row P247-6: the time-out exclusion is pinned even if its text named an unavailable model.
+    assert stage2.rate_limited(stage2.StepTimedOut("pi call failed: exit 1 (429 unavailable)")) is False
+
+
+def test_a_dropped_free_stage_with_no_stage_left_says_so(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Pre-review row P247-3. Planted fault: the drop leaves no stage and the refusal claims a round was spent.
+    state = loop_state(())
+    state["paid"] = {"ladder": [], "flash": [], "rungs": []}
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(pi=[{"model": model, "exit": 1, "stderr": RATE_LIMITED} for model in TEST_FREE])
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    err = capsys.readouterr().err
+    assert "every free member was rate-limited or unavailable" in err and "no paid stage" in err, err
+    assert "the last round was not clean" not in err
+
+
+def test_a_failed_stage_after_the_drop_names_the_drop(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Pre-review row P247-4. Planted fault: the failure after the drop names only the paid members.
+    world.script(
+        pi=[
+            *({"model": model, "exit": 1, "stderr": RATE_LIMITED} for model in TEST_FREE),
+            *({"model": model, "exit": 1, "stderr": "boom"} for model in (*TEST_FLASH, *TEST_RUNGS)),
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    assert "free stage skipped: every free member was rate-limited" in capsys.readouterr().err

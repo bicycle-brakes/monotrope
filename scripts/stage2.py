@@ -5649,7 +5649,7 @@ def prepare_loop(root: Path, change: str) -> None:
     stage2_availability.prepare(root, change, sys.modules[__name__])
 
 
-_RATE_LIMITED = re.compile(r"\b429\b|rate[ -]?limit|too many requests|\bunavailable\b", re.IGNORECASE)
+_RATE_LIMITED = re.compile(r"(?<![\w-])429(?![\w-])|rate[ _-]?limit|too many requests|\bunavailable\b", re.IGNORECASE)
 
 
 class FreeStageUnavailable(Exception):
@@ -5658,9 +5658,12 @@ class FreeStageUnavailable(Exception):
 
 def rate_limited(outcome: object) -> bool:
     """Whether a member's failure is a rate limit or an unavailable endpoint, not a time-out or another exit."""
+    # Only a failed exit counts: an empty answer carries the last stderr line too, and a warning that
+    # names 429 beside an empty answer is no rate limit (pre-review row P247-1).
     return (
         isinstance(outcome, CallFailed)
         and not isinstance(outcome, StepTimedOut)
+        and str(outcome).startswith("pi call failed: exit ")
         and _RATE_LIMITED.search(str(outcome)) is not None
     )
 
@@ -5753,7 +5756,13 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             # stage and the next stage takes this call's round; the snapshot written with that round
             # holds the drop, so no later call starts the free members again (bead coding-harness-pj98).
             state["free"]["skipped"] = f"free stage skipped: {dropped}"
-            print(f"review-loop: {state['free']['skipped']}", file=sys.stderr)
+            print(f"review-loop: {state['free']['skipped']}")
+            if next_stage(state) is None:
+                # Without a paid stage the drop has no round to be written with (pre-review row P247-3).
+                raise Refused(
+                    f"{dropped}; no paid stage of this run is left to take the round, so nothing is written "
+                    "and the next call starts the free members again. The maintainer decides what continues."
+                ) from None
 
 
 def _review_round(

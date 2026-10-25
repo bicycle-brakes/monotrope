@@ -50,7 +50,11 @@ PYTHON=$PWD/.venv/bin/python3 make verify
 - 1: tests/test_stage2.py::test_a_rate_limited_free_round_moves_on_to_the_flash_swarm — the call fails, writes no round, omits the notice, or calls a free member again.
 - 2: tests/test_stage2.py::test_a_free_round_with_an_ordinary_failure_still_writes_nothing — a time-out or another exit beside a 429 skips the free stage.
 - 2: tests/test_stage2.py::test_a_round_that_did_not_review_writes_nothing — an all-failed round writes a record.
+- 1: tests/test_stage2.py::test_rate_limited_reads_only_a_failed_exit_with_a_rate_limit — an empty answer, an id holding 429 or a missed `rate_limit_` spelling is misread.
+- 1: tests/test_stage2.py::test_a_time_out_is_never_a_rate_limit — a time-out drops the free stage.
+- 1: tests/test_stage2.py::test_a_failed_stage_after_the_drop_names_the_drop — the failure after the drop hides it.
 - 3: tests/test_stage2.py::test_a_rate_limited_member_beside_an_answer_keeps_the_free_round — a free round with an answer is skipped or loses the failure statement.
+- 4: tests/test_stage2.py::test_a_dropped_free_stage_with_no_stage_left_says_so — the refusal claims a spent round, or a record is written.
 
 ## Route
 

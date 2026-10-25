@@ -1117,7 +1117,8 @@ round, and a round over a cut diff never counts as clean (R-12, R-15). When
 every free member fails with a rate-limit (429) or unavailability error, the
 run drops the free stage and the Flash swarm takes the round in the same
 call, with a notice naming each member and its error (bead
-coding-harness-pj98); any other failure still writes nothing. Round 2
+coding-harness-pj98); the Flash round then has its own deadline, so that call
+can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
 declaration — with the paid rounds' read-only tools and the same bounded diff.
