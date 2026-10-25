@@ -13847,3 +13847,23 @@ def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: W
     committed = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
     assert "- 1: tests/test_new.py::test_new — the attempt writes it" in committed
     assert "- 2: not yet written tests/test_later.py::test_later" in committed
+
+
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World) -> None:
+    # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
+    # the refusal, although the restore removed the test it names.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    before = world.text()
+    step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
+    step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 1
+    assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    text = world.text()
+    assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
+    assert "| taken — test_a |" in text
+    rows_before = stage2.findings_rows(before)[1]
+    assert stage2.findings_rows(text)[1] == rows_before

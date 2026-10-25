@@ -197,6 +197,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/research.md`](changes/repair-fixed-lines/research.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/spec.md`](changes/repair-fixed-lines/spec.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
+| [`changes/repair-restore-status/decisions.md`](changes/repair-restore-status/decisions.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/findings.md`](changes/repair-restore-status/findings.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/plan.md`](changes/repair-restore-status/plan.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/research.md`](changes/repair-restore-status/research.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/spec.md`](changes/repair-restore-status/spec.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
