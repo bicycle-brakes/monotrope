@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-24
+updated: 2026-10-25
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -769,7 +769,7 @@ A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
 into a shell. Eleven verbs exist:
 
-- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5.
+- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5. The runner states the explorer's role and read-only tools in the prompt, and an answer that names no file of the repository fails instead of being appended (bead coding-harness-e7m).
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
