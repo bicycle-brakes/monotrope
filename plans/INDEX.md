@@ -133,6 +133,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/dirty-index/plan.md`](changes/dirty-index/plan.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/research.md`](changes/dirty-index/research.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/spec.md`](changes/dirty-index/spec.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/explore-role/decisions.md`](changes/explore-role/decisions.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/findings.md`](changes/explore-role/findings.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/plan.md`](changes/explore-role/plan.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/research.md`](changes/explore-role/research.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/spec.md`](changes/explore-role/spec.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |
@@ -165,6 +170,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-fenced-examples/decisions.md`](changes/interview-fenced-examples/decisions.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/interview-fenced-examples/findings.md`](changes/interview-fenced-examples/findings.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/interview-fenced-examples/plan.md`](changes/interview-fenced-examples/plan.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/interview-fenced-examples/research.md`](changes/interview-fenced-examples/research.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/interview-fenced-examples/spec.md`](changes/interview-fenced-examples/spec.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/ledger-marker/plan.md`](changes/ledger-marker/plan.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
@@ -250,6 +260,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/tolerate-derived-leftovers/decisions.md`](changes/tolerate-derived-leftovers/decisions.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/findings.md`](changes/tolerate-derived-leftovers/findings.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/plan.md`](changes/tolerate-derived-leftovers/plan.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/research.md`](changes/tolerate-derived-leftovers/research.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/spec.md`](changes/tolerate-derived-leftovers/spec.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/venv-pycache/decisions.md`](changes/venv-pycache/decisions.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/findings.md`](changes/venv-pycache/findings.md) | draft | none | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
