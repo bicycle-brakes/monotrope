@@ -1142,6 +1142,17 @@ reads any loop row. The record carries the run's snapshot — the discovery
 check, the stage membership and what is consumed — and neither a release nor
 an edited configuration resets a stop or replays a consumed stage.
 
+A record is written whole or not at all: each write goes to a temporary file
+beside `loop.md` and replaces it in one step. The record is the only memory
+of a run, so a lost one stops the loop rather than starting it over: while a
+review-loop audit line stands in `findings.md` after the last release, restart
+and no-round line, and no record exists, `review-loop` and `release-loop`
+(also the release inside `review`) refuse and name the record path they
+expected. A review-loop call that wrote audit lines and then ended without
+writing its round appends the runner's **no-round line**, `Loop attempt:
+<date> — no round was written; …`, so a retry after an attempt whose every
+member failed still runs. A record lost for good has no recovery verb yet.
+
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
 or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
@@ -1162,6 +1173,13 @@ resumed reviewer; an Opus reviewer writes its own). Only then does
 round had, and the reviewer marks each row in its `Phase 6` column, `agree` or
 `disagree — <reason>`. Nothing is netted: the reviewer's view of the loop's
 rows is the information.
+
+A release needs a `Phase 6 verdict:` line written after the last released
+block and after the last `Loop restarted:` line, so a restarted or continued
+run never releases on an earlier verdict. Every released block carries the
+runner's line `Record digest: sha256:<hex>` of the record it released; a
+second `release-loop` over a record whose digest equals the last released
+block's appends nothing, removes the record and says so.
 
 ### Repairing taken findings (repair)
 

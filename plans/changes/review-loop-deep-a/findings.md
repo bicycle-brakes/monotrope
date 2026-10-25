@@ -143,6 +143,9 @@ stand-in race, see "Side findings"; green alone three times).
   waits for the repair and that a release follows the verdict; it does
   not name the record digest, the no-round line or the lost-record
   refusal. No ADR, `prompts/` or `AGENTS.md` text needed a change.
+  Added on 2026-10-25 by the orchestrator: §4b now names the whole-or-absent
+  write, the lost-record refusal, the no-round line, the own-verdict rule and
+  the record digest.
 
 ## Side findings (not now)
 
