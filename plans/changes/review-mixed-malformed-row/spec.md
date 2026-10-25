@@ -39,11 +39,32 @@ and let the loop end clean (bead coding-harness-vque). Research:
 2. A table without a severity in cell 2 beside readable rows (a summary
    table) keeps the existing treatment: the round stands.
    *Refuted by:* a refusal of such an answer.
+3. An answer whose only finding-shaped line is unclosed or has the wrong
+   cell count refuses the round as in criterion 1, also without a readable
+   row beside it. A severity decorated with `*`, `_` or a trailing `:`
+   counts as a severity. Added after runner review R-2 and pre-review row
+   P238-1, 2026-10-25.
+   *Refuted by:* such an answer treated as an ordinary failed member, so a
+   peer's `No finding.` ends the round clean.
 
 ## Non-goals
 
 - Carry an unreadable line as an undecided row (the bead's second route).
-- Change how an answer without readable rows is handled (#235, #236).
+- Change how an answer without any finding-shaped line is handled (#235,
+  #236). Criterion 3 changes the case with one, on purpose.
+
+## Known limits (2026-10-25)
+
+- A line is finding-shaped only by a severity in cell 2. A finding whose
+  ID column is missing (severity in cell 1) is not caught: a summary table
+  with the severity in cell 1 must keep the round (criterion 2).
+- By design, a 2-to-5-cell table line with a severity in cell 2 beside
+  readable rows refuses the round, also when it is a summary keyed by ID,
+  a format example in a code fence, or prose such as `| note | minor | …`.
+  The table parser ignores fences as well.
+- Phase 6 (`review`) and phase 2a read answers with `parse_rows` alone and
+  do not use this check: a malformed line beside valid rows stays quoted
+  text there. A shared check is a change of its own.
 
 ## Definition of Done
 

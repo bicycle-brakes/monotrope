@@ -45,6 +45,7 @@ PYTHON=.venv/bin/python3 make verify
 
 - 1: tests/test_stage2.py::test_a_malformed_finding_row_beside_a_valid_one_refuses_the_round — the round stands or the refusal omits the member or line.
 - 2: tests/test_stage2.py::test_a_summary_table_beside_valid_rows_keeps_the_round — a summary table refuses the round.
+- 3: tests/test_stage2.py::test_an_open_short_finding_line_alone_refuses_the_round — an unclosed or decorated finding line alone is an ordinary failed member.
 
 ## Route
 

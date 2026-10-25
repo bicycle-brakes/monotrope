@@ -890,7 +890,8 @@ def finding_shaped(line: str) -> bool:
         return False
     body = stripped[1:-1] if len(stripped) > 1 and stripped.endswith("|") else stripped[1:]
     cells = _PIPE.split(body)
-    return len(cells) >= 2 and cells[1].strip().upper() in SEVERITIES
+    # A decorated severity (`**BLOCKER**`, `BLOCKER:`) is still one (pre-review row P238-2).
+    return len(cells) >= 2 and cells[1].strip().strip("*_:").strip().upper() in SEVERITIES
 
 
 def _open_furniture(line: str) -> bool:

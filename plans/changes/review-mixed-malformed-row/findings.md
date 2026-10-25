@@ -46,3 +46,35 @@ this change (introduced across #235 and #238, reachable through #236):
 
 `run_swarm` now counts finding-shaped lines among the table lines of an
 answer without rows, so the round is refused.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change, including the merge of #236 into it, before the phase-6 Codex
+review, which this container cannot reach. Phase 6 is still owed. It found
+no blocker. The orchestrating session fixed or recorded every row.
+
+- **P238-1 (MAJOR, spec divergence), fixed.** The R-2 fix changed how an
+  answer without readable rows is handled, which a non-goal excluded, and
+  no criterion covered it. The spec now has criterion 3 and a narrowed
+  non-goal; the ledger names the R-2 test.
+- **P238-2 (MINOR), fixed in part.** A decorated severity (`**BLOCKER**`,
+  `BLOCKER:`) in cell 2 was not finding-shaped, so such a line dropped out
+  undecided. `finding_shaped` now trims `*`, `_` and `:`. New cases in
+  `tests/test_stage2.py::test_a_malformed_finding_row_beside_a_valid_one_refuses_the_round`
+  and `::test_an_open_short_finding_line_alone_refuses_the_round`, red
+  before. A missing ID column (severity in cell 1) stays uncaught, because
+  criterion 2 keeps a summary table with the severity in cell 1; the spec
+  lists it under known limits. `CRITICAL` is no severity in this workflow.
+- **P238-3 (MINOR), recorded as by design.** A short table line with a
+  severity in cell 2 beside rows refuses the round, also for a summary keyed
+  by ID, a fenced format example or prose with pipes. The spec's known
+  limits say so.
+- **P238-4 (MINOR), not now.** Phase 6 and phase 2a do not use the check;
+  listed under the spec's known limits.
+- **P238-5 (NIT), not now.** The refusal says "table line(s) that are not
+  six-cell rows" also for an unclosed finding line; it quotes the line, so
+  the wording stays.
+- The merge of #236 (`780140f`) was checked: both helpers are kept, and the
+  adjusted planted line in `test_unreadable_answer_is_quoted_in_the_round`
+  weakens no assertion.
