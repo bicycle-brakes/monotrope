@@ -21,14 +21,28 @@ Class: bounded (one counted interview record or a reasoned skip owed).
 
 ## Q-1 · Which defects of the deep review are fixed
 
-asked: 2026-10-25
-answer: Fix every runner defect the deep review finds.
+context: |
+  Topic: the deep review of the review loop, part B (DL-B-1 to DL-B-14),
+  and two research-swarm rows that reach main's overlay (RS-3-3, RS-3-8).
+  Intention: decide whether the runner defects the reviewers found are
+  repaired now or left as findings.
+  Today: the reviews reported them with reproductions; nothing was changed.
+  Repository change: one branch repairs the runner defects in
+  scripts/stage2.py and model-endpoints.yaml, with their tests.
+  Architecture change: none; three rows that need one (B-8, B-9, B-13) stay
+  open questions.
+asked: 2026-10-25, conversation
+answer: "Bitte korrigiere auch alle Fehler im Runner die der reviewer gefunden hat" (please also fix every runner error the reviewer found — stated in German, translated by the agent)
 answered_by: maintainer
 status: answered
 
-The maintainer asked, in the conversation of 2026-10-25, for all runner
-errors the reviewers find to be fixed. The orchestrating session handed this
-change the part-B rows of the deep review. — 2026-10-25
+In the context of a deep review that reproduced runner defects in how the
+review loop chooses, calls and reads its members, facing the choice between
+repairing them now and leaving them as findings, we decided to repair every
+runner defect on one branch and to put the three rows that need a new
+declaration or prompt to the maintainer, to achieve a loop that neither
+leaks a key nor loses a paid round to an admission slip, accepting that some
+existing tests change their expectations with it. — 2026-10-25
 
 ## [DETAIL] The scope cut
 
