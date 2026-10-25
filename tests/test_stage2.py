@@ -13896,3 +13896,176 @@ def test_the_malformed_refusal_says_that_unreadable_answers_are_kept() -> None:
     message = str(error)
     assert message.startswith("malformed finding table")
     assert "nothing is written to the loop record" in message and "kept in findings.md" in message
+
+
+# ---------------------------------------------------------------------------
+# review-mixed-malformed-row, deferred rows fixed 2026-10-25 (P235-1, P238-2..4): what the
+# finding-shaped check reads - quoted and listed lines, a missing ID column, fenced examples -
+# and the two single-call phases that read answers with it.
+# ---------------------------------------------------------------------------
+
+QUOTED_OR_LISTED = [
+    "> | X9 | BLOCKER | CODE | src/app.py:1 |",
+    "- | X9 | BLOCKER | CODE | src/app.py:1 |",
+    "* | X9 | BLOCKER | CODE | src/app.py:1",
+    "1. | X9 | BLOCKER | CODE | src/app.py:1 |",
+    "> - | X9 | BLOCKER | CODE | src/app.py:1 |",
+    "> | X9 | BLOCKER | CODE | c | src/app.py:1 | a complete row, quoted |",
+    "- | X9 | BLOCKER | CODE | c | src/app.py:1 | a complete row, listed |",
+]
+QUOTED_IDS = ["quote", "dash", "star-open", "numbered", "quoted-list", "quoted-row", "listed-row"]
+
+
+@pytest.mark.parametrize("beside", [True, False], ids=["beside-a-row", "alone"])
+@pytest.mark.parametrize("bad", QUOTED_OR_LISTED, ids=QUOTED_IDS)
+def test_a_quoted_or_listed_finding_line_refuses_the_round(
+    world: World, capsys: pytest.CaptureFixture[str], bad: str, beside: bool
+) -> None:
+    # Criterion 4 (P235-1). Planted fault: a finding line behind `>` or a list marker is plain text, so a
+    # peer's "No finding." ends the round clean, or a quoted complete row is read as the reviewer's own row.
+    answer = (rows(1, "A") + "\n" if beside else "") + bad
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": "No finding."}])
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "the round stood although a quoted or listed finding line was unread"
+    err = capsys.readouterr().err
+    assert "acme-v1-free" in err and bad in err
+
+
+def test_a_line_without_a_leading_pipe_is_not_finding_shaped() -> None:
+    # Criterion 4, the stated limit: a line with no leading pipe, plain or behind a marker, stays text.
+    for line in [
+        "R2-1 | MAJOR | SPEC | c | spec.md:1 | f",
+        "> R2-1 | MAJOR | c",
+        "- MAJOR: see above",
+        "> just a quote",
+    ]:
+        assert not stage2.finding_shaped(line), line
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "| BLOCKER | CODE | criterion | src/app.py:1 | the ID column is missing |",
+        "| **MAJOR** | CODE | src/app.py:1 | f",
+        "| minor: | DOCS | README.md:1 | f |",
+    ],
+    ids=["five-cells", "bold-open-four", "colon-four"],
+)
+def test_a_finding_without_its_id_column_refuses_the_round(
+    world: World, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    # Criterion 5 (P238-2). Planted fault: a severity in cell 1 is never finding-shaped, so the line drops out.
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": rows(1, "A") + "\n" + bad},
+            {"model": "beacon-2-free", "stdout": "No finding."},
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "the round stood although a finding without its ID was unread"
+    assert bad in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "| Severity | Count |\n|---|---|\n| MAJOR | 1 |\n| **MINOR** | 0 |",
+        "| Severity | Open | Closed |\n|---|---|---|\n| MAJOR | 1 | 0 |",
+    ],
+    ids=["two-cells", "three-cells"],
+)
+def test_a_summary_keyed_by_severity_keeps_the_round(world: World, summary: str) -> None:
+    # Criterion 5, the other side (criterion 2's guard): fewer than four cells with a severity in cell 1 is a summary.
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": rows(1, "A") + "\n\n" + summary},
+            {"model": "beacon-2-free", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    assert len(stage2.record_rows(world.record().read_text(encoding="utf-8"))) == 1
+
+
+@pytest.mark.parametrize(
+    "example",
+    [
+        "```\n| <id> | BLOCKER | what a finding line looks like |\n```",
+        "~~~markdown\n| X | MAJOR | CODE | where |\n~~~",
+        "````text\n| X | MAJOR | inner ``` is no close |\n```\n| Y | MINOR | still inside |\n````",
+    ],
+    ids=["backticks", "tildes-with-info", "long-fence"],
+)
+def test_a_fenced_format_example_beside_rows_keeps_the_round(world: World, example: str) -> None:
+    # Criterion 6 (P238-3). Planted fault: a short format example in a code fence refuses a paid round.
+    answer = rows(1, "A") + "\n\nThe format I used:\n\n" + example
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    assert len(stage2.record_rows(world.record().read_text(encoding="utf-8"))) == 1
+
+
+@pytest.mark.parametrize("beside", [True, False], ids=["fenced-with-its-rows", "fenced-alone"])
+def test_a_fenced_finding_table_with_a_malformed_line_still_refuses(
+    world: World, capsys: pytest.CaptureFixture[str], beside: bool
+) -> None:
+    # Criterion 6, the other side. Planted fault: a reviewer that fences its whole table loses its malformed line,
+    # because the fence is taken for an example although it holds the answer's rows, or the answer's only lines.
+    body = (rows(1, "A") + "\n" if beside else "") + MIXED_BAD
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": f"```markdown\n{body}\n```"},
+            {"model": "beacon-2-free", "stdout": "No finding."},
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "a fenced malformed finding line dropped out"
+    assert MIXED_BAD in capsys.readouterr().err
+
+
+def test_parse_rows_reads_a_fenced_row_and_the_check_skips_only_an_example() -> None:
+    # Criterion 6, the parser's side. Planted fault: the parser drops fenced rows (a fenced table loses its
+    # findings) or the check skips a fence that holds rows.
+    found, _ = stage2.parse_rows("```\n" + rows(1, "A") + "\n```")
+    assert [cells[0] for cells in found] == ["A1"]
+    assert stage2.unread_finding_lines(rows(1, "A") + "\n```\n| X | MAJOR | e.g. |\n```") == []
+    assert stage2.unread_finding_lines("```\n" + rows(1, "A") + "\n| X | MAJOR | e.g. |\n```") == [
+        "| X | MAJOR | e.g. |"
+    ]
+
+
+def test_phase6_refuses_a_malformed_finding_line_beside_rows(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 7 (P238-4). Planted fault: phase 6 records a verdict and releases while a finding line is unread.
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    record = world.record().read_bytes()
+    world.script(codex=[codex_ok("T1", rows(1) + "\n" + MIXED_BAD), codex_ok("T1", "L1-1: agree")])
+    capsys.readouterr()
+    assert world.run("review") == 1
+    assert len(world.calls("codex")) == 1, "the marks call ran after a refused verdict"
+    err = capsys.readouterr().err
+    assert MIXED_BAD in err
+    text = world.text()
+    assert not re.search(r"^## Phase 6", text, re.M) and not re.search(r"^Phase 6 verdict:", text, re.M)
+    assert re.search(r"^## Rejected phase-6 answer — Codex, \d{4}-\d{2}-\d{2}$", text, re.M)
+    assert f"> {MIXED_BAD}" in text and not re.search(r"^\| X1 \|", text, re.M)
+    assert world.record().read_bytes() == record, "the refused verdict released the loop"
+
+
+def test_spec_review_refuses_a_malformed_finding_line_beside_rows(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 7 (P238-4). Planted fault: phase 2a appends the rows and leaves the finding line as plain text.
+    world.script(claude=[{"stdout": rows(1) + "\n" + MIXED_BAD}])
+    capsys.readouterr()
+    assert world.run("spec-review") == 1
+    assert MIXED_BAD in capsys.readouterr().err
+    text = world.text() if world.findings.exists() else ""
+    assert "## Phase 2a" not in text and "FB1-unique-body" not in text
+
+
+def test_spec_review_keeps_a_fenced_example_beside_rows(world: World) -> None:
+    # Criterion 7's guard: the shared check keeps the fence rule in phase 2a too.
+    world.script(claude=[{"stdout": rows(1) + "\n\n```\n| X | MAJOR | e.g. |\n```"}])
+    assert world.run("spec-review") == 0
+    assert "## Phase 2a" in world.text()

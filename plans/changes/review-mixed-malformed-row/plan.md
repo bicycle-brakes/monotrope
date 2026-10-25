@@ -46,6 +46,16 @@ PYTHON=.venv/bin/python3 make verify
 - 1: tests/test_stage2.py::test_a_malformed_finding_row_beside_a_valid_one_refuses_the_round — the round stands or the refusal omits the member or line.
 - 2: tests/test_stage2.py::test_a_summary_table_beside_valid_rows_keeps_the_round — a summary table refuses the round.
 - 3: tests/test_stage2.py::test_an_open_short_finding_line_alone_refuses_the_round — an unclosed or decorated finding line alone is an ordinary failed member.
+- 4: tests/test_stage2.py::test_a_quoted_or_listed_finding_line_refuses_the_round — a round is written beside a quoted or listed finding line, or a quoted row is read as a row.
+- 4: tests/test_stage2.py::test_a_line_without_a_leading_pipe_is_not_finding_shaped — a line without a leading pipe is taken for a finding.
+- 5: tests/test_stage2.py::test_a_finding_without_its_id_column_refuses_the_round — a finding with its ID column missing drops out and the round stands.
+- 5: tests/test_stage2.py::test_a_summary_keyed_by_severity_keeps_the_round — a two- or three-cell summary keyed by severity refuses the round.
+- 6: tests/test_stage2.py::test_a_fenced_format_example_beside_rows_keeps_the_round — a fenced format example refuses a round with readable rows.
+- 6: tests/test_stage2.py::test_a_fenced_finding_table_with_a_malformed_line_still_refuses — a fenced table loses its malformed finding line.
+- 6: tests/test_stage2.py::test_parse_rows_reads_a_fenced_row_and_the_check_skips_only_an_example — the parser drops fenced rows, or the check skips a fence that holds rows.
+- 7: tests/test_stage2.py::test_phase6_refuses_a_malformed_finding_line_beside_rows — phase 6 records a verdict or releases beside an unread finding line.
+- 7: tests/test_stage2.py::test_spec_review_refuses_a_malformed_finding_line_beside_rows — phase 2a appends a block beside an unread finding line.
+- 7: tests/test_stage2.py::test_spec_review_keeps_a_fenced_example_beside_rows — phase 2a refuses a fenced example beside rows.
 
 ## Route
 

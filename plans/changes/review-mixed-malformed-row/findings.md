@@ -78,3 +78,61 @@ no blocker. The orchestrating session fixed or recorded every row.
 - The merge of #236 (`780140f`) was checked: both helpers are kept, and the
   adjusted planted line in `test_unreadable_answer_is_quoted_in_the_round`
   weakens no assertion.
+
+## Deferred rows fixed, 2026-10-25
+
+The maintainer asked to fix all runner defects the reviewers found. An Opus
+5.5 subagent made these fixes at the orchestrator's direction, test first,
+in the worktree of this change; nothing was committed. Red output: the new
+tests run before the edit to `scripts/stage2.py` (`pytest -n 4`), 23 failed
+and 6 passed. The 6 that passed are guards for the other side of each rule
+and held before and after. Spec criteria 4 to 7 replace the matching
+known limits.
+
+- **P235-1, quoted or listed finding line (criterion 4), fixed.**
+  `finding_shaped` strips nested blockquote and list markers (`>`, `-`, `*`,
+  `+`, `1.`) before it looks for the leading `|`. A quoted or listed
+  complete six-cell row is refused, not read (spec [DETAIL]). A line without
+  a leading `|` stays out of scope (known limit). Tests:
+  `tests/test_stage2.py::test_a_quoted_or_listed_finding_line_refuses_the_round`
+  (14 cases, beside a row and alone). Red: all 14 failed with
+  `assert 0 == 1`, because the round was written.
+  `::test_a_line_without_a_leading_pipe_is_not_finding_shaped` is a guard
+  and passed before and after.
+- **P238-2, missing ID column (criterion 5), fixed.** A line with a
+  decorated severity in cell 1 and at least four cells is finding-shaped.
+  Tests: `::test_a_finding_without_its_id_column_refuses_the_round`. Red:
+  3 of 3 failed with `assert 0 == 1`. The guard
+  `::test_a_summary_keyed_by_severity_keeps_the_round` checks two- and
+  three-cell summaries and passed before and after.
+- **P238-3, fenced format example (criterion 6), fixed.** The new helper
+  `_fence_blocks` follows `_fenced` in `scripts/check_criterion_ledger.py`
+  but does not import it. The finding check skips a fenced block when
+  `parse_rows` reads no row from it, and only when the answer has readable
+  rows. `parse_rows` still reads rows inside fences, so a reviewer that
+  fences its whole table keeps its findings (spec [DETAIL]). Tests:
+  `::test_a_fenced_format_example_beside_rows_keeps_the_round`. Red: 3 of
+  3 failed with `assert 1 == 0`, because the round was refused.
+  `::test_parse_rows_reads_a_fenced_row_and_the_check_skips_only_an_example`
+  was red with `AttributeError: module 'stage2' has no attribute
+  'unread_finding_lines'`. The guard
+  `::test_a_fenced_finding_table_with_a_malformed_line_still_refuses`
+  checks a table fenced with its rows and a fenced line alone. It passed
+  before and after.
+- **P238-4, phases 6 and 2a (criterion 7), fixed.** Both phases now call
+  the shared `unread_finding_lines`. When it finds a line, phase 6 appends
+  its rejected phase-6 answer block and fails before any verdict. Phase 2a
+  fails before it appends anything, as it does after a failed call, but
+  only when the answer has readable rows. Without rows, its existing
+  treatment stands: the lines are appended and named as table lines that
+  are not rows, which
+  `::test_table_lines_that_are_not_rows_are_never_reported_as_no_finding`
+  pins. A first version that refused in both cases broke that test in the
+  full-file run and was narrowed. Both
+  failures name the lines (`unread_refusal`). The rejected-block sentence
+  now says "neither six-cell findings alone nor exactly `No finding.`".
+  Tests: `::test_phase6_refuses_a_malformed_finding_line_beside_rows` and
+  `::test_spec_review_refuses_a_malformed_finding_line_beside_rows`. Red:
+  both failed with `assert 0 == 1`, because the verdict or block was
+  written. The guard `::test_spec_review_keeps_a_fenced_example_beside_rows`
+  passed before and after.

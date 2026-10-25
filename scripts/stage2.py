@@ -883,15 +883,73 @@ def open_row(line: str) -> list[str] | None:
     return cells
 
 
+# A blockquote marker or a list marker before a line, as many as are nested (P235-1).
+_LINE_LEAD = re.compile(r"^(?:>[ \t]?|[-*+][ \t]+|\d{1,9}[.)][ \t]+)")
+# A CommonMark fence opening, and a closing one (mirrors `scripts/check_criterion_ledger.py`).
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+
+
+def _severity(cell: str) -> bool:
+    """A severity, also when decorated with `*`, `_` or a trailing `:` (pre-review row P238-2)."""
+    return cell.strip().strip("*_:").strip().upper() in SEVERITIES
+
+
 def finding_shaped(line: str) -> bool:
-    """A line that starts with `|` and has a severity in its second cell, closed or not (bead coding-harness-vque)."""
+    """A line that reads as a finding the runner may have to decide (bead coding-harness-vque).
+
+    After any blockquote or list markers (`>`, `-`, `*`, `+`, `1.`), it starts with `|` and has a severity in
+    cell 2, closed or not; or, its ID column missing, a severity in cell 1 and at least four cells, so a
+    summary keyed by severity (`| MAJOR | 1 |`) stays commentary (criteria 4 and 5). A line without a leading
+    `|` is not one: such prose is too common to read as a finding.
+    """
     stripped = line.strip()
+    while lead := _LINE_LEAD.match(stripped):
+        stripped = stripped[lead.end() :].strip()
     if not stripped.startswith("|"):
         return False
     body = stripped[1:-1] if len(stripped) > 1 and stripped.endswith("|") else stripped[1:]
     cells = _PIPE.split(body)
-    # A decorated severity (`**BLOCKER**`, `BLOCKER:`) is still one (pre-review row P238-2).
-    return len(cells) >= 2 and cells[1].strip().strip("*_:").strip().upper() in SEVERITIES
+    return len(cells) >= 2 and (_severity(cells[1]) or (len(cells) >= 4 and _severity(cells[0])))
+
+
+def _fence_blocks(lines: list[str]) -> list[range]:
+    """The line ranges of the fenced code blocks, fences included; an unclosed one runs to the end."""
+    blocks: list[range] = []
+    start, marker, length = -1, "", 0
+    for index, line in enumerate(lines):
+        if marker:
+            closed = _FENCE_CLOSE.match(line)
+            if closed and closed.group(1)[0] == marker and len(closed.group(1)) >= length:
+                blocks.append(range(start, index + 1))
+                marker, length = "", 0
+            continue
+        opened = _FENCE.match(line)
+        # CommonMark: the info string of a backtick fence holds no backtick; such a line opens nothing.
+        if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end() :]):
+            start, marker, length = index, opened.group(1)[0], len(opened.group(1))
+    if marker:
+        blocks.append(range(start, len(lines)))
+    return blocks
+
+
+def unread_finding_lines(answer: str) -> list[str]:
+    """The finding-shaped lines of a reviewer answer that `parse_rows` does not read as rows, stripped.
+
+    One check for every reader of reviewer answers - the loop, phase 2a and phase 6 (criterion 7). A fenced
+    code block from which `parse_rows` reads no row is a format example and is skipped; a fenced block that
+    holds a row is the reviewer's table, fenced, and is read like any other (criterion 6).
+    """
+    lines = answer.splitlines()
+    skipped: set[int] = set()
+    for block in _fence_blocks(lines):
+        if not parse_rows("\n".join(lines[index] for index in block))[0]:
+            skipped.update(block)
+    return [
+        line.strip()
+        for index, line in enumerate(lines)
+        if index not in skipped and finding_shaped(line) and not parse_rows(line)[0]
+    ]
 
 
 def _open_furniture(line: str) -> bool:
@@ -2162,13 +2220,14 @@ def run_swarm(
             # can certify a clean round. Commentary beside findings is kept.
             # A finding-shaped line without its closing pipe is a table line too (runner review R-2): read as
             # anything else, it would fail the member quietly and let a peer's "No finding." end the loop.
+            # Without rows, a fenced line counts too: a fence is skipped as an example only beside rows.
             table = [line.strip() for line in rest.splitlines() if split_row(line) is not None or finding_shaped(line)]
             if not rows and table:
                 raise MalformedTable(table, answer)
             # Beside readable rows, a finding-shaped line the parser could not read would drop out
             # undecided and let the loop end clean (bead coding-harness-vque): it refuses the round too.
-            # A table without a severity in cell 2 (a summary, say) stays commentary.
-            unread = [line.strip() for line in rest.splitlines() if finding_shaped(line)]
+            # A summary table, and a format example in a code fence, stay commentary.
+            unread = unread_finding_lines(answer)
             if rows and unread:
                 raise MalformedTable(unread, answer)
             if not rows and answer.strip() != "No finding.":
@@ -2328,8 +2387,23 @@ def spec_review(root: Path, change: str) -> None:
     begin_call(ctx, "spec-review", OPUS, prompt)
     answer = run_work_model(ctx, prompt, OPUS, writable=False)
     rows, _ = parse_rows(answer)
+    # A finding line the parser cannot read would stand as plain text beside the rows that are decided
+    # (criterion 7): the answer is refused, as a failed call is, before anything is appended. Without
+    # rows, the answer stays visible as table lines that are not rows, as before.
+    unread = unread_finding_lines(answer) if rows else []
+    if unread:
+        raise CallFailed(unread_refusal(unread))
     append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
     print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
+
+
+def unread_refusal(lines: list[str]) -> str:
+    """The failure of a single-call phase whose answer holds finding lines that are no rows (criterion 7)."""
+    named = "; ".join(f"'{line[:200]}{'…' if len(line) > 200 else ''}'" for line in lines)
+    return (
+        f"malformed finding table: {len(lines)} finding line(s) that are not six-cell rows: {named}; "
+        "no rows and no verdict were recorded"
+    )
 
 
 def recorded_2a_session(text: str) -> str | None:
@@ -2358,7 +2432,7 @@ def recorded_2a_session(text: str) -> str | None:
 
 
 def rejected_review_block(answer: str, thread: str) -> str:
-    """The evidence of a phase-6 answer that is neither six-cell findings nor exactly `No finding.`.
+    """The evidence of a phase-6 answer that is neither six-cell findings alone nor exactly `No finding.`.
 
     The block stands beside the authoritative phase-6 records, never inside them: its heading does
     not start `## Phase 6`, so the next review is no re-check because of it, and the runner writes
@@ -2370,7 +2444,7 @@ def rejected_review_block(answer: str, thread: str) -> str:
     return "\n\n".join(
         [
             f"## Rejected phase-6 answer — Codex, {today()}",
-            "The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict "
+            "The review call's answer was neither six-cell findings alone nor exactly `No finding.`; no verdict "
             f"was recorded and nothing was released (Codex thread: {thread}). The answer, as it came:",
             kept,
         ]
@@ -2407,6 +2481,11 @@ def review(root: Path, change: str) -> None:
     if not rows and answer.strip() != "No finding.":
         append(ctx.findings, rejected_review_block(answer, thread))
         raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+    # Beside readable rows, a finding line the parser cannot read is refused the same way (criterion 7).
+    unread = unread_finding_lines(answer)
+    if unread:
+        append(ctx.findings, rejected_review_block(answer, thread))
+        raise CallFailed(unread_refusal(unread))
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",

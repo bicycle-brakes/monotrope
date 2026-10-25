@@ -29,6 +29,9 @@ and let the loop end clean (bead coding-harness-vque). Research:
 
 - **Finding-shaped line:** a line that starts with `|` and has `BLOCKER`,
   `MAJOR` or `MINOR` (any case) in its second cell, closed or not.
+  Widened on 2026-10-25 by criteria 4 to 6: after blockquote or list
+  markers, also with the severity in cell 1 when the line has four or
+  more cells, and not inside a fenced example.
 
 ## Acceptance criteria
 
@@ -46,25 +49,58 @@ and let the loop end clean (bead coding-harness-vque). Research:
    P238-1, 2026-10-25.
    *Refuted by:* such an answer treated as an ordinary failed member, so a
    peer's `No finding.` ends the round clean.
+4. A line is finding-shaped also behind blockquote or list markers (`>`,
+   `-`, `*`, `+`, `1.`, nested): beside readable rows or alone, it refuses
+   the round as in criteria 1 and 3. A quoted or listed complete six-cell
+   row is refused the same way, not read as a row. A line without a
+   leading `|` stays out of scope. Added from rows P235-1 and the first
+   2026-10-25 known limit, 2026-10-25.
+   *Refuted by:* a round written beside such a line, or a quoted row read
+   as the reviewer's row.
+5. A line whose cell 1 is a (possibly decorated) severity and that has at
+   least four cells is finding-shaped, so a finding with its ID column
+   missing refuses the round; a summary keyed by severity with two or
+   three cells keeps it (criterion 2). Added from row P238-2, 2026-10-25.
+   *Refuted by:* a round written beside `| BLOCKER | CODE | c | loc | f |`,
+   or a refusal of `| MAJOR | 1 |` or `| MAJOR | 1 | 0 |` beside rows.
+6. A fenced code block (backtick or tilde fences, CommonMark rules) from
+   which the parser reads no row is a format example: its lines do not
+   refuse a round that has readable rows. A fenced block that holds a row
+   is the reviewer's table and is checked like any other, and an answer
+   without readable rows is checked fences included. Added from row
+   P238-3, 2026-10-25.
+   *Refuted by:* a refusal for a fenced example beside rows, or a written
+   round when a fenced table holds a malformed finding line.
+7. Phase 6 (`review`) and phase 2a (`spec-review`) use the same check
+   (`unread_finding_lines`): an answer with readable rows and a
+   finding-shaped line that is no row is refused before any verdict or
+   block is appended — phase 6
+   keeps it as a rejected phase-6 answer, phase 2a appends nothing, as for
+   a failed call. Added from row P238-4, 2026-10-25.
+   *Refuted by:* a `## Phase 6` or `## Phase 2a` block, a verdict line or
+   a release after such an answer.
 
 ## Non-goals
 
 - Carry an unreadable line as an undecided row (the bead's second route).
 - Change how an answer without any finding-shaped line is handled (#235,
-  #236). Criterion 3 changes the case with one, on purpose.
+  #236). Criteria 3, 4 and 7 change the case with one, on purpose.
 
 ## Known limits (2026-10-25)
 
-- A line is finding-shaped only by a severity in cell 2. A finding whose
-  ID column is missing (severity in cell 1) is not caught: a summary table
-  with the severity in cell 1 must keep the round (criterion 2).
-- By design, a 2-to-5-cell table line with a severity in cell 2 beside
-  readable rows refuses the round, also when it is a summary keyed by ID,
-  a format example in a code fence, or prose such as `| note | minor | …`.
-  The table parser ignores fences as well.
-- Phase 6 (`review`) and phase 2a read answers with `parse_rows` alone and
-  do not use this check: a malformed line beside valid rows stays quoted
-  text there. A shared check is a change of its own.
+- A finding line without a leading `|` (`R2-1 | MAJOR | …`) is not
+  caught: prose with a pipe and a severity word is too common for a cheap
+  rule to tell apart, so such an answer stays an unreadable answer or
+  commentary (#236).
+- By design, a 2-to-5-cell table line outside a fence with a severity in
+  cell 2 beside readable rows refuses the round, also when it is a
+  summary keyed by ID or prose such as `| note | minor | …`; so does a
+  summary keyed by severity with four or more cells (criterion 5).
+- The table parser reads six-cell rows inside fences too, so a fenced
+  example that is a complete six-cell row becomes a row to decide
+  (criterion 6 explains why).
+- A fenced malformed line beside rows outside the fence is taken for an
+  example and does not refuse (criterion 6).
 
 ## Definition of Done
 
@@ -80,3 +116,18 @@ None open.
   coding-harness-6jg (research).
 - [DETAIL] Only finding-shaped lines refuse beside rows, so a reviewer's
   summary table does not throw away a paid round.
+- [DETAIL] A quoted or listed complete row is refused, not read
+  (criterion 4): a reviewer quotes rows of an earlier round or of the
+  spec, so reading it would plant a finding nobody made; dropping it
+  could lose one. A refusal costs a re-run and decides nothing wrongly.
+- [DETAIL] Fences (criterion 6): the parser keeps reading rows inside a
+  fence, because models often fence their whole table and ignoring it
+  would turn that answer into a quiet failed member — the R-2 hole. The
+  check therefore skips a fence only when the parser reads no row from it,
+  and only beside readable rows, so both readers agree on what a fenced
+  table is.
+- [DETAIL] Phase 2a refuses only beside readable rows (criterion 7). An
+  answer without rows keeps its existing treatment there: it is appended
+  and said to be table lines that are not six-cell rows
+  (`test_table_lines_that_are_not_rows_are_never_reported_as_no_finding`).
+  Phase 2a has no loop that could end clean on it.
