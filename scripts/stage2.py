@@ -143,6 +143,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -223,8 +224,9 @@ def _pi_pin() -> str:
 
 PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
-# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
-REVIEWER_MINUTES = 30
+# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15);
+# raised from 30 by the maintainer on 2026-10-24.
+REVIEWER_MINUTES = 45
 # The exit code of a loop that finished, told apart from the refusal's 2 (R-11 of the review-swarm review).
 CLEAN_CODE = 3
 # `pi --version` that has not ended after this many seconds is a Pi off the pin (spec, criterion 27).
@@ -2235,6 +2237,26 @@ def recorded_2a_session(text: str) -> str | None:
     return found.group(1) if found else None
 
 
+def rejected_review_block(answer: str, thread: str) -> str:
+    """The evidence of a phase-6 answer that is neither six-cell findings nor exactly `No finding.`.
+
+    The block stands beside the authoritative phase-6 records, never inside them: its heading does
+    not start `## Phase 6`, so the next review is no re-check because of it, and the runner writes
+    no verdict line and no no-finding claim of its own here. The answer stands quoted, so control
+    text it carries - a verdict line, a heading, table rows - stays the reviewer's words; an empty
+    answer is said so plainly. Nothing was released: the loop record stands for the next attempt.
+    """
+    kept = quote_reviewer(answer) if answer.strip() else "The answer was empty or whitespace only."
+    return "\n\n".join(
+        [
+            f"## Rejected phase-6 answer — Codex, {today()}",
+            "The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict "
+            f"was recorded and nothing was released (Codex thread: {thread}). The answer, as it came:",
+            kept,
+        ]
+    )
+
+
 def review(root: Path, change: str) -> None:
     """Phase 6: verdict first, then release and mark the loop rows.
 
@@ -2259,6 +2281,12 @@ def review(root: Path, change: str) -> None:
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
+    # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
+    # boundary): six-cell findings, or exactly `No finding.`. An empty, refused or malformed answer
+    # records no verdict, releases nothing, and stands as rejected evidence for the next attempt.
+    if not rows and answer.strip() != "No finding.":
+        append(ctx.findings, rejected_review_block(answer, thread))
+        raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
@@ -3024,6 +3052,9 @@ VERIFY_SECONDS = 30 * 60
 GIT_SECONDS = 2 * 60
 
 
+UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
+
+
 def tool_state(root: Path) -> dict[str, str]:
     """The digest of the worktree's `.venv/` tree, taken before the model runs (R-21).
 
@@ -3034,7 +3065,24 @@ def tool_state(root: Path) -> dict[str, str]:
     """
     state: dict[str, str] = {}
     venv = root / ".venv"
-    for directory, names, files in os.walk(venv):
+    try:
+        info = venv.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            # Record the root link AND digest its tools: an unchanged link must not hide
+            # overwritten target bytes. os.walk traverses its root even with followlinks=False;
+            # nested directory links remain opaque, and _unlink_cache still rejects this root.
+            state[".venv"] = "link:" + str(venv.readlink())
+    except FileNotFoundError:
+        return state
+    except OSError:
+        return {".venv": UNREADABLE}
+
+    def unreadable_directory(error: OSError) -> None:
+        # os.walk otherwise silently skips failed scandir calls, hiding newly planted caches.
+        path = Path(error.filename) if error.filename is not None else venv
+        state[path.relative_to(root).as_posix()] = UNREADABLE
+
+    for directory, names, files in os.walk(venv, onerror=unreadable_directory):
         for name in sorted([*names, *files]):
             path = Path(directory) / name
             relative = path.relative_to(root).as_posix()
@@ -3044,18 +3092,92 @@ def tool_state(root: Path) -> dict[str, str]:
                 elif path.is_file():
                     state[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
             except OSError:
-                state[relative] = "unreadable"
+                state[relative] = UNREADABLE
     return state
 
 
+def _is_cache_path(relative: str) -> bool:
+    """True for a worktree-relative path below an exact `__pycache__` component inside `.venv/`.
+
+    The component must lie strictly between `.venv/` and the file itself, so a file named
+    `__pycache__` is not its own cache directory. The suffix is irrelevant: the import machinery
+    names `.pyc` today, and pytest's assertion rewriting may not tomorrow.
+    """
+    parts = relative.split("/")
+    return len(parts) > 2 and parts[0] == ".venv" and "__pycache__" in parts[1:-1]
+
+
+def _unlink_cache(root: Path, relative: str) -> bool | None:
+    """Unlink one cache candidate, reached only through real directories; say what happened.
+
+    Every component from `.venv/` down is checked with `lstat`, rejecting a linked root, parent,
+    cache directory or file in the inspected tree (spec criterion 6). This is a check-then-act
+    sequence: a concurrent directory replacement between inspection and `unlink` could redirect
+    deletion outside the tree. It assumes no concurrent filesystem writer; it does not provide
+    race-safe no-follow deletion. Returns `True` when the file was unlinked, `False` when an eligible
+    regular file could not be deleted, and `None` when the path is not a deletable cache file - a symlink, a
+    directory, or already gone - which stays an ordinary difference for the refusal.
+    """
+    parts = relative.split("/")
+    path = root
+    try:
+        for index, part in enumerate(parts):
+            path = path / part
+            info = path.lstat()
+            if index == len(parts) - 1:
+                if not stat.S_ISREG(info.st_mode):
+                    return None
+            elif not stat.S_ISDIR(info.st_mode):
+                return None
+    except OSError:
+        return None  # a component that cannot be stat-ed is not a proven cache file
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
-    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is."""
+    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is.
+
+    A new or content-changed regular file below an exact `__pycache__` component inside `.venv/` is
+    deleted before any runner-owned step: pytest's assertion rewriting writes bytecode there during
+    an attempt, and a deleted cache is rebuilt, so that write is normalized instead of refused (bead
+    coding-harness-q94b). Every other difference keeps the refusal with the first path named. The
+    baseline bookkeeping stays narrow: each successful unlink immediately removes that path's old
+    entry from the shared `before` dictionary, even if a later check fails. This records only the
+    runner's own deletions. Nothing that survives is rebaselined; recreated caches are deleted again.
+    """
     if before is None:
         return None
+
+    def differences(now: dict[str, str]) -> list[str]:
+        return sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+
     now = tool_state(root)
+    cleaned = False
+    for path in sorted(before.keys() | now.keys()):
+        if UNREADABLE in (before.get(path), now.get(path)):
+            return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
+        if not _is_cache_path(path):
+            continue  # retain the difference, but still clean eligible caches that sort later
+        if before.get(path) == now.get(path):
+            continue
+        if before.get(path, "").startswith("link:"):
+            continue  # removing a baseline symlink is never a cache-byte change
+        deleted = _unlink_cache(root, path)
+        if deleted is None:
+            continue  # a linked or non-regular cache-looking path stays a difference
+        if not deleted:
+            return f"`{path}` cannot be deleted, and a tool the attempt wrote is not run"
+        before.pop(path, None)  # record each runner-owned deletion even if a later check fails
+        cleaned = True
+    if cleaned:
+        now = tool_state(root)  # the tree changed through the runner's own deletions
     if now == before:
         return None
-    changed = sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+    changed = differences(now)
     return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"
 
 
@@ -5978,7 +6100,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
         elif args.verb == "review-loop":
-            # The three verbs that write the loop record hold it for their whole run (R-14).
+            # The four verbs that own the loop record hold it for their whole run (R-14): review
+            # reads it and releases it too (bead coding-harness-751).
             with holding_record(args.change, Path(args.root)):
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
@@ -5987,6 +6110,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
+        elif args.verb == "review":
+            folder_of(Path(args.root), args.change)
+            # The verdict reads the record and its release removes it, so review owns the record's
+            # lock from its first read through the release (R-14, bead coding-harness-751).
+            with holding_record(args.change, Path(args.root)):
+                review(Path(args.root), args.change)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except CleanStop as error:

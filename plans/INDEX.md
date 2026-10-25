@@ -192,6 +192,16 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/review-release-lock/decisions.md`](changes/review-release-lock/decisions.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-release-lock/findings.md`](changes/review-release-lock/findings.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-release-lock/plan.md`](changes/review-release-lock/plan.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-release-lock/research.md`](changes/review-release-lock/research.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-release-lock/spec.md`](changes/review-release-lock/spec.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-verdict-validated/decisions.md`](changes/review-verdict-validated/decisions.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/findings.md`](changes/review-verdict-validated/findings.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/plan.md`](changes/review-verdict-validated/plan.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/research.md`](changes/review-verdict-validated/research.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/spec.md`](changes/review-verdict-validated/spec.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/runner-time-line/decisions.md`](changes/runner-time-line/decisions.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/findings.md`](changes/runner-time-line/findings.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/plan.md`](changes/runner-time-line/plan.md) | draft | none | 2026-10-20 | coding-harness-9wp |
@@ -225,4 +235,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/venv-pycache/decisions.md`](changes/venv-pycache/decisions.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/findings.md`](changes/venv-pycache/findings.md) | draft | none | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/research.md`](changes/venv-pycache/research.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/spec.md`](changes/venv-pycache/spec.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
