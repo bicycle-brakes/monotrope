@@ -13486,7 +13486,10 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
 
 
-def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World) -> None:
+@pytest.mark.parametrize("nested_repository", [False, True])
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(
+    world: World, monkeypatch: pytest.MonkeyPatch, nested_repository: bool
+) -> None:
     # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
     # the refusal, although the restore removed the test it names.
     repair_world(world, ("L1-1", "rejected — out of scope", ""))
@@ -13497,8 +13500,22 @@ def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World
     step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
     step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
     script_repair(world, [step], make=[{"stdout": "green\n"}])
+    real_checkpoint = stage2.checkpoint
+
+    def checkpoint(*args, **kwargs):
+        if nested_repository:
+            # Plant the leftover at the guard boundary; git clean -fd must leave it alone.
+            nested = world.root / "leftover"
+            nested.mkdir()
+            git(nested, "init", "--quiet")
+        return real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
     assert world.run("repair") == 1
     assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    assert (world.root / "src" / "app.py").read_text() == "value = 1\n", "the refused fix survived"
+    if nested_repository:
+        assert (world.root / "leftover" / ".git").is_dir(), "the fixture lost the nested repository"
     text = world.text()
     assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
     assert "| taken — test_a |" in text
