@@ -13484,3 +13484,74 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+# ---------------------------------------------------------------------------
+# free-member-rate-limit (bead coding-harness-pj98): a rate-limited free round moves on
+# ---------------------------------------------------------------------------
+
+RATE_LIMITED = "boot\n429: Upstream request failed: Endpoint is unavailable.\n"
+
+
+def test_a_rate_limited_free_round_moves_on_to_the_flash_swarm(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 1. Planted fault: every rerun starts the same rate-limited free models and writes nothing.
+    world.script(
+        pi=[
+            *({"model": model, "exit": 1, "stderr": RATE_LIMITED} for model in TEST_FREE),
+            *({"model": model, "stdout": rows(1, model[:2].upper())} for model in TEST_FLASH),
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert f"## Round 1 — {', '.join(TEST_FLASH)}, " in record, "the Flash swarm did not take round 1"
+    notice = next(line for line in record.splitlines() if line.startswith("Notice: free stage skipped"))
+    for model in TEST_FREE:
+        assert model in notice and "429" in notice, notice
+    first = [rung_of(call) for call in world.reviews("pi")]
+    assert sorted(first) == sorted([*TEST_FREE, *TEST_FLASH])
+    # The next call of the run takes the next rung; no free member is called again.
+    world.write_record(
+        [("L1-1", "rejected — out of scope", ""), ("L1-2", "rejected — out of scope", "")],
+        state=stage2.read_state(record, ""),
+    )
+    world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+    world.run("review-loop")
+    later = [rung_of(call) for call in world.reviews("pi")][len(first) :]
+    assert not set(later) & set(TEST_FREE), f"a dropped free member was called again: {later}"
+
+
+@pytest.mark.parametrize(
+    "other",
+    [{"exit": 1, "stderr": "boom"}, {"stdout": "  \n", "exit": 0}],
+    ids=["other-exit", "empty-answer"],
+)
+def test_a_free_round_with_an_ordinary_failure_still_writes_nothing(world: World, other: dict) -> None:
+    # Criterion 2. Planted fault: one 429 beside an ordinary failure skips the free stage.
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "exit": 1, "stderr": RATE_LIMITED},
+            {"model": TEST_FREE[1], **other},
+            *({"model": model, "stdout": rows(1, "F")} for model in TEST_FLASH),
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "an ordinary failure let the free stage be skipped"
+    assert not {rung_of(call) for call in world.reviews("pi")} & set(TEST_FLASH)
+
+
+def test_a_rate_limited_member_beside_an_answer_keeps_the_free_round(world: World) -> None:
+    # Criterion 3. Planted fault: one rate-limited member skips the free stage although another answered.
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "exit": 1, "stderr": RATE_LIMITED},
+            {"model": TEST_FREE[1], "stdout": rows(1, "B")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert f"## Round 1 — {', '.join(TEST_FREE)}, " in record
+    assert f"{TEST_FREE[0]} failed: pi call failed" in record and "429" in record
+    assert "free stage skipped" not in record

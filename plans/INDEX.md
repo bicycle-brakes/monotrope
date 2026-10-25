@@ -138,6 +138,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/failed-check-spans/plan.md`](changes/failed-check-spans/plan.md) | draft | none | 2026-10-22 | coding-harness-8hr |
 | [`changes/failed-check-spans/research.md`](changes/failed-check-spans/research.md) | draft | none | 2026-10-22 | coding-harness-8hr |
 | [`changes/failed-check-spans/spec.md`](changes/failed-check-spans/spec.md) | draft | none | 2026-10-22 | coding-harness-8hr |
+| [`changes/free-member-rate-limit/decisions.md`](changes/free-member-rate-limit/decisions.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/free-member-rate-limit/findings.md`](changes/free-member-rate-limit/findings.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/free-member-rate-limit/plan.md`](changes/free-member-rate-limit/plan.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/free-member-rate-limit/research.md`](changes/free-member-rate-limit/research.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/free-member-rate-limit/spec.md`](changes/free-member-rate-limit/spec.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |

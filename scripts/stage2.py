@@ -5649,6 +5649,22 @@ def prepare_loop(root: Path, change: str) -> None:
     stage2_availability.prepare(root, change, sys.modules[__name__])
 
 
+_RATE_LIMITED = re.compile(r"\b429\b|rate[ -]?limit|too many requests|\bunavailable\b", re.IGNORECASE)
+
+
+class FreeStageUnavailable(Exception):
+    """Every member of a free round failed with a rate-limit or unavailability error (bead coding-harness-pj98)."""
+
+
+def rate_limited(outcome: object) -> bool:
+    """Whether a member's failure is a rate limit or an unavailable endpoint, not a time-out or another exit."""
+    return (
+        isinstance(outcome, CallFailed)
+        and not isinstance(outcome, StepTimedOut)
+        and _RATE_LIMITED.search(str(outcome)) is not None
+    )
+
+
 def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
     """One round of phase 4b, until a round is clean (ADR 0021).
 
@@ -5715,19 +5731,42 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             print(f"review-loop: paid models skipped: {'; '.join(skipped)}")
         # The snapshot is written only with the first completed round: a failed
         # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
-    stage = next_stage(state)
-    free_input = None
-    if stage is not None and stage["kind"] == "free":
-        free_input = free_diff(root)
-        if not free_input.strip():
-            state["free"]["skipped"] = "free stage skipped: no implementation source diff"
-            print(f"review-loop: {state['free']['skipped']}")
-            stage = next_stage(state)
-    if stage is None:
-        raise Refused(
-            "every stage of this run is consumed and the last round was not clean; the loop stops and "
-            "reports to the maintainer. No model is substituted."
-        )
+    while True:
+        stage = next_stage(state)
+        free_input = None
+        if stage is not None and stage["kind"] == "free":
+            free_input = free_diff(root)
+            if not free_input.strip():
+                state["free"]["skipped"] = "free stage skipped: no implementation source diff"
+                print(f"review-loop: {state['free']['skipped']}")
+                stage = next_stage(state)
+        if stage is None:
+            raise Refused(
+                "every stage of this run is consumed and the last round was not clean; the loop stops and "
+                "reports to the maintainer. No model is substituted."
+            )
+        try:
+            _review_round(root, change, record, findings_text, state, stage, free_input, receipt_taken)
+            return
+        except FreeStageUnavailable as dropped:
+            # Every free member was rate-limited or unavailable at review size: the run drops the free
+            # stage and the next stage takes this call's round; the snapshot written with that round
+            # holds the drop, so no later call starts the free members again (bead coding-harness-pj98).
+            state["free"]["skipped"] = f"free stage skipped: {dropped}"
+            print(f"review-loop: {state['free']['skipped']}", file=sys.stderr)
+
+
+def _review_round(
+    root: Path,
+    change: str,
+    record: str | None,
+    findings_text: str,
+    state: dict,
+    stage: dict,
+    free_input: str | None,
+    receipt_taken: bool,
+) -> None:
+    """One round of `review_loop` on its chosen stage: prompts, calls, the written round."""
     round_number = rounds_run(record, findings_text) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
@@ -5825,6 +5864,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 current = nxt
         members = [*members, *replaced]
     succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
+    if free and not succeeded and all(rate_limited(answers[member]) for member in members):
+        raise FreeStageUnavailable(
+            "every free member was rate-limited or unavailable: "
+            + "; ".join(f"{member} failed: {answers[member]}" for member in members)
+        )
     if not succeeded:
         raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
     numbered: list[list[str]] = []

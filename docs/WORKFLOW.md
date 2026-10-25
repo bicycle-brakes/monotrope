@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-24
+updated: 2026-10-25
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1113,7 +1113,11 @@ base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
 not what OpenCode Go bills. The prompt carries the implementation diff up to
 the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
-round, and a round over a cut diff never counts as clean (R-12, R-15). Round 2
+round, and a round over a cut diff never counts as clean (R-12, R-15). When
+every free member fails with a rate-limit (429) or unavailability error, the
+run drops the free stage and the Flash swarm takes the round in the same
+call, with a notice naming each member and its error (bead
+coding-harness-pj98); any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
 declaration — with the paid rounds' read-only tools and the same bounded diff.
