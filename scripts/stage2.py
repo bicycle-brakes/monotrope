@@ -160,6 +160,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_adr_answers  # noqa: E402
+import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -3930,7 +3931,7 @@ def verify_attempt(
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
 ) -> list[str]:
-    """Stamp changed held documents, render the index, format the targets, then run `make verify`.
+    """Format, clear derivable ledger markers, stamp changed documents, render the index, `make verify`.
 
     Preparation writes to the tree and executes its registry renderer. Before `make verify` the
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
@@ -3954,12 +3955,29 @@ def verify_attempt(
         # The attempt overwrote a program the runner starts: it fails here, before the renderer or
         # ruff runs, and the diagnostic names the path (R-21, acceptance criterion).
         return [tampered]
+    try:
+        # The marker of a test the attempt wrote is derivable, so it is not the attempt's to forget
+        # (bead coding-harness-7g6h); the stamp below then sees the plan as changed. The plan is an
+        # attempt-writable path: an alias (a symlink in it or its parents, a hard link) would carry the
+        # write outside the worktree, so it is refused first (runner review R-1, 2026-10-25).
+        relative = plan.relative_to(root)
+        if plan.is_symlink() or plan.resolve() != root.resolve() / relative:
+            return [f"refusing an aliased plan before clearing its ledger: {relative.as_posix()}"]
+        if plan.exists() and plan.stat().st_nlink > 1:
+            return [f"refusing a hard-linked plan before clearing its ledger: {relative.as_posix()}"]
+        # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
+        # Clear against those final bytes, before stamping the plan and verifying (F-1).
+        line = format_step(root, env, key, tools)
+        if formatted is not None and line is not None:
+            formatted.append(line)
+        check_criterion_ledger.clear_written(root, plan)
+    except (OSError, RuntimeError, ValueError) as error:
+        return [
+            f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+        ]
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
-    line = format_step(root, env, key, tools)
-    if formatted is not None and line is not None:
-        formatted.append(line)
     try:
         done = launch(
             ["make", "verify"],
