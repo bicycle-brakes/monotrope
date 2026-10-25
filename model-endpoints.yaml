@@ -505,6 +505,10 @@ ausgeschlossen:
       liest die Daten nicht.
   - was: "Kimi (Moonshot AI; models k3 and kimi-for-coding)"
     klasse: framework
+    # The ids and id prefixes the runner matches (`excluded_problem`): without them the
+    # decision bound nothing, and a Kimi free id in the live catalog would have reviewed
+    # diffs (DL-B-12 of the loop's deep review, 2026-10-25).
+    modelle: [kimi, k3, moonshot]
     grund: >-
       Dropped by the maintainer on 2026-09-30 — stage 2 reviews with Codex and
       GLM (ADR 0007).

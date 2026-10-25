@@ -376,6 +376,8 @@ LOOP_ID = re.compile(r"L\d+-\d+")
 # Loop identifiers always count; an unrelated colon label remains report prose.
 FINDING_ID = re.compile(r"([A-Za-z]+)-[0-9]+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
+# The runner's line before a member's kept words, naming the member (DL-B-3 of the loop's deep review).
+FROM_LINE = re.compile(r"From [A-Za-z0-9][A-Za-z0-9._:/-]*:")
 # A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
 # ledger's gate does (`check_criterion_ledger.py`).
@@ -489,6 +491,10 @@ class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
 
 
+class NotStarted(CallFailed):
+    """A reviewer that never started: the round's deadline had passed before its launch (DL-B-10)."""
+
+
 class StepTimedOut(CallFailed):
     """A started program ran into its time limit and its whole process group was killed (R-20)."""
 
@@ -508,12 +514,13 @@ def secrets_path() -> Path:
     return Path(named) if named else Path.home() / ".config" / "cc-routing" / "secrets.env"
 
 
-def read_secret(name: str) -> str | None:
-    """`KEY=value` or `export KEY=value`, quotes stripped, nothing evaluated."""
+def _secret_entries() -> list[tuple[str, str]]:
+    """The (name, value) pairs of the secrets file, in file order: `KEY=value` or `export KEY=value`, quotes stripped, nothing evaluated."""
     try:
         text = secrets_path().read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return None
+        return []
+    entries = []
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -521,12 +528,34 @@ def read_secret(name: str) -> str | None:
         if line.startswith("export "):
             line = line[len("export ") :].lstrip()
         key, sep, value = line.partition("=")
-        if sep and key.strip() == name:
+        if sep:
             value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
+            entries.append((key.strip(), value))
+    return entries
+
+
+def read_secret(name: str) -> str | None:
+    """`KEY=value` or `export KEY=value`, quotes stripped, nothing evaluated."""
+    for key, value in _secret_entries():
+        if key == name:
             return value or None
     return None
+
+
+# The two keys the runner uses are scrubbed whatever their length; every other value of the
+# secrets file once it is long enough to be a credential (DL-B-4 of the loop's deep review).
+NAMED_SECRETS = ("OPENCODE_GO_KEY", "GLM_KEY")
+
+
+def secret_values() -> list[str]:
+    """Every credential the secrets file holds, longest first: the named keys, and each value of FRAGMENT or more characters.
+
+    A shorter value (a flag such as `1`) is no credential, and scrubbing it would replace ordinary text.
+    """
+    values = {value for key, value in _secret_entries() if value and (key in NAMED_SECRETS or len(value) >= FRAGMENT)}
+    return sorted(values, key=lambda value: (-len(value), value))
 
 
 FRAGMENT = 8
@@ -568,9 +597,15 @@ def replace_credential(data: str | bytes, secret: str) -> str | bytes:
     return (b"" if isinstance(data, bytes) else "").join(out)
 
 
-def scrub(text: str, secret: str | None) -> str:
-    """Replace the credential, whole or in any fragment of 8 or more characters, in everything printed or written."""
-    return replace_credential(text, secret) if secret else text
+def scrub(text: str, secret: str | list[str] | tuple[str, ...] | None) -> str:
+    """Replace the credential, whole or in any fragment of 8 or more characters, in everything printed or written.
+
+    `secret` may be several credentials (`secret_values()`): each is replaced in turn.
+    """
+    for one in [secret] if isinstance(secret, str) else secret or []:
+        if one:
+            text = replace_credential(text, one)
+    return text
 
 
 def protect_diagnostics(text: str, key: str | None = None) -> str:
@@ -703,11 +738,35 @@ def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
     return foreign_env(own)
 
 
+# The process groups of the timed programs running now: an interrupted or terminated runner kills
+# them before it exits, because their own sessions keep a terminal's Ctrl-C from reaching them
+# (DL-B-5 of the loop's deep review).
+_LIVE_GROUPS: set[int] = set()
+_LIVE_LOCK = threading.Lock()
+# After a timeout kill, how long collecting the output may wait for a descendant that left the
+# group and still holds a pipe (DL-B-6).
+KILL_DRAIN_SECONDS = 5
+
+
+def kill_live() -> int:
+    """Kill the process group of every timed program still running; return how many were signalled."""
+    with _LIVE_LOCK:
+        groups = sorted(_LIVE_GROUPS)
+    for group in groups:
+        with contextlib.suppress(OSError):
+            os.killpg(group, signal.SIGKILL)
+    return len(groups)
+
+
+class Terminated(Exception):
+    """The runner received SIGTERM: the running programs are killed and the run stops (exit 143)."""
+
+
 def launch(
     command: list[str],
     root: Path,
     env: dict[str, str],
-    secret: str | None = None,
+    secret: str | list[str] | None = None,
     timeout: float | None = None,
     limit: str | None = None,
 ) -> subprocess.CompletedProcess:
@@ -715,7 +774,9 @@ def launch(
 
     With a `timeout` the program leads a process group of its own, and a timeout kills the whole
     group: a hung `make verify` leaves no shell, pytest or worker behind to write into the worktree
-    after the run stopped (O188-4 of the #188 review).
+    after the run stopped (O188-4 of the #188 review). The group is registered while it runs, so an
+    interrupted runner kills it too (`kill_live`), and the drain after a kill is bounded by
+    `KILL_DRAIN_SECONDS`: a descendant that left the group is abandoned, not waited for.
     """
     try:
         if timeout is None:
@@ -740,13 +801,19 @@ def launch(
             errors="replace",
             start_new_session=True,
         ) as process:
+            with _LIVE_LOCK:
+                _LIVE_GROUPS.add(process.pid)
             try:
                 stdout, stderr = process.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
                 with contextlib.suppress(OSError):
                     os.killpg(process.pid, signal.SIGKILL)
-                process.communicate()
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    process.communicate(timeout=KILL_DRAIN_SECONDS)
                 raise
+            finally:
+                with _LIVE_LOCK:
+                    _LIVE_GROUPS.discard(process.pid)
             return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
     except subprocess.TimeoutExpired as error:
         what = limit or f"the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
@@ -755,7 +822,7 @@ def launch(
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
 
-def last_error_line(done: subprocess.CompletedProcess, secret: str | None = None) -> str:
+def last_error_line(done: subprocess.CompletedProcess, secret: str | list[str] | None = None) -> str:
     """The last non-empty line of the program's standard error, scrubbed and bounded; empty when there is none."""
     lines = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
     if not lines:
@@ -767,7 +834,7 @@ def fail(
     program: str,
     done: subprocess.CompletedProcess,
     reason: str,
-    secret: str | None = None,
+    secret: str | list[str] | None = None,
     label: str | None = None,
 ) -> CallFailed:
     """Print the last lines of the program's standard error, scrubbed; return the exception to raise.
@@ -802,8 +869,13 @@ def split_row(line: str) -> list[str] | None:
 
 
 def _furniture(cells: list[str]) -> bool:
-    """The header or the separator of a table."""
-    return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
+    """The header or the separator of a table.
+
+    A header is known by its first cell `ID`, or by the column names after it, whatever its first cell
+    (`#`, `No.`): such a line is no finding (DL-B-11 of the loop's deep review).
+    """
+    named = [cell.lower() for cell in cells[1:6]] == [column.lower() for column in ROW_COLUMNS[1:6]]
+    return cells[0].lower() == "id" or named or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
 
 
 def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[list[str]], str]:
@@ -837,8 +909,9 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
 
 
 def render_table(columns: list[str], rows: list[list[str]]) -> str:
+    """A Markdown table; an unescaped `|` in a cell is escaped, so a cell never moves the columns (DL-B-7)."""
     lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
-    lines += ["| " + " | ".join(row) + " |" for row in rows]
+    lines += ["| " + " | ".join(_PIPE.sub(r"\\|", cell) for cell in row) + " |" for row in rows]
     return "\n".join(lines)
 
 
@@ -1335,8 +1408,13 @@ def ladder(root: Path) -> list[str]:
     """
     entry = endpoint_entry(root)
     models = [str(model) for model in entry.get("modelle") or []]
-    eligible = [model for model in models if terms_problem(entry, model) is None]
+    eligible = [model for model in models if paid_problem(root, entry, model) is None]
     return ordered_models(entry, eligible)
+
+
+def paid_problem(root: Path, entry: dict, model: str) -> str | None:
+    """Why a declared paid model is not eligible: its terms, or an `ausgeschlossen` entry naming it (DL-B-2)."""
+    return terms_problem(entry, model) or excluded_problem(root, model)
 
 
 def skipped_models(root: Path) -> list[str]:
@@ -1345,7 +1423,7 @@ def skipped_models(root: Path) -> list[str]:
     named = []
     declared = [str(model) for model in entry.get("modelle") or []]
     for model in dict.fromkeys([*declared, *(entry.get("flash_swarm") or [])]):
-        problem = terms_problem(entry, model) if model in declared else "not a declared paid model"
+        problem = paid_problem(root, entry, model) if model in declared else "not a declared paid model"
         if problem is not None:
             named.append(f"{model} ({problem})")
     return named
@@ -1503,6 +1581,35 @@ def parse_catalog(output: str) -> list[dict]:
     return rows
 
 
+# A catalog id the runner may select: third-party catalog text never carries a `|` or other markup into
+# the record's cells (DL-B-7 of the loop's deep review).
+MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+
+
+def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> dict[str, str]:
+    """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7).
+
+    A candidate is an id of the rule's provider that its suffix or include would select. An id outside
+    `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names: the maintainer's exclusion
+    leaves that id out, not the whole stage.
+    """
+    suffix = rule.get("id_suffix", "")
+    includes = {str(record["id"]) for record in rule.get("include") or []}
+    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
+    dropped: dict[str, str] = {}
+    for row in catalog:
+        model = row["model"]
+        if row["provider"] != rule["provider"] or model in excludes or model not in fresh or model in dropped:
+            continue
+        if not (model in includes or (suffix and model.endswith(suffix))):
+            continue
+        if not MODEL_ID.fullmatch(model):
+            dropped[model] = "not a plain model id"
+        elif problem := excluded_problem(root, model):
+            dropped[model] = problem
+    return dropped
+
+
 def select_free(rule: dict, catalog: list[dict]) -> list[str]:
     """The catalog ids of the rule's provider matching suffix or include, minus excludes, in catalog order.
 
@@ -1518,7 +1625,7 @@ def select_free(rule: dict, catalog: list[dict]) -> list[str]:
         if row["provider"] != rule["provider"]:
             continue
         model = row["model"]
-        if model in excludes:
+        if model in excludes or not MODEL_ID.fullmatch(model):
             continue
         if (model in includes or (suffix and model.endswith(suffix))) and model not in chosen:
             chosen.append(model)
@@ -1559,33 +1666,53 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
     }
 
 
-def activate_overlay(agent: Path, store: dict) -> None:
-    """Activate fetched definitions through Pi's explicit model configuration.
+# The catalog fields a model definition may carry into Pi's active configuration (RS-3-3 of the
+# research-swarm review): `samplingParams` is merged into the request body and could name another
+# model than `--model` and the audit line; `headers`, `compat` and every other field are dropped.
+# `baseUrl` crosses as it came: checking it against a declared address is the open DL-B-8.
+OVERLAY_FIELDS = ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
+
+
+def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
+    """Activate fetched definitions through Pi's explicit model configuration; return the fields dropped per id.
 
     Pi 1.2.0 restores its remote cache only for server dates newer than its
     shipped catalog. A successful fresh retrieval need not carry such a date.
     Keep models-store.json as retrieval evidence and use models.json's model
     definitions to activate that exact catalog independently of cache age.
-    Only model definitions cross here, never provider auth configuration.
+    Only the fields of `OVERLAY_FIELDS` cross, never provider auth
+    configuration, request-body parameters or headers; the fetched store is
+    never mutated (the retrieval evidence and persisted run snapshot).
     """
-    # Pi resolves explicit-config headers as shell commands / environment
-    # templates. Escape catalog literals at this boundary only: never mutate
-    # the fetched store (the retrieval evidence and persisted run snapshot).
     providers = {}
+    dropped: dict[str, list[str]] = {}
     for provider, entry in store.items():
         models = []
         for definition in entry.get("models", []):
-            model = dict(definition)
-            if "headers" in model:
-                headers = {}
-                for name, value in model["headers"].items():
-                    literal = value.replace("$", "$$")
-                    headers[name] = "$" + literal if literal.startswith("!") else literal
-                model["headers"] = headers
+            if not isinstance(definition, dict):
+                continue
+            model = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
+            # A `provider` equal to the store's key says nothing the key does not: it crosses unnamed;
+            # any other value would route the definition elsewhere and is dropped.
+            if definition.get("provider") == provider:
+                model["provider"] = provider
+            extra = sorted(
+                str(name)
+                for name in definition
+                if name not in OVERLAY_FIELDS and not (name == "provider" and definition[name] == provider)
+            )
+            if extra:
+                dropped[str(definition.get("id"))] = extra
             models.append(model)
         if models:
             providers[provider] = {"models": models}
     (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
+    return dropped
+
+
+def dropped_notice(dropped: dict[str, str]) -> str:
+    """The dropped free ids with their reasons, one line; a `|` in an id is escaped."""
+    return "; ".join(f"{model.replace('|', chr(92) + '|')} ({reason})" for model, reason in dropped.items())
 
 
 def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
@@ -1625,7 +1752,10 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 "from a stale cache."
             )
         store = overlay_store(agent, rule["provider"])
-        activate_overlay(agent, store)
+        stripped = activate_overlay(agent, store)
+        if stripped:
+            listing = "; ".join(f"{model} ({', '.join(fields)})" for model, fields in sorted(stripped.items()))
+            print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -1643,7 +1773,10 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
     # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
-    selected = [model for model in select_free(rule, catalog) if model in fresh]
+    dropped = free_drops(root, rule, catalog, fresh)
+    selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
+    if dropped:
+        print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
     if not selected and not allow_empty:
         raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
     return {
@@ -1653,6 +1786,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         "rule": json.loads(json.dumps(rule)),
         "catalog": catalog,
         "selected": selected,
+        "dropped": dropped,
         "overlay": sorted(fresh),
         "models_store": store,
         "billing": "not measured: pi.dev is a live catalog, not a billing statement",
@@ -1937,7 +2071,7 @@ def remaining(deadline: float | None) -> float:
         return REVIEWER_MINUTES * 60
     seconds = deadline - time.monotonic()
     if seconds <= 0:
-        raise CallFailed("the round time limit expired; no further reviewer starts")
+        raise NotStarted("the round time limit expired; no further reviewer starts")
     return seconds
 
 
@@ -2002,24 +2136,28 @@ def run_reviewer(
             task or f"Review the change {ctx.change} as the appended instructions say.",
         ]
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = launch(
-            command,
-            scratch if free else ctx.root,
-            env,
-            key,
-            timeout=timeout_seconds or remaining(deadline),
-            limit=(
-                f"the availability probe limit of {timeout_seconds} seconds"
-                if timeout_seconds
-                else f"the reviewer time limit of {REVIEWER_MINUTES:g} minutes"
-            ),
-        )
+        # Every key of the secrets file is scrubbed, not the OpenCode key alone: a member with read
+        # tools can quote the GLM key from the same file (DL-B-4 of the loop's deep review).
+        secrets = [key, *(value for value in secret_values() if value != key)]
+        if timeout_seconds:
+            seconds: float = timeout_seconds
+            limit = f"the availability probe limit of {timeout_seconds} seconds"
+        elif deadline is None:
+            seconds = remaining(None)
+            limit = f"the reviewer time limit of {REVIEWER_MINUTES:g} minutes"
+        else:
+            # The round's one deadline, not a fresh member limit: a late replacement gets what is left (DL-B-14).
+            seconds = remaining(deadline)
+            limit = (
+                f"the round time limit of {REVIEWER_MINUTES:g} minutes ({seconds:.0f} seconds were left for this call)"
+            )
+        done = launch(command, scratch if free else ctx.root, env, secrets, timeout=seconds, limit=limit)
         if done.returncode != 0:
-            raise fail("pi", done, f"exit {done.returncode}", key, model)
-        answer = scrub(done.stdout or "", key)
+            raise fail("pi", done, f"exit {done.returncode}", secrets, model)
+        answer = scrub(done.stdout or "", secrets)
         if not answer.strip():
             # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("pi", done, "the answer is empty", key, model)
+            raise fail("pi", done, "the answer is empty", secrets, model)
     return answer
 
 
@@ -2421,6 +2559,10 @@ def _record_lines(record: str) -> list[tuple[str, bool]]:
     reviewer = False
     for line in record.splitlines():
         if ROUND_HEADING.match(line):
+            reviewer = False
+        elif reviewer and FROM_LINE.fullmatch(line):
+            # Every reviewer line is quoted, so an unquoted `From <member>:` is the runner's: it closes one
+            # member's words and names the next member's (DL-B-3).
             reviewer = False
         elif not reviewer and line.strip() == NOT_ROWS_NOTE:
             lines.append((line, False))
@@ -5767,6 +5909,8 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     if not state["consumed"]:
         if state["free"].get("skipped"):
             notes.append(f"Notice: {state['free']['skipped']}.")
+        if state["free"].get("dropped"):
+            notes.append(f"Notice: free ids dropped: {dropped_notice(state['free']['dropped'])}.")
         skipped = skipped_models(root)
         if skipped:
             notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
@@ -5814,13 +5958,32 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                     break
                 nxt = options[0]
                 used.add(nxt)
-                notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
-                print(f"review-loop: {notes[-1]}", file=sys.stderr)
                 endpoints[nxt] = (OPENCODE, nxt, "max")
                 prompts[nxt] = prompt_for(nxt)
-                checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
+                try:
+                    checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
+                except Refused as refusal:
+                    # A rung the declaration now refuses is named and passed over: the members' answers
+                    # stand, and the rung is neither called nor consumed (DL-B-1 of the loop's deep review).
+                    notes.append(f"{nxt} not admitted: {refusal}")
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    continue
+                if time.monotonic() >= deadline:
+                    # The leak check can outlast the round: a replacement that cannot start writes no
+                    # call line and is not consumed (DL-B-10).
+                    notes.append(
+                        f"{current} failed: {reasons[current]}; the round time limit expired; no replacement starts"
+                    )
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    break
+                notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
                 append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
                 answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
+                if isinstance(answers[nxt], NotStarted):
+                    notes.append(f"{nxt} did not start: {answers[nxt]}; it is not consumed")
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    break
                 replaced.append(nxt)
                 current = nxt
         members = [*members, *replaced]
@@ -5829,7 +5992,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
     numbered: list[list[str]] = []
     statements: list[str] = []
-    reviewer_blocks: list[str] = []
+    reviewer_blocks: list[tuple[str, str]] = []
     for member in members:
         outcome = answers[member]
         if isinstance(outcome, BaseException):
@@ -5863,15 +6026,16 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         # An answer with no row is kept whole, blank lines included; beside rows, what is not a row.
         kept = rest if rows else outcome
         if kept.strip():
-            reviewer_blocks.append(kept.strip())
+            reviewer_blocks.append((member, kept.strip()))
     if cut_note:
         statements.append(
             f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
             "the change needs a round of its own."
         )
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
-    for block in reviewer_blocks:
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
+    for member, block in reviewer_blocks:
+        # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.
+        parts.append(f"From {member}:\n\n{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
     path = record_dir(change, root) / "loop.md"
     if record is None:
         # A continued run after a release starts a fresh record; write_state
@@ -6073,6 +6237,31 @@ def main(argv: list[str] | None = None) -> int:
         help="review-loop only: report id printed by prepare-loop after its selection was shown in the main conversation",
     )
     args = parser.parse_args(argv)
+    # SIGTERM stops the run like Ctrl-C: the running programs' groups are killed before the exit
+    # (DL-B-5). The handler is the runner's only while main runs, and only from the main thread.
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        previous = signal.signal(signal.SIGTERM, _terminate)
+    try:
+        return _run(args)
+    except (KeyboardInterrupt, Terminated) as error:
+        killed = kill_live()
+        what = "terminated" if isinstance(error, Terminated) else "interrupted"
+        print(f"{what}: the run stopped; {killed} running program group(s) killed.", file=sys.stderr)
+        if isinstance(error, KeyboardInterrupt):
+            raise  # Ctrl-C keeps its own exit; only the programs it could not reach are killed first.
+        return 143
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
+
+
+def _terminate(_signum: int, _frame: object) -> None:
+    raise Terminated("SIGTERM")
+
+
+def _run(args: argparse.Namespace) -> int:
+    """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
     try:
         if (
             args.stage2_off is not None

@@ -111,6 +111,8 @@ def prepare(root: Path, change: str, runner) -> None:
     entry = runner.endpoint_entry(root)
     paid = runner.ladder(root)
     skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
+    # A free id discovery dropped (excluded, or not a plain id) is named, never probed (DL-B-2, DL-B-7).
+    skipped.update(free.get("dropped") or {})
     candidates = list(free["selected"])
     if not runner.free_diff(root).strip():
         free["skipped"] = "free stage skipped: no implementation source diff"

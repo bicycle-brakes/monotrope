@@ -444,3 +444,18 @@ def test_receipts_of_two_worktrees_do_not_meet(world: World) -> None:
     assert not other.record().exists()
     world.script(pi=[{"stdout": "No finding."}] * 2)
     assert other.run("review-loop", "demo", "--availability-reported", receipt(other)["report_id"]) == 0
+
+
+def test_availability_names_a_dropped_free_id_as_skipped(world: World) -> None:
+    """Criterion 2 of review-loop-deep-b (DL-B-2): an excluded free id is not probed and is named as skipped."""
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [{"was": "beacon dropped", "klasse": "framework", "modelle": ["beacon"]}]
+    path.write_text(yaml.safe_dump(data))
+    assert world.run("prepare-loop") == 0
+    probed = {call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in world.reviews()}
+    assert "beacon-2-free" not in probed and "acme-v1-free" in probed
+    state = receipt(world)["state"]
+    assert "beacon dropped" in state["availability"]["skipped"]["beacon-2-free"]
+    assert state["free"]["selected"] == ["acme-v1-free"]

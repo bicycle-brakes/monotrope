@@ -1132,7 +1132,7 @@ def test_contract_environment_excludes_parent_provider_keys(
 
 @pytest.mark.usefixtures("installed_pi")
 def test_real_catalog_headers_remain_literal(tmp_path: Path) -> None:
-    """P6-15: pinned Pi's real composer preserves catalog strings without executing them."""
+    """P6-15, as RS-3-3 changed it: pinned Pi's real composer sees no catalog header, so none is executed or sent."""
     headers = {
         "X-Command": "!printf catalog-command-ran",
         "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
@@ -1161,5 +1161,8 @@ console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefine
         check=False,
     )
     assert done.returncode == 0, done.stderr
-    assert json.loads(done.stdout) == headers, "Pi evaluated a catalog header instead of preserving its literal value"
+    # Since RS-3-3 (change review-loop-deep-b) catalog headers are not activated at all: Pi neither
+    # evaluates nor sends them.
+    assert "catalog-command-ran" not in done.stdout and "catalog-value" not in done.stdout
+    assert "headers" not in (tmp_path / "models.json").read_text()
     assert json.dumps(store) == evidence
