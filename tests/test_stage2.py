@@ -13519,7 +13519,9 @@ def _record_bytes(world: World) -> bytes | None:
         ("rung", None),
     ],
 )
-def test_malformed_table_refuses_the_whole_round(world: World, stage: str, peer: str | None) -> None:
+def test_malformed_table_refuses_the_whole_round(
+    world: World, capsys: pytest.CaptureFixture[str], stage: str, peer: str | None
+) -> None:
     # Criterion 1. Planted fault: a malformed member is treated as an ordinary failed member.
     members = _row_ids_stage(world, stage)
     before = _record_bytes(world)
@@ -13528,8 +13530,25 @@ def test_malformed_table_refuses_the_whole_round(world: World, stage: str, peer:
         script.append({"model": members[1], "stdout": rows(1, "P") if peer == "rows" else peer})
     script += [{"model": model, "stdout": rows(1, "Z")} for model in TEST_RUNGS if model not in members]
     world.script(pi=script)
+    capsys.readouterr()
     assert world.run("review-loop") == 1
+    # The refusal, not the generic all-failed exit that shares exit 1 (pre-review row P235-2).
+    err = capsys.readouterr().err
+    assert "malformed finding table" in err and MALFORMED in err, err
     assert _record_bytes(world) == before, "a refused attempt completed a round"
+
+
+def test_colliding_reviewer_ids_keep_their_rows_and_attribution(world: World) -> None:
+    # Criterion 6. Planted fault: two members both answering `R2-1` collide, lose a row or swap reviewers.
+    members = _row_ids_stage(world, "free")
+    world.script(pi=[{"model": model, "stdout": rows(1, "R2-")} for model in members])
+    assert world.run("review-loop") == 0
+    record = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    written = [cells for cells in record if cells[5] == "FB1-unique-body"]
+    assert len(written) == 2, "a colliding row was lost"
+    assert len({cells[0] for cells in written}) == 2, "the runner's ids collided"
+    assert all(re.fullmatch(r"L\d+-\d+", cells[0]) for cells in written), "a reviewer's own id was kept"
+    assert [cells[6] for cells in written] == members, "the rows changed attribution"
 
 
 def test_malformed_table_refusal_names_scrubbed_member_lines(world: World, capsys: pytest.CaptureFixture[str]) -> None:

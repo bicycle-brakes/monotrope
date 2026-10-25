@@ -321,3 +321,31 @@ review loop and the phase-6 Codex review are still owed.
   alone while the round stood. Under this change's criterion 1 the whole
   round refuses; the test keeps its name and now asserts the refusal, the
   named member line and the same-stage rerun.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change before the phase-6 Codex review, which this container cannot reach.
+Phase 6 is still owed. It found no blocker and four minor rows; the
+orchestrating session fixed three and put one on the not-now list.
+
+- **P235-1 (MINOR), not now.** A finding line that the table parser does not
+  read as a row fails its member only generically, so beside a peer's
+  `No finding.` the round can end clean. Shapes: no closing pipe, no outer
+  pipes, inside a quote (`> |…|`) or a list item (`- |…|`). These are outside
+  this spec's definition of a malformed table. The no-closing-pipe case is
+  fixed by #236 (review-row-closing-pipe) and #238 (review-mixed-malformed-row);
+  the other three remain for a change of their own.
+- **P235-2 (MINOR), fixed.** `tests/test_stage2.py::test_malformed_table_refuses_the_whole_round`
+  asserted only exit 1, which the generic all-failed path also gives, so its
+  `rung-None` case passed before the fix. It now asserts the refusal text
+  and the offending line. Against `main`'s runner all five cases fail.
+- **P235-3 (MINOR), fixed.** Criterion 6 had no test with arbitrary or
+  colliding reviewer ids. `tests/test_stage2.py::test_colliding_reviewer_ids_keep_their_rows_and_attribution`
+  has both free members answer `R2-1`; the ledger names it. The behaviour
+  was already right, so it passes before and after.
+- **P235-4 (MINOR), corrected here.** The implementation section above says
+  "nine of the seventeen new test cases failed". The count of new cases was
+  13 (15 with the two cases of the reworked
+  `test_malformed_finding_tables_fail_the_member`); nine of the 13 failing
+  first is right. The section above stays as written.
