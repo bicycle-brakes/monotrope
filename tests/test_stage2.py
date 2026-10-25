@@ -13640,3 +13640,99 @@ def test_ordinary_call_failures_keep_partial_and_replacement_rules(
     assert world.run("review-loop") == 0
     rows_ = stage2.record_rows(world.record().read_text(encoding="utf-8"))
     assert [cells[6] for cells in rows_] == ["acme-v1-free"]
+
+
+# ---------------------------------------------------------------------------
+# review-row-closing-pipe (bead coding-harness-2i9j): open rows and kept answers
+# ---------------------------------------------------------------------------
+
+OPEN_LINES = [
+    f"| F-{n} | {sev} | {dim} | criterion {n} | README.md:{n} | open-row finding {n}"
+    for n, sev, dim in [
+        (1, "MAJOR", "DOCS"),
+        (2, "MINOR", "DOCS"),
+        (3, "MAJOR", "SPEC"),
+        (4, "BLOCKER", "CODE"),
+        (5, "minor", "DOCS"),
+    ]
+]
+
+
+def test_parse_rows_reads_an_open_row() -> None:
+    # Criterion 1. Planted fault: a line without its closing pipe stays text.
+    for line in OPEN_LINES:
+        found, rest = stage2.parse_rows(line)
+        closed, _ = stage2.parse_rows(line + " |")
+        assert found == closed and len(found) == 1 and rest == "", line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "| F-1 | MAJOR | DOCS | criterion | README.md:1",
+        "| F-1 | MAJOR | DOCS | criterion | README.md:1 | finding | extra",
+        "| F-1 | NOTE | DOCS | criterion | README.md:1 | finding",
+        "F-1 | MAJOR | DOCS | criterion | README.md:1 | finding",
+        "F-1",
+    ],
+    ids=["five-cells", "seven-cells", "no-severity", "no-leading-pipe", "id-alone"],
+)
+def test_parse_rows_keeps_other_open_lines_as_text(line: str) -> None:
+    # Criterion 2. Planted fault: the open-row rule accepts more than its one shape.
+    found, rest = stage2.parse_rows(line)
+    assert found == [] and rest == line
+
+
+def test_five_open_lines_complete_the_round(world: World) -> None:
+    # Criterion 3: the 2026-10-22 answer shape, five open lines over the free members.
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": "\n".join(OPEN_LINES[:3])},
+            {"model": "beacon-2-free", "stdout": "\n".join(OPEN_LINES[3:])},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    rows_ = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert [cells[0] for cells in rows_] == ["L1-1", "L1-2", "L1-3", "L1-4", "L1-5"]
+
+
+def test_unreadable_answer_names_its_first_line(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 4. Planted fault: the generic failure names no line, or the line carries the key.
+    answer = f"\n\nI could not review this: {OKEY} " + "x" * 300 + "\nsecond line"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": answer}])
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    err = capsys.readouterr().err
+    assert "malformed finding output" in err and "first unrecognised line: 'I could not review this: " in err
+    assert OKEY not in err and "second line" not in err.split("first unrecognised line")[1].split("\n")[0]
+
+
+def test_unreadable_answer_is_quoted_in_the_round(world: World) -> None:
+    # Criterion 5. Planted fault: the failure line stands alone, or the quoted answer's row joins the round.
+    answer = "I reviewed it.\nZ-9 | MAJOR | CODE | criterion | here | a finding without its leading pipe\nsee above"
+    world.script(
+        pi=[{"model": "acme-v1-free", "stdout": rows(1, "A")}, {"model": "beacon-2-free", "stdout": "prose " + answer}]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert "beacon-2-free failed: malformed finding output" in text
+    assert "> prose I reviewed it." in text and "> see above" in text
+    assert [cells[6] for cells in stage2.record_rows(text)] == ["acme-v1-free"]
+
+
+def test_unreadable_answer_of_a_refused_attempt_is_kept_in_findings(world: World) -> None:
+    # Criterion 6. Planted fault: a refused attempt loses the answers, or writes a record.
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": "No table here, sorry."},
+            {"model": "beacon-2-free", "stdout": f"| R2-1 | MAJOR | {OKEY} | five | cells |"},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    text = world.text()
+    assert "## Rejected review-loop answer — acme-v1-free, " in text
+    assert "## Rejected review-loop answer — beacon-2-free, " in text
+    assert "> No table here, sorry." in text and "> | R2-1 | MAJOR |" in text
+    assert OKEY not in text
+    assert stage2.record_rows(text) == [] and "Loop state" not in text

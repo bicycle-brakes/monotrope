@@ -202,6 +202,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-release-lock/plan.md`](changes/review-release-lock/plan.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/research.md`](changes/review-release-lock/research.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/spec.md`](changes/review-release-lock/spec.md) | draft | partial | 2026-10-24 | coding-harness-751 |
+| [`changes/review-row-closing-pipe/decisions.md`](changes/review-row-closing-pipe/decisions.md) | draft | partial | 2026-10-25 | coding-harness-2i9j |
+| [`changes/review-row-closing-pipe/findings.md`](changes/review-row-closing-pipe/findings.md) | draft | partial | 2026-10-25 | coding-harness-2i9j |
+| [`changes/review-row-closing-pipe/plan.md`](changes/review-row-closing-pipe/plan.md) | draft | partial | 2026-10-25 | coding-harness-2i9j |
+| [`changes/review-row-closing-pipe/research.md`](changes/review-row-closing-pipe/research.md) | draft | partial | 2026-10-25 | coding-harness-2i9j |
+| [`changes/review-row-closing-pipe/spec.md`](changes/review-row-closing-pipe/spec.md) | draft | partial | 2026-10-25 | coding-harness-2i9j |
 | [`changes/review-verdict-validated/decisions.md`](changes/review-verdict-validated/decisions.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/findings.md`](changes/review-verdict-validated/findings.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/plan.md`](changes/review-verdict-validated/plan.md) | draft | none | 2026-10-24 | coding-harness-5mx |
