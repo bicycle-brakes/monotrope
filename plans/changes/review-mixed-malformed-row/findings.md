@@ -33,3 +33,16 @@ Read by the implementing session, so it is no independent review.
   `parse_rows`, so it never reaches `finding_shaped` as leftover text.
 - The header line `| ID | Severity | … |` has no severity in cell 2 and is
   furniture anyway; it does not refuse.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change (introduced across #235 and #238, reachable through #236):
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-2 | MAJOR | An answer whose only finding line has no closing pipe and the wrong cell count (`\| X9 \| BLOCKER \| CODE \| src/app.py:1`) is an ordinary failed member, not a malformed table, so a peer's `No finding.` leaves a clean round and the loop ends (reproduced). | fixed — tests/test_stage2.py::test_an_open_short_finding_line_alone_refuses_the_round |
+
+`run_swarm` now counts finding-shaped lines among the table lines of an
+answer without rows, so the round is refused.

@@ -2143,7 +2143,9 @@ def run_swarm(
             rows, rest = parse_rows(answer)
             # No arbitrary prose (including a refusal or context-limit error)
             # can certify a clean round. Commentary beside findings is kept.
-            table = [line.strip() for line in rest.splitlines() if split_row(line) is not None]
+            # A finding-shaped line without its closing pipe is a table line too (runner review R-2): read as
+            # anything else, it would fail the member quietly and let a peer's "No finding." end the loop.
+            table = [line.strip() for line in rest.splitlines() if split_row(line) is not None or finding_shaped(line)]
             if not rows and table:
                 raise MalformedTable(table, answer)
             # Beside readable rows, a finding-shaped line the parser could not read would drop out

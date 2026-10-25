@@ -13773,3 +13773,14 @@ def test_a_summary_table_beside_valid_rows_keeps_the_round(world: World) -> None
     world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": "No finding."}])
     assert world.run("review-loop") == 0
     assert len(stage2.record_rows(world.record().read_text(encoding="utf-8"))) == 1
+
+
+def test_an_open_short_finding_line_alone_refuses_the_round(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Runner review R-2 (2026-10-25). Planted fault: an answer whose only finding line lacks its closing pipe
+    # and has the wrong cell count is an ordinary failed member, so a peer's "No finding." ends the loop clean.
+    bad = "| X9 | BLOCKER | CODE | src/app.py:1"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": bad}, {"model": "beacon-2-free", "stdout": "No finding."}])
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "the round stood although its only finding line was unreadable"
+    assert bad in capsys.readouterr().err
