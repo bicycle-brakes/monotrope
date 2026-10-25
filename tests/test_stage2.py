@@ -13573,6 +13573,279 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
 
 
 # ---------------------------------------------------------------------------
+# verify-stages-new-files (bead coding-harness-fdz): new files are in the index when make verify runs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_make_verify_sees_the_attempts_new_files_in_git(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    # Planted fault: `make verify` runs while the attempt's new script is untracked, so a gate that
+    # reads `git ls-files` (the leerprobe gate's foreign repository) misses it.
+    original_launch = stage2.launch
+    seen: list[str] = []
+
+    def record(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            seen.append(git(root, "ls-files"))
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    if verb == "implement":
+        world.script(
+            claude=[
+                {
+                    "stdout": "implemented",
+                    "plant": {"scripts/new_tool.py": "VALUE = 1\n", "src/app.py": "value = 2\n"},
+                    "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+                }
+            ],
+            make=[{"stdout": "green\n"}],
+        )
+    else:
+        repair_world(world)
+        step = repair_step()
+        step["plant"] = {**step["plant"], "scripts/new_tool.py": "VALUE = 1\n"}
+        script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run(verb) == 0
+    assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
+    assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+
+
+def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F6-2: text-mode Git output folds CR into LF, so the LF path is added twice
+    # and the distinct CR path stays untracked when verification starts.
+    names = {"scripts/new\rtool.py", "scripts/new\ntool.py"}
+    for name in names:
+        (world.root / name).write_text("VALUE = 1\n")
+    original_launch = stage2.launch
+    seen = []
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = subprocess.run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(os.fsdecode(listed).split("\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = subprocess.run(
+        [GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True
+    ).stdout
+    assert not names.intersection(os.fsdecode(listed_after).split("\0"))
+
+
+@pytest.mark.parametrize("raw_name", [b"assets/new\xff.txt", b"assets/new\xc3\xbf.txt"])
+def test_make_verify_preserves_raw_byte_paths_and_drops_both_entries(
+    world: World, monkeypatch: pytest.MonkeyPatch, raw_name: bytes
+) -> None:
+    # F6-3: text-mode stdin replaces 0xff with '?', adding the question-mark
+    # path twice while the other path stays invisible to verification.
+    names = {raw_name, b"assets/new?.txt"}
+    (world.root / "assets").mkdir()
+    for name in names:
+        try:
+            with open(os.fsencode(world.root) + b"/" + name, "wb") as file:  # noqa: PTH123 — raw byte path
+                file.write(b"new\n")
+        except OSError:
+            if sys.platform == "darwin" and b"\xff" in name:
+                pytest.skip("This macOS filesystem refuses non-UTF-8 file names")
+            raise
+    original_launch = stage2.launch
+    original_run = subprocess.run
+    calls = []
+    seen = []
+
+    def record(command, *args, **kwargs):
+        if "--pathspec-from-file=-" in command:
+            calls.append((list(command), kwargs))
+        return original_run(command, *args, **kwargs)
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = original_run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(listed.split(b"\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = original_run([GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True).stdout
+    assert names.isdisjoint(listed_after.split(b"\0"))
+    writes = [(argv, kwargs) for argv, kwargs in calls if "--pathspec-from-file=-" in argv]
+    assert len(writes) == 2
+    for argv, kwargs in writes:
+        assert "--pathspec-file-nul" in argv
+        assert kwargs.get("text") is False
+        assert names | {b""} <= set(kwargs["input"].split(b"\0"))
+    assert writes[0][1]["input"] == writes[1][1]["input"]
+
+
+def test_intent_to_add_keeps_git_pathspecs_as_bytes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise the binary protocol even on filesystems that refuse non-UTF-8 names.
+    names = [b"assets/new?.txt", b"assets/new\xff.txt"]
+    payload = b"\0".join(names) + b"\0"
+    calls = []
+
+    def git_bytes(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return subprocess.CompletedProcess(command, 0, payload if "ls-files" in command else b"", b"")
+
+    monkeypatch.setattr(stage2.subprocess, "run", git_bytes)
+    intended = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, intended)
+    assert intended == names
+    assert len(calls) == 3
+    assert "-z" in calls[0][0]
+    for argv, kwargs in calls:
+        assert kwargs.get("text") is False
+        if "ls-files" not in argv:
+            assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+            assert kwargs["input"] == payload
+
+
+def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
+    # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
+    # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"scripts/new_tool.py": "VALUE = 1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    assert "scripts/new_tool.py" not in git(world.root, "ls-files").splitlines()
+    assert git(world.root, "diff", "--cached", "--name-only") == ""
+
+
+@pytest.mark.parametrize("verification", ["green", "red", "timeout"])
+@pytest.mark.parametrize("failure", ["index.lock", "oserror"])
+def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch, verification: str, failure: str
+) -> None:
+    # F6-1: a cleanup failure must reject even a green verifier, and remain visible beside a
+    # failed or timed-out verifier. Plant a real Git lock after intent-to-add has succeeded.
+    (world.root / "scripts/new_tool.py").write_text("VALUE = 1\n")
+    lock = world.root / ".git/index.lock"
+    original_launch = stage2.launch
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            if failure == "index.lock":
+                lock.write_text("interrupted Git operation\n")
+            if verification == "timeout":
+                raise stage2.StepTimedOut("test verifier timed out")
+            return subprocess.CompletedProcess(command, int(verification == "red"), "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    if failure == "oserror":
+
+        def fail_drop(*_args, **_kwargs):
+            raise OSError("test cleanup unavailable")
+
+        monkeypatch.setattr(stage2, "drop_intended", fail_drop)
+    monkeypatch.setattr(stage2, "launch", verify)
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan)
+    finally:
+        lock.unlink(missing_ok=True)
+    cleanup = [problem for problem in problems if "intent-to-add" in problem]
+    assert cleanup, problems
+    assert ("index.lock" if failure == "index.lock" else "test cleanup unavailable") in cleanup[0]
+    if verification == "red":
+        assert any("`make verify` exited 1" in problem for problem in problems)
+    elif verification == "timeout":
+        assert any("`make verify` did not finish" in problem for problem in problems)
+
+
+def test_intend_new_files_passes_no_file_name_on_the_command_line(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1 (pre-review of #242). Planted fault: every name is an argument, so ~30,000 untracked files
+    # raise OSError "Argument list too long". The names must travel on stdin, for the add and the drop.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    (world.root / "scripts/new_b.py").write_text("B = 1\n")
+    calls: list[tuple[list[str], bytes | None]] = []
+    original = subprocess.run
+
+    def record(command, *args, **kwargs):
+        calls.append((list(command), kwargs.get("input")))
+        return original(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    names = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, names)
+    monkeypatch.undo()
+    assert sorted(names) == [b"scripts/new_a.py", b"scripts/new_b.py"]
+    writes = [(argv, text) for argv, text in calls if "--intent-to-add" in argv or "--cached" in argv]
+    assert len(writes) == 2
+    for argv, text in writes:
+        assert not any(os.fsdecode(name) in argv for name in names), argv
+        assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+        assert text is not None and set(text.split(b"\0")) == {*names, b""}
+    assert "scripts/new_a.py" not in git(world.root, "ls-files").splitlines()
+    assert "scripts/new_a.py" in git(world.root, "ls-files", "--others", "--exclude-standard").splitlines()
+
+
+def test_an_oserror_from_the_intent_to_add_call_becomes_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1. Planted fault: "Argument list too long" (OSError) is not caught, so the run ends in a traceback.
+    original = subprocess.run
+
+    def fail(command, *args, **kwargs):
+        if "--intent-to-add" in command:
+            raise OSError(7, "Argument list too long")
+        return original(command, *args, **kwargs)
+
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    monkeypatch.setattr(stage2.subprocess, "run", fail)
+    problems = stage2.verify_attempt(world.root, world.plan)
+    monkeypatch.undo()
+    assert len(problems) == 1 and "intent-to-add" in problems[0] and "Argument list too long" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone(world: World) -> None:
+    # P242-2 (a) and (c). Planted fault: a new file `[i].md` is read as a pattern that also matches the
+    # caller's staged `i.md`, and the drop (a reset to HEAD) unstages it; a staged `git rm --cached` is undone.
+    directory = world.root / "plans/changes/demo"
+    findings = directory / "findings.md"
+    findings.write_text("caller's change\n")
+    git(world.root, "add", "--", "plans/changes/demo/findings.md")
+    (directory / "[f]indings.md").write_text("new\n")
+    git(world.root, "rm", "--cached", "-q", "--", "plans/changes/demo/spec.md")
+    before = git(world.root, "diff", "--cached", "--name-status")
+    names = stage2.intend_new_files(world.root)
+    assert sorted(names) == [b"plans/changes/demo/[f]indings.md", b"plans/changes/demo/spec.md"]
+    stage2.drop_intended(world.root, names)
+    assert git(world.root, "diff", "--cached", "--name-status") == before
+    assert "plans/changes/demo/[f]indings.md" in git(world.root, "ls-files", "--others").splitlines()
+    assert "[f]indings.md" not in git(world.root, "ls-files").splitlines()
+
+
+def test_a_new_file_named_like_pathspec_magic_is_added_and_dropped(world: World) -> None:
+    # P242-2 (b). Planted fault: `:notes.md` is read as pathspec magic, so `git add -N` fails.
+    (world.root / ":notes.md").write_text("n\n")
+    names = stage2.intend_new_files(world.root)
+    assert names == [b":notes.md"]
+    assert ":notes.md" in git(world.root, "--literal-pathspecs", "ls-files").splitlines()
+    stage2.drop_intended(world.root, names)
+    assert ":notes.md" not in git(world.root, "ls-files").splitlines()
+    assert ":notes.md" in git(world.root, "ls-files", "--others").splitlines()
+
+
+# ---------------------------------------------------------------------------
 # explore-stage2-off-sonnet (bead coding-harness-e7m): the explorer knows its role; no research, no append
 # ---------------------------------------------------------------------------
 

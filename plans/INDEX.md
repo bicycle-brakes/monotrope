@@ -275,4 +275,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-absolute-python/plan.md`](changes/verify-absolute-python/plan.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/research.md`](changes/verify-absolute-python/research.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/spec.md`](changes/verify-absolute-python/spec.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-stages-new-files/decisions.md`](changes/verify-stages-new-files/decisions.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-stages-new-files/findings.md`](changes/verify-stages-new-files/findings.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-stages-new-files/plan.md`](changes/verify-stages-new-files/plan.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-stages-new-files/research.md`](changes/verify-stages-new-files/research.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-stages-new-files/spec.md`](changes/verify-stages-new-files/spec.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |

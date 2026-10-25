@@ -2964,13 +2964,21 @@ def release_loop(
     release(root, change)
 
 
-def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
+def _git_output(
+    root: Path,
+    *args: str,
+    allow: tuple[int, ...] = (0,),
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
+    preserve_newlines: bool = False,
+) -> str:
     try:
         done = subprocess.run(
             [GIT, "-C", str(root), *args],
+            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             capture_output=True,
-            text=True,
-            errors="replace",
+            text=not preserve_newlines,
+            errors=None if preserve_newlines else "replace",
             check=False,
             env=env,
             timeout=GIT_SECONDS,
@@ -2978,24 +2986,8 @@ def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
-    return done.stdout
-
-
-def _git_bytes(root: Path, *args: str) -> bytes:
-    """The raw stdout of a git command that must succeed: no text mode, so no newline translation."""
-    try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            capture_output=True,
-            check=False,
-            timeout=GIT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
-    if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {done.stderr.decode('utf-8', 'replace').strip()[:200]}")
-    return done.stdout
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return os.fsdecode(done.stdout)
 
 
 def change_diff(root: Path) -> str:
@@ -3231,6 +3223,78 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
+
+
+def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
+    """Run Git without decoding path output or translating pathspec stdin."""
+    try:
+        done = subprocess.run(
+            [GIT, "-C", str(root), *args],
+            input=stdin,
+            capture_output=True,
+            text=False,
+            check=False,
+            env=env,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    if done.returncode != 0:
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return done.stdout
+
+
+def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[bytes]:
+    """Add every untracked, non-ignored file intent-to-add, so `git ls-files` lists it; return the names.
+
+    A gate that reads the index (the leerprobe gate builds its foreign repository from `git ls-files`)
+    would otherwise miss a script the attempt just created (bead coding-harness-fdz). Intent-to-add
+    records only the path, not its content: the checkpoint's `git add -A` stages the content later, and
+    `verify_attempt` drops the entries right after `make verify`.
+    The names go to git on stdin, NUL-separated, so thousands of files cannot overflow the argument
+    list, and `--literal-pathspecs` makes them paths, not patterns: `[i].md` does not match `i.md`
+    and `:notes.md` is no pathspec magic. Paths remain filesystem bytes throughout listing,
+    adding and cleanup, including names that cannot be decoded as UTF-8.
+    """
+    names = [
+        name
+        for name in _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0")
+        if name
+    ]
+    if names:
+        _git_bytes(
+            root,
+            "--literal-pathspecs",
+            "add",
+            "--intent-to-add",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin=b"\0".join(names) + b"\0",
+        )
+    return names
+
+
+def drop_intended(root: Path, names: list[bytes], env: dict[str, str] | None = None) -> None:
+    """Remove the intent-to-add entries of `names` from the index; the files and the caller's entries stay.
+
+    `rm --cached` on the literal paths touches only those entries: a reset to HEAD would also unstage
+    a caller's change on a path that a pattern happens to match, or undo a caller's `git rm --cached`.
+    """
+    if names:
+        _git_bytes(
+            root,
+            "--literal-pathspecs",
+            "rm",
+            "--cached",
+            "-q",
+            "--ignore-unmatch",
+            "-f",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin=b"\0".join(names) + b"\0",
+        )
 
 
 def derived_leftover(root: Path, relative: Path) -> bool:
@@ -4070,6 +4134,11 @@ def verify_attempt(
     if preparation:
         return preparation
     try:
+        intended = intend_new_files(root, env)
+    except (Refused, OSError) as error:
+        return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+    problems = []
+    try:
         done = launch(
             ["make", "verify"],
             root,
@@ -4080,10 +4149,18 @@ def verify_attempt(
     except StepTimedOut as error:
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
-        return [f"`make verify` did not finish: {error}"]
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        problems.append(f"`make verify` did not finish: {error}")
+    else:
+        if done.returncode != 0:
+            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    finally:
+        # The entries were for the gates only: a failed run must not leave them in the operator's index,
+        # and a passing one is staged whole by the checkpoint (runner review R-5).
+        # Cleanup is a postcondition even when verification passed or timed out.
+        try:
+            drop_intended(root, intended, env)
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's intent-to-add entries could not be removed after `make verify`: {error}")
     try:
         time_log(plan)
     except Refused as error:
