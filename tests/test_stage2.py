@@ -1408,7 +1408,7 @@ def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> N
 
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
     # Two Claude calls run: the spec review first, then the explorer.
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1434,7 +1434,7 @@ def test_the_foreign_environment_is_the_runners(world: World) -> None:
 
 def test_no_call_carries_another_endpoints_key(world: World) -> None:
     """Criterion 13: the OpenCode Go key and the GLM key never meet in one environment."""
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1599,7 +1599,7 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
 def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
     (world.root / "plans/changes/demo/spec.md").unlink()
     world.plan.unlink()
-    world.script(claude=[{"stdout": "A sourced fact."}])
+    world.script(claude=[{"stdout": "A sourced fact from `src/app.py`."}])
     assert world.run("explore") == 0
     world.research.write_text("# no header\n", encoding="utf-8")
     assert world.run("explore") == 2
@@ -1610,7 +1610,7 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
-    world.script(claude=[{"stdout": "Fallback fact."}])
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
     call = world.calls("claude")[0]
     argv, env = call["argv"], call["env"]
@@ -1652,7 +1652,7 @@ def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
-    world.script(claude=[{"stdout": "the credential was @KEY@"}])
+    world.script(claude=[{"stdout": "the credential was @KEY@ in src/app.py"}])
     assert world.run("explore") == 0
     text = world.research.read_text(encoding="utf-8")
     assert "[credential]" in text
@@ -2460,7 +2460,7 @@ def test_a_key_fragment_never_survives_the_relayed_streams(world: World, capsys:
     world.script(
         claude=[
             {"stdout": "the model saw @KEY@\n" + KEY[:8] + " tail", "stderr": KEY[10:20], "exit": 1},
-            {"stdout": f"fact {KEY[:8]} and {KEY[16:]}"},
+            {"stdout": f"fact {KEY[:8]} and {KEY[16:]} in src/app.py"},
         ]
     )
     assert world.run("explore") == 1
@@ -13573,6 +13573,144 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
 
 
 # ---------------------------------------------------------------------------
+# explore-stage2-off-sonnet (bead coding-harness-e7m): the explorer knows its role; no research, no append
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("off", [False, True])
+def test_the_explore_prompt_states_the_models_role_and_tools(world: World, off: bool) -> None:
+    # Planted fault: the model is not told it is the explorer the runner started, with read-only tools.
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert stage2.EXPLORER_ROLE in prompt
+
+
+def test_an_exploration_answer_without_a_repository_path_fails_and_appends_nothing(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Planted fault: an answer that is no research (the 2026-10-20 Haiku refusal) is appended as research.
+    before = world.research.read_text(encoding="utf-8")
+    refusal = (
+        "I can't run phase 1: the Bash tool is disabled, and `stage2.py explore` has to be run through it. "
+        "Please rerun me with Bash."
+    )
+    world.script(claude=[{"stdout": refusal}])
+    capsys.readouterr()
+    assert world.run("explore", "demo", "--stage2-off", "GLM unavailable") == 1
+    text = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" not in text and "Bash tool is disabled" not in text
+    assert "seed fact" in text and text.count("## ") == before.count("## "), "research.md lost what it held"
+    err = capsys.readouterr().err
+    assert "names no file of the repository" in err and "Bash tool is disabled" in err
+
+
+def test_an_over_long_word_in_an_exploration_answer_fails_cleanly(world: World) -> None:
+    # Runner review R-6 (2026-10-25). Planted fault: path.exists() outside the try raises "File name too long"
+    # for a path-like token with a component over 255 bytes, so explore dies with a traceback.
+    word = "a" * 300 + ".md"
+    assert stage2.names_a_repository_file(world.root, f"see {word} and nothing else") is False
+    assert stage2.names_a_repository_file(world.root, f"see {word} and `src/app.py`") is True
+    world.script(claude=[{"stdout": f"see {word}"}])
+    assert world.run("explore") == 1
+
+
+# ---------------------------------------------------------------------------
+# explore-role pre-review repairs (PR #241, findings P241-1..P241-7)
+# ---------------------------------------------------------------------------
+
+
+def test_an_absolute_path_inside_the_worktree_counts_and_one_outside_does_not(world: World) -> None:
+    # P241-1. Planted fault: the token pattern cannot match a leading slash, so the absolute paths that
+    # Read and Glob return never count.
+    inside = f"{world.root}/src/app.py"
+    assert stage2.names_a_repository_file(world.root, f"The code is in {inside} only") is True
+    assert stage2.names_a_repository_file(world.root, "See /etc/passwd") is False
+
+
+def test_a_path_at_the_end_of_a_sentence_counts(world: World) -> None:
+    # P241-2. Planted fault: the full stop is glued onto the path, so the lookup misses the file.
+    for text in (
+        "The runner lives in src/app.py.",
+        "Files: src/app.py, and more",
+        "(see src/app.py)",
+        "see src/app.py; then",
+        "src/app.py:12 holds it",
+        "as in 'src/app.py'.",
+    ):
+        assert stage2.names_a_repository_file(world.root, text) is True, text
+
+
+def test_the_explorer_role_does_not_name_the_runner_script() -> None:
+    # P241-3. Planted fault: the role names `scripts/stage2.py`, so a refusal that echoes it passes the check.
+    assert "scripts/stage2.py" not in stage2.EXPLORER_ROLE
+    assert "use Grep" in stage2.EXPLORER_ROLE and "answer with the research now" in stage2.EXPLORER_ROLE
+
+
+def test_a_refusal_that_echoes_the_explorer_role_is_refused(world: World) -> None:
+    # P241-3. Planted fault: the echoed role wording names a repository file and the refusal passes.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts" / "stage2.py").write_text("", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, stage2.EXPLORER_ROLE) is False
+
+
+def test_a_path_after_the_five_thousandth_word_still_counts(world: World) -> None:
+    # P241-4a. Planted fault: the cap counts every word, so a path after the 5000th is never seen.
+    answer = "word " * 5001 + "src/app.py"
+    assert stage2.names_a_repository_file(world.root, answer) is True
+
+
+def test_a_windows_separator_in_a_path_counts(world: World) -> None:
+    # P241-4b. Planted fault: a backslash path is split at the separator and never found.
+    assert stage2.names_a_repository_file(world.root, r"see src\app.py for it") is True
+
+
+def test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry(world: World) -> None:
+    # P241-4c. Planted fault: a token without a slash or dot is skipped, so `Makefile` never counts.
+    (world.root / "Makefile").write_text("all:\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "the Makefile drives it") is True
+    assert stage2.names_a_repository_file(world.root, "the Nonexistent drives it") is False
+    # A root folder named as a bare word is ordinary prose in a refusal, not a cited source.
+    (world.root / "tests").mkdir(exist_ok=True)
+    assert stage2.names_a_repository_file(world.root, "I cannot run the tests, please rerun me") is False
+
+
+@pytest.mark.parametrize("citation", ["tests/", "./tests/"])
+@pytest.mark.parametrize("off", [False, True])
+def test_an_exploration_answer_citing_only_a_root_directory_is_accepted(world: World, citation: str, off: bool) -> None:
+    # F-1. Planted fault: tokenization drops the trailing slash and rejects a root directory as prose.
+    (world.root / "tests").mkdir(exist_ok=True)
+    answer = f"The regression suite lives in `{citation}`."
+    world.script(claude=[{"stdout": answer}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    research = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" in research
+    assert answer in research
+
+
+def test_a_git_internal_path_does_not_count(world: World) -> None:
+    # P241-5. Planted fault: .git/config exists in every worktree and satisfies the check.
+    (world.root / ".git").mkdir(exist_ok=True)
+    (world.root / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "only .git/config here") is False
+    assert stage2.names_a_repository_file(world.root, "only .git here") is False
+
+
+def test_a_refused_exploration_answer_shows_its_last_forty_lines(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # P241-7. Planted fault: the whole answer, or its head, is shown instead of the last 40 lines.
+    answer = "\n".join(f"line {n:02d}" for n in range(1, 61))
+    world.script(claude=[{"stdout": answer}])
+    capsys.readouterr()
+    assert world.run("explore") == 1
+    err = capsys.readouterr().err
+    assert "line 60" in err and "line 21" in err
+    assert "line 01" not in err and "line 20" not in err
+
+
 # tolerate-derived-leftovers (bead coding-harness-b5w): a failed run's derived writes do not block the next
 # ---------------------------------------------------------------------------
 
