@@ -13540,3 +13540,82 @@ def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
     assert world.run("implement") == 1
     assert "scripts/new_tool.py" not in git(world.root, "ls-files").splitlines()
     assert git(world.root, "diff", "--cached", "--name-only") == ""
+
+
+def test_intend_new_files_passes_no_file_name_on_the_command_line(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1 (pre-review of #242). Planted fault: every name is an argument, so ~30,000 untracked files
+    # raise OSError "Argument list too long". The names must travel on stdin, for the add and the drop.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    (world.root / "scripts/new_b.py").write_text("B = 1\n")
+    calls: list[tuple[list[str], str | None]] = []
+    original = subprocess.run
+
+    def record(command, *args, **kwargs):
+        calls.append((list(command), kwargs.get("input")))
+        return original(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    names = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, names)
+    monkeypatch.undo()
+    assert sorted(names) == ["scripts/new_a.py", "scripts/new_b.py"]
+    writes = [(argv, text) for argv, text in calls if "--intent-to-add" in argv or "--cached" in argv]
+    assert len(writes) == 2
+    for argv, text in writes:
+        assert not any(name in argv for name in names), argv
+        assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+        assert text is not None and set(text.split("\0")) == {*names, ""}
+    assert "scripts/new_a.py" not in git(world.root, "ls-files").splitlines()
+    assert "scripts/new_a.py" in git(world.root, "ls-files", "--others", "--exclude-standard").splitlines()
+
+
+def test_an_oserror_from_the_intent_to_add_call_becomes_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1. Planted fault: "Argument list too long" (OSError) is not caught, so the run ends in a traceback.
+    original = subprocess.run
+
+    def fail(command, *args, **kwargs):
+        if "--intent-to-add" in command:
+            raise OSError(7, "Argument list too long")
+        return original(command, *args, **kwargs)
+
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    monkeypatch.setattr(stage2.subprocess, "run", fail)
+    problems = stage2.verify_attempt(world.root, world.plan)
+    monkeypatch.undo()
+    assert len(problems) == 1 and "intent-to-add" in problems[0] and "Argument list too long" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone(world: World) -> None:
+    # P242-2 (a) and (c). Planted fault: a new file `[i].md` is read as a pattern that also matches the
+    # caller's staged `i.md`, and the drop (a reset to HEAD) unstages it; a staged `git rm --cached` is undone.
+    directory = world.root / "plans/changes/demo"
+    findings = directory / "findings.md"
+    findings.write_text("caller's change\n")
+    git(world.root, "add", "--", "plans/changes/demo/findings.md")
+    (directory / "[f]indings.md").write_text("new\n")
+    git(world.root, "rm", "--cached", "-q", "--", "plans/changes/demo/spec.md")
+    before = git(world.root, "diff", "--cached", "--name-status")
+    names = stage2.intend_new_files(world.root)
+    assert sorted(names) == ["plans/changes/demo/[f]indings.md", "plans/changes/demo/spec.md"]
+    stage2.drop_intended(world.root, names)
+    assert git(world.root, "diff", "--cached", "--name-status") == before
+    assert "plans/changes/demo/[f]indings.md" in git(world.root, "ls-files", "--others").splitlines()
+    assert "[f]indings.md" not in git(world.root, "ls-files").splitlines()
+
+
+def test_a_new_file_named_like_pathspec_magic_is_added_and_dropped(world: World) -> None:
+    # P242-2 (b). Planted fault: `:notes.md` is read as pathspec magic, so `git add -N` fails.
+    (world.root / ":notes.md").write_text("n\n")
+    names = stage2.intend_new_files(world.root)
+    assert names == [":notes.md"]
+    assert ":notes.md" in git(world.root, "--literal-pathspecs", "ls-files").splitlines()
+    stage2.drop_intended(world.root, names)
+    assert ":notes.md" not in git(world.root, "ls-files").splitlines()
+    assert ":notes.md" in git(world.root, "ls-files", "--others").splitlines()

@@ -32,6 +32,8 @@ the files the attempt created (bead coding-harness-fdz). Research:
    *Refuted by:* a new file missing from `git ls-files` at that moment.
 2. The checkpoint commit still holds the new file's content.
    *Refuted by:* the file missing from the commit.
+3. No intent-to-add entry outlives `make verify`; the caller's index is left as it was.
+   *Refuted by:* an intent-to-add entry or a changed staged state after the attempt.
 
 ## Non-goals
 

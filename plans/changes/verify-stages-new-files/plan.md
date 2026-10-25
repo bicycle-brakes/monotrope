@@ -36,7 +36,7 @@ Starts unless you say stop.
 ## Verification
 
 ```sh
-.venv/bin/python3 -m pytest -q tests/test_stage2.py -k sees_the_attempts_new_files
+.venv/bin/python3 -m pytest -q tests/test_stage2.py -k "sees_the_attempts_new_files or leaves_no_intent_to_add or no_file_name_on_the_command or oserror_from_the_intent or reads_names_as_paths or pathspec_magic"
 PYTHON=.venv/bin/python3 make verify
 ```
 
@@ -44,6 +44,11 @@ PYTHON=.venv/bin/python3 make verify
 
 - 1: tests/test_stage2.py::test_make_verify_sees_the_attempts_new_files_in_git — a new file is missing from git ls-files during make verify.
 - 2: tests/test_stage2.py::test_make_verify_sees_the_attempts_new_files_in_git — the new file is missing from the checkpoint commit.
+- 3: tests/test_stage2.py::test_a_failed_run_leaves_no_intent_to_add_entry — an intent-to-add entry or a changed staged state remains after a failed run.
+- 3: tests/test_stage2.py::test_intend_new_files_passes_no_file_name_on_the_command_line — a file name is on the command line, so a very large untracked set overflows the argument list.
+- 3: tests/test_stage2.py::test_an_oserror_from_the_intent_to_add_call_becomes_a_diagnostic — an OSError from the git call ends in a traceback instead of a diagnostic.
+- 3: tests/test_stage2.py::test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone — the caller's staged state changes after the drop.
+- 3: tests/test_stage2.py::test_a_new_file_named_like_pathspec_magic_is_added_and_dropped — a file named like pathspec magic fails to be added or stays in the index.
 
 ## Route
 

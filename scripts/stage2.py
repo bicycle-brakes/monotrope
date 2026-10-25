@@ -2959,10 +2959,17 @@ def release_loop(
     release(root, change)
 
 
-def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
+def _git_output(
+    root: Path,
+    *args: str,
+    allow: tuple[int, ...] = (0,),
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
+) -> str:
     try:
         done = subprocess.run(
             [GIT, "-C", str(root), *args],
+            input=stdin,
             capture_output=True,
             text=True,
             errors="replace",
@@ -3213,7 +3220,10 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
     A gate that reads the index (the leerprobe gate builds its foreign repository from `git ls-files`)
     would otherwise miss a script the attempt just created (bead coding-harness-fdz). Intent-to-add
     records only the path, not its content: the checkpoint's `git add -A` stages the content later, and
-    `restore_baseline` drops the entry with the file.
+    `verify_attempt` drops the entries right after `make verify`.
+    The names go to git on stdin, NUL-separated, so thousands of files cannot overflow the argument
+    list, and `--literal-pathspecs` makes them paths, not patterns: `[i].md` does not match `i.md`
+    and `:notes.md` is no pathspec magic.
     """
     names = [
         name
@@ -3221,8 +3231,39 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
         if name
     ]
     if names:
-        _git_output(root, "add", "--intent-to-add", "--", *names, env=env)
+        _git_output(
+            root,
+            "--literal-pathspecs",
+            "add",
+            "--intent-to-add",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin="\0".join(names) + "\0",
+        )
     return names
+
+
+def drop_intended(root: Path, names: list[str], env: dict[str, str] | None = None) -> None:
+    """Remove the intent-to-add entries of `names` from the index; the files and the caller's entries stay.
+
+    `rm --cached` on the literal paths touches only those entries: a reset to HEAD would also unstage
+    a caller's change on a path that a pattern happens to match, or undo a caller's `git rm --cached`.
+    """
+    if names:
+        _git_output(
+            root,
+            "--literal-pathspecs",
+            "rm",
+            "--cached",
+            "-q",
+            "--ignore-unmatch",
+            "-f",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin="\0".join(names) + "\0",
+        )
 
 
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
@@ -3975,7 +4016,7 @@ def verify_attempt(
         formatted.append(line)
     try:
         intended = intend_new_files(root, env)
-    except Refused as error:
+    except (Refused, OSError) as error:
         return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
     try:
         done = launch(
@@ -3993,9 +4034,8 @@ def verify_attempt(
         # The entries were for the gates only: a failed run must not leave them in the operator's index,
         # and a passing one is staged whole by the checkpoint (runner review R-5).
         # A failed reset leaves the entries visible to the next run's pre-existing-change check.
-        if intended:
-            with contextlib.suppress(Refused):
-                _git_output(root, "reset", "--quiet", "--", *intended, env=env)
+        with contextlib.suppress(Refused, OSError):
+            drop_intended(root, intended, env)
     problems = []
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())

@@ -53,3 +53,17 @@ this change:
 right after `make verify`; the checkpoint still stages the content whole.
 The self-review line above that said "no entry outlives a restore" was
 true but missed the failure without a restore.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request a read-only Opus 5.5 subagent reviewed the change
+before phase 6 (Codex, unreachable here); phase 6 is still owed. Repairs by a
+Sonnet 5.5 subagent at the orchestrator's direction.
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| P242-1 | MINOR | Every name was a command-line argument, so about 30,000 untracked files raised an uncaught `OSError: Argument list too long`. Names now go via stdin (`--pathspec-from-file=- --pathspec-file-nul`) and an `OSError` becomes a diagnostic. | fixed — tests/test_stage2.py::test_intend_new_files_passes_no_file_name_on_the_command_line, tests/test_stage2.py::test_an_oserror_from_the_intent_to_add_call_becomes_a_diagnostic |
+| P242-2 | MINOR | Names were read as pathspec patterns and the drop reset to HEAD: `[i].md` matched the caller's staged `i.md` and unstaged it, `:notes.md` made `git add -N` fail, a caller's `git rm --cached` was undone. Now `--literal-pathspecs` with `rm --cached --ignore-unmatch -f`. | fixed — tests/test_stage2.py::test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone, tests/test_stage2.py::test_a_new_file_named_like_pathspec_magic_is_added_and_dropped |
+| P242-3 | NIT | The `intend_new_files` docstring said `restore_baseline` drops the entry. | fixed — docstring now names `verify_attempt` right after `make verify`; no test |
+| P242-4 | NIT | spec.md lacked the criterion that no entry outlives `make verify`, and plan.md lacked ledger rows for the later tests. | fixed — spec.md criterion 3, plan.md ledger rows; checked by scripts/check_criterion_ledger.py |
+| P242-5 | NIT | A nested repository without a commit makes `git add --intent-to-add` fail, so the attempt gets a diagnostic before `make verify` instead of failing later at the checkpoint's `git add -A`. The outcome barely changes; no code change. | accepted — no test |
