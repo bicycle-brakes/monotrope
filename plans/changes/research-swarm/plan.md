@@ -751,7 +751,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 16: tests/test_stage2_research_refs.py::test_reference_claim_has_one_shared_unicode_budget_and_no_partial_support — Standalone claim assembly exceeds 4000 Unicode characters or retains an excerpt after any unresolved reference.
 - 16: tests/test_stage2_research_refs.py::test_reference_reads_only_frozen_bytes_and_refuses_escape — The resolver reads live bytes or accepts a path escaping the frozen packet.
 - 42: tests/test_stage2_research_catalog.py::test_preflight_duplicate_unrelated_metadata_fields_do_not_disable_go — A duplicate foreign-provider/property key disables an otherwise valid Go intersection.
-- 42: tests/test_stage2_research_catalog.py::test_preflight_raw_duplicate_keys_inside_models_are_document_ambiguity — A repeated raw key within Go models leaves a free identity eligible instead of duplicate-id capability-unavailable.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_raw_duplicate_id_key_inside_models_is_document_ambiguity — A repeated `id` key inside a Go models entry (renamed for deep review RS-3-5; other repeated keys exclude only their entry) leaves a free identity eligible instead of duplicate-id capability-unavailable.
 - 42: tests/test_stage2_research_catalog.py::test_preflight_non_model_pi_entries_are_not_candidate_faults — An unrelated ignored Pi entry excludes valid free peers.
 - 42: tests/test_stage2_research_catalog.py::test_preflight_non_object_capability_keeps_raw_value_evidence — A local malformed entry loses its exact source value.
 
@@ -1049,6 +1049,29 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 33: tests/test_research_handoff.py::test_unicode_line_separators_inside_records_stay_measured — A raw U+2028, U+2029 or U+0085 inside a fenced record makes a complete run not measured (deep review RS-1-2).
 - 32: tests/test_research_handoff.py::test_run_envelope_markers_end_a_foreign_fence — An unclosed foreign fence in earlier research hides later run envelopes from the gate (deep review RS-1-9).
 - 34: tests/test_research_handoff.py::test_numbered_lists_in_later_sections_are_not_criteria — A numbered rollout or open-decision list under a later heading becomes a criterion (deep review RS-1-3).
+- 53: tests/test_stage2_research_deep_review.py::test_a_failed_clear_binds_the_bytes_actually_appended — A failed clearing after the binding write leaves the binding of the text before the status changed, so the next run reuses nothing (deep review RS-1-1).
+- 17: tests/test_stage2_research_deep_review.py::test_publication_keeps_earlier_research_bytes_and_their_resume — Publication rewrites CRLF or lone CR bytes of earlier research, or the rewrite breaks the stored binding (deep review RS-1-8).
+- 17: tests/test_stage2_research_deep_review.py::test_append_replaces_research_in_one_atomic_step — The append truncates and rewrites research.md, or stamps it in a second write, so an interrupted publication loses earlier research (deep review RS-2-6).
+- 34: tests/test_stage2_research_deep_review.py::test_a_forged_run_envelope_in_an_explorer_answer_is_quoted — A run envelope inside a single explorer's answer counts as a complete run (deep review RS-1-10).
+- 14: tests/test_stage2_research_deep_review.py::test_web_text_reaches_the_judge_as_data_never_as_system_prompt — Web text or finder reports reach an Opus role as system prompt (deep review RS-1-5).
+- 15: tests/test_stage2_research_deep_review.py::test_an_unresolved_claim_outside_every_disagreement_fails_the_judge — A judge answer marks a claim unresolved outside every disagreement and is accepted, leaving no handoff item (deep review RS-1-5).
+- 52: tests/test_research_capture.py::test_a_home_canary_read_by_the_repository_seat_fails_the_capture — A home canary read by the repository seat passes the capture (deep review RS-1-4).
+- 18: tests/test_stage2_research_deep_review.py::test_the_judge_packet_carries_no_raw_copy_and_compact_json — The judge packet carries each report twice or indented (deep review RS-1-6).
+- 19: tests/test_stage2_research_deep_review.py::test_a_tight_judge_limit_is_announced_before_any_topic_call — A packet limit that leaves too little per report shows only at the judge, after the topic calls (deep review RS-1-6).
+- 38: tests/test_stage2_research_deep_review.py::test_a_launch_writes_only_its_own_allow_listed_row — A launch's models.json carries other rows, unchecked fields (samplingParams, headers, compat) or no checked baseUrl (deep review RS-3-1, RS-3-3, RS-3-7, RS-3-8).
+- 38: tests/test_stage2_research_deep_review.py::test_a_row_pi_would_refuse_fails_the_launch_closed — A row Pi's schema refuses is written and Pi falls back to its defaults (deep review RS-3-1).
+- 18: tests/test_stage2_research_deep_review.py::test_a_pi_answer_without_its_measured_model_is_a_failed_slot — A Pi answer given without its measured model counts as a valid contribution (deep review RS-3-1).
+- 9: tests/test_stage2_research_deep_review.py::test_every_research_pi_launch_is_offline — A research seat's Pi may download and run an unpinned rg or fd (deep review RS-3-4).
+- 7: tests/test_stage2_research_deep_review.py::test_an_empty_neighbour_packet_always_names_its_gap — An empty topic-5 packet's reconciliation lacks the named gap (deep review RS-1-7).
+- 23: tests/test_stage2_research_deep_review.py::test_lookalike_repository_names_are_refused — A confusable spelling of the change's name passes the public-topic deny list (deep review RS-1-11).
+- 23: tests/test_stage2_research_deep_review.py::test_the_sentence_sent_online_is_the_checked_nfc_text — The sentence sent online differs from the NFC text the allow-list checked (deep review RS-1-11).
+- 58: tests/test_stage2_research_deep_review.py::test_releasing_the_loop_keeps_the_research_store_and_its_lock — Releasing the review loop deletes the research store and its lock (deep review RS-2-1).
+- 16: tests/test_stage2_research_snapshot.py::test_committed_symlinks_and_submodules_freeze_without_being_followed — A committed symlink or submodule makes the freeze fail, or a link is followed outside the repository (deep review RS-2-2).
+- 52: tests/test_stage2_research_deep_review.py::test_a_store_in_the_common_git_dir_or_main_checkout_is_refused — A store under the common git directory or the main checkout of a linked worktree is accepted (deep review RS-2-3).
+- 53: tests/test_stage2_research_store.py::test_an_unusable_source_names_each_of_its_stored_results — An unusable source's stored results go unnamed (deep review RS-2-4).
+- 55: tests/test_stage2_research_store.py::test_a_reused_result_keeps_the_run_that_launched_it — A twice-reused result no longer names the run that made the call (deep review RS-2-5).
+- 42: tests/test_stage2_research_catalog.py::test_other_repeated_keys_inside_one_entry_exclude_only_that_candidate — A repeated key inside one models.dev entry excludes every free model (deep review RS-3-5).
+- 41: tests/test_stage2_research_catalog.py::test_a_repeated_nested_key_in_a_pi_row_excludes_only_that_row — A repeated nested key in one Pi row ends the whole preflight (deep review RS-3-5).
 
 ## Not touched
 
@@ -1449,7 +1472,7 @@ Optional: add `--os-sandbox` on macOS to wrap every command in `sandbox-exec` (o
 - What the tool does: builds a scratch repository, HOME and `XDG_STATE_HOME` with synthetic canaries; starts a loopback mock server; runs the real catalog helper and `select_research_catalog` against it; starts the seats through the swarm's own `Run.pi_command` and the probe through `probe_go`, all via `stage2.PI_WRAPPER`; writes `<out>.json` and `<out>.md`.
 - What the maintainer watches: the terminal for an unexpected process; the printed verdict lines (criteria 8, 9, 47, repository seat, state-store guard; exit 0 = all PASS, 1 = a FAIL, 2 = refused or unusable); and, before pasting anything, the Markdown report's "Not enforced" list. Name resolution, native subprocesses and other processes are not blocked; the Node network guard denies non-loopback connections of Pi itself.
 - Afterwards: the orchestrator copies the Markdown report into `research.md` (version and source hashes, method, outbound payloads, tool schemas, attempts, receipts, canary outcomes) with the tested commit and the exact command, then asks for the fresh phase-6 re-check. F-1 is closed by the maintainer's ruling, not by the tool.
-- A FAIL is a finding, not a tool fault: do not edit the verdict logic to turn it green. A `repository-seat` OBSERVED line (an absolute-path read outside the worktree succeeded) is reported, not judged: criteria 8, 9 and 47 concern free contexts and the probe.
+- A FAIL is a finding, not a tool fault: do not edit the verdict logic to turn it green. A home canary that reaches the repository seat's model (an absolute-path read outside the worktree succeeded) is a `repository-seat` FAIL since the path lock is required (deep review RS-1-4, 2026-10-25; until then it was reported as OBSERVED and not judged).
 - Result of the first real run (2026-10-19T11:12:34Z, commit `2028c13`): recorded in `research.md`, "F-1 attended offline capture — 2026-10-19". The `repository-seat` FAIL was real (finding F-24, repaired by the path lock, Q-16); the criterion 9 FAIL was the tool's refusal heuristic missing two refusal texts (repaired, see "Repository path lock — 2026-10-19"). The capture is repeated, attended, after these repairs; with the lock a scripted absolute-path read is refused.
 
 ## Earlier implementation time

@@ -859,13 +859,51 @@ def render_table(columns: list[str], rows: list[list[str]]) -> str:
 
 
 def append(path: Path, text: str) -> None:
-    """Add a block at the end, separated by one blank line."""
-    existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    joined = f"{existing}\n{text.rstrip()}\n" if existing else f"{text.rstrip()}\n"
-    path.write_text(joined, encoding="utf-8")
-    stamp_updated(path)
+    """Add a block at the end, separated by one blank line, and stamp `updated:` - in one atomic replacement.
+
+    The earlier bytes stay exactly as they were (CRLF, lone CR, anything not LF; deep review RS-1-8): the new
+    content is built from the file's bytes, never from text read with universal newlines. The appended and
+    stamped result goes to a temporary file in the same directory, is flushed to disk and then replaces the
+    file in one step, so a crash, a kill or a full disk leaves either the old file or the new one, never a
+    truncated one (deep review RS-2-6).
+    """
+    existing = path.read_bytes() if path.exists() else b""
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if existing.endswith(b"\n") else b"\n") + b"\n"
+    joined = existing + separator + addition if existing else addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+    write_atomic(path, stamped)
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Replace ``path`` with ``data``: temporary file, fsync, rename, directory fsync; the mode is kept."""
+    try:
+        mode = path.stat().st_mode & 0o7777
+    except FileNotFoundError:
+        path.write_bytes(data)  # nothing earlier to lose; the process umask applies as for any new file
+        return
+    handle, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+        temporary.chmod(mode)
+        temporary.replace(path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def stamp_updated(path: Path) -> None:
@@ -2875,9 +2913,28 @@ def release(root: Path, change: str) -> list[list[str]]:
     if kept:
         block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
     append(findings, "\n\n".join(block))
-    shutil.rmtree(record_dir(change, root))
+    remove_loop_record(record_dir(change, root))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
     return rows
+
+
+def remove_loop_record(directory: Path) -> None:
+    """Delete the review loop's record, never the phase-1 research files beside it (deep review RS-2-1).
+
+    The change's record directory also holds the research state store (`research/`, with the lock a running
+    research run holds) and research preparation's receipt and probe audits (`research-*`). Deleting those
+    would lose the reusable results of an interrupted run and let a second run take a fresh lock while the
+    first still holds the old one. The directory goes only when nothing else is left in it.
+    """
+    for entry in directory.iterdir():
+        if entry.name == "research" or entry.name.startswith("research-"):
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    with contextlib.suppress(OSError):
+        directory.rmdir()
 
 
 def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
@@ -4780,8 +4837,19 @@ def explore(
     prompt = work_prompt(root, "01-explore.md", change, extra)
     begin_work_call(ctx, "explore", endpoint, prompt, 1, route, ctx.research, stage2_off)
     answer = run_work_model(ctx, prompt, endpoint, writable=False, key=key)
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{answer.strip()}")
+    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
+
+
+def quote_research_records(text: str) -> str:
+    """A model answer with every research-swarm/v2 run marker and record fence made inert (deep review RS-1-10).
+
+    The research-handoff gate trusts each well-formed run envelope in `research.md`; only the research runner
+    writes one. A single explorer's answer is appended as prose, so a forged envelope or record fence in it is
+    quoted: the marker no longer matches the gate's envelope or record syntax and is read as plain text.
+    """
+    text = re.sub(r"<!--(\s*/?)research-swarm/v2", r"<!--\1research-swarm/v2 (quoted)", text)
+    return re.sub(r"(?m)^([ \t]*`{3,}[ \t]*)research-swarm/v2", r"\1quoted-research-swarm/v2", text)
 
 
 def implementation_prompt(

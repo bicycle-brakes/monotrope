@@ -128,6 +128,8 @@ class Source:
     results: dict = field(default_factory=dict)
     interrupted: list = field(default_factory=list)
     run: dict | None = None
+    # Stored results of runs before the latest one, by run id: never a source, always named (deep review RS-2-4).
+    older: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -292,7 +294,12 @@ class Store:
     def adopt(self, run_id, source, record):
         """Copy a reused result into the new run, keeping its original times and leak-check record."""
         body = {name: value for name, value in record.items() if name != "kind"}
-        self.write_result(run_id, body["slot_id"], {**body, "reused_from": {"run_id": source.run_id}})
+        # `reused_from` names the immediate source; `launched_in` the run that made the call, whose times the
+        # record carries, through every later reuse (deep review RS-2-5).
+        launched_in = record.get("launched_in") or source.run_id
+        self.write_result(
+            run_id, body["slot_id"], {**body, "reused_from": {"run_id": source.run_id}, "launched_in": launched_in}
+        )
 
     def clear(self):
         """Remove every stored run (after a complete publication); the lock file stays."""
@@ -437,7 +444,12 @@ class Store:
         latest = runs[-1]
         run_id = latest["run_id"]
         results, interrupted = self.slot_records(run_id)
-        base = {"run_id": run_id, "results": results, "interrupted": interrupted, "run": latest}
+        older = {}
+        for run in runs[:-1]:
+            stored = sorted(self.slot_records(run["run_id"])[0])
+            if stored:
+                older[run["run_id"]] = stored
+        base = {"run_id": run_id, "results": results, "interrupted": interrupted, "run": latest, "older": older}
         reasons = []
         refused = [slot for slot, record in sorted(results.items()) if record.get("outcome") == "refused"]
         if latest.get("refusal"):
@@ -475,8 +487,16 @@ def plan_reuse(source, planned, validate):
     reused is named with its reason, so a silent discard cannot happen.
     """
     planned = list(planned)
+    # Results stay stored because a reverted edit may match again (design.md), but only the latest run is a
+    # source: an older run's results are named, never silently passed over (deep review RS-2-4).
+    older = [
+        (f"{slot_id} (run {run_id})", "not the latest run")
+        for run_id, slots in source.older.items()
+        for slot_id in slots
+    ]
     if not source.usable:
-        return ReusePlan({}, [], planned)
+        unusable = [(slot_id, "source run unusable") for slot_id in sorted(source.results)]
+        return ReusePlan({}, unusable + older, planned)
     reused, named = {}, []
     ids = {slot["slot_id"] for slot in planned}
     for slot in planned:
@@ -496,7 +516,7 @@ def plan_reuse(source, planned, validate):
             reused[slot["slot_id"]] = record
     for slot_id in sorted(set(source.results) - ids):
         named.append((slot_id, "not planned"))
-    return ReusePlan(reused, named, [slot for slot in planned if slot["slot_id"] not in reused])
+    return ReusePlan(reused, named + older, [slot for slot in planned if slot["slot_id"] not in reused])
 
 
 def _valid(validate, record):

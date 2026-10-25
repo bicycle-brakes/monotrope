@@ -527,9 +527,8 @@ def test_preflight_non_object_capability_keeps_raw_value_evidence(tmp_path, sour
     assert candidate["evidence"]["entry"] == {"present": True, "value": 5}
 
 
-@pytest.mark.parametrize("field", ["id", "tool_call"])
-def test_preflight_raw_duplicate_keys_inside_models_are_document_ambiguity(tmp_path, sources, field):
-    entry = '"id":"alpha-free","tool_call":true,' + ('"id":"alpha-free"' if field == "id" else '"tool_call":true')
+def test_preflight_raw_duplicate_id_key_inside_models_is_document_ambiguity(tmp_path, sources):
+    entry = '"id":"alpha-free","tool_call":true,"id":"alpha-free"'
     sources.metadata_body = (
         '{"opencode-go":{"models":{"alpha-free":{' + entry + '},"beta-free":{"id":"beta-free","tool_call":true}}}}'
     )
@@ -537,6 +536,37 @@ def test_preflight_raw_duplicate_keys_inside_models_are_document_ambiguity(tmp_p
     assert result["selected"] == []
     assert result["fixed"] == FIXED
     assert result["capability_reason"] == "duplicate-id"
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        '"id":"alpha-free","tool_call":true,"tool_call":true',
+        '"id":"alpha-free","tool_call":true,"cost":{"input":1,"input":2}',
+    ],
+)
+def test_other_repeated_keys_inside_one_entry_exclude_only_that_candidate(tmp_path, sources, entry):
+    # Criterion 42 (deep review RS-3-5). Planted fault: a repeated key nested anywhere in the models object - not a
+    # repeated model key or id - makes the whole source capability-unavailable and excludes every free model.
+    sources.metadata_body = (
+        '{"opencode-go":{"models":{"alpha-free":{' + entry + '},"beta-free":{"id":"beta-free","tool_call":true}}}}'
+    )
+    result = select(collect(tmp_path, sources))
+    assert result["capability_status"] == "available"
+    assert result["selected"] == ["beta-free"]
+    assert next(c for c in result["candidates"] if c["id"] == "alpha-free")["reason"] == "metadata-malformed"
+
+
+def test_a_repeated_nested_key_in_a_pi_row_excludes_only_that_row(tmp_path, sources):
+    # Criteria 41, 42 (deep review RS-3-5). Planted fault: a repeated key inside one Pi row's nested object ends
+    # the whole preflight with exit 1 instead of excluding that candidate as pi-malformed.
+    body = json.dumps(sources.pi_models)
+    row = json.dumps(sources.pi_models[3])
+    assert row in body
+    sources.pi_body = body.replace(row, row[:-1] + ',"cost":{"input":1,"input":2}}', 1)
+    result = select(collect(tmp_path, sources))
+    assert next(c for c in result["candidates"] if c["id"] == "alpha-free")["reason"] == "pi-malformed"
+    assert result["selected"] == ["beta-free"]
 
 
 @pytest.mark.parametrize(

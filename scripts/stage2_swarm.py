@@ -76,6 +76,18 @@ def _catalog_duplicates(value):
     return isinstance(value, list) and any(_catalog_duplicates(item) for item in value)
 
 
+def _identity_doubt(entries):
+    """A repeated key of the collection itself, or a repeated `id` key inside one of its entries.
+
+    Only these, with equal ids under two entries, are document-level (decisions.md S-44, S-50); any other repeated
+    key inside one entry makes that entry malformed, never the whole source (deep review RS-3-5).
+    """
+    values = entries.values() if isinstance(entries, dict) else entries if isinstance(entries, list) else ()
+    return bool(getattr(entries, "duplicate_keys", ())) or any(
+        "id" in getattr(entry, "duplicate_keys", ()) for entry in values
+    )
+
+
 def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
@@ -105,7 +117,7 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         raw = _catalog_json(pi["body"])
     except (KeyError, TypeError, ValueError) as error:
         raise ResearchCatalogError("pi-malformed") from error
-    if _catalog_duplicates(raw):
+    if _identity_doubt(raw) or (isinstance(raw, dict) and _identity_doubt(raw.get("models"))):
         raise ResearchCatalogError("duplicate Pi identity or key")
     if isinstance(raw, dict):
         raw = raw["models"] if isinstance(raw.get("models"), list) else list(raw.values())
@@ -122,6 +134,8 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         models[item["id"]] = item
 
     def pi_reason(item):
+        if _catalog_duplicates(item):
+            return "pi-malformed"
         kind = item.get("type", "chat")
         inputs = item.get("input")
         if (
@@ -180,7 +194,7 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             elif (
                 provider in getattr(document, "duplicate_keys", set())
                 or "models" in getattr(block, "duplicate_keys", set())
-                or _catalog_duplicates(capabilities)
+                or _identity_doubt(capabilities)
             ):
                 capability_reason = "duplicate-id"
             else:
@@ -220,7 +234,7 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             return "metadata-missing"
         if (
             not isinstance(entry, dict)
-            or getattr(entry, "duplicates", False)
+            or _catalog_duplicates(entry)
             or entry.get("id") != ident
             or "tool_call" in entry
             and type(entry["tool_call"]) is not bool

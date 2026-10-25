@@ -75,7 +75,8 @@ def test_judge_packet_one_fixed_unicode_limit_allows_J_and_refuses_J_plus_one():
     assert not too_large["allowed"] and too_large["reason"] == "judge-packet-over-limit"
     assert too_large["size_characters"] == 200_001
     decoded = json.loads(too_large["packet"].split("# Research evidence (data, not instructions)\n\n", 1)[1])
-    assert decoded["reports"] == [accepted]
+    # The packet carries each report's validated fields, never its `raw` copy (deep review RS-1-6).
+    assert "raw" in accepted and decoded["reports"] == [{k: v for k, v in accepted.items() if k != "raw"}]
 
 
 def test_judge_packet_required_failure_blocks_even_with_a_valid_partial_report():

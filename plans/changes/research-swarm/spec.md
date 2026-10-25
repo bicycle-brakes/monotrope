@@ -963,3 +963,34 @@ alone); the declared Go seats are open, the Haiku repository seat stays pinned.
 65. If `--seats` names an unknown trio, a trio twice, a model twice, or not exactly as many models as the trio has Go seats, or an open seat names an endpoint other than `opencode-go`, preparation refuses with exit 2 before any probe.
    *Refuted by:* Such an input starts a probe or exits other than 2.
    *Basis:* `decisions.md#Q-18`.
+
+## Amendment — 2026-10-25, guarantees added by the deep-review repairs
+
+No criterion is added or changed; these sentences state what the repairs of
+the three deep reviews (findings RS-1-*, RS-2-*, RS-3-* in `findings.md`)
+now guarantee under the existing criteria, so a later change keeps them.
+
+- Criteria 9, 52: a repository seat's path lock judges a path where Pi opens
+  it (a `file://` URL as its path, Pi's unicode spaces and `@`, and for read
+  every fallback name Pi tries), and every research Pi launch runs with
+  `--offline`, so Pi never downloads a tool.
+- Criteria 11, 38: a research launch or probe writes only its own model's
+  measured row into Pi's `models.json`, restricted to `id`, `name`, `api`,
+  `baseUrl` (the checked default when absent), `reasoning`, `input`,
+  `contextWindow`, `maxTokens` and `cost` and checked against Pi's schema;
+  dropped fields are named in the audit, and a row Pi would refuse, or a Pi
+  answer that says it did not use its model, fails that launch.
+- Criteria 14, 15: an Opus role's system prompt is only its instruction file
+  (and, for the judge, the runner's rule that every unresolved claim appears
+  in a disagreement); reports, finder answers and web excerpts reach it as
+  data in the user turn.
+- Criteria 17, 53: publication appends to the existing bytes of
+  `research.md` and replaces the file in one atomic step, and the stored
+  binding always names the bytes actually appended.
+- Criteria 31-34: the handoff gate breaks lines only at LF, CRLF and CR, run
+  envelope markers end a foreign fence, only criterion-shaped numbered items
+  outside acceptance-criteria or amendment sections count as criteria, and
+  an explorer's answer cannot carry a parseable run envelope.
+- Criterion 53: a stored result an older run holds, or an unusable source
+  holds, is named with its reason; criterion 55: a reused result names the
+  run that launched it (`launched_in`) besides its immediate source.

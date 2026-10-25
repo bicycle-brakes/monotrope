@@ -220,3 +220,29 @@ def test_snapshot_special_file_read_cannot_block_preparation(repo):
     os.mkfifo(repo / CHANGE / "pipe")
     with pytest.raises(module().ResearchSnapshotError, match="regular"):
         module()._read(repo, CHANGE + "/pipe", time.monotonic() + 30)
+
+
+def test_committed_symlinks_and_submodules_freeze_without_being_followed(repo, tmp_path):
+    # Deep review RS-2-2. Planted fault: a tracked symlink (CLAUDE.md -> AGENTS.md) fails the freeze with ELOOP and
+    # a submodule gitlink as "not a regular file", so phase-1 research can never run in such a repository; or a
+    # link is followed to bytes outside the repository.
+    outside = tmp_path / "outside-secret.txt"
+    outside.write_bytes(b"OUTSIDE-CANARY\n")
+    (repo / "AGENTS.md").write_bytes(b"# rules\n")
+    (repo / "CLAUDE.md").symlink_to("AGENTS.md")
+    (repo / "escape.txt").symlink_to(outside)
+    commit(repo, "links", paths=["AGENTS.md", "CLAUDE.md", "escape.txt"])
+    sha = git(repo, "rev-parse", "HEAD")
+    (repo / "vendor" / "sub").mkdir(parents=True)
+    git(repo, "update-index", "--add", "--cacheinfo", f"160000,{sha},vendor/sub")
+    git(repo, "commit", "-q", "-m", "submodule")
+    with freeze(repo) as state:
+        sources = state.sources()
+        assert sources["CLAUDE.md"] == b"symlink AGENTS.md"
+        assert sources["escape.txt"] == b"symlink " + bytes(outside)
+        assert sources["vendor/sub"] == b"gitlink " + sha.encode()
+        assert all(b"OUTSIDE-CANARY" not in data for data in sources.values())
+        assert state.changed_paths() == []
+        (repo / "CLAUDE.md").unlink()
+        (repo / "CLAUDE.md").symlink_to("README.md")
+        assert state.changed_paths() == ["CLAUDE.md"], "a retargeted link is a changed input"

@@ -182,7 +182,9 @@ def option(flag):
 
 
 prompt_file = option("--append-system-prompt-file") or option("--append-system-prompt")
-prompt = Path(prompt_file).read_text() if prompt_file else ""
+system_prompt = Path(prompt_file).read_text() if prompt_file else ""
+stdin_text = sys.stdin.read()  # a Claude role's data arrives here, as part of its user turn
+prompt = system_prompt + ("\\n\\n" + stdin_text if stdin_text else "")
 agent = os.environ.get("PI_CODING_AGENT_DIR")
 model = option("--model") or ""
 topic_match = re.search(r"(?:Public topic|Topic) (\\d+) of 11", prompt)
@@ -220,7 +222,8 @@ record = {
     "cwd": os.getcwd(),
     "t0": time.time(),
     "sleep": step.get("sleep", 0),
-    "stdin": os.read(0, 100).decode(),
+    "stdin": stdin_text,
+    "system_prompt": system_prompt,
     "prompt": prompt,
     "prompt_path": str(prompt_file) if prompt_file else None,
     "agent_dir": agent,
@@ -301,6 +304,10 @@ if stdout.startswith("AUTO") and kind == "judge":
             body["disagreements"] = [bad]
     if variant == "answer-field":
         body["answer"] = "use option A"
+    if variant.startswith("unresolved-"):
+        judgements[0] = {"claim": claims[0], "disposition": "unresolved", "unique": False}
+        if variant == "unresolved-disputed":
+            body["disagreements"] = [{"claims": claims[:2], "summary": "two seats differ on the value"}]
     stdout = json.dumps(body)
 sys.stdout.write(stdout.replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))

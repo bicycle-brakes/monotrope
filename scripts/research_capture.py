@@ -461,8 +461,10 @@ def evaluate(records: list[dict], canaries: list[dict], seat_kinds: dict[str, st
             reasons += [f"canary that must never reach a model: {item}" for item in always]
         later = hit_list(repositories, only={"home"})
         if later:
-            observed = True
-            reasons += [f"observed (a scripted absolute-path read succeeded): {item}" for item in later]
+            # The path lock (Q-16) is required now, so a home read is a regression of F-24, not an observation
+            # (deep review RS-1-4).
+            failed = True
+            reasons += [f"home canary read past the path lock (finding F-24): {item}" for item in later]
         if not failed and not observed:
             reasons.append("no environment, home, state or transport-key canary reached the repository seat")
         checks.append(

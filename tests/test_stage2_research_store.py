@@ -493,13 +493,25 @@ def test_a_changed_binding_reuses_nothing_and_names_the_paths(store, repo):
 
 
 def test_only_the_latest_stored_run_is_a_source(store, repo):
+    # Criterion 53 (deep review RS-2-4). Planted faults: an older run's result is reused, or it is passed over
+    # silently - the design keeps it stored because a reverted edit may match again, and names it.
     k = key("s1")
-    make_source(store, repo, results=[(k, terminal(k))])
+    older = make_source(store, repo, results=[(k, terminal(k))])
     time.sleep(0.01)
     make_source(store, repo, results=[])  # a newer run holding no results
     source, plan = resume(store, repo, [k])
     assert plan.reused == {}
-    assert [reason for _, reason in plan.not_reused] == []  # the older run is not looked at
+    assert plan.not_reused == [(f"s1 (run {older})", "not the latest run")]
+
+
+def test_an_unusable_source_names_each_of_its_stored_results(store, repo):
+    # Criterion 53 (deep review RS-2-4). Planted fault: an unusable latest run reuses nothing and names none of
+    # its stored results.
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding={"research": "changed"})
+    source, plan = resume(store, repo, [k])
+    assert not source.usable
+    assert plan.not_reused == [("s1", "source run unusable")]
 
 
 @pytest.mark.parametrize("outcome", ["cancelled", "failed", "timed-out", "refused", "not-started-deadline"])
@@ -697,3 +709,22 @@ def test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing(tmp_pa
     with pytest.raises(store_module.StoreWriteError):
         store_module.Store(alias / "s").assert_outside(forbidden)
     store_module.Store(tmp_path / "elsewhere" / "s").assert_outside(forbidden, home=home)
+
+
+def test_a_reused_result_keeps_the_run_that_launched_it(store, repo):
+    # Criterion 55 (deep review RS-2-5). Planted fault: after A -> B -> C reuse, C's record names only B although
+    # it carries A's start and end times, so the run that made the call is lost.
+    k = key("s1")
+    first = make_source(store, repo, results=[(k, terminal(k))])
+    for _ in range(2):
+        time.sleep(0.01)
+        source, plan = resume(store, repo, [k])
+        assert source.usable and set(plan.reused) == {"s1"}
+        with freeze(repo) as state:
+            run = store.start_run(CHANGE, "receipt-2", stored_binding(state, state.sources()[RESEARCH]))
+        store.adopt(run, source, plan.reused["s1"])
+        store.finish_run(run, "incomplete")
+    record = store.slot_records(run)[0]["s1"]
+    assert record["launched_in"] == first
+    assert record["reused_from"] == {"run_id": source.run_id} and source.run_id != first
+    assert record["started"] == "2026-10-18T10:00:00Z"

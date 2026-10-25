@@ -35,8 +35,23 @@ def _remaining(deadline):
         raise ResearchSnapshotError("frozen input deadline expired")
 
 
+def _index_entry(root, path, deadline, mode):
+    """The object id the index records for ``path`` with ``mode``; anything else is not an input of that kind."""
+    entry = _git(root, deadline, "ls-files", "--stage", "-z", "--", path).split("\0")[0]
+    meta, _tab, name = entry.partition("\t")
+    fields = meta.split()
+    if name != path or len(fields) != 3 or fields[0] != mode:
+        raise ResearchSnapshotError("frozen input is not a regular file: " + path)
+    return fields[1]
+
+
 def _read(root, path, deadline):
-    """Never follow a file or directory symlink to an ambient input."""
+    """Never follow a file or directory symlink to an ambient input.
+
+    A symbolic link git tracks as one (mode 120000) is frozen as its target text, read without following it,
+    as git stores it; a tracked submodule (mode 160000) as the commit its gitlink records (deep review RS-2-2).
+    Neither reads anything outside the repository; any other link or directory is refused as before.
+    """
     parts = _relative(path).parts
     _remaining(deadline)
     fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -46,6 +61,12 @@ def _read(root, path, deadline):
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             os.close(fd)
             fd = child
+        mode = os.stat(parts[-1], dir_fd=fd, follow_symlinks=False).st_mode  # noqa: PTH116 - relative to dir_fd
+        if stat.S_ISLNK(mode):
+            _index_entry(root, path, deadline, "120000")
+            return b"symlink " + os.fsencode(os.readlink(parts[-1], dir_fd=fd))  # noqa: PTH115 - relative to dir_fd
+        if stat.S_ISDIR(mode):
+            return b"gitlink " + _index_entry(root, path, deadline, "160000").encode("ascii")
         child = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
         os.close(fd)
         fd = child

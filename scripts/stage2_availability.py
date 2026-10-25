@@ -315,11 +315,120 @@ def _failed(runner, program: str, done, reason: str, key: str | None) -> object:
     return runner.CallFailed(f"{program} call failed: {reason}{detail}")
 
 
-def install_measured_models(runner, agent: Path, store: dict | None) -> None:
-    """Give Pi's fresh agent directory the measured catalog: the retrieval evidence and its model definitions."""
-    if store:
-        (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+# The fields of a measured catalog row that reach a research launch's models.json (deep review RS-3-3). Pi merges
+# others into the provider request (`samplingParams` into the body, so a row could name another model than the
+# one checked; `headers`, `compat`), and the selection checks none of them; they are dropped and named.
+OVERLAY_FIELDS = ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
+# The origin the selection checks a row's absent `baseUrl` as (stage2_swarm.select_research_catalog); a row
+# without one is written with it, so Pi never fills in a shipped definition's other path (deep review RS-3-7).
+CHECKED_BASE_URL = "https://opencode.ai/zen/go/v1"
+# Pi's stderr when it could not use its models.json, or fell back to an unconfigured model (deep review RS-3-1).
+PI_CONFIG_ERRORS = (
+    "Failed to load models.json",
+    "Failed to parse models.json",
+    "Invalid models.json schema",
+    "not found for provider",
+)
+
+
+class OverlayError(ValueError):
+    """A measured row Pi's models.json schema would reject: the launch fails closed, never with Pi's defaults."""
+
+
+def _number(value: object, *, positive: bool = False) -> bool:
+    return (
+        type(value) in (int, float)
+        and value == value  # not NaN
+        and value not in (float("inf"), float("-inf"))
+        and (not positive or value > 0)
+    )
+
+
+def pi_row_problem(row: dict) -> str | None:
+    """The first field of ``row`` Pi 1.2.0's models.json schema (ModelDefinitionSchema) refuses, or None.
+
+    Pi validates the whole file and drops every row when one fails, so a selected model would silently resolve
+    to Pi's shipped definition or a custom id at Pi's default endpoint (deep review RS-3-1).
+    """
+    if not isinstance(row.get("id"), str) or not row["id"]:
+        return "id"
+    for name in ("name", "api", "baseUrl"):
+        if name in row and (not isinstance(row[name], str) or not row[name]):
+            return name
+    if "reasoning" in row and type(row["reasoning"]) is not bool:
+        return "reasoning"
+    if "input" in row and (
+        not isinstance(row["input"], list) or any(item not in ("text", "image") for item in row["input"])
+    ):
+        return "input"
+    for name in ("contextWindow", "maxTokens"):
+        if name in row and not _number(row[name], positive=True):
+            return name
+    if "cost" in row:
+        cost = row["cost"]
+        rates = ("input", "output", "cacheRead", "cacheWrite")
+        if not isinstance(cost, dict) or any(not _number(cost.get(rate)) for rate in rates):
+            return "cost"
+        tiers = cost.get("tiers")
+        if tiers is not None and (
+            not isinstance(tiers, list)
+            or any(
+                not isinstance(tier, dict) or any(not _number(tier.get(k)) for k in ("inputTokensAbove", *rates))
+                for tier in tiers
+            )
+        ):
+            return "cost"
+    return None
+
+
+def install_measured_models(runner, agent: Path, store: dict | None, *, model: str | None = None) -> list[str]:
+    """Give Pi's fresh agent directory the measured catalog: the retrieval evidence and its model definitions.
+
+    ``models-store.json`` keeps the whole store as retrieval evidence. With ``model`` (every research launch and
+    probe) ``models.json`` carries only that model's row (deep review RS-3-1: one malformed row elsewhere in the
+    catalog made Pi reject the file), restricted to ``OVERLAY_FIELDS``, with the checked ``baseUrl`` when it has
+    none, and checked against Pi's schema first: a row Pi would refuse raises ``OverlayError``. Returns one note
+    per row whose other fields were dropped, for the caller's audit. Without ``model`` the whole store goes
+    through ``runner.activate_overlay``, as before.
+    """
+    if not store:
+        return []
+    (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+    if model is None:
         runner.activate_overlay(agent, store)
+        return []
+    providers: dict[str, dict] = {}
+    dropped: list[str] = []
+    for provider, entry in store.items():
+        definitions = entry.get("models", []) if isinstance(entry, dict) else []
+        for definition in definitions if isinstance(definitions, list) else []:
+            if not isinstance(definition, dict) or definition.get("id") != model:
+                continue
+            row = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
+            if provider == GO:
+                row.setdefault("baseUrl", CHECKED_BASE_URL)
+            # `provider` naming the same provider is redundant for Pi, and dropping it changes nothing.
+            extra = sorted(
+                str(name)
+                for name in definition
+                if name not in OVERLAY_FIELDS and not (name == "provider" and definition[name] == provider)
+            )
+            if extra:
+                dropped.append(f"{provider}/{model}: dropped catalog field(s) {', '.join(extra)}")
+            problem = pi_row_problem(row)
+            if problem:
+                raise OverlayError(f"the measured row of {provider}/{model} breaks Pi's models.json schema ({problem})")
+            providers.setdefault(provider, {"models": []})["models"].append(row)
+    (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
+    return dropped
+
+
+def pi_config_error(stderr: str | None) -> str | None:
+    """Pi's own line saying it could not use its models.json or the configured model, or None."""
+    for line in (stderr or "").splitlines():
+        if any(marker in line for marker in PI_CONFIG_ERRORS):
+            return line.strip()
+    return None
 
 
 def probe_go(
@@ -349,7 +458,13 @@ def probe_go(
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
-        install_measured_models(runner, agent, store)
+        # Research preparation probes what its launches will use: one checked row (deep review RS-3-1). The review
+        # loop's probes keep the whole overlay until that loop's own repair changes `activate_overlay`.
+        try:
+            dropped = install_measured_models(runner, agent, store, model=model if verb == "prepare-explore" else None)
+        except OverlayError as error:
+            raise runner.CallFailed(f"pi call failed: {error}") from None
+        audit.extend(dropped)
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "probe-prompt.md"
@@ -386,6 +501,9 @@ def probe_go(
         )
         if done.returncode != 0:
             raise _failed(runner, "pi", done, f"exit {done.returncode}", key)
+        refused = pi_config_error(done.stderr)
+        if refused:
+            raise _failed(runner, "pi", done, f"Pi did not use the measured model ({refused})", key)
         if not runner.scrub(done.stdout or "", key).strip():
             raise _failed(runner, "pi", done, "the answer is empty", key)
 

@@ -303,3 +303,17 @@ def test_the_real_pi_needs_the_attended_flag_and_starts_nothing_without_it(
     monkeypatch.setattr(subprocess, "run", boom)
     monkeypatch.setattr(subprocess, "Popen", boom)
     assert rc.main(["--scratch", str(tmp_path / "scratch"), "--out", str(tmp_path / "r")]) == 2
+
+
+def test_a_home_canary_read_by_the_repository_seat_fails_the_capture():
+    # Criterion 52 (deep review RS-1-4). Planted fault: a home canary that reaches the repository seat's model is
+    # graded OBSERVED and the overall verdict counts only FAIL, so a path-lock regression (F-24) passes.
+    records = clean_records()
+    records.append(request_record("repository", "research the change"))
+    kinds = {**SEAT_KINDS, "repository": "repository"}
+    clean = {c["criterion"]: c["verdict"] for c in rc.evaluate(records, CANARIES, kinds)}
+    assert clean["repository-seat"] == "PASS"
+    records.append(request_record("repository", "tool result: CANARY-HOME-0002", index=1))
+    checks = rc.evaluate(records, CANARIES, kinds)
+    (seat,) = [c for c in checks if c["criterion"] == "repository-seat"]
+    assert seat["verdict"] == "FAIL" and any("F-24" in reason for reason in seat["reasons"])
