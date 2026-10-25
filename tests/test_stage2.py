@@ -13724,11 +13724,21 @@ def test_unreadable_answer_names_its_first_line(world: World, capsys: pytest.Cap
     err = capsys.readouterr().err
     assert "malformed finding output" in err and "first unrecognised line: 'I could not review this: " in err
     assert OKEY not in err and "second line" not in err.split("first unrecognised line")[1].split("\n")[0]
+    # P236-3: the named line is cut at 200 characters plus the ellipsis.
+    named = re.search(r"first unrecognised line: '([^']*)'", err).group(1)
+    assert len(named) <= 201 and named.endswith("…"), len(named)
+    # P236-2: every member failed, so the refusal path keeps each answer under its own heading.
+    text = world.text()
+    for member in ("acme-v1-free", "beacon-2-free"):
+        assert f"## Rejected review-loop answer — {member}, " in text, member
 
 
 def test_unreadable_answer_is_quoted_in_the_round(world: World) -> None:
     # Criterion 5. Planted fault: the failure line stands alone, or the quoted answer's row joins the round.
-    answer = "I reviewed it.\nZ-9 | MAJOR | CODE | criterion | here | a finding without its leading pipe\nsee above"
+    answer = (
+        "I reviewed it.\nZ-9 | MAJOR | CODE | criterion | here | a finding without its leading pipe\nsee above"
+        "\n| L1-9 | MAJOR | SPEC | c | spec.md:1"
+    )
     world.script(
         pi=[{"model": "acme-v1-free", "stdout": rows(1, "A")}, {"model": "beacon-2-free", "stdout": "prose " + answer}]
     )
@@ -13736,7 +13746,9 @@ def test_unreadable_answer_is_quoted_in_the_round(world: World) -> None:
     text = world.record().read_text(encoding="utf-8")
     assert "beacon-2-free failed: malformed finding output" in text
     assert "> prose I reviewed it." in text and "> see above" in text
+    assert "> | L1-9" in text, "the planted table line is not quoted"
     assert [cells[6] for cells in stage2.record_rows(text)] == ["acme-v1-free"]
+    assert all(cells[0] != "L1-9" for cells in stage2.record_rows(text))
 
 
 def test_unreadable_answer_of_a_refused_attempt_is_kept_in_findings(world: World) -> None:
@@ -13755,3 +13767,75 @@ def test_unreadable_answer_of_a_refused_attempt_is_kept_in_findings(world: World
     assert "> No table here, sorry." in text and "> | R2-1 | MAJOR |" in text
     assert OKEY not in text
     assert stage2.record_rows(text) == [] and "Loop state" not in text
+
+
+def test_a_refused_replacement_keeps_both_unreadable_answers(world: World) -> None:
+    # Criterion 6 (P236-4): a Flash member answers unreadably, its paid replacement answers with a malformed
+    # table. Planted fault: the refusal after the replacement forgets the answers.
+    _flash_round_world(world)
+    before = world.record().read_text(encoding="utf-8")
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": "No table from the first member."},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": MALFORMED},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert world.record().read_text(encoding="utf-8") == before, "a refused attempt wrote to the record"
+    text = world.text()
+    assert "## Rejected review-loop answer — deepseek-v4.1-flash, " in text
+    assert "## Rejected review-loop answer — mimo-v2.6-pro, " in text
+    assert "> No table from the first member." in text and "> | R2-1 | MAJOR | SPEC | five cells only" in text
+
+
+def test_the_unreadable_failure_names_the_first_unrecognised_line_not_the_furniture(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 4 (P236-1). Planted fault: the message names the header the parser skipped.
+    answer = "| ID | Severity | Dimension | Criterion | Location | Finding |\n|---|---|---|---|---|---|\n" + (
+        "F-1 | MAJOR | DOCS | c | a.md | f"
+    )
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": answer}])
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    err = capsys.readouterr().err
+    assert "first unrecognised line: 'F-1 | MAJOR | DOCS | c | a.md | f'" in err, err
+    assert "first unrecognised line: '| ID" not in err and "first unrecognised line: '|---" not in err
+
+
+def test_parse_rows_drops_open_furniture() -> None:
+    # Criterion 2 (P236-6). Planted fault: an open header and separator stay as reviewer text.
+    answer = "\n".join(
+        [
+            "| ID | Severity | Dimension | Criterion | Location | Finding",
+            "|---|---|---|---|---|---",
+            OPEN_LINES[0],
+        ]
+    )
+    found, rest = stage2.parse_rows(answer)
+    assert len(found) == 1 and rest == ""
+
+
+def test_an_all_open_table_round_carries_no_not_rows_block(world: World) -> None:
+    # Criterion 3 (P236-6). Planted fault: the open header and separator are quoted as a not-a-row block.
+    answer = "\n".join(
+        [
+            "| ID | Severity | Dimension | Criterion | Location | Finding",
+            "|---|---|---|---|---|---",
+            OPEN_LINES[0],
+        ]
+    )
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": rows(1, "B")}])
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert [cells[0] for cells in stage2.record_rows(text)] == ["L1-1", "L1-2"]
+    assert stage2.NOT_ROWS_NOTE not in text
+
+
+def test_the_malformed_refusal_says_that_unreadable_answers_are_kept() -> None:
+    # Criterion 6 (P236-7). Planted fault: the message claims nothing is written while findings.md gets answers.
+    error = stage2.malformed_refusal({"m": stage2.MalformedTable(["| a |"], "| a |")})
+    message = str(error)
+    assert message.startswith("malformed finding table")
+    assert "nothing is written to the loop record" in message and "kept in findings.md" in message
