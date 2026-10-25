@@ -1890,7 +1890,8 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
 
     monkeypatch.setattr(stage2.subprocess, "run", record)
     assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
-    assert len(commands) == 3
+    # Working-tree diff, index diff (bead coding-harness-0c8), untracked listing, and the registry's git archive.
+    assert len(commands) == 4
     for command, env in commands:
         assert command[0] == stage2.GIT, f"a git call does not name the resolved path: {command}"
         assert env is not None, command
@@ -3164,6 +3165,62 @@ def test_a_draft_refuses_changes_outside_findings(world: World, capsys: pytest.C
     assert world.calls() == []
     error = capsys.readouterr().err
     assert "pre-existing changes outside this change's findings.md" in error and "src/app.py" in error
+
+
+def stage_and_revert(root: Path) -> tuple[str, str]:
+    """Stage new content for src/app.py, then put the committed content back in the file."""
+    app = root / "src" / "app.py"
+    committed = app.read_text(encoding="utf-8")
+    app.write_text("staged = True\n", encoding="utf-8")
+    git(root, "add", "src/app.py")
+    app.write_text(committed, encoding="utf-8")
+    return committed, git(root, "diff", "--cached", "--", "src/app.py")
+
+
+def test_changed_paths_lists_an_index_only_change(world: World) -> None:
+    # Criterion 1 (bead coding-harness-0c8). Planted fault: the index is not compared with the commit.
+    stage_and_revert(world.root)
+    assert git(world.root, "diff", "--name-only", "HEAD") == ""
+    assert Path("src/app.py") in stage2.changed_paths(world.root)
+
+
+def tracked_files(root: Path) -> list[Path]:
+    """The committed files of a test repository, sorted."""
+    listing = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True).stdout
+    return sorted(Path(name) for name in listing.split("\0") if name)
+
+
+def test_changed_paths_lists_each_kind_once(world: World) -> None:
+    # Criterion 4. Planted fault: an index entry and its working file listed twice, or a kind dropped.
+    app = world.root / "src" / "app.py"
+    app.write_text("staged = True\n", encoding="utf-8")
+    git(world.root, "add", "src/app.py")
+    app.write_text("edited again = True\n", encoding="utf-8")
+    (world.root / "src" / "new.py").write_text("new = True\n", encoding="utf-8")
+    # A tracked file changed only in the working tree: the index query alone cannot list it.
+    worktree_only = next(path for path in tracked_files(world.root) if path != Path("src/app.py"))
+    with (world.root / worktree_only).open("a", encoding="utf-8") as handle:
+        handle.write("\nworking tree only\n")
+    # `changed_paths` returns a set, so "listed twice" cannot happen; the exact set pins every kind.
+    assert stage2.changed_paths(world.root) == {Path("src/app.py"), Path("src/new.py"), worktree_only}
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft", "repair"])
+def test_writing_verbs_refuse_an_index_only_change(world: World, verb: str, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criteria 2 and 3. Planted fault: the pre-existing check reads only the working tree.
+    if verb == "draft":
+        draft_world(world)
+    elif verb == "repair":
+        repair_world(world)
+    world.script(codex=[{"stdout": "must not run"}], claude=[{"stdout": "must not run"}])
+    capsys.readouterr()
+    committed, staged = stage_and_revert(world.root)
+    assert world.run(verb) == 2
+    assert world.calls("codex") == [] and world.calls("claude") == []
+    error = capsys.readouterr().err
+    assert "pre-existing changes outside this change's findings.md" in error and "src/app.py" in error
+    assert git(world.root, "diff", "--cached", "--", "src/app.py") == staged
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == committed
 
 
 def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
@@ -13484,3 +13541,246 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+@pytest.mark.parametrize("nested_repository", [False, True])
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(
+    world: World, monkeypatch: pytest.MonkeyPatch, nested_repository: bool
+) -> None:
+    # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
+    # the refusal, although the restore removed the test it names.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    before = world.text()
+    step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
+    step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    real_checkpoint = stage2.checkpoint
+
+    def checkpoint(*args, **kwargs):
+        if nested_repository:
+            # Plant the leftover at the guard boundary; git clean -fd must leave it alone.
+            nested = world.root / "leftover"
+            nested.mkdir()
+            git(nested, "init", "--quiet")
+        return real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 1
+    assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    assert (world.root / "src" / "app.py").read_text() == "value = 1\n", "the refused fix survived"
+    if nested_repository:
+        assert (world.root / "leftover" / ".git").is_dir(), "the fixture lost the nested repository"
+    text = world.text()
+    assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
+    assert "| taken — test_a |" in text
+    rows_before = stage2.findings_rows(before)[1]
+    assert stage2.findings_rows(text)[1] == rows_before
+
+
+def test_findings_stay_when_the_commit_fails_without_a_rollback(world: World) -> None:
+    # Pre-review row P240-1 (2026-10-25). Planted fault: findings.md is rewound after `git commit` itself
+    # failed; the fix and its test stay in the tree, so the `fixed` status naming that test must stay too.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    hook = world.root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\necho hook says no >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD").strip() == head, "the hook did not stop the commit"
+    assert (world.root / "tests" / "test_fix.py").exists(), "the fixture lost the attempt's test"
+    assert "fixed — tests/test_fix.py::test_fix" in world.text(), "findings.md was rewound beside the kept fix"
+
+
+@pytest.mark.parametrize("failure", ["after-commit", "refused"])
+def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # Runner review R-4 (2026-10-25). Planted fault: findings.md is rewound after a failure raised once the
+    # commit exists (HEAD keeps the fixed statuses), or after a Refused stop that must write nothing.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    real = stage2.checkpoint
+
+    def failing(*args, **kwargs):
+        if failure == "refused":
+            raise stage2.Refused("a decided stop that writes nothing")
+        real(*args, **kwargs)
+        raise stage2.CallFailed("the runner checkpoint left a dirty worktree")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") == (2 if failure == "refused" else 1)
+    text = world.text()
+    if failure == "after-commit":
+        committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+        assert "fixed — tests/test_fix.py::test_fix" in committed
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was rewound behind the commit"
+    else:
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was written after a Refused stop"
+
+
+def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
+    # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that exists.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n"
+        "- 2: not yet written tests/test_later.py::test_later — nobody writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ledger with markers")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"tests/test_new.py": "def test_new():\n    pass\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "- 1: tests/test_new.py::test_new — the attempt writes it" in committed
+    assert "- 2: not yet written tests/test_later.py::test_later" in committed
+
+
+def test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F-1: clearing before Ruff misses a valid definition with whitespace before `(`.
+    # The formatter stand-in plants Ruff's normalized output; the real ledger gate must
+    # already pass when stamping starts and when `make verify` starts.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (world.plan.parent / "spec.md").write_text("# Spec\n\n## Acceptance criteria\n\n1. A test exists.\n")
+    target = world.root / "tests/test_new.py"
+    target.parent.mkdir(exist_ok=True)
+    target.write_text("def test_new ():\n    pass\n", encoding="utf-8")
+    venv_ruff(world)
+    world.script(
+        ruff=[{}, {"plant": {"tests/test_new.py": "def test_new():\n    pass\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    seen: list[str] = []
+    real_prepare = stage2.prepare_derived
+    real_launch = stage2.launch
+
+    def assert_ready(step: str) -> None:
+        seen.append(step)
+        assert target.read_text() == "def test_new():\n    pass\n"
+        diagnostics: list[str] = []
+        assert stage2.check_criterion_ledger.run(world.root, diagnostics.append) == 0, diagnostics
+        assert "not yet written" not in world.plan.read_text()
+
+    def watching_prepare(*args, **kwargs):
+        assert_ready("stamp")
+        return real_prepare(*args, **kwargs)
+
+    def watching_launch(command, *args, **kwargs):
+        if command == ["make", "verify"]:
+            assert_ready("verify")
+        return real_launch(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "prepare_derived", watching_prepare)
+    monkeypatch.setattr(stage2, "launch", watching_launch)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert seen == ["stamp", "verify"]
+
+
+def test_the_ledger_is_cleared_before_the_documents_are_stamped(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pre-review row P239-2 (2026-10-25). Planted fault: the marker is cleared after `prepare_derived`, so the
+    # plan's `updated:` stamp misses the runner's own edit and the frontmatter-current gate goes red.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ledger with a marker")
+    seen: list[str] = []
+    real = stage2.prepare_derived
+
+    def watching(*args, **kwargs):
+        seen.append(world.plan.read_text(encoding="utf-8"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "prepare_derived", watching)
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"tests/test_new.py": "def test_new():\n    pass\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert seen and "not yet written" not in seen[0], "the documents were stamped before the ledger was cleared"
+
+
+@pytest.mark.parametrize("alias", ["parent-symlink", "hard-link"])
+def test_clearing_the_ledger_refuses_an_aliased_parent_or_a_hard_link(world: World, tmp_path: Path, alias: str) -> None:
+    # Pre-review row P239-3 (2026-10-25). Planted fault: only a symlink at plan.md itself is refused, so a
+    # symlinked change folder or a hard-linked plan carries the write outside the worktree.
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_x.py").write_text("def test_y():\n    assert True\n", encoding="utf-8")
+    ledger = "# Other\n\n## Criterion ledger\n\n- 1: not yet written tests/test_x.py::test_y\n"
+    if alias == "parent-symlink":
+        folder = world.plan.parent
+        outside_folder = tmp_path / "outside-change"
+        outside_folder.mkdir()
+        outside = outside_folder / "plan.md"
+        outside.write_text(ledger, encoding="utf-8")
+        shutil.rmtree(folder)
+        folder.symlink_to(outside_folder)
+    else:
+        outside = tmp_path / "linked-plan.md"
+        outside.write_text(ledger, encoding="utf-8")
+        world.plan.unlink()
+        os.link(outside, world.plan)
+    before = outside.read_bytes()
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan, None, [], None)
+    except stage2.Refused as error:
+        problems = [str(error)]
+    assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
+    assert problems and "plan" in problems[0]
+
+
+def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, tmp_path: Path) -> None:
+    # Runner review R-1 (2026-10-25). Planted fault: clear_written follows a plan.md symlink and rewrites a file
+    # outside the worktree before any alias check runs.
+    outside = tmp_path / "sibling-plan.md"
+    outside.write_text(
+        "# Other\n\n## Criterion ledger\n\n- 1: not yet written tests/test_x.py::test_y\n", encoding="utf-8"
+    )
+    before = outside.read_bytes()
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_x.py").write_text("def test_y():\n    assert True\n", encoding="utf-8")
+    world.plan.unlink()
+    world.plan.symlink_to(outside)
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan, None, [], None)
+    except stage2.Refused as error:
+        problems = [str(error)]
+    assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
+    assert problems and "plan" in problems[0]

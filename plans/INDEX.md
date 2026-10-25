@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/dirty-index/decisions.md`](changes/dirty-index/decisions.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/findings.md`](changes/dirty-index/findings.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/plan.md`](changes/dirty-index/plan.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/research.md`](changes/dirty-index/research.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/spec.md`](changes/dirty-index/spec.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |
@@ -160,6 +165,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/plan.md`](changes/ledger-marker/plan.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/research.md`](changes/ledger-marker/research.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/spec.md`](changes/ledger-marker/spec.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/loop-until-clean/decisions.md`](changes/loop-until-clean/decisions.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/design.md`](changes/loop-until-clean/design.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/findings.md`](changes/loop-until-clean/findings.md) | draft | none | 2026-10-14 | coding-harness-4fk |
@@ -187,6 +197,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/research.md`](changes/repair-fixed-lines/research.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/spec.md`](changes/repair-fixed-lines/spec.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
+| [`changes/repair-restore-status/decisions.md`](changes/repair-restore-status/decisions.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/findings.md`](changes/repair-restore-status/findings.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/plan.md`](changes/repair-restore-status/plan.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/research.md`](changes/repair-restore-status/research.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/spec.md`](changes/repair-restore-status/spec.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
@@ -240,4 +255,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/research.md`](changes/venv-pycache/research.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/spec.md`](changes/venv-pycache/spec.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
+| [`changes/verify-absolute-python/decisions.md`](changes/verify-absolute-python/decisions.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/findings.md`](changes/verify-absolute-python/findings.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/plan.md`](changes/verify-absolute-python/plan.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/research.md`](changes/verify-absolute-python/research.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/spec.md`](changes/verify-absolute-python/spec.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
