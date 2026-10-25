@@ -62,6 +62,10 @@ class Sources:
         self.events: list[tuple[str, str]] = []
         self.overlap: threading.Barrier | None = None
         self.stop = threading.Event()
+        # Held sources answer only at teardown; `held_marker` is written once every held request has arrived
+        # (bead coding-harness-jik: deadline tests wait on this event, not on wall-clock delays).
+        self.held: set[str] = set()
+        self.held_marker: Path | None = None
 
 
 @pytest.fixture
@@ -86,6 +90,14 @@ def sources():
             state.events.append(("start", path))
             if state.overlap is not None:
                 state.overlap.wait(timeout=60)
+            name = "pi" if path.startswith("/api/models/") else "metadata" if path == "/metadata" else None
+            if name in state.held:
+                arrived = {
+                    "pi" if p.startswith("/api/models/") else "metadata" for e, p in state.events if e == "start"
+                }
+                if state.held_marker is not None and state.held <= arrived:
+                    state.held_marker.write_text("held")
+                state.stop.wait()
             state.stop.wait(delay)
             state.events.append(("end", path))
             encoded = body.encode()
@@ -126,9 +138,39 @@ fs.readFileSync = function(path, ...args) {
   return read.call(this, path, ...args);
 };
 syncBuiltinESMExports();
+// The controlled deadline (bead coding-harness-jik): the bridge's own deadline timer - the one setTimeout of
+// deadlineMs - runs its callback once every held request has reached the server (the marker file) and the
+// bodies of the sources that answer have been read, a few event-loop turns later. Its abort path is the real one;
+// only the moment is an event instead of a wall-clock bet on the machine's load.
+const options = JSON.parse(process.argv[2]);
+const control = options.controlledDeadline;
+delete options.controlledDeadline;
+let deadlineTimers = 0;
+if (control) {
+  const realFetch = globalThis.fetch;
+  let consumed = 0;
+  globalThis.fetch = async (...args) => {
+    const response = await realFetch(...args);
+    const text = response.text.bind(response);
+    response.text = async () => { const body = await text(); consumed++; return body; };
+    return response;
+  };
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback, ms, ...rest) => {
+    if (ms !== options.deadlineMs) return realSetTimeout(callback, ms, ...rest);
+    deadlineTimers++;
+    let ready = 0;
+    const poll = setInterval(() => {
+      ready = fs.existsSync(control.marker) && consumed >= control.answered ? ready + 1 : 0;
+      if (ready >= 3) { clearInterval(poll); callback(...rest); }
+    }, 5);
+    return poll;
+  };
+}
 const { collectCatalog } = await import(process.argv[1]);
-const result = await collectCatalog(JSON.parse(process.argv[2]));
+const result = await collectCatalog(options);
 result.test_guard = { commands, credentialReads };
+result.test_deadline_timers = deadlineTimers;
 console.log(JSON.stringify(result));
 """
     environment = {key: value for key, value in os.environ.items() if key in {"PATH", "LANG", "LC_ALL", "LC_CTYPE"}}
@@ -152,8 +194,19 @@ console.log(JSON.stringify(result));
     assert done.returncode == 0, done.stderr
     result = json.loads(done.stdout)
     assert result["test_guard"] == {"commands": 0, "credentialReads": 0}
+    if "controlledDeadline" in options:
+        assert result["test_deadline_timers"] == 1, "the bridge must arm exactly one timer of deadlineMs"
     assert all("authorization" not in {key.lower() for key in headers} for _, headers in sources.requests)
     return result
+
+
+def held_collect(tmp_path: Path, sources: Sources, held: set[str]) -> dict:
+    """`collect` with the named sources held until teardown and the shared deadline fired by event."""
+    sources.held = set(held)
+    sources.held_marker = tmp_path / f"held-{len(sources.requests)}"
+    answered = len({"pi", "metadata"} - sources.held)
+    control = {"marker": str(sources.held_marker), "answered": answered}
+    return collect(tmp_path, sources, deadlineMs=10000, controlledDeadline=control)
 
 
 def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None) -> dict:
@@ -357,8 +410,9 @@ def test_preflight_unsuccessful_pi_response_is_not_measured_empty_or_retried(tmp
 
 @pytest.mark.parametrize("slow", ["pi", "metadata"])
 def test_preflight_shared_deadline_has_asymmetric_failure_rules(tmp_path, sources, slow):
-    setattr(sources, slow + "_delay", 60)
-    bridge = collect(tmp_path, sources, deadlineMs=10000)
+    # The slow source is held until teardown and the deadline fires once it is in flight (bead jik): no
+    # outcome depends on how fast the machine imports Pi.
+    bridge = held_collect(tmp_path, sources, {slow})
     assert len(sources.requests) == 2
     if slow == "pi":
         with pytest.raises(swarm.ResearchCatalogError) as failure:
@@ -730,19 +784,16 @@ def test_models_dev_capabilities_intersect_only_fresh_pi_ids(tmp_path, sources):
 @pytest.mark.parametrize("fault", ["http-500", "http-404", "unparsable", "timeout", "not-an-object", "no-provider"])
 def test_models_dev_failure_excludes_free_and_keeps_required_slots(tmp_path, sources, fault):
     # Criterion 42. Planted fault: a failed source launches free models, aborts required slots or reads as measured empty.
-    options = {}
     if fault.startswith("http"):
         sources.metadata_status = int(fault.split("-")[1])
     elif fault == "unparsable":
         sources.metadata_body = "{broken"
-    elif fault == "timeout":
-        sources.metadata_delay = 60
-        options["deadlineMs"] = 10000
     elif fault == "not-an-object":
         sources.metadata_body = "[]"
-    else:
+    elif fault != "timeout":
         sources.metadata_body = "{}"
-    result = select(collect(tmp_path, sources, **options))
+    bridge = held_collect(tmp_path, sources, {"metadata"}) if fault == "timeout" else collect(tmp_path, sources)
+    result = select(bridge)
     assert result["selected"] == [] and result["N"] == 0
     assert result["capability_status"] == "capability-unavailable"
     assert result["selection_outcome"] != "measured-empty", "an unread source masqueraded as measured empty metadata"
@@ -793,9 +844,9 @@ def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, source
     assert failure.value.exit_code == 1
     assert len(sources.requests) == 2, "a timed-out read was retried"
     # Pi on time, models.dev timed out: a reasoned, required-slot-preserving selection; an explicit include is fatal.
-    # The deadline leaves room for Pi's own start under load (a 1 s deadline timed Pi out on a busy machine).
-    sources.pi_delay, sources.metadata_delay = 0.0, 60
-    bridge = collect(tmp_path, sources, deadlineMs=10000)
+    # models.dev is held and the deadline fires once Pi has answered (bead jik), not after a wall-clock bet.
+    sources.pi_delay = sources.metadata_delay = 0.0
+    bridge = held_collect(tmp_path, sources, {"metadata"})
     result = select(bridge)
     assert result["capability_reason"] == "timeout" and result["fixed"] == FIXED and result["selected"] == []
     with pytest.raises(swarm.ResearchCatalogError) as failure:
