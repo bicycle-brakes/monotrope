@@ -48,3 +48,19 @@ this change:
 The check now compares the `HEAD` version and the working file with their
 first `updated:` line masked; a symlink, a non-file, undecodable bytes or
 identical bytes are no stamp-only change.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request a read-only Opus 5.5 subagent reviewed the change
+before phase 6 (Codex, unreachable here). Phase 6 is still owed. Repairs were
+made by a Sonnet 5.5 subagent at the orchestrator's direction.
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| P243-1 | MAJOR | `derived_leftover` read `HEAD` in text mode, so CRLF and lone CR became LF while the worktree was raw: a whole-file CRLF-to-LF conversion plus a new stamp was tolerated and later committed. | fixed, HEAD read as bytes and decoded strictly as UTF-8, no newline translation, `"\ufffd"` heuristic dropped — tests/test_stage2.py::test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else (ids `crlf-to-lf-plus-stamp`, `lf-to-crlf-plus-stamp`, `lone-cr-to-lf-plus-stamp`) |
+| P243-2 | MAJOR | Same cause: a genuine CRLF file whose only change is the stamp was refused. | fixed by the same change — same test, id `crlf-stamp` |
+| P243-3 | MINOR | The mask hit the first line starting `updated: ` anywhere, any value, any file. | fixed, only the single frontmatter `updated:` line is masked (`check_frontmatter_current._BLOCK`, `_UPDATED_LINE`) and the new value must be `updated: YYYY-MM-DD` — same test, ids `body-updated-line-changed`, `body-updated-no-frontmatter`, `non-date-value`, `python-file`, `second-frontmatter-updated-line-changed` |
+| P243-4 | MINOR | `stamp` accepts `updated:` without a space and can insert a line where none was. | fixed for the no-space form (id `no-space-stamp`); an inserted line is refused and named a non-goal in spec.md (id `inserted-stamp-line`) |
+| P243-5 | MINOR | In `draft`, a leftover the run started with was put back and listed as "the runner put back what a draft may not change", blaming the model. | fixed, the leftovers are computed before the first call and left out of that listing (still put back) — tests/test_stage2.py::test_a_draft_does_not_blame_the_model_for_a_derived_leftover |
+| P243-6 | MINOR | No unit test of `derived_leftover` over the stamp variants. | fixed, parametrised test; it fails when every frontmatter `updated:` line is masked (`second-frontmatter-updated-line-changed`) and when the match is `startswith("updated")` (`updated-prefixed-key-kept`) — tests/test_stage2.py::test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else |
+| P243-7 | NIT | The `.pyc` clause tolerates files that this repository ignores. | not now, no code change: `.pyc` is gitignored here, so the clause matters only in target repositories that track bytecode |

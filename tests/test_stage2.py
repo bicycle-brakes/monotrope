@@ -3248,6 +3248,35 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
         assert f"- {path}" in block, path
 
 
+def test_a_draft_does_not_blame_the_model_for_a_derived_leftover(world: World) -> None:
+    # P243-5. Planted fault: a leftover the run started with is put back and listed as what the model changed.
+    draft_world(world)
+    note = world.root / "docs" / "note.md"
+    note.write_text("---\ntitle: N\nupdated: 2026-01-01\n---\n\nNote\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "note")
+    note.write_text(note.read_text(encoding="utf-8").replace("2026-01-01", "2026-10-25"), encoding="utf-8")
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "src/app.py": "value = 2\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    block = quote_blocks(world.text())[0]
+    assert "- `src/app.py`" in block, "the model's own stray edit is still listed"
+    assert "docs/note.md" not in "\n".join(block), "a leftover the run started with is blamed on the model"
+    assert "2026-01-01" in git(world.root, "show", "HEAD:docs/note.md")
+
+
 def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
     # 2a's F-8. Planted fault: the put-back listing stops at `ATTEMPT_FILES` and hides the last
     # path behind a remainder line, so the audit cannot name every restored path.
@@ -13537,3 +13566,60 @@ def test_a_content_edit_behind_dash_lines_is_no_derived_leftover(world: World) -
     assert not stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md"))
     doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
     assert stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md")), "a stamp-only change was refused"
+
+
+_FM = "---\ntitle: T\nupdated: 2026-01-01\n---\n\nBody\n"
+_FM_NEW = _FM.replace("2026-01-01", "2026-10-25")
+_LEFTOVER_CASES = [
+    # (id, path, HEAD bytes, worktree bytes, tolerated)
+    ("lf-stamp", "n.md", _FM, _FM_NEW, True),
+    ("bom-file", "n.md", "\ufeff" + _FM, "\ufeff" + _FM_NEW, True),
+    ("quoted-to-unquoted", "n.md", _FM.replace("2026-01-01", '"2026-01-01"'), _FM_NEW, True),
+    ("no-space-stamp", "n.md", _FM.replace("updated: ", "updated:"), _FM_NEW, True),
+    ("crlf-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW.replace("\n", "\r\n"), True),
+    ("crlf-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW, False),
+    ("lf-to-crlf-plus-stamp", "n.md", _FM, _FM_NEW.replace("\n", "\r\n"), False),
+    ("lone-cr-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r"), _FM_NEW, False),
+    (
+        "updated-prefixed-key-kept",
+        "n.md",
+        _FM.replace("title: T", "title: T\nupdatedby: a"),
+        _FM_NEW.replace("title: T", "title: T\nupdatedby: a"),
+        True,
+    ),
+    (
+        "second-frontmatter-updated-line-changed",
+        "n.md",
+        _FM.replace("updated: 2026-01-01", "updated: 2026-01-01\nupdated: a"),
+        _FM_NEW.replace("updated: 2026-10-25", "updated: 2026-10-25\nupdated: b"),
+        False,
+    ),
+    ("other-key-changed", "n.md", _FM, _FM_NEW.replace("title: T", "title: U"), False),
+    ("body-updated-line-changed", "n.md", _FM + "updated: old\n", _FM_NEW + "updated: new text\n", False),
+    ("body-updated-no-frontmatter", "n.md", "Body\nupdated: old\n", "Body\nupdated: new text\n", False),
+    ("non-date-value", "n.md", _FM, _FM.replace("2026-01-01", "2026-10-25 ; anything"), False),
+    ("python-file", "t.py", "# x\nupdated: 2026-01-01\n", "# x\nupdated: 2026-10-25\n", False),
+    ("inserted-stamp-line", "n.md", "---\ntitle: T\n---\n\nBody\n", _FM_NEW, False),
+    ("undecodable-bytes", "n.md", _FM, _FM_NEW + "\udcff", False),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "head", "now", "tolerated"),
+    [pytest.param(*case[1:], id=case[0]) for case in _LEFTOVER_CASES],
+)
+def test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else(
+    world: World, path: str, head: str, now: str, tolerated: bool
+) -> None:
+    # P243-1..6. Planted faults: HEAD read in text mode (CRLF/CR become LF), any `updated:` line masked, the
+    # mask `startswith("updated")`, any value accepted, the mask outside the frontmatter block.
+    def raw(text: str) -> bytes:
+        return text.encode("utf-8", errors="surrogateescape")
+
+    file = world.root / "plans" / "changes" / "demo" / path
+    file.write_bytes(raw(head))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "leftover fixture")
+    file.write_bytes(raw(now))
+    relative = Path("plans/changes/demo") / path
+    assert stage2.derived_leftover(world.root, relative) is tolerated

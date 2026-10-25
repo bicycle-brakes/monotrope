@@ -36,7 +36,7 @@ Starts unless you say stop.
 ## Verification
 
 ```sh
-.venv/bin/python3 -m pytest -q tests/test_stage2.py -k derived_writes
+.venv/bin/python3 -m pytest -q tests/test_stage2.py -k "derived_writes or derived_leftover or dash_lines or does_not_blame"
 PYTHON=.venv/bin/python3 make verify
 ```
 
@@ -44,6 +44,8 @@ PYTHON=.venv/bin/python3 make verify
 
 - 1: tests/test_stage2.py::test_a_failed_runs_derived_writes_do_not_block_the_next_run — the second run is refused.
 - 2: tests/test_stage2.py::test_a_hand_edit_beside_derived_writes_is_still_refused — a content edit starts the run, or the refusal lists the index.
+- 2: tests/test_stage2.py::test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else — a CRLF-to-LF conversion, a body or non-date `updated:` line, or a second frontmatter `updated:` line beside a stamp is tolerated, or a genuine CRLF or BOM stamp-only change is refused.
+- 1: tests/test_stage2.py::test_a_draft_does_not_blame_the_model_for_a_derived_leftover — the findings list a leftover the run started with as put back by the model's attempt.
 
 ## Route
 

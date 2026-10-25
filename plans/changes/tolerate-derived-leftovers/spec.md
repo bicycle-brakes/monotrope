@@ -44,6 +44,9 @@ Decisions: `decisions.md`, Q-1.
 
 - Put derived writes back after a failed run (the bead's other route).
 - Tolerate any other change.
+- Tolerate an inserted stamp line: a file whose `HEAD` version has no frontmatter
+  `updated:` line is refused, although `check_frontmatter_current.stamp` can insert
+  one. A person resolves it (P243-4).
 
 ## Definition of Done
 

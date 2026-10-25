@@ -2977,6 +2977,22 @@ def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict
     return done.stdout
 
 
+def _git_bytes(root: Path, *args: str) -> bytes:
+    """The raw stdout of a git command that must succeed: no text mode, so no newline translation."""
+    try:
+        done = subprocess.run(
+            [GIT, "-C", str(root), *args],
+            capture_output=True,
+            check=False,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    if done.returncode != 0:
+        raise Refused(f"git {args[0]} failed: {done.stderr.decode('utf-8', 'replace').strip()[:200]}")
+    return done.stdout
+
+
 def change_diff(root: Path) -> str:
     """The diff against the merge base with origin/main, uncommitted and untracked files included."""
     base = _merge_base(root)
@@ -3218,28 +3234,44 @@ def derived_leftover(root: Path, relative: Path) -> bool:
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
         return True
-    # The two versions are compared with their first `updated:` line masked, never through a parsed diff:
-    # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3).
+    # The two versions are compared with the frontmatter `updated:` line masked, never through a parsed diff:
+    # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3). Both are
+    # read as bytes and decoded without newline translation, so a CRLF to LF conversion is a change (P243-1).
     path = root / relative
     try:
         if path.is_symlink() or not path.is_file():
             return False
         now = path.read_bytes().decode("utf-8")
-        then = _git_output(root, "show", f"HEAD:{relative.as_posix()}")
+        then = _git_bytes(root, "show", f"HEAD:{relative.as_posix()}").decode("utf-8")
     except (OSError, UnicodeDecodeError, Refused):
         return False
-    if "\ufffd" in then or now == then:
+    if now == then:
         return False
+    before, after = _mask_stamp(then, dated=False), _mask_stamp(now, dated=True)
+    return before is not None and before == after
 
-    def masked(text: str) -> str | None:
-        lines = text.split("\n")
-        for index, line in enumerate(lines):
-            if line.startswith("updated: "):
-                lines[index] = "updated: "
-                return "\n".join(lines)
+
+_STAMP_DATE = re.compile(r"updated: \d{4}-\d{2}-\d{2}\r?")
+
+
+def _mask_stamp(text: str, *, dated: bool) -> str | None:
+    """`text` with the frontmatter's one `updated:` line replaced by a mask; None when there is no such line.
+
+    The line is found as `check_frontmatter_current.stamp` finds it, so the no-space form matches too. With
+    `dated` the line must be what `stamp` writes, `updated: YYYY-MM-DD`; an inserted or missing line is None.
+    """
+    block = check_frontmatter_current._BLOCK.match(text)
+    if block is None:
         return None
-
-    return masked(then) is not None and masked(then) == masked(now)
+    lines = block.group(1).split("\n")
+    found = [i for i, line in enumerate(lines) if check_frontmatter_current._UPDATED_LINE.match(line)]
+    if len(found) != 1:
+        return None
+    line = lines[found[0]]
+    if dated and not _STAMP_DATE.fullmatch(line):
+        return None
+    lines[found[0]] = "updated: <stamp>" + ("\r" if line.endswith("\r") else "")
+    return text[: block.start(1)] + "\n".join(lines) + text[block.end(1) :]
 
 
 def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
@@ -5439,6 +5471,8 @@ def draft(root: Path, change: str) -> None:
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
+    started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
     ignored_before = ignored_snapshot(root)
     tools = tool_state(root)  # before any model runs (R-21)
     routes = [
@@ -5510,6 +5544,7 @@ def draft(root: Path, change: str) -> None:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
+        put = [path for path in put if Path(path) not in started_with]
         if put:
             restored = protect_files(put_back_lines(put), key)
             listing = "\n".join(restored)
