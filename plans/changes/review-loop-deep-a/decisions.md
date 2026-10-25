@@ -21,9 +21,13 @@ Class: bounded (one counted interview record or a reasoned skip owed).
 
 The maintainer asked on 2026-10-25, in the conversation of the orchestrating
 session, for every defect of the deep review of the review loop (part A,
-DL-A-1 to DL-A-10) to be repaired, and stated the direction of each fix.
-The orchestrating session relayed those answers to this session; they are
-recorded here as stated. The research (`research.md`) holds each finding.
+DL-A-1 to DL-A-10) to be repaired (Q-10, the one counted record). The
+direction of each fix (Q-1 to Q-9) is the orchestrating agent's, taken from
+the review's smallest fixes and relayed to this session; those records are
+agent answers and are not counted. Q-1 (DL-A-8) was put to the maintainer as
+"runner or doctrine"; the maintainer answered "repair all of it", and the
+agent chose that the code follows the doctrine. The research (`research.md`)
+holds each finding.
 
 ## Q-1 · Whether the runner enforces "repair before the next round"
 
@@ -37,9 +41,9 @@ context: |
   Repository change: review-loop refuses while a taken row of the run is
   not repaired; the test that relied on the gap changes.
   Architecture change: none; the code follows the doctrine.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "code follows doctrine: the runner refuses the next round while a taken row is not repaired; adapt test_round_three_starts_only_after_a_taken_row and every test that relies on the old behaviour"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of the review loop admitting a new round over taken rows
@@ -59,9 +63,9 @@ context: |
   Repository change: a release needs a verdict line that stands after the
   last release block and after the last restart line.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "release requires a phase-6 verdict line after both the last release and the last restart"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of release-loop accepting an old verdict for new rows, facing
@@ -80,9 +84,9 @@ context: |
   Repository change: release is idempotent; the mechanism is the agent's
   choice, reasoned in the plan.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "make release idempotent — a record digest line or a tombstone rename, the implementer's choice, reasoned in the plan"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of a release that a crash can repeat, facing the choice
@@ -103,9 +107,9 @@ context: |
   attempts (repair's check reused), and review-loop reads its snapshot
   before the stops.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "findings.md body immutable across implement attempts, reusing repair's check, and read_state before the stops in review_loop"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of the implementing model being able to forge loop state,
@@ -125,9 +129,9 @@ context: |
   Repository change: a temporary file in the record's directory, then
   os.replace.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "temp file + os.replace for record writes"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of a loop record that a failed write can truncate, facing the
@@ -145,9 +149,9 @@ context: |
   Repository change: repair holds the record lock for its whole run, and a
   record gone at marking time raises, naming the ids.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "hold the record lock for the whole repair; raise naming the ids if the record vanished"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of a repair whose record a release can remove, facing the
@@ -167,9 +171,9 @@ context: |
   review-loop audit lines stand but no record and no release, naming the
   expected record path.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "refuse release and a fresh loop when audit lines exist but no record or release, naming the expected record path"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of a loop record that is missing while findings.md shows the
@@ -188,9 +192,9 @@ context: |
   Repository change: free_diff reports its cut and review_loop merges it
   into the round's cut note.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "free_diff reports its cut; review_loop merges it into cut_note"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of a free round over a diff cut by free_diff's own bounds,
@@ -210,9 +214,9 @@ context: |
   Repository change: the name is validated before the lock; the dead
   helpers are deleted after a grep over scripts/ and tests/.
   Architecture change: none.
-asked: 2026-10-25, conversation (relayed by the orchestrating session)
+asked: 2026-10-25, decided by the orchestrating agent (relayed)
 answer: "validate the change name before taking the lock; delete the dead helpers, checking with grep across scripts/ and tests/ first"
-answered_by: maintainer
+answered_by: agent
 status: answered
 
 In the context of two small defects of the runner, facing the choice
@@ -220,3 +224,24 @@ between fixing them now and leaving them, we decided to fix them in this
 change, to achieve that a bad name writes nothing and no unused two-write
 path stays callable, accepting that tests of the deleted helpers move to
 the runner's live functions. — 2026-10-25
+
+## Q-10 · Whether every defect of the deep review part A is repaired
+
+context: |
+  Topic: the deep review of the review loop, part A (DL-A-1 to DL-A-10).
+  Intention: decide whether the six reproduced defects, the doctrine gap
+  DL-A-8 and the NITs are repaired now or left as findings.
+  Today: the review reported them with reproductions; nothing was changed.
+  Repository change: one branch repairs all ten in scripts/stage2.py and its
+  tests.
+  Architecture change: none; the code follows ADR 0021.
+asked: 2026-10-25, conversation
+answer: "repariere das alles" (repair all of it — stated in German, translated by the agent), given beside the list DL-A-1 to DL-A-10
+answered_by: maintainer
+status: answered
+
+In the context of a deep review that reproduced ten defects and gaps in the
+review loop's control and state, facing the choice between repairing them now
+and leaving them as findings, we decided to repair all ten on one branch, to
+achieve a loop whose stops and releases cannot be forged, lost or misread,
+accepting that about forty loop tests change their seeding with it. — 2026-10-25
