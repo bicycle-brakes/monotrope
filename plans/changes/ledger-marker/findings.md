@@ -88,9 +88,11 @@ Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3963–3971 | Marker clearing runs before formatting. If an attempt writes `def test_new ():` with a matching ledger marker, `clear_written` leaves it untouched; Ruff then formats it to `def test_new():`, so the criterion-ledger gate rejects the now-stale marker during `make verify`. Reproduced with the worktree’s Ruff. Clear markers against the formatted tests before stamping the plan and running verification. [Acceptance criterion 3] | Codex | taken — test: an attempt that writes `def test_new ():` with a matching ledger marker passes the criterion-ledger gate after Ruff formats it to `def test_new():` (orchestrator, 2026-10-25) | — |
+| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3963–3971 | Marker clearing runs before formatting. If an attempt writes `def test_new ():` with a matching ledger marker, `clear_written` leaves it untouched; Ruff then formats it to `def test_new():`, so the criterion-ledger gate rejects the now-stale marker during `make verify`. Reproduced with the worktree’s Ruff. Clear markers against the formatted tests before stamping the plan and running verification. [Acceptance criterion 3] | Codex | fixed — tests/test_stage2.py::test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify | — |
 
 Phase 6 verdict: codex 01a174aa-2cf8-7ad1-90e1-01b2b8008e7a, 2026-10-25
 Reviewer session: codex 01a174aa-2cf8-7ad1-90e1-01b2b8008e7a — a fresh session reviewed: no phase-2a session was recorded
 
 Loop rows: none — the loop did not run for this change.
+
+Stage-2 call, 2026-10-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 552 files, 2094 commits, 12 rules.

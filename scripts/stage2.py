@@ -3926,7 +3926,7 @@ def verify_attempt(
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
 ) -> list[str]:
-    """Clear derivable ledger markers, stamp changed held documents, render the index, format, `make verify`.
+    """Format, clear derivable ledger markers, stamp changed documents, render the index, `make verify`.
 
     Preparation writes to the tree and executes its registry renderer. Before `make verify` the
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
@@ -3960,6 +3960,11 @@ def verify_attempt(
             return [f"refusing an aliased plan before clearing its ledger: {relative.as_posix()}"]
         if plan.exists() and plan.stat().st_nlink > 1:
             return [f"refusing a hard-linked plan before clearing its ledger: {relative.as_posix()}"]
+        # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
+        # Clear against those final bytes, before stamping the plan and verifying (F-1).
+        line = format_step(root, env, key, tools)
+        if formatted is not None and line is not None:
+            formatted.append(line)
         check_criterion_ledger.clear_written(root, plan)
     except (OSError, RuntimeError, ValueError) as error:
         return [
@@ -3968,9 +3973,6 @@ def verify_attempt(
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
-    line = format_step(root, env, key, tools)
-    if formatted is not None and line is not None:
-        formatted.append(line)
     try:
         done = launch(
             ["make", "verify"],

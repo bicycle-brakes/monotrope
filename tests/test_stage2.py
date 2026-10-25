@@ -13512,6 +13512,52 @@ def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: W
     assert "- 2: not yet written tests/test_later.py::test_later" in committed
 
 
+def test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F-1: clearing before Ruff misses a valid definition with whitespace before `(`.
+    # The formatter stand-in plants Ruff's normalized output; the real ledger gate must
+    # already pass when stamping starts and when `make verify` starts.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (world.plan.parent / "spec.md").write_text("# Spec\n\n## Acceptance criteria\n\n1. A test exists.\n")
+    target = world.root / "tests/test_new.py"
+    target.parent.mkdir(exist_ok=True)
+    target.write_text("def test_new ():\n    pass\n", encoding="utf-8")
+    venv_ruff(world)
+    world.script(
+        ruff=[{}, {"plant": {"tests/test_new.py": "def test_new():\n    pass\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    seen: list[str] = []
+    real_prepare = stage2.prepare_derived
+    real_launch = stage2.launch
+
+    def assert_ready(step: str) -> None:
+        seen.append(step)
+        assert target.read_text() == "def test_new():\n    pass\n"
+        diagnostics: list[str] = []
+        assert stage2.check_criterion_ledger.run(world.root, diagnostics.append) == 0, diagnostics
+        assert "not yet written" not in world.plan.read_text()
+
+    def watching_prepare(*args, **kwargs):
+        assert_ready("stamp")
+        return real_prepare(*args, **kwargs)
+
+    def watching_launch(command, *args, **kwargs):
+        if command == ["make", "verify"]:
+            assert_ready("verify")
+        return real_launch(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "prepare_derived", watching_prepare)
+    monkeypatch.setattr(stage2, "launch", watching_launch)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert seen == ["stamp", "verify"]
+
+
 def test_the_ledger_is_cleared_before_the_documents_are_stamped(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Pre-review row P239-2 (2026-10-25). Planted fault: the marker is cleared after `prepare_derived`, so the
     # plan's `updated:` stamp misses the runner's own edit and the frontmatter-current gate goes red.
