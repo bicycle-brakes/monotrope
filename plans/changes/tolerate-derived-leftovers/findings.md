@@ -64,3 +64,11 @@ made by a Sonnet 5.5 subagent at the orchestrator's direction.
 | P243-5 | MINOR | In `draft`, a leftover the run started with was put back and listed as "the runner put back what a draft may not change", blaming the model. | fixed, the leftovers are computed before the first call and left out of that listing (still put back) — tests/test_stage2.py::test_a_draft_does_not_blame_the_model_for_a_derived_leftover |
 | P243-6 | MINOR | No unit test of `derived_leftover` over the stamp variants. | fixed, parametrised test; it fails when every frontmatter `updated:` line is masked (`second-frontmatter-updated-line-changed`) and when the match is `startswith("updated")` (`updated-prefixed-key-kept`) — tests/test_stage2.py::test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else |
 | P243-7 | NIT | The `.pyc` clause tolerates files that this repository ignores. | not now, no code change: `.pyc` is gitignored here, so the clause matters only in target repositories that track bytecode |
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
