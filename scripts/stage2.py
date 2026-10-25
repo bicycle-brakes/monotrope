@@ -4717,24 +4717,42 @@ def _mark_record_rows(
 # 2026-10-20 a `--stage2-off` model took itself for the orchestrator, said its Bash tool was disabled and
 # asked to be rerun, and wrote no research.
 EXPLORER_ROLE = (
-    "You are the phase-1 explorer that `scripts/stage2.py explore` has already started; you are not the "
-    "orchestrator and you run no command. Your tools are read-only (Read, Grep, Glob) and that is all this "
-    "phase needs: read the repository and write the research now."
+    "You are the phase-1 explorer that the runner has already started; you are not the orchestrator and "
+    "you run no command. Your tools are read-only (Read, Grep, Glob) and that is all this phase needs; "
+    "where the phase prompt says `rg`, use Grep. Read the repository and answer with the research now."
 )
 
-_PATH_TOKEN = re.compile(r"[\w.\-]+(?:/[\w.\-]+)*")
+_PATH_TOKEN = re.compile(r"/?[\w.\-]+(?:/[\w.\-]+)*")
 
 
 def names_a_repository_file(root: Path, answer: str) -> bool:
-    """Whether the answer names at least one file or directory that exists inside the worktree."""
+    """Whether the answer names at least one file or directory that exists inside the worktree.
+
+    A heuristic: "exists in the worktree" includes ignored files, and `.git` never counts.
+    """
     base = root.resolve()
-    for token in _PATH_TOKEN.findall(answer)[:5000]:
-        if token in (".", "..") or not ("/" in token or "." in token):
+    # A bare word counts only as a file directly at the root (`Makefile`): a folder name such as
+    # `tests` or `scripts` also stands in an ordinary refusal ("I cannot run the tests").
+    root_files = {entry.name for entry in base.iterdir() if entry.is_file()} if base.is_dir() else set()
+    seen: set[str] = set()
+    for raw in _PATH_TOKEN.findall(answer.replace("\\", "/")):
+        token = raw.rstrip(".-")  # sentence punctuation glued to the end of a path
+        if token in seen or token.strip("/") in ("", ".", ".."):
             continue
+        if "/" not in token and "." not in token:
+            if token in root_files:
+                return True
+            continue
+        seen.add(token)
+        # Cap the path-like candidates, so filler words do not hide a later path.
+        if len(seen) > 5000:
+            break
         try:
             path = (root / token).resolve()
             # exists() raises on a component over the file system's name limit (runner review R-6).
-            if path != base and path.is_relative_to(base) and path.exists():
+            if path == base or not path.is_relative_to(base) or path.relative_to(base).parts[0] == ".git":
+                continue
+            if path.exists():
                 return True
         except (OSError, RuntimeError, ValueError):
             continue

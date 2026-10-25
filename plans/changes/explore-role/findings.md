@@ -46,3 +46,25 @@ this change:
 | ID | Severity | Finding | Status |
 |---|---|---|---|
 | R-6 | MINOR | In `names_a_repository_file`, `path.exists()` stood outside the `try`; on Python 3.12 a path-like token with a component over 255 bytes raises "File name too long", so `explore` died with a traceback and the answer was neither appended nor shown (reproduced). | fixed — tests/test_stage2.py::test_an_over_long_word_in_an_exploration_answer_fails_cleanly |
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request a read-only Opus 5.5 subagent reviewed the change
+before phase 6 (Codex, unreachable from this container); phase 6 is still owed.
+The repairs were made by a Sonnet 5.5 subagent at the orchestrator's direction.
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| P241-1 | MAJOR | An absolute path inside the worktree, as Read and Glob return it, never counted because the token pattern could not match a leading slash. An absolute path outside the worktree is still refused. | fixed — tests/test_stage2.py::test_an_absolute_path_inside_the_worktree_counts_and_one_outside_does_not |
+| P241-2 | MAJOR | A path ending a sentence had the full stop glued on, so the lookup missed it. Trailing `.` and `-` are stripped; `a.py:12` is unchanged. | fixed — tests/test_stage2.py::test_a_path_at_the_end_of_a_sentence_counts |
+| P241-3 | MAJOR | `EXPLORER_ROLE` named `scripts/stage2.py explore`, so a refusal echoing it passed. The path is gone from the role; the check stays a heuristic and a refusal naming a file that the phase prompt or `AGENTS.md` also names still passes. | fixed and documented as a limit — tests/test_stage2.py::test_the_explorer_role_does_not_name_the_runner_script, tests/test_stage2.py::test_a_refusal_that_echoes_the_explorer_role_is_refused |
+| P241-4 | MINOR | The 5000 cap counted every word; backslash separators and bare top-level names such as `Makefile` were not recognised. Candidates are filtered, then capped; `\` is read as `/`; a bare word counts as a direct root entry. | fixed — tests/test_stage2.py::test_a_path_after_the_five_thousandth_word_still_counts, tests/test_stage2.py::test_a_windows_separator_in_a_path_counts, tests/test_stage2.py::test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry |
+| P241-5 | MINOR | `.git` exists in every worktree and satisfied the check. A path under `.git` no longer counts; ignored files still count ("exists in the worktree"), with no git call. | fixed and documented as a limit — tests/test_stage2.py::test_a_git_internal_path_does_not_count |
+| P241-6 | NIT | The role did not say to use Grep where the phase prompt says `rg`, and said "write the research now". | fixed — tests/test_stage2.py::test_the_explorer_role_does_not_name_the_runner_script |
+| P241-7 | NIT | Criterion 2 (the last 40 lines of a refused answer are shown) had no test of the cut. | fixed — tests/test_stage2.py::test_a_refused_exploration_answer_shows_its_last_forty_lines |
+- Orchestrator's change on review of the repair: a bare word now counts
+  only as a *file* directly at the root (`Makefile`, `LICENSE`), not as any
+  root entry, because a folder name (`tests`, `scripts`, `docs`) stands in
+  an ordinary refusal ("I cannot run the tests"). The 5000 cap now counts
+  only path-like candidates. `test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry`
+  pins the folder case.

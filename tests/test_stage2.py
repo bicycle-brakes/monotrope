@@ -13528,3 +13528,84 @@ def test_an_over_long_word_in_an_exploration_answer_fails_cleanly(world: World) 
     assert stage2.names_a_repository_file(world.root, f"see {word} and `src/app.py`") is True
     world.script(claude=[{"stdout": f"see {word}"}])
     assert world.run("explore") == 1
+
+
+# ---------------------------------------------------------------------------
+# explore-role pre-review repairs (PR #241, findings P241-1..P241-7)
+# ---------------------------------------------------------------------------
+
+
+def test_an_absolute_path_inside_the_worktree_counts_and_one_outside_does_not(world: World) -> None:
+    # P241-1. Planted fault: the token pattern cannot match a leading slash, so the absolute paths that
+    # Read and Glob return never count.
+    inside = f"{world.root}/src/app.py"
+    assert stage2.names_a_repository_file(world.root, f"The code is in {inside} only") is True
+    assert stage2.names_a_repository_file(world.root, "See /etc/passwd") is False
+
+
+def test_a_path_at_the_end_of_a_sentence_counts(world: World) -> None:
+    # P241-2. Planted fault: the full stop is glued onto the path, so the lookup misses the file.
+    for text in (
+        "The runner lives in src/app.py.",
+        "Files: src/app.py, and more",
+        "(see src/app.py)",
+        "see src/app.py; then",
+        "src/app.py:12 holds it",
+        "as in 'src/app.py'.",
+    ):
+        assert stage2.names_a_repository_file(world.root, text) is True, text
+
+
+def test_the_explorer_role_does_not_name_the_runner_script() -> None:
+    # P241-3. Planted fault: the role names `scripts/stage2.py`, so a refusal that echoes it passes the check.
+    assert "scripts/stage2.py" not in stage2.EXPLORER_ROLE
+    assert "use Grep" in stage2.EXPLORER_ROLE and "answer with the research now" in stage2.EXPLORER_ROLE
+
+
+def test_a_refusal_that_echoes_the_explorer_role_is_refused(world: World) -> None:
+    # P241-3. Planted fault: the echoed role wording names a repository file and the refusal passes.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts" / "stage2.py").write_text("", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, stage2.EXPLORER_ROLE) is False
+
+
+def test_a_path_after_the_five_thousandth_word_still_counts(world: World) -> None:
+    # P241-4a. Planted fault: the cap counts every word, so a path after the 5000th is never seen.
+    answer = "word " * 5001 + "src/app.py"
+    assert stage2.names_a_repository_file(world.root, answer) is True
+
+
+def test_a_windows_separator_in_a_path_counts(world: World) -> None:
+    # P241-4b. Planted fault: a backslash path is split at the separator and never found.
+    assert stage2.names_a_repository_file(world.root, r"see src\app.py for it") is True
+
+
+def test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry(world: World) -> None:
+    # P241-4c. Planted fault: a token without a slash or dot is skipped, so `Makefile` never counts.
+    (world.root / "Makefile").write_text("all:\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "the Makefile drives it") is True
+    assert stage2.names_a_repository_file(world.root, "the Nonexistent drives it") is False
+    # A root folder named as a bare word is ordinary prose in a refusal, not a cited source.
+    (world.root / "tests").mkdir(exist_ok=True)
+    assert stage2.names_a_repository_file(world.root, "I cannot run the tests, please rerun me") is False
+
+
+def test_a_git_internal_path_does_not_count(world: World) -> None:
+    # P241-5. Planted fault: .git/config exists in every worktree and satisfies the check.
+    (world.root / ".git").mkdir(exist_ok=True)
+    (world.root / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "only .git/config here") is False
+    assert stage2.names_a_repository_file(world.root, "only .git here") is False
+
+
+def test_a_refused_exploration_answer_shows_its_last_forty_lines(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # P241-7. Planted fault: the whole answer, or its head, is shown instead of the last 40 lines.
+    answer = "\n".join(f"line {n:02d}" for n in range(1, 61))
+    world.script(claude=[{"stdout": answer}])
+    capsys.readouterr()
+    assert world.run("explore") == 1
+    err = capsys.readouterr().err
+    assert "line 60" in err and "line 21" in err
+    assert "line 01" not in err and "line 20" not in err

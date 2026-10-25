@@ -42,6 +42,20 @@ names no file of the repository fails instead of being appended as research
 - Change which model `--stage2-off` uses (option 1 in research).
 - Edit `prompts/01-explore.md` (human-written).
 
+## Known limits
+
+The check is a heuristic, not proof that research was done.
+
+- A refusal that names a repository file which also appears in the phase
+  prompt or in `AGENTS.md` (for example `scripts/stage2.py`,
+  `docs/WORKFLOW.md`, `AGENTS.md`) still passes. Real research legitimately
+  cites these files, so the check does not exclude them.
+- "Exists" means exists in the worktree: ignored files count, and no git
+  call is made. Only a path under `.git` is never counted.
+- A bare word counts only if it is an entry directly at the root of the
+  worktree (`Makefile`); a path may be absolute if it lies inside the
+  worktree, and `\` is read as `/`.
+
 ## Definition of Done
 
 - Tests red before the edit; `PYTHON=.venv/bin/python3 make verify` green
