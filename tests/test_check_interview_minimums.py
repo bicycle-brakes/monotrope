@@ -1008,3 +1008,69 @@ def test_the_workflow_states_the_claim_and_the_adoption_record() -> None:
     assert "ADR 0014" in workflow
     assert "2026-10-08" in workflow
     assert 'that a "yes" is followed by an ADR' not in workflow
+
+
+# ---------------------------------------------------------------------------
+# A fenced example is no record (bead coding-harness-k2r)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("fence", "closing"), [("```", "```"), ("~~~", "~~~"), ("````markdown", "````")])
+def test_a_fenced_record_or_skip_is_not_counted(fence: str, closing: str) -> None:
+    example = (
+        "# Decisions\n\nAn example of the form:\n\n"
+        f'{fence}\n## Q-1 · An example question\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+        f"\n## SKIP · interview\n\nstatus: skipped\nreason: an example reason\n{closing}\n"
+    )
+    records, skips = gate._parse_records(example)
+    assert records == [] and skips == [], "a fenced example was counted"
+
+
+def test_a_record_after_a_closed_fence_still_counts() -> None:
+    text = (
+        "# Decisions\n\n```\n## Q-9 · fenced\n```\n\n"
+        '## Q-1 · A real question\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+    )
+    records, _ = gate._parse_records(text)
+    assert [ident for ident, _ in records] == ["Q-1"]
+    assert records[0][1]["status"] == "answered"
+
+
+_REAL_Q1 = '## Q-1 · A real question\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+_HIDDEN_Q9 = '## Q-9 · hidden\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+
+
+def _ids(text: str) -> list[str]:
+    records, _ = gate._parse_records(text)
+    return [ident for ident, _ in records]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # a shorter closer inside a four-backtick fence does not close it
+        (f"````\n```\n{_HIDDEN_Q9}````\n\n{_REAL_Q1}", ["Q-1"]),
+        # a tilde line inside a backtick fence does not close it
+        (f"```\n~~~\n{_HIDDEN_Q9}```\n\n{_REAL_Q1}", ["Q-1"]),
+        # a closer carrying an info string is no closer: the fence stays open
+        (f"```\n{_HIDDEN_Q9}```js\n\n{_REAL_Q1}", []),
+        # a one-line "```a```" is no fence (a backtick in a backtick fence's info string)
+        (f"```a```\n\n{_REAL_Q1}", ["Q-1"]),
+        # four spaces of indent make a code block, not a fence
+        (f"    ```\n\n{_REAL_Q1}", ["Q-1"]),
+    ],
+    ids=["shorter-closer", "tilde-in-backtick", "closer-with-info", "one-line-fence", "indented-four"],
+)
+def test_the_commonmark_fence_rules_decide_what_is_hidden(text: str, expected: list[str]) -> None:
+    assert _ids(text) == expected
+
+
+def test_an_unclosed_fence_before_the_records_hides_them() -> None:
+    text = f"# Decisions\n\n```\nnever closed\n\n{_REAL_Q1}"
+    records, skips = gate._parse_records(text)
+    assert records == [] and skips == [], "an unclosed fence must hide what follows (fails safe, red)"
+
+
+def test_a_crlf_file_with_a_closed_fence_still_counts_the_real_record() -> None:
+    text = f"# Decisions\n\n```\n{_HIDDEN_Q9}```\n\n{_REAL_Q1}".replace("\n", "\r\n")
+    assert _ids(text) == ["Q-1"]
