@@ -54,3 +54,11 @@ two minor rows, both reproduced and both fixed by the orchestrating session.
   criterion 2 expects. The ledger names both new tests.
 - Not now: the runner echoes the literal word `lauf_cmd` instead of the
   command (`── [<gate>] $ lauf_cmd`). Present on `main` before this change.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review above. Phase 6 follows in a fresh
+Codex session.
