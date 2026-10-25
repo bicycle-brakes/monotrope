@@ -81,3 +81,16 @@ answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan
 answer 1) that the small cloud-session fixes get phase 6 only tonight,
 because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
 a fresh Codex session.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 552 files, 2092 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3963–3971 | Marker clearing runs before formatting. If an attempt writes `def test_new ():` with a matching ledger marker, `clear_written` leaves it untouched; Ruff then formats it to `def test_new():`, so the criterion-ledger gate rejects the now-stale marker during `make verify`. Reproduced with the worktree’s Ruff. Clear markers against the formatted tests before stamping the plan and running verification. [Acceptance criterion 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a174aa-2cf8-7ad1-90e1-01b2b8008e7a, 2026-10-25
+Reviewer session: codex 01a174aa-2cf8-7ad1-90e1-01b2b8008e7a — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
