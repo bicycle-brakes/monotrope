@@ -97,7 +97,7 @@ Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-2 | MINOR | SPEC | Phase 6 | scripts/stage2.py:3230 | With new non-ignored files named `scripts/new\rtool.py` and `scripts/new\ntool.py`, `_git_output(text=True)` converts the carriage return into a newline. Reproduced: `intend_new_files` sends the newline path twice to `git add`, leaving the carriage-return path untracked when verification starts. Preserve filenames without newline translation. [Acceptance criterion 1] | Codex | open | — |
+| F6-2 | MINOR | SPEC | Phase 6 | scripts/stage2.py:3230 | With new non-ignored files named `scripts/new\rtool.py` and `scripts/new\ntool.py`, `_git_output(text=True)` converts the carriage return into a newline. Reproduced: `intend_new_files` sends the newline path twice to `git add`, leaving the carriage-return path untracked when verification starts. Preserve filenames without newline translation. [Acceptance criterion 1] | Codex | taken — test: new files named `scripts/new\rtool.py` and `scripts/new\ntool.py` are both intent-to-add before make verify; file names are read without newline translation (orchestrator, 2026-10-25) | — |
 
 Phase 6 verdict: codex 01a174db-45be-70f2-84fb-51ba92a64dd1, 2026-10-25
 Reviewer session: codex 01a174db-45be-70f2-84fb-51ba92a64dd1 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
