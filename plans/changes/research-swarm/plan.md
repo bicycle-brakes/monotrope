@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-23
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -1042,6 +1042,13 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 33: tests/test_research_handoff.py::test_duplicate_yaml_answer_keys_are_not_measured — Duplicate answer keys fall back to prose and close an obligation or supply a criterion Basis instead of not measured (phase-6 F-64).
 - 33: tests/test_research_handoff.py::test_yaml_answer_errors_are_not_measured — A merge key or another YAML error in an answer closes an obligation or supplies a criterion Basis instead of exit 3 (phase-6 F-65).
 - 34: tests/test_research_handoff.py::test_amended_criteria_after_main_headings_require_basis — A later main heading hides an amended criterion from Basis checks (review-loop L4-2).
+
+- 52: tests/test_stage2_repository_pathlock.py::test_a_file_url_is_judged_where_pi_reads_it — A `file://` path passes the lock as a name inside the worktree while Pi reads the real path outside it (deep review RS-3-2).
+- 52: tests/test_stage2_repository_pathlock.py::test_an_unreadable_file_url_is_refused — A `file://` URL that names no local path is let through instead of refused.
+- 52: tests/test_stage2_repository_pathlock.py::test_reads_through_pi_fallback_names_are_judged_too — A curly-quote, NFD or AM/PM fallback name Pi's read tries reaches a symlink outside the worktree (deep review RS-3-6).
+- 33: tests/test_research_handoff.py::test_unicode_line_separators_inside_records_stay_measured — A raw U+2028, U+2029 or U+0085 inside a fenced record makes a complete run not measured (deep review RS-1-2).
+- 32: tests/test_research_handoff.py::test_run_envelope_markers_end_a_foreign_fence — An unclosed foreign fence in earlier research hides later run envelopes from the gate (deep review RS-1-9).
+- 34: tests/test_research_handoff.py::test_numbered_lists_in_later_sections_are_not_criteria — A numbered rollout or open-decision list under a later heading becomes a criterion (deep review RS-1-3).
 
 ## Not touched
 

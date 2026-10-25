@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-17
-updated: 2026-10-23
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -4636,3 +4636,15 @@ Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model hy3 · leak check clean over 567 files, 1912 commits, 12 rules.
 
 Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 567 files, 1912 commits, 12 rules.
+
+## Phase 6 — deep reviews RS-1, RS-2 and RS-3, 2026-10-25
+
+Three read-only deep reviews of `explore/research-swarm` at 8480b1d (part 1 orchestration and judge, part 2 persistence and records, part 3 Pi seats, catalog and path lock) reproduced each finding below in a scratch copy; the repairs were written test-first on this branch by an orchestrated Claude Code session. Pi 1.2.0 ran under Node 22 in the scratch copies, not the declared Node 26.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| RS-3-2 | BLOCKER | SPEC | base | `scripts/stage2_repository_pathlock.mjs` `confinementError` | The repository seats' path lock resolved a `file://` URL as a relative name inside the worktree and allowed it, while Pi's `normalizePath` turns it into the real path with `fileURLToPath`: `read file:///<outside>/secret.txt`, `ls file:///etc` and `find path=file:///root` reached files anywhere on the machine and their text reached a Go model. Reproduced on the pinned Pi 1.2.0 through the real `Run.pi_command`. Repair: the lock mirrors Pi's normalisation (unicode spaces, `@`, `~` refused, `file://` through `fileURLToPath`) before it confines; re-checked on the pinned Pi under Node 22, the secret no longer reaches the model. [criterion 52, Q-16] | deep review 3 (Claude Opus 5.5) | fixed — tests/test_stage2_repository_pathlock.py::test_a_file_url_is_judged_where_pi_reads_it, tests/test_stage2_repository_pathlock.py::test_an_unreadable_file_url_is_refused | — |
+| RS-3-6 | MINOR | SPEC | base | `scripts/stage2_repository_pathlock.mjs` `confinementError` against Pi `resolveReadPathAsync` | The lock judged the literal path, but Pi's `read` falls back to curly-quote, NFD and AM/PM variants of a missing path: with a symlink `notes’` (U+2019) in the worktree pointing outside, `notes'/secret.txt` passed the lock and Pi read the outside file. Repair: for `read`, every fallback name Pi tries that exists must also stay inside the worktree. [criterion 52] | deep review 3 (Claude Opus 5.5) | fixed — tests/test_stage2_repository_pathlock.py::test_reads_through_pi_fallback_names_are_judged_too | — |
+| RS-1-2 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py` `parse_text` | The gate split `research.md` with `str.splitlines()`, which breaks at U+2028, U+2029 and U+0085 that the runner's `json.dumps(ensure_ascii=False)` keeps raw inside JSON strings; a complete run whose receipt excerpt or claim text carried one became not measured (exit 3), and CI runs the gate over every change. Repair: the gate breaks lines only at LF, CRLF and CR (`_lines`), also for `decisions.md` and `spec.md`. [criteria 31-33] | deep review 1 (Claude Opus 5.5) | fixed — tests/test_research_handoff.py::test_unicode_line_separators_inside_records_stay_measured | — |
+| RS-1-9 | MAJOR | SPEC | base | `scripts/check_research_handoff.py` `parse_text` | Markdown fence state carried across run envelopes: earlier research ending in an unclosed `~~~` or four-backtick fence swallowed every later v2 envelope ("exempt - legacy", exit 0, with an open [DECISION] obligation), and an unclosed ```` ```python ```` fence turned it into exit 3. Repair: a run envelope's opening and closing lines are hard boundaries that end a foreign fence. [criteria 31-33] | deep review 1 (Claude Opus 5.5) | fixed — tests/test_research_handoff.py::test_run_envelope_markers_end_a_foreign_fence | — |
+| RS-1-3 | MINOR | SPEC | base | `scripts/check_research_handoff.py` `_basis_lines` | After "Acceptance criteria" the scan treated any numbered line under any later heading as a criterion, so a rollout list or numbered open decisions repeated a criterion number (exit 3) or became a criterion without a Basis (exit 1); `plans/changes/criterion-test-ledger/spec.md` has one under "Open decisions". Repair: under an "Acceptance criteria" or "Amendment" heading and its subsections every numbered item counts; under any other later section only an item that reads as a criterion (When, While, If, Where, perhaps bold) counts, so F-25's later-section protection holds. [criterion 34] | deep review 1 (Claude Opus 5.5) | fixed — tests/test_research_handoff.py::test_numbered_lists_in_later_sections_are_not_criteria | — |

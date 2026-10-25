@@ -174,3 +174,48 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     loaded = Path(command[command.index("-e") + 1])
     assert loaded.parent == scratch and loaded.read_text(encoding="utf-8") == EXTENSION.read_text(encoding="utf-8")
     assert command[command.index("--tools") + 1] == "read,grep,find,ls"
+
+
+@pytest.mark.parametrize("tool", ["read", "grep", "find", "ls"])
+def test_a_file_url_is_judged_where_pi_reads_it(world: World, tool: str) -> None:
+    """Pi turns a `file://` path into a real path with fileURLToPath; the lock must judge that path (RS-3-2)."""
+    target = world.outside / "canary.txt" if tool == "read" else world.outside
+    args = {"path": target.as_uri()}
+    if tool in ("grep", "find"):
+        args["pattern"] = "x"
+    result = world.gate(tool, **args)
+    assert blocked(result), result
+    assert "outside the worktree" in result["reason"]
+    inside = world.root / "src" / ("a.txt" if tool == "read" else "")
+    args["path"] = inside.as_uri()
+    assert world.gate(tool, **args) is None
+
+
+def test_an_unreadable_file_url_is_refused(world: World) -> None:
+    assert blocked(world.gate("read", path="file://remote-host/etc/hostname"))
+
+
+def test_unicode_spaces_are_normalised_as_pi_normalises_them(world: World) -> None:
+    # Pi maps U+00A0, U+2000-U+200A, U+202F, U+205F and U+3000 to a space before resolving.
+    (world.root / "a b").mkdir()
+    (world.root / "a b" / "c").symlink_to(world.outside)
+    for space in ("\u00a0", "\u2007", "\u202f", "\u205f", "\u3000"):
+        assert blocked(world.gate("ls", path=f"a{space}b/c")), repr(space)
+
+
+@pytest.mark.parametrize(
+    ("planted", "asked"),
+    [
+        ("notes\u2019", "notes'"),  # Pi's curly-quote fallback
+        ("cafe\u0301", "caf\u00e9"),  # Pi's NFD fallback
+        ("Shot 1\u202fPM.d", "Shot 1 PM.d"),  # Pi's macOS AM/PM fallback
+    ],
+)
+def test_reads_through_pi_fallback_names_are_judged_too(world: World, planted: str, asked: str) -> None:
+    """Pi's read falls back to curly-quote, NFD and AM/PM variants of a missing path (RS-3-6)."""
+    (world.root / planted).symlink_to(world.outside)
+    assert blocked(world.gate("read", path=f"{asked}/canary.txt"))
+    assert blocked(world.gate("read", path=f"{planted}/canary.txt"))
+    (world.root / f"{planted}-in").mkdir()
+    (world.root / f"{planted}-in" / "x.txt").write_text("x", encoding="utf-8")
+    assert world.gate("read", path=f"{asked}-in/x.txt") is None

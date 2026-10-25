@@ -191,10 +191,23 @@ def _check_report(report: object, run_id: str, where: str) -> dict:
     return report
 
 
+def _lines(text: str) -> list[str]:
+    """The text's lines, broken only at LF, CRLF and CR (deep review RS-1-2).
+
+    ``str.splitlines`` also breaks at U+2028, U+2029, U+0085 and other characters that JSON keeps raw inside a
+    string, so a record whose web excerpt or claim text carries one would no longer parse.
+    """
+    return re.split(r"\r\n|\r|\n", text)
+
+
 def parse_text(text: str, label: str) -> list[ParsedRun]:
-    """Every v2 run envelope of one research.md, validated; raises CannotMeasure on anything ambiguous."""
+    """Every v2 run envelope of one research.md, validated; raises CannotMeasure on anything ambiguous.
+
+    A run envelope's opening and closing lines are hard boundaries (deep review RS-1-9): they end a foreign
+    Markdown fence that earlier prose left open, so such a fence never hides a run from the gate.
+    """
     runs: list[ParsedRun] = []
-    lines = text.splitlines()
+    lines = _lines(text)
     envelope: str | None = None
     blocks: dict[str, list[tuple[str, str]]] = {}
     index = 0
@@ -202,6 +215,8 @@ def parse_text(text: str, label: str) -> list[ParsedRun]:
     while index < len(lines):
         line = lines[index]
         index += 1
+        if other is not None and (_OPEN.match(line) or line == _CLOSE):
+            other = None
         if other is not None:
             closed = _FENCE_ANY.match(line)
             if (
@@ -474,7 +489,7 @@ def _string_list(value: object, where: str) -> list[str]:
 
 def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
     """Read unique Q identities and their structured research links; repeats are ambiguous."""
-    lines = text.splitlines()
+    lines = _lines(text)
     fenced = _fenced_flags(lines)
     heads = [
         (number, _RECORD.match(line[3:].rstrip()))
@@ -666,12 +681,24 @@ def _header(spec_text: str) -> dict:
     return loaded if isinstance(loaded, dict) else {}
 
 
+_CRITERION_SECTION = re.compile(r"^(acceptance criteria|amendment)", re.I)
+_CRITERION_SHAPE = re.compile(r"^(\*\*)?(When|While|If|Where)\b")
+
+
 def _basis_lines(spec_text: str) -> dict[int, list[str]]:
-    """Per criterion number the text of its `*Basis:*` lines; a criterion without one maps to []."""
-    lines = spec_text.splitlines()
+    """Per criterion number the text of its `*Basis:*` lines; a criterion without one maps to [].
+
+    Under an "Acceptance criteria" or "Amendment" heading and its subsections every numbered item is a
+    criterion. Amendments may add criteria under later main headings, so once acceptance criteria begin a
+    heading ends an item, not the scan; but under any other later section only an item that reads as a
+    criterion (When, While, If or Where, perhaps in bold) counts, so a rollout list or numbered open decisions
+    are never mistaken for criteria (deep review RS-1-3).
+    """
+    lines = _lines(spec_text)
     fenced = _fenced_flags(lines)
     result: dict[int, list[str]] = {}
     inside = False
+    section: int | None = None  # the level of the criterion section the scan is in, if any
     current: int | None = None
     collecting = False
     for number, line in enumerate(lines):
@@ -679,21 +706,25 @@ def _basis_lines(spec_text: str) -> dict[int, list[str]]:
             continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", line)
         if heading:
-            # Amendments may add criteria under later main headings. Once
-            # acceptance criteria begin, headings end an item, not the scan.
-            if heading.group(2).strip().lower().startswith("acceptance criteria"):
-                inside = True
+            level = len(heading.group(1))
+            if _CRITERION_SECTION.match(heading.group(2).strip()):
+                inside, section = True, level
+            elif section is not None and level <= section:
+                section = None
             current, collecting = None, False
             continue
         if not inside:
             continue
-        numbered = re.match(r"^([1-9][0-9]*)\. ", line)
-        if numbered:
+        numbered = re.match(r"^([1-9][0-9]*)\. (.*)$", line)
+        if numbered and (section is not None or _CRITERION_SHAPE.match(numbered.group(2))):
             current = int(numbered.group(1))
             if current in result:
                 raise CannotMeasure(f"spec.md: criterion {current} appears twice; its Basis is ambiguous")
             result[current] = []
             collecting = False
+            continue
+        if numbered:
+            current, collecting = None, False
             continue
         basis = re.match(r"^\s+\*Basis:\*(.*)$", line)
         if current is not None and basis:

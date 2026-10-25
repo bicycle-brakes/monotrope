@@ -10,6 +10,13 @@
 // the seat was started in (its working directory). It is plain JavaScript, so
 // the lock holds on every platform Pi runs on; no operating-system sandbox.
 //
+// The path is judged where Pi itself would open it (review findings RS-3-2 and
+// RS-3-6): the lock mirrors Pi 1.2.0's `normalizePath` (unicode spaces to a
+// space, a leading "@" stripped, `~` refused, a `file://` URL turned into its
+// path with fileURLToPath) and, for read, every fallback name Pi's
+// `resolveReadPath` tries when the literal path is missing (the macOS AM/PM,
+// NFD and curly-quote variants): each one that exists must stay inside.
+//
 // Limits, stated: the lock checks the path a tool is called with, not what the
 // tool then walks. A symbolic link INSIDE the worktree that points out is
 // refused when named directly, but a directory walk (grep, find) does not
@@ -17,8 +24,9 @@
 // pattern is refused when it is absolute, begins with `~` or has a `..` segment.
 //
 // The pure helpers are exported so tests can drive them without Pi.
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const LOCKED_TOOLS = ["read", "grep", "find", "ls"];
 const PATH_FIELDS = ["path"];
@@ -43,26 +51,53 @@ export function realTarget(target) {
   }
 }
 
+// Pi's set of unicode spaces (utils/paths.js UNICODE_SPACES), each read as a plain space.
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+
 function normalize(text) {
   // Pi strips a leading "@" and maps unicode spaces to a plain space.
-  return String(text).replace(/[  -   　]/g, " ").replace(/^@/, "");
+  return String(text).replace(UNICODE_SPACES, " ").replace(/^@/, "");
 }
 
-export function confinementError(rawPath, root) {
+// The absolute path Pi's resolveToCwd gives for an already normalized text; a `file://` URL is
+// converted the way Pi converts it (throws when it names no local path).
+function piResolve(text, root) {
+  const local = /^file:\/\//.test(text) ? fileURLToPath(text) : text;
+  return path.isAbsolute(local) ? path.resolve(local) : path.resolve(root, local);
+}
+
+// The fallback names Pi's resolveReadPath tries, in its order, when the resolved path is missing.
+function readFallbacks(resolved) {
+  const amPm = resolved.replace(/ (AM|PM)\./gi, "\u202F$1.");
+  const nfd = resolved.normalize("NFD");
+  const curly = resolved.replace(/'/g, "\u2019");
+  const nfdCurly = nfd.replace(/'/g, "\u2019");
+  return [amPm, nfd, curly, nfdCurly].filter((name) => name !== resolved);
+}
+
+function escapes(realRoot, target) {
+  const relative = path.relative(realRoot, realTarget(target));
+  return relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
+}
+
+export function confinementError(rawPath, root, { read = false } = {}) {
   if (typeof rawPath !== "string") return "the path must be a string";
   const text = normalize(rawPath);
   if (text.startsWith("~")) return `the path '${rawPath}' begins with ~, which names a home directory outside the worktree`;
   const realRoot = realTarget(root);
-  let real;
+  const outside = `the path '${rawPath}' resolves outside the worktree: repository seats read only inside it`;
   try {
-    real = realTarget(path.resolve(root, text));
+    const resolved = piResolve(text, root);
+    if (escapes(realRoot, resolved)) return outside;
+    if (read) {
+      for (const name of readFallbacks(resolved)) {
+        if (existsSync(name) && escapes(realRoot, name)) return outside;
+      }
+    }
   } catch {
     return `the path '${rawPath}' cannot be resolved inside the worktree`;
   }
-  const relative = path.relative(realRoot, real);
-  const escapes = relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
-  if (!escapes) return null;
-  return `the path '${rawPath}' resolves outside the worktree: repository seats read only inside it`;
+  return null;
 }
 
 export function patternError(pattern) {
@@ -85,7 +120,7 @@ export function gate(toolName, input, root) {
   const args = input && typeof input === "object" ? input : {};
   for (const field of PATH_FIELDS) {
     if (args[field] !== undefined && args[field] !== null) {
-      const error = confinementError(args[field], root);
+      const error = confinementError(args[field], root, { read: toolName === "read" });
       if (error) return error;
     }
   }

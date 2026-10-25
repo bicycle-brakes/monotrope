@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-23
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -934,7 +934,9 @@ maintainer answer is supplied here.
 - [DETAIL] Residual read risk: stored results lie outside every directory a
   model is given and are never named to a model. A repository seat runs with
   the path lock `scripts/stage2_repository_pathlock.mjs` (decision Q-16): its
-  read, grep, find and ls calls are refused when the path, with `..`
+  read, grep, find and ls calls are refused when the path, normalised as Pi
+  normalises it (a `file://` URL read as its path, unicode spaces, an `@`
+  prefix; for read also every fallback name Pi tries), with `..`
   collapsed and symbolic links followed, lies outside the worktree, so an
   absolute path to the store, the home directory or the git directory does
   not reach a model on any platform Pi runs on. The lock judges the path a

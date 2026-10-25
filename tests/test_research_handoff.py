@@ -993,3 +993,51 @@ def test_yaml_answer_errors_are_not_measured(world: World, capsys, answer: str, 
     code, output = world.check(capsys)
     assert code == 3, output
     assert "not measured" in output and "answer" in output
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085"])
+def test_unicode_line_separators_inside_records_stay_measured(world: World, capsys, separator: str) -> None:
+    # Criteria 31-33 (deep review RS-1-2). Planted fault: the parser splits a fenced JSON record at a character
+    # that `str.splitlines` treats as a line break although JSON keeps it raw inside a string, so a complete run
+    # whose web excerpt or claim text carries one is "not measured" (exit 3) everywhere CI runs the gate.
+    run = run_text(RUN1, decision=f"Which store{separator}format?")
+    escaped = json.dumps(separator)[1:-1]
+    raw = run.replace(escaped, separator)
+    assert separator in raw, "the record must carry the raw separator, as the runner's ensure_ascii=False does"
+    world.write([raw])
+    code, output = world.check(capsys)
+    assert code == 0, output
+    world.write([raw], records=[])
+    code, output = world.check(capsys)
+    assert code == 1 and f"{RUN1}/H-1" in output, output
+
+
+@pytest.mark.parametrize("opener", ["~~~", "````", "```python", "~~~~ text"])
+def test_run_envelope_markers_end_a_foreign_fence(world: World, capsys, opener: str) -> None:
+    # Criteria 31-33 (deep review RS-1-9). Planted fault: earlier research prose (or a raw single-explorer
+    # answer) ends in an unclosed Markdown fence, which swallows every later run envelope, so the gate reports
+    # "exempt - legacy" and exits 0 with an open [DECISION] obligation, or exits 3.
+    earlier = f"## Runner exploration\n\nThe model answered:\n\n{opener}\ndef f():\n    pass\n\n"
+    world.write([earlier + run_text(RUN1)], records=[])
+    code, output = world.check(capsys)
+    assert code == 1 and f"{RUN1}/H-1" in output, output
+    world.write([earlier + run_text(RUN1)])
+    code, output = world.check(capsys)
+    assert code == 0, output
+
+
+def test_numbered_lists_in_later_sections_are_not_criteria(world: World, capsys) -> None:
+    # Criterion 34 (deep review RS-1-3). Planted fault: a numbered list under a later heading (rollout steps,
+    # open decisions) becomes a criterion: it repeats a criterion number (exit 3) or lacks a Basis (exit 1).
+    plain = spec_text(neighbours=[])
+    for later in (
+        "\n## Rollout\n\n1. Merge the pull request.\n2. Announce it.\n",
+        "\n## Open decisions\n\n1. **The entry form** stays open.\n",
+    ):
+        world.write([run_text(RUN1)], spec=plain + later)
+        code, output = world.check(capsys)
+        assert code == 0, output
+    # A criterion-shaped item under a later main section still counts (phase-6 F-25 stays true).
+    world.write([run_text(RUN1)], spec=plain + "\n## Notes\n\n2. **When** amended, check its origin.\n")
+    code, output = world.check(capsys)
+    assert code == 1 and "2" in output, output
