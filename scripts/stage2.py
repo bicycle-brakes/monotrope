@@ -3235,15 +3235,14 @@ def derived_leftover(root: Path, relative: Path) -> bool:
     verify), a file whose only difference from `HEAD` is its `updated:` line (the date stamp), and Python
     bytecode under `__pycache__` that the runner's own renderer wrote. A content edit is never one.
     """
-    if any(relative.as_posix().casefold().startswith(prefix) for prefix in _held_prefixes(root)):
-        return False
     # A stamp or rendered file never accounts for a tracked permission/type change.
-    raw = _git_output(root, "diff", "--raw", "--no-renames", "-z", "HEAD", "--", relative.as_posix())
-    for metadata in raw.split("\0")[::2]:
-        if metadata:
-            modes = metadata.split()[:2]
-            if modes[0] != ":000000" and modes[0][1:] != modes[1]:
-                return False
+    for index in ((), ("--cached",)):
+        raw = _git_output(root, "diff", *index, "--raw", "--no-renames", "-z", "HEAD", "--", relative.as_posix())
+        for metadata in raw.split("\0")[::2]:
+            if metadata:
+                modes = metadata.split()[:2]
+                if modes[0] != ":000000" and modes[0][1:] != modes[1]:
+                    return False
     if relative.as_posix() == "plans/INDEX.md":
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
@@ -3257,12 +3256,16 @@ def derived_leftover(root: Path, relative: Path) -> bool:
             return False
         now = path.read_bytes().decode("utf-8")
         then = _git_bytes(root, "show", f"HEAD:{relative.as_posix()}").decode("utf-8")
+        staged = _git_bytes(root, "show", f":{relative.as_posix()}").decode("utf-8")
     except (OSError, UnicodeDecodeError, Refused):
         return False
-    if now == then:
+    if now == staged == then:
         return False
-    before, after = _mask_stamp(then, dated=False), _mask_stamp(now, dated=True)
-    return before is not None and before == after
+    before = _mask_stamp(then, dated=False)
+    # Check both independent versions against HEAD: git add -A must not erase a substantive staged edit.
+    return before is not None and all(
+        version == then or _mask_stamp(version, dated=True) == before for version in (now, staged)
+    )
 
 
 _STAMP_DATE = re.compile(r"updated: \d{4}-\d{2}-\d{2}\r?")
@@ -4094,7 +4097,7 @@ RUNNER_HELD = (
 
 
 def _held_prefixes(root: Path) -> list[str]:
-    """Committed human-decided and runner-held prefixes, shared by admission and checkpoint guards."""
+    """Committed human-decided and runner-held prefixes for checkpoint protection."""
     try:
         data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
         # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
@@ -4145,6 +4148,12 @@ def checkpoint(
         if exposed:
             raise Refused(credential_message(exposed))
     try:
+        # A protected document's derived stamp may enter the run, but must not enter its commit.
+        # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
+        held = _held_prefixes(root)
+        for path in sorted(changed_paths(root)):
+            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path):
+                _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", path.as_posix())
         blocked = uncommittable(root, change, keep)
     except Refused as error:
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go

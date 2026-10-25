@@ -13648,8 +13648,7 @@ def test_derived_leftover_refuses_a_stamp_with_a_mode_change(world: World, stage
         stage2.refuse_preexisting(world.root, set())
 
 
-@pytest.mark.parametrize("substantive", [False, True])
-def test_derived_leftover_refuses_a_human_decided_document(world: World, substantive: bool) -> None:
+def test_derived_leftover_refuses_a_human_decided_document(world: World) -> None:
     relative = Path("docs/adr/0001-example.md")
     doc = world.root / relative
     doc.parent.mkdir(parents=True, exist_ok=True)
@@ -13660,13 +13659,64 @@ def test_derived_leftover_refuses_a_human_decided_document(world: World, substan
     provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "protected document fixture")
-    doc.write_text(_FM_NEW + ("Substantive edit\n" if substantive else ""), encoding="utf-8")
+    doc.write_text(_FM_NEW + "Substantive edit\n", encoding="utf-8")
     # Admission must agree with the checkpoint's committed provenance guard.
     assert relative.as_posix() in stage2.uncommittable(world.root, "demo")
     # Assert the classification first so the baseline proves the fault by AssertionError.
     assert not stage2.derived_leftover(world.root, relative)
     with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
         stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("fault", ["content", "mode"])
+def test_derived_leftover_refuses_a_substantive_staged_edit(world: World, fault: str) -> None:
+    # F-3: the working copy hides a human edit that remains in the index.
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "staged document fixture")
+    doc.write_text(_FM + ("Human edit\n" if fault == "content" else ""), encoding="utf-8")
+    if fault == "mode":
+        doc.chmod(0o755)
+    git(world.root, "add", str(relative))
+    doc.chmod(0o644)
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft", "repair"])
+def test_a_protected_stamp_leftover_is_admitted_and_restored(world: World, verb: str) -> None:
+    # F-4: admission accepts a stamp, but the checkpoint must never commit the protected document.
+    if verb == "draft":
+        draft_world(world)
+        passing_draft(world)
+    elif verb == "repair":
+        repair_world(world)
+    else:
+        successful_implementation(world)
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected stamp fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    stage2.refuse_preexisting(world.root, {world.findings.relative_to(world.root)})
+    assert world.run(verb) == 0
+    assert doc.read_text(encoding="utf-8") == _FM
+    assert git(world.root, "diff", baseline, "HEAD", "--", str(relative)) == ""
+    assert git(world.root, "status", "--porcelain") == ""
 
 
 _LEFTOVER_CASES = [
