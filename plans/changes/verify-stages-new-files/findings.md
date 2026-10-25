@@ -38,3 +38,18 @@ Read by the implementing session, so it is no independent review.
   files before, so nothing new slips through.
 - `changed_paths` and the credential scans list the same paths as before:
   an intent-to-add file is still a change against `HEAD`.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change:
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-5 | MINOR | When every attempt fails at `make verify`, no `restore_baseline` runs, so the intent-to-add entries stay in the operator's index: `git stash -u` refuses ("not uptodate"), and a new file deleted by hand leaves an entry `changed_paths` cannot see (reproduced). | fixed — tests/test_stage2.py::test_a_failed_run_leaves_no_intent_to_add_entry |
+
+`verify_attempt` now drops the entries with `git reset` in a `finally`
+right after `make verify`; the checkpoint still stages the content whole.
+The self-review line above that said "no entry outlives a restore" was
+true but missed the failure without a restore.

@@ -13525,3 +13525,18 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     assert world.run(verb) == 0
     assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
     assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+
+
+def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
+    # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
+    # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"scripts/new_tool.py": "VALUE = 1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    assert "scripts/new_tool.py" not in git(world.root, "ls-files").splitlines()
+    assert git(world.root, "diff", "--cached", "--name-only") == ""

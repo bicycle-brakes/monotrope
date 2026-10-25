@@ -3974,7 +3974,7 @@ def verify_attempt(
     if formatted is not None and line is not None:
         formatted.append(line)
     try:
-        intend_new_files(root, env)
+        intended = intend_new_files(root, env)
     except Refused as error:
         return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
     try:
@@ -3989,6 +3989,13 @@ def verify_attempt(
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
         return [f"`make verify` did not finish: {error}"]
+    finally:
+        # The entries were for the gates only: a failed run must not leave them in the operator's index,
+        # and a passing one is staged whole by the checkpoint (runner review R-5).
+        # A failed reset leaves the entries visible to the next run's pre-existing-change check.
+        if intended:
+            with contextlib.suppress(Refused):
+                _git_output(root, "reset", "--quiet", "--", *intended, env=env)
     problems = []
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
