@@ -3332,6 +3332,40 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
     return names
 
 
+def derived_leftover(root: Path, relative: Path) -> bool:
+    """A change the runner itself derives before every verify, so a failed run may leave it (bead coding-harness-b5w).
+
+    Three kinds, and only these: the rendered `plans/INDEX.md` (re-rendered from the tree before the next
+    verify), a file whose only difference from `HEAD` is its `updated:` line (the date stamp), and Python
+    bytecode under `__pycache__` that the runner's own renderer wrote. A content edit is never one.
+    """
+    if relative.as_posix() == "plans/INDEX.md":
+        return True
+    if "__pycache__" in relative.parts and relative.suffix == ".pyc":
+        return True
+    try:
+        diff = _git_output(root, "diff", "--unified=0", "--no-color", "HEAD", "--", relative.as_posix())
+    except Refused:
+        return False
+    changed = [line for line in diff.splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---"))]
+    removed = [line[1:] for line in changed if line.startswith("-")]
+    added = [line[1:] for line in changed if line.startswith("+")]
+    return (
+        len(removed) == 1
+        and len(added) == 1
+        and removed[0].startswith("updated: ")
+        and added[0].startswith("updated: ")
+    )
+
+
+def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
+    """Refuse pre-existing changes outside `allowed`, except the runner's own derived leftovers (bead coding-harness-b5w)."""
+    outside = {path for path in changed_paths(root) - allowed if not derived_leftover(root, path)}
+    if outside:
+        listing = ", ".join(sorted(path.as_posix() for path in outside))
+        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+
+
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     """Gitignored files with their mtime and size, so a later scan can tell which the run touched.
 
@@ -5350,10 +5384,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else GLM_FLASH
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
@@ -5574,10 +5605,7 @@ def draft(root: Path, change: str) -> None:
     """
     ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     ignored_before = ignored_snapshot(root)
     tools = tool_state(root)  # before any model runs (R-21)
@@ -5736,10 +5764,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")

@@ -240,6 +240,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/tolerate-derived-leftovers/decisions.md`](changes/tolerate-derived-leftovers/decisions.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/findings.md`](changes/tolerate-derived-leftovers/findings.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/plan.md`](changes/tolerate-derived-leftovers/plan.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/research.md`](changes/tolerate-derived-leftovers/research.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/tolerate-derived-leftovers/spec.md`](changes/tolerate-derived-leftovers/spec.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/venv-pycache/decisions.md`](changes/venv-pycache/decisions.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/findings.md`](changes/venv-pycache/findings.md) | draft | none | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | partial | 2026-10-24 | coding-harness-q94b |

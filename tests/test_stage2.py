@@ -13940,3 +13940,42 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     assert world.run(verb) == 0
     assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
     assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+
+
+# tolerate-derived-leftovers (bead coding-harness-b5w): a failed run's derived writes do not block the next
+# ---------------------------------------------------------------------------
+
+
+def test_a_failed_runs_derived_writes_do_not_block_the_next_run(world: World) -> None:
+    # Planted fault: the rendered index and the date stamps a failed run left are refused as pre-existing.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"src/app.py": "value = 2\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    leftovers = stage2.changed_paths(world.root)
+    assert Path("plans/INDEX.md") in leftovers, "the failed run left no rendered index to tolerate"
+    # The work itself is put back by the operator; the runner's own writes stay, as a failed run leaves them.
+    git(world.root, "checkout", "--", "src/app.py")
+    git(world.root, "checkout", "--", "plans/changes/demo/plan.md")
+    stamp_only = world.research
+    stamp_only.write_text(
+        stamp_only.read_text(encoding="utf-8").replace("updated: 2026-09-30", "updated: 2026-10-25"), encoding="utf-8"
+    )
+    successful_implementation(world)
+    assert world.run("implement") == 0, "the runner refused its own derived writes"
+
+
+def test_a_hand_edit_beside_derived_writes_is_still_refused(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Guard: only a stamp-only diff, the rendered index and bytecode are tolerated; a content edit is not.
+    (world.root / "plans" / "INDEX.md").write_text("# rendered\n", encoding="utf-8")
+    world.research.write_text(world.research.read_text(encoding="utf-8") + "a hand-written line\n", encoding="utf-8")
+    successful_implementation(world)
+    capsys.readouterr()
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "plans/changes/demo/research.md" in err and "plans/INDEX.md" not in err
+    assert world.calls("claude") == []
