@@ -202,6 +202,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-row-ids/plan.md`](changes/review-loop-row-ids/plan.md) | draft | partial | 2026-10-20 | coding-harness-6jg |
 | [`changes/review-loop-row-ids/research.md`](changes/review-loop-row-ids/research.md) | draft | none | 2026-10-20 | coding-harness-6jg |
 | [`changes/review-loop-row-ids/spec.md`](changes/review-loop-row-ids/spec.md) | draft | partial | 2026-10-20 | coding-harness-6jg |
+| [`changes/review-mixed-malformed-row/decisions.md`](changes/review-mixed-malformed-row/decisions.md) | draft | partial | 2026-10-25 | coding-harness-vque |
+| [`changes/review-mixed-malformed-row/findings.md`](changes/review-mixed-malformed-row/findings.md) | draft | partial | 2026-10-25 | coding-harness-vque |
+| [`changes/review-mixed-malformed-row/plan.md`](changes/review-mixed-malformed-row/plan.md) | draft | partial | 2026-10-25 | coding-harness-vque |
+| [`changes/review-mixed-malformed-row/research.md`](changes/review-mixed-malformed-row/research.md) | draft | partial | 2026-10-25 | coding-harness-vque |
+| [`changes/review-mixed-malformed-row/spec.md`](changes/review-mixed-malformed-row/spec.md) | draft | partial | 2026-10-25 | coding-harness-vque |
 | [`changes/review-release-lock/decisions.md`](changes/review-release-lock/decisions.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/findings.md`](changes/review-release-lock/findings.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/plan.md`](changes/review-release-lock/plan.md) | draft | partial | 2026-10-24 | coding-harness-751 |

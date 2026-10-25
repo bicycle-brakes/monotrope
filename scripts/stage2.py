@@ -880,6 +880,16 @@ def open_row(line: str) -> list[str] | None:
     return cells
 
 
+def finding_shaped(line: str) -> bool:
+    """A line that starts with `|` and has a severity in its second cell, closed or not (bead coding-harness-vque)."""
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return False
+    body = stripped[1:-1] if len(stripped) > 1 and stripped.endswith("|") else stripped[1:]
+    cells = _PIPE.split(body)
+    return len(cells) >= 2 and cells[1].strip().upper() in SEVERITIES
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table."""
     return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
@@ -2136,6 +2146,12 @@ def run_swarm(
             table = [line.strip() for line in rest.splitlines() if split_row(line) is not None]
             if not rows and table:
                 raise MalformedTable(table, answer)
+            # Beside readable rows, a finding-shaped line the parser could not read would drop out
+            # undecided and let the loop end clean (bead coding-harness-vque): it refuses the round too.
+            # A table without a severity in cell 2 (a summary, say) stays commentary.
+            unread = [line.strip() for line in rest.splitlines() if finding_shaped(line)]
+            if rows and unread:
+                raise MalformedTable(unread, answer)
             if not rows and answer.strip() != "No finding.":
                 raise UnreadableAnswer(answer)
             answers[member] = answer

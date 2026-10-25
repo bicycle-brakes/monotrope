@@ -13784,3 +13784,40 @@ def test_unreadable_answer_of_a_refused_attempt_is_kept_in_findings(world: World
     assert "> No table here, sorry." in text and "> | R2-1 | MAJOR |" in text
     assert OKEY not in text
     assert stage2.record_rows(text) == [] and "Loop state" not in text
+
+
+# ---------------------------------------------------------------------------
+# review-mixed-malformed-row (bead coding-harness-vque): a malformed row beside a valid one
+# ---------------------------------------------------------------------------
+
+MIXED_BAD = "| X9 | BLOCKER | CODE | five cells only | src/app.py:1 |"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [MIXED_BAD, "| X9 | blocker | CODE | src/app.py:1", "| X9 | MINOR | a | b |"],
+    ids=["five-cells", "open-four-cells", "closed-four-cells"],
+)
+def test_a_malformed_finding_row_beside_a_valid_one_refuses_the_round(
+    world: World, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    # Planted fault: the valid row carries the answer, the malformed BLOCKER row drops out undecided.
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": rows(1, "A") + "\n" + bad},
+            {"model": "beacon-2-free", "stdout": "No finding."},
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "the round stood although a finding row was unreadable"
+    err = capsys.readouterr().err
+    assert "acme-v1-free" in err and bad.strip() in err
+
+
+def test_a_summary_table_beside_valid_rows_keeps_the_round(world: World) -> None:
+    # Guard: a table line without a severity in cell 2 is commentary, not a malformed finding.
+    answer = rows(1, "A") + "\n\n| Severity | Count |\n|---|---|\n| MAJOR | 1 |"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    assert len(stage2.record_rows(world.record().read_text(encoding="utf-8"))) == 1
