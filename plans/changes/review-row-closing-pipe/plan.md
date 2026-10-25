@@ -54,9 +54,14 @@ PYTHON=.venv/bin/python3 make verify
 - 1: tests/test_stage2.py::test_parse_rows_reads_an_open_row — an open row stays text or its cells differ from the closed line.
 - 2: tests/test_stage2.py::test_parse_rows_keeps_other_open_lines_as_text — a short, long, severity-less or pipe-less line is read as a row.
 - 3: tests/test_stage2.py::test_five_open_lines_complete_the_round — a member fails, the attempt refuses, or rows are missing.
-- 4: tests/test_stage2.py::test_unreadable_answer_names_its_first_line — the message lacks the line or carries a credential.
+- 4: tests/test_stage2.py::test_unreadable_answer_names_its_first_line — the message lacks the line, carries a credential, is not cut to 200 characters, or a refused attempt forgets the answers.
+- 4: tests/test_stage2.py::test_the_unreadable_failure_names_the_first_unrecognised_line_not_the_furniture — the message names a header or separator the parser skipped.
 - 5: tests/test_stage2.py::test_unreadable_answer_is_quoted_in_the_round — the failure line stands without the quoted answer, or a quoted table line becomes a row.
 - 6: tests/test_stage2.py::test_unreadable_answer_of_a_refused_attempt_is_kept_in_findings — an answer is lost, a quoted line becomes a row, or a record is written.
+- 6: tests/test_stage2.py::test_a_refused_replacement_keeps_both_unreadable_answers — the refusal after a paid replacement forgets the answers.
+- 6: tests/test_stage2.py::test_the_malformed_refusal_says_that_unreadable_answers_are_kept — the refusal says nothing is written while findings.md receives answers.
+- 2: tests/test_stage2.py::test_parse_rows_drops_open_furniture — an open header or separator stays reviewer text.
+- 3: tests/test_stage2.py::test_an_all_open_table_round_carries_no_not_rows_block — a round with an open header and separator quotes them as a not-a-row block.
 
 ## Route
 

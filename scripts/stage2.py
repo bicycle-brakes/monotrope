@@ -493,12 +493,14 @@ class UnreadableAnswer(CallFailed):
     """A reviewer answer with no readable row that is not exactly `No finding.` (bead coding-harness-2i9j).
 
     It carries the scrubbed answer, so the round or `findings.md` can keep it, and names the first
-    non-blank line in its message, so the failure says what the runner could not read.
+    non-blank line `parse_rows` left as text in its message, so the failure says what the runner could not read.
     """
 
     def __init__(self, answer: str, message: str | None = None) -> None:
         self.answer = answer
-        first = next((line.strip() for line in answer.splitlines() if line.strip()), "")
+        # The first line the parser neither read as a row nor skipped as furniture (decision Q-1 (2)).
+        unread = parse_rows(answer)[1] or answer
+        first = next((line.strip() for line in unread.splitlines() if line.strip()), "")
         if len(first) > 200:
             first = first[:200] + "…"
         super().__init__(
@@ -546,7 +548,8 @@ def malformed_refusal(failed: dict[str, MalformedTable]) -> CallFailed:
     """One failure that names every malformed member and quotes each offending line."""
     parts = [f"{member}: " + " / ".join(error.lines) for member, error in failed.items()]
     return CallFailed(
-        "malformed finding table, the round is refused and nothing is written; "
+        "malformed finding table, the round is refused and nothing is written to the loop record; "
+        "unreadable answers are kept in findings.md; "
         + "; ".join(parts)
         + ". Rerun review-loop: the same stage runs again."
     )
@@ -890,6 +893,17 @@ def finding_shaped(line: str) -> bool:
     return len(cells) >= 2 and cells[1].strip().upper() in SEVERITIES
 
 
+def _open_furniture(line: str) -> bool:
+    """The header or separator of a table whose lines lack their closing pipe (bead coding-harness-2i9j).
+
+    The cells are split the way `open_row` splits them; any other open line stays text.
+    """
+    stripped = line.strip()
+    if not stripped.startswith("|") or stripped.endswith("|"):
+        return False
+    return _furniture([cell.strip() for cell in _PIPE.split(stripped[1:])])
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table."""
     return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
@@ -913,6 +927,8 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
             opened = open_row(line)
             if opened is not None:
                 rows.append(opened)
+            elif _open_furniture(line):
+                continue
             elif line.strip():
                 rest.append(line)
         elif _furniture(cells) or not any(cell.strip() for cell in cells):

@@ -54,8 +54,10 @@ lost because a refused attempt writes no record (`research.md`).
 3. A review-loop round whose members answer with the five open lines F-1
    to F-5 of the 2026-10-22 shape completes with five rows.
    *Refuted by:* a member failure, a refusal, or fewer rows.
-4. The failure of an unreadable answer names its first non-blank line,
-   scrubbed and cut to 200 characters.
+4. The failure of an unreadable answer names its first unrecognised line:
+   the first non-blank line that `parse_rows` neither read as a row nor
+   skipped as table furniture (header or separator), scrubbed and cut to
+   200 characters.
    *Refuted by:* a failure message without that line, or with a
    credential.
 5. In a written round, each member that failed with an unreadable answer

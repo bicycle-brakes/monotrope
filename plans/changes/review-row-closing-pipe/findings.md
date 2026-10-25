@@ -44,3 +44,19 @@ review loop and the phase-6 Codex review are still owed.
 - A paid member that fails unreadably and is replaced: its answer is
   quoted in the written round as well, because the round lists the
   replaced member among its members.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request a read-only Opus 5.5 subagent reviewed the change
+before the phase-6 Codex review, which is unreachable from this container.
+Phase 6 is still owed. Repairs were made by a Sonnet 5.5 subagent at the
+orchestrator's direction.
+
+- P236-1 (MAJOR): the failure named the first non-blank line of the raw answer, which could be a header or separator the parser had skipped, against Q-1 (2) ("first unrecognised line"). Now named from the text `parse_rows` leaves over; spec criterion 4 reworded to match. Fixed; test `test_the_unreadable_failure_names_the_first_unrecognised_line_not_the_furniture`.
+- P236-2 (test gap, MAJOR-adjacent): keeping the answers before the all-members-failed `CallFailed` was untested. Fixed; test `test_unreadable_answer_names_its_first_line` now asserts a rejected-answer heading per member.
+- P236-3 (test gap): the 200-character cut of the named line was untested. Fixed; same test asserts at most 201 characters.
+- P236-4 (test gap): keeping the answers before the refusal after a paid replacement was untested. Fixed; test `test_a_refused_replacement_keeps_both_unreadable_answers`.
+- P236-5 (weak test): the quoting test could not fail for the reason it names. Fixed; `test_unreadable_answer_is_quoted_in_the_round` now plants a table-like line and asserts it quoted. Note: an unreadable answer cannot contain a closed table line (it would be a row, or a malformed table that refuses the round), so the planted line is an open five-cell line `| L1-9 | MAJOR | SPEC | c | spec.md:1`.
+- P236-6 (MINOR): an open header and separator stayed as reviewer text and produced a not-a-row block. Fixed; tests `test_parse_rows_drops_open_furniture` and `test_an_all_open_table_round_carries_no_not_rows_block`.
+- P236-7 (MINOR): the malformed-table refusal said nothing is written although unreadable answers go to `findings.md`. Fixed; test `test_the_malformed_refusal_says_that_unreadable_answers_are_kept`.
+- Observation: `parse_rows` also serves phase 2a and phase 6, which now accept open rows too; not tested there; not now.
