@@ -945,3 +945,8 @@ reconcile `stage2.release` (RS-2-1 here, DL-A-3 in #249) and `stage2.append`
 - Close coding-harness-jik (its commit `2936dcf` carries `Closes-Bead`).
 - File beads for #249 and #250 and replace `bead: to be filed` in their
   change folders.
+
+# Addendum, 2026-10-25 about 19:28 UTC
+
+#250 is green at `1f08910` (gates and verify): the P6-14 fix holds on Node 26.
+No process and no check-in of this session is left running.
