@@ -170,6 +170,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-fenced-examples/plan.md`](changes/interview-fenced-examples/plan.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/research.md`](changes/interview-fenced-examples/research.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/spec.md`](changes/interview-fenced-examples/spec.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/plan.md`](changes/ledger-marker/plan.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/research.md`](changes/ledger-marker/research.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/spec.md`](changes/ledger-marker/spec.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/loop-until-clean/decisions.md`](changes/loop-until-clean/decisions.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/design.md`](changes/loop-until-clean/design.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/findings.md`](changes/loop-until-clean/findings.md) | draft | none | 2026-10-14 | coding-harness-4fk |
@@ -197,6 +202,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/research.md`](changes/repair-fixed-lines/research.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/spec.md`](changes/repair-fixed-lines/spec.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
+| [`changes/repair-restore-status/decisions.md`](changes/repair-restore-status/decisions.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/findings.md`](changes/repair-restore-status/findings.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/plan.md`](changes/repair-restore-status/plan.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/research.md`](changes/repair-restore-status/research.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-restore-status/spec.md`](changes/repair-restore-status/spec.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
