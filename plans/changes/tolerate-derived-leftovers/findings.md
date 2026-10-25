@@ -72,3 +72,17 @@ answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan
 answer 1) that the small cloud-session fixes get phase 6 only tonight,
 because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
 a fresh Codex session.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 553 files, 2128 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3242–3251 | Changing a tracked document from mode 100644 to 100755 alongside its `updated:` date is accepted as a derived leftover: the comparison checks bytes but never the executable bit. With `core.filemode=true`, `implement` and `repair` can therefore commit an unrelated permission change. Reject mode changes even when the masked contents match. [Non-goal: tolerate no other change.] | Codex | open | — |
+| F-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3277–3282; scripts/stage2.py:4129–4149 | A stamp-only leftover in an existing `docs/adr/` document passes the new pre-existing-change check but remains forbidden by `uncommittable`, because that prefix is human-decided. Even after successful verification, the checkpoint fails and restores the implementation. The promised successful retry therefore fails when this is its only initial leftover; reconcile admission with checkpoint handling while preserving protection of substantive ADR edits. [Acceptance criterion 1.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a174e9-59f6-7ac1-b5dc-59ee50d0af43, 2026-10-25
+Reviewer session: codex 01a174e9-59f6-7ac1-b5dc-59ee50d0af43 — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
