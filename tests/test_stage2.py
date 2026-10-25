@@ -1890,7 +1890,8 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
 
     monkeypatch.setattr(stage2.subprocess, "run", record)
     assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
-    assert len(commands) == 3
+    # Working-tree diff, index diff (bead coding-harness-0c8), untracked listing, and the registry's git archive.
+    assert len(commands) == 4
     for command, env in commands:
         assert command[0] == stage2.GIT, f"a git call does not name the resolved path: {command}"
         assert env is not None, command
@@ -3164,6 +3165,53 @@ def test_a_draft_refuses_changes_outside_findings(world: World, capsys: pytest.C
     assert world.calls() == []
     error = capsys.readouterr().err
     assert "pre-existing changes outside this change's findings.md" in error and "src/app.py" in error
+
+
+def stage_and_revert(root: Path) -> tuple[str, str]:
+    """Stage new content for src/app.py, then put the committed content back in the file."""
+    app = root / "src" / "app.py"
+    committed = app.read_text(encoding="utf-8")
+    app.write_text("staged = True\n", encoding="utf-8")
+    git(root, "add", "src/app.py")
+    app.write_text(committed, encoding="utf-8")
+    return committed, git(root, "diff", "--cached", "--", "src/app.py")
+
+
+def test_changed_paths_lists_an_index_only_change(world: World) -> None:
+    # Criterion 1 (bead coding-harness-0c8). Planted fault: the index is not compared with the commit.
+    stage_and_revert(world.root)
+    assert git(world.root, "diff", "--name-only", "HEAD") == ""
+    assert Path("src/app.py") in stage2.changed_paths(world.root)
+
+
+def test_changed_paths_lists_each_kind_once(world: World) -> None:
+    # Criterion 4. Planted fault: an index entry and its working file listed twice, or a kind dropped.
+    app = world.root / "src" / "app.py"
+    app.write_text("staged = True\n", encoding="utf-8")
+    git(world.root, "add", "src/app.py")
+    app.write_text("edited again = True\n", encoding="utf-8")
+    (world.root / "src" / "new.py").write_text("new = True\n", encoding="utf-8")
+    listing = sorted(stage2.changed_paths(world.root))
+    assert listing.count(Path("src/app.py")) == 1
+    assert Path("src/new.py") in listing
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft", "repair"])
+def test_writing_verbs_refuse_an_index_only_change(world: World, verb: str, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criteria 2 and 3. Planted fault: the pre-existing check reads only the working tree.
+    if verb == "draft":
+        draft_world(world)
+    elif verb == "repair":
+        repair_world(world)
+    world.script(codex=[{"stdout": "must not run"}], claude=[{"stdout": "must not run"}])
+    capsys.readouterr()
+    committed, staged = stage_and_revert(world.root)
+    assert world.run(verb) == 2
+    assert world.calls("codex") == [] and world.calls("claude") == []
+    error = capsys.readouterr().err
+    assert "pre-existing changes outside this change's findings.md" in error and "src/app.py" in error
+    assert git(world.root, "diff", "--cached", "--", "src/app.py") == staged
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == committed
 
 
 def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
