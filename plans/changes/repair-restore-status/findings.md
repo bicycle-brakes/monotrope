@@ -73,3 +73,11 @@ both fixed by the orchestrating session.
   preflight. When both are merged, the `restore_findings(kept)` call here
   becomes `put_findings_back(original=error)`, or it is the one findings
   write that skips that preflight.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
