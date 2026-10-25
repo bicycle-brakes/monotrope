@@ -14,6 +14,15 @@
 
 set -u
 
+# A relative `$PYTHON` is read where the caller stood and exported absolute:
+# gates start children in other directories (the leerprobe gate's foreign
+# repository), where a relative path names nothing (bead coding-harness-4x2c).
+# A bare name (`python3`) stays a PATH lookup.
+case "${PYTHON:-}" in
+    "" | /*) ;;
+    */*) PYTHON="$PWD/$PYTHON" ;;
+esac
+
 # Back to the repository root before anything is chosen, wherever the caller
 # stood: `.venv/bin/python3` below is this checkout's own (bead
 # coding-harness-ei0).
@@ -104,7 +113,9 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
     # Werkzeuge aus dem Pin aufloesen (gates.md G-12): `python3` in der Liste
     # heisst "der gepinnte Interpreter", nicht "was der PATH gerade hergibt".
     # Die CI macht dasselbe ueber setup-python mit derselben Version.
-    lauf_cmd=${cmd/python3/"$PYTHON"}
+    # Quoted for `sh -c`: an absolute path may hold a space; a quote inside it is escaped.
+    python_word="'$(printf %s "$PYTHON" | sed "s/'/'\\\\''/g")'"
+    lauf_cmd=${cmd/python3/"$python_word"}
     echo ""
     echo "── [$gid] $ lauf_cmd"
     if sh -c "$lauf_cmd"; then
