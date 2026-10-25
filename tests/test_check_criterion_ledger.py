@@ -712,3 +712,20 @@ def test_clear_written_removes_the_marker_of_an_existing_test_only(tmp_path: Pat
     assert "- 3: not yet written tests/test_done.py::test_other" in text
     assert "- 9: not yet written tests/test_done.py::test_done — an example" in text, "a fenced example changed"
     assert gate.clear_written(tmp_path, plan) == [], "a second pass changed the plan again"
+
+
+def test_clear_written_leaves_a_fenced_example_inside_the_ledger_section(tmp_path: Path) -> None:
+    # Pre-review row P239-1 (2026-10-25). Planted fault: a fence that stands under the ledger heading is
+    # read as part of the section, and its example line is rewritten.
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text("def test_a():\n    pass\n", encoding="utf-8")
+    plan = tmp_path / "plan.md"
+    plan.write_text(
+        "# Plan\n\n## Criterion ledger\n\n```text\n- 1: not yet written tests/test_a.py::test_a — example\n```\n\n"
+        "- 1: not yet written tests/test_a.py::test_a — real\n",
+        encoding="utf-8",
+    )
+    assert gate.clear_written(tmp_path, plan) == [1]
+    text = plan.read_text(encoding="utf-8")
+    assert "- 1: not yet written tests/test_a.py::test_a — example" in text, "a fenced example changed"
+    assert "- 1: tests/test_a.py::test_a — real" in text

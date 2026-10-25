@@ -47,3 +47,29 @@ this change:
 
 The fix refuses a symlinked, alias-resolving or hard-linked plan before
 `clear_written`, as `prepare_derived` refuses such documents.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change before the phase-6 Codex review, which this container cannot reach.
+Phase 6 is still owed. It found no blocker and four minor rows, all fixed
+by the orchestrating session.
+
+- **P239-1 (MINOR), fixed.** `clear_written` rewrote a fenced example that
+  stands under the ledger heading: `ledger_sections` stops only at a heading
+  inside a fence and keeps the fenced lines in the section. Criterion 2 says
+  a fenced entry is never changed. Lines in a fence are now skipped. Test:
+  `tests/test_check_criterion_ledger.py::test_clear_written_leaves_a_fenced_example_inside_the_ledger_section`,
+  red before the fix.
+- **P239-2 (MINOR), fixed.** Nothing pinned that the marker is cleared
+  before `prepare_derived` stamps `updated:`. Test:
+  `tests/test_stage2.py::test_the_ledger_is_cleared_before_the_documents_are_stamped`;
+  with the call moved after `prepare_derived`, it fails.
+- **P239-3 (MINOR), fixed.** The alias guard's parent-folder and hard-link
+  branches had no test. Test:
+  `tests/test_stage2.py::test_clearing_the_ledger_refuses_an_aliased_parent_or_a_hard_link`;
+  removing either branch makes its case fail.
+- **P239-4 (NIT), fixed.** The alias refusal is now criterion 4 of the spec
+  with its ledger entries; the verification filter names every new test;
+  the `verify_attempt` docstring names the ledger step. `repair` reaches the
+  same code through `run_attempts`; only `implement` is tested end to end.

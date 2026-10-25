@@ -3926,7 +3926,7 @@ def verify_attempt(
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
 ) -> list[str]:
-    """Stamp changed held documents, render the index, format the targets, then run `make verify`.
+    """Clear derivable ledger markers, stamp changed held documents, render the index, format, `make verify`.
 
     Preparation writes to the tree and executes its registry renderer. Before `make verify` the
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`

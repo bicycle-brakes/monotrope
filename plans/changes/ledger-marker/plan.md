@@ -38,7 +38,7 @@ Starts unless you say stop.
 ## Verification
 
 ```sh
-.venv/bin/python3 -m pytest -q tests/test_stage2.py tests/test_check_criterion_ledger.py -k 'clear_written or clears_the_ledger_marker'
+.venv/bin/python3 -m pytest -q tests/test_stage2.py tests/test_check_criterion_ledger.py -k 'clear_written or clears_the_ledger_marker or clearing_the_ledger or ledger_is_cleared'
 PYTHON=.venv/bin/python3 make verify
 ```
 
@@ -46,7 +46,11 @@ PYTHON=.venv/bin/python3 make verify
 
 - 1: tests/test_check_criterion_ledger.py::test_clear_written_removes_the_marker_of_an_existing_test_only — an existing test keeps its marker.
 - 2: tests/test_check_criterion_ledger.py::test_clear_written_removes_the_marker_of_an_existing_test_only — a missing test or a fenced line loses its marker, or a second pass changes the plan.
+- 2: tests/test_check_criterion_ledger.py::test_clear_written_leaves_a_fenced_example_inside_the_ledger_section — a fenced example under the ledger heading is rewritten.
 - 3: tests/test_stage2.py::test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote — the committed plan keeps the marker.
+- 3: tests/test_stage2.py::test_the_ledger_is_cleared_before_the_documents_are_stamped — the plan is stamped before its marker is cleared.
+- 4: tests/test_stage2.py::test_clearing_the_ledger_never_writes_through_an_aliased_plan — a symlinked plan's target outside the worktree changes.
+- 4: tests/test_stage2.py::test_clearing_the_ledger_refuses_an_aliased_parent_or_a_hard_link — a symlinked change folder or a hard-linked plan carries the write outside.
 
 ## Route
 

@@ -207,9 +207,14 @@ def clear_written(root: Path, plan: Path) -> list[int]:
     if text is None:
         return []
     raw = text.split("\n")
+    lines = _lines(text)
+    # A fence under the ledger heading still belongs to the section; its lines are examples (P239-1).
+    fenced = _fenced(lines)
     cleared: list[int] = []
-    for section in ledger_sections(_lines(text)):
+    for section in ledger_sections(lines):
         for number, line in section:
+            if fenced[number - 1]:
+                continue
             entry = parse_entry(line, number)
             if entry is None or entry.kind != "not yet written":
                 continue

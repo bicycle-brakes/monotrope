@@ -13512,6 +13512,67 @@ def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: W
     assert "- 2: not yet written tests/test_later.py::test_later" in committed
 
 
+def test_the_ledger_is_cleared_before_the_documents_are_stamped(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pre-review row P239-2 (2026-10-25). Planted fault: the marker is cleared after `prepare_derived`, so the
+    # plan's `updated:` stamp misses the runner's own edit and the frontmatter-current gate goes red.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ledger with a marker")
+    seen: list[str] = []
+    real = stage2.prepare_derived
+
+    def watching(*args, **kwargs):
+        seen.append(world.plan.read_text(encoding="utf-8"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "prepare_derived", watching)
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"tests/test_new.py": "def test_new():\n    pass\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert seen and "not yet written" not in seen[0], "the documents were stamped before the ledger was cleared"
+
+
+@pytest.mark.parametrize("alias", ["parent-symlink", "hard-link"])
+def test_clearing_the_ledger_refuses_an_aliased_parent_or_a_hard_link(world: World, tmp_path: Path, alias: str) -> None:
+    # Pre-review row P239-3 (2026-10-25). Planted fault: only a symlink at plan.md itself is refused, so a
+    # symlinked change folder or a hard-linked plan carries the write outside the worktree.
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_x.py").write_text("def test_y():\n    assert True\n", encoding="utf-8")
+    ledger = "# Other\n\n## Criterion ledger\n\n- 1: not yet written tests/test_x.py::test_y\n"
+    if alias == "parent-symlink":
+        folder = world.plan.parent
+        outside_folder = tmp_path / "outside-change"
+        outside_folder.mkdir()
+        outside = outside_folder / "plan.md"
+        outside.write_text(ledger, encoding="utf-8")
+        shutil.rmtree(folder)
+        folder.symlink_to(outside_folder)
+    else:
+        outside = tmp_path / "linked-plan.md"
+        outside.write_text(ledger, encoding="utf-8")
+        world.plan.unlink()
+        os.link(outside, world.plan)
+    before = outside.read_bytes()
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan, None, [], None)
+    except stage2.Refused as error:
+        problems = [str(error)]
+    assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
+    assert problems and "plan" in problems[0]
+
+
 def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, tmp_path: Path) -> None:
     # Runner review R-1 (2026-10-25). Planted fault: clear_written follows a plan.md symlink and rewrites a file
     # outside the worktree before any alias check runs.

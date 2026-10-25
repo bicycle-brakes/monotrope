@@ -37,6 +37,11 @@ longer fails on a stale marker (bead coding-harness-7g6h). Research:
 3. `implement` and `repair` clear the markers before `make verify`, so the
    committed plan carries the cleared entries.
    *Refuted by:* a committed plan with the marker on a test the attempt wrote.
+4. The runner refuses a plan reached through an alias (a symbolic link at
+   it or in its parent folders, or a hard link) before it clears anything,
+   so no file outside the worktree is written. Added after runner review
+   R-1 and pre-review row P239-3, 2026-10-25.
+   *Refuted by:* a changed file outside the worktree.
 
 ## Non-goals
 
