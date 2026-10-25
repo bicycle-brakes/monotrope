@@ -102,6 +102,7 @@ at `82488fc`; use the available gates and the phase-3 prompt's plan form.
 - 5: tests/test_stage2.py::test_malformed_flash_answer_stops_before_replacement — an initial malformed member permits any replacement call.
 - 5: tests/test_stage2.py::test_malformed_replacement_stops_the_paid_round — a malformed replacement permits the next ladder call.
 - 6: tests/test_stage2.py::test_a_round_is_written_as_its_rung — arbitrary reviewer ids lose rows, collide or change attribution.
+- 6: tests/test_stage2.py::test_colliding_reviewer_ids_keep_their_rows_and_attribution — two members' identical `R2-1` ids collide, lose a row or change attribution.
 - 6: tests/test_stage2.py::test_parse_rows_folds_a_pipe_inside_the_finding_into_it — valid finding-cell pipes become malformed output.
 - 7: tests/test_stage2.py::test_a_failed_swarm_member_preserves_successful_answers — ordinary member failure erases successful rows.
 - 7: tests/test_stage2.py::test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung — an ordinary failure prevents its eligible replacement.
