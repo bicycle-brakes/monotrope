@@ -24,6 +24,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -1896,6 +1897,138 @@ def _pruefling(gate: dict) -> str:
     return m.group(1) if m else ""
 
 
+def _evidence(script: str, sources: dict[Path, str]) -> list[str]:
+    """The mutation evidence for the script `script`, as `<file>::<test>` names."""
+    if script.startswith("tests/"):
+        # If the gate runs a test file, its evidence lies IN that file. The
+        # search below would instead accept every file that merely MENTIONS
+        # the path — on 2026-09-08 that made `test_workflow_entry.py` the
+        # evidence for `ruleset-drift`, because it names the name in a list
+        # and has some mutation evidence of its own. A coverage that assumes
+        # from a mention covers nothing.
+        return [
+            f"{p.name}::{m}"
+            for p, text in sources.items()
+            if p.as_posix().endswith(script)
+            for m in MUTATIONS_NAMEN.findall(text)
+        ]
+    # A script is evidenced by a mutation-named test that REACHES it, not by a
+    # file that names it (bead coding-harness-a05, maintainer 2026-10-21, option
+    # B). On 2026-10-20 a call-site test named the plans-registry renderer only to
+    # identify a command, and the ratchet called both plans-registry exceptions
+    # stale although no test seeds a fault into the renderer.
+    return [f"{p.name}::{t}" for p, text in sources.items() for t in _tests_reaching(text, script)]
+
+
+class _Function(NamedTuple):
+    """A module-level function of a test file, as the ratchet reads it."""
+
+    names: set[str]  # every name used in its body
+    attributes: set[tuple[str, str]]  # every `<name>.<attr>`, dunders left out
+    paths: list[str]  # every string that builds a path or a command
+
+
+class _ParsedTestFile(NamedTuple):
+    """A test file read once, for every script the ratchet asks about."""
+
+    imports: list[tuple[str, str, bool]]  # (module, bound name, imported as a module?)
+    constants: list[tuple[set[str], list[str]]]  # (names bound, path strings built)
+    functions: dict[str, _Function]
+
+
+def _path_strings(root: ast.AST, parents: dict[ast.AST, ast.AST]) -> list[str]:
+    """Strings under `root` that build a path or a command: an operand of `/`,
+    an argument of a call, or an element of a list or tuple handed to a call."""
+    hits = []
+    for k in ast.walk(root):
+        if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+            continue
+        up = parents.get(k)
+        if isinstance(up, ast.List | ast.Tuple):
+            up = parents.get(up)
+        if (
+            (isinstance(up, ast.BinOp) and isinstance(up.op, ast.Div))
+            or (isinstance(up, ast.Call) and k is not up.func)
+            or isinstance(up, ast.keyword)
+        ):
+            hits.append(k.value)
+    return hits
+
+
+@functools.cache
+def _parsed(text: str) -> _ParsedTestFile | None:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    imports = []
+    for k in ast.walk(tree):
+        if isinstance(k, ast.Import):
+            imports += [(a.name, a.asname or a.name, True) for a in k.names]
+        elif isinstance(k, ast.ImportFrom) and k.module:
+            imports += [(k.module, a.asname or a.name, False) for a in k.names]
+    constants = []
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign | ast.AnnAssign) and stmt.value is not None:
+            targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+            names = {z.id for z in targets if isinstance(z, ast.Name)}
+            constants.append((names, _path_strings(stmt.value, parents)))
+    functions = {
+        stmt.name: _Function(
+            names={k.id for k in ast.walk(stmt) if isinstance(k, ast.Name)},
+            attributes={
+                (k.value.id, k.attr)
+                for k in ast.walk(stmt)
+                if isinstance(k, ast.Attribute) and isinstance(k.value, ast.Name) and not k.attr.startswith("__")
+            },
+            paths=_path_strings(stmt, parents),
+        )
+        for stmt in tree.body
+        if isinstance(stmt, ast.FunctionDef)
+    }
+    return _ParsedTestFile(imports, constants, functions)
+
+
+def _tests_reaching(text: str, script_file: str) -> list[str]:
+    """The mutation-named tests in `text` that reach the script `script_file`.
+
+    A test reaches the script when its body — or the body of a module-level
+    helper of the same file it calls, at any depth — uses it: a non-dunder
+    attribute of a module bound by `import <script>` (with or without `as`), a
+    name bound by `from <script> import …`, or a string naming the file that
+    builds a path or a command (an operand of `/`, an argument of a call, an
+    element of a list or tuple handed to a call), directly or through a
+    module-level constant built that way. A mention in a comparison, a docstring
+    or another test reaches nothing; nor does `<module>.__file__`.
+    """
+    stem = script_file.removesuffix(".py")
+    if stem not in text:  # neither an import nor a path can name it
+        return []
+    parsed = _parsed(text)
+    if parsed is None:
+        return []
+    file_re = re.compile(rf"(?:^|[/\s]){re.escape(script_file)}(?:\s|$)")
+
+    def names_file(paths: list[str]) -> bool:
+        return any(file_re.search(p) for p in paths)
+
+    modules = {bound for module, bound, whole in parsed.imports if module == stem and whole}
+    names = {bound for module, bound, whole in parsed.imports if module == stem and not whole}
+    for bound, paths in parsed.constants:
+        if names_file(paths):
+            names |= bound
+
+    reached = {
+        name
+        for name, fn in parsed.functions.items()
+        if fn.names & names or any(base in modules for base, _ in fn.attributes) or names_file(fn.paths)
+    }
+    while new := {name for name, fn in parsed.functions.items() if name not in reached and fn.names & reached}:
+        reached |= new
+    return [name for name in parsed.functions if name in reached and MUTATIONS_NAMEN.search(f"def {name}(")]
+
+
 def test_every_gate_step_has_a_mutation_test() -> None:
     """Every gate has a run that turns it red — or a reason in the ratchet.
 
@@ -1914,18 +2047,7 @@ def test_every_gate_step_has_a_mutation_test() -> None:
             if gid not in OHNE_MUTATIONSTEST:
                 ohne.append(f"{gid} (no script recognisable)")
             continue
-        if ziel.startswith("tests/"):
-            # If the gate runs a test file, its evidence lies IN that file. The
-            # search below would instead accept every file that merely MENTIONS
-            # the path — on 2026-09-08 that made `test_workflow_entry.py` the
-            # evidence for `ruleset-drift`, because it names the name in a list
-            # and has some mutation evidence of its own. A coverage that assumes
-            # from a mention covers nothing.
-            datei = REPO_ROOT / ziel
-            belegt = datei.is_file() and bool(MUTATIONS_NAMEN.search(datei.read_text(encoding="utf-8")))
-        else:
-            belegt = any(MUTATIONS_NAMEN.search(text) for p, text in quellen.items() if ziel in text)
-        if not belegt and gid not in OHNE_MUTATIONSTEST:
+        if not _evidence(ziel, quellen) and gid not in OHNE_MUTATIONSTEST:
             ohne.append(f"{gid} → {ziel}")
 
     assert not ohne, (
@@ -1951,12 +2073,104 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
     ueberholt = []
     for gid in OHNE_MUTATIONSTEST:
         ziel = _pruefling(bekannt[gid])
-        if ziel and any(MUTATIONS_NAMEN.search(t) for p, t in quellen.items() if ziel in t):
+        if ziel and _evidence(ziel, quellen):
             ueberholt.append(gid)
     assert not ueberholt, f"long since covered, but still in the ratchet: {ueberholt}"
 
     ohne_grund = [g for g, grund in OHNE_MUTATIONSTEST.items() if len(grund.strip()) < 10]
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
+
+
+# Test files that name a gate's script without seeding a fault into it. Each
+# holds a mutation-named test that has nothing to do with the script (bead
+# coding-harness-a05). The second is the shape of the call-site test of
+# 2026-10-20 (PR #188), which made the plans-registry exceptions look stale.
+BARE_MENTIONS = {
+    "a mention in another test": """
+def test_the_drift_job_names_the_registry() -> None:
+    assert "plans_registry.py" in COMMAND
+
+
+def test_the_lock_goes_red_when_it_is_held() -> None:
+    assert lock.held()
+""",
+    "a call site that only identifies the script": """
+import plans_registry
+
+
+def test_the_runner_refuses_a_planted_renderer(tmp_path) -> None:
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    command = run_the_runner(tmp_path)
+    name = "renderer" if "plans_registry.py" in command[-2] else command[0]
+    assert name != "renderer"
+""",
+}
+
+
+@pytest.mark.parametrize("case", sorted(BARE_MENTIONS))
+def test_a_bare_mention_of_a_gate_script_is_no_mutation_evidence(case: str) -> None:
+    """Naming a gate's script is not seeding a fault into it (bead coding-harness-a05).
+
+    Until 2026-10-25 any test file that contained the script's file name and
+    some mutation-named test counted as evidence for that gate, so a mention
+    could empty the ratchet without a single seeded red run.
+    """
+    sources = {REPO_ROOT / "tests" / "test_foreign.py": BARE_MENTIONS[case]}
+    assert _evidence("plans_registry.py", sources) == [], f"{case} counted as mutation evidence"
+
+
+# Test files whose mutation-named test reaches the script it is evidence for:
+# a call into the module, a name imported from it, or a path to the file that a
+# call runs — in the test itself or through a helper of the same file.
+GENUINE_EVIDENCE = {
+    "a call into the imported module": """
+def test_the_gate_goes_red_when_a_link_is_broken(tmp_path) -> None:
+    import check_docs
+
+    assert check_docs.main(["--root", str(tmp_path)]) == 1
+""",
+    "a call through an alias": """
+import check_docs as gate
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert gate.main(["--root", str(tmp_path)]) == 1
+""",
+    "a name imported from the module": """
+from check_docs import main
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert main(["--root", str(tmp_path)]) == 1
+""",
+    "a script path run through a helper": """
+SCRIPT = REPO_ROOT / "scripts" / "check_docs.py"
+
+
+def _run(root):
+    return subprocess.run([sys.executable, str(SCRIPT), "--root", str(root)])
+
+
+def _broken(root):
+    return _run(root)
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert _broken(tmp_path).returncode == 1
+""",
+    "a script path in the command itself": """
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    erg = subprocess.run([sys.executable, "scripts/check_docs.py", "--root", str(tmp_path)])
+    assert erg.returncode == 1
+""",
+}
+
+
+@pytest.mark.parametrize("case", sorted(GENUINE_EVIDENCE))
+def test_a_mutation_test_that_reaches_the_gate_script_is_evidence(case: str) -> None:
+    """The stricter rule still sees the forms the existing evidence takes."""
+    sources = {REPO_ROOT / "tests" / "test_own.py": GENUINE_EVIDENCE[case]}
+    assert _evidence("check_docs.py", sources), f"{case} no longer counts as mutation evidence"
 
 
 def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
