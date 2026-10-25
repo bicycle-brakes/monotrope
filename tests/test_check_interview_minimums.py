@@ -1008,3 +1008,30 @@ def test_the_workflow_states_the_claim_and_the_adoption_record() -> None:
     assert "ADR 0014" in workflow
     assert "2026-10-08" in workflow
     assert 'that a "yes" is followed by an ADR' not in workflow
+
+
+# ---------------------------------------------------------------------------
+# A fenced example is no record (bead coding-harness-k2r)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~", "````markdown"])
+def test_a_fenced_record_or_skip_is_not_counted(fence: str) -> None:
+    closing = fence.rstrip("markdown")
+    example = (
+        "# Decisions\n\nAn example of the form:\n\n"
+        f'{fence}\n## Q-1 · An example question\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+        f"\n## SKIP · interview\n\nstatus: skipped\nreason: an example reason\n{closing}\n"
+    )
+    records, skips = gate._parse_records(example)
+    assert records == [] and skips == [], "a fenced example was counted"
+
+
+def test_a_record_after_a_closed_fence_still_counts() -> None:
+    text = (
+        "# Decisions\n\n```\n## Q-9 · fenced\n```\n\n"
+        '## Q-1 · A real question\n\nanswer: "yes"\nanswered_by: maintainer\nstatus: answered\n'
+    )
+    records, _ = gate._parse_records(text)
+    assert [ident for ident, _ in records] == ["Q-1"]
+    assert records[0][1]["status"] == "answered"
