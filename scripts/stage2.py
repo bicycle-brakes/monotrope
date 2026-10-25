@@ -4722,7 +4722,7 @@ EXPLORER_ROLE = (
     "where the phase prompt says `rg`, use Grep. Read the repository and answer with the research now."
 )
 
-_PATH_TOKEN = re.compile(r"/?[\w.\-]+(?:/[\w.\-]+)*")
+_PATH_TOKEN = re.compile(r"/?[\w.\-]+(?:/[\w.\-]+)*/?")
 
 
 def names_a_repository_file(root: Path, answer: str) -> bool:

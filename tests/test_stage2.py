@@ -13590,6 +13590,20 @@ def test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry(world: World) -
     assert stage2.names_a_repository_file(world.root, "I cannot run the tests, please rerun me") is False
 
 
+@pytest.mark.parametrize("citation", ["tests/", "./tests/"])
+@pytest.mark.parametrize("off", [False, True])
+def test_an_exploration_answer_citing_only_a_root_directory_is_accepted(world: World, citation: str, off: bool) -> None:
+    # F-1. Planted fault: tokenization drops the trailing slash and rejects a root directory as prose.
+    (world.root / "tests").mkdir(exist_ok=True)
+    answer = f"The regression suite lives in `{citation}`."
+    world.script(claude=[{"stdout": answer}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    research = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" in research
+    assert answer in research
+
+
 def test_a_git_internal_path_does_not_count(world: World) -> None:
     # P241-5. Planted fault: .git/config exists in every worktree and satisfies the check.
     (world.root / ".git").mkdir(exist_ok=True)

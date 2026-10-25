@@ -83,9 +83,11 @@ Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MINOR | SPEC | Phase 6 | scripts/stage2.py:4738–4745 | An answer citing only the existing directory `tests/` is rejected: tokenization drops the trailing slash, then the bare-word branch accepts only files. Reproduced in this worktree: `tests/` returns false while `./tests/` returns true. Preserve explicit directory citations so valid research is not discarded. [Acceptance criterion 2: existing file or directory] | Codex | taken — test: an explorer answer that cites only the existing directory `tests/` is accepted, as `./tests/` is (orchestrator, 2026-10-25) | — |
+| F-1 | MINOR | SPEC | Phase 6 | scripts/stage2.py:4738–4745 | An answer citing only the existing directory `tests/` is rejected: tokenization drops the trailing slash, then the bare-word branch accepts only files. Reproduced in this worktree: `tests/` returns false while `./tests/` returns true. Preserve explicit directory citations so valid research is not discarded. [Acceptance criterion 2: existing file or directory] | Codex | fixed — tests/test_stage2.py::test_an_exploration_answer_citing_only_a_root_directory_is_accepted | — |
 
 Phase 6 verdict: codex 01a174c5-d58b-7262-9a13-096abc3f29e6, 2026-10-25
 Reviewer session: codex 01a174c5-d58b-7262-9a13-096abc3f29e6 — a fresh session reviewed: no phase-2a session was recorded
 
 Loop rows: none — the loop did not run for this change.
+
+Stage-2 call, 2026-10-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 552 files, 2106 commits, 12 rules.
