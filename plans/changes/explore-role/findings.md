@@ -68,3 +68,11 @@ The repairs were made by a Sonnet 5.5 subagent at the orchestrator's direction.
   an ordinary refusal ("I cannot run the tests"). The 5000 cap now counts
   only path-like candidates. `test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry`
   pins the folder case.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
