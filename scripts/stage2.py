@@ -3314,6 +3314,24 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     return {Path(name) for name in [*tracked, *untracked] if name}
 
 
+def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]:
+    """Add every untracked, non-ignored file intent-to-add, so `git ls-files` lists it; return the names.
+
+    A gate that reads the index (the leerprobe gate builds its foreign repository from `git ls-files`)
+    would otherwise miss a script the attempt just created (bead coding-harness-fdz). Intent-to-add
+    records only the path, not its content: the checkpoint's `git add -A` stages the content later, and
+    `restore_baseline` drops the entry with the file.
+    """
+    names = [
+        name
+        for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
+        if name
+    ]
+    if names:
+        _git_output(root, "add", "--intent-to-add", "--", *names, env=env)
+    return names
+
+
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     """Gitignored files with their mtime and size, so a later scan can tell which the run touched.
 
@@ -4068,6 +4086,10 @@ def verify_attempt(
     line = format_step(root, env, key, tools)
     if formatted is not None and line is not None:
         formatted.append(line)
+    try:
+        intend_new_files(root, env)
+    except Refused as error:
+        return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
     try:
         done = launch(
             ["make", "verify"],

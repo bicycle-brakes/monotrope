@@ -13900,3 +13900,43 @@ def test_an_exploration_answer_without_a_repository_path_fails_and_appends_nothi
     assert "seed fact" in text and text.count("## ") == before.count("## "), "research.md lost what it held"
     err = capsys.readouterr().err
     assert "names no file of the repository" in err and "Bash tool is disabled" in err
+
+
+# verify-stages-new-files (bead coding-harness-fdz): new files are in the index when make verify runs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_make_verify_sees_the_attempts_new_files_in_git(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    # Planted fault: `make verify` runs while the attempt's new script is untracked, so a gate that
+    # reads `git ls-files` (the leerprobe gate's foreign repository) misses it.
+    original_launch = stage2.launch
+    seen: list[str] = []
+
+    def record(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            seen.append(git(root, "ls-files"))
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    if verb == "implement":
+        world.script(
+            claude=[
+                {
+                    "stdout": "implemented",
+                    "plant": {"scripts/new_tool.py": "VALUE = 1\n", "src/app.py": "value = 2\n"},
+                    "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+                }
+            ],
+            make=[{"stdout": "green\n"}],
+        )
+    else:
+        repair_world(world)
+        step = repair_step()
+        step["plant"] = {**step["plant"], "scripts/new_tool.py": "VALUE = 1\n"}
+        script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run(verb) == 0
+    assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
+    assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
