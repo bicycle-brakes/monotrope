@@ -2,11 +2,11 @@
 title: "Findings — review-loop-row-ids"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-20
 created: 2026-10-20
 last_reviewed: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-6jg
@@ -283,3 +283,41 @@ Stage-2 call, 2026-10-20: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/changes/review-loop-row-ids/spec.md`
 
 Stage-2 call, 2026-10-20: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 495 files, 1610 commits, 12 rules.
+
+## Implementation, 2026-10-25
+
+Implemented by hand by the orchestrating Claude Code session in a cloud
+container, at the maintainer's instruction of 2026-10-25 (conversation):
+GLM, Codex and OpenCode Go are unreachable there, so `stage2.py implement`
+could not run. Red first: nine of the seventeen new test cases failed
+before the production edit. The single-rung case of criterion 1 and the
+ordinary-failure controls of criterion 7 passed before and after, as
+guards.
+
+- `MalformedTable`, a `CallFailed` subtype, is raised in `run_swarm` for
+  an answer with no readable row and at least one table line that
+  `parse_rows` kept as non-row text. Prose answers keep the generic failure.
+- `review_loop` refuses with every malformed member and its lines right
+  after the initial batch, and right after a malformed replacement, before
+  any further replacement and before the record, the snapshot or a consumed
+  stage is written.
+
+## Self-review, 2026-10-25
+
+Read by the implementing session, so it is no independent review; the
+review loop and the phase-6 Codex review are still owed.
+
+- The refusal goes through `main`'s exit-1 path like an all-failed round,
+  so an availability receipt is handled as it is for that failure.
+- The quoted lines come from the answer `run_reviewer` already scrubbed
+  (the test plants the Go key in one line and checks stderr and findings).
+- Side finding, not now: the test stand-in for `pi` reads `calls.jsonl`
+  while a parallel member may be appending to it; once in this session a
+  run failed with a `JSONDecodeError` from the stand-in, and four reruns
+  passed. Pre-existing; it can touch any parallel-swarm test.
+- Changed expectation: the `partial` case of
+  `test_malformed_finding_tables_fail_the_member` (loop-until-clean,
+  criterion 4) expected a malformed member beside a readable one to fail
+  alone while the round stood. Under this change's criterion 1 the whole
+  round refuses; the test keeps its name and now asserts the refusal, the
+  named member line and the same-stage rerun.

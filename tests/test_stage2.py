@@ -13247,7 +13247,11 @@ def test_paid_terms_doctrine_records_the_retention_decision() -> None:
 
 @pytest.mark.parametrize("partial", [False, True])
 def test_malformed_finding_tables_fail_the_member(world: World, capsys, partial: bool) -> None:
-    """Criterion 4: five-cell findings cannot certify a clean round or hide a failed member."""
+    """Criterion 4: five-cell findings cannot certify a clean round or hide a failed member.
+
+    Since review-loop-row-ids (bead coding-harness-6jg) a malformed table refuses the whole round even
+    beside a readable peer, and the refusal names the member and its line.
+    """
     malformed = "| F-1 | MAJOR | CODE | scripts/helper.py | A defect |"
     world.script(
         pi=[
@@ -13255,17 +13259,14 @@ def test_malformed_finding_tables_fail_the_member(world: World, capsys, partial:
             {"model": TEST_FREE[1], "stdout": malformed},
         ]
     )
-    assert world.run("review-loop") == (0 if partial else 1)
-    if partial:
-        text = world.record().read_text()
-        assert f"{TEST_FREE[1]} failed:" in text
-        assert len(stage2.record_rows(text)) == 1
-        assert "from 1 of 2 members" in capsys.readouterr().out
-    else:
-        assert not world.record().exists(), "malformed answers consumed the free stage"
-        world.script(pi=[{"stdout": "No finding."}] * 2)
-        assert world.run("review-loop") == 0
-        assert "## Round 1" in world.record().read_text()
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    err = capsys.readouterr().err
+    assert f"{TEST_FREE[1]}: {malformed}" in err
+    assert not world.record().exists(), "malformed answers consumed the free stage"
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop") == 0
+    assert "## Round 1" in world.record().read_text()
 
 
 @pytest.mark.parametrize("last_modified", [0, 946684800000])
@@ -13484,3 +13485,158 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+# ---------------------------------------------------------------------------
+# review-loop-row-ids (bead coding-harness-6jg): an unreadable table refuses the round
+# ---------------------------------------------------------------------------
+
+MALFORMED = "| R2-1 | MAJOR | SPEC | five cells only | spec.md:1 |"
+
+
+def _row_ids_stage(world: World, stage: str) -> list[str]:
+    """Seed the record for one stage; return its members in call order."""
+    if stage == "free":
+        return list(TEST_FREE)
+    if stage == "flash":
+        _flash_round_world(world)
+        return list(TEST_FLASH)
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free", "flash")))
+    return list(TEST_RUNGS)
+
+
+def _record_bytes(world: World) -> bytes | None:
+    return world.record().read_bytes() if world.record().exists() else None
+
+
+@pytest.mark.parametrize(
+    ("stage", "peer"),
+    [
+        ("free", "No finding."),
+        ("free", "rows"),
+        ("flash", "No finding."),
+        ("flash", "rows"),
+        ("rung", None),
+    ],
+)
+def test_malformed_table_refuses_the_whole_round(world: World, stage: str, peer: str | None) -> None:
+    # Criterion 1. Planted fault: a malformed member is treated as an ordinary failed member.
+    members = _row_ids_stage(world, stage)
+    before = _record_bytes(world)
+    script = [{"model": members[0], "stdout": MALFORMED}]
+    if peer is not None:
+        script.append({"model": members[1], "stdout": rows(1, "P") if peer == "rows" else peer})
+    script += [{"model": model, "stdout": rows(1, "Z")} for model in TEST_RUNGS if model not in members]
+    world.script(pi=script)
+    assert world.run("review-loop") == 1
+    assert _record_bytes(world) == before, "a refused attempt completed a round"
+
+
+def test_malformed_table_refusal_names_scrubbed_member_lines(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 2. Planted fault: the diagnostic omits a member or a line, rewrites an id, or leaks a key.
+    first = [MALFORMED, "| R2-2 | MINOR | MAINT | four | cells |"]
+    second = [f"| Q-7 | MAJOR | {OKEY} | leaked | key |"]
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": "\n".join(first)},
+            {"model": "beacon-2-free", "stdout": "\n".join(second)},
+        ]
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 1
+    err = capsys.readouterr().err
+    assert "acme-v1-free" in err and "beacon-2-free" in err
+    for line in first:
+        assert line in err, f"an offending line is missing: {line}"
+    assert "| Q-7 | MAJOR |" in err, "the second member's line or its original id is missing"
+    assert OKEY not in err and OKEY not in world.text()
+
+
+def test_malformed_table_refusal_preserves_round_state(world: World) -> None:
+    # Criterion 3. Planted fault: the refusal writes a round, a snapshot or a consumed stage.
+    world.script(
+        pi=[{"model": "acme-v1-free", "stdout": MALFORMED}, {"model": "beacon-2-free", "stdout": "No finding."}]
+    )
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "a fresh refused attempt created a loop record"
+    assert "Loop state" not in (world.text() if world.findings.exists() else "")
+    _flash_round_world(world)
+    before = _record_bytes(world)
+    world.script(
+        pi=[{"model": "deepseek-v4.1-flash", "stdout": MALFORMED}, {"model": "mimo-v2.6-flash", "stdout": rows(1)}]
+    )
+    assert world.run("review-loop") == 1
+    assert _record_bytes(world) == before
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert state["consumed"] == ["free"]
+
+
+def test_malformed_table_retry_uses_the_same_stage(world: World) -> None:
+    # Criterion 4. Planted fault: the refused attempt advances the ladder or the round number.
+    _flash_round_world(world)
+    world.script(
+        pi=[{"model": "deepseek-v4.1-flash", "stdout": MALFORMED}, {"model": "mimo-v2.6-flash", "stdout": rows(1)}]
+    )
+    assert world.run("review-loop") == 1
+    first = len(world.reviews("pi"))
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    called = [rung_of(call) for call in world.reviews("pi")][first:]
+    assert sorted(called) == sorted(TEST_FLASH), called
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
+
+
+def test_malformed_flash_answer_stops_before_replacement(world: World) -> None:
+    # Criterion 5. Planted fault: a malformed member, or another member's failure beside it, buys a replacement.
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": MALFORMED},
+            {"model": "mimo-v2.6-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1)},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert "mimo-v2.6-pro" not in [rung_of(call) for call in world.reviews("pi")]
+
+
+def test_malformed_replacement_stops_the_paid_round(world: World) -> None:
+    # Criterion 5. Planted fault: a malformed replacement is replaced by the next ladder model.
+    pin_entry(world.root / "model-endpoints.yaml", (*TEST_LADDER, "spike-a"))
+    state = loop_state(("free",))
+    state["paid"] = {
+        "ladder": [*TEST_LADDER, "spike-a"],
+        "flash": list(TEST_FLASH),
+        "rungs": ["mimo-v2.6-pro", "spike-a"],
+    }
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    before = _record_bytes(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": MALFORMED},
+            {"model": "spike-a", "stdout": rows(1, "S")},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert "spike-a" not in [rung_of(call) for call in world.reviews("pi")]
+    assert _record_bytes(world) == before
+
+
+@pytest.mark.parametrize("failure", ["exit", "empty", "timeout"])
+def test_ordinary_call_failures_keep_partial_and_replacement_rules(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # Criterion 7. Planted fault: a timeout, an exit or an empty answer is read as a malformed table.
+    broken = {
+        "exit": {"stdout": "", "stderr": "boom", "exit": 1},
+        "empty": {"stdout": ""},
+        "timeout": {"stdout": "too late", "sleep": 30},
+    }[failure]
+    if failure == "timeout":
+        monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.05)
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(1, "A")}, {"model": "beacon-2-free", **broken}])
+    assert world.run("review-loop") == 0
+    rows_ = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert [cells[6] for cells in rows_] == ["acme-v1-free"]

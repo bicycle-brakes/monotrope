@@ -1,10 +1,10 @@
 ---
 title: "Plan — review-loop-row-ids"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-20
 last_reviewed: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-6jg
@@ -95,16 +95,17 @@ at `82488fc`; use the available gates and the phase-3 prompt's plan form.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_malformed_table_refuses_the_whole_round — a malformed member beside clean or readable peers completes any stage.
-- 2: not yet written tests/test_stage2.py::test_malformed_table_refusal_names_scrubbed_member_lines — any affected member or line vanishes, ids change, or a credential leaks.
-- 3: not yet written tests/test_stage2.py::test_malformed_table_refusal_preserves_round_state — refusal creates a record or changes existing/released completion state.
-- 4: not yet written tests/test_stage2.py::test_malformed_table_retry_uses_the_same_stage — retry skips models or advances the round number.
-- 5: not yet written tests/test_stage2.py::test_malformed_flash_answer_stops_before_replacement — an initial malformed member permits any replacement call.
-- 5: not yet written tests/test_stage2.py::test_malformed_replacement_stops_the_paid_round — a malformed replacement permits the next ladder call.
+- 1: tests/test_stage2.py::test_malformed_table_refuses_the_whole_round — a malformed member beside clean or readable peers completes any stage.
+- 2: tests/test_stage2.py::test_malformed_table_refusal_names_scrubbed_member_lines — any affected member or line vanishes, ids change, or a credential leaks.
+- 3: tests/test_stage2.py::test_malformed_table_refusal_preserves_round_state — refusal creates a record or changes existing/released completion state.
+- 4: tests/test_stage2.py::test_malformed_table_retry_uses_the_same_stage — retry skips models or advances the round number.
+- 5: tests/test_stage2.py::test_malformed_flash_answer_stops_before_replacement — an initial malformed member permits any replacement call.
+- 5: tests/test_stage2.py::test_malformed_replacement_stops_the_paid_round — a malformed replacement permits the next ladder call.
 - 6: tests/test_stage2.py::test_a_round_is_written_as_its_rung — arbitrary reviewer ids lose rows, collide or change attribution.
 - 6: tests/test_stage2.py::test_parse_rows_folds_a_pipe_inside_the_finding_into_it — valid finding-cell pipes become malformed output.
 - 7: tests/test_stage2.py::test_a_failed_swarm_member_preserves_successful_answers — ordinary member failure erases successful rows.
 - 7: tests/test_stage2.py::test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung — an ordinary failure prevents its eligible replacement.
-- 7: not yet written tests/test_stage2.py::test_ordinary_call_failures_keep_partial_and_replacement_rules — timeout or empty output is wrongly classified as malformed table output.
+- 7: tests/test_stage2.py::test_ordinary_call_failures_keep_partial_and_replacement_rules — timeout or empty output is wrongly classified as malformed table output.
 
 ## Time used
+2026-10-25 11:09:56–11:14:31 UTC, 275 s — implement and self-review · orchestrating session · model claude-opus-5-5 · accepted · measured by the orchestrator
