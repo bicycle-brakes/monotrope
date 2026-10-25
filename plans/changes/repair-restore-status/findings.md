@@ -48,3 +48,28 @@ this change:
 
 The restore now runs only for a `CallFailed` while HEAD is still the
 baseline; a `Refused` stop is re-raised untouched.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change before the phase-6 Codex review, which this container cannot reach.
+Phase 6 is still owed. It found no blocker, one minor row and one nit,
+both fixed by the orchestrating session.
+
+- **P240-1 (MINOR), fixed.** `run_attempts` put `findings.md` back after
+  every `CallFailed` from `checkpoint` while HEAD stayed at the baseline.
+  That includes a failed `git commit` (a refusing pre-commit hook, a git
+  timeout) and a failed rollback, where the fix and its test stay in the
+  tree: the `fixed` status naming that test was erased. The restore now
+  also requires that nothing outside the kept paths differs from the
+  baseline. Test: `tests/test_stage2.py::test_findings_stay_when_the_commit_fails_without_a_rollback`,
+  red before the fix.
+- **P240-2 (NIT), fixed.** `test_findings_stay_when_the_checkpoint_fails_without_a_rollback`
+  accepted exit 1 or 2 for both cases; it now expects 2 for the refused stop
+  and 1 after the commit. The unreadable-map trigger of criterion 1 still
+  has no test of its own; it shares the blocked path's rollback.
+- **For the merge with #228** (restore-symlink-parent): #228 sends every
+  findings restore through `put_findings_back`, which runs the parent-alias
+  preflight. When both are merged, the `restore_findings(kept)` call here
+  becomes `put_findings_back(original=error)`, or it is the one findings
+  write that skips that preflight.

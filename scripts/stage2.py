@@ -5132,12 +5132,14 @@ def run_attempts(
                     # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
                     # exists: after one, HEAD holds those statuses. A `Refused` stop (a credential, a
                     # recovery the maintainer decided writes nothing) is never followed by a write
-                    # (runner review R-4).
+                    # (runner review R-4). Only when the tree really went back: a failed `git commit`
+                    # leaves the fix and its test in place, and the status naming them stays (P240-1).
                     try:
                         moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                        undone = not (changed_paths(root) - set(allowed))
                     except Refused:
-                        moved = True
-                    if kept is not None and not moved:
+                        moved, undone = True, False
+                    if kept is not None and not moved and undone:
                         restore_findings(kept)
                     raise
                 if after_commit is not None:

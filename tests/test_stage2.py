@@ -13506,6 +13506,27 @@ def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(world: World
     assert stage2.findings_rows(text)[1] == rows_before
 
 
+def test_findings_stay_when_the_commit_fails_without_a_rollback(world: World) -> None:
+    # Pre-review row P240-1 (2026-10-25). Planted fault: findings.md is rewound after `git commit` itself
+    # failed; the fix and its test stay in the tree, so the `fixed` status naming that test must stay too.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    hook = world.root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\necho hook says no >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD").strip() == head, "the hook did not stop the commit"
+    assert (world.root / "tests" / "test_fix.py").exists(), "the fixture lost the attempt's test"
+    assert "fixed — tests/test_fix.py::test_fix" in world.text(), "findings.md was rewound beside the kept fix"
+
+
 @pytest.mark.parametrize("failure", ["after-commit", "refused"])
 def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
     world: World, monkeypatch: pytest.MonkeyPatch, failure: str
@@ -13528,7 +13549,7 @@ def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
         raise stage2.CallFailed("the runner checkpoint left a dirty worktree")
 
     monkeypatch.setattr(stage2, "checkpoint", failing)
-    assert world.run("repair") in (1, 2)
+    assert world.run("repair") == (2 if failure == "refused" else 1)
     text = world.text()
     if failure == "after-commit":
         committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
