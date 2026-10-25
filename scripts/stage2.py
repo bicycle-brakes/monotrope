@@ -489,6 +489,29 @@ class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
 
 
+class MalformedTable(CallFailed):
+    """A reviewer answered in table lines and none of them is a six-cell row (bead coding-harness-6jg).
+
+    Such an answer is a finding nobody can read, not a failed call: it refuses the whole round, before any
+    replacement and before anything is written, so its missing findings can never certify a clean round.
+    `lines` are the offending lines of the already scrubbed answer, as they came.
+    """
+
+    def __init__(self, lines: list[str]) -> None:
+        self.lines = lines
+        super().__init__(f"malformed finding table: {len(lines)} table line(s) that are not six-cell rows")
+
+
+def malformed_refusal(failed: dict[str, MalformedTable]) -> CallFailed:
+    """One failure that names every malformed member and quotes each offending line."""
+    parts = [f"{member}: " + " / ".join(error.lines) for member, error in failed.items()]
+    return CallFailed(
+        "malformed finding table, the round is refused and nothing is written; "
+        + "; ".join(parts)
+        + ". Rerun review-loop: the same stage runs again."
+    )
+
+
 class StepTimedOut(CallFailed):
     """A started program ran into its time limit and its whole process group was killed (R-20)."""
 
@@ -2048,9 +2071,12 @@ def run_swarm(
     def one(member: str) -> None:
         try:
             answer = run_reviewer(ctx, member, prompts[member], key, free=free, deadline=deadline)
-            rows, _rest = parse_rows(answer)
+            rows, rest = parse_rows(answer)
             # No arbitrary prose (including a refusal or context-limit error)
             # can certify a clean round. Commentary beside findings is kept.
+            table = [line.strip() for line in rest.splitlines() if split_row(line) is not None]
+            if not rows and table:
+                raise MalformedTable(table)
             if not rows and answer.strip() != "No finding.":
                 raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
             answers[member] = answer
@@ -5794,6 +5820,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     # limit per call (R-8 of the review-swarm review).
     deadline = time.monotonic() + REVIEWER_MINUTES * 60
     answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
+    malformed = {m: answers[m] for m in members if isinstance(answers[m], MalformedTable)}
+    if malformed:
+        raise malformed_refusal(malformed)  # before any replacement or write (bead coding-harness-6jg)
     replaced: list[str] = []
     if stage["kind"] == "paid-swarm":
         # A failed Flash member is replaced by the cheapest admitted ladder model
@@ -5826,6 +5855,8 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
                 append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
                 answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
+                if isinstance(answers[nxt], MalformedTable):
+                    raise malformed_refusal({nxt: answers[nxt]})
                 replaced.append(nxt)
                 current = nxt
         members = [*members, *replaced]
