@@ -94,3 +94,82 @@ This is a feature. It needs at least three answers. If it amends ADR 0021
   beyond 2026-10-31.
 - Whether other providers on the Go page carry validity dates. Only the
   DeepSeek rows were asked for.
+
+## Draft preparation addendum — 2026-10-26
+
+Repository inspection at `97980181` resolves implementation gaps without
+changing the five maintainer answers in `decisions.md`:
+
+- `terms_problem` is at lines 1279–1302 in `scripts/stage2.py` at this
+  commit, rather than the earlier line number above. `ladder` filters with
+  it, and `declaration_problem` calls it before paid Go dispatch, including
+  the interactive session path. Extending that shared guard reaches saved
+  selections as well as new ones; expiry can refuse a saved round without
+  rebuilding its historical membership.
+- `scripts/stage2_availability.py` prepares and renders receipts; its state
+  already retains `terms_skipped`. `review_loop` writes round notes and
+  releases them to findings. These are the existing boundaries for warning
+  display and evidence; no background service is needed.
+- Every existing Go terms record, including explicit wire-API skips, has
+  `gelesen`. Other than DeepSeek's documented expiry, the migration can
+  apply the maintainer's reading-plus-30-days rule to those dates without
+  claiming a new source reading. Other provider pages remain not read;
+  no additional provider end date is asserted by this draft.
+- `templates/spec.md`, `templates/design.md` and `templates/adr.md` exist;
+  `templates/plan.md` and `scripts/validate_change_artefacts.py` do not.
+  The plan follows `prompts/03-plan.md`; existing interview, criterion-ledger
+  and registry checks remain the available gates.
+- The cited `docs/journal/handover/2026-10-25-cloud-runner-fixes.md` is not
+  present in this worktree and was not read. The latest available handover,
+  `docs/journal/handover/2026-10-23-night-run.md` with its addenda, was read;
+  the change's own research and later interview carry its current intent.
+  GitHub PR state could not be read because the API connection failed.
+
+The source re-read above is retained as supplied evidence; this drafting
+call fetched no external source and wrote no implementation or tracker data.
+
+Draft validation on 2026-10-26: the change-specific interview check and
+criterion-ledger check passed. YAML headers, the ADR claim, the runner's
+original plan-card check and the empty phase-4 time section passed local
+structural checks. The ADR-answer gate reports the missing maintainer answer
+as expected; no answer was written. Full `make verify`, registry generation
+and tracker-dependent checks belong to the orchestrating runner.
+
+### Draft retry validation — 2026-10-26
+
+The second draft call at the same baseline re-read the existing spec,
+design, plan, ADR proposal and runner diagnostics. `findings.md` contains
+attempt diagnostics, with no open phase-2a rows to incorporate. The
+change-specific interview check and repository criterion-ledger check
+both passed again. No acceptance criterion or maintainer answer changed.
+
+The plan now carries the existing worktree-toolchain prerequisites:
+`make venv`, `bash tools/pi/install.sh` and the pinned-version check.
+The first attempt's supplied evidence reports 16 Pi contract setup errors
+from the missing installation; it does not justify changing a criterion
+or weakening those tests. This draft installed nothing, ran no full
+`make verify`, and leaves its fresh result to the orchestrator. The absent
+artifact validator and tracker-dependent registry remain unmeasured here.
+Current external PR state and live-session registry were not read because
+this call is restricted to the worktree and repository git directory.
+
+### Third draft attempt — 2026-10-26
+
+The GLM route (attempt 3, after the two failed Codex attempts) re-read the
+draft artifacts against the tree at `97980181`: `terms_problem`
+(`scripts/stage2.py` lines 1279–1302) and every caller — `ladder`,
+`skipped_models`, `declaration_problem` (reached by `preflight`,
+`checked_prompt` and `stage2_session.py` line 185), so the saved-round and
+interactive paths share the guard; the availability receipt, whose digest
+covers the whole receipt, so an added warning list changes no digest rule;
+and the 18 `modelle_terms` records (reading dates 2026-10-07/17/22; +30
+day deadlines 2026-11-06/16/21; both DeepSeek entries on 2026-10-31). The
+ledger's named existing tests are defined
+(`test_free_class_admission_is_bound_to_discovery_and_purpose`,
+`test_each_call_runs_its_own_leak_check`); its not-yet-written files and
+functions do not exist. The markdownlint gate is `report`, not `block`;
+the only blocking failure of both earlier attempts stays the worktree's
+missing pinned Pi install, an orchestrator prerequisite no artifact can
+supply. Edits this attempt: the spec's goal line follows the template
+scaffold, criterion 3 now carries the recorded-date naming its refutation
+already demanded, and the four headers name this attempt's producer.
