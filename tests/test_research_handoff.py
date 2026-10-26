@@ -1041,3 +1041,14 @@ def test_numbered_lists_in_later_sections_are_not_criteria(world: World, capsys)
     world.write([run_text(RUN1)], spec=plain + "\n## Notes\n\n2. **When** amended, check its origin.\n")
     code, output = world.check(capsys)
     assert code == 1 and "2" in output, output
+
+
+@pytest.mark.parametrize("local", ["C8", "C0", "C10", "C1extra", "C", "c1"])
+def test_a_malformed_claim_beside_a_valid_one_fails_the_handoff(world, capsys, local):
+    good = gid(RUN1, 1, SEATS[0], "C1")
+    bad = gid(RUN1, 1, SEATS[0], local)
+    world.write([run_text(RUN1)], spec=spec_text(basis=(f"`{good}`",)))
+    assert world.check(capsys)[0] == 0
+    world.write([run_text(RUN1)], spec=spec_text(basis=(f"`{good}` and `{bad}`",)))
+    code, output = world.check(capsys)
+    assert code == 1 and bad in output

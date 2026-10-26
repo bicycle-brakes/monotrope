@@ -948,6 +948,8 @@ def _bases(out: Outcome, label: str, spec_text: str, complete: list[ParsedRun], 
                     out.findings.append(
                         f"{label}: criterion {number} names the claim {token}, which the judge did not mark supported"
                     )
+            else:
+                out.findings.append(f"{label}: criterion {number} names an invalid basis reference {token}")
         if not origins:
             out.findings.append(
                 f"{label}: criterion {number} names no supported claim and no answered Q-record as its basis"

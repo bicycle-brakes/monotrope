@@ -1071,7 +1071,9 @@ def execute(args, scratch: Path) -> dict:
                     "stderr": err,
                     "seconds": round(time.monotonic() - started, 1),
                     "receipts_path": str(receipts) if seat["tools"] == "public" else None,
-                    "receipts": receipts.read_text(encoding="utf-8").splitlines() if receipts.is_file() else [],
+                    "receipts": [line for line in receipts.read_text(encoding="utf-8").split("\n") if line]
+                    if receipts.is_file()
+                    else [],
                 }
             )
         probe_audit: list[str] = []

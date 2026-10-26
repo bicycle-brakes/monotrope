@@ -177,6 +177,8 @@ def resolve_research_reference(sources, path, reference):
         lines = text.splitlines(keepends=True)
         suffix = parsed.suffix.lower()
         if suffix == ".md":
+            # Only document newlines create Markdown structure; Unicode separators are prose.
+            lines = io.StringIO(text, newline="").readlines()
             start, end = _markdown_extent(lines, reference)
         elif suffix == ".py":
             # Match AST source lines (LF, CRLF, CR), preserving their bytes;

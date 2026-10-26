@@ -317,3 +317,27 @@ def test_a_home_canary_read_by_the_repository_seat_fails_the_capture():
     checks = rc.evaluate(records, CANARIES, kinds)
     (seat,) = [c for c in checks if c["criterion"] == "repository-seat"]
     assert seat["verdict"] == "FAIL" and any("F-24" in reason for reason in seat["reasons"])
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085"])
+def test_a_unicode_line_separator_inside_a_receipt_stays_one_captured_line(tmp_path, monkeypatch, separator):
+    original_run = rc.subprocess.run
+    receipt = {"url": "https://example.org/", "excerpt": f"first{separator}second"}
+    line = json.dumps(receipt, ensure_ascii=False)
+
+    def run_with_receipt(command, **kwargs):
+        result = original_run(command, **kwargs)
+        seat_dir = tmp_path / "scratch" / "seats" / "online"
+        receipts = seat_dir / "research" / "receipts.jsonl"
+        if seat_dir.is_dir():
+            receipts.parent.mkdir(exist_ok=True)
+            receipts.write_text(line + "\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(rc.subprocess, "run", run_with_receipt)
+    code, report = run_capture(tmp_path)
+    assert code == 0
+    online = next(seat for seat in report["seats"] if seat["label"] == "online")
+    assert online["receipts"]["count"] == 1
+    assert online["receipts"]["lines"] == [line]
+    assert json.loads(online["receipts"]["lines"][0]) == receipt

@@ -247,3 +247,15 @@ def test_reference_python_type_alias_has_its_module_assignment_extent():
     result = resolve("a.py", "type Alias = tuple[int, str]\n", "Alias")
     assert result["supported"] and result["excerpt"] == "type Alias = tuple[int, str]\n"
     assert not resolve("a.py", "type Alias = int\ntype Alias = str\n", "Alias")["supported"]
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085", "\v", "\f", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_a_unicode_line_separator_in_markdown_prose_invents_no_heading(separator, newline):
+    section = f"## Real{newline}paragraph{separator}## Invented{newline}secret{newline}"
+    text = section + f"## Next{newline}end{newline}"
+    assert not resolve("a.md", text, "Invented")["supported"]
+    real = resolve("a.md", text, "Real")
+    assert real["supported"] and real["excerpt"] == section
+    assert (real["start_line"], real["end_line"]) == (1, 3)
+    assert resolve("a.md", text, "Next")["excerpt"] == f"## Next{newline}end{newline}"
