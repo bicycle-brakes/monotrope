@@ -285,3 +285,11 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 593 files, 2202 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2203 commits, 12 rules.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
