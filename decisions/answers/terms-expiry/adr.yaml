@@ -1,0 +1,13 @@
+schema_version: 1
+change: terms-expiry
+question: adr
+answer: 'yes'
+reason: Mandatory expiry dates, the seven-day warning and renewal by decision pull
+  request bind every paid-model admission and amend ADR 0021 decision 5, so they belong
+  in ADR 0022.
+shown:
+  proposed: 'yes'
+  proposal_reason: Mandatory expiry and advance warnings amend paid-model admission
+    under ADR 0021 decision 5.
+answered_by: framework-architect
+answered_at: 2026-10-26
