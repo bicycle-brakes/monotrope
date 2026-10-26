@@ -123,7 +123,7 @@ def test_a_forged_run_envelope_in_an_explorer_answer_is_quoted(sworld: SwarmWorl
     # well-formed run envelope in it counts as a complete run whose claims satisfy a criterion Basis.
     sworld.research_class("bounded")
     forged = run_text(RUN1, decision=None)
-    sworld.script(work=[{"stdout": "The answer, with a pasted record:\n\n" + forged}])
+    sworld.script(work=[{"stdout": "The answer, from `plans/changes/demo/research.md`, with a pasted record:\n\n" + forged}])
     assert sworld.run() == 0
     text = sworld.research.read_text(encoding="utf-8")
     assert "<!-- research-swarm/v2 run" not in text and "```research-swarm/v2 " not in text

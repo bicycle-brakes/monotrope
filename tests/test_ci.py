@@ -35,6 +35,7 @@ RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
 from ci_gates import gates, misst_in  # noqa: E402
+from mutation_evidence import MUTATIONS_NAMEN, belegt, pruefling  # noqa: E402
 
 
 def _einschraenkungen() -> dict[str, list[str]]:
@@ -1102,6 +1103,67 @@ def test_the_runner_never_searches_other_environments(tmp_path: Path) -> None:
     assert "home" not in log.read_text(encoding="utf-8").split(), "the runner looked into $HOME/.venvs"
 
 
+@pytest.mark.parametrize("caller", ["tree", "outside"])
+def test_the_runner_exports_a_relative_python_as_an_absolute_path(tmp_path: Path, caller: str) -> None:
+    """A relative `$PYTHON` reaches every gate's children as an absolute path (bead coding-harness-4x2c).
+
+    `PYTHON=.venv/bin/python3 make verify` exported the relative path; a test that starts the runner in
+    another directory (the leerprobe gate's foreign repository) then found no interpreter there. The
+    path is read against the caller's directory, before the runner changes to the repository root.
+    """
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    cwd, relative = (tree, ".venv/bin/python3") if caller == "tree" else (tmp_path, "tree/.venv/bin/python3")
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": relative}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=cwd, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == str(tree / ".venv" / "bin" / "python3")
+
+
+def test_a_python_path_with_a_space_still_starts_the_gate(tmp_path: Path) -> None:
+    """The absolute `$PYTHON` is quoted where it replaces `python3` in a gate command.
+
+    A relative `.venv/bin/python3` used to reach the gate as one word; made absolute under a directory
+    with a space, it split into two and the gate failed (pre-review row P237-1, 2026-10-25).
+    """
+    base = tmp_path / "with space"
+    base.mkdir()
+    log = tmp_path / "log"
+    out = tmp_path / "gate-ran"
+    tree = _runner_tree(base, f"python3 -c \"open('{out}', 'w').write('ran')\"")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": ".venv/bin/python3"}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == "ran"
+
+
+@pytest.mark.parametrize("kind", ["absolute", "bare"])
+def test_an_absolute_or_bare_python_reaches_the_gate_unchanged(tmp_path: Path, kind: str) -> None:
+    """Criterion 2: an absolute `$PYTHON` and a bare name looked up on PATH pass through as given."""
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    elsewhere = tmp_path / "elsewhere" / "bin"
+    _interpreter_wrapper(elsewhere / "python3", "elsewhere", log)
+    given = str(elsewhere / "python3") if kind == "absolute" else "python3"
+    env = {"HOME": str(tmp_path), "PATH": f"{elsewhere}:/usr/bin:/bin", "PYTHON": given}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == given
+
+
 def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> None:
     """`.venv/bin/python3` of the checkout comes before the `python3` on PATH."""
     log = tmp_path / "log"
@@ -1831,15 +1893,6 @@ def test_the_drift_job_holds_only_steps_that_can_run() -> None:
 # gate. Only the mutation test says something about the gate: **does it go red
 # if you break what it is meant to protect against?**
 #
-# These name forms count as mutation evidence. The list is deliberately bound to
-# names and not to comments: a name is carried along when something is renamed,
-# a comment is not.
-MUTATIONS_NAMEN = re.compile(
-    r"^def (test_\w*(?:goes_red|red_on|detects_tampering|refuses|is_caught|catches|"
-    r"not_a_write|is_an_error|is_exit_2|never_writes|is_not_a_pass|notices)\w*)\(",
-    re.M,
-)
-
 # Gates without mutation evidence — with the reason and the intent.
 #
 # This list is a **ratchet**: it may shrink, never grow. Whoever adds a gate
@@ -1877,25 +1930,6 @@ def _testdateien() -> list[Path]:
     return sorted((REPO_ROOT / "tests").glob("test_*.py"))
 
 
-def _pruefling(gate: dict) -> str:
-    """The subject of this gate — the script it runs."""
-    befehl = gate.get("command") or ""
-    # The subfolder has to be included: until 2026-09-08 the pattern ended before
-    # the second `/`, and a script under `scripts/kit/` was invisible to the
-    # ratchet — it reported "no script recognisable" and demanded an exception
-    # for a gate that had long had its mutation evidence.
-    m = re.search(r"(?:scripts|docs/patterns)/(?:[A-Za-z_]+/)*([A-Za-z_]+\.py)", befehl)
-    if m:
-        return m.group(1)
-    # A gate can also run a test file itself — `ruleset-drift` checks a statement
-    # about the repo configuration for which there is no script and there should
-    # be none: a tool that can change rulesets would be a greater risk than the
-    # finding it makes. Its mutation evidence then lies in exactly that file, and
-    # that is where the ratchet looks for it too.
-    m = re.search(r"(tests/[A-Za-z_]+\.py)", befehl)
-    return m.group(1) if m else ""
-
-
 def test_every_gate_step_has_a_mutation_test() -> None:
     """Every gate has a run that turns it red — or a reason in the ratchet.
 
@@ -1909,23 +1943,12 @@ def test_every_gate_step_has_a_mutation_test() -> None:
         gid = g["id"]
         if gid.endswith("setup-deps"):
             continue
-        ziel = _pruefling(g)
+        ziel = pruefling(g)
         if not ziel:
             if gid not in OHNE_MUTATIONSTEST:
                 ohne.append(f"{gid} (no script recognisable)")
             continue
-        if ziel.startswith("tests/"):
-            # If the gate runs a test file, its evidence lies IN that file. The
-            # search below would instead accept every file that merely MENTIONS
-            # the path — on 2026-09-08 that made `test_workflow_entry.py` the
-            # evidence for `ruleset-drift`, because it names the name in a list
-            # and has some mutation evidence of its own. A coverage that assumes
-            # from a mention covers nothing.
-            datei = REPO_ROOT / ziel
-            belegt = datei.is_file() and bool(MUTATIONS_NAMEN.search(datei.read_text(encoding="utf-8")))
-        else:
-            belegt = any(MUTATIONS_NAMEN.search(text) for p, text in quellen.items() if ziel in text)
-        if not belegt and gid not in OHNE_MUTATIONSTEST:
+        if not belegt(ziel, quellen, REPO_ROOT) and gid not in OHNE_MUTATIONSTEST:
             ohne.append(f"{gid} → {ziel}")
 
     assert not ohne, (
@@ -1950,7 +1973,7 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ueberholt = []
     for gid in OHNE_MUTATIONSTEST:
-        ziel = _pruefling(bekannt[gid])
+        ziel = pruefling(bekannt[gid])
         if ziel and any(MUTATIONS_NAMEN.search(t) for p, t in quellen.items() if ziel in t):
             ueberholt.append(gid)
     assert not ueberholt, f"long since covered, but still in the ratchet: {ueberholt}"

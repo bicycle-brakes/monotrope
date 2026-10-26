@@ -534,7 +534,7 @@ def test_explicit_class_explores_without_spec_or_plan(sworld: SwarmWorld) -> Non
 
     sworld.rewind()
     sworld.research_class(None)
-    sworld.script(work=[{"stdout": "A fact."}])
+    sworld.script(work=[{"stdout": "A fact from `plans/changes/demo/research.md`."}])
     assert sworld.run("--class", "bounded") == 0, "the explicit argument routes a headerless change"
     assert kinds(sworld) == ["work"]
 

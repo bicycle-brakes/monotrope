@@ -97,6 +97,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "
         "the denylist each machine keeps outside the repository, which no CI step holds"
     ),
+    "mutation_evidence.py": (
+        "Library — the gate ratchet's analyzer (RB-G4); tests/test_ci.py imports it, and the "
+        "pytest gate runs it there (bead coding-harness-diic)"
+    ),
     "research_capture.py": (
         "Entry point, not a gate - the maintainer-attended F-1 offline capture of the research swarm's free-context "
         "isolation (real pinned Pi against a loopback mock, synthetic canaries, no external request); it needs the "
