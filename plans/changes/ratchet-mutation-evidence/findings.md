@@ -162,3 +162,20 @@ Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude C
 | R7-4 | MINOR | SPEC | base | `scripts/mutation_evidence.py:94–105` | A legitimate reaching test is rejected when the command list is first bound to a local and then run. Repro: `cmd = ["python3", "scripts/plans_registry.py"]` followed by `assert subprocess.run(cmd).returncode == 1` returns []. The same happens with an f-string path (`subprocess.run([f"{root}/scripts/plans_registry.py"])`). Criterion 2 lists "a command list naming the script path" as evidence. Both shapes are also rejected by the pre-repair code (11774aa6^), so this is not a regression. A shape using `m = plans_registry; m.main()` is likewise rejected, which is arguably "the same through an alias". | Sonnet 5.5 | taken — test: tests/test_ci.py::test_a_command_list_bound_to_a_local_then_run_is_gate_evidence (orchestrator, 2026-10-26; maintainer: close the class with an allow-list - only subprocess.run/Popen/check_call/check_output with the script path, possibly through a local bound to the command list, a call of the script module's entry function, or a call of a helper in the same file that does one of these, counts; a mention, comparison, reference or shadowed name never does) | — |
 
 Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2262 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/mutation_evidence.py` +78 -55
+> - `tests/test_ci.py` +50 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R7-1: several fixed lines
+> - R7-2: several fixed lines
+> - R7-3: several fixed lines
+> - R7-4: several fixed lines
+> ```
