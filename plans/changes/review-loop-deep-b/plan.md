@@ -91,7 +91,12 @@ phase-6 Codex review are still owed.
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet replaces Codex for two hours (2026-10-26).
 
+## Runner route — 2026-10-26
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet replaces Codex for two hours (2026-10-26).
+
 ## Time used
 
 2026-10-26 00:48:46–01:06:31 UTC, 1066 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 17:18:57–17:32:01 UTC, 784 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-26 17:32:44–17:39:48 UTC, 424 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

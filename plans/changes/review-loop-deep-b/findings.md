@@ -224,3 +224,18 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claud
 > - F6-1: several fixed lines
 > - F6-2: several fixed lines
 > ```
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2270 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +23 -10
+> - `tests/test_stage2.py` +18 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`.
+> - F6-1: several fixed lines
+> - F6-2: several fixed lines
+> ```
