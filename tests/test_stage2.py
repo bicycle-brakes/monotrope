@@ -13962,6 +13962,28 @@ def test_every_secrets_value_is_scrubbed_from_loop_answers_and_errors(world: Wor
     assert "MAINT" in text
 
 
+@pytest.mark.parametrize("name", ["FOO_TOKEN", "SERVICE_PASSWORD", "client_secret", "API_KEY"])
+def test_a_short_value_of_a_credential_named_key_is_scrubbed(world: World, capsys, name: str) -> None:
+    """Short credentials are scrubbed from answers, failure lines and stderr, while flags remain readable."""
+    secret = "abc123"
+    with stage2.secrets_path().open("a", encoding="utf-8") as handle:
+        handle.write(f"{name}={secret}\n")
+    assert "1" not in stage2.secret_values(), "the fixture's OTHER=1 is a flag"
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": f"| X1 | MAJOR | MAINT | impl | x | credential {secret}, flag 1 |"},
+            {"model": "beacon-2-free", "exit": 1, "stderr": f"auth failed for {secret}\n"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert secret not in text and secret not in err
+    assert "credential [credential], flag 1" in text
+    assert "beacon-2-free failed: pi call failed: exit 1 (auth failed for [credential])" in text
+    assert "auth failed for [credential]" in err
+
+
 def _child_alive(pid: int) -> bool:
     try:
         state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
@@ -15982,6 +16004,21 @@ def test_a_dropped_catalog_id_carries_no_control_bytes(world: World, capsys) -> 
     for text in (capsys.readouterr().err, world.record().read_text()):
         assert "\x1b" not in text and "\x00" not in text
         assert r"acme\x1b[31m\x00-free" in text
+
+
+def test_a_not_activated_catalog_field_carries_no_control_bytes(world: World, monkeypatch, capsys) -> None:
+    """Discovery escapes controls in both catalog ids and dropped field names on stderr."""
+    model = "a\x1b[31mX"
+    field = "ev\x1b]0;pwn\x07il"
+    store = {stage2.OPENCODE: {"models": [{"id": model, "samplingParams": {}, field: 1}]}}
+    original = copy.deepcopy(store)
+    monkeypatch.setattr(stage2, "overlay_store", lambda *_args: store)
+    stage2.discover_free(world.root, allow_empty=True)
+    err = capsys.readouterr().err
+    assert "catalog fields not activated:" in err
+    assert "\x1b" not in err and "\x07" not in err
+    assert r"a\x1b[31mX (ev\x1b]0;pwn\x07il, samplingParams)" in err
+    assert store == original
 
 
 def test_a_malformed_catalog_definition_is_dropped_whole_and_named(tmp_path: Path) -> None:

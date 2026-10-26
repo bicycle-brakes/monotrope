@@ -580,17 +580,19 @@ def read_secret(name: str) -> str | None:
     return None
 
 
-# The two keys the runner uses are scrubbed whatever their length; every other value of the
-# secrets file once it is long enough to be a credential (DL-B-4 of the loop's deep review).
-NAMED_SECRETS = ("OPENCODE_GO_KEY", "GLM_KEY")
+# Credential-named entries are scrubbed whatever their length; other values must be long
+# enough to distinguish them from ordinary flags (DL-B-4 of the loop's deep review).
+CREDENTIAL_NAME = re.compile(r"(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(?:_|$)", re.I)
 
 
 def secret_values() -> list[str]:
-    """Every credential the secrets file holds, longest first: the named keys, and each value of FRAGMENT or more characters.
+    """Credentials longest first: credential-named entries, and every value of FRAGMENT or more characters.
 
-    A shorter value (a flag such as `1`) is no credential, and scrubbing it would replace ordinary text.
+    Short values under other names (flags such as `OTHER=1`) would replace ordinary text.
     """
-    values = {value for key, value in _secret_entries() if value and (key in NAMED_SECRETS or len(value) >= FRAGMENT)}
+    values = {
+        value for key, value in _secret_entries() if value and (CREDENTIAL_NAME.search(key) or len(value) >= FRAGMENT)
+    }
     return sorted(values, key=lambda value: (-len(value), value))
 
 
@@ -1820,7 +1822,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         store = overlay_store(agent, rule["provider"])
         stripped = activate_overlay(agent, store)
         if stripped:
-            listing = "; ".join(f"{model} ({', '.join(fields)})" for model, fields in sorted(stripped.items()))
+            listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
             print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
         try:
             listing = launch(
