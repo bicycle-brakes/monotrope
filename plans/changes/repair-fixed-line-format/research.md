@@ -78,3 +78,31 @@ keeps the answer: the next rejection can then be read.
   `plans/changes/ratchet-mutation-evidence/findings.md` and
   `plans/changes/review-loop-deep-b/findings.md`, on their branches.
 - Bead coding-harness-hgvp.
+
+## Draft gap checks
+
+Read in this worktree at `089b13af` on 2026-10-26:
+
+- `check_repair_answer` collects normalized right sides before calling
+  `fixed_status`; its current list count rejects identical repetitions too.
+  Existing tests `test_each_taken_row_needs_exactly_one_fixed_line` and
+  `test_repair_prose_alone_still_needs_fixed_lines` pin that old behavior;
+  keep their ledger-referenced names but revise their duplicate fixtures to
+  distinct conflicts when implementing the answered repetition detail.
+- `run_attempts` receives a completed answer before checking HEAD and
+  verification, and may stop without ever calling the repair answer check.
+  Saving only in that check would miss failed verification and call failures.
+  `CallFailed` already has a `partial_answer` field; the work-call transports
+  do not consistently carry output there today.
+- `save_attempt` saves failed trees under local `refs/stage2/attempts/` refs;
+  baseline restoration removes changed worktree paths. Answer evidence must
+  survive that restoration and also exist for successful attempts.
+- `scrub` alone covers a known credential, whereas `protect_diagnostics`
+  applies the active secret denylist on keyless routes too and refuses
+  blocking rules or unreadable protection inputs. Retained answers and quoted
+  conflict lines need that existing policy, not raw output fallback.
+- No `templates/plan.md` or `scripts/validate_change_artefacts.py` exists.
+  The phase-3 prompt supplies the plan form; interview, criterion-ledger and
+  registry scripts are present. Registry checking reads the shared tracker
+  through `bead_render.py`, outside this draft's permitted reading boundary;
+  leave that full check and index regeneration to the orchestrating runner.
