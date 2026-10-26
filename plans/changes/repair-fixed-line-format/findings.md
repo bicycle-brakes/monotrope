@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-26
 created: 2026-10-26
 last_reviewed: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-hgvp
@@ -150,3 +150,7 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 669 files, 2294 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 669 files, 2296 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 669 files, 2296 commits, 12 rules.
