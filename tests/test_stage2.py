@@ -12943,7 +12943,7 @@ def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> 
 def test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument(world: World) -> None:
     text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: nonsense\nneighbours: nope")
     world.research.write_text(text, encoding="utf-8")
-    world.script(claude=[{"stdout": "Fallback fact."}])
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
     call = world.calls("claude")[0]
     assert call["argv"][call["argv"].index("--model") + 1] == "claude-haiku-5-5"
