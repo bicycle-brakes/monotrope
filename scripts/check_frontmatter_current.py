@@ -223,6 +223,30 @@ class CannotStamp(Exception):  # noqa: N818 — a verdict, not an error class
     """The file cannot be edited without guessing. Named by the caller, left unchanged."""
 
 
+def stamped(text: str, today: date) -> str:
+    """The text with its header's `updated:` set to today, by editing one line; unchanged without a header.
+
+    The pure half of ``stamp``: a writer that must replace a file in one atomic step (the research append,
+    deep review RS-2-6) stamps the bytes it is about to write instead of rewriting the file a second time.
+    """
+    m = _BLOCK.match(text)
+    if not m:
+        return text
+    zeilen = m.group(1).split("\n")
+    neu = f"updated: {today.isoformat()}"
+    vorhanden = [i for i, z in enumerate(zeilen) if _UPDATED_LINE.match(z)]
+    if len(vorhanden) > 1:
+        return text
+    if vorhanden:
+        # A CRLF line keeps its `\r`; the value and anything after it are replaced.
+        zeilen[vorhanden[0]] = neu + ("\r" if zeilen[vorhanden[0]].endswith("\r") else "")
+    else:
+        nach = [i for i, z in enumerate(zeilen) if z.startswith("last_reviewed:")]
+        stelle = nach[0] if nach else len(zeilen) - 1
+        zeilen.insert(stelle + 1, neu + ("\r" if zeilen[stelle].endswith("\r") else ""))
+    return text[: m.start(1)] + "\n".join(zeilen) + text[m.end(1) :]
+
+
 def stamp(path: Path, today: date) -> bool:
     """Set `updated:` to today by editing one line. True when the file changed.
 
@@ -233,22 +257,7 @@ def stamp(path: Path, today: date) -> bool:
         text = path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
         raise CannotStamp(f"not valid UTF-8 ({exc.reason} at byte {exc.start})") from exc
-    m = _BLOCK.match(text)
-    if not m:
-        return False
-    zeilen = m.group(1).split("\n")
-    neu = f"updated: {today.isoformat()}"
-    vorhanden = [i for i, z in enumerate(zeilen) if _UPDATED_LINE.match(z)]
-    if len(vorhanden) > 1:
-        return False
-    if vorhanden:
-        # A CRLF line keeps its `\r`; the value and anything after it are replaced.
-        zeilen[vorhanden[0]] = neu + ("\r" if zeilen[vorhanden[0]].endswith("\r") else "")
-    else:
-        nach = [i for i, z in enumerate(zeilen) if z.startswith("last_reviewed:")]
-        stelle = nach[0] if nach else len(zeilen) - 1
-        zeilen.insert(stelle + 1, neu + ("\r" if zeilen[stelle].endswith("\r") else ""))
-    ergebnis = text[: m.start(1)] + "\n".join(zeilen) + text[m.end(1) :]
+    ergebnis = stamped(text, today)
     if ergebnis == text:
         return False
     path.write_bytes(ergebnis.encode("utf-8"))

@@ -69,6 +69,37 @@ own line.
 out of ideas for questions. If two answers would lead to the same build, the
 question was a `[DETAIL]`.
 
+## After a research swarm (ADR 0020)
+
+For a `feature` or `architectural` change the runner has appended a
+`research-swarm/v2` run to `research.md`, with an obligation inventory of
+items `<run>/H-<n>` (decisions, class disagreements, judge disagreements and
+neighbour items). Read that inventory and the questions marked `[DECISION]` in
+the reports first; derive your questions from them. The minimums above are a
+floor, no ceiling: every item the inventory holds still needs an answer.
+
+A question that answers an inventory item is linked in its interview record:
+
+```markdown
+research_items: [<run>/H-1, <run>/H-2]
+research_claims:
+  - <run>/<n>/<seat>/C1
+research_neighbours: {keep: [plans/changes/<name>/spec.md], drop: [], add: []}
+```
+
+- `research_items` names the items the answer closes; `research_claims` names
+  the reported claims it rests on. Only a maintainer-answered record with a
+  nonblank answer and context closes an item.
+- A neighbour item (a suggested neighbour, a contradiction, a given path
+  judged unrelated, a split) also needs its path in `research_neighbours`:
+  `keep`, `drop` or `add`, as the maintainer stated it. The same path in two
+  lists, or two answered records that disagree, is not measurable. A prose
+  "keep it" without the field leaves the item open.
+- The agent never answers, waives or drops an item itself; a `[DETAIL]` stays
+  prose and closes nothing. The gate `research-handoff`
+  (`scripts/check_research_handoff.py`) checks the identities and fields, not
+  your reading.
+
 ## What you write
 
 `decisions.md`, one entry per decision. Every question the maintainer answers

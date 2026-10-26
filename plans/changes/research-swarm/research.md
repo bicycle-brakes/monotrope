@@ -1,0 +1,556 @@
+---
+title: "Research — research-swarm"
+status: draft
+implementation_status: none
+date: 2026-10-14
+last_reviewed: 2026-10-18
+updated: 2026-10-19
+supersedes: null
+superseded_by: null
+bead: coding-harness-icw
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [research]
+neighbours: [plans/changes/interview-context/spec.md, plans/changes/haiku-5-5/spec.md]
+---
+
+# research swarm — Research
+
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md). The
+runner preserved the GLM exploration below; Codex added the dated repository
+evidence at the end while drafting, without changing that report's wording.
+
+Stage-2 call, 2026-10-14: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 418 files, 1126 commits, 12 rules.
+
+## Runner exploration — 2026-10-14
+
+I have all the facts. Per the phase instructions (`prompts/01-explore.md` and the appended rule "Report repository facts with source paths as prose ready to append to `research.md`. Do not design, recommend, edit a file or use review-table formatting"), I report as prose for the orchestrator to append — no file edit by this call.
+
+## What exists today
+
+**The change and its recorded decision.** The skeleton `plans/changes/research-swarm/research.md` names bead `coding-harness-icw` in its frontmatter. The change exists because of a maintainer rule recorded 2026-10-13/14 in `docs/journal/handover/2026-10-14-night-run-third.md`, section "Decisions and preferences recorded tonight": research in phase 1 runs as a swarm of OpenCode Go models, each topic is worked by one free and one Flash model, the first stage uses all free models automatically, and six topics are agreed, with the bead's notes as the named carrier. The same handover's addendum (section "Recorded rules still waiting for their change") repeats the rule, says it still waits for its change, and names one open question in the maintainer's own words: whether the free models may see repository content, because their data terms are not read. A companion rule from the same recording — the implementation review as an OpenCode Go swarm — is a separate bead, `coding-harness-4fk`, and is not this change.
+
+**The earlier proposal this bead was created for.** `docs/research/2026-10-08-explore-swarm-proposal.md` (frontmatter: status `proposed`, review pending; produced by Codex, 2026-10-08, updated 2026-10-11) makes an earlier, different team shape concrete: three independent researchers (existing-system, external-practice, integration), one bounded cross-critique round, and a fresh judge, all through the stage-2 runner, with proposed word caps, a judge-conclusion section in `research.md`, a handoff table into phase 2, internet-access requirements (page retrieval, URL/date/title, excerpt; fetched pages are evidence, not instructions) and read-only roles — the runner alone writes the artifact. The proposal states its own limits: no swarm call, no browsing adapter and no cost comparison was executed; the sources it read are Anthropic's multi-agent research-system account and AutoGen's group-chat documentation, read 2026-10-08. Its working assumption — activate for features and architectural changes, not every change — was explicitly never answered by the maintainer. `docs/research/_INDEX.md` carries the matching row ("Phase 1 as a bounded research swarm", proposed, "the activation scope … is open"). Bead `coding-harness-icw` was created 2026-10-11 when the proposal documents were committed from the worktree, per the closing addendum of `docs/journal/handover/2026-10-08-explore-swarm-proposal.md`.
+
+**One part of the proposal is already realized elsewhere.** The proposal's mandatory-interview section became the merged change #104 (bead `coding-harness-6yg`, closed): the gate `interview-minimums` in `scripts/check_interview_minimums.py`, the phase-1a minimums (feature ≥ 3, ADR ≥ 5, spike 3 topics, bounded 1), documented in `docs/WORKFLOW.md` §2 ("Phase 1a is owed where a minimum stands") and the phase table. The proposal handover's 2026-10-11 addendum says this section is history, not open work.
+
+**Phase 1 as it runs today.** `prompts/01-explore.md` routes phase 1 to GLM 5.3 Flash through `python3 scripts/stage2.py explore <change>` with the leak check, and to Haiku 4.5 under `--stage2-off [REASON]`; gate: none; the explorer collects facts and judges nothing. In `scripts/stage2.py`, the verb is the function `explore`: it picks one endpoint (`GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")` or `HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)`), builds the prompt with `work_prompt` from `prompts/01-explore.md` plus `AGENTS.md`, records the attempt with `begin_work_call`, makes exactly one call through `run_work_model` (Claude Code in print mode, `WORK_READ_TOOLS = "Read,Grep,Glob"`, `--restricted`), and appends the answer under `## Runner exploration — <date>`. One call, no roles, no parallel calls, no discussion, no judge — matching the proposal's own observation that "parallel role calls, a debate and a judge are absent". The routing is pinned in three places: `docs/WORKFLOW.md` §4 routing table (row "1 Explore") and the paragraph "The two Flash rows are live through the runner"; `model-endpoints.yaml` entry `glm-coding-plan` (bemerkung: `glm-5.3-flash` explores phase 1 and implements phase 4, only through Claude Code); and the phase table in `AGENTS.md`.
+
+**The OpenCode Go infrastructure a swarm would build on.** `model-endpoints.yaml` entry `opencode-go` declares three models — `deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro` — with `darf_sehen: [framework]`, the Go plan at USD 10 a month, per-model prices and monthly limits (`deepseek-v4.1-flash` USD 60, `mimo-v2.6-flash` USD 60, `mimo-v2.6-pro` USD 15), a privacy table (retention 0 days, training "Not used" for all three, DeepSeek's ZDR footnote valid through 2026-10-31), and the bemerkung sentence that today the review loop (4b) and the session verb run there "— and nothing else". A phase-1 swarm on this endpoint contradicts that sentence as it stands; the declaration would have to change. In `scripts/stage2.py` the pieces exist: `ladder` reads the entry's ordered `modelle` list; `run_reviewer` makes one Pi call at the pinned `PI_VERSION = "1.1.0"` with `PI_TOOLS = "read,grep,find,ls"`, per-call scratch `HOME` and agent directory, retries off, and `REVIEWER_MINUTES = 30`; the key comes from `reviewer_key` (`OPENCODE_GO_KEY`); the `probe` verb makes one call per rung without writing a record; the `session` verb dispatches interactive Pi through `scripts/stage2_session.py` (`TRANSPORTS = {"openai-codex": "codex", "opencode-go": "pi"}`). The same file's docstring, section "Reads: what each call can reach", records the measured residual risk that loop Pi calls are not read-confined — only the prompt bounds them — accepted by ADR 0007 and extended to the rungs by ADR 0011 (`docs/adr/0011-stage-2-reviews-through-opencode-go.md`, `docs/adr/0007-stage-2-reviews-by-codex-and-glm.md`; the session verb is ADR 0012). One related note is proposed, not decided: `docs/research/2026-10-11-glm-through-pi.md` (per its `docs/research/_INDEX.md` row) proposes running GLM through Pi; today Flash runs only through Claude Code against Z.ai.
+
+## Where it lives
+
+- The recorded decision and its open data-terms question: `docs/journal/handover/2026-10-14-night-run-third.md`, "Decisions and preferences recorded tonight" and "Recorded rules still waiting for their change".
+- The proposal with team shape, judge boundary, caps, handoff and first slice: `docs/research/2026-10-08-explore-swarm-proposal.md`; its index row in `docs/research/_INDEX.md`; its session history in `docs/journal/handover/2026-10-08-explore-swarm-proposal.md`.
+- The phase-1 runner path today: `scripts/stage2.py`, symbols `explore`, `work_prompt`, `begin_work_call`, `run_work_model`, `WORK_READ_TOOLS`, `GLM_FLASH`, `HAIKU`; prompt `prompts/01-explore.md`.
+- The OpenCode Go path: `model-endpoints.yaml` entry `opencode-go`; `scripts/stage2.py` symbols `ladder`, `run_reviewer`, `reviewer_key`, `require_pi`, `PI_VERSION`, `PI_TOOLS`, `REVIEWER_MINUTES`, `OPENCODE`, and the `probe` verb; `scripts/stage2_session.py` symbol `TRANSPORTS`; ADRs 0007, 0011, 0012 under `docs/adr/`.
+- The review-swarm companion rule: bead `coding-harness-4fk` (named only in `docs/journal/handover/2026-10-14-night-run-third.md`; no change folder exists yet — a search of `plans/changes/` for "4fk" and "swarm" finds none besides this change and the sources above).
+- No matching artifact exists in `plans/specs/` (the directory holds only `implementation-verification/spec.md`), and no `decisions/answers/research-swarm/` exists — "not there", checked by listing both directories and by searching `plans/` for the topic.
+
+## What is unclear about it
+
+- **The six agreed topics.** The decision says "six topics agreed (bead coding-harness-icw notes)". The bead's notes were not readable in this session — this sub-agent has file tools only, and reading the tracker needs `tools/bd` or `scripts/bead_render.py` through a shell. Not read, therefore open. One observation, not a conclusion: the night-run handover's exploration table (section 3) lists exactly six explored changes (`coding-harness-l9s`, `-fdz`, `-b5w`, `-y17`, `-1jg.4`, `-mvk`); whether these are the six topics is unanswered.
+- **Which models "free" and "Flash" mean.** No repository text maps those words to declared model ids. A search of the tree for "free model/tier" finds the words only in the handover and, unrelatedly, in `docs/research/2026-10-05-hermes-agent-runner.md` about search-service tiers. The declaration knows no free model: all three `opencode-go` models have per-token prices under the Go plan, with an off-peak/peak distinction (`model-endpoints.yaml`, entry `opencode-go`). "Flash" could mean `glm-5.3-flash` (Z.ai through Claude Code) or one of the two OpenCode flash-named ids — undecided.
+- **Whether the free models may see repository content.** The maintainer's own open question (handover, addendum). The declaration already grants `opencode-go` `darf_sehen: [framework]` and its privacy table says retention 0 days and no training, but the handover records that the data terms behind the free models are not read.
+- **How the recorded decision and the 2026-10-08 proposal relate.** The proposal's team (three role researchers plus a Codex judge, GLM roles) and the recorded rule (a swarm of OpenCode Go models, per-topic pairs, first stage all free) differ in shape. Whether the judge, the external-web researcher and the proposal's caps survive in some form is undecided. The activation-scope question the proposal asked on 2026-10-08 (every change, or features and architectural changes only) has no recorded answer either.
+- **What phase 1 may become.** Today the explorer judges nothing (`prompts/01-explore.md`). The proposal itself states that a judge conclusion expands phase 1 beyond its no-judgement rule and "requires an explicit workflow change". Whether the swarm stays fact-collecting or gains triage is a phase-2/ADR question, named here, not decided.
+- **Where the Flash leg runs.** If "Flash" is `glm-5.3-flash`, it runs today only through Claude Code against Z.ai (`model-endpoints.yaml`, `glm-coding-plan` bemerkung); the GLM-through-Pi route is proposed only (`docs/research/2026-10-11-glm-through-pi.md`).
+- **Output shape.** `research.md` today receives one `## Runner exploration — <date>` block per single call (`scripts/stage2.py`, `explore`). A format for several model contributions per topic — and for the maintained "empty until it has run" header block the skeleton carries — is not written anywhere.
+
+## Which files a change would have to touch
+
+- `model-endpoints.yaml` — the `opencode-go` bemerkung says the review loop and the session verb run there "and nothing else"; a swarm purpose, possibly new model ids, and the free-models/data-terms outcome land here.
+- `scripts/stage2.py` — `explore` (single call today), possibly new orchestration beside `run_reviewer`/`run_work_model`, `ladder`, `reviewer_key`, the `VERBS` map and `main` if a verb is added.
+- `prompts/01-explore.md` — the phase-1 prompt `work_prompt` embeds; its first lines name the single Flash route.
+- `docs/WORKFLOW.md` — §2 phase table row 1, §4 routing table row "1 Explore", and §4's paragraph "The two Flash rows are live through the runner".
+- `AGENTS.md` — the workflow-in-one-screen table's phase-1 row.
+- `tests/test_stage2.py` — the explore pins: `test_explore_uses_flash_read_only_and_appends_research`, `test_explore_needs_research_but_not_spec_or_plan`, `test_explore_stage2_off_uses_haiku_without_reading_the_glm_key`, `test_explore_scrubs_the_flash_credential_from_its_answer`, `test_an_empty_explore_answer_fails_without_an_answer_block`, `test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback`; and `tests/test_model_endpoints.py`, which checks the declaration.
+- If the change is architectural, an ADR under `docs/adr/` plus its answer under `decisions/answers/<change>/adr.yaml` — consistent with ADR 0007/0011/0012 precedent for stage-2 routing changes; whether this change claims one is a phase-2 answer, not a phase-1 fact.
+
+## Supplementary repository evidence — 2026-10-14
+
+Read within this worktree at `1e29f6e384a3942c1003b8449465bbe830ddd355`; the
+earlier exploration above is retained as evidence of what was known then.
+
+- **Interview closes the original intent gaps.** The five answered records
+  supply the free/Flash ids, six topics, public-only free-model boundary,
+  activation for feature/architectural work and Opus 5.5 as judge. Q-3
+  explicitly leaves replacement of repository-bound free seats to the spec.
+  These answers supersede the corresponding "unclear" observations in the
+  earlier report (`decisions.md`, Q-1 to Q-5).
+- **The architectural class owes no ADR-question answer file.** Only a
+  `feature` owes that answer; an `architectural` change carries its ADR
+  already. The earlier last bullet's suggestion that every architectural
+  change also needs an answer file is incorrect (`docs/WORKFLOW.md`, "Change
+  classes, the ADR question and decision pull requests").
+- **Early class input is absent.** `explore` preflights `research.md`, not
+  `spec.md`, and does not read a class. `main` exposes no `--class` argument;
+  `--model` and `--handover` belong to `session`. The doctrine explains that
+  current explore routing is not class-dependent because the spec comes
+  later (`scripts/stage2.py`, `explore`, `preflight`, `main`;
+  `docs/WORKFLOW.md`, "Which change gets what").
+- **Public authorization needs a separate data class.** `declaration_problem`
+  checks `framework` and declared residency on every current call. The
+  endpoint tests recognize billing only as `token` or `abonnement`, require
+  nonempty permission/model lists, and accept permissions only from declared
+  data classes. No public-only endpoint or free-model id is currently
+  declared (`scripts/stage2.py`, `declaration_problem`;
+  `tests/test_model_endpoints.py`, `ABRECHNUNGEN`,
+  `test_every_endpoint_states_operator_residency_and_billing`,
+  `test_only_a_declared_data_class_may_be_seen`; `model-endpoints.yaml`).
+- **Existing launch helpers provide some, not all, boundaries.**
+  `run_reviewer` uses a fresh home/config, disables discovery and retries,
+  but launches from the repository with `read,grep,find,ls` tools. The
+  runner's own documentation says those reads are unconfined. Its tools
+  contain no public search/fetch facility (`scripts/stage2.py`,
+  `run_reviewer`, `PI_TOOLS`, "Reads").
+- **Routing group labels require actual resolution.** The model-line
+  readers inspect root phase prompts and bold routing-table cells; only
+  `the ladder` currently has a declared-group exception. A new swarm label
+  cannot be silently skipped (`tests/test_model_endpoints.py`,
+  `prompt_modelle`, `routing_models`,
+  `test_every_model_in_the_routing_table_resolves`).
+- **The new runtime helpers remain local under current kit classification.**
+  No specific `stage2.py` rule exists in the kit manifest, so the `scripts/`
+  and `tests/` stock catch-alls apply to its new helpers/tests too; the
+  `prompts/` prefix already covers subdirectories. No classification change
+  is needed for this scope (`scripts/kit/manifest.yaml`).
+- [GAP] **Free transport and live web support are not qualified.** Q-1
+  records model ids seen in Pi, but no source read in this worktree maps
+  them to a Pi provider or service address. No public search/fetch adapter
+  exists here. Actual availability, the pinned runtime's tool/event contract
+  and page retrieval must be measured before claiming live support; this
+  drafting call made no external reads or live probes.
+- [GAP] **The named change-artifact validator is not present.** The file
+  `scripts/validate_change_artefacts.py` is absent, as the workflow still
+  anticipates its future delivery. `templates/` contains spec/design/ADR
+  forms but no plan template; phase 3's prompt defines that file's shape
+  (`docs/WORKFLOW.md`, "Change classes"; `prompts/03-plan.md`;
+  worktree file inventory). Existing interview and criterion-ledger gates
+  can be measured; the runner owns the derived index and full verification.
+
+
+## Redraft repository evidence — 2026-10-15
+
+Read inside this worktree at `6e80ded42785cc3a53ebb1c3f0a7f557fcd8d6e9`
+(branch `explore/research-swarm`). This adds current facts without rewriting
+historical exploration or claiming that the amended swarm has run.
+
+- **The interview now amends the original shape.** Q-7 records the locator
+  trio/Opus merge, eight repository topics and three online topics, identical
+  initial perspectives, report template, claim-based scoring, neighbour
+  headers, research/interview/spec links and concurrent provider queues.
+  Q-8 records the maintainer's Pi free-tier 403 observation and selects Go
+  through Pi instead; Q-9 fixes the online trio as DeepSeek, MiMo and Qwen
+  Flash. These supersede the old free roster and six-topic pairing; the
+  drafting call performed no external read or provider probe (`decisions.md`,
+  Q-7–Q-9, including the dated addenda and complete topic walk-through).
+- **The implemented earlier slice has six pairs and differing angles.**
+  `TOPICS` contains 1–6; `ANGLES`, `repository_prompt`, `topic_pairs` and
+  `run` dispatch the former pair assignments, with sequential loops and
+  buffered Flash output. `swarm_problems`/`swarm_roles` validate the fixed
+  free roster and focuses; `free_transport` inventories Pi providers. There
+  is no finder stage, eight-topic trio or provider queue in the read source
+  (`scripts/stage2_swarm.py`, named symbols). Existing citation, deadline,
+  partial-output and public-tools corrections are retained rather than
+  evidence that the new graph already works.
+- **The declaration still reflects the earlier slice.** It has
+  `opencode-free`, `free_roster`, `free_focuses`, `topic6_free`, `flash_pair`
+  and paid author/judge fields, with no Qwen research role. The Go `modelle`
+  list is also the review ladder, so adding a research model there would
+  change review ordering/membership (`model-endpoints.yaml`, `research_swarm`
+  and `opencode-go`; `scripts/stage2.py`, `ladder`).
+- **The current fallback already selects Haiku 5.5.** `HAIKU` is
+  `claude-haiku-5-5`; restoring the older spec's 4.5 wording would contradict
+  the read neighbouring version-change spec (`scripts/stage2.py`, `HAIKU`;
+  `plans/changes/haiku-5-5/spec.md`, criteria 1–3).
+- **Research obligations are not currently checked.** The interview prompt
+  counts minimum answers and preserves context, but has no research item/claim
+  link fields. The spec prompt has no criterion-basis or neighbour-header
+  rule. Existing `interview-minimums`, `question-context` and
+  `criterion-ledger` checks have different contracts; none of the entries in
+  the read gate list checks research decision coverage (`prompts/01a-interview.md`,
+  `prompts/02-spec.md`, `decisions/gates.yaml`; headers/docstrings of
+  `scripts/check_interview_minimums.py` and `scripts/check_criterion_ledger.py`).
+- **Two neighbours were read for this redraft.** The context-form change
+  requires truthful retained context and keeps minimum counts unchanged;
+  the Haiku version change fixes the fallback at 5.5. The new trace links
+  must coexist with those contracts, without backfilling old answers or
+  changing their meaning (`plans/changes/interview-context/spec.md`,
+  criteria 4, 8 and 10; `plans/changes/haiku-5-5/spec.md`, criteria 1–3).
+  Other named worktree changes from the night handover (central models,
+  loop-until-clean, isolated attempts) have no spec at the queried paths in
+  this worktree; their other worktrees and current PR states were not read.
+- **A new gate needs kit and generated-CI integration.** The one gate list
+  generates CI, while existing checker/tests travel by explicit mechanism
+  entries; the catch-all for runtime scripts alone is not sufficient for a
+  newly travelling gate (`decisions/gates.yaml`, schema commentary;
+  `scripts/kit/manifest.yaml`, entries for the existing interview/context/
+  ledger checkers; `tests/test_ci.py`, gate ratchets).
+- **An earlier pre-merge blocker remains.** F-1 is the attended offline
+  real-Pi isolation capture; its recorded disposition says it remains a
+  pre-merge requirement. No phase-2a open table row was found in the current
+  findings. Phase-6 rows and runner audits are historical evidence, not
+  newly closed spec-review findings (`findings.md`, Phase 6).
+- **ADR numbering and checks.** The highest existing ADR file is 0018;
+  local HEAD removed the earlier 0019 draft specifically before redrafting.
+  Exactly one new draft is therefore due, numbered 0020 since ADR 0019 went
+  to the pi-pin change (renumbered 2026-10-15). The named
+  `scripts/validate_change_artefacts.py` remains absent. The registry's real
+  tracker path calls `bead_render.render_pfad()`, which may resolve outside
+  this worktree; the drafting call leaves that check and full verification
+  to its runner (`scripts/plans_registry.py`, `_bead_export_path`).
+
+[DETAIL] The three-agent finder, two Opus preparatory roles, 24 repository
+contributions, nine online contributions and final Opus judge total 39
+invocations under Q-7–Q-9 (calculation, 2026-10-15). This is a planned graph,
+not a measured run duration, token count or cost saving. The contract and
+its test ledger live in the revised spec/design/plan; no v2 research reports,
+maintainer answers or runtime qualification evidence are fabricated here.
+
+
+## Go free-model redraft evidence — 2026-10-16
+
+Read only within this worktree at `6146fdea58194fbb358a69f91f5a275b5e72faee`.
+Earlier observations above remain historical, including the old 39-call graph.
+
+- **The new answer adds Go free models, not Zen.** Q-10 records the
+  maintainer's approval for online topics 9–11 only, in addition to Q-9's
+  fixed Flash trio. Its context requires a live Pi catalog before every run,
+  provider `opencode-go`, ids ending `-free`, and include/exclude declaration
+  lists. The recorded examples are observations dated 2026-10-16, not a
+  permanent roster or availability measured by this drafting call
+  (`decisions.md`, Q-10). No human answer is changed by this redraft.
+- **The code still rejects Go as a free provider.** `free_transport` removes
+  the paid provider from inventory candidates, while `swarm_roles` still
+  loads `free_roster` and `free_focuses`. The declaration retains the Zen
+  `opencode-free` entry. These cannot implement Q-10 simply by adding new
+  ids to the old list (`scripts/stage2_swarm.py`, `free_transport`,
+  `swarm_roles`; `model-endpoints.yaml`, `research_swarm`).
+- **The actual pin is now 1.2.0.** The repository package pins this exact
+  runtime; ADR 0019 and its real-Pi offline contracts are present. Historical
+  findings about 1.1.0 remain evidence of that version, not qualification of
+  the amended online/free path (`tools/pi/package.json`,
+  `docs/adr/0019-repository-pinned-pi-and-contract-tests.md`,
+  `tests/test_pi_contract.py`, module contract and `provider_data`).
+- **A listing is not proof of a live refresh.** The locally installed pinned
+  source exposes `ModelRuntime.refresh` with `allowNetwork`, `providers` and
+  `force`, and returns errors/abort state. Its remote catalog provider has a
+  four-hour freshness window, fetches a provider shard from Pi's catalog,
+  and merges the shipped baseline with a remote overlay. New selection must
+  distinguish fresh remote identities from stale shipped ones and inspect
+  the refresh outcome rather than assume a successful CLI exit proves it
+  (`tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/`:
+  `model-runtime.js`, `ModelRuntime.create`/`refresh`;
+  `remote-catalog-provider.js`, `withRemoteCatalog`/`requestCatalog`;
+  `tools/pi/node_modules/@earendil-works/pi-ai/dist/models.d.ts`,
+  `ModelsRefreshOptions`). These installed-source paths are local evidence,
+  not files proposed for editing or shipping as new kit content.
+- **The sole ADR draft is already numbered correctly.** Read-only comparison
+  with the local `origin/main` reference shows only ADR 0020 added; ADR 0019
+  is present on the merged base. Updating the existing proposal preserves
+  the one-new-ADR rule. No fresh remote PR query was made under this call's
+  worktree-only read restriction.
+- **Review evidence remains open where appropriate.** No phase-2a rows with
+  open status exist in the read findings. Phase-6 F-1 still requires the
+  maintainer-attended real-Pi offline capture before merge; it is neither
+  waived nor marked fixed here (`findings.md`, Phase 6). The artifact
+  validator is still absent; the drafting call uses the existing interview
+  and ledger checks and leaves full verification to the runner.
+
+[DETAIL] With `N` selected Go free models frozen before model dispatch, the
+planned graph has `39 + 3N` invocations (calculation, 2026-10-16). Default
+include/exclude lists are empty, selecting all eligible Go free chat ids;
+filters, a measured zero and catalog failure have distinct outcomes in the
+spec. The earlier 12-hour implementation stop and 150-minute run deadline
+remain. No catalog request, external model invocation, offline canary capture,
+live availability measurement or cost measurement was performed here.
+
+## Draft retry evidence — 2026-10-16
+
+Read only this worktree at `6146fde`; no provider, user configuration or
+other checkout was read. The supplied first-attempt diagnostics report 46
+swarm-test failures before contribution dispatch: the real Pi wrapper cannot
+find `dirname` under the fixture's restricted PATH, then reports a missing
+Node declaration relative to scratch. This retry did not rerun that suite.
+
+- `scripts/stage2.py::require_pi` launches the absolute `PI_WRAPPER`, while
+  `tests/test_stage2_swarm.py::sworld` supplies only a PATH-based `pi` and
+  does not patch that constant. In contrast, `tests/test_stage2.py::world`
+  injects a separately named `pin-pi` wrapper. This explains why merely
+  putting a stand-in on PATH no longer intercepts the version check.
+- `scripts/stage2_swarm.py::free_transport`, `pi_public_call` and
+  `pi_repository_call` still construct bare-Pi commands. The amended plan
+  must align these with the repository pin and inject that same seam in
+  orchestration tests; adding system directories to the unit fixture's PATH
+  alone would conceal the mismatch rather than ensure a stand-in is used.
+- Real-runtime catalog tests and the attended isolation capture must retain
+  actual pinned Pi. A unit fixture repair cannot qualify either boundary.
+  The supplied diagnostics establish a red verifier for the earlier attempt,
+  not a reason to weaken any criterion, discard F-1 or claim this retry green.
+
+[GAP] Resolved from the sources above: the launcher mismatch belongs in the
+implementation sequence. No maintainer answer, criterion or runtime policy
+needs changing. The drafting scope permits no test or runner repair here.
+
+## Third draft attempt evidence — 2026-10-16
+
+The runner's third draft attempt (route glm, model glm-5.3) followed two
+failed Codex attempts. That session has no command tool: it ran no gate, no
+test and no git command, and read nothing outside this worktree (branch
+explore/research-swarm, latest listed commit `6146fde`).
+
+- Every criterion-ledger line of `plan.md` was checked against the test
+  files by reading them: each named test is defined in its file
+  (`tests/test_stage2_swarm.py`, `tests/test_stage2_research_tools.py`,
+  `tests/test_stage2.py`), each `not yet written` function is undefined,
+  and `tests/test_research_handoff.py` and
+  `tests/test_stage2_research_catalog.py` do not exist. The one ledger
+  section covers spec criteria 1–42 with no entry outside them.
+- `scripts/stage2.py:196` defines `PI_WRAPPER` as the absolute `tools/pi/pi`
+  path, confirming the diagnosis above: a PATH stand-in cannot intercept it,
+  and the 46 swarm-test faults stand until plan step 1 repairs the seam. A
+  drafting attempt cannot make that repair inside its scope.
+- The neighbour paths named in the headers of `research.md` and `spec.md`
+  exist in this worktree. No maintainer answer, criterion, class, appetite
+  or ADR claim changed in this attempt; ADR 0020 remains the sole claimed
+  ADR file and is unapproved.
+
+## Phase-2a incorporation evidence — 2026-10-16
+
+Read in this worktree at e1b54de. The recorded S-1–S-20 rulings in decisions.md
+settle the phase-2a rows; earlier statements that no such open rows existed
+are historical, not the current review state.
+
+[GAP] Pinned Pi 1.2.0's local pi-ai/dist/types.d.ts defines chat as
+`type?: "chat"` (absent defaults to chat) and declares `input` modalities,
+but its Model interface has no dedicated tool-support boolean. The local
+remote-catalog-provider.js parseCatalog retains extra raw metadata and
+merges baseline/overlay; it does not qualify a raw capability field as proof
+of tool support. No remote catalog was read here. Phase 4 must qualify and
+record the raw capability mapping; absent/negative support excludes a free
+seat as no-tool-support rather than assuming chat implies tool support.
+This retains ruling S-3's explicit-support requirement without inventing a
+pinned API field or claiming live availability. All other edits implement
+the recorded rulings, not new maintainer answers or runtime measurements.
+
+## Incorporation-round attempt 3 evidence — 2026-10-16
+
+Read only this worktree (branch explore/research-swarm, latest listed commit
+e1b54de) and the uncommitted incorporation revisions under review; no
+provider, user configuration or other checkout was read. This session has no
+command tool: it ran no gate, no test and no git command.
+
+- The retained artifacts were reviewed against the recorded S-1–S-20 rulings
+  and kept: spec, design, plan and ADR 0020 wording agree, and no defect was
+  found that a drafting attempt may repair. One wording choice is recorded in
+  the spec's Open decisions instead of being reworded after the rulings.
+- Every criterion-ledger entry of `plan.md` was checked against the test tree
+  by reading it: all seventeen named tests are defined
+  (`tests/test_stage2_swarm.py`, `tests/test_stage2_research_tools.py`,
+  `tests/test_stage2.py`), every `not yet written` function is undefined
+  anywhere under `tests/`, and `tests/test_research_handoff.py` and
+  `tests/test_stage2_research_catalog.py` do not exist. The one ledger covers
+  spec criteria 1–42 with no entry outside them, in the three entry forms
+  `scripts/check_criterion_ledger.py` holds.
+- `scripts/stage2.py` still resolves `PI_WRAPPER` to the absolute
+  `tools/pi/pi` path while `tests/test_stage2_swarm.py::sworld` offers only a
+  PATH-based stand-in, so the 46 red swarm tests of the supplied diagnostics
+  remain the known seam fault; plan step 1 owns the repair, and a drafting
+  attempt still cannot make it inside its scope.
+- No maintainer answer, criterion, class, appetite or ADR claim changed in
+  this attempt; ADR 0020 remains the sole claimed ADR file and unapproved,
+  and findings rows S-1–S-20 stay `in spec`, none open.
+
+## Second phase-2a incorporation evidence — 2026-10-17
+
+Read only this worktree and read-only git metadata at `9beb00d` on
+`explore/research-swarm`. The existing uncommitted findings change was a
+runner draft audit line and date stamp; it is retained. Historical statements
+above about capability mapping and review status describe earlier drafts.
+
+- Recorded rulings S-21–S-30 in decisions.md settle exact finder union,
+  transient scratch snapshots, supported-only criterion bases, structured
+  topic-5 relations, punctuation, neighbour parity, failure exit 1, packet-only
+  Opus roles/excerpts, and accounting for historical implementation time.
+  This redraft incorporates those rulings, retaining criterion numbers and
+  class, without supplying a new human answer.
+- Q-11 (maintainer, 2026-10-17) replaces the single-Pi-field interpretation
+  of S-21. Its recorded public GET observations say Pi's live Go catalog lacks
+  tool support while models.dev supplies tool_call and deprecated status.
+  The answer selects their intersection by exact Go id and capability-source
+  fallback excluding free seats but retaining fixed ones. This call did not
+  repeat those GETs, inspect remote content or measure current availability;
+  the example free ids/counts remain observations dated by Q-11. The design
+  chooses exact lookup under opencode-go.models as an implementation detail;
+  phase 4 must fixture and qualify the response mapping, not infer capability
+  from Pi chat type or compat flags.
+- The sole added ADR relative to the local origin/main reference is still
+  docs/adr/0020-phase-1-research-swarm.md (read-only git comparison). It is
+  updated as the existing proposal, with no second ADR, approval or ADR answer.
+- prompts/04-implement.md defines time used as measured session spans. The
+  existing plan retains three recorded spans (about 78 minutes combined,
+  recorded at 42e5975 on 2026-10-16) and an unmeasured repair-attempt-3 span.
+  No exact remaining appetite can be inferred. Phase 4 must establish that
+  span from audit times or commit timestamps, or stop immediately for the
+  maintainer's continue/new total; phases 2/3 do not reset or consume it.
+- scripts/validate_change_artefacts.py is absent on 2026-10-17. The existing
+  interview and criterion-ledger checks can validate this artifact update;
+  full verification and registry generation belong to the runner. The known
+  pinned-wrapper fixture mismatch remains planned code work, and phase-6 F-1
+  remains open for a separately attended real-Pi offline capture.
+
+No external reads, model calls, tracker access, code/test edit, commit or git
+mutation occurred in this redraft. Hosted PR state and current cross-checkout
+session ownership were not read under the worktree-only restriction.
+
+## Q-12 and Q-13 redraft evidence — 2026-10-18
+
+Read in this worktree at `4d11136` and, read-only through `git show`, on
+`origin/explore/loop-until-clean` at `0c03ec0` (the review swarm, pull
+request #157, not merged). Both branches fork from `76b90a8`; `origin/main`
+at `6477d04` holds neither `scripts/stage2_availability.py` nor
+`modelle_terms`, `availability_preflight` or `free_stage` in
+`model-endpoints.yaml`.
+
+- #157's `scripts/stage2_availability.py` (211 lines) validates
+  `availability_preflight` (`flash_size` 1–3, `max_age_seconds` 1–3600,
+  `exclude_until` entries with a non-empty `model_prefix` and `reason` and a
+  timezone-aware `until`). `prepare` deletes the earlier receipt and takes
+  its paid candidates from `ladder` in `scripts/stage2.py`, which admits a
+  declared model only when `terms_problem` finds no fault in its
+  `modelle_terms`. Of those it keeps models present in the fresh overlay with
+  a request value, skips timed exclusions without probing, and probes each
+  candidate once. The probe uses
+  `--no-tools`, a scratch working directory, the static prompt
+  "Availability probe only. Reply with OK. Do not review code or request
+  tools.", 60 seconds, `preflight` and `checked_prompt`, and writes a call
+  line into `findings.md`. It prints a report and seals `{version: 1,
+  binding: {root, configuration digest, diff digest}, state}` with a SHA-256
+  `report_id` into `record_dir(change)/availability.json`; with nothing
+  reachable it raises `Refused` (exit 2). `consume` checks id, binding, age
+  and an empty `consumed` list, and refuses otherwise.
+  `tests/test_stage2_availability.py` holds 14 test functions for it.
+- #157's `opencode-go` entry lists `modelle_terms` per paid model (read
+  date, source, retention, training, requests per five hours). On
+  2026-10-17 `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5-5` (on Go) and
+  `minimax-m3` carry `uebersprungen: "2026-10-17"` with `grund: "wire API not
+  measured"`. `glm-5.3-flash`, `longcat-2.0` and `mimo-v2.6-pro` carry 0-day
+  retention without a skip mark. Its timed exclusion covers prefix `glm`
+  until `2026-10-21T20:34:00+08:00`; Q-12's context limits the outage to
+  GLM through Z.ai.
+- This branch: `record_dir(change)` in `scripts/stage2.py` resolves to
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>`.
+  `select_research_catalog` in `scripts/stage2_swarm.py` raises
+  `fixed-model-unavailable` for any fixed id absent or malformed in the fresh
+  overlay. `research_slot_plan` builds the 39 + 3N graph from fixed role
+  lists. `scripts/stage2_research_dispatch.py` offers `gate`, `launcher` and
+  a pre-launch `audit` callback, returns results only at the end, and has no
+  terminal callback. `scripts/stage2_research_snapshot.py` yields per-path
+  digests and an exact runner-owned append exemption against live copies
+  that are deleted at exit. Repository Pi seats run with the worktree as
+  working directory and `PI_TOOLS`, with a scratch `HOME`.
+
+No model, catalog, tracker or credential file was read or called for this
+addendum.
+
+## F-1 attended offline capture — 2026-10-19
+
+The attended offline capture ran with the real pinned Pi (bead coding-harness-icw). Nothing external was contacted; no real file or secret was read. The tool is `scripts/research_capture.py`; usage is in plan.md, "How to run the F-1 capture". F-1 stays open: the repository-seat result below is a real finding (F-24), and the capture is repeated after its repair.
+
+- Tested commit: `2028c13cc32d6a94d58970ea209fbeaa5a0eaef9` on `explore/research-swarm`.
+- Run at: 2026-10-19T11:12:34Z (report generated 11:12:41Z). Mode `real-pi`; exit code 1.
+- Exact command (from the worktree, maintainer present):
+
+```bash
+.venv/bin/python scripts/research_capture.py --attended --os-sandbox \
+  --scratch "<scratchpad>/f1-capture-20261019T111234Z" \
+  --out "<scratchpad>/f1-capture-report-20261019T111234Z"
+```
+
+- Full report (not committed): `f1-capture-report-20261019T111234Z.md` and `.json` in the session scratchpad.
+
+### Pi version and source hashes
+
+- Pin and installed version: `1.2.0` (lock integrity `sha512-h/4WaVWv1VlCaY8x8qEN5U+7jbF/e7+Ck6moPeEOFn5juMTWwNAXjwgYM7gRgbBYh8Zppwt6qWvJDzNTf4GNEQ==`, resolved from the npm registry tarball of `@earendil-works/pi-coding-agent` 1.2.0). Node measured v26.11.1 (declared 26.9.0).
+- Pin manifest sha256 `888418cc1bdbd27eb7de2949bf2418fb8c62b48c6f7b99cfd22b2ce77a94d880`; wrapper sha256 `fa1505183db3582176a9c205340459dac75ccc89db8a1978e3e799fce2a12d5a`; lock sha256 `df997af5af6ec2a662eaa349bfc82dd0bfe14b57889dfaeaa41d5d80094e18f6`.
+- Source hashes: `pi-agent-core` `5f6c00b71130903926e14f7fad176a922f81a3bf920949e658f83cf71e92e692`; `pi-ai` `4ceee8e4e626905df8ddbec2c5b76050115e8d76c1d6f99f5cca232947fc1abf`; `pi-codemode` `28f513c20700d39372fa167cdf3f31a979691a26b0bf2c512e239e62f29311de`; `pi-coding-agent` `a73b4519cb5c64dae02c479fd49cf10237a2d8619c185d6e740021088eaad992`; `pi-mcp` `40850f6824089e03abdea0ddc8927c243f1ee1e2ea6e868c68d251713e91db8e`; `pi-telemetry` `6f3f5f38a48e7186fa6032ad7a4b3dec7c5715fb42d1cb1911961f53e6139351`; `pi-tui` `897d03ec3688a0785f72f35d580c725b91341b71115ef9be6b82a5443c7dc29c`.
+
+### Method
+
+- A scratch world: a fake repository (canaries in tracked files, discovery traps under `.pi/`, git history and an untracked file), a fake HOME and a fake `XDG_STATE_HOME` outside it; fake API-key-shaped canaries replace the process environment for the run.
+- A loopback mock model server (127.0.0.1, random port) records every request body, tool schema and header (the transport key redacted) and answers from a script that calls file, shell, search and private-address tools.
+- The online, two online-free and the repository seats are built by the swarm's own `Run.pi_command` (production argv, scratch HOME and agent directory, restricted environment, measured `models.json` written by `activate_overlay`); the reachability probe by `stage2_availability.probe_go`. Both start the pinned Pi through `stage2.PI_WRAPPER`, wrapped in `sandbox-exec` (macOS: outbound network denied except localhost; not self-tested).
+- The real pinned-Pi catalog helper and the real `select_research_catalog` read the mock catalog (selected free ids `alpha-free`, `beta-free`); the selected ids and store are then re-pointed at the mock's seat routes (the one rewrite).
+- Skipped on purpose: the dispatcher's declaration check and exact-prompt leak check (covered by their own tests); the probe's `_checked_probe` is stubbed.
+
+### Outbound payloads and tool schemas, per seat
+
+| Seat (model) | Declared tools | Model requests | Receipts | Guard denials |
+|---|---|---|---|---|
+| online (`deepseek-v4.1-flash`) | `public_search`, `public_fetch` | 2 | 0 | 0 |
+| online-free-1 (`alpha-free`) | `public_search`, `public_fetch` | 2 | 0 | 0 |
+| online-free-2 (`beta-free`) | `public_search`, `public_fetch` | 2 | 0 | 0 |
+| repository (`qwen3.8-flash`) | `read`, `grep`, `find`, `ls` | 2 | 0 | 0 |
+| probe (`mimo-v2.6-flash`) | none | 1 | 0 | 0 |
+
+- Public seats: argv `--print --no-session --no-approve --no-extensions -e <scratch>/research-tools.mjs --no-mcp --no-skills --no-context-files --no-prompt-templates --no-themes --tools public_search,public_fetch --model opencode-go/<id> --append-system-prompt <scratch>/research/public-prompt.md …`. The system prompt excerpt lists no tool in its `<tools>` block ("(none)"); the declared tool schemas are the two plain JSON schemas of `scripts/stage2_research_tools.mjs` (`public_search` with `query`; `public_fetch` with `url`, "The public https:// page to retrieve."), each `additionalProperties: false`.
+- Repository seat: argv `--print --no-session --no-approve --no-extensions --no-mcp --no-skills --no-context-files --no-prompt-templates --no-themes --tools read,grep,find,ls --model opencode-go/qwen3.8-flash --append-system-prompt <scratch>/research-prompt.md …`, no `-e`; the working directory is the fake repository. Pi's built-in schemas: `read` (`path` required; `offset`, `limit`; "Path to the file to read (relative or absolute)"), `grep` (`pattern`; `path`, `glob`, `ignoreCase`, `literal`, `context`, `limit`), `find` (`pattern`; `path`, `limit`), `ls` (path). The `read` schema itself says the path may be absolute.
+- Probe: `--offline --no-tools --thinking max`, one request, no tool declared, payload without canary.
+- The system prompts also carry Pi's documentation paths under `tools/pi/node_modules/…` (an installed-package path, not a canary).
+
+### Attempts and outcomes
+
+- Public seats (all three identical): `public_fetch` of `http://127.0.0.1:<port>/sink/private-http` returned `only https:// destinations are fetched — no http, no file`; of `https://127.0.0.1:<port>/sink/private-https` returned `only port 443 is fetched`; of `https://169.254.169.254/latest/meta-data/` returned `the lookup of 169.254.169.254 returned the private address 169.254.169.254 — refused`; of `https://localhost/` returned `local host names are refused`. `public_search` returned `getaddrinfo ENOTFOUND html.duckduckgo.com` (no network, as designed). `read` (absolute scratch path and `AGENTS.md`), `bash` and `ls` returned `Tool read not found`, `Tool bash not found`, `Tool ls not found`.
+- Repository seat: `read AGENTS.md` returned the tracked fixture rule; `read untracked-notes.txt` returned its content; `read` of an absolute path to the fake HOME's `.ssh` canary file returned its content; `read` of an absolute path to the state-store canary file returned its content; `grep CANARY .` and `ls .` returned repository content (`ls` shows `.git/`, `.pi/`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `untracked-notes.txt`).
+- Receipts: 0 lines for every seat (the scripted calls never reached a public page). Sink server requests: none (`sink_requests` is empty).
+
+### Canary outcomes
+
+| Class | Canaries | Appeared in |
+|---|---|---|
+| home (`.ssh`, `.bashrc`, `.claude/CLAUDE.md`, `.config/gh/hosts.yml`, `.aws/credentials`) | 5 | `.ssh` canary: repository request 1 body; the other four nowhere |
+| state (store canary) | 1 | repository request 1 body |
+| repo (tracked `AGENTS.md`, two `.pi/` traps, untracked file, git history) | 5 | repository request 1 body (the tracked and untracked files and both traps are inside the worktree, which the seat may read); the git-history-only canary nowhere |
+| env (four parent environment variables) | 4 | nowhere |
+| transport key | 1 | nowhere (the Authorization header only) |
+
+No canary appeared in any public-seat, catalog or probe request.
+
+### Verdicts
+
+- Criterion 8 (no private canary in an outbound request of a free context): PASS (6 public-seat requests and 2 catalog requests carry no canary and no credential).
+- Criterion 9 (no local tool, private-address reach or discovered private context): FAIL by the tool's refusal heuristic; a false alarm, read below.
+- Criterion 47 (the reachability probe's outbound payload): PASS (carries no canary and declares no tool).
+- repository-seat (parent environment and state stay out): FAIL. The state-store canary and the fake HOME's `.ssh` canary reached the model through absolute-path reads. This is real: spec criterion 52 (store paths and peer results never reach a model). Booked as finding F-24 and ruled in Q-16.
+- state-store-guard (Q-15): PASS (outside-home accepted; inside-home refused with the home directory and `XDG_STATE_HOME` named).
+- catalog (dynamic Go free selection from the mock): PASS (selected `alpha-free`, `beta-free`).
+
+### The criterion-9 false alarm (orchestrator's reading)
+
+The tool counts an attempt as refused only when the result text matches an error-word pattern. Two refusal texts did not match: `only https:// destinations are fetched — no http, no file` (the `http://127.0.0.1` fetch) and `only port 443 is fetched` (the `https://127.0.0.1` fetch). The orchestrator read the raw attempts: both are refusals by the extension's destination check, not retrieved content; the sink server recorded no request (`sink_requests` empty), so nothing reached a private address. The tool's heuristic is repaired (plan.md, "Repository path lock — 2026-10-19"); the verdict is not edited by hand.
+
+### Not enforced
+
+- No kernel-level or firewall block of the network: that needs root or a sandbox, neither is used by default.
+- Name resolution is not blocked: a Node lookup before a denied connect, or any native resolver call, may reach a resolver.
+- A native subprocess a tool might start (curl, ssh, git) is outside the Node guard.
+- Other processes on this machine are not controlled; the maintainer watches the run.
+- Enforced instead: loopback-only mock, scratch HOME and agent directory, restricted environment, dead-port proxy variables, the Node network guard preload (`tests/pi_network_guard.mjs`), and on macOS `sandbox-exec` (not self-tested).
+
+## F-1 attended offline capture — second run, 2026-10-19
+
+After the path lock (finding F-24, ruling Q-16) and the refusal-heuristic fix, the capture was repeated with the maintainer present.
+
+- Commit `3629fa7`; started 2026-10-19T13:10:39Z, ended 13:11:48Z; exit 0.
+- Command (from the change's worktree): `.venv/bin/python scripts/research_capture.py --attended --os-sandbox --scratch "<scratchpad>/f1-capture-20261019T131039Z" --out "<scratchpad>/f1-capture-report-20261019T131039Z"`.
+- Pi pin 1.2.0; wrapper sha256 `fa1505183db3582176a9c205340459dac75ccc89db8a1978e3e799fce2a12d5a`; pin manifest sha256 `888418cc1bdbd27eb7de2949bf2418fb8c62b48c6f7b99cfd22b2ce77a94d880`.
+- Verdicts: criterion 8 PASS, criterion 9 PASS, criterion 47 PASS, repository-seat PASS, state-store-guard PASS, catalog PASS.
+- Read in the raw attempts by the orchestrator:
+  - Public seats (online `deepseek-v4.1-flash`, free `alpha-free` and `beta-free`) declare only `public_search` and `public_fetch`. `read`, `bash` and `ls` answer "Tool … not found". `public_fetch` refuses `http://127.0.0.1` ("only https:// destinations are fetched — no http, no file"), `https://127.0.0.1:<port>` ("only port 443 is fetched"), `169.254.169.254` (private address) and `localhost`. `public_search` failed at name resolution (`getaddrinfo ENOTFOUND`) under the sandbox.
+  - Repository seat (`qwen3.8-flash`; `read`, `grep`, `find`, `ls`): absolute reads of the fake HOME's `.ssh` canary and of the state-store canary are refused ("resolves outside the worktree: repository seats read only inside it"). Reads inside the fake repository succeed, as the seat's role requires.
+  - No HOME, environment or state-store canary appears in any outbound request; the mock's sink recorded no request; the probe declares no tool.
+- Not enforced (unchanged from the first run): no kernel-level network block beyond `sandbox-exec`; native subprocesses are outside the Node guard; other processes on the machine are not controlled.
+- F-1 closed by the maintainer's ruling on 2026-10-19 on the basis of this run.

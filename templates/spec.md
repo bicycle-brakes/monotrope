@@ -38,6 +38,7 @@ appetite: <hours>  # hours of phase 4, repair rounds included — a stop, not an
 change: <change>  # a feature only
 adr_question: {proposed: "<yes|no>", reason: "<one sentence>"}  # a feature only, the quotes kept
 adr_files: []  # every class: the files under docs/adr/ this change creates, changes or removes
+neighbours: []  # optional: spec paths given or confirmed through a research swarm (the gate research-handoff compares it)
 ```
 
 # Spec — `<change>`
@@ -63,10 +64,13 @@ for it. A criterion that cannot go red is not one.
 
 One condition per criterion, beginning the sentence with When, While or If, is
 recommended, not required: it becomes the rule once pull request #60 merges,
-and until then the rule is `prompts/02-spec.md`.
+and until then the rule is `prompts/02-spec.md`. After a research swarm
+(`docs/WORKFLOW.md`, phase 1) every criterion also carries a `*Basis:*` line
+and the header `neighbours:` is kept in step with the interview.
 
 1. When `<trigger>`, `<what holds>`.
    *Refuted by:* `<the result that shows it does not hold>`.
+   *Basis:* `<optional; after a research swarm required: decisions.md#Q-<n> and/or supported claim ids <run>/<n>/<seat>/C<k>>`.
 
 ## Non-goals
 
