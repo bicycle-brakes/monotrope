@@ -2121,7 +2121,7 @@ def released_digest(text: str) -> str | None:
 
 def record_identity(record: str) -> str:
     """Identify completed rounds independently of repair marks and the mutable stage snapshot."""
-    rounds = ROUND_HEADING.findall(record)
+    rounds = [line for line in record.splitlines() if ROUND_HEADING.match(line)]
     rows = [row[:7] for row in record_rows(record)]
     return record_digest(json.dumps([rounds, rows], sort_keys=True))
 

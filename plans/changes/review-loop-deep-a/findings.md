@@ -292,7 +292,7 @@ Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | impl | scripts/stage2.py:2124 | `record_identity` hashes only the prefix matched by `ROUND_HEADING`, ending after the first model. Reproduced with two finding-free round-1 records: changing the second reviewer and date produces different digests but identical identities. After an interrupted release, `release-loop` therefore rewrites the released block and deletes this changed record without a new verdict, bypassing the overlap refusal. Hash complete round-heading lines so changed reviewer membership requires reconciliation. [Acceptance criterion 4] | Codex | taken — test: tests/test_stage2.py::test_record_identity_covers_every_reviewer_in_the_round_heading (orchestrator, 2026-10-26) | — |
+| F6-1 | MAJOR | SPEC | impl | scripts/stage2.py:2124 | `record_identity` hashes only the prefix matched by `ROUND_HEADING`, ending after the first model. Reproduced with two finding-free round-1 records: changing the second reviewer and date produces different digests but identical identities. After an interrupted release, `release-loop` therefore rewrites the released block and deletes this changed record without a new verdict, bypassing the overlap refusal. Hash complete round-heading lines so changed reviewer membership requires reconciliation. [Acceptance criterion 4] | Codex | fixed — tests/test_stage2.py::test_record_identity_covers_every_reviewer_in_the_round_heading | — |
 
 Phase 6 verdict: codex 01a17765-8eec-7f32-a0ad-f3e9fb4f2288, 2026-10-26
 Reviewer session: codex 01a17765-8eec-7f32-a0ad-f3e9fb4f2288 — a fresh session reviewed: no phase-2a session was recorded
@@ -382,3 +382,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-26: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 598 files, 2206 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 598 files, 2208 commits, 12 rules.

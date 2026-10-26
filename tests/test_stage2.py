@@ -13821,6 +13821,47 @@ def test_a_release_repeated_after_a_crash_appends_nothing(
 
 
 @pytest.mark.parametrize("new_verdict", [False, True])
+@pytest.mark.parametrize(
+    "changed_heading",
+    [
+        "## Round 1 — first, replacement, third, 2026-09-30",
+        "## Round 1 — first, second, replacement, 2026-09-30",
+        "## Round 1 — first, second, third, 2026-10-26",
+    ],
+)
+def test_record_identity_covers_every_reviewer_in_the_round_heading(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    changed_heading: str,
+    new_verdict: bool,
+) -> None:
+    """F6-1: a changed heading in a finding-free round must not reconcile an interrupted release."""
+    world.write_record([], members=["first", "second", "third"], state=loop_state(("free",)))
+    original = world.record().read_text(encoding="utf-8")
+    changed = original.replace("## Round 1 — first, second, third, 2026-09-30", changed_heading)
+    assert stage2.record_digest(original) != stage2.record_digest(changed)
+    assert stage2.record_identity(original) != stage2.record_identity(changed)
+
+    world.write_findings(VERDICT)
+    crash_the_release_after_the_append(world, monkeypatch)
+    world.record().write_text(changed, encoding="utf-8")
+    if new_verdict:
+        world.findings.write_text(world.text() + "\n" + VERDICT + "\n", encoding="utf-8")
+    record_before = world.record().read_bytes()
+    findings_before = world.findings.read_bytes()
+    capsys.readouterr()
+    assert world.run("release-loop") == 2
+    error = capsys.readouterr().err
+    if new_verdict:
+        assert "round ids: 1" in error and "maintainer must reconcile" in error
+    else:
+        assert "no phase-6 verdict line after the last release" in error
+    assert world.record().read_bytes() == record_before
+    assert world.findings.read_bytes() == findings_before
+
+
+@pytest.mark.parametrize("new_verdict", [False, True])
 @pytest.mark.parametrize("rewrite", ["repair", "stage-failed", "round", "empty-round"])
 def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
     world: World, monkeypatch: pytest.MonkeyPatch, new_verdict: bool, rewrite: str, capsys: pytest.CaptureFixture[str]
