@@ -4,10 +4,11 @@ status: draft
 implementation_status: none
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-abra
+class: feature
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-10-25"}
