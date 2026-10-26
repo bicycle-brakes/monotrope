@@ -91,3 +91,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet r
 2026-10-26 17:06:11–17:17:18 UTC, 667 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-26 17:18:45–17:31:56 UTC, 791 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-10-26 17:51:24–18:09:04 UTC, 1060 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-26 18:09:33–18:19:06 UTC, 573 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

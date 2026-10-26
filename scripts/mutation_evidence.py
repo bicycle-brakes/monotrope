@@ -66,165 +66,193 @@ def evidence(script: str, sources: dict[Path, str]) -> list[str]:
     return [f"{p.name}::{t}" for p, text in sources.items() for t in _tests_reaching(text, script)]
 
 
-RUN_CALLS = {"run", "Popen", "check_call", "check_output"}
+RUN_CALLS = {"run", "Popen", "call", "check_call", "check_output"}
 
 
-class _Function(NamedTuple):
-    """A module-level function of a test file, as the ratchet reads it."""
+class _Imported(NamedTuple):
+    """A name resolved through an import, rather than a similarly named call."""
 
-    calls: set[str]  # names invoked, rather than merely referenced; shadowed ones left out
-    imports: list[tuple[str, str, bool]]  # imports local to this function
-    attributes: set[tuple[str, str]]  # invoked `<name>.<attr>`, dunders and shadowed bases left out
-    params: set[str]  # parameter names (fixtures shadow module-level names)
-    locals: dict[str, list[str]]  # names assigned in the body, with the strings of their values
-    runs: list[tuple[list[str], set[str]]]  # per run call: strings and names in its arguments
-
-
-class _ParsedTestFile(NamedTuple):
-    """A test file read once, for every script the ratchet asks about."""
-
-    imports: list[tuple[str, str, bool]]  # (module, bound name, imported as a module?)
-    constants: list[tuple[set[str], list[str]]]  # (names bound, strings in the value)
-    functions: dict[str, _Function]
-
-
-def _strings(root: ast.AST) -> list[str]:
-    return [k.value for k in ast.walk(root) if isinstance(k, ast.Constant) and isinstance(k.value, str)]
-
-
-def _is_run_call(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Call):
-        return False
-    callee = node.func
-    name = callee.id if isinstance(callee, ast.Name) else callee.attr if isinstance(callee, ast.Attribute) else None
-    return name in RUN_CALLS
+    path: str
 
 
 def _scope_nodes(root: ast.AST):
     """Walk one lexical scope without importing bindings from nested scopes."""
     yield root
+    if isinstance(root, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda):
+        return
     for child in ast.iter_child_nodes(root):
-        if not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda):
-            yield from _scope_nodes(child)
-
-
-def _imports(nodes: list[ast.AST]) -> list[tuple[str, str, bool]]:
-    imports = []
-    for node in nodes:
-        if isinstance(node, ast.Import):
-            imports.extend((a.name, a.asname or a.name, True) for a in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.extend((node.module, a.asname or a.name, False) for a in node.names)
-    return imports
+        yield from _scope_nodes(child)
 
 
 @functools.cache
-def _parsed(text: str) -> _ParsedTestFile | None:
+def _parsed(text: str) -> ast.Module | None:
+    """Read each source file once, without importing or executing it."""
     try:
-        tree = ast.parse(text)
+        return ast.parse(text)
     except SyntaxError:
         return None
-    imports = _imports(list(_scope_nodes(tree)))
-    constants = []
-    for stmt in tree.body:
-        if isinstance(stmt, ast.Assign | ast.AnnAssign) and stmt.value is not None:
-            targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
-            names = {z.id for z in targets if isinstance(z, ast.Name)}
-            constants.append((names, _strings(stmt.value)))
-    functions = {}
-    for stmt in tree.body:
-        if not isinstance(stmt, ast.FunctionDef):
-            continue
-        nodes = [node for body in stmt.body for node in _scope_nodes(body)]
-        spec = stmt.args
-        params = {a.arg for a in [*spec.posonlyargs, *spec.args, *spec.kwonlyargs, spec.vararg, spec.kwarg] if a}
-        assigned: dict[str, list[str]] = {}
-        for node in nodes:
-            if isinstance(node, ast.Assign | ast.AnnAssign) and node.value is not None:
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                for z in targets:
-                    if isinstance(z, ast.Name):
-                        assigned.setdefault(z.id, []).extend(_strings(node.value))
-            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-                assigned.setdefault(node.id, [])
-        shadowed = params | set(assigned)
-        calls = [node.func for node in nodes if isinstance(node, ast.Call)]
-        runs = []
-        for node in nodes:
-            if _is_run_call(node):
-                parts = [*node.args, *(k.value for k in node.keywords)]
-                runs.append(
-                    (
-                        [s for p in parts for s in _strings(p)],
-                        {k.id for p in parts for k in ast.walk(p) if isinstance(k, ast.Name)},
-                    )
-                )
-        functions[stmt.name] = _Function(
-            calls={node.id for node in calls if isinstance(node, ast.Name)} - shadowed,
-            imports=_imports(nodes),
-            attributes={
-                (node.value.id, node.attr)
-                for node in calls
-                if isinstance(node, ast.Attribute)
-                and isinstance(node.value, ast.Name)
-                and node.value.id not in shadowed
-                and not node.attr.startswith("__")
-            },
-            params=params,
-            locals=assigned,
-            runs=runs,
-        )
-    return _ParsedTestFile(imports, constants, functions)
 
 
 def _tests_reaching(text: str, script_file: str) -> list[str]:
-    """The mutation-named tests in `text` that reach the script `script_file`.
+    """Follow same-file calls and ordered command bindings from mutation tests.
 
-    A test reaches the script when its body — or the body of a module-level
-    helper of the same file it calls, at any depth — calls it: a non-dunder
-    attribute of a module bound by `import <script>` (with or without `as`), a
-    call to a name bound by `from <script> import …`, or a string naming the
-    file handed to a run call (`run`, `Popen`, `check_call`, `check_output`) —
-    in its arguments, through a local bound to the command, or through a
-    module-level constant. A name that a parameter or an assignment of the
-    function rebinds is no longer the module's. A mention in a comparison, a
-    docstring or another test reaches nothing; nor does `<module>.__file__`.
+    Only resolved subprocess calls run commands. The script must occupy argv[0]
+    or argv[1] after a Python interpreter; other arguments are mere mentions.
+    Values are deliberately limited to imports, functions, paths and lists.
+    Fixtures and cross-file helpers are not evaluated.
     """
     stem = script_file.removesuffix(".py")
-    if stem not in text:  # neither an import nor a path can name it
+    if stem not in text:
         return []
-    parsed = _parsed(text)
-    if parsed is None:
+    tree = _parsed(text)
+    if tree is None:
         return []
-    file_re = re.compile(rf"(?:^|[/\s]){re.escape(script_file)}(?:\s|$)")
+    hit = False
+    module: dict = {}
 
-    def names_file(paths: list[str]) -> bool:
-        return any(file_re.search(p) for p in paths)
+    def is_script(value):
+        return isinstance(value, str) and value.rsplit("/", 1)[-1] == script_file
 
-    path_names = set()
-    for bound, paths in parsed.constants:
-        if names_file(paths):
-            path_names |= bound
+    def runs_script(command):
+        if isinstance(command, str):
+            return is_script(command)
+        if not isinstance(command, list) or not command:
+            return False
+        if is_script(command[0]):
+            return True
+        program = command[0]
+        interpreter = program == _Imported("sys.executable") or (
+            isinstance(program, str) and re.fullmatch(r"python(?:[0-9]+(?:\.[0-9]+)*)?", program.rsplit("/", 1)[-1])
+        )
+        return bool(interpreter and len(command) > 1 and is_script(command[1]))
 
-    def runs_script(fn: _Function) -> bool:
-        for strings, used in fn.runs:
-            if names_file(strings):
-                return True
-            for used_name in used:
-                if used_name in fn.locals:
-                    if names_file(fn.locals[used_name]):
-                        return True
-                elif used_name in path_names and used_name not in fn.params:
-                    return True
-        return False
+    def imported_gate(path):
+        return path in {stem, "scripts." + stem}
 
-    reached = set()
-    for name, fn in parsed.functions.items():
-        imports = parsed.imports + fn.imports
-        modules = {bound for module, bound, whole in imports if module == stem and whole}
-        names = {bound for module, bound, whole in imports if module == stem and not whole}
-        if fn.calls & names or any(base in modules for base, _ in fn.attributes) or runs_script(fn):
-            reached.add(name)
-    while new := {name for name, fn in parsed.functions.items() if name not in reached and fn.calls & reached}:
-        reached |= new
-    return [name for name in parsed.functions if name in reached and MUTATIONS_NAMEN.search(f"def {name}(")]
+    def value(node, env, active):
+        nonlocal hit
+        if isinstance(node, ast.Name):
+            return env.get(node.id)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Attribute):
+            base = value(node.value, env, active)
+            if isinstance(base, _Imported):
+                return _Imported(base.path + "." + node.attr)
+        elif isinstance(node, ast.List | ast.Tuple):
+            return [value(item, env, active) for item in node.elts]
+        elif isinstance(node, ast.JoinedStr):
+            return "".join(str(value(part, env, active) or "") for part in node.values)
+        elif isinstance(node, ast.FormattedValue):
+            return value(node.value, env, active)
+        elif isinstance(node, ast.BinOp):
+            left = value(node.left, env, active)
+            right = value(node.right, env, active)
+            if isinstance(node.op, ast.Div) and isinstance(right, str):
+                return (left.rstrip("/") + "/" if isinstance(left, str) else "") + right
+            if isinstance(node.op, ast.Add) and isinstance(left, str) and isinstance(right, str):
+                return left + right
+        elif isinstance(node, ast.Call):
+            callee = value(node.func, env, active)
+            args = [value(arg, env, active) for arg in node.args]
+            kwargs = {kw.arg: value(kw.value, env, active) for kw in node.keywords}
+            if isinstance(callee, _Imported):
+                base, _, name = callee.path.rpartition(".")
+                if base == "subprocess" and name in RUN_CALLS:
+                    hit |= runs_script(args[0] if args else kwargs.get("args"))
+                elif imported_gate(base) and not name.startswith("__"):
+                    hit = True
+            if isinstance(callee, ast.FunctionDef | ast.AsyncFunctionDef):
+                invoke(callee, args, kwargs, active)
+            # Preserve path constructors without treating their strings as runs.
+            if isinstance(node.func, ast.Name) and node.func.id in {"str", "Path"} and args:
+                return args[0]
+            if callee == _Imported("pathlib.Path") and args:
+                return args[0]
+        else:
+            # Calls in assertions, comparisons, subscripts and comprehensions
+            # still execute; nested function and lambda bodies do not.
+            if not isinstance(node, ast.Lambda):
+                for child in ast.iter_child_nodes(node):
+                    value(child, env, active)
+        return None
+
+    def statements(body, env, active):
+        for stmt in body:
+            if isinstance(stmt, ast.Import):
+                for alias in stmt.names:
+                    env[alias.asname or alias.name.split(".")[0]] = _Imported(
+                        alias.name if alias.asname else alias.name.split(".")[0]
+                    )
+            elif isinstance(stmt, ast.ImportFrom):
+                for alias in stmt.names:
+                    env[alias.asname or alias.name] = _Imported(f"{stmt.module}.{alias.name}")
+            elif isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+                env[stmt.name] = stmt
+            elif isinstance(stmt, ast.ClassDef):
+                env[stmt.name] = None
+            elif isinstance(stmt, ast.Assign | ast.AnnAssign):
+                assigned = value(stmt.value, env, active) if stmt.value is not None else None
+                targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        env[target.id] = assigned
+            elif isinstance(stmt, ast.With | ast.AsyncWith):
+                for item in stmt.items:
+                    value(item.context_expr, env, active)
+                statements(stmt.body, env, active)
+            elif isinstance(stmt, ast.If | ast.For | ast.AsyncFor | ast.While):
+                # Syntax evidence reads both branches, not runtime conditions.
+                value(stmt.test if isinstance(stmt, ast.If | ast.While) else stmt.iter, env, active)
+                statements(stmt.body, env.copy(), active)
+                statements(stmt.orelse, env.copy(), active)
+            elif isinstance(stmt, ast.Try):
+                statements(stmt.body, env.copy(), active)
+                for handler in stmt.handlers:
+                    statements(handler.body, env.copy(), active)
+                statements(stmt.orelse, env.copy(), active)
+                statements(stmt.finalbody, env, active)
+            else:
+                value(stmt, env, active)
+
+    def invoke(fn, args, kwargs, active):
+        if id(fn) in active:
+            return
+        env = module.copy()
+        # Python treats assigned names as local even before the assignment.
+        for stmt in fn.body:
+            for node in _scope_nodes(stmt):
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                    env[node.id] = None
+        positional = [*fn.args.posonlyargs, *fn.args.args]
+        for param in [*positional, *fn.args.kwonlyargs, fn.args.vararg, fn.args.kwarg]:
+            if param:
+                env[param.arg] = None
+        for param, default in zip(positional[-len(fn.args.defaults) :], fn.args.defaults, strict=False):
+            env[param.arg] = value(default, module, active)
+        for param, arg in zip(positional, args, strict=False):
+            env[param.arg] = arg
+        for param in [*positional, *fn.args.kwonlyargs]:
+            if param.arg in kwargs:
+                env[param.arg] = kwargs[param.arg]
+        statements(fn.body, env, active | {id(fn)})
+
+    statements(tree.body, module, set())
+    tests = []
+    for stmt in tree.body:
+        if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+            tests.append((stmt.name, stmt))
+        elif isinstance(stmt, ast.ClassDef):
+            tests.extend(
+                (f"{stmt.name}::{fn.name}", fn)
+                for fn in stmt.body
+                if isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef)
+            )
+    reached = []
+    for name, fn in tests:
+        if MUTATIONS_NAMEN.search(f"def {fn.name}("):
+            hit = False
+            invoke(fn, [], {}, set())
+            if hit:
+                reached.append(name)
+    return reached

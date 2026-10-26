@@ -2094,13 +2094,101 @@ def test_x_goes_red(_run):
     assert evidence("plans_registry.py", {Path("test_helper.py"): helper}) == []
 
 
+@pytest.mark.parametrize(
+    "imports, call, params",
+    [
+        ("import asyncio", "asyncio.run", ""),
+        ("", "parser.run", "parser"),
+        ("", "runner.run", "runner"),
+        ("def run(c): return c", "run", ""),
+        ("from unrelated import run", "run", ""),
+        ("", "subprocess.run", ""),
+        ("import subprocess", "subprocess.run", "subprocess"),
+    ],
+)
+def test_a_run_named_call_outside_subprocess_is_no_gate_evidence(imports, call, params) -> None:
+    source = f'{imports}\ndef test_x_goes_red({params}):\n    {call}(["python", "scripts/plans_registry.py"])\n'
+    assert evidence("plans_registry.py", {Path("t.py"): source}) == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "['echo', 'see scripts/plans_registry.py']",
+        "['grep', 'x', 'scripts/plans_registry.py']",
+        "['cat', S]",
+        "['ls'], cwd=S",
+        "['python', 'other.py', S]",
+        "['scripts/plans_registry.py.backup']",
+    ],
+)
+def test_a_script_path_that_is_not_the_program_run_is_no_gate_evidence(command) -> None:
+    source = f"""import subprocess
+S = 'scripts/plans_registry.py'
+def test_x_goes_red():
+    subprocess.run({command})
+"""
+    assert evidence("plans_registry.py", {Path("t.py"): source}) == []
+
+
+@pytest.mark.parametrize(
+    "body, counts",
+    [
+        ("cmd=['python', 'scripts/plans_registry.py']\ncmd=['ls']\nsubprocess.run(cmd)", False),
+        ("subprocess.run(cmd)\ncmd=['python', 'scripts/plans_registry.py']", False),
+        ("cmd=['python', 'scripts/plans_registry.py']\nsubprocess.run(cmd)\ncmd=['ls']", True),
+        ("cmd=['ls']\ncmd=['python', 'scripts/plans_registry.py']\nsubprocess.run(cmd)", True),
+    ],
+)
+def test_a_reassigned_command_counts_by_its_last_value(body, counts) -> None:
+    source = "import subprocess\nS='scripts/plans_registry.py'\ndef test_x_goes_red():\n"
+    source += "\n".join("    " + line for line in body.splitlines())
+    assert bool(evidence("plans_registry.py", {Path("t.py"): source})) is counts
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        """import subprocess
+def _go(c):
+    return subprocess.run(c)
+def _forward(c):
+    return _go(c)
+def test_x_goes_red():
+    assert _forward(['python', 'scripts/plans_registry.py'])
+""",
+        """import plans_registry
+class T:
+    def test_x_goes_red(self):
+        plans_registry.main()
+""",
+        """from scripts import plans_registry
+def test_x_goes_red():
+    plans_registry.main()
+""",
+        """from subprocess import call as execute
+def test_x_goes_red():
+    execute(['python', 'scripts/plans_registry.py'])
+""",
+        """import subprocess as process
+def test_x_goes_red():
+    process.check_output(args=['scripts/plans_registry.py'])
+""",
+    ],
+)
+def test_a_helper_running_its_parameter_and_a_class_test_are_gate_evidence(source) -> None:
+    assert evidence("plans_registry.py", {Path("t.py"): source})
+
+
 def test_a_command_list_bound_to_a_local_then_run_is_gate_evidence() -> None:
     local = """
+import subprocess
 def test_x_goes_red():
     cmd = ["python3", "scripts/plans_registry.py"]
     assert subprocess.run(cmd).returncode == 1
 """
     fstring = """
+import subprocess
 def test_x_goes_red(root):
     assert subprocess.run([f"{root}/scripts/plans_registry.py"]).returncode == 1
 """
@@ -2133,6 +2221,8 @@ def test_a_broken_link_goes_red(tmp_path) -> None:
     assert main(["--root", str(tmp_path)]) == 1
 """,
     "a script path run through a helper": """
+import subprocess
+import sys
 SCRIPT = REPO_ROOT / "scripts" / "check_docs.py"
 
 
@@ -2148,6 +2238,8 @@ def test_a_broken_link_goes_red(tmp_path) -> None:
     assert _broken(tmp_path).returncode == 1
 """,
     "a script path in the command itself": """
+import subprocess
+import sys
 def test_a_broken_link_goes_red(tmp_path) -> None:
     erg = subprocess.run([sys.executable, "scripts/check_docs.py", "--root", str(tmp_path)])
     assert erg.returncode == 1
