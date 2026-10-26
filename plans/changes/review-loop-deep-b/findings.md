@@ -209,3 +209,18 @@ Kept from the loop record:
 > Notice: in the live catalog without a terms reading: gemini-4-argon-contributor, gpt-5.6-luna, grok-4.6, grok-4.7, kimi-k2.7-code, kimi-k3, minimax-m2.7, muse-spark-1.2-contributor, muse-spark-1.3-contributor, space-bunny.
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2266 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +18 -8
+> - `tests/test_stage2.py` +17 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: several fixed lines
+> - F6-2: several fixed lines
+> ```
