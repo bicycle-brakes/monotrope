@@ -46,10 +46,12 @@ PYTHON=.venv/bin/python3 make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_a_malformed_answer_is_asked_once_more — the round fails on the first malformed answer.
-- 2: not yet written tests/test_stage2.py::test_the_first_malformed_answer_is_kept_in_the_round — the record drops the first answer.
-- 3: not yet written tests/test_stage2.py::test_a_second_malformed_answer_fails_the_member — the member is asked a third time or passes.
-- 4: not yet written tests/test_stage2.py::test_the_second_call_has_its_own_call_line — the second call writes no call line.
-- 5: not yet written tests/test_stage2.py::test_no_second_call_after_the_round_deadline — a second call starts after the deadline.
+- 1: tests/test_stage2.py::test_a_malformed_answer_is_asked_once_more — the round fails on the first malformed answer.
+- 2: tests/test_stage2.py::test_the_first_malformed_answer_is_kept_in_the_round — the record drops the first answer.
+- 3: tests/test_stage2.py::test_a_second_malformed_answer_fails_the_member — the member is asked a third time or passes.
+- 4: tests/test_stage2.py::test_the_second_call_has_its_own_call_line — the second call writes no call line.
+- 5: tests/test_stage2.py::test_no_second_call_after_the_round_deadline — a second call starts after the deadline.
 
 ## Time used
+
+2026-10-26 10:04:39–10:42:34 UTC, 2275 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
