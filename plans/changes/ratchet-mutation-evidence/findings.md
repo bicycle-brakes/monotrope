@@ -213,3 +213,15 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 619 files, 2276 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 669 files, 2281 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R9-1 | MAJOR | SPEC | implementation | scripts/mutation_evidence.py:113–118 | A mutation-named test calling `subprocess.run("echo scripts/plans_registry.py", shell=True)` is returned as registry evidence, although it only prints the path. Reproduced with a passing test that asserts that output. Matching the final path component of the whole shell command credits a mere mention and can remove an exemption without a reaching test. [Acceptance criterion 1] | Codex | rejected — known limit, moved to coding-harness-up2m: the maintainer decided on 2026-10-26 that an edge case after the last strict round becomes a known limit with its own bead; no real test uses this shape (orchestrator, 2026-10-26) | — |
+| R9-2 | MAJOR | SPEC | integration | tests/test_ci.py:1954 | On commit `56478395`, `test_every_gate_step_has_a_mutation_test` fails because the research-to-spec handoff gate (`research-handoff`) has no recognized evidence and is not exempted. Its test file contains no name matching `MUTATIONS_NAMEN`; the old mention rule returned true, while the new predicate returns `[]`. The current repository therefore fails the required coverage check. [Acceptance criterion 3] | Codex | taken — test: tests/test_ci.py::test_every_gate_step_has_a_mutation_test (orchestrator, 2026-10-26; a different mechanism: the research-handoff gate from #158 needs a mutation test that reaches its script) | — |
+
+Phase 6 verdict: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245, 2026-10-26
+Reviewer session: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
