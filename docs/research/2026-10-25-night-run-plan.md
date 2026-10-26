@@ -110,3 +110,43 @@ merges with `--match-head-commit` only when all of the following hold:
 - When a phase-6 re-check finds another edge case of the same mechanism,
   stop and ask instead of patching case by case.
 - When Codex does not start, stop. Merge nothing that lacks phase 6.
+
+## Addendum, 2026-10-25 about 21:20 UTC: beads for after the queue
+
+The maintainer asked which beads fit tonight. These come after step 8 (#158)
+and run one at a time, if time is left. Each runs the full workflow for its
+class, and each ends in its own pull request.
+
+**Decided, no maintainer decision needed:**
+
+1. Retry a malformed paid answer once (coding-harness-70rw). Answered on
+   2026-10-24.
+2. Fast pre-check before `make verify` (coding-harness-csm). The maintainer
+   answered "build it". Merge `main` into `feat/runner-precheck`, check the
+   plan against today's runner, and ask on a material deviation.
+3. Docstrings touched by #229 (rows L3-2 and L3-3 of loop-state-block). The
+   maintainer answered "search and repair yourself".
+4. WORKFLOW §4b describes #249's `Record digest:` line, its `Loop attempt:`
+   line and its lost-record refusal. This runs after #249 merges.
+5. `cut_rounds` raises `ValueError` on a record without round headings
+   (coding-harness-jmtl).
+6. Repair brake: the orchestrator sets Origin (coding-harness-ywbh, answer 4).
+7. Warn on a differing OpenCode Go address (coding-harness-x2g9, answer 3).
+
+**Drafted tonight, merged by the maintainer:**
+
+8. A `gilt_bis` date on each terms record, plus a re-read of DeepSeek's
+   retention terms (coding-harness-abra, answer 2). **Due 2026-10-31.**
+   This is a decision pull request. If it does not start tonight, it goes
+   first in the next joint window.
+
+**Not tonight:**
+
+- The recovery verb for a lost loop record (coding-harness-7ihj). It
+  amends ADR 0021 and needs an interview with at least five answers.
+  Tonight it gets at most its `research.md`.
+- The mixed 429 case of #247 (coding-harness-pj98). Its ADR amendment needs
+  an interview.
+- Diffs over 2000 lines (coding-harness-ut8q), the gate for research before
+  interview (coding-harness-99v7), and the ADR 0011 amendment
+  (coding-harness-ugzw). Each needs the maintainer.
