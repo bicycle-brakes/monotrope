@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-24
+updated: 2026-10-26
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -769,7 +769,7 @@ A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
 into a shell. Eleven verbs exist:
 
-- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5.
+- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5. The runner states the explorer's role and read-only tools in the prompt, and an answer that names no file of the repository fails instead of being appended (bead coding-harness-e7m).
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
@@ -1113,7 +1113,12 @@ base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
 not what OpenCode Go bills. The prompt carries the implementation diff up to
 the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
-round, and a round over a cut diff never counts as clean (R-12, R-15). Round 2
+round, and a round over a cut diff never counts as clean (R-12, R-15). When
+every free member fails with a rate-limit (429) or unavailability error, the
+run drops the free stage and the Flash swarm takes the round in the same
+call, with a notice naming each member and its error (bead
+coding-harness-pj98); the Flash round then has its own deadline, so that call
+can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
 declaration — with the paid rounds' read-only tools and the same bounded diff.
@@ -1133,6 +1138,9 @@ read as possible carriers of that isolation (bead `coding-harness-8df`). Every l
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
+A member whose answer is malformed — no six-cell row and not exactly `No finding.` — is asked once more with the
+format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
+keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory
@@ -1141,6 +1149,30 @@ not into the repository: the phase-6 reviewer writes its verdict before it
 reads any loop row. The record carries the run's snapshot — the discovery
 check, the stage membership and what is consumed — and neither a release nor
 an edited configuration resets a stop or replays a consumed stage.
+
+A record is written whole or not at all: each write goes to a temporary file
+beside `loop.md` and replaces it in one step. The record is the only memory
+of a run, so a lost one stops the loop rather than starting it over: while a
+review-loop audit line remains unaccounted for in `findings.md` after the last
+release or restart, and no record exists, `review-loop`, `release-loop`
+(also the release inside `review`) and `release-loop --stage-failed` refuse and name the record path they
+expected. A review-loop call that wrote audit lines and then ended without
+writing its round appends the runner's **no-round line**, `Loop attempt:
+<date> — no round was written; …`, so a retry after an attempt whose every
+member failed still runs. Each no-round line's `audit calls: N` accounts for
+only the last N pending audit lines at that point; earlier unaccounted calls
+still refuse, even if they precede the last no-round line. A marker without
+a count accounts for no calls. This bookkeeping line is also appended after
+a `Refused` stop that follows audit writes: it is an explicit exception to
+runner review R-4's rule against writes after refusal, needed so a refused
+replacement does not make a retry look like a lost record. It consumes no
+stage and records no round. When findings.md carries a completed round, the
+maintainer can pass this refusal with `release-loop --restart --reason
+<reason>`: the restart line excludes the earlier unaccounted calls and the
+next `review-loop` starts a fresh run. It does not recover the lost record.
+Without a completed round, restart refuses; the maintainer must reconcile
+the missing record. This resolves the lost-record recovery question: the
+existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
@@ -1162,6 +1194,27 @@ resumed reviewer; an Opus reviewer writes its own). Only then does
 round had, and the reviewer marks each row in its `Phase 6` column, `agree` or
 `disagree — <reason>`. Nothing is netted: the reviewer's view of the loop's
 rows is the information.
+
+A release needs a `Phase 6 verdict:` line written after the last released
+block and after the last `Loop restarted:` line, so a restarted or continued
+run never releases on an earlier verdict. Every released block carries the
+runner's line `Record digest: sha256:<hex>` of the record it released; a
+second `release-loop` over a record whose digest equals the last released
+block's appends nothing, removes the record and says so. Each block also
+carries `Record identity: sha256:<hex>`, a hash of the round headings and the
+first seven cells of each record row, excluding Status and Broke a test.
+When identity matches the last released block but digest differs (for example
+after repair or stage retirement), `release-loop` rewrites that block in
+place from the record, including statuses, snapshot, kept words and digest,
+preserving its heading and Phase 6 cells. It then removes the record without
+appending a second block or requiring a new verdict. A released block can
+therefore change on retry; its rounds are still counted once. If neither
+hash matches, release refuses when a record row id is already released or
+a record round number is at or below the released round count. The refusal
+names the overlapping row ids and round numbers, appends and removes
+nothing, and requires the maintainer to reconcile the extended record.
+This includes extending a record left by a crash between append and removal;
+such an extended record is not automatically reconciled.
 
 ### Repairing taken findings (repair)
 
