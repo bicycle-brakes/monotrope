@@ -13899,10 +13899,20 @@ def test_the_loop_refuses_a_record_still_present_after_release(
     assert "round ids: 1" in error
     if status is not None:
         assert "row ids: L1-1" in error
-    assert "maintainer must reconcile" in error
+    if extended:
+        assert "maintainer must reconcile" in error
+    else:
+        assert "run release-loop again" in error
+        assert "appends nothing" in error
+        assert "removes the remnant" in error
+        assert "maintainer must reconcile" not in error
     assert world.record().read_bytes() == record_before
     assert world.findings.read_bytes() == findings_before
     assert world.reviews("pi") == []
+    if not extended:
+        assert world.run("release-loop") == 0
+        assert not world.record().exists()
+        assert world.findings.read_bytes() == findings_before
 
 
 def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

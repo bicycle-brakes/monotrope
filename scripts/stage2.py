@@ -2933,10 +2933,14 @@ def released_overlap_refusal(record: str, text: str) -> str | None:
         identifiers.append("row ids: " + ", ".join(sorted(overlap)))
     if old_rounds:
         identifiers.append("round ids: " + ", ".join(old_rounds))
+    remedy = "the maintainer must reconcile the extended record."
+    if released_digest(text) == record_digest(record):
+        remedy = "run release-loop again: it appends nothing and removes the remnant already released."
     return (
         "the loop record overlaps rounds already released ("
         + "; ".join(identifiers)
-        + "); nothing is appended or removed; the maintainer must reconcile the extended record."
+        + "); nothing is appended or removed; "
+        + remedy
     )
 
 

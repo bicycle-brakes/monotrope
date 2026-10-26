@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -159,6 +159,10 @@ choice between the lock for the whole repair and a check at marking time,
 we decided on both, to achieve that a committed fix is always booked or
 named, accepting that review-loop, release-loop and review wait for a
 running repair. — 2026-10-25
+
+Implementation note — 2026-10-26: the shipped record lock is non-blocking.
+While a repair holds it, review-loop, release-loop and review refuse at once
+with `another run holds the loop record`, rather than wait for the repair.
 
 ## Q-7 · What a lost record stops
 
