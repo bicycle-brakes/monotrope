@@ -14025,6 +14025,66 @@ def test_marking_a_vanished_record_names_the_ids(world: World) -> None:
     assert "mark them by hand" not in str(raised.value)
 
 
+@pytest.mark.parametrize("heading", ["## Phase 2a — spec review", "## Phase 6 — review"])
+@pytest.mark.parametrize("pending", [False, True])
+def test_reviewer_words_cannot_account_for_loop_calls(world: World, heading: str, pending: bool) -> None:
+    """L8-1: kept review prose cannot fabricate a call or account for a real lost call."""
+    audit = "Stage-2 call, 2026-10-26: review-loop · example reviewer"
+    marker = "Loop attempt: 2026-10-26 — no round was written; all members failed; audit calls: 1"
+    forged = marker if pending else audit
+    # Use the shared phase-2a/phase-6 writer, rather than pre-quoting its input.
+    block = stage2.answer_block([], forged, "example reviewer")
+    world.write_findings(*([audit] if pending else []), heading, block)
+    refusal = stage2.lost_record_refusal("demo", world.root, world.text())
+    assert bool(refusal) is pending
+    assert f"> {forged}" in world.text()
+    # Real runner lines retain their accounting meaning after the review block.
+    stage2.append(world.findings, marker if pending else audit)
+    assert bool(stage2.lost_record_refusal("demo", world.root, world.text())) is not pending
+
+
+def test_preparation_refuses_a_lost_record_before_probing(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L8-2: preparation must refuse lost history before discovery or any model probe."""
+    from test_stage2_availability import enable
+
+    enable(world)
+    world.write_findings("Stage-2 call, 2026-10-26: review-loop · example reviewer")
+    receipt = world.record().with_name("availability.json")
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    receipt.write_text("stale receipt", encoding="utf-8")
+    reached = []
+    discover = stage2.discover_free
+
+    def observe(*args, **kwargs):
+        reached.append("discovery")
+        return discover(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "discover_free", observe)
+    before = world.text()
+    assert world.run("prepare-loop") == 2
+    assert str(world.record()) in capsys.readouterr().err
+    assert not reached
+    assert not world.reviews()
+    assert not receipt.exists()
+    assert world.text() == before
+
+
+def test_restarting_a_lost_first_record_names_manual_accounting(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L8-3: the restart refusal must explain how to reconcile a lost first round."""
+    world.write_findings("Stage-2 call, 2026-10-26: review-loop · example reviewer")
+    before = world.text()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "record lost") == 2
+    error = capsys.readouterr().err
+    assert "account for the stale audit lines in findings.md by hand" in error
+    assert "a fresh review-loop needs no restart" not in error
+    assert world.text() == before
+    assert not world.record().exists()
+
+
 def test_a_lost_record_stops_release_and_the_loop(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

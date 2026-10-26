@@ -891,7 +891,7 @@ def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) 
         parts = [f"{reviewer} reported no finding."]
     kept = rest if rows else answer
     if kept.strip():
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{kept.strip()}")
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(kept.strip())}")
     return parts
 
 
@@ -3077,6 +3077,12 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
     last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
     if not last:
+        if lost_record_refusal(change, root, text):
+            raise Refused(
+                f"{change} has no completed loop round and its loop record is missing; "
+                "the maintainer must account for the stale audit lines in findings.md by hand before retrying. "
+                "A restart cannot recover the lost record; nothing is written."
+            )
         raise Refused(f"{change} has no completed loop round; a fresh review-loop needs no restart.")
     if restarted_fresh(None, text):
         raise Refused("the loop is already restarted and no round has run since; nothing is written.")

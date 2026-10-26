@@ -98,6 +98,10 @@ def prepare(root: Path, change: str, runner) -> None:
     findings = folder / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = runner.read_record(change, root)
+    if record is None:
+        refusal = runner.lost_record_refusal(change, root, text)
+        if refusal:
+            raise runner.Refused(refusal)
     # A maintainer's restart (ADR 0021, restart amendment) is the one way a run with history is prepared again.
     if not runner.restarted_fresh(record, text) and (
         runner.read_state(record, text) is not None or runner.rounds_run(record, text)
