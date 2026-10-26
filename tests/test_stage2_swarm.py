@@ -3020,3 +3020,13 @@ def test_unterminated_class_header_refuses_before_calls(sworld: SwarmWorld, name
     assert re.search("repair.*header", refusal)
     assert sworld.run() == 2
     assert sworld.calls() == []
+
+
+@pytest.mark.parametrize("separator", [" ", " ", "\u0085", "\x0b", "\x0c", "\x1c"])
+def test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence(sworld: SwarmWorld, separator: str) -> None:
+    sworld.research_class("bounded")
+    (sworld.root / "plans/changes/demo/spec.md").write_text(f"---{separator}title: x\n", encoding="utf-8")
+    try:
+        stage2.declared_class(sworld.root, "demo", None)
+    except stage2.Refused as error:
+        assert "unterminated" not in str(error)

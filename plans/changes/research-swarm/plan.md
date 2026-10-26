@@ -1540,6 +1540,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-26
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet replaces Codex for two hours (2026-10-26).
+
 ## Time used
 
 2026-10-21 22:23:33–22:48:01 UTC, 0:24:28, break counted — F-64 repair.
@@ -2081,6 +2085,7 @@ Span (measured, `date -u`): 2026-10-18T21:31:06Z to 2026-10-18T21:52:03Z, about 
 2026-10-26 15:02:24–15:12:02 UTC, 578 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 15:48:02–16:06:33 UTC, 1111 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 16:19:05–16:38:19 UTC, 1154 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 17:00:31–17:16:07 UTC, 936 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 
 ## Main sync after #157 — 2026-10-18
 

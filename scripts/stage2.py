@@ -5268,7 +5268,7 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
             ) from error
         match = re.match(r"---\n(.*?)\n---(?:\n|$)", text, re.S)
         if not match:
-            if text.splitlines()[:1] == ["---"]:
+            if text.split("\n", 1)[0].rstrip("\r") == "---":
                 raise Refused(f"plans/changes/{change}/{name}: repair the unterminated front matter header.")
             continue
         try:
