@@ -275,12 +275,17 @@ REPAIR_ANSWER = (
     "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
     "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
     "A colon line whose right side is a fixed status (`fixed — …`) also fails when its id names no\n"
-    "taken row, whatever the id's shape. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "taken row, whatever the id's shape. A taken row takes exactly one distinct fixed line: a repeated\n"
+    "identical line counts once, and two different fixed lines for one row fail the attempt, so give\n"
+    "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
+    "A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
     "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
-    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
+    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
+    "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
+    "the attempt's diagnostics, where a rejected answer can be read again."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -843,6 +848,18 @@ def fail(
     last = last_error_line(done, secret)
     detail = f" ({last})" if last else ""
     return CallFailed(f"{program} call failed: {reason}{detail}")
+
+
+def failed_with_answer_file(error: CallFailed, answer_file: Path) -> CallFailed:
+    """A failed Codex call keeps whatever its answer file already held, as its partial answer.
+
+    The repair evidence saves a failed call's available output too (bead coding-harness-hgvp); the
+    message and the failure class stay as `fail` built them, so failure classification and the retry
+    behavior are unchanged.
+    """
+    with contextlib.suppress(OSError, UnicodeDecodeError):
+        error.partial_answer = answer_file.read_text(encoding="utf-8")
+    return error
 
 
 # ---------------------------------------------------------------------------
@@ -1999,9 +2016,9 @@ def run_codex(
         done = launch(command, ctx.root, foreign_env({}))
         thread = thread_id(done.stdout or "")
         if done.returncode != 0:
-            raise fail("codex", done, f"exit {done.returncode}")
+            raise failed_with_answer_file(fail("codex", done, f"exit {done.returncode}"), answer_file)
         if thread is None:
-            raise fail("codex", done, "no thread.started event")
+            raise failed_with_answer_file(fail("codex", done, "no thread.started event"), answer_file)
         try:
             answer = answer_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:
@@ -3689,6 +3706,48 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
+def save_answer_evidence(root: Path, change: str, token: str, attempt: int, answer: str, key: str | None) -> str:
+    """Save one attempt's full answer as protected evidence below the worktree's own git directory.
+
+    Written at the model-return boundary, before any HEAD check, verification or answer check can
+    stop the run, so a rejected answer stays diagnosable from what the model actually returned (bead
+    coding-harness-hgvp). The directory is git's resolved per-worktree `stage2/attempts/<change>/` -
+    local evidence like `refs/stage2/attempts/`, tracked by no path and carried by no branch push.
+    The answer passes `protect_diagnostics` once on every route, the keyless ones included; an empty
+    or unavailable answer is recorded as such, never fabricated or retried. The file is created
+    exclusively, so an earlier attempt's evidence is never overwritten; an aliased destination, a
+    protection failure or a failed write raises, so no checkpoint stands on lost or unprotected
+    evidence. Returns the saved file, as the diagnostics name it.
+    """
+    try:
+        git_dir = Path(_git_output(root, "rev-parse", "--absolute-git-dir").strip())
+    except Refused as error:
+        raise CallFailed(f"the answer evidence directory could not be resolved ({error})") from error
+    if not git_dir.is_absolute():
+        git_dir = root / git_dir
+    body = protect_diagnostics(answer, key) if answer.strip() else "(no answer was returned)\n"
+    directory = git_dir / "stage2" / "attempts" / change
+    expected = Path(os.path.realpath(git_dir)) / "stage2" / "attempts" / change
+    if directory.is_symlink() or os.path.realpath(directory) != str(expected):
+        raise CallFailed(
+            f"the answer evidence directory {directory} is not this worktree's own stage2/attempts/{change}; "
+            "no evidence is written and no checkpoint is made"
+        )
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        destination = directory / f"attempt-{attempt}-{token}.md"
+        handle = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(handle, "w", encoding="utf-8") as file:
+            file.write(body if body.endswith("\n") else body + "\n")
+        if destination.is_symlink() or destination.stat().st_nlink > 1:
+            raise OSError(f"the destination is aliased ({destination})")
+    except OSError as error:
+        raise CallFailed(
+            f"the answer evidence could not be saved ({error}); no evidence is written and no checkpoint is made"
+        ) from error
+    return str(destination)
+
+
 def restore_baseline(
     root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
 ) -> str:
@@ -3865,7 +3924,10 @@ def run_work_model(
             env = glm_env(key, config_dir, endpoint[1])
         done = launch(command, ctx.root, env, key, timeout=timeout, limit=limit)
     if done.returncode != 0:
-        raise fail("claude", done, f"exit {done.returncode}", key)
+        error = fail("claude", done, f"exit {done.returncode}", key)
+        # A failed call's printed answer travels along for the repair evidence; nothing else changes.
+        error.partial_answer = scrub(done.stdout or "", key)
+        raise error
     answer = scrub(done.stdout or "", key)
     if not answer.strip():
         raise fail("claude", done, "the answer is empty", key)
@@ -4979,7 +5041,11 @@ def check_repair_answer(
 
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
     active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
-    status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
+    status. A finding-shaped id or claimed fix that names no taken row still fails. A taken row's
+    claims are its collected lines whose right side starts `fixed — `: explanations beside them are
+    prose, identical claims count once, two distinct claims fail as `several fixed lines`, and with
+    no claim at all the missing or malformed diagnostics stand as they did (spec, criteria 1-4).
+    Every row of
     findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
     rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
@@ -5018,16 +5084,25 @@ def check_repair_answer(
     fixes: dict[str, str] = {}
     for _place, row in taken:
         ident, given = row[0], parsed.pop(row[0], [])
-        if not given:
-            problems.append(f"{ident}: no fixed line")
+        # A claim is a right side that starts `fixed — `; everything else naming the row is report
+        # prose (spec, criterion 1). Claims are deduplicated in their normalized form as the parser
+        # collected them, before `fixed_status` rewrites anything, so two different claims can never
+        # collapse into one (spec, criterion 2); identical repetitions count once, in encounter order.
+        claims = list(dict.fromkeys(line for line in given if line.startswith("fixed — ")))
+        if not claims:
+            # Explanations alone, or a lone malformed line, keep the missing or malformed diagnostic
+            # rather than passing as a repair (spec, criterion 4).
+            problems.append(f"{ident}: no fixed line" if not given else fixed_status(ident, given[0]))
             continue
-        if len(given) > 1:
-            problems.append(f"{ident}: several fixed lines")
+        if len(claims) > 1:
+            quoted = "; ".join(f"`{claim}`" for claim in claims)
+            problems.append(f"{ident}: several fixed lines ({quoted})")
             continue
-        outcome = fixed_status(ident, given[0])
+        outcome = fixed_status(ident, claims[0])
         if outcome.startswith("fixed — "):
             fixes[ident] = outcome
         else:
+            # A malformed fixed claim stays a claim: it is validated here, or it conflicted above.
             problems.append(outcome)
     for ident in parsed:
         problems.append(f"{ident}: no taken row carries this id")
@@ -5531,6 +5606,7 @@ def run_attempts(
     snapshot_findings=None,  # () -> the findings text as it stands right before the model call
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
+    retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -5540,6 +5616,12 @@ def run_attempts(
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
     F-2).
+
+    A verb that passes `retain_answer` keeps every attempt's full answer: right at the model-return
+    boundary, before any HEAD check, verification or answer check can stop the run, the protected
+    answer is saved as local evidence and its location joins the attempt's diagnostics - the parser's
+    rejections, the call and verify failures included - and is printed on success (bead
+    coding-harness-hgvp). A failed call keeps the output it returned.
 
     The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
     every route, the keyless ones included; the block in findings.md and the retry prompt both take that
@@ -5574,6 +5656,9 @@ def run_attempts(
     # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
     # next attempt's reference by taking the digest again (P1 of the #188 review).
     tools = tool_state(root) if tools is None else tools
+    # One token per invocation: every attempt's evidence file carries it beside its attempt number,
+    # so a rerun of the verb never overwrites an earlier run's evidence (spec, criterion 6).
+    token = f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -5604,6 +5689,7 @@ def run_attempts(
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
         answer = ""
+        evidence: str | None = None
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
         # A completed call keeps its measured entry whatever post-call check then stops the run; a
         # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
@@ -5629,6 +5715,13 @@ def run_attempts(
                 call_error = error
             else:
                 completed = True
+            if retain_answer:
+                # Before the HEAD checks, verification or the answer check can stop the run: the
+                # whole answer, a failed call's available output included, protected once for the
+                # route it arrived on. A protection or write failure raises and stops the run with
+                # no checkpoint (spec, criteria 6 and 8).
+                output = answer if completed else (call_error.partial_answer if call_error is not None else "")
+                evidence = save_answer_evidence(root, ctx.change, token, attempt, output, key)
             if endpoint == CODEX:
                 try:
                     head_now = _git_output(root, "rev-parse", "HEAD").strip()
@@ -5654,6 +5747,8 @@ def run_attempts(
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"
+                    if retain_answer and evidence is not None:
+                        listing += f"\n- the attempt's protected answer is saved at {evidence}"
                     append(
                         ctx.findings,
                         quote_block(
@@ -5682,7 +5777,10 @@ def run_attempts(
                     saved = f"saving the attempt failed ({save_error})"
                 restored = restore_baseline(root, baseline, allowed, ignored_before)
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
-                raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
+                ended = f"{error}; {saved}; {restored}{leaked}"
+                if retain_answer and evidence is not None:
+                    ended += f"; the attempt's protected answer is saved at {evidence}"
+                raise CallFailed(ended) from error
             if key is not None:
                 # Every route scans with the key read in this run - the Sonnet fallback included - before
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -5740,6 +5838,10 @@ def run_attempts(
                 # The format line stands first: the step ran before `make verify`, and the next model
                 # learns that the runner formats and whether ruff left findings it could not fix.
                 problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
+                if retain_answer and evidence is not None:
+                    # The locator stands last, so tailing the listing keeps it even where the
+                    # displayed diagnostics are cut (spec, criterion 7).
+                    problems.append(f"the attempt's protected answer is saved at {evidence}")
                 if kept is not None:
                     # Before the block is appended, so the quoted diagnostics stand beside the rows as
                     # they were, not beside the model's edits of them.
@@ -5826,6 +5928,8 @@ def run_attempts(
                     raise
                 if after_commit is not None:
                     after_commit()
+                if retain_answer and evidence is not None:
+                    print(f"{verb}: the attempt's protected answer is saved at {evidence}")
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
                 return
             if attempt < len(routes):
@@ -6349,6 +6453,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
         tools=tools,
+        retain_answer=True,
     )
 
 

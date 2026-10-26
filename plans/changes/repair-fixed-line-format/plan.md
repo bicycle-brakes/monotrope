@@ -109,9 +109,9 @@ The runner refreshes the index and performs full verification and the commit.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_ignores_explanations_for_a_taken_id — prose beside the unique valid claim rejects the answer
-- 2: not yet written tests/test_stage2.py::test_repair_deduplicates_identical_fixed_claims — identical normalized claims trigger a retry
-- 3: not yet written tests/test_stage2.py::test_repair_rejects_distinct_fixed_claims — a valid claim hides a second distinct or malformed claim
+- 1: tests/test_stage2.py::test_repair_ignores_explanations_for_a_taken_id — prose beside the unique valid claim rejects the answer
+- 2: tests/test_stage2.py::test_repair_deduplicates_identical_fixed_claims — identical normalized claims trigger a retry
+- 3: tests/test_stage2.py::test_repair_rejects_distinct_fixed_claims — a valid claim hides a second distinct or malformed claim
 - 3: tests/test_stage2.py::test_each_taken_row_needs_exactly_one_fixed_line — missing, distinct conflicting or unknown lines pass; revise identical-duplicate fixture
 - 4: tests/test_stage2.py::test_repair_prose_alone_still_needs_fixed_lines — prose alone passes; revise repeated-claim fixture to a distinct conflict
 - 4: tests/test_stage2.py::test_repair_rejects_malformed_known_fixed_lines — malformed status or empty reason is accepted
@@ -120,10 +120,13 @@ The runner refreshes the index and performs full verification and the commit.
 - 5: tests/test_stage2.py::test_repair_rejects_unknown_finding_shaped_identifiers — an unknown established-prefix id is ignored
 - 5: tests/test_stage2.py::test_repair_rejects_unknown_loop_id_without_loop_rows — an unknown loop claim is ignored
 - 5: tests/test_stage2.py::test_repair_rejects_unknown_claimed_fixes — an unknown free-text fix is ignored
-- 6: not yet written tests/test_stage2.py::test_repair_retains_each_attempt_answer — success, early failure, retry, restore or another invocation loses or overwrites full available output
-- 7: not yet written tests/test_stage2.py::test_repair_conflict_diagnostics_quote_claims_and_answer_location — the failure omits a conflicting claim or a retrievable protected answer locator
-- 8: not yet written tests/test_stage2.py::test_repair_answer_evidence_is_protected_on_every_route — stored output or quotes expose a denylist secret or credential fragment
-- 8: not yet written tests/test_stage2.py::test_repair_answer_evidence_failure_stops_safely — protection failure or an unsafe/unwritable destination causes a raw write or successful checkpoint
+- 6: tests/test_stage2.py::test_repair_retains_each_attempt_answer — success, early failure, retry, restore or another invocation loses or overwrites full available output
+- 7: tests/test_stage2.py::test_repair_conflict_diagnostics_quote_claims_and_answer_location — the failure omits a conflicting claim or a retrievable protected answer locator
+- 8: tests/test_stage2.py::test_repair_answer_evidence_is_protected_on_every_route — stored output or quotes expose a denylist secret or credential fragment
+- 8: tests/test_stage2.py::test_repair_answer_evidence_failure_stops_safely — protection failure or an unsafe/unwritable destination causes a raw write or successful checkpoint
 - 9: tests/test_stage2.py::test_repair_instructions_describe_answer_filtering_and_hand_repairs — extend assertions for unique claims, repetition, conflicts and evidence retrieval in prompt and workflow
 
 ## Time used
+
+2026-10-26 20:01:28–20:46:57 UTC, 2729 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-26 20:47:02–21:01:23 UTC, 861 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

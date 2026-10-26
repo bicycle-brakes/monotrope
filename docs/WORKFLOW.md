@@ -1313,8 +1313,12 @@ doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the
-fixed lines are ignored; a colon line whose id looks like a finding id
-(`L1-2`, `F-12`) and names no taken row still fails the attempt. Loop ids
+fixed lines are ignored, and so is an explanation beside a row's one fixed
+line; a colon line whose id looks like a finding id
+(`L1-2`, `F-12`) and names no taken row still fails the attempt. A row takes
+exactly one distinct fixed line: a repeated identical fixed line counts once,
+and two different fixed lines for one row fail the attempt as `several fixed
+lines`, with both claims quoted and the attempt's saved answer named. Loop ids
 always count; letters-hyphen-digits ids count only when their prefix occurs
 in the change's row ids, including rejected and fixed rows; `L` counts only
 when the change has a loop row. A colon line whose right side is a fixed
@@ -1339,7 +1343,13 @@ with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
 only after two failed post-run checks; a failed call stops the run without a
 fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
 leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
-stops the run unrewritten. A fixed row counts as a taken one for the next
+stops the run unrewritten. Every attempt's complete answer is kept as
+protected local evidence below the worktree's own git directory,
+`stage2/attempts/<change>/attempt-<n>-<token>.md`, written before any
+post-run check can stop the run and named in the attempt's diagnostics, so a
+rejected answer can be read after the fact; a failed call keeps the output it
+returned, and an evidence or protection failure stops the run before any
+checkpoint. A fixed row counts as a taken one for the next
 round and for the run count; **`Broke a test` stays the orchestrator's mark**,
 written from the run's evidence before the next round or the release. The
 rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which
