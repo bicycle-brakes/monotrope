@@ -46,7 +46,7 @@ import stage2_runs  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
-KEY = "sk-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"
+KEY = "sk-" + "zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"  # joined at run time: never key-shaped in a diff or prompt
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 SETTINGS = REPO_ROOT / ".claude" / "settings.json"
