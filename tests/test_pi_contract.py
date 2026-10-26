@@ -619,7 +619,7 @@ def test_real_free_reviewer_has_only_the_implementation_diff(transport, tmp_path
             stage2.FREE_REVIEW_BODY,
             "This is round 1; you are `acme-1-free`.",
             stage2.ANSWER_FORMAT,
-            f"## The implementation diff\n\n{stage2.free_diff(root)}",
+            f"## The implementation diff\n\n{stage2.free_diff(root)[0]}",
         ]
     )
     standin = StandIn([{"content": "No finding."}])
