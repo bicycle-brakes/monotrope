@@ -4637,6 +4637,8 @@ Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model hy3 · le
 
 Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 567 files, 1912 commits, 12 rules.
 
+Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 567 files, 1913 commits, 12 rules.
+
 ## Phase 6 — deep reviews RS-1, RS-2 and RS-3, 2026-10-25
 
 Three read-only deep reviews of `explore/research-swarm` at 8480b1d (part 1 orchestration and judge, part 2 persistence and records, part 3 Pi seats, catalog and path lock) reproduced each finding below in a scratch copy; the repairs were written test-first on this branch by an orchestrated Claude Code session. Pi 1.2.0 ran under Node 22 in the scratch copies, not the declared Node 26.
