@@ -13823,7 +13823,7 @@ def test_a_release_repeated_after_a_crash_appends_nothing(
 @pytest.mark.parametrize("new_verdict", [False, True])
 @pytest.mark.parametrize("rewrite", ["repair", "stage-failed", "round", "empty-round"])
 def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
-    world: World, monkeypatch: pytest.MonkeyPatch, new_verdict: bool, rewrite: str
+    world: World, monkeypatch: pytest.MonkeyPatch, new_verdict: bool, rewrite: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     world.write_record(
         [] if rewrite == "empty-round" else [("L1-1", "taken — test_a", "no")], state=loop_state(("free",))
@@ -13848,7 +13848,15 @@ def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
     world.findings.write_text(world.text().replace("| no | — |", "| no | confirmed after repair |"), encoding="utf-8")
     if new_verdict:
         world.findings.write_text(world.text() + "\n" + VERDICT + "\n", encoding="utf-8")
+    capsys.readouterr()
     assert world.run("release-loop") == (2 if rewrite in ("round", "empty-round") else 0)
+    error = capsys.readouterr().err
+    if new_verdict and rewrite in ("round", "empty-round"):
+        assert "round ids: 1" in error
+        assert "## Round" not in error
+        if rewrite == "round":
+            assert "L1-1" in error
+        assert "maintainer must reconcile" in error
     if rewrite != "empty-round":
         assert "confirmed after repair" in world.text()
     if new_verdict:
@@ -13999,7 +14007,9 @@ def test_a_stage_retirement_over_a_lost_record_is_refused(world: World, capsys: 
     before = world.text()
     capsys.readouterr()
     assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "wedged") == 2
-    assert str(world.record()) in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert str(world.record()) in error
+    assert "retired" in error
     assert not world.record().exists(), "retirement recreated the lost record"
     assert world.text() == before
     # An explicit maintainer restart remains the way past a lost record.

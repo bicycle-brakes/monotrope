@@ -2157,7 +2157,7 @@ def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
     return (
         f"findings.md shows review-loop calls after the last release, but there is no loop record at "
         f"{record_dir(change, root) / 'loop.md'}; the loop ran and its record is lost or under another "
-        "state directory (XDG_STATE_HOME). Nothing is released or run; the maintainer decides."
+        "state directory (XDG_STATE_HOME). Nothing is released or run, and no stage is retired; the maintainer decides."
     )
 
 
@@ -2977,11 +2977,18 @@ def release(root: Path, change: str) -> list[list[str]]:
     released, _ = findings_rows(text)
     overlap = {row[0] for row in rows} & {row[0] for row in released}
     released_rounds = rounds_run(None, text)
-    old_rounds = [heading for heading in ROUND_HEADING.findall(record) if int(heading.split()[2]) <= released_rounds]
+    old_rounds = [
+        heading.split()[2] for heading in ROUND_HEADING.findall(record) if int(heading.split()[2]) <= released_rounds
+    ]
     if overlap or old_rounds:
+        identifiers = []
+        if overlap:
+            identifiers.append("row ids: " + ", ".join(sorted(overlap)))
+        if old_rounds:
+            identifiers.append("round ids: " + ", ".join(old_rounds))
         raise Refused(
             "the loop record overlaps rounds already released ("
-            + ", ".join(sorted(overlap) or old_rounds)
+            + "; ".join(identifiers)
             + "); nothing is appended or removed; the maintainer must reconcile the extended record."
         )
     refusal = undecided_refusal(rows, "nothing is released")

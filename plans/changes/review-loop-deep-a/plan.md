@@ -43,6 +43,9 @@ Starts unless you say stop.
      `released_digest` and `record_digest` make an identical repeated release
      a removal only. `released_identity` and `record_identity` reconcile the
      same rounds in place when mutable record content changed (criterion 4).
+     When neither hash matches, overlapping row ids or round numbers at or
+     below the released count refuse with ids, leaving both files intact
+     for the maintainer to reconcile the extended record.
    - `replace_record` (temporary file, `os.replace` through
      `Path.replace`); `write_round` writes a fresh record's heading and
      snapshot in its one write; `_mark_record_rows` uses `replace_record`
@@ -108,6 +111,7 @@ python3 scripts/check_criterion_ledger.py
 - 2: tests/test_stage2.py::test_implement_cannot_write_findings — an implement attempt that wrote a release block, restart line or verdict line is committed.
 - 3: tests/test_stage2.py::test_a_release_block_without_its_snapshot_refuses_the_loop — a release block without its state line ends the loop clean or reaches a reviewer.
 - 4: tests/test_stage2.py::test_a_release_repeated_after_a_crash_appends_nothing — a second release-loop after a crash appends the rows again or keeps the record.
+- 4: tests/test_stage2.py::test_a_release_after_a_crash_and_a_repair_appends_no_second_block — an extended record with overlapping row ids or old rounds is appended or removed instead of refused with ids for maintainer reconciliation.
 - 5: tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was — a write that fails midway changes the record or leaves a temporary file.
 - 5: tests/test_stage2.py::test_a_fresh_record_is_written_whole_in_one_write — a fresh record takes two writes, or its heading and snapshot are missing.
 - 6: tests/test_stage2.py::test_repair_holds_the_record_lock_for_its_whole_run — the record lock is free during the repair's model call or record read.
@@ -134,3 +138,4 @@ phase-6 Codex review are still owed.
 2026-10-26 00:30:30–00:47:48 UTC, 1038 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 01:55:44–02:10:54 UTC, 910 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 03:35:43–03:50:19 UTC, 875 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 04:15:33–04:25:38 UTC, 605 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

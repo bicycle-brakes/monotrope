@@ -1146,8 +1146,8 @@ A record is written whole or not at all: each write goes to a temporary file
 beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
-release or restart, and no record exists, `review-loop` and `release-loop`
-(also the release inside `review`) refuse and name the record path they
+release or restart, and no record exists, `review-loop`, `release-loop`
+(also the release inside `review`) and `release-loop --stage-failed` refuse and name the record path they
 expected. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
@@ -1158,7 +1158,13 @@ a count accounts for no calls. This bookkeeping line is also appended after
 a `Refused` stop that follows audit writes: it is an explicit exception to
 runner review R-4's rule against writes after refusal, needed so a refused
 replacement does not make a retry look like a lost record. It consumes no
-stage and records no round. A record lost for good has no recovery verb yet.
+stage and records no round. When findings.md carries a completed round, the
+maintainer can pass this refusal with `release-loop --restart --reason
+<reason>`: the restart line excludes the earlier unaccounted calls and the
+next `review-loop` starts a fresh run. It does not recover the lost record.
+Without a completed round, restart refuses; the maintainer must reconcile
+the missing record. This resolves the lost-record recovery question: the
+existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
@@ -1194,7 +1200,13 @@ after repair or stage retirement), `release-loop` rewrites that block in
 place from the record, including statuses, snapshot, kept words and digest,
 preserving its heading and Phase 6 cells. It then removes the record without
 appending a second block or requiring a new verdict. A released block can
-therefore change on retry; its rounds are still counted once.
+therefore change on retry; its rounds are still counted once. If neither
+hash matches, release refuses when a record row id is already released or
+a record round number is at or below the released round count. The refusal
+names the overlapping row ids and round numbers, appends and removes
+nothing, and requires the maintainer to reconcile the extended record.
+This includes extending a record left by a crash between append and removal;
+such an extended record is not automatically reconciled.
 
 ### Repairing taken findings (repair)
 

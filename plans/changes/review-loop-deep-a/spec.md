@@ -72,9 +72,15 @@ decisions: `decisions.md` Q-1 to Q-9.
    differs, release rewrites that block in place from the record (including
    statuses, snapshot, kept words and digest), preserving its heading and
    Phase 6 cells, then removes the record; it appends no second block and
-   needs no new verdict.
-   *Refuted by:* two release blocks of one record, or a record kept after
-   the second call.
+   needs no new verdict. If neither hash matches, release refuses when any
+   record row id is already released or any record round number is at or
+   below the released round count. It names the overlapping row ids and
+   round numbers, appends and removes nothing, and requires the maintainer
+   to reconcile the extended record (including a record extended after a
+   crash between append and removal).
+   *Refuted by:* two release blocks of one record, a matching record kept
+   after the second call, or an overlapping extended record appended or
+   removed instead of refused for maintainer reconciliation.
 5. **A record write is whole or absent (DL-A-4, Q-5).** `write_round` and
    the repair's record marking write a temporary file in the record's
    directory and `os.replace` it over `loop.md`; a write that fails leaves
@@ -90,10 +96,16 @@ decisions: `decisions.md` Q-1 to Q-9.
    return when the record is gone.
 7. **A lost record stops the loop (DL-A-6, Q-7).** With no record, a
    review-loop audit line after the last release, restart and no-round
-   line refuses `release-loop` (and the release inside `review`) and
-   `review-loop`, naming the expected record path. A review-loop call that
+   line refuses `release-loop` (and the release inside `review`),
+   `review-loop` and `release-loop --stage-failed`, naming the expected
+   record path. A review-loop call that
    wrote audit lines and then ended without its round appends a no-round
    line, so a retry after an attempt whose every member failed still runs.
+   The maintainer can pass the refusal with `release-loop --restart
+   --reason <reason>` when findings.md carries a completed round; this
+   starts a fresh run and does not recover the lost record. Without a
+   completed round, restart refuses and the maintainer must reconcile the
+   missing record.
    *Refuted by:* a no-loop line or a fresh round 1 written over a lost
    record, or a refused retry after an all-failed attempt.
 8. **A release needs its own verdict (DL-A-7, Q-2).** A release of a
@@ -123,7 +135,8 @@ decisions: `decisions.md` Q-1 to Q-9.
   review, not read here).
 - Real multi-process races beyond the lock tests.
 - A command that recovers a record lost for good (criterion 7 refuses;
-  recovery is the maintainer's).
+  recovery is the maintainer's; the existing restart starts a fresh run
+  when a completed round remains in findings.md).
 
 ## Definition of Done
 
