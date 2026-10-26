@@ -104,3 +104,46 @@ Phase 6 verdict: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43, 2026-10-26
 Reviewer session: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43 — a fresh session reviewed: no phase-2a session was recorded
 
 Loop rows: none — the loop did not run for this change.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_ci.py` +105 -24
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: tests/test_ci.py::test_a_string_comparison_is_no_gate_evidence: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - R6-2: tests/test_ci.py::test_a_helper_reference_is_no_helper_call: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - R6-3: tests/test_ci.py::test_an_import_in_another_test_binds_nothing_here: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: no fixed line
+> - R6-2: no fixed line
+> - R6-3: no fixed line
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: several fixed lines
+> - R6-2: several fixed lines
+> - R6-3: several fixed lines
+> ```

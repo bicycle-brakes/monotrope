@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-a05
@@ -66,5 +66,12 @@ sub-agent (Opus 5.5) in a cloud container on 2026-10-25, in the worktree
 session's instruction. The review loop and the phase-6 Codex review are
 still owed.
 
+## Runner route — 2026-10-26
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 2026-10-25 17:00–17:40 UTC, about 40 min — research, spec, plan, implement and self-review · Claude Code sub-agent · model claude-opus-5-5 · accepted · estimated by the sub-agent from its own file times, not measured by the orchestrator
+2026-10-26 02:14:54–02:26:04 UTC, 670 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-26 02:26:09–02:32:50 UTC, 401 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-26 02:32:55–02:39:21 UTC, 386 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
