@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -86,3 +86,5 @@ Research, spec, plan, implementation and self-review by an Opus 5.5
 sub-agent of the orchestrating Claude Code session in a cloud container on
 2026-10-25, at the maintainer's instruction. The review loop and the
 phase-6 Codex review are still owed.
+
+## Time used
