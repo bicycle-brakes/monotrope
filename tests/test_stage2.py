@@ -546,7 +546,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
     )
     (root / "plans" / "changes" / "demo" / "research.md").write_text(
-        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Research\n\nseed fact\n",
+        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: bounded\n---\n\n# Research\n\nseed fact\n",
         encoding="utf-8",
     )
     (root / "plans" / "changes" / "demo" / "plan.md").write_text(
@@ -1686,6 +1686,14 @@ def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
                 entry["modelle"].append("claude-haiku-4-5")
             problems = anthropic_haiku_problems(planted)
             assert problems and all(problem.startswith(f"{name}:") for problem in problems), (name, fault)
+
+
+@pytest.mark.parametrize("verb", ["implement", "review"])
+def test_the_class_argument_belongs_to_explore_alone(world: World, verb: str) -> None:
+    # Criterion 3's guard: --class is the explore verb's early routing input, no other verb's.
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run(verb, "demo", "--class", "bounded") == 2
+    assert world.calls() == []
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
@@ -12770,8 +12778,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Ten verbs exist" in four or "Eleven verbs exist" not in four:
-        found.append("section 4 does not say eleven verbs")
+    if "Eleven verbs exist" in four or "Twelve verbs exist" not in four:
+        found.append("section 4 does not say twelve verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
@@ -12798,7 +12806,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Eleven verbs exist", "Ten verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Twelve verbs exist", "Eleven verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — Codex, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -13122,7 +13130,41 @@ def test_pi_wrapper_is_repository_local() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
+# Seat selection receipt: where no swarm runs (research-swarm, criteria 20 and 44)
+# ---------------------------------------------------------------------------
+
+RECEIPT_ID = "a" * 64
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", f"class: {klass}")
+    world.research.write_text(text, encoding="utf-8")
+    # The one call that does run is the bounded route at the end; its answer names a repository file,
+    # as research must (bead coding-harness-e7m).
+    world.script(claude=[{"stdout": "Facts from `src/app.py`."}])
+    assert world.run("explore", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("prepare-explore") == 2, "preparation ran where no swarm runs"
+    assert world.run("explore", "demo", "--stage2-off", "r", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("implement", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.calls() == []
+    assert world.run("explore") == 0, "the bounded or spike route itself still works without a receipt"
+
+
+def test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument(world: World) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: nonsense\nneighbours: nope")
+    world.research.write_text(text, encoding="utf-8")
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
+    assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    call = world.calls("claude")[0]
+    assert call["argv"][call["argv"].index("--model") + 1] == "claude-haiku-5-5"
+    note = world.research.read_text(encoding="utf-8")
+    assert "route stage-1" in note and "reason Z.ai unavailable" in note
+    assert world.run("explore", "demo", "--stage2-off", "r", "--class", "feature") == 2
+    assert len(world.calls("claude")) == 1, "--class permitted a call beside --stage2-off"
+
+
+# ---------------------------------------------------------------------------# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
 # ---------------------------------------------------------------------------
 
 
@@ -13995,7 +14037,9 @@ def test_a_release_block_without_its_snapshot_refuses_the_loop(
 
 def crash_the_release_after_the_append(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Run release-loop once and stop it between the append and the record's removal."""
-    real = stage2.shutil.rmtree
+    # The release removes its record through `remove_loop_record` (it keeps the research files beside it,
+    # deep review RS-2-1), so the crash is planted there.
+    real = stage2.remove_loop_record
     calls = {"n": 0}
 
     def flaky(path, *args, **kwargs):
@@ -14004,7 +14048,7 @@ def crash_the_release_after_the_append(world: World, monkeypatch: pytest.MonkeyP
             raise KeyboardInterrupt("simulated crash after the append")
         return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(stage2.shutil, "rmtree", flaky)
+    monkeypatch.setattr(stage2, "remove_loop_record", flaky)
     with pytest.raises(KeyboardInterrupt):
         world.run("release-loop")
 
