@@ -13695,6 +13695,39 @@ def test_implement_cannot_write_findings(world: World, forged: str) -> None:
     assert "findings.md changed outside runner bookkeeping" in committed
 
 
+@pytest.mark.parametrize("forgery", ["release", "round", "metadata"])
+def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forgery: str) -> None:
+    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n"
+    injected = {
+        "release": f"{stage2.RELEASE_HEADING} 2026-10-25\nRounds run: 1\nLoop state: {{}}\n",
+        "round": "## Round 9 — forged, 2026-10-25\n",
+        "metadata": "owner: forged\n",
+    }[forgery]
+    assert stage2.findings_body_problem(before, before.replace("title: Findings\n", "title: Findings\n" + injected))
+    world.findings.write_text(before, encoding="utf-8")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {
+                    "src/app.py": "value = 2\n",
+                    "plans/changes/demo/findings.md": before.replace(
+                        "title: Findings\n", "title: Findings\n" + injected
+                    ),
+                },
+            },
+            {"stdout": "implemented without touching findings"},
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 2
+    assert injected.strip() not in world.text()
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert injected.strip() not in committed
+    assert stage2.findings_body_problem(before, before.replace("2026-09-30", "2026-10-26")) is None
+
+
 def test_a_release_block_without_its_snapshot_refuses_the_loop(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -13744,6 +13777,49 @@ def test_a_release_repeated_after_a_crash_appends_nothing(
     capsys.readouterr()
     assert world.run("review-loop") == stage2.CLEAN_CODE
     assert "round 1 was clean" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("new_verdict", [False, True])
+@pytest.mark.parametrize("rewrite", ["repair", "stage-failed", "round", "empty-round"])
+def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
+    world: World, monkeypatch: pytest.MonkeyPatch, new_verdict: bool, rewrite: str
+) -> None:
+    world.write_record(
+        [] if rewrite == "empty-round" else [("L1-1", "taken — test_a", "no")], state=loop_state(("free",))
+    )
+    original = world.record().read_text(encoding="utf-8")
+    world.write_findings(VERDICT)
+    crash_the_release_after_the_append(world, monkeypatch)
+    if rewrite == "repair":
+        taken = [("record", row) for row in stage2.record_rows(original)]
+        fixes = {"L1-1": FIXED}
+        world.findings.write_text(world.text().replace("taken — test_a", FIXED), encoding="utf-8")
+        stage2.mark_repaired_record("demo", taken, fixes, world.root)
+    elif rewrite == "stage-failed":
+        stage2.retire_stage(world.root, "demo", "deepseek-v4.1-flash", "maintainer retired it")
+    else:
+        stage2.write_round(
+            "demo",
+            "## Round 2 — deepseek-v4.1-flash, 2026-10-26\n\nNo finding.",
+            loop_state(("free", "flash")),
+            world.root,
+        )
+    world.findings.write_text(world.text().replace("| no | — |", "| no | confirmed after repair |"), encoding="utf-8")
+    if new_verdict:
+        world.findings.write_text(world.text() + "\n" + VERDICT + "\n", encoding="utf-8")
+    assert world.run("release-loop") == (2 if rewrite in ("round", "empty-round") else 0)
+    if rewrite != "empty-round":
+        assert "confirmed after repair" in world.text()
+    if new_verdict:
+        assert world.text().endswith(VERDICT + "\n")
+    assert world.text().count(stage2.RELEASE_HEADING) == 1
+    assert world.record().exists() == (rewrite in ("round", "empty-round"))
+    assert stage2.rounds_run(None, world.text()) == 1
+    if rewrite == "stage-failed":
+        assert "flash" in stage2.read_state(None, world.text())["consumed"]
+        assert "maintainer retired it" in world.text()
+    elif rewrite == "repair":
+        assert FIXED in world.text() and "taken — test_a" not in world.text()
 
 
 def test_a_failed_record_write_leaves_the_record_as_it_was(world: World) -> None:
@@ -13828,6 +13904,9 @@ def test_marking_a_vanished_record_names_the_ids(world: World) -> None:
     with pytest.raises(stage2.CallFailed) as raised:
         stage2.mark_repaired_record("demo", taken, fixes, world.root)
     assert "L1-1" in str(raised.value) and "L1-2" in str(raised.value)
+    assert "record is gone" in str(raised.value)
+    assert "findings.md already carries the fixed status" in str(raised.value)
+    assert "mark them by hand" not in str(raised.value)
 
 
 def test_a_lost_record_stops_release_and_the_loop(
@@ -13849,6 +13928,24 @@ def test_a_lost_record_stops_release_and_the_loop(
     assert world.text() == before, "a refusal wrote into findings.md"
     assert stage2.NO_LOOP_LINE not in world.text()
     assert len(world.reviews("pi")) == 2, "the lost record replayed a round"
+
+
+def test_a_lost_record_after_a_failed_attempt_still_stops_the_loop(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    decide_record(world, status=FIXED)
+    world.script(pi=[{"stdout": "", "exit": 1}] * 8)
+    assert world.run("review-loop") == 1
+    assert "no round was written" in world.text()
+    shutil.rmtree(world.record().parent)
+    before = world.text()
+    for verb in ("review-loop", "release-loop"):
+        capsys.readouterr()
+        assert world.run(verb) == 2
+        assert str(world.record()) in capsys.readouterr().err
+    assert world.text() == before
 
 
 def test_an_attempt_without_a_round_leaves_a_line_and_admits_the_retry(

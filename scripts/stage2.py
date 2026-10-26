@@ -370,11 +370,12 @@ RELEASE_LINE = re.compile("^" + re.escape(RELEASE_HEADING), re.M)
 NO_LOOP = re.compile("^" + re.escape(NO_LOOP_LINE) + r"[ \t]*$", re.M)
 # The release block's own line: the digest of the record it released. A release-loop whose record has
 # the digest of the last released block appends nothing again (DL-A-3 of the deep review).
+RELEASE_END = "<!-- End of released loop record -->"
 DIGEST_KEY = "Record digest: "
 DIGEST_LINE = re.compile(r"^Record digest: (sha256:[0-9a-f]{64})[ \t]*$", re.M)
 # The runner's line before every review-loop member call, and its line after a review-loop call that
-# wrote such lines and then no round: with no record, an audit line after the last release, restart and
-# no-round line means the record is lost, not that the loop never ran (DL-A-6 of the deep review).
+# wrote such lines and then no round. A no-round marker accounts only for that attempt's call count;
+# any other call after the last release/restart needs its record (DL-A-6 of the deep review).
 LOOP_AUDIT_LINE = re.compile(r"^Stage-2 call, \d{4}-\d{2}-\d{2}: review-loop · ", re.M)
 NO_ROUND_KEY = "Loop attempt: "
 NO_ROUND_LINE = re.compile(r"^Loop attempt: \d{4}-\d{2}-\d{2} — no round was written\b", re.M)
@@ -2118,13 +2119,40 @@ def released_digest(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def record_identity(record: str) -> str:
+    """Identify completed rounds independently of repair marks and the mutable stage snapshot."""
+    rounds = ROUND_HEADING.findall(record)
+    rows = [row[:7] for row in record_rows(record)]
+    return record_digest(json.dumps([rounds, rows], sort_keys=True))
+
+
+def released_identity(text: str) -> str | None:
+    start = _last_release(text)
+    if start < 0:
+        return None
+    block = text[start:]
+    cut = KEPT_FROM.search(block)
+    match = re.search(r"^Record identity: (sha256:[0-9a-f]{64})[ \t]*$", block[: cut.start()] if cut else block, re.M)
+    return match.group(1) if match else None
+
+
 def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
-    """With no record: the refusal when a review-loop audit line stands after the last release, restart and
-    no-round line - the loop ran and its record is not where this run looks (DL-A-6 of the deep review).
+    """Refuse unaccounted calls after the last release/restart when their record is missing.
+
+    Each no-round marker accounts for exactly its failed attempt's audit calls (DL-A-6).
     """
-    matches = list(NO_ROUND_LINE.finditer(text))
-    since = max(_last_release(text), _last_restart(text), matches[-1].start() if matches else -1)
-    if not any(match.start() > since for match in LOOP_AUDIT_LINE.finditer(text)):
+    since = max(_last_release(text), _last_restart(text))
+    pending: list[int] = []
+    # A failed attempt accounts only for its own calls, never an earlier completed round.
+    # Old uncounted markers cannot establish which calls failed, so refuse conservatively.
+    for line in text[since + 1 :].splitlines():
+        if LOOP_AUDIT_LINE.match(line):
+            pending.append(1)
+        elif NO_ROUND_LINE.match(line):
+            count = re.search(r"; audit calls: (\d+)$", line)
+            if count and int(count.group(1)):
+                del pending[max(0, len(pending) - int(count.group(1))) :]
+    if not pending:
         return None
     return (
         f"findings.md shows review-loop calls after the last release, but there is no loop record at "
@@ -2856,14 +2884,58 @@ def kept_lines(record: str) -> str:
     return "\n\n".join(kept)
 
 
+def release_block(record: str, text: str) -> str:
+    """Render one released record, including a boundary for crash-time reconciliation."""
+    rows = record_rows(record)
+    state = read_state(record, text)
+    released, _ = findings_rows(text)
+    verdicts = {row[0]: row[-1] for row in released}
+    block = [
+        f"{RELEASE_HEADING} {today()}",
+        render_table(RELEASED_COLUMNS, [[*row, verdicts.get(row[0], "—")] for row in rows]),
+    ]
+    if not rows:
+        block.append("No loop row was reported.")
+    block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    block.append(f"{DIGEST_KEY}{record_digest(record)}")
+    block.append(f"Record identity: {record_identity(record)}")
+    cut = cut_rounds(record)
+    if cut:
+        block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
+    if state is not None:
+        # The snapshot travels as the block's own line, before the kept words:
+        # a continued run reads its stages from here, never from the reviewers'
+        # text (criterion 13).
+        block.append(f"{STATE_KEY}{json.dumps(state, sort_keys=True)}")
+    kept = kept_lines(record)
+    if kept:
+        block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
+    block.append(RELEASE_END)
+    return "\n\n".join(block)
+
+
 def release(root: Path, change: str) -> list[list[str]]:
     """The loop rows into findings.md, after the phase-6 verdict. Returns the rows released."""
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = read_record(change, root)
-    if record is not None and released_digest(text) == record_digest(record):
+    if record is not None and (
+        released_digest(text) == record_digest(record) or released_identity(text) == record_identity(record)
+    ):
         # The block stands already: a run stopped between the append and the removal (DL-A-3 of the
         # deep review). Appending it again would count its rounds twice and double its ids.
+        if released_digest(text) != record_digest(record):
+            # Repair may have changed Status cells; stage retirement also changes the snapshot and
+            # retained explanation. Reconcile the existing block atomically before deleting its copy.
+            start = _last_release(text)
+            end = text.find("\n" + RELEASE_END, start)
+            if end < 0:
+                raise Refused("the released block has no record boundary; nothing is removed.")
+            end += len("\n" + RELEASE_END)
+            block = release_block(record, text)
+            heading = text[start:].splitlines()[0]
+            block = heading + "\n" + block.split("\n", 1)[1]
+            replace_record(findings, text[:start] + block + text[end:])
         shutil.rmtree(record_dir(change, root))
         rows = record_rows(record)
         print(
@@ -2898,27 +2970,20 @@ def release(root: Path, change: str) -> list[list[str]]:
             append(findings, NO_LOOP_LINE)
         return []
     rows = record_rows(record)
+    released, _ = findings_rows(text)
+    overlap = {row[0] for row in rows} & {row[0] for row in released}
+    released_rounds = rounds_run(None, text)
+    old_rounds = [heading for heading in ROUND_HEADING.findall(record) if int(heading.split()[2]) <= released_rounds]
+    if overlap or old_rounds:
+        raise Refused(
+            "the loop record overlaps rounds already released ("
+            + ", ".join(sorted(overlap) or old_rounds)
+            + "); nothing is appended or removed; the maintainer must reconcile the extended record."
+        )
     refusal = undecided_refusal(rows, "nothing is released")
     if refusal:
         raise Refused(refusal)
-    state = read_state(record, text)
-    block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
-    if not rows:
-        block.append("No loop row was reported.")
-    block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
-    block.append(f"{DIGEST_KEY}{record_digest(record)}")
-    cut = cut_rounds(record)
-    if cut:
-        block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
-    if state is not None:
-        # The snapshot travels as the block's own line, before the kept words:
-        # a continued run reads its stages from here, never from the reviewers'
-        # text (criterion 13).
-        block.append(f"{STATE_KEY}{json.dumps(state, sort_keys=True)}")
-    kept = kept_lines(record)
-    if kept:
-        block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
-    append(findings, "\n\n".join(block))
+    append(findings, release_block(record, text))
     shutil.rmtree(record_dir(change, root))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
     return rows
@@ -4735,14 +4800,11 @@ def fixed_status(ident: str, rest: str) -> str:
 
 
 def findings_body_problem(before: str, now: str) -> str | None:
-    """The problem when findings.md's body changed during a work call; its frontmatter is excluded, because
-    the runner refreshes `updated:`.
-
-    Repair and implement share it: neither model may write a finding, a verdict, a release block or a
-    restart line - the loop reads its state from that file (DL-A-2 of the deep review).
-    """
-    header = r"\A---\n.*?\n---\n"
-    if re.sub(header, "", now, count=1, flags=re.S) == re.sub(header, "", before, count=1, flags=re.S):
+    """Protect the whole file, allowing only the runner's one frontmatter date refresh."""
+    if now == before:
+        return None
+    masked = _mask_stamp(before, dated=False)
+    if masked is not None and _mask_stamp(now, dated=True) == masked:
         return None
     return "findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand"
 
@@ -4766,8 +4828,8 @@ def check_repair_answer(
     status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
     findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
     rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
-    other phases and every earlier attempt's evidence; only the frontmatter is excluded, because the
-    runner refreshes `updated:`. Only when no problem stands do the red-first runs start, one pytest run
+    other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
+    may be refreshed by the runner. Only when no problem stands do the red-first runs start, one pytest run
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
@@ -4953,10 +5015,11 @@ def _mark_record_rows(
 ) -> None:
     record = read_record(change, root)
     if record is None:
-        # A committed fix whose record is gone is booked nowhere; say which rows to book (DL-A-5).
+        # Findings were marked before the checkpoint; the vanished record cannot be marked (DL-A-5).
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(
-            f"the loop record is gone; the fixed status of {waiting} is not written there; mark them by hand."
+            f"the loop record is gone; findings.md already carries the fixed status of {waiting}; "
+            "no record was marked. Check these rows in findings.md; the maintainer must decide how to recover the record."
         )
     ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
@@ -6126,11 +6189,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     }
     if not ctx.findings.exists():
         ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
-    audited = False
+    audited = 0
     try:
         for member in members:
             append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
-            audited = True
+            audited += 1
         key = reviewer_key()
         notes: list[str] = []
         if not state["consumed"]:
@@ -6189,6 +6252,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                     prompts[nxt] = prompt_for(nxt)
                     checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
                     append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
+                    audited += 1
                     answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
                     replaced.append(nxt)
                     current = nxt
@@ -6254,7 +6318,8 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             with contextlib.suppress(OSError):
                 append(
                     ctx.findings,
-                    f"{NO_ROUND_KEY}{today()} — no round was written; the review-loop calls above consumed no stage.",
+                    f"{NO_ROUND_KEY}{today()} — no round was written; the review-loop calls above consumed no stage; "
+                    f"audit calls: {audited}",
                 )
         raise
     if receipt_taken:
