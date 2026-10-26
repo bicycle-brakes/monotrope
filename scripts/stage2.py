@@ -2741,6 +2741,10 @@ def replace_record(path: Path, text: str) -> None:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             stream.write(text)
             stream.flush()
+            # Reconciliation also replaces findings.md: retain its permissions instead of
+            # installing mkstemp's private mode. Fresh external records keep that private mode.
+            if path.exists():
+                os.fchmod(stream.fileno(), path.stat().st_mode & 0o7777)
             os.fsync(stream.fileno())
         Path(temporary).replace(path)
     except BaseException:
@@ -6315,6 +6319,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         if audited:
             # The calls above wrote no round: say so in findings.md, so their audit lines read as an
             # attempt that consumed nothing and not as a lost record (DL-A-6 of the deep review).
+            # This bookkeeping also follows Refused: an explicit exception to runner review R-4's
+            # no-write-after-refusal rule. It accounts only for this attempt's already-written audit
+            # calls; without it, a refused replacement would make the permitted retry look lost.
             with contextlib.suppress(OSError):
                 append(
                     ctx.findings,

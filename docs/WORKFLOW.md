@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-25
+updated: 2026-10-26
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1145,13 +1145,20 @@ an edited configuration resets a stop or replays a consumed stage.
 A record is written whole or not at all: each write goes to a temporary file
 beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
-review-loop audit line stands in `findings.md` after the last release, restart
-and no-round line, and no record exists, `review-loop` and `release-loop`
+review-loop audit line remains unaccounted for in `findings.md` after the last
+release or restart, and no record exists, `review-loop` and `release-loop`
 (also the release inside `review`) refuse and name the record path they
 expected. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
-member failed still runs. A record lost for good has no recovery verb yet.
+member failed still runs. Each no-round line's `audit calls: N` accounts for
+only the last N pending audit lines at that point; earlier unaccounted calls
+still refuse, even if they precede the last no-round line. A marker without
+a count accounts for no calls. This bookkeeping line is also appended after
+a `Refused` stop that follows audit writes: it is an explicit exception to
+runner review R-4's rule against writes after refusal, needed so a refused
+replacement does not make a retry look like a lost record. It consumes no
+stage and records no round. A record lost for good has no recovery verb yet.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
@@ -1179,7 +1186,15 @@ block and after the last `Loop restarted:` line, so a restarted or continued
 run never releases on an earlier verdict. Every released block carries the
 runner's line `Record digest: sha256:<hex>` of the record it released; a
 second `release-loop` over a record whose digest equals the last released
-block's appends nothing, removes the record and says so.
+block's appends nothing, removes the record and says so. Each block also
+carries `Record identity: sha256:<hex>`, a hash of the round headings and the
+first seven cells of each record row, excluding Status and Broke a test.
+When identity matches the last released block but digest differs (for example
+after repair or stage retirement), `release-loop` rewrites that block in
+place from the record, including statuses, snapshot, kept words and digest,
+preserving its heading and Phase 6 cells. It then removes the record without
+appending a second block or requiring a new verdict. A released block can
+therefore change on retry; its rounds are still counted once.
 
 ### Repairing taken findings (repair)
 

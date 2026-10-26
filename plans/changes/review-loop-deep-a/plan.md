@@ -39,8 +39,10 @@ Starts unless you say stop.
      `restore_findings` to `run_attempts` (criterion 2).
    - `read_state` refuses a released block without a `Loop state:` line;
      `review_loop` reads the snapshot before its stops (criterion 3).
-   - `release` writes `Record digest:`; `released_digest` and
-     `record_digest` make a repeated release a removal only (criterion 4).
+   - `release` writes `Record digest:` and `Record identity:`;
+     `released_digest` and `record_digest` make an identical repeated release
+     a removal only. `released_identity` and `record_identity` reconcile the
+     same rounds in place when mutable record content changed (criterion 4).
    - `replace_record` (temporary file, `os.replace` through
      `Path.replace`); `write_round` writes a fresh record's heading and
      snapshot in its one write; `_mark_record_rows` uses `replace_record`
@@ -69,8 +71,19 @@ the append leaves a record nobody reads and no release — the very loss
 criterion 7 refuses. The digest keeps the order append-then-delete, so
 every crash point leaves either the record alone (nothing appended yet;
 the next call appends) or the record and its block (the next call sees
-the digest and only deletes). It costs one runner line per block, read
-from the runner's own lines only (cut at `Kept from the loop record:`).
+the digest and only deletes).
+
+The digest alone cannot recognise that same record after repair or stage
+retirement changes it. A second runner line, `Record identity: sha256:<hex>`,
+hashes the round headings and the first seven cells of each record row,
+excluding Status and Broke a test. A matching identity with a different
+digest rewrites the existing released block in place before removing the
+record: statuses, snapshot, kept words and digest follow the record, while
+the original heading and Phase 6 cells remain. No second block or new verdict
+is needed, so rounds are still counted once. Adding a round changes identity
+even when it has no rows. Both hashes are read only from the runner's own
+lines (cut at `Kept from the loop record:`). This costs two runner lines per
+block and deliberately allows the last released block to change on retry.
 
 ## Why `write_state` goes (criterion 5)
 
@@ -119,3 +132,4 @@ phase-6 Codex review are still owed.
 ## Time used
 
 2026-10-26 00:30:30–00:47:48 UTC, 1038 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 01:55:44–02:10:54 UTC, 910 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

@@ -13822,6 +13822,23 @@ def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
         assert FIXED in world.text() and "taken — test_a" not in world.text()
 
 
+@pytest.mark.parametrize("mode", [0o644, 0o640])
+def test_the_release_reconcile_keeps_the_findings_mode(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: int
+) -> None:
+    """L3-2: reconciling a released record must not replace findings.md's mode with 0600."""
+    world.write_record([("L1-1", "rejected — out of scope", "no")], state=loop_state(("free",)))
+    world.write_findings(VERDICT)
+    world.findings.chmod(mode)
+    crash_the_release_after_the_append(world, monkeypatch)
+    stage2.retire_stage(world.root, "demo", "deepseek-v4.1-flash", "maintainer retired it")
+    assert world.run("release-loop") == 0
+    assert world.findings.stat().st_mode & 0o7777 == mode
+    assert "maintainer retired it" in world.text()
+    assert world.text().count(stage2.RELEASE_HEADING) == 1
+    assert not world.record().exists()
+
+
 def test_a_failed_record_write_leaves_the_record_as_it_was(world: World) -> None:
     """Criterion 5. Planted fault: `write_text` truncates first, so a failed write keeps the snapshot and loses the round."""
     import resource

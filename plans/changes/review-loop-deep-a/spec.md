@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -65,7 +65,14 @@ decisions: `decisions.md` Q-1 to Q-9.
    the runner's line `Record digest: sha256:<hex>` of the record it
    released. A `release-loop` whose record's digest equals the last
    released block's appends nothing, removes the record and reports it,
-   whatever verdict stands; `Rounds run:` is then counted once.
+   whatever verdict stands; `Rounds run:` is then counted once. Every block
+   also carries `Record identity: sha256:<hex>`, computed from its round
+   headings and the first seven cells of each record row, excluding Status
+   and Broke a test. If that identity matches the last block but the digest
+   differs, release rewrites that block in place from the record (including
+   statuses, snapshot, kept words and digest), preserving its heading and
+   Phase 6 cells, then removes the record; it appends no second block and
+   needs no new verdict.
    *Refuted by:* two release blocks of one record, or a record kept after
    the second call.
 5. **A record write is whole or absent (DL-A-4, Q-5).** `write_round` and
