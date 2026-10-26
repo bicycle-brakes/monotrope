@@ -212,6 +212,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/research.md`](changes/provenance-location/research.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/spec.md`](changes/provenance-location/spec.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
+| [`changes/ratchet-mutation-evidence/decisions.md`](changes/ratchet-mutation-evidence/decisions.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/findings.md`](changes/ratchet-mutation-evidence/findings.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/plan.md`](changes/ratchet-mutation-evidence/plan.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/research.md`](changes/ratchet-mutation-evidence/research.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/spec.md`](changes/ratchet-mutation-evidence/spec.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/red-first-install/decisions.md`](changes/red-first-install/decisions.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/findings.md`](changes/red-first-install/findings.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |

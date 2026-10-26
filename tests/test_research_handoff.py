@@ -205,6 +205,22 @@ def world(tmp_path: Path) -> World:
     return World(tmp_path)
 
 
+def test_research_handoff_goes_red_when_a_research_answer_is_removed(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Seed a lost answer and reach the gate directly for mutation coverage."""
+    world.write([run_text(RUN1)])
+    args = ["--root", str(world.root), "--change", "demo"]
+    assert gate.main(args) == 0
+    capsys.readouterr()
+
+    # Planted fault: a spec remains after its research decision loses its answer.
+    world.write([run_text(RUN1)], records=[])
+    assert gate.main(args) == 1
+    captured = capsys.readouterr()
+    assert f"open research item {RUN1}/H-1" in captured.out
+
+
 def test_a_lost_research_decision_turns_the_gate_red(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     # Criteria 31, 32. Planted fault: the class minimums hide a lost item, an open/agent answer passes, or an
     # inventory that dropped a derived item is believed.
