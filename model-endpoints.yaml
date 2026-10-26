@@ -35,8 +35,8 @@ datenklassen:
   public-web:
     was: "Oeffentlich zugaengliche Quellen: Suchergebnisse und abgerufene Webseiten"
     bemerkung: >-
-      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0020
-      draft). Kein Repositorien-Inhalt und keine Kundenbezuege — zu einem Aufruf
+      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0020,
+      vorgeschlagen bis zum Merge). Kein Repositorien-Inhalt und keine Kundenbezuege — zu einem Aufruf
       auf dieser Klasse verlaesst nur der gefilterte Ein-Satz-Themensatz die
       Grenze; die Antworten der Modelle sind Daten, kein Beweis fuer Lokales.
 
@@ -389,8 +389,9 @@ endpunkte:
         runs on it.
     bemerkung: >-
       The review loop (phase 4b), the interactive session verb (`stage2.py
-      session`, ADR 0012) and, since ADR 0020, the eleven Flash research calls
-      of the swarm declared below run here; the spec review (phase
+      session`, ADR 0012) and, since ADR 0020, the research swarm's Go calls
+      declared below (finders, repository-topic and online seats, free seats;
+      their number per run grows with the free seats) run here; the spec review (phase
       2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
       `python3
       scripts/stage2.py` and Pi at the version the runner pins — the exact
@@ -469,12 +470,15 @@ endpunkte:
       decision 3).
 
 # ---------------------------------------------------------------------------
-# Der Recherche-Schwarm (ADR 0020 draft) — wer in welcher Rolle laeuft
+# Der Recherche-Schwarm (ADR 0020, vorgeschlagen bis zum Merge) — wer in welcher Rolle laeuft
 # ---------------------------------------------------------------------------
 #
 # Die Rollen sind hier DEKLARIERT, nicht in einem Skript hardkodiert: der
 # Schwarm-Lauf liest diesen Block und lehnt jede Rolle ab, deren Endpunkt oder
-# Modell hier nicht so steht, wie die Rolle sie braucht. Der Block aendert
+# Modell hier nicht so steht, wie die Rolle sie braucht. Ausnahme: fehlt
+# `finder_merge`, nimmt der Lauf still das Modell von `judge`
+# (scripts/stage2_availability.py); wer `judge` aendert, aendert also auch den
+# Merge der Finder. Der Block aendert
 # NICHT die Reihenfolge von `opencode-go.modelle` — die bleibt die Leiter der
 # Review-Schleife (phase 4b).
 research_swarm:
