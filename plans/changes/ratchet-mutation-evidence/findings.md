@@ -194,3 +194,20 @@ Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude C
 | R8-4 | MINOR | SPEC | base | `scripts/mutation_evidence.py:196–200` and `scripts/mutation_evidence.py:224–227` | The allow-list wrongly rejects a legitimate helper shape. The test calls a same-file helper `_go(c)` that does `subprocess.run(c)`, and passes the command: `assert _go(['python','scripts/plans_registry.py'])`. The helper's run uses a parameter, so it is not credited. The test's own run-call strings are not examined either, so the whole test returns `[]`. Criterion 2 allows a path through a helper chain, and the decision says a call of a helper that does a run counts. Also rejected: a test method inside a class (`class T: def test_x_goes_red(self): plans_registry.main()`), because only module-level `FunctionDef`s are read, and `from scripts import plans_registry` followed by `plans_registry.main()`. Both rejections only cause false negatives. The class-method case did not regress, because the old code rejected it too. | Sonnet 5.5 | taken — test: tests/test_ci.py::test_a_helper_running_its_parameter_and_a_class_test_are_gate_evidence (orchestrator, 2026-10-26; maintainer, last round: the callee must resolve to the subprocess module's run, Popen, call, check_call or check_output; the script path must be the program run - argv[0], or the first argument after a python interpreter; a local command list counts only by its last assignment before the call; a same-file helper that runs its parameter counts when the test passes it such a command; test methods in classes and `from scripts import <module>` are read too) | — |
 
 Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2272 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/mutation_evidence.py` +139 -56
+> - `tests/test_ci.py` +65 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R8-1: several fixed lines
+> - R8-2: several fixed lines
+> - R8-3: several fixed lines
+> - R8-4: several fixed lines
+> ```
