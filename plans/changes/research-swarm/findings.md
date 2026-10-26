@@ -4777,3 +4777,13 @@ Phase 6 verdict: codex 01a178f7-23ab-74e2-a3dd-955a8fd33f31, 2026-10-26
 Reviewer session: codex 01a178f7-23ab-74e2-a3dd-955a8fd33f31 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 664 files, 2255 commits, 12 rules.
+
+## Phase 6 — Sonnet 5.5, 2026-10-26
+
+Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude Code session: the maintainer moved the Codex tasks to Sonnet for two hours (2026-10-26, 17:26–19:26 CET). Its answer is recorded unchanged below; the reviewer's checked line: F-66, F-67, F-68, F-69 and F-70 are each fixed and each named test would fail on the old code (read, not run); no regression from the repairs found.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-71 | MINOR | MAINT | base | `scripts/stage2.py:5271` | The class-header reader detects an "unterminated front matter header" with `text.splitlines()[:1] == ["---"]`; `splitlines` also breaks at U+2028, U+2029, U+0085, \x0b, \x0c and \x1c-\x1e. Reproduced: for `t = "---<U+2028>title: x\n"` the front-matter regex `---\n(.*?)\n---(?:\n\|$)` does not match, yet `t.splitlines()[:1]` is `['---']`, so the file is refused as "unterminated front matter" although its first line is `---<U+2028>title: x` - prose, not a front-matter fence. The Unicode-separator class fixed by F-68/F-70 elsewhere survives here. Fix: `text.split("\n", 1)[0]` (or a regex on `\A---\r?$`). Contrived, hence MINOR; no numbered criterion, same defect class as F-66-F-70. | Sonnet 5.5 | taken — test: tests/test_stage2.py::test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence (orchestrator, 2026-10-26; within the maintainer's "close the class" answer) | — |
+
+Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
