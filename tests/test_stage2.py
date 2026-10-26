@@ -9509,6 +9509,7 @@ def test_runner_time_write_failure_keeps_original_cause(
     outside = tmp_path / "outside-plan.md"
     outside.write_bytes(b"untouched\n")
     real_model = stage2.run_work_model
+    real_restore = stage2.restore_work_input
     _script_credential_plant(world)
 
     def model(*args, **kwargs):
@@ -9518,8 +9519,10 @@ def test_runner_time_write_failure_keeps_original_cause(
             world.plan.symlink_to(outside)
         return answer
 
-    def broken_restore(_root, _path, _content):
-        raise OSError("the worktree is full")
+    def broken_restore(root, path, content):
+        if path == world.plan:
+            raise OSError("the worktree is full")
+        return real_restore(root, path, content)
 
     monkeypatch.setattr(stage2, "run_work_model", model)
     monkeypatch.setattr(stage2, "restore_work_input", broken_restore)
@@ -9569,6 +9572,7 @@ def test_runner_terminal_failure_survives_failed_log_write(
     FakeClock(monkeypatch, UTC_START)
     world.script(claude=[{"stdout": "done"}])
     real_write = Path.write_text
+    real_restore = stage2.restore_work_input
     ready = False
     failure = stage2.CallFailed("make executable is unavailable")
     scans = 0
@@ -9590,8 +9594,10 @@ def test_runner_terminal_failure_survives_failed_log_write(
             raise OSError("plan write failed")
         return real_write(path, *args, **kwargs)
 
-    def restore(*_args, **_kwargs):
-        raise OSError("plan recovery failed")
+    def restore(root, path, content):
+        if path == world.plan:
+            raise OSError("plan recovery failed")
+        return real_restore(root, path, content)
 
     monkeypatch.setattr(stage2, "verify_attempt", verify)
     monkeypatch.setattr(stage2, "remove_changed_credential", scan)
@@ -13671,6 +13677,41 @@ FORGED_FINDINGS = {
 }
 
 
+def test_implement_restore_does_not_write_through_a_findings_symlink(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """L5-3: rejected implement output must not redirect restoration or diagnostics."""
+    target = tmp_path / "findings-target.md"
+    original = b"untouched target\n"
+    target.write_bytes(original)
+    world.script(
+        claude=[
+            {"stdout": "implemented", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "implemented without touching findings"},
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    real = stage2.run_work_model
+
+    def plant_link(*args, **kwargs):
+        answer = real(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            world.findings.unlink()
+            world.findings.symlink_to(target)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", plant_link)
+    result = world.run("implement")
+    assert target.read_bytes() == original, "restoration or diagnostics wrote through the symlink"
+    assert result == 0
+    assert not world.findings.is_symlink()
+    assert len(world.calls("claude")) == 2
+    diagnostic = "Attempt 1 (flash) failed its post-run checks."
+    assert diagnostic in world.text()
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert diagnostic in committed
+
+
 @pytest.mark.parametrize("forged", sorted(FORGED_FINDINGS))
 def test_implement_cannot_write_findings(world: World, forged: str) -> None:
     """Criterion 2. Planted fault: implement passes no findings snapshot or body check, and commits the forgery."""
@@ -13945,6 +13986,25 @@ def test_a_lost_record_stops_release_and_the_loop(
     assert world.text() == before, "a refusal wrote into findings.md"
     assert stage2.NO_LOOP_LINE not in world.text()
     assert len(world.reviews("pi")) == 2, "the lost record replayed a round"
+
+
+def test_a_stage_retirement_over_a_lost_record_is_refused(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L5-1: stage retirement must not rebuild a lost run from its earlier released snapshot."""
+    world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FLASH))
+    assert world.run("review-loop") == 0
+    shutil.rmtree(world.record().parent)
+    before = world.text()
+    capsys.readouterr()
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "wedged") == 2
+    assert str(world.record()) in capsys.readouterr().err
+    assert not world.record().exists(), "retirement recreated the lost record"
+    assert world.text() == before
+    # An explicit maintainer restart remains the way past a lost record.
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer restarts") == 0
+    assert "Loop restarted:" in world.text()
 
 
 def test_a_lost_record_after_a_failed_attempt_still_stops_the_loop(

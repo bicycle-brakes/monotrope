@@ -3008,6 +3008,10 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     findings_path = folder_of(root, change) / "findings.md"
     findings_text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
     record = read_record(change, root)
+    if record is None:
+        refusal = lost_record_refusal(change, root, findings_text)
+        if refusal:
+            raise Refused(refusal)
     if record is None and not findings_text:
         raise Refused(f"there is no loop record for {change} and no released block; nothing can be retired.")
     # After `release-loop` the snapshot lives in findings.md while loop.md is gone: a continued run
@@ -5622,7 +5626,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         ),
         answer_check=check,
         snapshot_findings=snapshot,
-        restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
+        restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
     )
 
 
