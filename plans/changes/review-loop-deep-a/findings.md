@@ -228,3 +228,29 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 593 files, 2197 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2197 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 593 files, 2198 commits, 12 rules.
+
+Loop attempt: 2026-10-26 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 593 files, 2199 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2199 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2199 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex gpt-6.1-sol at capacity twice (2026-10-26 07:03 UTC); ADR 0017 ladder step 3 · leak check clean over 593 files, 2199 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/review-loop-deep-a/plan.md` +2 -0
+> - `scripts/stage2.py` +32 -17
+> - `tests/test_stage2.py` +32 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L7-1: several fixed lines
+> - L7-2: several fixed lines
+> ```

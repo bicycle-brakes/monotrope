@@ -133,9 +133,14 @@ sub-agent (Opus 5.5) of the orchestrating session in a cloud container on
 2026-10-25, at the maintainer's instruction. The review loop and the
 phase-6 Codex review are still owed.
 
+## Runner route — 2026-10-26
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex gpt-6.1-sol at capacity twice (2026-10-26 07:03 UTC); ADR 0017 ladder step 3.
+
 ## Time used
 
 2026-10-26 00:30:30–00:47:48 UTC, 1038 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 01:55:44–02:10:54 UTC, 910 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 03:35:43–03:50:19 UTC, 875 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 04:15:33–04:25:38 UTC, 605 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 07:03:56–07:10:16 UTC, 380 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
