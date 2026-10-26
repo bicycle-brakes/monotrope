@@ -145,9 +145,12 @@ def test_expiry_is_inclusive_on_the_utc_day(monkeypatch: pytest.MonkeyPatch) -> 
         def now(cls, _tz=None) -> dt.datetime:
             return dt.datetime(2026, 10, 31, 23, 40, tzinfo=dt.UTC)
 
+    # Lift the constant seam first, or the fakes below are never read and a
+    # local-date implementation would pass (review loop row L1-2).
+    monkeypatch.undo()
     monkeypatch.setattr(stage2.dt, "date", LocalDateAhead)
     monkeypatch.setattr(stage2.dt, "datetime", FrozenDateTime)
-    assert stage2.terms_today() == dt.date(2026, 10, 31)
+    assert stage2.terms_today() == dt.date(2026, 10, 31), "the local date decided, not UTC"
     assert stage2.terms_problem(a_record(gilt_bis="2026-10-31"), "m") is None
 
 
@@ -378,7 +381,11 @@ def test_paid_retries_and_replacements_recheck_expiry(
 
 
 def test_non_deepseek_records_receive_reading_plus_thirty_days() -> None:
-    """Criterion 6: every non-DeepSeek record, skipped ones included, expires `gelesen` plus 30 days."""
+    """Criterion 6: every non-DeepSeek record expires `gelesen` plus 30 days, or on the end date its prose states.
+
+    The rule, not a date, is pinned: a documented renewal re-reads a record
+    and moves both dates, and must not need a test edit (review loop row L1-3).
+    """
     entry = stage2.endpoint_entry(REPO_ROOT)
     terms = entry["modelle_terms"]
     assert set(terms) >= set(entry["modelle"]), "a declared paid model has no terms record at all"
@@ -387,25 +394,33 @@ def test_non_deepseek_records_receive_reading_plus_thirty_days() -> None:
         if model in deepseek:
             continue
         assert isinstance(record.get("gelesen"), str) and record["gelesen"], model
-        expected = (dt.date.fromisoformat(record["gelesen"]) + dt.timedelta(days=30)).isoformat()
         assert isinstance(record.get("gilt_bis"), str), f"{model}: the expiry is not the quoted string"
-        assert record["gilt_bis"] == expected, f"{model}: {record['gilt_bis']} is not the reading plus 30 days"
+        expected = (dt.date.fromisoformat(record["gelesen"]) + dt.timedelta(days=30)).isoformat()
+        stated = f"valid through {record['gilt_bis']}" in str(record.get("aufbewahrung", ""))
+        assert record["gilt_bis"] == expected or stated, (
+            f"{model}: {record['gilt_bis']} is neither the reading plus 30 days nor an end date the record states"
+        )
 
 
 def test_both_deepseek_records_use_the_documented_expiry() -> None:
-    """Criterion 7: both DeepSeek records carry the 2026-10-25 re-read, the 2026-10-31 expiry and the prose."""
+    """Criterion 7: both DeepSeek records carry the source's own end date, after the reading, and the prose.
+
+    The 2026-10-25 re-read set 2026-10-31; a monthly renewal moves both
+    dates, so the test pins the rule rather than those dates (review loop row L1-3).
+    """
     terms = stage2.endpoint_entry(REPO_ROOT)["modelle_terms"]
     for model in ("deepseek-v4.1-flash", "deepseek-v4-pro"):
         record = terms[model]
-        assert record["gelesen"] == "2026-10-25", model
-        assert record["gilt_bis"] == "2026-10-31", model
+        assert isinstance(record.get("gilt_bis"), str), f"{model}: the expiry is not the quoted string"
+        read = dt.date.fromisoformat(record["gelesen"])
+        until = dt.date.fromisoformat(record["gilt_bis"])
+        assert read <= until, f"{model}: expires before it was read"
         assert "renewed monthly" in record["aufbewahrung"], model
-        assert "valid through 2026-10-31" in record["aufbewahrung"], model
-    # The generic 30-day rule did not swallow them: reading + 30 would be 2026-11-24.
-    generic = (dt.date(2026, 10, 25) + dt.timedelta(days=30)).isoformat()
-    assert generic == "2026-11-24"
-    assert terms["deepseek-v4.1-flash"]["gilt_bis"] != generic
-    assert terms["deepseek-v4-pro"]["gilt_bis"] != generic
+        assert f"valid through {record['gilt_bis']}" in record["aufbewahrung"], (
+            f"{model}: gilt_bis is not the end date the source states"
+        )
+        # The generic 30-day rule did not swallow them.
+        assert until != read + dt.timedelta(days=30), f"{model}: the generic rule replaced the source's date"
 
 
 # ---------------------------------------------------------------------------

@@ -120,7 +120,9 @@ recorded terms reading is valid, with advance notice of expiry
   amends its paid-terms decision without editing its prior decision text.
 - `decisions/answers/`, `decisions/gates.yaml`, `provenance.yaml`, routing
   credentials, leak-check rules and the customer-instance boundary remain
-  unchanged; none is needed to implement expiry.
+  unchanged by the implementation; none is needed to implement expiry. The
+  one answer file of this change, the maintainer's ADR answer, was recorded
+  before drafting (`decisions/answers/terms-expiry/adr.yaml`).
 
 ## Definition of Done
 
