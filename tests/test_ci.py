@@ -1103,6 +1103,67 @@ def test_the_runner_never_searches_other_environments(tmp_path: Path) -> None:
     assert "home" not in log.read_text(encoding="utf-8").split(), "the runner looked into $HOME/.venvs"
 
 
+@pytest.mark.parametrize("caller", ["tree", "outside"])
+def test_the_runner_exports_a_relative_python_as_an_absolute_path(tmp_path: Path, caller: str) -> None:
+    """A relative `$PYTHON` reaches every gate's children as an absolute path (bead coding-harness-4x2c).
+
+    `PYTHON=.venv/bin/python3 make verify` exported the relative path; a test that starts the runner in
+    another directory (the leerprobe gate's foreign repository) then found no interpreter there. The
+    path is read against the caller's directory, before the runner changes to the repository root.
+    """
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    cwd, relative = (tree, ".venv/bin/python3") if caller == "tree" else (tmp_path, "tree/.venv/bin/python3")
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": relative}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=cwd, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == str(tree / ".venv" / "bin" / "python3")
+
+
+def test_a_python_path_with_a_space_still_starts_the_gate(tmp_path: Path) -> None:
+    """The absolute `$PYTHON` is quoted where it replaces `python3` in a gate command.
+
+    A relative `.venv/bin/python3` used to reach the gate as one word; made absolute under a directory
+    with a space, it split into two and the gate failed (pre-review row P237-1, 2026-10-25).
+    """
+    base = tmp_path / "with space"
+    base.mkdir()
+    log = tmp_path / "log"
+    out = tmp_path / "gate-ran"
+    tree = _runner_tree(base, f"python3 -c \"open('{out}', 'w').write('ran')\"")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": ".venv/bin/python3"}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == "ran"
+
+
+@pytest.mark.parametrize("kind", ["absolute", "bare"])
+def test_an_absolute_or_bare_python_reaches_the_gate_unchanged(tmp_path: Path, kind: str) -> None:
+    """Criterion 2: an absolute `$PYTHON` and a bare name looked up on PATH pass through as given."""
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    elsewhere = tmp_path / "elsewhere" / "bin"
+    _interpreter_wrapper(elsewhere / "python3", "elsewhere", log)
+    given = str(elsewhere / "python3") if kind == "absolute" else "python3"
+    env = {"HOME": str(tmp_path), "PATH": f"{elsewhere}:/usr/bin:/bin", "PYTHON": given}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == given
+
+
 def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> None:
     """`.venv/bin/python3` of the checkout comes before the `python3` on PATH."""
     log = tmp_path / "log"
