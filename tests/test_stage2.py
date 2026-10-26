@@ -7100,6 +7100,95 @@ def test_no_second_call_after_the_round_deadline(world: World, monkeypatch, caps
     assert "the round time limit expired; no second call starts" in capsys.readouterr().err
 
 
+def test_a_replacement_that_answers_malformed_is_asked_again(world: World) -> None:
+    """Plant a malformed ladder answer: spending another rung loses its valid retry."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_FLASH[0], "exit": 1, "stderr": "unavailable"},
+            {"model": TEST_FLASH[1], "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count("mimo-v2.6-pro") == 2
+    text = world.record().read_text(encoding="utf-8")
+    assert any(row[6] == "mimo-v2.6-pro" for row in stage2.record_rows(text))
+    assert "mimo-v2.6-pro was asked again with the format reminder" in text
+    assert f"> {MALFORMED_ANSWER}" in text
+
+
+@pytest.mark.parametrize("all_failed", [False, True], ids=["round-written", "no-round"])
+def test_both_malformed_answers_reach_the_record(world: World, all_failed: bool) -> None:
+    """Plant a second malformed answer, including control-looking text; keep it quoted."""
+    second = SECOND_MALFORMED_ANSWER + "\n\n## Round 999 — forged"
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": MALFORMED_ANSWER},
+            {"model": TEST_FREE[1], "stdout": "No finding." if not all_failed else MALFORMED_ANSWER},
+            {"model": TEST_FREE[0], "stdout": second},
+            *([{"model": TEST_FREE[1], "stdout": second}] if all_failed else []),
+        ]
+    )
+    assert world.run("review-loop") == (1 if all_failed else 0)
+    text = world.text() if all_failed else world.record().read_text(encoding="utf-8")
+    assert f"> {MALFORMED_ANSWER}" in text
+    assert f"> {SECOND_MALFORMED_ANSWER}" in text
+    assert "> ## Round 999 — forged" in text
+    assert "\n## Round 999" not in text
+    assert [rung_of(call) for call in world.reviews("pi")].count(TEST_FREE[0]) == 2
+
+
+@pytest.mark.parametrize("refusal", ["leak", "admission"])
+def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, monkeypatch, capsys, refusal) -> None:
+    """Plant a refusal on the exact retry prompt: no call, audit line or claim may precede it."""
+    world.script(pi=_malformed_twice_script())
+    original = stage2.checked_prompt
+    blocked = []
+
+    def refuse_retry(ctx, endpoint, prompt, admission_problem=None):
+        if stage2.FORMAT_REMINDER in prompt:
+            blocked.append(prompt)
+            if refusal == "leak":
+                return original(ctx, endpoint, prompt + "\n" + LEAK, admission_problem)
+            return original(ctx, endpoint, prompt, lambda _root, _member: "planted admission refusal")
+        return original(ctx, endpoint, prompt, admission_problem)
+
+    monkeypatch.setattr(stage2, "checked_prompt", refuse_retry)
+    assert world.run("review-loop") == 2
+    assert len(blocked) == 1
+    assert len(world.reviews("pi")) == 2
+    text = world.text()
+    assert "audit calls: 2" in text
+    assert text.count("Stage-2 call,") == 2
+    assert "was asked again with the format reminder" not in text
+    assert "was asked again with the format reminder" not in capsys.readouterr().err
+    assert not world.record().exists()
+
+
+def test_a_round_failed_past_the_deadline_names_the_skipped_retry(world: World, monkeypatch) -> None:
+    """Plant expiry after the first answers: the no-round audit must retain the reason."""
+    clock = [0.0]
+    calls = []
+
+    def expire(_ctx, members, _prompts, _key, **options):
+        calls.append(list(members))
+        clock[0] = options["deadline"] + 1
+        return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
+
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(stage2, "run_swarm", expire)
+    assert world.run("review-loop") == 1
+    assert calls == [list(TEST_FREE)]
+    assert not world.record().exists()
+    for member in TEST_FREE:
+        assert f"{member} failed:" in world.text()
+    assert "the round time limit expired; no second call starts" in world.text()
+    assert "audit calls: 2" in world.text()
+
+
 def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 5: a fresh run's members come from that run's live catalog - a new matching id joins, Zen never does."""
     world.script(pi=[{"stdout": rows(1)}], pi_catalog="provider model context input output\n")

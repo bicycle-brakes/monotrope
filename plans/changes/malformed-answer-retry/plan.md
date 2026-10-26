@@ -30,17 +30,20 @@ Starts unless you say stop.
 
 1. `tests/test_stage2.py`: the five tests in the ledger, red first.
 2. `scripts/stage2.py`: a `MalformedAnswer` error carrying the answer;
-   `run_swarm` raises it; after `run_swarm` (and after a Flash
-   replacement) the round asks each member with a `MalformedAnswer` once
-   more, through `checked_prompt`, `call_line`, `audited` and the round's
-   deadline; the record gets the runner line and the quoted first answer.
+   `run_swarm` raises it; after the initial swarm, before Flash
+   replacement, the round asks each member with a `MalformedAnswer` once
+   more. Each replacement gets the same retry before another rung is spent.
+   Both paths use `checked_prompt`, `call_line`, `audited` and the round's
+   deadline; the record keeps the runner line and both answers, including a
+   malformed second answer. Failed attempts keep the skipped-retry reason
+   and any malformed answers in the no-round audit.
 3. `docs/WORKFLOW.md` §4b: one sentence on the retry.
 4. This change folder and `plans/INDEX.md`.
 
 ## Verification
 
 ```sh
-.venv/bin/python3 -m pytest -q tests/test_stage2.py -k "malformed or asked_again or format_reminder"
+.venv/bin/python3 -m pytest -q tests/test_stage2.py -k "malformed or asked_again or format_reminder or test_the_second_call_has_its_own_call_line or test_no_second_call_after_the_round_deadline or test_a_leak_block_on_the_retry_prompt_makes_no_second_call or test_a_round_failed_past_the_deadline_names_the_skipped_retry"
 PYTHON=.venv/bin/python3 make verify
 ```
 
@@ -55,3 +58,4 @@ PYTHON=.venv/bin/python3 make verify
 ## Time used
 
 2026-10-26 10:04:39–10:42:34 UTC, 2275 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-26 12:35:24–12:48:25 UTC, 781 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

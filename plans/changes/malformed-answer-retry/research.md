@@ -44,7 +44,10 @@ Read in `scripts/stage2.py` at `379df54d`:
 - A failed Flash member is replaced by a ladder model in the parent, after
   `run_swarm`: checked prompt, call line, `audited += 1`, then
   `run_swarm([nxt], …)` under the round's one deadline.
-- `ANSWER_FORMAT` is the format instruction every review prompt ends with.
+- `ANSWER_FORMAT` supplies the format instruction within each review prompt.
+  The free prompt ends with the implementation diff; the paid prompt ends
+  with `READ_REQUEST`. The retry appends the reminder and `ANSWER_FORMAT`
+  so the required format is at the end of the retry prompt.
 
 ## Sources
 
