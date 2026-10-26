@@ -15406,3 +15406,27 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
         problems = [str(error)]
     assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
     assert problems and "plan" in problems[0]
+
+
+def test_a_flash_member_malformed_twice_is_still_replaced(world: World) -> None:
+    """Criterion 3, as today. Planted fault: the asked-again pass runs after the ladder replacement, so a Flash
+    member whose second answer is malformed too is neither replaced nor stated - the ladder model it was owed
+    never runs (orchestrator's self-review, 2026-10-26)."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "deepseek-v4.1-flash", "stdout": SECOND_MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count("deepseek-v4.1-flash") == 2 and "mimo-v2.6-pro" in calls, (
+        "the twice-malformed Flash member was not replaced by the ladder"
+    )
+    text = world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash was asked again with the format reminder" in text
+    assert "replaced by mimo-v2.6-pro" in text
+    assert "rung:mimo-v2.6-pro" in stage2.read_state(text, "")["consumed"]

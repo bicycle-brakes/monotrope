@@ -18,3 +18,18 @@ tags: [findings, stage-2]
 # Findings — malformed-answer-retry
 
 Stage-2 call, 2026-10-26: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 614 files, 2227 commits, 12 rules.
+
+## Self-review, 2026-10-26
+
+Read by the orchestrating session after the implementation (commit
+`65e3ad56`), so it is no independent review.
+
+- The asked-again pass ran after the Flash replacement, and the replacement
+  skipped a malformed member. A Flash member malformed twice was then neither
+  replaced nor stated, although today such a member is replaced by the
+  ladder (criterion 3, "fails the member as today"). Repaired by hand, red
+  first: the pass now runs before the replacement, which treats a failed
+  second answer like any failed call
+  (`tests/test_stage2.py::test_a_flash_member_malformed_twice_is_still_replaced`).
+- A replacement that answers malformed is not asked again; the spec owes
+  the second call to a member, and a replacement is called once. Left as is.
