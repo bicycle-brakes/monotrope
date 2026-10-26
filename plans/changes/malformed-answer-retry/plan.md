@@ -51,3 +51,5 @@ PYTHON=.venv/bin/python3 make verify
 - 3: not yet written tests/test_stage2.py::test_a_second_malformed_answer_fails_the_member — the member is asked a third time or passes.
 - 4: not yet written tests/test_stage2.py::test_the_second_call_has_its_own_call_line — the second call writes no call line.
 - 5: not yet written tests/test_stage2.py::test_no_second_call_after_the_round_deadline — a second call starts after the deadline.
+
+## Time used
