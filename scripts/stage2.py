@@ -246,6 +246,11 @@ ANSWER_FORMAT = (
     "decides what is taken, so a word of your own is not a fault.\n"
     "The runner adds the reviewer, the status and the test mark. When there is no finding, answer exactly: No finding."
 )
+# The asked-again call after a malformed answer (bead coding-harness-70rw): the
+# sentence names what went wrong, the format instruction follows it again.
+FORMAT_REMINDER = (
+    "Your previous answer was not in the required format, so it could not be read as findings; answer once more."
+)
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
     "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
@@ -513,6 +518,21 @@ class CheckpointRolledBack(CallFailed):
 
 class StepTimedOut(CallFailed):
     """A started program ran into its time limit and its whole process group was killed (R-20)."""
+
+
+class MalformedAnswer(CallFailed):
+    """A review answer with no six-cell row that is not exactly `No finding.`; it carries the answer.
+
+    The swarm's member fails with it as today, and the round asks the member once
+    more with the format reminder (bead coding-harness-70rw); the answer rides
+    along so the record can quote the first attempt. The phase-6 verdict check
+    keeps its plain `CallFailed` - a malformed verdict is out of scope.
+    """
+
+    def __init__(self, answer: str) -> None:
+        empty = "the answer is empty; " if not answer.strip() else ""
+        super().__init__(f"malformed finding output: {empty}expected six-cell findings or exactly 'No finding.'")
+        self.answer = answer
 
 
 def today() -> str:
@@ -2208,8 +2228,8 @@ def run_reviewer(
             raise fail("pi", done, f"exit {done.returncode}", secrets, model)
         answer = scrub(done.stdout or "", secrets)
         if not answer.strip():
-            # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("pi", done, "the answer is empty", secrets, model)
+            # A successful empty response is malformed too: the round owes it its format retry.
+            raise MalformedAnswer(answer)
     return answer
 
 
@@ -2227,7 +2247,9 @@ def run_swarm(
     The answers come back per member: the scrubbed answer, or the exception
     that failed the member (a nonzero exit, a timeout, an empty answer). A
     member's failure never discards another member's answer (criterion 4).
-    Without parsed findings, only the explicit no-finding response succeeds.
+    Without parsed findings, only the explicit no-finding response succeeds;
+    an answer with neither raises `MalformedAnswer`, which carries the answer
+    for the round's asked-again call and its record.
 
     `deadline` is the round's one deadline (`time.monotonic()` seconds): members and every
     replacement share it, so a round cannot outlast `REVIEWER_MINUTES` by summing its members'
@@ -2242,7 +2264,7 @@ def run_swarm(
             # No arbitrary prose (including a refusal or context-limit error)
             # can certify a clean round. Commentary beside findings is kept.
             if not rows and answer.strip() != "No finding.":
-                raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+                raise MalformedAnswer(answer)
             answers[member] = answer
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error
@@ -6451,12 +6473,13 @@ def _review_round(
     if not ctx.findings.exists():
         ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
     audited = 0
+    notes: list[str] = []
+    malformed_blocks: list[str] = []
     try:
         for member in members:
             append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
             audited += 1
         key = reviewer_key()
-        notes: list[str] = []
         if not state["consumed"]:
             if state["free"].get("skipped"):
                 notes.append(f"Notice: {state['free']['skipped']}.")
@@ -6485,6 +6508,45 @@ def _review_round(
         deadline = time.monotonic() + REVIEWER_MINUTES * 60
         answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
         replaced: list[str] = []
+
+        def ask_malformed_again(member: str) -> None:
+            """Retry each initial or replacement member once, before replacing a failure."""
+            nonlocal audited
+            first = answers[member]
+            if not isinstance(first, MalformedAnswer):
+                return
+
+            def expired() -> bool:
+                if time.monotonic() < deadline:
+                    return False
+                notes.append(f"{member} failed: {first}; the round time limit expired; no second call starts")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                return True
+
+            if expired():
+                return
+            retry_prompt = "\n\n".join([prompts[member], FORMAT_REMINDER, ANSWER_FORMAT])
+            checked_retry = checked_prompt(ctx, endpoints[member], retry_prompt, _free_admission(free, state))
+            # Checking the prompt must neither claim a call nor buy extra round time.
+            if expired():
+                return
+            append(ctx.findings, call_line("review-loop", endpoints[member], checked_retry))
+            audited += 1
+            notes.append(f"{member} was asked again with the format reminder: the first answer was malformed")
+            print(f"review-loop: {notes[-1]}", file=sys.stderr)
+            malformed_blocks.append(
+                f"{member}'s first answer, which was not in the required format:\n\n{quote_reviewer(first.answer.strip())}"
+            )
+            answers.update(run_swarm(ctx, [member], {member: retry_prompt}, key, free=free, deadline=deadline))
+            second = answers[member]
+            if isinstance(second, MalformedAnswer):
+                malformed_blocks.append(
+                    f"{member}'s second answer, which was not in the required format:\n\n"
+                    f"{quote_reviewer(second.answer.strip())}"
+                )
+
+        for member in members:
+            ask_malformed_again(member)
         if stage["kind"] == "paid-swarm":
             # A failed Flash member is replaced by the cheapest admitted ladder model
             # not in this round and not consumed, on the same paid prompt; each model
@@ -6537,6 +6599,7 @@ def _review_round(
                         print(f"review-loop: {notes[-1]}", file=sys.stderr)
                         break
                     replaced.append(nxt)
+                    ask_malformed_again(nxt)
                     current = nxt
             members = [*members, *replaced]
         succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
@@ -6593,6 +6656,7 @@ def _review_round(
         for member, block in reviewer_blocks:
             # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.
             parts.append(f"From {member}:\n\n{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
+        parts.extend(malformed_blocks)
         path = record_dir(change, root) / "loop.md"
         # A continued run after a release starts a fresh record: `write_round` writes its heading and the
         # run's snapshot line with the round, in one write.
@@ -6610,7 +6674,8 @@ def _review_round(
                 append(
                     ctx.findings,
                     f"{NO_ROUND_KEY}{today()} — no round was written; the review-loop calls above consumed no stage; "
-                    f"audit calls: {audited}",
+                    f"audit calls: {audited}"
+                    + ("\n\n" + "\n\n".join([*notes, *malformed_blocks]) if notes or malformed_blocks else ""),
                 )
         raise
     if receipt_taken:
