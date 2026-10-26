@@ -2918,6 +2918,28 @@ def release_block(record: str, text: str) -> str:
     return "\n\n".join(block)
 
 
+def released_overlap_refusal(record: str, text: str) -> str | None:
+    """Refuse a record whose rows or rounds still stand in released history."""
+    released, _ = findings_rows(text)
+    overlap = {row[0] for row in record_rows(record)} & {row[0] for row in released}
+    released_rounds = rounds_run(None, text)
+    old_rounds = [
+        heading.split()[2] for heading in ROUND_HEADING.findall(record) if int(heading.split()[2]) <= released_rounds
+    ]
+    if not (overlap or old_rounds):
+        return None
+    identifiers = []
+    if overlap:
+        identifiers.append("row ids: " + ", ".join(sorted(overlap)))
+    if old_rounds:
+        identifiers.append("round ids: " + ", ".join(old_rounds))
+    return (
+        "the loop record overlaps rounds already released ("
+        + "; ".join(identifiers)
+        + "); nothing is appended or removed; the maintainer must reconcile the extended record."
+    )
+
+
 def release(root: Path, change: str) -> list[list[str]]:
     """The loop rows into findings.md, after the phase-6 verdict. Returns the rows released."""
     findings = folder_of(root, change) / "findings.md"
@@ -2940,6 +2962,7 @@ def release(root: Path, change: str) -> list[list[str]]:
             heading = text[start:].splitlines()[0]
             block = heading + "\n" + block.split("\n", 1)[1]
             replace_record(findings, text[:start] + block + text[end:])
+            stamp_updated(findings)
         shutil.rmtree(record_dir(change, root))
         rows = record_rows(record)
         print(
@@ -2974,23 +2997,9 @@ def release(root: Path, change: str) -> list[list[str]]:
             append(findings, NO_LOOP_LINE)
         return []
     rows = record_rows(record)
-    released, _ = findings_rows(text)
-    overlap = {row[0] for row in rows} & {row[0] for row in released}
-    released_rounds = rounds_run(None, text)
-    old_rounds = [
-        heading.split()[2] for heading in ROUND_HEADING.findall(record) if int(heading.split()[2]) <= released_rounds
-    ]
-    if overlap or old_rounds:
-        identifiers = []
-        if overlap:
-            identifiers.append("row ids: " + ", ".join(sorted(overlap)))
-        if old_rounds:
-            identifiers.append("round ids: " + ", ".join(old_rounds))
-        raise Refused(
-            "the loop record overlaps rounds already released ("
-            + "; ".join(identifiers)
-            + "); nothing is appended or removed; the maintainer must reconcile the extended record."
-        )
+    refusal = released_overlap_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     refusal = undecided_refusal(rows, "nothing is released")
     if refusal:
         raise Refused(refusal)
@@ -6098,6 +6107,10 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
+    if record is not None:
+        refusal = released_overlap_refusal(record, findings_text)
+        if refusal:
+            raise Refused(refusal)
     if record is None:
         refusal = lost_record_refusal(change, root, findings_text)
         if refusal:

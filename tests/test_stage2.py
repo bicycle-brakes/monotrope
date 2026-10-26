@@ -13871,6 +13871,56 @@ def test_a_release_after_a_crash_and_a_repair_appends_no_second_block(
         assert FIXED in world.text() and "taken — test_a" not in world.text()
 
 
+@pytest.mark.parametrize("status", ["rejected — out of scope", "taken — test_a", None])
+@pytest.mark.parametrize("extended", [False, True])
+def test_the_loop_refuses_a_record_still_present_after_release(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    status: str | None,
+    extended: bool,
+) -> None:
+    """L7-1: a crash-time copy must never create a phantom clean round."""
+    world.write_record([] if status is None else [("L1-1", status, "no")], state=loop_state(("free",)))
+    world.write_findings(VERDICT)
+    crash_the_release_after_the_append(world, monkeypatch)
+    if extended:
+        stage2.write_round(
+            "demo",
+            "## Round 2 — deepseek-v4.1-flash, 2026-10-26\n\nNo finding.",
+            loop_state(("free", "flash")),
+            world.root,
+        )
+    record_before = world.record().read_bytes()
+    findings_before = world.findings.read_bytes()
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    error = capsys.readouterr().err
+    assert "round ids: 1" in error
+    if status is not None:
+        assert "row ids: L1-1" in error
+    assert "maintainer must reconcile" in error
+    assert world.record().read_bytes() == record_before
+    assert world.findings.read_bytes() == findings_before
+    assert world.reviews("pi") == []
+
+
+def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L7-2: replacing a released block stamps findings.md just like appending one."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+    world.write_findings(VERDICT)
+    crash_the_release_after_the_append(world, monkeypatch)
+    world.findings.write_text("---\nupdated: 2000-01-01\n---\n\n" + world.text(), encoding="utf-8")
+    world.record().write_text(
+        world.record().read_text(encoding="utf-8").replace("taken — test_a", FIXED), encoding="utf-8"
+    )
+    assert world.run("release-loop") == 0
+    assert f"updated: {stage2.dt.date.today().isoformat()}\n" in world.text()
+    assert FIXED in world.text()
+    assert world.text().count(stage2.RELEASE_HEADING) == 1
+    assert not world.record().exists()
+
+
 @pytest.mark.parametrize("mode", [0o644, 0o640])
 def test_the_release_reconcile_keeps_the_findings_mode(
     world: World, monkeypatch: pytest.MonkeyPatch, mode: int
