@@ -1060,6 +1060,55 @@ def test_fresh_opus_reconciles_eleven_topics_and_map(sworld: SwarmWorld) -> None
     assert "failed validation" in sworld.research.read_text(encoding="utf-8")
 
 
+def test_the_judge_packet_limit_assumes_at_most_one_token_per_character() -> None:
+    # L7-1: the inverted conversion refuses even the required reports' permitted excerpts.
+    import stage2_research_judge
+
+    policy = stage2_research_judge.research_judge_capacity_policy()
+    conversion = policy["tokens_per_unicode_character"]
+    assert 0 < conversion <= 1
+    available = policy["capacity_tokens"] - policy["output_reserve_tokens"] - policy["transport_reserve_tokens"]
+    assert policy["limit_characters"] == int(available / conversion)
+    reports, outcomes = [], []
+    for topic in range(1, 12):
+        for peer in range(3):
+            seat = f"opencode-go:peer-{peer}"
+            outcomes.append({"topic": topic, "seat": seat, "required": True, "outcome": "ok"})
+            reports.append(
+                {
+                    "run_id": "capacity-test",
+                    "topic": topic,
+                    "seat": seat,
+                    "claims": [
+                        {
+                            "id": f"capacity-test/{topic}/{seat}/C{claim}",
+                            "local_id": f"C{claim}",
+                            "evidence_status": "valid",
+                            "statement": "The cited source supports this claim.",
+                            "kind": "fact",
+                            "confidence": "high",
+                            "basis": "The resolved evidence.",
+                            "evidence": ["source.md::Evidence"],
+                            "resolved": [
+                                {
+                                    "citation": "source.md::Evidence",
+                                    "supported": True,
+                                    "excerpt": "ü" * 4000,
+                                    "truncated": False,
+                                }
+                            ],
+                        }
+                        for claim in range(1, 8)
+                    ],
+                }
+            )
+    result = stage2_research_judge.build_research_judge_packet(
+        "Judge all evidence.", run_id="capacity-test", map_record={}, reports=reports, outcomes=outcomes
+    )
+    assert result["size_characters"] > 33 * 7 * 4000
+    assert result["allowed"], "all required topics' seven full excerpts must fit without shortening"
+
+
 def test_judge_packet_limit_refuses_before_launch_without_shortening(
     sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:

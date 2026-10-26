@@ -719,7 +719,9 @@ takes the class from the explicit `--class` argument and the headers of
 `research.md` and `spec.md`, wherever stated. All available declarations must
 agree; missing, invalid or disagreeing declarations refuse before any model
 call. `--stage2-off [REASON]` keeps the Stage-1 route and
-skips the class entirely.
+skips class derivation and class/neighbour header checks. Passing `--class`
+beside `--stage2-off` is refused with exit 2 before any call; the class has
+no effect on that route.
 
 **Nothing checks a change's class beyond explore.** A `feature` stated as a
 `spike` skips every stage-2 review, and one stated as `bounded` may skip the
@@ -819,7 +821,11 @@ and the run gets its own run id, deadlines and receipt.
 **The handoff is checked (gate `research-handoff`).** The runner derives an
 obligation inventory from the reports (accepted `[DECISION]` questions, class
 disagreements, judge disagreements, neighbour items). The check
-`scripts/check_research_handoff.py` re-derives it independently and holds the
+`scripts/check_research_handoff.py` re-derives it from the stored reports using
+`research_handoff.derive_inventory`, the same function the runner uses. It
+checks the stored inventory against that result, independently of the judge,
+but cannot detect an obligation that the shared derivation itself omits.
+Tests and phase-6 review must catch that shared failure. It holds the
 maintainer's answers to it: every item closed by a maintainer-answered record
 that links it (`research_items`), `neighbours:` of the spec equal to the given
 or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
@@ -837,7 +843,9 @@ into a shell. Twelve verbs exist:
   class is read wherever stated in `--class` and the headers of `research.md`
   and `spec.md`; missing, invalid or disagreeing declarations refuse before any
   model call; a swarm run needs `--availability-reported <id>` from
-  `prepare-explore`; `--stage2-off [REASON]` uses Haiku 5.5 and skips the class. The runner states
+  `prepare-explore`; `--stage2-off [REASON]` uses Haiku 5.5 and skips class derivation
+  and class/neighbour header checks; combining it with `--class` is refused
+  with exit 2 before any call. The runner states
   the explorer's role and read-only tools in the prompt, and an answer that
   names no file of the repository fails instead of being appended (bead
   coding-harness-e7m).

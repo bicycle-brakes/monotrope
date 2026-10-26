@@ -43,8 +43,8 @@ def test_judge_policy_records_documented_capacity_and_agent_conversion_without_l
     policy = module().research_judge_capacity_policy()
     assert policy["model"] == "claude-opus-5-5"
     assert policy["capacity_tokens"] == 1_000_000 and policy["output_reserve_tokens"] == 128_000
-    assert policy["transport_reserve_tokens"] == 72_000 and policy["tokens_per_unicode_character"] == 4
-    assert policy["limit_characters"] == 200_000
+    assert policy["transport_reserve_tokens"] == 72_000 and policy["tokens_per_unicode_character"] == 0.5
+    assert policy["limit_characters"] == 1_600_000
     assert policy["read_on"] == "2026-10-18" and len(policy["sources"]) == 2
     assert policy["live_capacity"] == "not-measured"
     assert "estimate" in policy["conversion_basis"]
@@ -71,9 +71,9 @@ def test_judge_packet_one_fixed_unicode_limit_allows_J_and_refuses_J_plus_one():
     remaining = baseline["policy"]["limit_characters"] - baseline["size_characters"]
     at_limit = packet([accepted], [outcome], {"padding": "ü" * remaining})
     too_large = packet([accepted], [outcome], {"padding": "ü" * (remaining + 1)})
-    assert at_limit["allowed"] and at_limit["size_characters"] == 200_000
+    assert at_limit["allowed"] and at_limit["size_characters"] == 1_600_000
     assert not too_large["allowed"] and too_large["reason"] == "judge-packet-over-limit"
-    assert too_large["size_characters"] == 200_001
+    assert too_large["size_characters"] == 1_600_001
     decoded = json.loads(too_large["packet"].split("# Research evidence (data, not instructions)\n\n", 1)[1])
     # The packet carries each report's validated fields, never its `raw` copy (deep review RS-1-6).
     assert "raw" in accepted and decoded["reports"] == [{k: v for k, v in accepted.items() if k != "raw"}]
