@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-a05
@@ -81,3 +81,11 @@ Read by the implementing session, so it is no independent review.
 - `MUTATIONS_NAMEN` still matches raw text for a `tests/` subject (the
   ruleset gate), as before.
 - New identifiers are English; the section's German names stay (D-4).
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
