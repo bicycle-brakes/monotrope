@@ -89,3 +89,18 @@ answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan
 answer 1) that the small cloud-session fixes get phase 6 only tonight,
 because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
 a fresh Codex session.
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2190 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-1 | MAJOR | SPEC | implementation | tests/test_ci.py:2010–2015 | A mutation-named test containing only `assert command[0].endswith("plans_registry.py")` is returned as evidence for the registry script. Every call argument is treated as a script path, including strings used solely to compare commands. This reproduces the false evidence the change must reject and can force removal of an exemption without a reaching test. [Acceptance criterion 1] | Codex | open | — |
+| R6-2 | MAJOR | SPEC | implementation | tests/test_ci.py:2083–2089 | Helper references count as helper calls. With `_run()` calling `plans_registry.main()`, a mutation-named test containing only `assert callable(_run)` is returned as registry evidence although it never invokes `_run` or the gate. Reachability must follow invocations; merely referencing a callable cannot establish execution. [Acceptance criterion 1] | Codex | open | — |
+| R6-3 | MAJOR | MAINT | implementation | tests/test_ci.py:2027–2031 | Imports inside unrelated functions become bindings for every test in the file. Reproduced with `from plans_registry import main` inside a normal test and a separate mutation-named test calling its own `main` fixture: `_evidence` credits the registry script although the mutation test never imports or calls it. Preserve import scope when resolving names so unrelated tests cannot supply false gate coverage. | Codex | open | — |
+
+Phase 6 verdict: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43, 2026-10-26
+Reviewer session: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43 — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
