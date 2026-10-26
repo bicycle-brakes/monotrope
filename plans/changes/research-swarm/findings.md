@@ -4762,3 +4762,15 @@ Stage-2 call, 2026-10-26: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 664 files, 2248 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 664 files, 2252 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 664 files, 2253 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-68 | MAJOR | SPEC | base | `scripts/stage2_research_refs.py:177–180` | With a literal U+2028 inside Markdown prose before `## Invented`, the resolver returns `supported=True` for `Invented` although it is not an ATX heading on a document line. Reproduced with `## Real\nparagraph\u2028## Invented\nsecret\n`; the real section's excerpt is also truncated. `splitlines()` invents structural boundaries, allowing nonexistent sections to confer evidence and map scope. [criterion 16] | Codex | open | — |
+| F-69 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:933–950` | A criterion Basis containing one supported claim and a nonexistent claim ending in `C8` passes the handoff gate. Reproduced through `check_change()` with complete research and answered obligations: no findings. Tokens outside the claim regex are silently ignored once another origin is valid, so malformed claim references evade the requirement to validate every named claim. [criterion 34] | Codex | open | — |
+
+Phase 6 verdict: codex 01a178f7-23ab-74e2-a3dd-955a8fd33f31, 2026-10-26
+Reviewer session: codex 01a178f7-23ab-74e2-a3dd-955a8fd33f31 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
