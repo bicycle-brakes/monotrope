@@ -35,6 +35,7 @@ RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
 from ci_gates import gates, misst_in  # noqa: E402
+from mutation_evidence import MUTATIONS_NAMEN, belegt, pruefling  # noqa: E402
 
 
 def _einschraenkungen() -> dict[str, list[str]]:
@@ -1892,15 +1893,6 @@ def test_the_drift_job_holds_only_steps_that_can_run() -> None:
 # gate. Only the mutation test says something about the gate: **does it go red
 # if you break what it is meant to protect against?**
 #
-# These name forms count as mutation evidence. The list is deliberately bound to
-# names and not to comments: a name is carried along when something is renamed,
-# a comment is not.
-MUTATIONS_NAMEN = re.compile(
-    r"^def (test_\w*(?:goes_red|red_on|detects_tampering|refuses|is_caught|catches|"
-    r"not_a_write|is_an_error|is_exit_2|never_writes|is_not_a_pass|notices)\w*)\(",
-    re.M,
-)
-
 # Gates without mutation evidence — with the reason and the intent.
 #
 # This list is a **ratchet**: it may shrink, never grow. Whoever adds a gate
@@ -1938,25 +1930,6 @@ def _testdateien() -> list[Path]:
     return sorted((REPO_ROOT / "tests").glob("test_*.py"))
 
 
-def _pruefling(gate: dict) -> str:
-    """The subject of this gate — the script it runs."""
-    befehl = gate.get("command") or ""
-    # The subfolder has to be included: until 2026-09-08 the pattern ended before
-    # the second `/`, and a script under `scripts/kit/` was invisible to the
-    # ratchet — it reported "no script recognisable" and demanded an exception
-    # for a gate that had long had its mutation evidence.
-    m = re.search(r"(?:scripts|docs/patterns)/(?:[A-Za-z_]+/)*([A-Za-z_]+\.py)", befehl)
-    if m:
-        return m.group(1)
-    # A gate can also run a test file itself — `ruleset-drift` checks a statement
-    # about the repo configuration for which there is no script and there should
-    # be none: a tool that can change rulesets would be a greater risk than the
-    # finding it makes. Its mutation evidence then lies in exactly that file, and
-    # that is where the ratchet looks for it too.
-    m = re.search(r"(tests/[A-Za-z_]+\.py)", befehl)
-    return m.group(1) if m else ""
-
-
 def test_every_gate_step_has_a_mutation_test() -> None:
     """Every gate has a run that turns it red — or a reason in the ratchet.
 
@@ -1970,23 +1943,12 @@ def test_every_gate_step_has_a_mutation_test() -> None:
         gid = g["id"]
         if gid.endswith("setup-deps"):
             continue
-        ziel = _pruefling(g)
+        ziel = pruefling(g)
         if not ziel:
             if gid not in OHNE_MUTATIONSTEST:
                 ohne.append(f"{gid} (no script recognisable)")
             continue
-        if ziel.startswith("tests/"):
-            # If the gate runs a test file, its evidence lies IN that file. The
-            # search below would instead accept every file that merely MENTIONS
-            # the path — on 2026-09-08 that made `test_workflow_entry.py` the
-            # evidence for `ruleset-drift`, because it names the name in a list
-            # and has some mutation evidence of its own. A coverage that assumes
-            # from a mention covers nothing.
-            datei = REPO_ROOT / ziel
-            belegt = datei.is_file() and bool(MUTATIONS_NAMEN.search(datei.read_text(encoding="utf-8")))
-        else:
-            belegt = any(MUTATIONS_NAMEN.search(text) for p, text in quellen.items() if ziel in text)
-        if not belegt and gid not in OHNE_MUTATIONSTEST:
+        if not belegt(ziel, quellen, REPO_ROOT) and gid not in OHNE_MUTATIONSTEST:
             ohne.append(f"{gid} → {ziel}")
 
     assert not ohne, (
@@ -2011,7 +1973,7 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ueberholt = []
     for gid in OHNE_MUTATIONSTEST:
-        ziel = _pruefling(bekannt[gid])
+        ziel = pruefling(bekannt[gid])
         if ziel and any(MUTATIONS_NAMEN.search(t) for p, t in quellen.items() if ziel in t):
             ueberholt.append(gid)
     assert not ueberholt, f"long since covered, but still in the ratchet: {ueberholt}"

@@ -76,6 +76,9 @@ rules:
   - prefix: scripts/ci_gates.py
     rolle: mechanismus
     reason: "liest decisions/gates.yaml als die eine Gate-Liste und leitet ci.yml ab, plus die Sperrklinken (D-10, bead bo0)"
+  - prefix: scripts/mutation_evidence.py
+    rolle: mechanismus
+    reason: "the gate ratchet's analyzer; tests/test_ci.py travels and imports it (bead coding-harness-diic)"
   - prefix: scripts/verify_all.sh
     rolle: mechanismus
     reason: "der lokale Lauf: haelt keine Kommandos, fragt ci_gates.py (bead bo0)"
