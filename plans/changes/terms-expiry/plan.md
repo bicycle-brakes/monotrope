@@ -144,21 +144,21 @@ release exemption, and the drafting agent must not create an answer file.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_terms_expiry.py::test_paid_terms_require_a_usable_expiry — a missing or unusable date admits a paid model
-- 2: not yet written tests/test_stage2_terms_expiry.py::test_expiry_is_inclusive_on_the_utc_day — admission uses the local date or the wrong side of midnight
-- 3: not yet written tests/test_stage2_terms_expiry.py::test_expiry_skips_name_model_and_reason — preparation or review hides the model, reason or expired date
-- 4: not yet written tests/test_stage2_terms_expiry.py::test_expiry_warning_window_on_preparation_and_review — warning boundaries or fresh, legacy and resumed display differ
-- 5: not yet written tests/test_stage2_terms_expiry.py::test_saved_admission_cannot_authorize_an_expired_call — a fresh receipt or saved round dispatches an expired member or alters prior history
-- 5: not yet written tests/test_stage2_terms_expiry.py::test_paid_retries_and_replacements_recheck_expiry — a probe retry, compatibility probe, replacement or malformed-answer retry bypasses the date guard
-- 5: not yet written tests/test_stage2_session.py::test_an_expired_go_model_starts_no_interactive_session — interactive launch starts a terminal or transport after expiry
-- 6: not yet written tests/test_stage2_terms_expiry.py::test_non_deepseek_records_receive_reading_plus_thirty_days — a record is missed, has the wrong deadline or a fabricated re-read
-- 7: not yet written tests/test_stage2_terms_expiry.py::test_both_deepseek_records_use_the_documented_expiry — either record lacks the October 25 reading, October 31 deadline or retention qualification
+- 1: tests/test_stage2_terms_expiry.py::test_paid_terms_require_a_usable_expiry — a missing or unusable date admits a paid model
+- 2: tests/test_stage2_terms_expiry.py::test_expiry_is_inclusive_on_the_utc_day — admission uses the local date or the wrong side of midnight
+- 3: tests/test_stage2_terms_expiry.py::test_expiry_skips_name_model_and_reason — preparation or review hides the model, reason or expired date
+- 4: tests/test_stage2_terms_expiry.py::test_expiry_warning_window_on_preparation_and_review — warning boundaries or fresh, legacy and resumed display differ
+- 5: tests/test_stage2_terms_expiry.py::test_saved_admission_cannot_authorize_an_expired_call — a fresh receipt or saved round dispatches an expired member or alters prior history
+- 5: tests/test_stage2_terms_expiry.py::test_paid_retries_and_replacements_recheck_expiry — a probe retry, compatibility probe, replacement or malformed-answer retry bypasses the date guard
+- 5: tests/test_stage2_session.py::test_an_expired_go_model_starts_no_interactive_session — interactive launch starts a terminal or transport after expiry
+- 6: tests/test_stage2_terms_expiry.py::test_non_deepseek_records_receive_reading_plus_thirty_days — a record is missed, has the wrong deadline or a fabricated re-read
+- 7: tests/test_stage2_terms_expiry.py::test_both_deepseek_records_use_the_documented_expiry — either record lacks the October 25 reading, October 31 deadline or retention qualification
 - 8: not a test — phase-6 review reads docs/WORKFLOW.md and ADR 0022 against the renewal decision; red if source/date evidence or maintainer merge is optional
-- 8: not yet written tests/test_stage2_terms_expiry.py::test_terms_evaluation_never_renews_the_declaration — preparation, review or admission changes endpoint-file bytes
-- 9: not yet written tests/test_stage2_terms_expiry.py::test_expiry_preserves_prior_admission_guards — future expiry overrides a skip, unread/training-enabled terms or empty-selection refusal
+- 8: tests/test_stage2_terms_expiry.py::test_terms_evaluation_never_renews_the_declaration — preparation, review or admission changes endpoint-file bytes
+- 9: tests/test_stage2_terms_expiry.py::test_expiry_preserves_prior_admission_guards — future expiry overrides a skip, unread/training-enabled terms or empty-selection refusal
 - 9: tests/test_stage2.py::test_free_class_admission_is_bound_to_discovery_and_purpose — the free exception broadens beyond discovery and its purpose
 - 9: tests/test_stage2.py::test_each_call_runs_its_own_leak_check — a later call bypasses the leak scan
-- 10: not yet written tests/test_stage2_terms_expiry.py::test_expiry_warnings_survive_receipt_round_and_release — model/date warning evidence disappears after preparation or release
+- 10: tests/test_stage2_terms_expiry.py::test_expiry_warnings_survive_receipt_round_and_release — model/date warning evidence disappears after preparation or release
 
 ## Not touched
 
@@ -170,4 +170,12 @@ changes. No extra live source fetch is claimed; use the recorded DeepSeek
 re-read. No tracker write, commit, push or repository-changing git command
 belongs to this drafting call.
 
+## Runner route — 2026-10-26
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-26 17:12:13–18:10:46 UTC, 3512 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-26 18:10:52–18:42:36 UTC, 1904 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-26 18:42:43–18:48:51 UTC, 368 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

@@ -1,0 +1,501 @@
+"""Paid terms expire: the `gilt_bis` boundary of paid admission (bead coding-harness-abra).
+
+Every case runs the runner against synthetic `opencode-go` declarations and
+controls only the terms UTC-date seam, `stage2.terms_today`; the runner's
+accounting clocks stay live, and receipt age stays measured by its own clock
+(`stage2_availability.now`). The migration assertions (criteria 6 and 7) read
+the repository's real declaration, which the orchestrator edits by hand before
+phase 4. No test reaches a real endpoint: reviewer and probe calls run through
+the stand-ins the shared `world` fixture plants.
+
+Each behavioral test's fault is the refusal the baseline runner lacks: on the
+baseline's `terms_problem` every date-question here admits the model instead.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+
+import stage2  # noqa: E402
+import stage2_availability as availability  # noqa: E402
+from test_stage2 import (  # noqa: E402
+    FIXED,
+    MALFORMED_ANSWER,
+    REPO_ROOT,
+    TEST_FLASH,
+    TEST_FREE,
+    TEST_LADDER,
+    TEST_RUNGS,
+    VERDICT,
+    World,
+    decide_record,
+    forget_the_run,
+    loop_state,
+    rows,
+    rung_of,
+)
+from test_stage2 import world as stage2_world  # noqa: E402
+from test_stage2_availability import enable, receipt  # noqa: E402
+
+world = stage2_world
+
+
+def set_terms(w: World, model: str, **changes: object) -> None:
+    """Rewrite one declared model's terms record in the world's declaration."""
+    path = w.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle_terms"][model].update(changes)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def disable_preparation(w: World) -> None:
+    """Take the availability rule back out: the record's legacy path again."""
+    path = w.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry.pop("availability_preflight", None)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def a_record(**changes: object) -> dict:
+    """One admissible record, dated far ahead, with the given fields replaced."""
+    record = {
+        "gelesen": "2026-10-25",
+        "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
+        "aufbewahrung": "0 days",
+        "training": "Not used",
+        "gilt_bis": "2099-01-01",
+    }
+    record.update(changes)
+    return {"modelle_terms": {"m": record}}
+
+
+# ---------------------------------------------------------------------------
+# Criterion 1: no usable `gilt_bis`, no admission
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "gilt_bis",
+    [
+        None,  # the field is missing
+        "",  # empty
+        True,  # not a string
+        20261031,  # not a string
+        dt.date(2026, 10, 31),  # a YAML-native date, not the quoted string
+        dt.datetime(2026, 10, 31, 12, 0, tzinfo=dt.UTC),  # a timestamp
+        "2026-10-31T00:00:00",  # a timestamp in string form
+        "2026-2-3",  # malformed
+        "31.10.2026",  # malformed
+        " 2026-10-31",  # padded
+        "2026-10-31 ",  # padded
+        "2026-13-01",  # impossible calendar date
+        "2026-02-30",  # impossible calendar date
+        "2027-02-29",  # no leap day
+    ],
+)
+def test_paid_terms_require_a_usable_expiry(gilt_bis: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1: a missing or unusable date admits no paid model, and none is invented."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
+    record = a_record()
+    if gilt_bis is None:
+        del record["modelle_terms"]["m"]["gilt_bis"]  # the field is missing
+    else:
+        record["modelle_terms"]["m"]["gilt_bis"] = gilt_bis
+    problem = stage2.terms_problem(record, "m")
+    assert problem is not None and "m" in problem, problem
+    if gilt_bis is None:
+        assert "missing" in problem, problem
+    elif isinstance(gilt_bis, str):
+        assert "not a quoted ISO date" in problem, problem
+    # The positive control: the quoted ISO string itself admits.
+    assert stage2.terms_problem(a_record(gilt_bis="2026-11-30"), "m") is None
+
+
+# ---------------------------------------------------------------------------
+# Criterion 2: inclusive on the UTC day, decided in UTC
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_is_inclusive_on_the_utc_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2: valid through the named UTC day, refused the day after — never by the local date."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 31))
+    assert stage2.terms_problem(a_record(gilt_bis="2026-10-31"), "m") is None, "the expiry day admitted"
+    assert stage2.terms_problem(a_record(gilt_bis="2026-11-01"), "m") is None, "a later day admitted"
+    expired = stage2.terms_problem(a_record(gilt_bis="2026-10-30"), "m")
+    assert expired and "expired on 2026-10-30" in expired, expired
+
+    # The judgement reads UTC, not the local calendar: at 23:40 UTC a zone a
+    # day ahead (UTC+14) already reads 2026-11-01, and it must not decide.
+    class LocalDateAhead(dt.date):
+        @classmethod
+        def today(cls) -> dt.date:
+            return dt.date(2026, 11, 1)
+
+    class FrozenDateTime(dt.datetime):
+        @classmethod
+        def now(cls, _tz=None) -> dt.datetime:
+            return dt.datetime(2026, 10, 31, 23, 40, tzinfo=dt.UTC)
+
+    monkeypatch.setattr(stage2.dt, "date", LocalDateAhead)
+    monkeypatch.setattr(stage2.dt, "datetime", FrozenDateTime)
+    assert stage2.terms_today() == dt.date(2026, 10, 31)
+    assert stage2.terms_problem(a_record(gilt_bis="2026-10-31"), "m") is None
+
+
+# ---------------------------------------------------------------------------
+# Criterion 3: exclusions name the model, the kind and the passed date
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_skips_name_model_and_reason(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3: preparation names every excluded id with missing, invalid or passed and the date."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 11, 1))
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    set_terms(world, TEST_LADDER[1], gilt_bis=True)
+    set_terms(world, TEST_RUNGS[0], gilt_bis=None)
+    named = stage2.skipped_models(world.root)
+    assert any(TEST_LADDER[0] in reason and "expired on 2026-10-31" in reason for reason in named), named
+    assert any(TEST_LADDER[1] in reason and "not a quoted ISO date" in reason for reason in named), named
+    assert any(TEST_RUNGS[0] in reason and "gilt_bis is missing" in reason for reason in named), named
+    assert stage2.ladder(world.root) == [], "an excluded model stayed eligible"
+    # The same reasons reach preparation's report and its receipt.
+    enable(world)
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert world.run("prepare-loop") == 0
+    out = capsys.readouterr().out
+    assert "Paid admission skipped:" in out
+    assert "expired on 2026-10-31" in out and TEST_LADDER[0] in out
+    terms_skipped = receipt(world)["state"]["availability"]["terms_skipped"]
+    for model in TEST_LADDER[:2] + TEST_RUNGS:
+        assert any(model in reason for reason in terms_skipped), (model, terms_skipped)
+
+
+# ---------------------------------------------------------------------------
+# Criterion 4: the warning window, on preparation and every round
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_warning_window_on_preparation_and_review(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4: warning from seven days out through the expiry day, none at eight or after.
+
+    Fresh, legacy and resumed rounds each evaluate the current day; a skipped
+    record warns too, for a warning is notice, never admission.
+    """
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
+
+    def warned(gilt_bis: str) -> list[str]:
+        record = a_record()["modelle_terms"]["m"]
+        record["gilt_bis"] = gilt_bis
+        return stage2.terms_warnings({"modelle": ["m"], "modelle_terms": {"m": record}})
+
+    assert len(warned("2026-11-02")) == 1, "no warning seven days out"
+    assert warned("2026-11-02") == ["the data terms of m expire on 2026-11-02 (7 days left)"]
+    assert len(warned("2026-11-03")) == 0, "a warning eight days out"
+    assert len(warned("2026-10-27")) == 1, "no warning one day out"
+    assert len(warned("2026-10-26")) == 1, "no warning on the expiry day"
+    assert len(warned("2026-10-25")) == 0, "an expired date warned instead of skipped"
+    # A skipped record warns too, for a warning is notice, never admission.
+    skipped = a_record(uebersprungen="2026-10-17", grund="wire API", gilt_bis="2026-11-02")["modelle_terms"]["m"]
+    assert stage2.terms_problem({"modelle_terms": {"m": skipped}}, "m") is not None
+    assert stage2.terms_warnings({"modelle": ["m"], "modelle_terms": {"m": skipped}}) == [
+        "the data terms of m expire on 2026-11-02 (7 days left)"
+    ]
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-28")
+    # A fresh run's first round is the free swarm; the warning joins its notes.
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    first = capsys.readouterr().err
+    line = f"review-loop: Notice: the data terms of {TEST_LADDER[0]} expire on 2026-10-28 (2 days left)."
+    assert line in first, first
+    # A legacy run's next round re-evaluates the current day and warns again.
+    decide_record(world, status=FIXED)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    second = capsys.readouterr().err
+    assert line in second, second
+    text = world.record().read_text(encoding="utf-8")
+    note = f"Notice: the data terms of {TEST_LADDER[0]} expire on 2026-10-28 (2 days left)."
+    assert text.count(note) == 2, "the resumed round did not renew the warning in the record"
+
+
+# ---------------------------------------------------------------------------
+# Criterion 5: a saved admission cannot authorize an expired call
+# ---------------------------------------------------------------------------
+
+
+def test_saved_admission_cannot_authorize_an_expired_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5: receipt-backed and saved selections recheck the day — an expired member dispatches nothing."""
+    clock = {"day": dt.date(2026, 10, 31)}
+    monkeypatch.setattr(stage2, "terms_today", lambda: clock["day"])
+    start = dt.datetime(2026, 10, 31, 23, 0, tzinfo=dt.UTC)
+    monkeypatch.setattr(availability, "now", lambda: start)
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    # Act 1: preparation on the expiry day admits the member into the receipt's
+    # Flash swarm; the free round consumes it, and a day later the saved
+    # selection refuses instead of dispatching.
+    enable(world)
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    assert prepared["state"]["paid"]["flash"][0] == TEST_LADDER[0]
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    decide_record(world, status=FIXED)
+    record_after_round = world.record().read_text(encoding="utf-8")
+    dispatched = len(world.reviews("pi"))
+    clock["day"] = dt.date(2026, 11, 1)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 2
+    assert len(world.reviews("pi")) == dispatched, "an expired member was dispatched on the receipt's selection"
+    assert world.record().read_text(encoding="utf-8") == record_after_round, "the refusal reset prior run history"
+    assert stage2.rounds_run(world.record().read_text(encoding="utf-8"), "") == 1, "the refusal fabricated a round"
+    assert "expired on 2026-10-31" in capsys.readouterr().err
+    capsys.readouterr()
+    # Act 2: a saved selection whose terms expire after the parent's batch
+    # validation refuses immediately before the launch, and history stands.
+    disable_preparation(world)
+    forget_the_run(world)
+    world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+    record_before = world.record().read_text(encoding="utf-8")
+    dispatched = len(world.reviews("pi"))
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+
+    real = stage2.checked_prompt
+
+    def flip_after_batch(ctx, endpoint, prompt, admission_problem=None):
+        result = real(ctx, endpoint, prompt, admission_problem)
+        if endpoint[1] == TEST_FLASH[1]:
+            clock["day"] = dt.date(2026, 11, 1)
+        return result
+
+    monkeypatch.setattr(stage2, "checked_prompt", flip_after_batch)
+    assert world.run("review-loop") == 2
+    assert world.reviews("pi")[dispatched:] == [], "an expired member reached the model after the batch checks"
+    assert world.record().read_text(encoding="utf-8") == record_before, "the refusal reset prior run history"
+    assert '"consumed": ["free"]' in record_before, "the seeded snapshot was not what the refusal preserved"
+    assert not world.findings.exists(), "the refusal wrote a round"
+    assert "expired on 2026-10-31" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Criterion 5: retries, replacements and probes recheck the day
+# ---------------------------------------------------------------------------
+
+
+def test_paid_retries_and_replacements_recheck_expiry(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5: a probe retry, the compatibility probe, a Flash replacement and a
+    malformed-answer retry each refuse an expired model instead of dispatching it."""
+    clock = {"day": dt.date(2026, 10, 31)}
+    monkeypatch.setattr(stage2, "terms_today", lambda: clock["day"])
+    start = dt.datetime(2026, 10, 31, 12, 0, tzinfo=dt.UTC)
+    monkeypatch.setattr(availability, "now", lambda: start)
+    # Act 1: the first availability probe of an expiring model times out, the
+    # day passes, and the second probe is refused instead of trusted.
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    enable(world)
+    tries: list[str] = []
+
+    def probe(_ctx, model, _prompt, _key, **_options):
+        if model == TEST_LADDER[0]:
+            tries.append(model)
+            if len(tries) == 1:
+                clock["day"] = dt.date(2026, 11, 1)
+                raise stage2.CallFailed(
+                    f"pi was stopped by the availability probe limit of {availability.PROBE_SECONDS} seconds"
+                )
+        return "OK"
+
+    real_run_reviewer = stage2.run_reviewer
+    monkeypatch.setattr(stage2, "run_reviewer", probe)
+    assert world.run("prepare-loop") == 2
+    assert tries == [TEST_LADDER[0]]
+    assert not availability.receipt_path(world.root, "demo", stage2).exists(), "a refused attempt left a receipt"
+    capsys.readouterr()
+    # Act 2: the compatibility probe names the expired model and calls it never.
+    monkeypatch.setattr(stage2, "run_reviewer", real_run_reviewer)
+    world.script(pi=[{"stdout": "OK"}] * 4)
+    assert world.run("probe") == 0
+    probed = [rung_of(call) for call in world.reviews("pi")]
+    assert TEST_LADDER[0] not in probed, "an expired model was probed"
+    assert set(probed) == {*TEST_FREE, TEST_LADDER[1], TEST_RUNGS[0]}, probed
+    out = capsys.readouterr().out
+    assert TEST_LADDER[0] in out and "expired on 2026-10-31" in out
+    # Act 3: a Flash replacement of a failed member refuses on its own terms.
+    disable_preparation(world)
+    forget_the_run(world)
+    set_terms(world, TEST_LADDER[0], gilt_bis="2099-01-01")
+    set_terms(world, TEST_RUNGS[0], gilt_bis="2026-10-31")
+    world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+    record_before = world.record().read_text(encoding="utf-8")
+    dispatched = len(world.reviews("pi"))
+    world.script(pi=[{"model": TEST_FLASH[0], "exit": 1, "stderr": "down"}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 2
+    made = [rung_of(call) for call in world.reviews("pi")[dispatched:]]
+    assert sorted(made) == sorted(TEST_FLASH), "the expired rung was called"
+    assert world.record().read_text(encoding="utf-8") == record_before
+    assert "replaced by" in world.text() and "no round was written" in world.text()
+    assert "expired on 2026-10-31" in capsys.readouterr().err
+    # Act 4: a malformed first answer is asked again only while the terms hold.
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    set_terms(world, TEST_LADDER[1], gilt_bis="2026-10-31")
+    set_terms(world, TEST_RUNGS[0], gilt_bis="2026-10-31")
+    clock["day"] = dt.date(2026, 10, 31)
+
+    def expire(_ctx, members, _prompts, _key, **_options):
+        clock["day"] = dt.date(2026, 11, 1)
+        return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
+
+    monkeypatch.setattr(stage2, "run_swarm", expire)
+    world.script(pi=[{"stdout": MALFORMED_ANSWER}] * 4)
+    dispatched = len(world.reviews("pi"))
+    assert world.run("review-loop") == 2
+    assert len(world.reviews("pi")) == dispatched, "a retry was dispatched after the day turned"
+    text = world.text()
+    assert "audit calls: 2" in text
+    assert "was asked again with the format reminder" not in text
+    assert world.record().read_text(encoding="utf-8") == record_before
+
+
+# ---------------------------------------------------------------------------
+# Criteria 6 and 7: the migration of the real declaration
+# ---------------------------------------------------------------------------
+
+
+def test_non_deepseek_records_receive_reading_plus_thirty_days() -> None:
+    """Criterion 6: every non-DeepSeek record, skipped ones included, expires `gelesen` plus 30 days."""
+    entry = stage2.endpoint_entry(REPO_ROOT)
+    terms = entry["modelle_terms"]
+    assert set(terms) >= set(entry["modelle"]), "a declared paid model has no terms record at all"
+    deepseek = {"deepseek-v4.1-flash", "deepseek-v4-pro"}
+    for model, record in terms.items():
+        if model in deepseek:
+            continue
+        assert isinstance(record.get("gelesen"), str) and record["gelesen"], model
+        expected = (dt.date.fromisoformat(record["gelesen"]) + dt.timedelta(days=30)).isoformat()
+        assert isinstance(record.get("gilt_bis"), str), f"{model}: the expiry is not the quoted string"
+        assert record["gilt_bis"] == expected, f"{model}: {record['gilt_bis']} is not the reading plus 30 days"
+
+
+def test_both_deepseek_records_use_the_documented_expiry() -> None:
+    """Criterion 7: both DeepSeek records carry the 2026-10-25 re-read, the 2026-10-31 expiry and the prose."""
+    terms = stage2.endpoint_entry(REPO_ROOT)["modelle_terms"]
+    for model in ("deepseek-v4.1-flash", "deepseek-v4-pro"):
+        record = terms[model]
+        assert record["gelesen"] == "2026-10-25", model
+        assert record["gilt_bis"] == "2026-10-31", model
+        assert "renewed monthly" in record["aufbewahrung"], model
+        assert "valid through 2026-10-31" in record["aufbewahrung"], model
+    # The generic 30-day rule did not swallow them: reading + 30 would be 2026-11-24.
+    generic = (dt.date(2026, 10, 25) + dt.timedelta(days=30)).isoformat()
+    assert generic == "2026-11-24"
+    assert terms["deepseek-v4.1-flash"]["gilt_bis"] != generic
+    assert terms["deepseek-v4-pro"]["gilt_bis"] != generic
+
+
+# ---------------------------------------------------------------------------
+# Criterion 8: the runner renews nothing
+# ---------------------------------------------------------------------------
+
+
+def test_terms_evaluation_never_renews_the_declaration(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 8: preparation and a review round read the declared dates and rewrite no byte."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 30))
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    declaration = world.root / "model-endpoints.yaml"
+    enable(world)
+    before = declaration.read_bytes()
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    assert declaration.read_bytes() == before, "terms evaluation rewrote the declaration"
+    assert f"the data terms of {TEST_LADDER[0]} expire on 2026-10-31 (1 day left)" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Criterion 9: expiry preserves every prior admission guard
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_preserves_prior_admission_guards(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 9: a future expiry admits no skipped, unread or training-enabled record, and an
+    all-expired ladder reports a refusal, never a clean round."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
+
+    def entry_with(model: str, **changes: object) -> dict:
+        record = {
+            "gelesen": "2026-10-07",
+            "quelle": "src",
+            "aufbewahrung": "0 days",
+            "training": "Not used",
+            "gilt_bis": "2099-01-01",
+        }
+        record.update(changes)
+        return {"modelle_terms": {model: record}}
+
+    problem = stage2.terms_problem(entry_with("m", uebersprungen="2026-10-17", grund="wire API"), "m")
+    assert problem and "was skipped on 2026-10-17" in problem and "gilt_bis" not in problem, problem
+    problem = stage2.terms_problem(entry_with("m", training="Yes"), "m")
+    assert problem and "training" in problem and "gilt_bis" not in problem, problem
+    problem = stage2.terms_problem(entry_with("m", aufbewahrung="  "), "m")
+    assert problem and "retention" in problem and "gilt_bis" not in problem, problem
+    problem = stage2.terms_problem({"modelle_terms": {}}, "m")
+    assert problem and "no dated reading" in problem, "an unread record became admissible by expiry alone"
+    # The world act: every paid reading expired, the free round still runs and
+    # the next paid stage refuses on expiry — never a clean round.
+    for model in TEST_LADDER:
+        set_terms(world, model, gilt_bis="2026-10-25")
+    assert stage2.ladder(world.root) == []
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == sorted(TEST_FREE)
+    decide_record(world, status=FIXED)
+    assert world.run("review-loop") == 2, "an empty eligible selection was reported as a clean round"
+    assert stage2.CLEAN_CODE != 2 and "expired on 2026-10-25" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Criterion 10: the warning survives receipt, round and release
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_warnings_survive_receipt_round_and_release(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10: one day out, the warning stands in the receipt, the round record and the released findings."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 30))
+    set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-31")
+    warning = f"the data terms of {TEST_LADDER[0]} expire on 2026-10-31 (1 day left)"
+    enable(world)
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert world.run("prepare-loop") == 0
+    assert receipt(world)["state"]["availability"]["terms_warnings"] == [warning]
+    assert "Terms warning:" in capsys.readouterr().out
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", receipt(world)["report_id"]) == 0
+    assert warning in world.record().read_text(encoding="utf-8")
+    decide_record(world, status=FIXED)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert warning in world.text(), "releasing the round lost the warning"

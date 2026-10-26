@@ -1100,6 +1100,28 @@ the Flash swarm; the remaining reachable paid candidates form the ladder.
 Existing snapshots and legacy declarations without the rule retain the
 behavior below. A run with history cannot be reset by preparation.
 
+**Paid terms expire (ADR 0022, bead coding-harness-abra).** Every
+`modelle_terms` record of a paid model carries `gilt_bis`, a quoted ISO
+calendar date the reading is valid through; the following UTC day it is
+expired, and the judgement reads UTC, never the local calendar. A record
+without a usable `gilt_bis` — missing, not a quoted date, or an impossible
+calendar date — grants no admission, and the runner never infers, extends or
+renews a date at runtime. A refusal names the model, says whether the expiry
+is missing, invalid or passed, and names the recorded date once it has
+passed. From seven UTC days before expiry through the expiry day,
+preparation and every round — fresh, legacy or resumed — print a warning
+with the model id and date, and the round's notes carry it, so the released
+findings keep it; a warning neither admits nor refuses, an expired reading
+is a skip with its reason, not a warning, and a skipped record with a valid
+date warns too. A saved selection or a fresh receipt does not keep an
+expired member admissible: the round is refused before the call, and the
+run's history stands. Renewal is not the runner's: a reading is introduced
+or renewed by an agent's dated source re-read and a decision pull request
+merged by the maintainer; where the source states an end date it is
+recorded, and otherwise a record expires `gelesen` plus 30 calendar days.
+Migrated 2026-10-26 on that rule; both DeepSeek readings carry the
+documented 2026-10-25 source re-read and expire 2026-10-31.
+
 After implementation and before phase 6, `review-loop` runs one round per
 call, and the loop runs **until a round is clean — every row of a round
 decided and none accepted (ADR 0021).** Round 1 is the **free swarm**: a

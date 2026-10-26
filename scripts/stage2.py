@@ -1276,12 +1276,39 @@ def _terms(entry: dict, model: str) -> dict:
     return record if isinstance(record, dict) else {}
 
 
-def terms_problem(entry: dict, model: str) -> str | None:
-    """Why the paid model's data terms are not read (yet), or None when it is admitted.
+def terms_today() -> dt.date:
+    """The UTC calendar date terms expiry is judged against (a seam for tests).
 
-    A dated, sourced reading must explicitly rule out training. A dated skip
-    keeps the model out and names its reason for the handover (ADR 0021,
-    decision 5).
+    Terms are a UTC boundary (spec, terms): the local calendar date never
+    decides admission, so tests pin this seam alone and leave the runner's
+    accounting clocks live.
+    """
+    return dt.datetime.now(dt.UTC).date()
+
+
+def _gilt_bis(record: dict) -> tuple[dt.date | None, str]:
+    """The record's parsed `gilt_bis`, or why it is not a usable end date.
+
+    Only a quoted ISO calendar date counts (spec, terms): a missing value, a
+    YAML-native date, a timestamp and a malformed or impossible calendar date
+    are all refused, never repaired or inferred (fail closed).
+    """
+    value = record.get("gilt_bis")
+    if value is None:
+        return None, "gilt_bis is missing"
+    if not isinstance(value, str) or not DATE_ONLY.fullmatch(value) or not _valid_date(value):
+        return None, "gilt_bis is not a quoted ISO date YYYY-MM-DD"
+    return dt.date.fromisoformat(value), ""
+
+
+def terms_problem(entry: dict, model: str) -> str | None:
+    """Why the paid model's data terms are unread or no longer valid, or None when it is admitted.
+
+    A dated, sourced reading must explicitly rule out training and carry a
+    usable end date `gilt_bis`, valid through that UTC day; the following day
+    the reading is expired (bead coding-harness-abra). A dated skip keeps the
+    model out and names its reason for the handover (ADR 0021, decision 5).
+    The declared dates rule: the runner never infers, extends or renews one.
     """
     record = _terms(entry, model)
     if record.get("uebersprungen"):
@@ -1299,7 +1326,36 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
     if record.get("training") != "Not used":
         return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    expiry, why = _gilt_bis(record)
+    if expiry is None:
+        return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
+    if expiry < terms_today():
+        return f"the model {model}'s data terms expired on {expiry.isoformat()}; the reading admits no further call"
     return None
+
+
+TERMS_WARNING_DAYS = 7
+
+
+def terms_warnings(entry: dict) -> list[str]:
+    """The declared paid models whose reading expires within seven UTC days, declared order.
+
+    Every declared record warns on a valid date inside the window, a skipped
+    record included: a warning is advance notice, never admission ([DETAIL],
+    2026-10-26). An expired date warns not — that is a skip with its reason —
+    and an unusable one warns not either, for it refuses admission outright.
+    """
+    today = terms_today()
+    warnings = []
+    for model in dict.fromkeys(str(model) for model in entry.get("modelle") or []):
+        expiry, _why = _gilt_bis(_terms(entry, model))
+        if expiry is None:
+            continue
+        days = (expiry - today).days
+        if 0 <= days <= TERMS_WARNING_DAYS:
+            left = "1 day" if days == 1 else f"{days} days"
+            warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
+    return warnings
 
 
 def request_value(entry: dict, model: str) -> float | None:
@@ -6222,10 +6278,33 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 print(f"review-loop: {state['free']['skipped']}")
                 stage = next_stage(state)
         if stage is None:
-            raise Refused(
+            message = (
                 "every stage of this run is consumed and the last round was not clean; the loop stops and "
                 "reports to the maintainer. No model is substituted."
             )
+            # A run whose declaration names paid models while its snapshot holds no paid stage would
+            # stop without saying why: every reading was excluded at snapshot time (spec criteria 3
+            # and 9). Name each exclusion, so the spent run reports the expiry, not a bare stop.
+            try:
+                entry = endpoint_entry(root)
+            except Refused:
+                entry = None
+            if entry is not None:
+                declared = [str(model) for model in entry.get("modelle") or []]
+                paid = state["paid"]
+                if declared and not (paid.get("ladder") or paid.get("flash") or paid.get("rungs")):
+                    problems = "; ".join(
+                        reason
+                        for model in dict.fromkeys(declared)
+                        if (reason := terms_problem(entry, model)) is not None
+                    )
+                    if problems:
+                        message = (
+                            "every stage of this run is consumed and the last round was not clean; no paid "
+                            f"model of the declaration is admissible: {problems}. The loop stops and reports "
+                            "to the maintainer."
+                        )
+            raise Refused(message)
         # The orchestrator decides and repairs before another review (ADR 0021, decision 6): a taken row of
         # this run that no repair has marked `fixed` holds the next round (DL-A-8 of the deep review). Spent
         # stages stop first: there is no next round to hold.
@@ -6329,6 +6408,23 @@ def _review_round(
                 notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
             for note in notes:
                 print(f"review-loop: {note}", file=sys.stderr)
+        # Terms are evaluated on every round, fresh, legacy or resumed ([DETAIL],
+        # 2026-10-26): a reading inside the seven-day window warns here, before
+        # any model call, and the warning joins the round's notes so the record
+        # and the released findings carry it. A warning neither admits nor
+        # refuses a member.
+        for warning in terms_warnings(endpoint_entry(root)):
+            notes.append(f"Notice: {warning}.")
+            print(f"review-loop: {notes[-1]}", file=sys.stderr)
+        # Expiry once more, immediately before the launch: a member whose terms
+        # expired after the batch checks above refuses the round here, without a
+        # call and without touching the run's history (spec criterion 5).
+        if not free:
+            entry = endpoint_entry(root)
+            for member in members:
+                problem = terms_problem(entry, member)
+                if problem:
+                    raise Refused(problem)
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
         deadline = time.monotonic() + REVIEWER_MINUTES * 60

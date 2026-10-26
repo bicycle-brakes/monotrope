@@ -82,6 +82,9 @@ def report(state: dict) -> str:
     ]
     lines.extend(f"Unavailable: {model}: {reason}" for model, reason in available["failed"].items())
     lines.extend(f"Skipped: {model}: {reason}" for model, reason in available["skipped"].items())
+    # A receipt of an older runner holds no warning list; its absence is no
+    # statement about current admission, which the round rechecks live.
+    lines.extend(f"Terms warning: {warning}" for warning in available.get("terms_warnings", []))
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
     return "\n".join(lines)
 
@@ -189,6 +192,10 @@ def prepare(root: Path, change: str, runner) -> None:
         "slow": slow,
         "skipped": skipped,
         "terms_skipped": runner.skipped_models(root),
+        # Advance notice inside the seven-day window, expired records excluded:
+        # the warning travels in the receipt's digest and reaches the report
+        # here (bead coding-harness-abra). A warning grants no admission.
+        "terms_warnings": runner.terms_warnings(entry),
     }
     print(report(state))
     for reason in state["availability"]["terms_skipped"]:

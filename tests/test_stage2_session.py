@@ -16,6 +16,7 @@ variant at a time and named in the test.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
@@ -180,12 +181,15 @@ class World:
             "modelle": [GO_BARE],
         }
         entry.update(changes)
-        # A paid model needs a dated reading of its data terms to be admitted (ADR 0021, decision 5).
+        # A paid model needs a dated reading of its data terms to be admitted (ADR 0021, decision 5),
+        # valid through a quoted expiry date (bead coding-harness-abra); the far-future date keeps
+        # every fixture from aging into a skip, and a boundary test sets its own.
         entry.setdefault(
             "modelle_terms",
             {
                 model: {
                     "gelesen": "2026-10-07",
+                    "gilt_bis": "2099-01-01",
                     "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
                     "aufbewahrung": "0 days",
                     "training": "Not used",
@@ -378,6 +382,23 @@ def test_a_declared_go_model_selects_the_pi_transport(world: World) -> None:
     assert "endpoint opencode-go" in world.text()
     assert f"--model {GO_MODEL}" in world.command()
     assert world.calls("opencode") == [], "the id names the endpoint; the OpenCode CLI is never called"
+
+
+def test_an_expired_go_model_starts_no_interactive_session(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5: an expired Go declaration refuses before any transport, terminal or audit line."""
+    world.declare_go()
+    path = world.tree / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle_terms"][GO_BARE]["gilt_bis"] = "2026-10-30"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 31))
+    assert world.run(model=GO_MODEL) == 2
+    assert world.calls() == [], "an expired model reached a CLI stand-in or the terminal"
+    assert not world.findings.exists(), "the refusal wrote no audit line"
+    assert "expired on 2026-10-30" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
