@@ -262,3 +262,15 @@ Stage-2 call, 2026-10-26: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - R9-2: tests/test_ci.py::test_every_gate_step_has_a_mutation_test: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
 > ```
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 670 files, 2288 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R10-1 | MAJOR | SPEC | implementation | scripts/mutation_evidence.py:204–208 | Branch assignments are discarded before subsequent calls are analyzed. A mutation-named test initializes `cmd=['python','scripts/plans_registry.py']`, replaces it with an echo command in both branches of an `if`, then calls `subprocess.run(cmd)`. The passing test only runs echo, but `evidence()` credits the registry script using the obsolete command. This permits coverage without a reaching test. [Acceptance criterion 1] | Codex | open | — |
+| R10-2 | MINOR | SPEC | implementation | scripts/mutation_evidence.py:231–232 | Helper defaults are evaluated again when analyzing each invocation. With `def _helper(value=plans_registry.main()): return value`, a mutation-named test containing only `assert _helper('no run') == 'no run'` is credited as registry evidence. Runtime verification confirms the gate runs during module import and zero times during the test. The helper invocation must not attribute its definition-time default call to the test. [Acceptance criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17a1d-f207-77d2-8d2e-20c378cdf96f, 2026-10-26
+Reviewer session: codex 01a17a1d-f207-77d2-8d2e-20c378cdf96f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
