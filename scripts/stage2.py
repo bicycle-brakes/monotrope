@@ -524,7 +524,8 @@ class MalformedAnswer(CallFailed):
     """
 
     def __init__(self, answer: str) -> None:
-        super().__init__("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+        empty = "the answer is empty; " if not answer.strip() else ""
+        super().__init__(f"malformed finding output: {empty}expected six-cell findings or exactly 'No finding.'")
         self.answer = answer
 
 
@@ -2059,8 +2060,8 @@ def run_reviewer(
             raise fail("pi", done, f"exit {done.returncode}", key, model)
         answer = scrub(done.stdout or "", key)
         if not answer.strip():
-            # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("pi", done, "the answer is empty", key, model)
+            # A successful empty response is malformed too: the round owes it its format retry.
+            raise MalformedAnswer(answer)
     return answer
 
 

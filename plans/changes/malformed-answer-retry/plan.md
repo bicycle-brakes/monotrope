@@ -59,3 +59,5 @@ PYTHON=.venv/bin/python3 make verify
 
 2026-10-26 10:04:39–10:42:34 UTC, 2275 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
 2026-10-26 12:35:24–12:48:25 UTC, 781 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 13:09:59–13:27:48 UTC, 1069 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-26 13:27:58–13:40:10 UTC, 733 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

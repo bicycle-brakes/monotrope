@@ -1484,7 +1484,7 @@ def test_no_call_carries_another_endpoints_key(world: World) -> None:
 
 @pytest.mark.usefixtures("busy_stdin")
 def test_every_call_gets_an_empty_standard_input(world: World) -> None:
-    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
+    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)} for _ in TEST_FREE])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert len(world.calls()) == 5, "the spec review, the discovery and the free round's members were expected"
@@ -6680,16 +6680,17 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
 )
 def test_a_call_without_an_answer_is_not_a_round(world: World, step: dict) -> None:
     """Criterion 4: a failed call, or one with no answer at all, completes no round and consumes no stage."""
-    world.script(pi=[step, step] + [{"stdout": rows(1)}] * 5)
+    attempts = 2 if step.get("exit") else 4  # Successful empty answers get one format retry each.
+    world.script(pi=[step] * attempts + [{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 1
     assert not world.record().exists()
     assert world.run("review-loop") == 0, "the retry after a failed attempt did not run the free stage again"
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
-    assert len(world.reviews("pi")) == 6, "two free attempts and one Flash round were expected"
+    assert len(world.reviews("pi")) == attempts + 4, "the failed attempt, free round and Flash round were expected"
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
-    assert len(world.reviews("pi")) == 7
+    assert len(world.reviews("pi")) == attempts + 5
 
 
 @pytest.mark.parametrize("verb", ["review-loop", "probe"])
@@ -7042,6 +7043,23 @@ def test_a_malformed_answer_is_asked_once_more(world: World) -> None:
         assert again["prompt_file"].rstrip() == original["prompt_file"].rstrip() + tail, (
             "the asked-again call did not take the member's prompt followed by the format reminder"
         )
+
+
+@pytest.mark.parametrize("answer", ["", "  \n\t"], ids=["empty", "whitespace-only"])
+def test_an_empty_answer_is_asked_again_with_the_format_reminder(world: World, answer: str) -> None:
+    """F-1: a successful Pi exit with no text must reach the malformed-answer retry."""
+    world.script(pi=_malformed_twice_script(first=answer))
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert [cells[6] for cells in stage2.record_rows(text)] == list(TEST_FREE)
+    calls = world.reviews("pi")
+    assert len(calls) == 4, "each empty answer must get exactly one retry"
+    tail = f"\n\n{stage2.FORMAT_REMINDER}\n\n{stage2.ANSWER_FORMAT}"
+    for member in TEST_FREE:
+        original, again = [call for call in calls if rung_of(call) == member]
+        assert again["prompt_file"].rstrip() == original["prompt_file"].rstrip() + tail
+        assert f"{member} was asked again with the format reminder" in text
+        assert world.text().count(f"review-loop · endpoint {stage2.OPENCODE} · model {member} · leak check clean") == 2
 
 
 def test_the_first_malformed_answer_is_kept_in_the_round(world: World) -> None:
@@ -14533,6 +14551,7 @@ def test_a_free_round_with_an_ordinary_failure_still_writes_nothing(world: World
         pi=[
             {"model": TEST_FREE[0], "exit": 1, "stderr": RATE_LIMITED},
             {"model": TEST_FREE[1], **other},
+            *([{"model": TEST_FREE[1], **other}] if not other.get("exit") else []),
             *({"model": model, "stdout": rows(1, "F")} for model in TEST_FLASH),
         ]
     )
