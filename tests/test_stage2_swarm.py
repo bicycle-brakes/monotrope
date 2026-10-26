@@ -55,6 +55,16 @@ RECEIPT = {
     "bytes": 20,
 }
 
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085"])
+def test_a_unicode_line_separator_inside_a_receipt_keeps_the_receipt(separator: str) -> None:
+    # Planted fault: splitlines() breaks a JSON string at a Unicode separator.
+    events = [{"type": "tool", "text": f"first{separator}second"}, {"type": "end"}]
+    text = "\n".join(json.dumps(event, ensure_ascii=False) for event in events) + "\n"
+
+    assert stage2_swarm.parse_receipts(text) == events
+
+
 SEED = (
     "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\nneighbours: []\n---\n\n"
     "# Research\n\nseed fact\n"

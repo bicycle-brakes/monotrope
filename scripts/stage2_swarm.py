@@ -614,7 +614,7 @@ def public_env(own: dict[str, str]) -> dict[str, str]:
 def parse_receipts(text: str) -> list[dict]:
     """The receipt JSON lines, skipping lines that do not parse."""
     parsed: list[dict] = []
-    for line in text.splitlines():
+    for line in text.split("\n"):
         try:
             event = json.loads(line)
         except ValueError:
