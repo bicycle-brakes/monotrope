@@ -747,7 +747,8 @@ def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
 # them before it exits, because their own sessions keep a terminal's Ctrl-C from reaching them
 # (DL-B-5 of the loop's deep review).
 _LIVE_GROUPS: set[int] = set()
-_LIVE_LOCK = threading.Lock()
+_LIVE_LOCK = threading.RLock()
+_LAUNCH_STOPPED = threading.Event()
 # After a timeout kill, how long collecting the output may wait for a descendant that left the
 # group and still holds a pipe (DL-B-6).
 KILL_DRAIN_SECONDS = 5
@@ -755,6 +756,7 @@ KILL_DRAIN_SECONDS = 5
 
 def kill_live() -> int:
     """Kill the process group of every timed program still running; return how many were signalled."""
+    _LAUNCH_STOPPED.set()
     with _LIVE_LOCK:
         groups = sorted(_LIVE_GROUPS)
     for group in groups:
@@ -795,31 +797,44 @@ def launch(
                 errors="replace",
                 check=False,
             )
-        with subprocess.Popen(
-            command,
-            cwd=root,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            errors="replace",
-            start_new_session=True,
-        ) as process:
+        process = None
+        try:
             with _LIVE_LOCK:
+                if _LAUNCH_STOPPED.is_set():
+                    raise NotStarted("the runner was interrupted; no program starts")
+                process = subprocess.Popen(
+                    command,
+                    cwd=root,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    errors="replace",
+                    start_new_session=True,
+                )
                 _LIVE_GROUPS.add(process.pid)
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                with contextlib.suppress(OSError):
-                    os.killpg(process.pid, signal.SIGKILL)
-                with contextlib.suppress(subprocess.TimeoutExpired):
-                    process.communicate(timeout=KILL_DRAIN_SECONDS)
+            # Cancellation may have arrived while Popen was starting in a worker.
+            if _LAUNCH_STOPPED.is_set():
+                raise NotStarted("the runner was interrupted during launch")
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            if process is None:
                 raise
-            finally:
+            # Kill before unregistering and before any Popen cleanup could wait for a live child.
+            with contextlib.suppress(OSError):
+                os.killpg(process.pid, signal.SIGKILL)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.communicate(timeout=KILL_DRAIN_SECONDS)
+            raise
+        finally:
+            if process is not None:
+                for pipe in (process.stdout, process.stderr):
+                    if pipe is not None:
+                        pipe.close()
                 with _LIVE_LOCK:
                     _LIVE_GROUPS.discard(process.pid)
-            return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
     except subprocess.TimeoutExpired as error:
         what = limit or f"the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
         raise StepTimedOut(f"{command[0]} was stopped by {what}") from error
@@ -1188,6 +1203,10 @@ def producer_for(endpoint: tuple[str, str, str | None]) -> str:
     return producers.get(endpoint[0], "pi")
 
 
+class AdmissionRefused(Refused):
+    """Only the declaration refused this model; a replacement may be skipped."""
+
+
 def checked_prompt(
     ctx: Context,
     endpoint: tuple[str, str, str | None],
@@ -1205,7 +1224,7 @@ def checked_prompt(
         else declaration_problem(ctx.root, endpoint[0], endpoint[1])
     )
     if problem:
-        raise Refused(problem)
+        raise AdmissionRefused(problem)
     result = leakcheck.check(ctx.change, leakcheck.default_denylist(), ctx.root, [("prompt", prompt)])
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
@@ -1693,8 +1712,10 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
     dropped: dict[str, list[str]] = {}
     for provider, entry in store.items():
         models = []
-        for definition in entry.get("models", []):
+        for position, definition in enumerate(entry.get("models", []), 1):
+            label = f"{provider} definition {position}"
             if not isinstance(definition, dict):
+                dropped[label] = ["not a model object"]
                 continue
             model = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
             # A `provider` equal to the store's key says nothing the key does not: it crosses unnamed;
@@ -1706,8 +1727,11 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
                 for name in definition
                 if name not in OVERLAY_FIELDS and not (name == "provider" and definition[name] == provider)
             )
+            if not model:
+                dropped[label] = [*extra, "no allowed fields"]
+                continue
             if extra:
-                dropped[str(definition.get("id"))] = extra
+                dropped[str(definition.get("id") or label)] = extra
             models.append(model)
         if models:
             providers[provider] = {"models": models}
@@ -1716,8 +1740,14 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
 
 
 def dropped_notice(dropped: dict[str, str]) -> str:
-    """The dropped free ids with their reasons, one line; a `|` in an id is escaped."""
-    return "; ".join(f"{model.replace('|', chr(92) + '|')} ({reason})" for model, reason in dropped.items())
+    """Name rejected ids as visible text, without terminal controls or table delimiters."""
+
+    def visible(value: str) -> str:
+        return "".join(
+            f"\\x{ord(char):02x}" if ord(char) < 32 or 127 <= ord(char) <= 159 else char for char in value
+        ).replace("|", "\\|")
+
+    return "; ".join(f"{visible(model)} ({visible(reason)})" for model, reason in dropped.items())
 
 
 def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
@@ -6228,7 +6258,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 prompts[nxt] = prompt_for(nxt)
                 try:
                     checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
-                except Refused as refusal:
+                except AdmissionRefused as refusal:
                     # A rung the declaration now refuses is named and passed over: the members' answers
                     # stand, and the rung is neither called nor consumed (DL-B-1 of the loop's deep review).
                     notes.append(f"{nxt} not admitted: {refusal}")
@@ -6503,6 +6533,7 @@ def main(argv: list[str] | None = None) -> int:
         help="review-loop only: report id printed by prepare-loop after its selection was shown in the main conversation",
     )
     args = parser.parse_args(argv)
+    _LAUNCH_STOPPED.clear()
     # SIGTERM stops the run like Ctrl-C: the running programs' groups are killed before the exit
     # (DL-B-5). The handler is the runner's only while main runs, and only from the main thread.
     previous = None

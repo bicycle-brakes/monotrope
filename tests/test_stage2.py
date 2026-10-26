@@ -46,6 +46,14 @@ import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
 
+
+@pytest.fixture(autouse=True)
+def isolated_launch_cancellation(monkeypatch):
+    """Each test represents a separate runner process, including its cancellation latch."""
+    if hasattr(stage2, "_LAUNCH_STOPPED"):
+        monkeypatch.setattr(stage2, "_LAUNCH_STOPPED", threading.Event())
+
+
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
 KEY = "sk-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"
@@ -14804,3 +14812,142 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
         problems = [str(error)]
     assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
     assert problems and "plan" in problems[0]
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, stage2.Terminated])
+def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
+    world: World, monkeypatch, tmp_path: Path, interruption
+) -> None:
+    """An exception inside main-thread communicate must kill the leader and its descendant."""
+    import signal
+
+    pidfile = tmp_path / "descendant.pid"
+    heartbeat = tmp_path / "heartbeat"
+    processes = []
+    original = subprocess.Popen.communicate
+
+    def interrupt(process, *args, **kwargs):
+        if not processes:
+            processes.append(process)
+            end = time.monotonic() + 2
+            while not heartbeat.exists() and time.monotonic() < end:
+                time.sleep(0.01)
+            raise interruption()
+        return original(process, *args, **kwargs)
+
+    def verb(*_args):
+        child = (
+            "import os, time; from pathlib import Path; "
+            f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
+            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(150)]"
+        )
+        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(3)"
+        stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
+
+    monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
+    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    start = time.monotonic()
+    try:
+        if interruption is KeyboardInterrupt:
+            with pytest.raises(KeyboardInterrupt):
+                world.run("explore")
+        else:
+            assert world.run("explore") == 143
+        time.sleep(0.1)
+        first = heartbeat.read_text()
+        time.sleep(0.15)
+        assert heartbeat.read_text() == first, "descendant survived main's interrupt handler"
+        assert processes[0].poll() is not None, "group leader survived the interrupt"
+        assert time.monotonic() - start < 2, "Popen cleanup waited for natural child completion"
+    finally:
+        for process in processes:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+
+
+def test_a_launch_after_the_interrupt_starts_no_program(world: World, monkeypatch, tmp_path: Path) -> None:
+    """A worker released after main has handled the interrupt cannot start another program."""
+    release = threading.Event()
+    errors = []
+    marker = tmp_path / "late"
+
+    def worker():
+        release.wait()
+        try:
+            stage2.launch(
+                [sys.executable, "-c", f"from pathlib import Path; Path({str(marker)!r}).write_text('started')"],
+                tmp_path,
+                dict(os.environ),
+                timeout=2,
+            )
+        except stage2.NotStarted as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+
+    def verb(*_args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            world.run("explore")
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not marker.exists(), "a late worker started a program after cancellation"
+    assert len(errors) == 1
+
+
+def test_a_leak_refusal_for_a_replacement_stops_the_run(world: World, monkeypatch) -> None:
+    """The declaration's recoverable refusal must not swallow the mandatory leak check."""
+    _flash_next(world)
+    original = stage2.leakcheck.check
+    checks = []
+
+    def refuse_replacement(*args, **kwargs):
+        checks.append(1)
+        if len(checks) == 3:
+            raise stage2.Refused("replacement leak check BLOCK")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2.leakcheck, "check", refuse_replacement)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+        ]
+    )
+    assert world.run("review-loop") == 2
+    assert "## Round 2" not in world.record().read_text()
+    assert "rung:mimo-v2.6-pro" not in stage2.read_state(world.record().read_text(), "")["consumed"]
+
+
+def test_a_dropped_catalog_id_carries_no_control_bytes(world: World, capsys) -> None:
+    """Untrusted rejected ids are rendered visibly without terminal control bytes."""
+    bad = "acme\x1b[31m\x00-free"
+    world.script(
+        pi_catalog="provider model context input output\nopencode-go acme-v1-free 128000 0 0\n"
+        + f"opencode-go {bad} 128000 0 0\n",
+        pi=[{"stdout": rows(1, "A")}] * 2,
+    )
+    assert world.run("review-loop") == 0
+    for text in (capsys.readouterr().err, world.record().read_text()):
+        assert "\x1b" not in text and "\x00" not in text
+        assert r"acme\x1b[31m\x00-free" in text
+
+
+def test_a_malformed_catalog_definition_is_dropped_whole_and_named(tmp_path: Path) -> None:
+    """Malformed definitions are named by position, without an empty model or a shared None key."""
+    store = {stage2.OPENCODE: {"models": [{"headers": {}}, {"compat": {}}, None, "bad", {"id": "good"}]}}
+    original = copy.deepcopy(store)
+    dropped = stage2.activate_overlay(tmp_path, store)
+    active = json.loads((tmp_path / "models.json").read_text())
+    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "good"}]
+    assert len(dropped) == 4
+    for position in range(1, 5):
+        assert any(f"definition {position}" in name for name in dropped)
+    assert store == original

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -63,8 +63,9 @@ rows strictly (deep review part B, 2026-10-25). Research: `research.md`.
    unescaped `|` in a cell (DL-B-7).
    *Refuted by:* such an id reviewing, or a `|` in a cell moving columns.
 9. A replacement whose launch the round deadline prevents — checked after
-   its leak check and again at launch — writes no call line and is not
-   consumed (DL-B-10).
+   its leak check and again at launch — is not consumed. If the deadline
+   expires after the post-check but before launch, a call line may already
+   be written; the round names the replacement as not started (DL-B-10).
    *Refuted by:* `rung:<id>` consumed for a rung that never ran.
 10. A table line whose cells after the first are the column names
     (Severity, Dimension, Origin, Where, Finding; any case) is furniture,
