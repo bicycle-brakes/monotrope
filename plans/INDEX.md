@@ -191,6 +191,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/loop-until-clean/plan.md`](changes/loop-until-clean/plan.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/research.md`](changes/loop-until-clean/research.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/spec.md`](changes/loop-until-clean/spec.md) | draft | none | 2026-10-16 | coding-harness-4fk |
+| [`changes/malformed-answer-retry/decisions.md`](changes/malformed-answer-retry/decisions.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
+| [`changes/malformed-answer-retry/findings.md`](changes/malformed-answer-retry/findings.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
+| [`changes/malformed-answer-retry/plan.md`](changes/malformed-answer-retry/plan.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
+| [`changes/malformed-answer-retry/research.md`](changes/malformed-answer-retry/research.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
+| [`changes/malformed-answer-retry/spec.md`](changes/malformed-answer-retry/spec.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
 | [`changes/mutation-evidence-module/decisions.md`](changes/mutation-evidence-module/decisions.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/findings.md`](changes/mutation-evidence-module/findings.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
