@@ -1220,6 +1220,9 @@ read as possible carriers of that isolation (bead `coding-harness-8df`). Every l
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
+A member whose answer is malformed — no six-cell row and not exactly `No finding.` — is asked once more with the
+format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
+keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory

@@ -1484,7 +1484,7 @@ def test_no_call_carries_another_endpoints_key(world: World) -> None:
 
 @pytest.mark.usefixtures("busy_stdin")
 def test_every_call_gets_an_empty_standard_input(world: World) -> None:
-    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
+    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)} for _ in TEST_FREE])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert len(world.calls()) == 5, "the spec review, the discovery and the free round's members were expected"
@@ -6688,16 +6688,17 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
 )
 def test_a_call_without_an_answer_is_not_a_round(world: World, step: dict) -> None:
     """Criterion 4: a failed call, or one with no answer at all, completes no round and consumes no stage."""
-    world.script(pi=[step, step] + [{"stdout": rows(1)}] * 5)
+    attempts = 2 if step.get("exit") else 4  # Successful empty answers get one format retry each.
+    world.script(pi=[step] * attempts + [{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 1
     assert not world.record().exists()
     assert world.run("review-loop") == 0, "the retry after a failed attempt did not run the free stage again"
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
-    assert len(world.reviews("pi")) == 6, "two free attempts and one Flash round were expected"
+    assert len(world.reviews("pi")) == attempts + 4, "the failed attempt, free round and Flash round were expected"
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
-    assert len(world.reviews("pi")) == 7
+    assert len(world.reviews("pi")) == attempts + 5
 
 
 @pytest.mark.parametrize("verb", ["review-loop", "probe"])
@@ -6991,7 +6992,11 @@ def test_a_failed_swarm_member_preserves_successful_answers(
     world: World, capsys: pytest.CaptureFixture[str], broken: dict
 ) -> None:
     """Criterion 4: one member's failure is named beside the others' rows; the round still stands."""
-    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(2, "A")}, broken])
+    steps: list[dict] = [{"model": "acme-v1-free", "stdout": rows(2, "A")}, broken]
+    if not broken.get("exit"):
+        # A malformed answer is asked once more (malformed-answer-retry); the second answer is malformed too.
+        steps.append({"model": "beacon-2-free", "stdout": "not a table either | at all"})
+    world.script(pi=steps)
     assert world.run("review-loop") == 0
     text = world.record().read_text(encoding="utf-8")
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
@@ -7001,7 +7006,213 @@ def test_a_failed_swarm_member_preserves_successful_answers(
     assert "beacon-2-free failed:" in text, "the failed member left no trace"
     if not broken.get("exit"):
         assert "malformed finding output" in text
+        assert "beacon-2-free was asked again with the format reminder" in text
+        assert [rung_of(call) for call in world.reviews("pi")].count("beacon-2-free") == 2, (
+            "the malformed member was not asked exactly once more"
+        )
     assert "from 1 of 2 members" in capsys.readouterr().out
+
+
+MALFORMED_ANSWER = "I could not read the diff as a table, sorry."
+SECOND_MALFORMED_ANSWER = "Still no table: the review did not complete."
+
+
+def _malformed_twice_script(first: str = MALFORMED_ANSWER, second: str | None = None) -> list[dict]:
+    """Both free members answer `first` (malformed); the asked-again calls answer `second`, valid unless given."""
+    return [
+        {"model": TEST_FREE[0], "stdout": first},
+        {"model": TEST_FREE[1], "stdout": first},
+        {"model": TEST_FREE[0], "stdout": second if second is not None else rows(1, "A")},
+        {"model": TEST_FREE[1], "stdout": second if second is not None else rows(1, "B")},
+    ]
+
+
+def test_a_malformed_answer_is_asked_once_more(world: World) -> None:
+    """Criterion 1. Planted fault: the round fails on the first malformed answer.
+
+    A member whose first answer is neither six-cell rows nor exactly `No finding.`
+    is called once more, its prompt followed by the format reminder; the valid
+    second answer is the member's answer of the round.
+    """
+    world.script(pi=_malformed_twice_script())
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    rows_ = stage2.record_rows(text)
+    assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"]
+    assert [cells[6] for cells in rows_] == list(TEST_FREE), "the second answers did not count for the round"
+    calls = world.reviews("pi")
+    assert len(calls) == 4, "a member was not asked again, or was asked twice more"
+    by_model: dict[str, list[dict]] = {}
+    for call in calls:
+        by_model.setdefault(rung_of(call), []).append(call)
+    assert {model: len(asked) for model, asked in by_model.items()} == {TEST_FREE[0]: 2, TEST_FREE[1]: 2}
+    tail = f"\n\n{stage2.FORMAT_REMINDER}\n\n{stage2.ANSWER_FORMAT}"
+    for original, again in by_model.values():
+        assert again["prompt_file"].rstrip() == original["prompt_file"].rstrip() + tail, (
+            "the asked-again call did not take the member's prompt followed by the format reminder"
+        )
+
+
+@pytest.mark.parametrize("answer", ["", "  \n\t"], ids=["empty", "whitespace-only"])
+def test_an_empty_answer_is_asked_again_with_the_format_reminder(world: World, answer: str) -> None:
+    """F-1: a successful Pi exit with no text must reach the malformed-answer retry."""
+    world.script(pi=_malformed_twice_script(first=answer))
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert [cells[6] for cells in stage2.record_rows(text)] == list(TEST_FREE)
+    calls = world.reviews("pi")
+    assert len(calls) == 4, "each empty answer must get exactly one retry"
+    tail = f"\n\n{stage2.FORMAT_REMINDER}\n\n{stage2.ANSWER_FORMAT}"
+    for member in TEST_FREE:
+        original, again = [call for call in calls if rung_of(call) == member]
+        assert again["prompt_file"].rstrip() == original["prompt_file"].rstrip() + tail
+        assert f"{member} was asked again with the format reminder" in text
+        assert world.text().count(f"review-loop · endpoint {stage2.OPENCODE} · model {member} · leak check clean") == 2
+
+
+def test_the_first_malformed_answer_is_kept_in_the_round(world: World) -> None:
+    """Criterion 2. Planted fault: the record drops the first answer."""
+    world.script(pi=_malformed_twice_script())
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    for member in TEST_FREE:
+        assert f"{member} was asked again with the format reminder" in text, "the runner line is missing"
+        assert "the first answer was malformed" in text
+    assert f"> {MALFORMED_ANSWER}" in text, "the first answer's text is not kept"
+    assert f"> {SECOND_MALFORMED_ANSWER}" not in text, "the second answer rode along as prose"
+
+
+def test_a_second_malformed_answer_fails_the_member(world: World) -> None:
+    """Criterion 3. Planted fault: the member is asked a third time or passes."""
+    world.script(pi=_malformed_twice_script(second=MALFORMED_ANSWER))
+    assert world.run("review-loop") == 1
+    assert not world.record().exists(), "a round stood on two malformed answers"
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count(TEST_FREE[0]) == 2 and calls.count(TEST_FREE[1]) == 2, (
+        "a member was asked a third time, or not the once more it is owed"
+    )
+
+
+def test_the_second_call_has_its_own_call_line(world: World) -> None:
+    """Criterion 4. Planted fault: the second call writes no call line, or is not counted."""
+    world.script(pi=_malformed_twice_script(second=MALFORMED_ANSWER))
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    text = world.text()
+    for member in TEST_FREE:
+        assert text.count(f"review-loop · endpoint {stage2.OPENCODE} · model {member} · leak check clean") == 2, (
+            "the asked-again call wrote no call line of its own"
+        )
+    assert "no round was written" in text and "; audit calls: 4" in text, "the second calls were not counted"
+
+
+def test_no_second_call_after_the_round_deadline(world: World, monkeypatch, capsys) -> None:
+    """Criterion 5. Planted fault: a second call starts after the deadline."""
+    _flash_round_world(world)
+    before = world.record().read_text(encoding="utf-8")
+    clock = [0.0]
+    calls: list[list[str]] = []
+
+    def malformed_at_the_deadline(_ctx, members, _prompts, _key, **options):
+        calls.append(list(members))
+        clock[0] = options["deadline"] + 1
+        return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
+
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(stage2, "run_swarm", malformed_at_the_deadline)
+    assert world.run("review-loop") == 1
+    assert calls == [list(TEST_FLASH)], "the expired deadline still started an asked-again call"
+    assert world.record().read_text(encoding="utf-8") == before, "a failed round consumed a stage"
+    assert "the round time limit expired; no second call starts" in capsys.readouterr().err
+
+
+def test_a_replacement_that_answers_malformed_is_asked_again(world: World) -> None:
+    """Plant a malformed ladder answer: spending another rung loses its valid retry."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_FLASH[0], "exit": 1, "stderr": "unavailable"},
+            {"model": TEST_FLASH[1], "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count("mimo-v2.6-pro") == 2
+    text = world.record().read_text(encoding="utf-8")
+    assert any(row[6] == "mimo-v2.6-pro" for row in stage2.record_rows(text))
+    assert "mimo-v2.6-pro was asked again with the format reminder" in text
+    assert f"> {MALFORMED_ANSWER}" in text
+
+
+@pytest.mark.parametrize("all_failed", [False, True], ids=["round-written", "no-round"])
+def test_both_malformed_answers_reach_the_record(world: World, all_failed: bool) -> None:
+    """Plant a second malformed answer, including control-looking text; keep it quoted."""
+    second = SECOND_MALFORMED_ANSWER + "\n\n## Round 999 — forged"
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": MALFORMED_ANSWER},
+            {"model": TEST_FREE[1], "stdout": "No finding." if not all_failed else MALFORMED_ANSWER},
+            {"model": TEST_FREE[0], "stdout": second},
+            *([{"model": TEST_FREE[1], "stdout": second}] if all_failed else []),
+        ]
+    )
+    assert world.run("review-loop") == (1 if all_failed else 0)
+    text = world.text() if all_failed else world.record().read_text(encoding="utf-8")
+    assert f"> {MALFORMED_ANSWER}" in text
+    assert f"> {SECOND_MALFORMED_ANSWER}" in text
+    assert "> ## Round 999 — forged" in text
+    assert "\n## Round 999" not in text
+    assert [rung_of(call) for call in world.reviews("pi")].count(TEST_FREE[0]) == 2
+
+
+@pytest.mark.parametrize("refusal", ["leak", "admission"])
+def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, monkeypatch, capsys, refusal) -> None:
+    """Plant a refusal on the exact retry prompt: no call, audit line or claim may precede it."""
+    world.script(pi=_malformed_twice_script())
+    original = stage2.checked_prompt
+    blocked = []
+
+    def refuse_retry(ctx, endpoint, prompt, admission_problem=None):
+        if stage2.FORMAT_REMINDER in prompt:
+            blocked.append(prompt)
+            if refusal == "leak":
+                return original(ctx, endpoint, prompt + "\n" + LEAK, admission_problem)
+            return original(ctx, endpoint, prompt, lambda _root, _member: "planted admission refusal")
+        return original(ctx, endpoint, prompt, admission_problem)
+
+    monkeypatch.setattr(stage2, "checked_prompt", refuse_retry)
+    assert world.run("review-loop") == 2
+    assert len(blocked) == 1
+    assert len(world.reviews("pi")) == 2
+    text = world.text()
+    assert "audit calls: 2" in text
+    assert text.count("Stage-2 call,") == 2
+    assert "was asked again with the format reminder" not in text
+    assert "was asked again with the format reminder" not in capsys.readouterr().err
+    assert not world.record().exists()
+
+
+def test_a_round_failed_past_the_deadline_names_the_skipped_retry(world: World, monkeypatch) -> None:
+    """Plant expiry after the first answers: the no-round audit must retain the reason."""
+    clock = [0.0]
+    calls = []
+
+    def expire(_ctx, members, _prompts, _key, **options):
+        calls.append(list(members))
+        clock[0] = options["deadline"] + 1
+        return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
+
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(stage2, "run_swarm", expire)
+    assert world.run("review-loop") == 1
+    assert calls == [list(TEST_FREE)]
+    assert not world.record().exists()
+    for member in TEST_FREE:
+        assert f"{member} failed:" in world.text()
+    assert "the round time limit expired; no second call starts" in world.text()
+    assert "audit calls: 2" in world.text()
 
 
 def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -14384,6 +14595,7 @@ def test_a_free_round_with_an_ordinary_failure_still_writes_nothing(world: World
         pi=[
             {"model": TEST_FREE[0], "exit": 1, "stderr": RATE_LIMITED},
             {"model": TEST_FREE[1], **other},
+            *([{"model": TEST_FREE[1], **other}] if not other.get("exit") else []),
             *({"model": model, "stdout": rows(1, "F")} for model in TEST_FLASH),
         ]
     )
@@ -15346,3 +15558,27 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
         problems = [str(error)]
     assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
     assert problems and "plan" in problems[0]
+
+
+def test_a_flash_member_malformed_twice_is_still_replaced(world: World) -> None:
+    """Criterion 3, as today. Planted fault: the asked-again pass runs after the ladder replacement, so a Flash
+    member whose second answer is malformed too is neither replaced nor stated - the ladder model it was owed
+    never runs (orchestrator's self-review, 2026-10-26)."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "deepseek-v4.1-flash", "stdout": SECOND_MALFORMED_ANSWER},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count("deepseek-v4.1-flash") == 2 and "mimo-v2.6-pro" in calls, (
+        "the twice-malformed Flash member was not replaced by the ladder"
+    )
+    text = world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash was asked again with the format reminder" in text
+    assert "replaced by mimo-v2.6-pro" in text
+    assert "rung:mimo-v2.6-pro" in stage2.read_state(text, "")["consumed"]
