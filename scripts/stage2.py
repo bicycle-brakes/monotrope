@@ -3711,8 +3711,9 @@ def save_answer_evidence(root: Path, change: str, token: str, attempt: int, answ
 
     Written at the model-return boundary, before any HEAD check, verification or answer check can
     stop the run, so a rejected answer stays diagnosable from what the model actually returned (bead
-    coding-harness-hgvp). The directory is git's resolved per-worktree `stage2/attempts/<change>/` -
-    local evidence like `refs/stage2/attempts/`, tracked by no path and carried by no branch push.
+    coding-harness-hgvp). The directory is git's resolved per-worktree `stage2/attempts/<change>/` - in
+    a linked worktree below the main checkout's `.git/worktrees/<name>/`, which the diagnostics name
+    as an absolute path - local evidence like `refs/stage2/attempts/`, tracked by no path and carried by no branch push.
     The answer passes `protect_diagnostics` once on every route, the keyless ones included; an empty
     or unavailable answer is recorded as such, never fabricated or retried. The file is created
     exclusively, so an earlier attempt's evidence is never overwritten; an aliased destination, a

@@ -217,11 +217,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
-| [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | none | 2026-10-26 | coding-harness-hgvp |
-| [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | none | 2026-10-26 | coding-harness-hgvp |
-| [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | none | 2026-10-26 | coding-harness-hgvp |
-| [`changes/repair-fixed-line-format/research.md`](changes/repair-fixed-line-format/research.md) | draft | none | 2026-10-26 | coding-harness-hgvp |
-| [`changes/repair-fixed-line-format/spec.md`](changes/repair-fixed-line-format/spec.md) | draft | none | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/research.md`](changes/repair-fixed-line-format/research.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/spec.md`](changes/repair-fixed-line-format/spec.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-lines/decisions.md`](changes/repair-fixed-lines/decisions.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/findings.md`](changes/repair-fixed-lines/findings.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |

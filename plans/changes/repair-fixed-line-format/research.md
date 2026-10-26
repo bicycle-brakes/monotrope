@@ -1,7 +1,7 @@
 ---
 title: "Research — repair-fixed-line-format"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-26
 last_reviewed: 2026-10-26
 updated: 2026-10-26

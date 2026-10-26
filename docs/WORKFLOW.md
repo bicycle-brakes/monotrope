@@ -1344,7 +1344,9 @@ only after two failed post-run checks; a failed call stops the run without a
 fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
 leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
 stops the run unrewritten. Every attempt's complete answer is kept as
-protected local evidence below the worktree's own git directory,
+protected local evidence below the worktree's own git directory (git's
+per-worktree directory: in a linked worktree that is
+`.git/worktrees/<name>/` of the main checkout),
 `stage2/attempts/<change>/attempt-<n>-<token>.md`, written before any
 post-run check can stop the run and named in the attempt's diagnostics, so a
 rejected answer can be read after the fact; a failed call keeps the output it
