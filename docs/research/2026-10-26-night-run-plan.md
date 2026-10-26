@@ -103,7 +103,25 @@ decision pull request, and m98e's decision pull request.
 6. #228 (re-check of F6-4), then #229 (phase 6).
 7. coding-harness-m98e, then coding-harness-680l with coding-harness-fmir
    (answer 3).
-8. Handover pull request in the morning.
+8. More beads, added at the maintainer's request (2026-10-26, "Nehme mehr
+   beads rein"). Each is bounded unless named otherwise, and each ends in
+   its own pull request. All five are runner faults that cost the day
+   session whole attempts, so fixing them makes later nights cheaper:
+   1. coding-harness-hgvp: Sonnet repair answers carry several fixed lines
+      per row, so the runner rejects green code. It went wrong three times on
+      2026-10-26, and tonight's Sonnet fallback (answer 1) depends on it.
+      **It moves ahead of step 7.**
+   2. coding-harness-jik: a load-sensitive test times out under a full
+      `make verify` and rejects correct repairs.
+   3. coding-harness-6ie: the Sonnet fallback must continue from Flash's
+      edits, and a Flash call error must not wipe them.
+   4. coding-harness-t83: the repair prompt forbids handover files and
+      anything outside the taken rows' scope.
+   5. coding-harness-ut8q (spike, research note only): a diff over the
+      2000-line bound can never end the loop cleanly. This happened to #158
+      on 2026-10-26. The follow-up touches ADR 0021, so it is the
+      maintainer's call; the night writes only the note.
+9. Handover pull request in the morning.
 
 ## Stop rules
 
