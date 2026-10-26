@@ -78,7 +78,7 @@ Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | implementation | scripts/stage2.py:6341 | When Pi exits successfully with empty or whitespace-only output while time remains, `run_reviewer` raises plain `CallFailed`, so the retry guard skips the member. This output meets the spec’s malformed-answer definition, but the member fails or is replaced without its promised format retry. Reproduced with both empty and whitespace-only output. [Terms; acceptance criterion 1] | Codex | open | — |
+| F-1 | MAJOR | SPEC | implementation | scripts/stage2.py:6341 | When Pi exits successfully with empty or whitespace-only output while time remains, `run_reviewer` raises plain `CallFailed`, so the retry guard skips the member. This output meets the spec’s malformed-answer definition, but the member fails or is replaced without its promised format retry. Reproduced with both empty and whitespace-only output. [Terms; acceptance criterion 1] | Codex | taken — test: tests/test_stage2.py::test_an_empty_answer_is_asked_again_with_the_format_reminder (orchestrator, 2026-10-26) | — |
 
 Phase 6 verdict: codex 01a17850-6638-7791-8145-a2ef921e7447, 2026-10-26
 Reviewer session: codex 01a17850-6638-7791-8145-a2ef921e7447 — a fresh session reviewed: no phase-2a session was recorded
