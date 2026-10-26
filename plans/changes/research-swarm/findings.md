@@ -4701,7 +4701,7 @@ Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-66 | MAJOR | SPEC | base | `scripts/stage2_research_refs.py:176–209` | A literal U+2028 inside a Python string before `def target():` shifts the evidence excerpt: reproduced with `banner = "first<U+2028>second"` followed by a function returning 42, the resolver reports `supported=True` but returns the string’s tail and function declaration, omitting `return 42`. `str.splitlines()` counts Unicode separators that Python’s AST does not count as source lines. Valid evidence must contain the cited node’s actual lines. [criterion 16] | Codex | open | — |
+| F-66 | MAJOR | SPEC | base | `scripts/stage2_research_refs.py:176–209` | A literal U+2028 inside a Python string before `def target():` shifts the evidence excerpt: reproduced with `banner = "first<U+2028>second"` followed by a function returning 42, the resolver reports `supported=True` but returns the string’s tail and function declaration, omitting `return 42`. `str.splitlines()` counts Unicode separators that Python’s AST does not count as source lines. Valid evidence must contain the cited node’s actual lines. [criterion 16] | Codex | taken — test: tests/test_stage2_research_refs.py::test_a_unicode_line_separator_in_a_string_keeps_the_cited_node_lines (orchestrator, 2026-10-26) | — |
 
 Phase 6 verdict: codex 01a178b2-cc69-7302-8e00-8daccaedf552, 2026-10-26
 Reviewer session: codex 01a178b2-cc69-7302-8e00-8daccaedf552 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
