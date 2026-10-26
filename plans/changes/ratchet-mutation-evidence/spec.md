@@ -58,6 +58,11 @@ that mentions it (bead coding-harness-a05; the maintainer's option B,
 - Removing the plans-registry exemptions; their seeded red run is still
   outstanding.
 - Translating the existing German identifiers of the section.
+- Constructs written to fool the static reading (maintainer, 2026-10-26,
+  phase-6 rows R10-1 and R10-2): a command variable reassigned in every
+  branch before the call, and a helper default evaluated at import time.
+  Evidence taken from the run itself is follow-up work
+  (coding-harness-4ft9).
 
 ## Definition of Done
 
