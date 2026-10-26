@@ -4678,3 +4678,19 @@ Bead coding-harness-jik (load-sensitive timing tests), 2026-10-25: the store's S
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 659 files, 2240 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 659 files, 2243 commits, 12 rules.
+
+## Review loop ended without a clean round, 2026-10-26
+
+The review loop (phase 4b) ran seven rounds (2026-10-22 to 2026-10-23) and
+every taken row of round 7 is repaired (f127daf1, 128424b7). It cannot end
+with a clean round: the change diff is 31,720 lines, each round reads the
+first 2,000, and a clean answer over a cut diff does not end the loop. Even
+split into parts, the change is above the bound of four parts the maintainer
+set on 2026-10-26 (bead coding-harness-ut8q).
+
+The maintainer decided on 2026-10-26, in the conversation, as a one-time
+exception and not as a rule: finish round 7, release the loop without a
+clean round with this note, and run a fresh phase-6 Codex review over the
+whole change. The whole branch was read by the three deep reviews of
+2026-10-25 (RS-1, RS-2 and RS-3 above); their repairs had no Codex re-check
+until this phase 6.
