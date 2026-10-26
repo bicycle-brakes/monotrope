@@ -665,6 +665,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 16: tests/test_stage2_research_refs.py::test_a_unicode_line_separator_in_a_string_keeps_the_cited_node_lines — Unicode separators inside Python strings shift the AST-selected evidence excerpt or omit the cited node's actual lines (phase-6 F-66).
 - 34: tests/test_research_handoff.py::test_research_swarm_seat_amendment_has_answered_bases — The actual seat amendment's criteria 62–65 lack answered Q-18 bases when checked with complete v2 research (review-loop L5-1).
 - 9: tests/test_stage2_research_tools.py::test_non_global_lookup_addresses_never_reach_the_transport — Documentation, benchmarking, multicast, reserved or mapped non-global addresses reach the transport directly, in mixed DNS answers or after redirects (review-loop L5-3).
 
@@ -2073,6 +2074,7 @@ Span (measured, `date -u`): 2026-10-18T21:31:06Z to 2026-10-18T21:52:03Z, about 
 2026-10-23 16:04:29–16:15:04 UTC, 635 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-23 16:22:32–16:31:23 UTC, 531 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 14:33:24–14:51:22 UTC, 1079 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 15:02:24–15:12:02 UTC, 578 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Main sync after #157 — 2026-10-18
 

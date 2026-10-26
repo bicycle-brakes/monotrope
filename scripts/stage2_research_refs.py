@@ -8,6 +8,7 @@ No function here opens a repository file or performs a model operation.
 from __future__ import annotations
 
 import ast
+import io
 import json
 import math
 import re
@@ -178,6 +179,9 @@ def resolve_research_reference(sources, path, reference):
         if suffix == ".md":
             start, end = _markdown_extent(lines, reference)
         elif suffix == ".py":
+            # Match AST source lines (LF, CRLF, CR), preserving their bytes;
+            # Unicode separators inside strings do not advance node.lineno.
+            lines = io.StringIO(text, newline="").readlines()
             start, end = _python_extent(text, reference)
         elif suffix in (".yaml", ".yml", ".json"):
             if suffix == ".json":

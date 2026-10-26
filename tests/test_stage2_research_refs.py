@@ -81,6 +81,21 @@ def test_reference_python_uses_ast_definition_extent(reference, excerpt):
     assert result["supported"] and result["excerpt"] == excerpt
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085", "\v", "\f", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_a_unicode_line_separator_in_a_string_keeps_the_cited_node_lines(separator, newline):
+    banner = f'banner = "first{separator}second"{newline}'
+    function = f"def target():{newline}    return 42{newline}"
+    text = banner + function + f"AFTER = 0{newline}"
+
+    result = resolve("a.py", text, "target")
+    assert result["supported"]
+    assert (result["start_line"], result["end_line"]) == (2, 3)
+    assert result["excerpt"] == function
+    assert resolve("a.py", text, "banner")["excerpt"] == banner
+    assert resolve("a.py", text, "AFTER")["excerpt"] == f"AFTER = 0{newline}"
+
+
 @pytest.mark.parametrize(
     "text",
     [
