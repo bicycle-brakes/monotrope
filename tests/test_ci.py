@@ -2020,6 +2020,39 @@ def test_a_bare_mention_of_a_gate_script_is_no_mutation_evidence(case: str) -> N
     assert evidence("plans_registry.py", sources) == [], f"{case} counted as mutation evidence"
 
 
+def test_a_string_comparison_is_no_gate_evidence() -> None:
+    source = """
+def test_the_command_goes_red(command):
+    assert command[0].endswith("plans_registry.py")
+"""
+    assert evidence("plans_registry.py", {Path("test_command.py"): source}) == []
+
+
+def test_a_helper_reference_is_no_helper_call() -> None:
+    source = """
+import plans_registry
+
+def _run():
+    return plans_registry.main()
+
+def test_the_gate_goes_red():
+    assert callable(_run)
+"""
+    assert evidence("plans_registry.py", {Path("test_reference.py"): source}) == []
+
+
+def test_an_import_in_another_test_binds_nothing_here() -> None:
+    source = """
+def test_unrelated():
+    from plans_registry import main
+    assert main() == 0
+
+def test_the_gate_goes_red(main):
+    assert main() == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_scope.py"): source}) == []
+
+
 # Test files whose mutation-named test reaches the script it is evidence for:
 # a call into the module, a name imported from it, or a path to the file that a
 # call runs — in the test itself or through a helper of the same file.

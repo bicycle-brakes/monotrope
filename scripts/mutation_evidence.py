@@ -70,7 +70,9 @@ class _Function(NamedTuple):
     """A module-level function of a test file, as the ratchet reads it."""
 
     names: set[str]  # every name used in its body
-    attributes: set[tuple[str, str]]  # every `<name>.<attr>`, dunders left out
+    calls: set[str]  # names invoked, rather than merely referenced
+    imports: list[tuple[str, str, bool]]  # imports local to this function
+    attributes: set[tuple[str, str]]  # invoked `<name>.<attr>`, dunders left out
     paths: list[str]  # every string that builds a path or a command
 
 
@@ -83,22 +85,44 @@ class _ParsedTestFile(NamedTuple):
 
 
 def _path_strings(root: ast.AST, parents: dict[ast.AST, ast.AST]) -> list[str]:
-    """Strings under `root` that build a path or a command: an operand of `/`,
-    an argument of a call, or an element of a list or tuple handed to a call."""
+    """Strings used to build paths or command arguments, excluding string predicates."""
     hits = []
     for k in ast.walk(root):
         if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
             continue
         up = parents.get(k)
-        if isinstance(up, ast.List | ast.Tuple):
-            up = parents.get(up)
+        in_command = isinstance(up, ast.List | ast.Tuple) and isinstance(parents.get(up), ast.Call)
+        call = up if isinstance(up, ast.Call) else parents.get(up) if isinstance(up, ast.keyword) else None
+        callee = call.func if isinstance(call, ast.Call) else None
+        call_name = (
+            callee.id if isinstance(callee, ast.Name) else callee.attr if isinstance(callee, ast.Attribute) else None
+        )
         if (
             (isinstance(up, ast.BinOp) and isinstance(up.op, ast.Div))
-            or (isinstance(up, ast.Call) and k is not up.func)
-            or isinstance(up, ast.keyword)
+            or in_command
+            or call_name
+            in {"Path", "PurePath", "PurePosixPath", "run", "Popen", "check_call", "check_output", "system"}
         ):
             hits.append(k.value)
     return hits
+
+
+def _scope_nodes(root: ast.AST):
+    """Walk one lexical scope without importing bindings from nested scopes."""
+    yield root
+    for child in ast.iter_child_nodes(root):
+        if not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Lambda):
+            yield from _scope_nodes(child)
+
+
+def _imports(nodes: list[ast.AST]) -> list[tuple[str, str, bool]]:
+    imports = []
+    for node in nodes:
+        if isinstance(node, ast.Import):
+            imports.extend((a.name, a.asname or a.name, True) for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.extend((node.module, a.asname or a.name, False) for a in node.names)
+    return imports
 
 
 @functools.cache
@@ -108,31 +132,32 @@ def _parsed(text: str) -> _ParsedTestFile | None:
     except SyntaxError:
         return None
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
-    imports = []
-    for k in ast.walk(tree):
-        if isinstance(k, ast.Import):
-            imports += [(a.name, a.asname or a.name, True) for a in k.names]
-        elif isinstance(k, ast.ImportFrom) and k.module:
-            imports += [(k.module, a.asname or a.name, False) for a in k.names]
+    imports = _imports(list(_scope_nodes(tree)))
     constants = []
     for stmt in tree.body:
         if isinstance(stmt, ast.Assign | ast.AnnAssign) and stmt.value is not None:
             targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
             names = {z.id for z in targets if isinstance(z, ast.Name)}
             constants.append((names, _path_strings(stmt.value, parents)))
-    functions = {
-        stmt.name: _Function(
-            names={k.id for k in ast.walk(stmt) if isinstance(k, ast.Name)},
+    functions = {}
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.FunctionDef):
+            continue
+        nodes = [node for body in stmt.body for node in _scope_nodes(body)]
+        calls = [node.func for node in nodes if isinstance(node, ast.Call)]
+        functions[stmt.name] = _Function(
+            names={node.id for node in nodes if isinstance(node, ast.Name)},
+            calls={node.id for node in calls if isinstance(node, ast.Name)},
+            imports=_imports(nodes),
             attributes={
-                (k.value.id, k.attr)
-                for k in ast.walk(stmt)
-                if isinstance(k, ast.Attribute) and isinstance(k.value, ast.Name) and not k.attr.startswith("__")
+                (node.value.id, node.attr)
+                for node in calls
+                if isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and not node.attr.startswith("__")
             },
             paths=_path_strings(stmt, parents),
         )
-        for stmt in tree.body
-        if isinstance(stmt, ast.FunctionDef)
-    }
     return _ParsedTestFile(imports, constants, functions)
 
 
@@ -140,12 +165,12 @@ def _tests_reaching(text: str, script_file: str) -> list[str]:
     """The mutation-named tests in `text` that reach the script `script_file`.
 
     A test reaches the script when its body — or the body of a module-level
-    helper of the same file it calls, at any depth — uses it: a non-dunder
+    helper of the same file it calls, at any depth — calls it: a non-dunder
     attribute of a module bound by `import <script>` (with or without `as`), a
-    name bound by `from <script> import …`, or a string naming the file that
-    builds a path or a command (an operand of `/`, an argument of a call, an
-    element of a list or tuple handed to a call), directly or through a
-    module-level constant built that way. A mention in a comparison, a docstring
+    call to a name bound by `from <script> import …`, or a string naming the
+    file that builds a path or a command (an operand of `/`, a path constructor
+    or command execution argument, or an element of a list or tuple handed
+    to a call), directly or through a module-level constant built that way. A mention in a comparison, a docstring
     or another test reaches nothing; nor does `<module>.__file__`.
     """
     stem = script_file.removesuffix(".py")
@@ -159,17 +184,23 @@ def _tests_reaching(text: str, script_file: str) -> list[str]:
     def names_file(paths: list[str]) -> bool:
         return any(file_re.search(p) for p in paths)
 
-    modules = {bound for module, bound, whole in parsed.imports if module == stem and whole}
-    names = {bound for module, bound, whole in parsed.imports if module == stem and not whole}
+    path_names = set()
     for bound, paths in parsed.constants:
         if names_file(paths):
-            names |= bound
+            path_names |= bound
 
-    reached = {
-        name
-        for name, fn in parsed.functions.items()
-        if fn.names & names or any(base in modules for base, _ in fn.attributes) or names_file(fn.paths)
-    }
-    while new := {name for name, fn in parsed.functions.items() if name not in reached and fn.names & reached}:
+    reached = set()
+    for name, fn in parsed.functions.items():
+        imports = parsed.imports + fn.imports
+        modules = {bound for module, bound, whole in imports if module == stem and whole}
+        names = {bound for module, bound, whole in imports if module == stem and not whole}
+        if (
+            fn.calls & names
+            or fn.names & path_names
+            or any(base in modules for base, _ in fn.attributes)
+            or names_file(fn.paths)
+        ):
+            reached.add(name)
+    while new := {name for name, fn in parsed.functions.items() if name not in reached and fn.calls & reached}:
         reached |= new
     return [name for name in parsed.functions if name in reached and MUTATIONS_NAMEN.search(f"def {name}(")]
