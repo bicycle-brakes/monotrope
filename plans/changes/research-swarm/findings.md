@@ -4789,3 +4789,9 @@ Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude C
 Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 664 files, 2260 commits, 12 rules.
+
+## Phase 6 — Sonnet 5.5, 2026-10-26 (re-check after F-71)
+
+Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude Code session, inside the maintainer's Sonnet window (2026-10-26, 17:26–19:26 CET). Sonnet 5.5 reported no finding. Its checked line: F-71 is fixed (the old line would refuse `---<U+2028>title` as unterminated, so the new parametrized test fails on the old code); the replacement keeps CRLF and plain `---` detection; the F-71 tests and the handoff, research-refs and research-capture tests changed since d2e59383 pass (10 and 262 passed); no regression seen.
+
+Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
