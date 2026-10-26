@@ -191,6 +191,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/loop-until-clean/plan.md`](changes/loop-until-clean/plan.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/research.md`](changes/loop-until-clean/research.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/spec.md`](changes/loop-until-clean/spec.md) | draft | none | 2026-10-16 | coding-harness-4fk |
+| [`changes/mutation-evidence-module/decisions.md`](changes/mutation-evidence-module/decisions.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/mutation-evidence-module/findings.md`](changes/mutation-evidence-module/findings.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/pi-pin/decisions.md`](changes/pi-pin/decisions.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/design.md`](changes/pi-pin/design.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/findings.md`](changes/pi-pin/findings.md) | draft | none | 2026-10-15 | coding-harness-agx |
