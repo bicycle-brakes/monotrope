@@ -3734,17 +3734,26 @@ def save_answer_evidence(root: Path, change: str, token: str, attempt: int, answ
             f"the answer evidence directory {directory} is not this worktree's own stage2/attempts/{change}; "
             "no evidence is written and no checkpoint is made"
         )
+    destination = directory / f"attempt-{attempt}-{token}.md"
+    created = False
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        destination = directory / f"attempt-{attempt}-{token}.md"
         handle = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
         with os.fdopen(handle, "w", encoding="utf-8") as file:
             file.write(body if body.endswith("\n") else body + "\n")
         if destination.is_symlink() or destination.stat().st_nlink > 1:
             raise OSError(f"the destination is aliased ({destination})")
     except OSError as error:
+        # Remove only the file this call created, never an earlier exclusive destination.
+        cleanup = "no evidence is written"
+        if created:
+            try:
+                destination.unlink()
+            except OSError as cleanup_error:
+                cleanup = f"incomplete evidence remains at {destination} (cleanup failed: {cleanup_error})"
         raise CallFailed(
-            f"the answer evidence could not be saved ({error}); no evidence is written and no checkpoint is made"
+            f"the answer evidence could not be saved ({error}); {cleanup} and no checkpoint is made"
         ) from error
     return str(destination)
 
@@ -5043,8 +5052,9 @@ def check_repair_answer(
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
     active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
     status. A finding-shaped id or claimed fix that names no taken row still fails. A taken row's
-    claims are its collected lines whose right side starts `fixed — `: explanations beside them are
-    prose, identical claims count once, two distinct claims fail as `several fixed lines`, and with
+    claims are its collected lines whose right side starts `fixed` followed by a dash, including
+    malformed spacing: explanations beside them are prose, identical claims count once, two distinct
+    claims fail as `several fixed lines`, and with
     no claim at all the missing or malformed diagnostics stand as they did (spec, criteria 1-4).
     Every row of
     findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
@@ -5085,11 +5095,11 @@ def check_repair_answer(
     fixes: dict[str, str] = {}
     for _place, row in taken:
         ident, given = row[0], parsed.pop(row[0], [])
-        # A claim is a right side that starts `fixed — `; everything else naming the row is report
+        # A claim starts with fixed and a dash, including malformed spacing; other text is report
         # prose (spec, criterion 1). Claims are deduplicated in their normalized form as the parser
         # collected them, before `fixed_status` rewrites anything, so two different claims can never
         # collapse into one (spec, criterion 2); identical repetitions count once, in encounter order.
-        claims = list(dict.fromkeys(line for line in given if line.startswith("fixed — ")))
+        claims = list(dict.fromkeys(line for line in given if re.match(r"^fixed\s*[—–-]", line)))
         if not claims:
             # Explanations alone, or a lone malformed line, keep the missing or malformed diagnostic
             # rather than passing as a repair (spec, criterion 4).
@@ -5722,7 +5732,34 @@ def run_attempts(
                 # route it arrived on. A protection or write failure raises and stops the run with
                 # no checkpoint (spec, criteria 6 and 8).
                 output = answer if completed else (call_error.partial_answer if call_error is not None else "")
-                evidence = save_answer_evidence(root, ctx.change, token, attempt, output, key)
+                try:
+                    evidence = save_answer_evidence(root, ctx.change, token, attempt, output, key)
+                except (Refused, CallFailed, OSError) as evidence_error:
+                    # Evidence is a terminal boundary, but the model's edits still need the same
+                    # recovery as a failed call. Keep both failures and the snapshot location.
+                    if kept is not None:
+                        restore_findings(kept)
+                    exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
+                    try:
+                        saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+                    except OSError as save_error:
+                        saved = f"saving the attempt failed ({save_error})"
+                    # As in the normal HEAD check, never rewrite a commit made by the model.
+                    try:
+                        moved = endpoint == CODEX and _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    restored = (
+                        "HEAD moved or could not be read; history was not rewritten"
+                        if moved
+                        else restore_baseline(root, baseline, allowed, ignored_before)
+                    )
+                    failures = [str(call_error)] if call_error is not None else []
+                    failures += [str(evidence_error), saved, restored]
+                    if exposed:
+                        failures.append(credential_message(exposed))
+                    failure_type = Refused if isinstance(evidence_error, Refused) else CallFailed
+                    raise failure_type("; ".join(failures)) from evidence_error
             if endpoint == CODEX:
                 try:
                     head_now = _git_output(root, "rev-parse", "HEAD").strip()
@@ -5761,6 +5798,7 @@ def run_attempts(
                                 moved_head=True,
                             ),
                             key,
+                            whole=[line for line in listing.splitlines() if evidence and evidence in line],
                         ),
                     )
                     raise CallFailed(problem) from call_error
@@ -5780,7 +5818,7 @@ def run_attempts(
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 ended = f"{error}; {saved}; {restored}{leaked}"
                 if retain_answer and evidence is not None:
-                    ended += f"; the attempt's protected answer is saved at {evidence}"
+                    ended += f"\nthe attempt's protected answer is saved at {evidence}"
                 raise CallFailed(ended) from error
             if key is not None:
                 # Every route scans with the key read in this run - the Sonnet fallback included - before
@@ -5853,7 +5891,14 @@ def run_attempts(
                 listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
                 files = protect_files(files, key)
                 diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-                append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+                append(
+                    ctx.findings,
+                    quote_block(
+                        attempt_block(attempt, route, listing, files),
+                        key,
+                        whole=[line for line in listing.splitlines() if evidence and evidence in line],
+                    ),
+                )
             record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
             exposed = []
             if key is not None:

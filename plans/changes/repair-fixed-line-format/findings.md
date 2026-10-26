@@ -133,3 +133,20 @@ Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 669 files, 2290 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 669 files, 2290 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 669 files, 2293 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +54 -9
+> - `tests/test_stage2.py` +109 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-9: tests/test_stage2.py::test_repair_malformed_fixed_claim_still_conflicts: refs changed while the named test ran: refs/heads/decide/terms-expiry
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-fixed-line-format/stage2/attempts/repair-fixed-line-format/attempt-1-20261026T215823690591Z-4ce18907.md
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 669 files, 2294 commits, 12 rules.

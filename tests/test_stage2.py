@@ -10300,13 +10300,13 @@ def test_repair_answer_evidence_failure_stops_safely(world: World) -> None:
     repair_world(world)
     baseline = git(world.root, "rev-parse", "HEAD")
     # A blocking rule refuses the protection itself; nothing is written, and no checkpoint stands.
-    # The step plants nothing: a refusal stops the run without the failed call's restore.
+    # The step plants nothing: the refusal still saves the attempt and restores model edits.
     set_denylist(DENYLIST + "blocked = FIXKEY-[0-9]{6}\n")
     script_repair(world, [{"stdout": f"the token is {FIXTURE_SECRET}\n"}], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 2
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     assert not (world.root / ".git" / "stage2").exists(), "a refused protection still wrote evidence"
-    # The completed call kept its measured time entry; the next run starts from a clean tree again.
+    # Only the runner's measured time entry remains; clear it to isolate the next scenario.
     git(world.root, "checkout", "--", "plans/changes/demo/plan.md")
     # An aliased evidence directory stops the run before anything is written through the alias.
     set_denylist(DENYLIST)
@@ -15762,3 +15762,112 @@ def test_a_flash_member_malformed_twice_is_still_replaced(world: World) -> None:
     assert "deepseek-v4.1-flash was asked again with the format reminder" in text
     assert "replaced by mimo-v2.6-pro" in text
     assert "rung:mimo-v2.6-pro" in stage2.read_state(text, "")["consumed"]
+
+
+@pytest.mark.parametrize("failed_call", [False, True])
+@pytest.mark.parametrize("failure", ["protection", "write"])
+def test_repair_answer_evidence_failure_restores_the_attempt(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failed_call: bool,
+    failure: str,
+) -> None:
+    """A failed evidence save must preserve the edits on an attempt ref, then undo them."""
+    baseline = repair_world(world)
+    world.write_findings(VERDICT)
+    original_findings = world.text()
+    real_codex = stage2.run_codex
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        world.findings.write_text("model damaged findings\n", encoding="utf-8")
+        if failed_call:
+            raise stage2.CallFailed("original model transport failure", partial_answer="partial answer")
+        return result
+
+    def fail_evidence(*_args, **_kwargs):
+        if failure == "protection":
+            raise stage2.Refused("evidence protection refused")
+        raise stage2.CallFailed("evidence write failed")
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "save_answer_evidence", fail_evidence)
+    assert world.run("repair") == (2 if failure == "protection" else 1)
+    error = capsys.readouterr().err
+    assert "evidence protection refused" in error if failure == "protection" else "evidence write failed" in error
+    if failed_call:
+        assert "original model transport failure" in error
+    assert "the attempt is saved at refs/stage2/attempts/demo/" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+    assert not (world.root / "tests/test_fix.py").exists()
+    assert "model damaged findings" not in world.text()
+    assert original_findings in world.text()
+    refs = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo").splitlines()
+    assert len(refs) == 1
+    assert git(world.root, "show", f"{refs[0]}:src/app.py") == "value = 2"
+    assert world.calls("make") == []
+    assert len(world.calls("codex")) == 1
+
+
+def test_repair_answer_evidence_locator_survives_the_quote_cut(world: World) -> None:
+    """A long absolute evidence path must still name its complete file in findings."""
+    repair_world(world)
+    # Move the disposable repository under a path longer than the quote limit.
+    parent = world.state / ("a" * 180) / ("b" * 180) / ("c" * 180)
+    parent.mkdir(parents=True)
+    destination = parent / "repo"
+    shutil.move(str(world.root), destination)
+    world.root = destination
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    answer = "L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_other.py::test_other"
+    script_repair(world, [repair_step(stdout=answer)] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    saved = sorted((world.root / ".git/stage2/attempts/demo").glob("attempt-*.md"))
+    assert len(saved) == 3
+    for path in saved:
+        assert len(str(path)) > stage2.QUOTE_LINE_CHARS
+        assert str(path) in world.text(), "the quoted locator lost its evidence filename"
+        assert path.read_text(encoding="utf-8") == answer + "\n"
+
+
+def test_repair_answer_evidence_failed_write_leaves_no_file(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A write error after exclusive creation must remove the incomplete evidence."""
+    real_fdopen = stage2.os.fdopen
+
+    class BrokenWriter:
+        def __init__(self, handle, *args, **kwargs):
+            self.file = real_fdopen(handle, *args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def write(self, body):
+            self.file.write(body[:5])
+            self.file.flush()
+            raise OSError("planted short write")
+
+        def __exit__(self, *args):
+            self.file.close()
+
+    monkeypatch.setattr(stage2.os, "fdopen", BrokenWriter)
+    with pytest.raises(stage2.CallFailed, match="planted short write"):
+        stage2.save_answer_evidence(world.root, "demo", "write-failure", 1, "complete answer", None)
+    directory = world.root / ".git/stage2/attempts/demo"
+    assert list(directory.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "malformed", ["fixed —", "fixed—tests/test_fix.py::test_fix", "fixed —tests/test_fix.py::test_fix"]
+)
+def test_repair_malformed_fixed_claim_still_conflicts(world: World, malformed: str) -> None:
+    """A malformed dash claim beside a valid one must conflict rather than disappear."""
+    repair_world(world)
+    answer = f"L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: {malformed}"
+    script_repair(world, [repair_step(stdout=answer), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "L1-1: several fixed lines" in prompt
+    assert f"`{malformed}`" in prompt
