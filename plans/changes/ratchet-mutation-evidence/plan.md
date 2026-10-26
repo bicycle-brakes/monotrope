@@ -82,6 +82,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet r
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet replaces Codex for two hours (2026-10-26).
 
+## Runner route — 2026-10-26
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 2026-10-25 17:00–17:40 UTC, about 40 min — research, spec, plan, implement and self-review · Claude Code sub-agent · model claude-opus-5-5 · accepted · estimated by the sub-agent from its own file times, not measured by the orchestrator
 2026-10-26 02:14:54–02:26:04 UTC, 670 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
@@ -92,3 +96,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet r
 2026-10-26 17:18:45–17:31:56 UTC, 791 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-10-26 17:51:24–18:09:04 UTC, 1060 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-26 18:09:33–18:19:06 UTC, 573 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-26 19:43:47–20:10:02 UTC, 1574 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-26 20:10:07–20:19:52 UTC, 585 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-26 20:19:58–20:29:48 UTC, 590 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

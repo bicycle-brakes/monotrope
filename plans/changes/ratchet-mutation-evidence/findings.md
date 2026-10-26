@@ -225,3 +225,40 @@ Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245, 2026-10-26
 Reviewer session: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 669 files, 2282 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_research_handoff.py` +16 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: tests/test_ci.py::test_every_gate_step_has_a_mutation_test: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 669 files, 2283 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: no fixed line
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 669 files, 2283 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: tests/test_ci.py::test_every_gate_step_has_a_mutation_test: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
