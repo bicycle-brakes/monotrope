@@ -154,6 +154,10 @@ stand-in race, see "Side findings"; green alone three times).
   line and fail (`JSONDecodeError`), which turned
   `test_ineligible_paid_models_are_skipped_and_named` red once in the full
   suite. Pre-existing; the test is green alone.
+  Note, 2026-10-26: this change fixed it after all - the stand-in now takes an
+  exclusive lock on its call log for every read and append (bead
+  coding-harness-yepe); the entry above records the state when it was found
+  (loop row L9-3).
 
 ## Self-review, 2026-10-25
 
@@ -260,3 +264,22 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 593 files, 2201 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2201 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 593 files, 2202 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2202 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/review-loop-deep-a/decisions.md` +5 -0
+> - `scripts/stage2.py` +5 -1
+> - `tests/test_stage2.py` +11 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L9-3: no fixed line
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 593 files, 2202 commits, 12 rules.
