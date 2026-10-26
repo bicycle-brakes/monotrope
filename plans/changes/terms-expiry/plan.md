@@ -79,20 +79,21 @@ this follows the phase-3 card, ledger and time-section form.
 6. `tests/test_stage2_session.py` — date `World.declare_go` fixtures and add
    the ledger's interactive regression proving an expired Go declaration
    starts no terminal/transport; existing declaration and leak tests stand.
-7. `model-endpoints.yaml` — add quoted `gilt_bis` to every existing Go
-   `modelle_terms` record, including wire-API skips: non-DeepSeek dates are
-   2026-11-06, 2026-11-16 or 2026-11-21 for readings on October 7, 17 or 22
-   respectively. Both DeepSeek records use `gelesen: "2026-10-25"`, the
-   recorded source and `gilt_bis: "2026-10-31"`; retain/add the monthly
-   zero-retention-agreement qualification. Do not advance any other reading
-   date or alter model membership, costs or explicit skips.
+7. `model-endpoints.yaml` — done by the orchestrator by hand before phase 4
+   (the runner holds this file): every Go `modelle_terms` record carries a
+   quoted `gilt_bis` (non-DeepSeek: `gelesen` + 30 days, so 2026-11-06,
+   2026-11-16 or 2026-11-21); both DeepSeek records carry `gelesen:
+   "2026-10-25"`, `gilt_bis: "2026-10-31"` and the monthly-agreement
+   qualification. The implementation must not edit this file; tests that need
+   other dates use synthetic declarations.
 8. `docs/WORKFLOW.md` — document required expiry, inclusive UTC cutoff,
    seven-day warnings, refusal of saved expired members, the source-date or
    reading-plus-30-day rule, and sourced renewal through a maintainer-merged
    decision PR; distinguish declared dates from automatic extensions.
-9. `docs/adr/0022-paid-model-terms-expire.md` (new draft already present) —
-   keep the expiry amendment aligned with the implementation; ADR 0021's
-   historical body and numbered D-/O-decision mappings need no edits.
+9. `docs/adr/0022-paid-model-terms-expire.md` — not edited in phase 4 (a
+   human-decided path the runner refuses); a divergence between it and the
+   implementation is reported in `findings.md` for the orchestrator to carry
+   into the decision pull request by hand.
 10. `plans/changes/terms-expiry/plan.md` — mark ledger tests written as they
     land and leave measured phase-4 time to the runner below.
 11. `plans/changes/terms-expiry/findings.md` — retain existing runner evidence
