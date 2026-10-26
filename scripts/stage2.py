@@ -6246,6 +6246,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
+    # Warn before admission and leak checks can refuse a call, including saved runs.
+    for warning in terms_warnings(endpoint_entry(root)):
+        print(f"review-loop: Notice: {warning}.", file=sys.stderr)
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
@@ -6302,7 +6305,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                         message = (
                             "every stage of this run is consumed and the last round was not clean; no paid "
                             f"model of the declaration is admissible: {problems}. The loop stops and reports "
-                            "to the maintainer."
+                            "to the maintainer. No model is substituted."
                         )
             raise Refused(message)
         # The orchestrator decides and repairs before another review (ADR 0021, decision 6): a taken row of
@@ -6377,15 +6380,10 @@ def _review_round(
         member: checked_prompt(ctx, endpoints[member], prompts[member], _free_admission(free, state))
         for member in members
     }
-    if not ctx.findings.exists():
-        ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
     audited = 0
     notes: list[str] = []
     malformed_blocks: list[str] = []
     try:
-        for member in members:
-            append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
-            audited += 1
         key = reviewer_key()
         if not state["consumed"]:
             if state["free"].get("skipped"):
@@ -6409,13 +6407,11 @@ def _review_round(
             for note in notes:
                 print(f"review-loop: {note}", file=sys.stderr)
         # Terms are evaluated on every round, fresh, legacy or resumed ([DETAIL],
-        # 2026-10-26): a reading inside the seven-day window warns here, before
-        # any model call, and the warning joins the round's notes so the record
-        # and the released findings carry it. A warning neither admits nor
-        # refuses a member.
+        # 2026-10-26): review_loop prints advance notice before admission checks.
+        # Keep current warnings in the round notes too, so the record and the
+        # released findings carry them. A warning neither admits nor refuses a member.
         for warning in terms_warnings(endpoint_entry(root)):
             notes.append(f"Notice: {warning}.")
-            print(f"review-loop: {notes[-1]}", file=sys.stderr)
         # Expiry once more, immediately before the launch: a member whose terms
         # expired after the batch checks above refuses the round here, without a
         # call and without touching the run's history (spec criterion 5).
@@ -6425,6 +6421,12 @@ def _review_round(
                 problem = terms_problem(entry, member)
                 if problem:
                     raise Refused(problem)
+        # Audit only after the final admission check allows the initial dispatch.
+        if not ctx.findings.exists():
+            ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
+        for member in members:
+            append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
+            audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
         deadline = time.monotonic() + REVIEWER_MINUTES * 60

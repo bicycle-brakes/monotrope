@@ -113,9 +113,12 @@ def prepare(root: Path, change: str, runner) -> None:
     problem = runner.entry_problem(root, runner.OPENCODE)
     if problem:
         raise runner.Refused(problem)
+    entry = runner.endpoint_entry(root)
+    terms_warnings = runner.terms_warnings(entry)
+    for warning in terms_warnings:
+        print(f"Terms warning: {warning}")
     runner.require_pi()
     free = runner.discover_free(root, allow_empty=True)
-    entry = runner.endpoint_entry(root)
     paid = runner.ladder(root)
     skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
     candidates = list(free["selected"])
@@ -195,7 +198,7 @@ def prepare(root: Path, change: str, runner) -> None:
         # Advance notice inside the seven-day window, expired records excluded:
         # the warning travels in the receipt's digest and reaches the report
         # here (bead coding-harness-abra). A warning grants no admission.
-        "terms_warnings": runner.terms_warnings(entry),
+        "terms_warnings": terms_warnings,
     }
     print(report(state))
     for reason in state["availability"]["terms_skipped"]:

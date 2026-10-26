@@ -270,6 +270,7 @@ def test_saved_admission_cannot_authorize_an_expired_call(
     capsys.readouterr()
     # Act 2: a saved selection whose terms expire after the parent's batch
     # validation refuses immediately before the launch, and history stands.
+    clock["day"] = dt.date(2026, 10, 31)
     disable_preparation(world)
     forget_the_run(world)
     world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
@@ -278,9 +279,11 @@ def test_saved_admission_cannot_authorize_an_expired_call(
     world.script(pi=[{"stdout": rows(1)}] * 2)
 
     real = stage2.checked_prompt
+    checked_members = []
 
     def flip_after_batch(ctx, endpoint, prompt, admission_problem=None):
         result = real(ctx, endpoint, prompt, admission_problem)
+        checked_members.append(endpoint[1])
         if endpoint[1] == TEST_FLASH[1]:
             clock["day"] = dt.date(2026, 11, 1)
         return result
@@ -290,7 +293,9 @@ def test_saved_admission_cannot_authorize_an_expired_call(
     assert world.reviews("pi")[dispatched:] == [], "an expired member reached the model after the batch checks"
     assert world.record().read_text(encoding="utf-8") == record_before, "the refusal reset prior run history"
     assert '"consumed": ["free"]' in record_before, "the seeded snapshot was not what the refusal preserved"
-    assert not world.findings.exists(), "the refusal wrote a round"
+    assert checked_members == list(TEST_FLASH), "the test never completed the parent batch checks"
+    assert stage2.rounds_run(world.record().read_text(), "") == 1
+    assert not world.findings.exists(), "the pre-launch refusal wrote call audits or a round"
     assert "expired on 2026-10-31" in capsys.readouterr().err
 
 
@@ -514,3 +519,63 @@ def test_expiry_warnings_survive_receipt_round_and_release(
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     assert warning in world.text(), "releasing the round lost the warning"
+
+
+@pytest.mark.parametrize("case", ["prepare-leak", "prepare-probe", "review-expired", "review-leak"])
+def test_expiry_warnings_print_before_a_refused_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    """A refusal in admission, leak checking or a probe cannot hide another model's warning."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
+    set_terms(world, TEST_LADDER[1], gilt_bis="2026-10-28")
+    warning = f"the data terms of {TEST_LADDER[1]} expire on 2026-10-28 (2 days left)"
+    seen = []
+
+    def refuse(*_args, **_kwargs):
+        output = capsys.readouterr()
+        seen.append(output.out + output.err)
+        raise stage2.Refused("synthetic call refusal")
+
+    if case.startswith("prepare"):
+        enable(world)
+        if case == "prepare-probe":
+            monkeypatch.setattr(stage2, "run_reviewer", refuse)
+        else:
+            monkeypatch.setattr(stage2, "checked_prompt", refuse)
+        verb = "prepare-loop"
+    else:
+        world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+        if case == "review-expired":
+            set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-25")
+        else:
+            monkeypatch.setattr(stage2, "checked_prompt", refuse)
+        verb = "review-loop"
+    assert world.run(verb) == 2
+    output = capsys.readouterr()
+    assert warning in "".join(seen) + output.out + output.err
+    if seen:
+        assert warning in seen[0], "warning was emitted only after the refused call"
+    assert world.reviews() == []
+    if verb == "prepare-loop":
+        assert not availability.receipt_path(world.root, "demo", stage2).exists()
+    else:
+        assert stage2.rounds_run(world.record().read_text(), world.text() if world.findings.exists() else "") == 1
+
+
+def test_spent_refusal_says_no_model_is_substituted(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An expiry-enriched spent-run refusal retains the no-substitution guarantee."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 11, 1))
+    for model in TEST_LADDER:
+        set_terms(world, model, gilt_bis="2026-10-31")
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": [], "flash": [], "rungs": []}
+    world.write_record([("L1-1", FIXED, "no")], state=state)
+    before = world.record().read_bytes()
+    assert world.run("review-loop") == 2
+    error = capsys.readouterr().err
+    assert "expired on 2026-10-31" in error
+    assert "No model is substituted." in error
+    assert world.reviews() == []
+    assert world.record().read_bytes() == before
