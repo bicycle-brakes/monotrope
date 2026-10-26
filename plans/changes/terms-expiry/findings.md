@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-26
 created: 2026-10-26
 last_reviewed: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-abra
@@ -695,3 +695,53 @@ Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model mimo-v2.5
 Stage-2 call, 2026-10-26: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 623 files, 2289 commits, 12 rules.
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 623 files, 2292 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 623 files, 2296 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 623 files, 2296 commits, 12 rules.
+
+Loop attempt: 2026-10-27 — no round was written; the review-loop calls above consumed no stage; audit calls: 2
+
+Notice: the data terms of deepseek-v4.1-flash expire on 2026-10-31 (5 days left).
+
+Notice: the data terms of deepseek-v4-pro expire on 2026-10-31 (5 days left).
+
+longcat-2.0 was asked again with the format reminder: the first answer was malformed
+
+longcat-2.0's first answer, which was not in the required format:
+
+> After a thorough review of the implementation, I have examined:
+> 
+> **Core logic** — `terms_today()` (UTC seam), `_gilt_bis()` (strict quoted-ISO parser, fail-closed), `terms_problem()` (expiry check appended after existing skip/source/retention/training guards), `terms_warnings()` (0–7 day window, includes skipped records, excludes expired ones).
+> 
+> **Review-loop wiring** — warnings printed in `review_loop` before admission (so they survive refusals), re-evaluated in `_review_round` notes (so they reach the record), and a pre-launch expiry recheck on the paid members (catches midnight crossing between batch check and launch). Replacements and malformed retries both re-check expiry via `checked_prompt` → `declaration_problem` → `terms_problem`.
+> 
+> **Availability preparation** — `terms_warnings` collected into the receipt's `state["availability"]["terms_warnings"]`, rendered in `report`, covered by the existing digest.
+> 
+> **Migration** — every non-DeepSeek record gets `gelesen` + 30 days (verified: e.g. 2026-10-07 → 2026-11-06, 2026-10-17 → 2026-11-16, 2026-10-22 → 2026-11-21); both DeepSeek records use the sourced 2026-10-31 with the monthly-agreement prose; skipped records are dated too.
+> 
+> **ADR / WORKFLOW.md** — consistent with the implementation: inclusive UTC expiry day, seven-day window, warnings never relax admission, no runner-side renewal, sourced decision-PR renewal path.
+> 
+> **Tests** — all ten criteria covered by deterministic tests with the `terms_today` seam pinned; boundary cases (7/8/1/0/−1 days), UTC-vs-local, saved/receipt/resumed/replacement/malformed-retry/interactive paths, migration assertions, declaration-immutability, prior-guard preservation, and warning persistence through receipt/round/release.
+> 
+> No finding.
+
+longcat-2.0's second answer, which was not in the required format:
+
+> After thorough review of the implementation diff, the test suite, and the supporting documentation, I have analyzed the change across all three finding dimensions.
+> 
+> The implementation correctly:
+> - Adds `_gilt_bis()` with strict quoted-ISO-date validation (rejects YAML-native dates, timestamps, malformed/ impossible dates)
+> - Extends `terms_problem()` with fail-closed expiry checking after all existing admission guards
+> - Adds `terms_warnings()` covering the 0–7 day inclusive window, including skipped records but excluding expired/unusable dates
+> - Re-checks expiry immediately before paid launch in `_review_round` (handling the midnight-crossing case) before any audit lines are written
+> - Preserves existing skip, retention, training, leak-check, and free-class admission guards
+> - Documents the renewal-by-decision-PR procedure in WORKFLOW.md and ADR 0022
+> 
+> The test suite covers all 10 criteria including edge cases (missing/empty/type-invalid/timestamp/malformed/impossible dates, leap-day, UTC vs local, 7/8/1/0/-1 day boundaries, midnight-crossing, saved receipts, retries, replacements, compatibility probes, malformed-answer retries, interactive sessions, receipt release, migration of the real declaration, and runner non-renewal).
+> 
+> I find no issues that meet the finding criteria: the change does what it promises, does nothing nobody asked for, and handles error cases, edge cases, and outward-facing contracts correctly.
+> 
+> No finding.
+
+Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 623 files, 2297 commits, 12 rules.
