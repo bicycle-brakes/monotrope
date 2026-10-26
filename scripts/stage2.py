@@ -496,6 +496,10 @@ class NotStarted(CallFailed):
     """A reviewer that never started: the round's deadline had passed before its launch (DL-B-10)."""
 
 
+class CheckpointRolledBack(CallFailed):
+    """The commit guard refused the attempt and ran its baseline restore."""
+
+
 class StepTimedOut(CallFailed):
     """A started program ran into its time limit and its whole process group was killed (R-20)."""
 
@@ -3102,13 +3106,21 @@ def release_loop(
     release(root, change)
 
 
-def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
+def _git_output(
+    root: Path,
+    *args: str,
+    allow: tuple[int, ...] = (0,),
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
+    preserve_newlines: bool = False,
+) -> str:
     try:
         done = subprocess.run(
             [GIT, "-C", str(root), *args],
+            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             capture_output=True,
-            text=True,
-            errors="replace",
+            text=not preserve_newlines,
+            errors=None if preserve_newlines else "replace",
             check=False,
             env=env,
             timeout=GIT_SECONDS,
@@ -3116,8 +3128,8 @@ def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
-    return done.stdout
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return os.fsdecode(done.stdout)
 
 
 def change_diff(root: Path) -> str:
@@ -3353,6 +3365,149 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
+
+
+def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
+    """Run Git without decoding path output or translating pathspec stdin."""
+    try:
+        done = subprocess.run(
+            [GIT, "-C", str(root), *args],
+            input=stdin,
+            capture_output=True,
+            text=False,
+            check=False,
+            env=env,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    if done.returncode != 0:
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return done.stdout
+
+
+def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[bytes]:
+    """Add every untracked, non-ignored file intent-to-add, so `git ls-files` lists it; return the names.
+
+    A gate that reads the index (the leerprobe gate builds its foreign repository from `git ls-files`)
+    would otherwise miss a script the attempt just created (bead coding-harness-fdz). Intent-to-add
+    records only the path, not its content: the checkpoint's `git add -A` stages the content later, and
+    `verify_attempt` drops the entries right after `make verify`.
+    The names go to git on stdin, NUL-separated, so thousands of files cannot overflow the argument
+    list, and `--literal-pathspecs` makes them paths, not patterns: `[i].md` does not match `i.md`
+    and `:notes.md` is no pathspec magic. Paths remain filesystem bytes throughout listing,
+    adding and cleanup, including names that cannot be decoded as UTF-8.
+    """
+    names = [
+        name
+        for name in _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0")
+        if name
+    ]
+    if names:
+        _git_bytes(
+            root,
+            "--literal-pathspecs",
+            "add",
+            "--intent-to-add",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin=b"\0".join(names) + b"\0",
+        )
+    return names
+
+
+def drop_intended(root: Path, names: list[bytes], env: dict[str, str] | None = None) -> None:
+    """Remove the intent-to-add entries of `names` from the index; the files and the caller's entries stay.
+
+    `rm --cached` on the literal paths touches only those entries: a reset to HEAD would also unstage
+    a caller's change on a path that a pattern happens to match, or undo a caller's `git rm --cached`.
+    """
+    if names:
+        _git_bytes(
+            root,
+            "--literal-pathspecs",
+            "rm",
+            "--cached",
+            "-q",
+            "--ignore-unmatch",
+            "-f",
+            "--pathspec-from-file=-",
+            "--pathspec-file-nul",
+            env=env,
+            stdin=b"\0".join(names) + b"\0",
+        )
+
+
+def derived_leftover(root: Path, relative: Path) -> bool:
+    """A change the runner itself derives before every verify, so a failed run may leave it (bead coding-harness-b5w).
+
+    Three kinds, and only these: the rendered `plans/INDEX.md` (re-rendered from the tree before the next
+    verify), a file whose only difference from `HEAD` is its `updated:` line (the date stamp), and Python
+    bytecode under `__pycache__` that the runner's own renderer wrote. A content edit is never one.
+    """
+    # A stamp or rendered file never accounts for a tracked permission/type change.
+    for index in ((), ("--cached",)):
+        raw = _git_output(root, "diff", *index, "--raw", "--no-renames", "-z", "HEAD", "--", relative.as_posix())
+        for metadata in raw.split("\0")[::2]:
+            if metadata:
+                modes = metadata.split()[:2]
+                if modes[0] != ":000000" and modes[0][1:] != modes[1]:
+                    return False
+    if relative.as_posix() == "plans/INDEX.md":
+        return True
+    if "__pycache__" in relative.parts and relative.suffix == ".pyc":
+        return True
+    # The two versions are compared with the frontmatter `updated:` line masked, never through a parsed diff:
+    # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3). Both are
+    # read as bytes and decoded without newline translation, so a CRLF to LF conversion is a change (P243-1).
+    path = root / relative
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        now = path.read_bytes().decode("utf-8")
+        then = _git_bytes(root, "show", f"HEAD:{relative.as_posix()}").decode("utf-8")
+        staged = _git_bytes(root, "show", f":{relative.as_posix()}").decode("utf-8")
+    except (OSError, UnicodeDecodeError, Refused):
+        return False
+    if now == staged == then:
+        return False
+    before = _mask_stamp(then, dated=False)
+    # Check both independent versions against HEAD: git add -A must not erase a substantive staged edit.
+    return before is not None and all(
+        version == then or _mask_stamp(version, dated=True) == before for version in (now, staged)
+    )
+
+
+_STAMP_DATE = re.compile(r"updated: \d{4}-\d{2}-\d{2}\r?")
+
+
+def _mask_stamp(text: str, *, dated: bool) -> str | None:
+    """`text` with the frontmatter's one `updated:` line replaced by a mask; None when there is no such line.
+
+    The line is found as `check_frontmatter_current.stamp` finds it, so the no-space form matches too. With
+    `dated` the line must be what `stamp` writes, `updated: YYYY-MM-DD`; an inserted or missing line is None.
+    """
+    block = check_frontmatter_current._BLOCK.match(text)
+    if block is None:
+        return None
+    lines = block.group(1).split("\n")
+    found = [i for i, line in enumerate(lines) if check_frontmatter_current._UPDATED_LINE.match(line)]
+    if len(found) != 1:
+        return None
+    line = lines[found[0]]
+    if dated and not _STAMP_DATE.fullmatch(line):
+        return None
+    lines[found[0]] = "updated: <stamp>" + ("\r" if line.endswith("\r") else "")
+    return text[: block.start(1)] + "\n".join(lines) + text[block.end(1) :]
+
+
+def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
+    """Refuse pre-existing changes outside `allowed`, except the runner's own derived leftovers (bead coding-harness-b5w)."""
+    outside = {path for path in changed_paths(root) - allowed if not derived_leftover(root, path)}
+    if outside:
+        listing = ", ".join(sorted(path.as_posix() for path in outside))
+        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
 
 
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
@@ -4121,6 +4276,11 @@ def verify_attempt(
     if preparation:
         return preparation
     try:
+        intended = intend_new_files(root, env)
+    except (Refused, OSError) as error:
+        return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+    problems = []
+    try:
         done = launch(
             ["make", "verify"],
             root,
@@ -4131,10 +4291,18 @@ def verify_attempt(
     except StepTimedOut as error:
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
-        return [f"`make verify` did not finish: {error}"]
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        problems.append(f"`make verify` did not finish: {error}")
+    else:
+        if done.returncode != 0:
+            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    finally:
+        # The entries were for the gates only: a failed run must not leave them in the operator's index,
+        # and a passing one is staged whole by the checkpoint (runner review R-5).
+        # Cleanup is a postcondition even when verification passed or timed out.
+        try:
+            drop_intended(root, intended, env)
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's intent-to-add entries could not be removed after `make verify`: {error}")
     try:
         time_log(plan)
     except Refused as error:
@@ -4169,15 +4337,8 @@ RUNNER_HELD = (
 )
 
 
-def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
-    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
-
-    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
-    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
-    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
-    `docs/adr/` prefix is exactly that (P1 of the #192 review).
-    """
-    spared = {path.as_posix() for path in keep or ()}
+def _held_prefixes(root: Path) -> list[str]:
+    """Committed human-decided and runner-held prefixes for checkpoint protection."""
     try:
         data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
         # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
@@ -4189,9 +4350,21 @@ def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> lis
         ]
     except (Refused, KeyError, TypeError, AttributeError, yaml.YAMLError) as error:
         raise Refused(f"the committed provenance map cannot be read; no attempt is committed ({error})") from error
-    folder = f"plans/changes/{change}/"
     # Case-folded on both sides: on a case-insensitive checkout `.Claude/Rules/` is `.claude/rules/` (O192-2).
-    held = [path.casefold() for path in [*decided, *RUNNER_HELD]]
+    return [path.casefold() for path in [*decided, *RUNNER_HELD]]
+
+
+def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
+    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
+
+    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
+    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
+    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
+    `docs/adr/` prefix is exactly that (P1 of the #192 review).
+    """
+    spared = {path.as_posix() for path in keep or ()}
+    folder = f"plans/changes/{change}/"
+    held = _held_prefixes(root)
     return sorted(
         relative.as_posix()
         for relative in changed_paths(root)
@@ -4216,18 +4389,24 @@ def checkpoint(
         if exposed:
             raise Refused(credential_message(exposed))
     try:
+        # A protected document's derived stamp may enter the run, but must not enter its commit.
+        # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
+        held = _held_prefixes(root)
+        for path in sorted(changed_paths(root)):
+            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path):
+                _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", path.as_posix())
         blocked = uncommittable(root, change, keep)
     except Refused as error:
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
         # first, so nothing the runner could not classify stays in the tree (O192-5).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(f"{error}; {restored}") from error
+        raise CheckpointRolledBack(f"{error}; {restored}") from error
     if blocked:
         # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
         # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
         # refused attempt's to lose (P1 and P2 of the #192 review).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(
+        raise CheckpointRolledBack(
             "the attempt changed paths a stage-2 run does not commit: "
             + ", ".join(f"`{path}`" for path in blocked)
             + f"; {restored}"
@@ -4878,6 +5057,52 @@ def _mark_record_rows(
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
+# The explorer's role, stated by the runner in every exploration prompt (bead coding-harness-e7m): on
+# 2026-10-20 a `--stage2-off` model took itself for the orchestrator, said its Bash tool was disabled and
+# asked to be rerun, and wrote no research.
+EXPLORER_ROLE = (
+    "You are the phase-1 explorer that the runner has already started; you are not the orchestrator and "
+    "you run no command. Your tools are read-only (Read, Grep, Glob) and that is all this phase needs; "
+    "where the phase prompt says `rg`, use Grep. Read the repository and answer with the research now."
+)
+
+_PATH_TOKEN = re.compile(r"/?[\w.\-]+(?:/[\w.\-]+)*/?")
+
+
+def names_a_repository_file(root: Path, answer: str) -> bool:
+    """Whether the answer names at least one file or directory that exists inside the worktree.
+
+    A heuristic: "exists in the worktree" includes ignored files, and `.git` never counts.
+    """
+    base = root.resolve()
+    # A bare word counts only as a file directly at the root (`Makefile`): a folder name such as
+    # `tests` or `scripts` also stands in an ordinary refusal ("I cannot run the tests").
+    root_files = {entry.name for entry in base.iterdir() if entry.is_file()} if base.is_dir() else set()
+    seen: set[str] = set()
+    for raw in _PATH_TOKEN.findall(answer.replace("\\", "/")):
+        token = raw.rstrip(".-")  # sentence punctuation glued to the end of a path
+        if token in seen or token.strip("/") in ("", ".", ".."):
+            continue
+        if "/" not in token and "." not in token:
+            if token in root_files:
+                return True
+            continue
+        seen.add(token)
+        # Cap the path-like candidates, so filler words do not hide a later path.
+        if len(seen) > 5000:
+            break
+        try:
+            path = (root / token).resolve()
+            # exists() raises on a component over the file system's name limit (runner review R-6).
+            if path == base or not path.is_relative_to(base) or path.relative_to(base).parts[0] == ".git":
+                continue
+            if path.exists():
+                return True
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return False
+
+
 def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
     """Phase 1: GLM Flash, or explicit Haiku fallback, appends repository facts."""
     endpoint = HAIKU if stage2_off is not None else GLM_FLASH
@@ -4889,12 +5114,19 @@ def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
         if key is None:
             raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
     extra = (
+        f"{EXPLORER_ROLE} "
         "Report repository facts with source paths as prose ready to append to `research.md`. "
         "Do not design, recommend, edit a file or use review-table formatting."
     )
     prompt = work_prompt(root, "01-explore.md", change, extra)
     begin_work_call(ctx, "explore", endpoint, prompt, 1, route, ctx.research, stage2_off)
     answer = run_work_model(ctx, prompt, endpoint, writable=False, key=key)
+    if not names_a_repository_file(root, answer):
+        # Research names its sources; an answer that names no file of the repository is a refusal or a
+        # question, not research, and is shown rather than appended (bead coding-harness-e7m).
+        tail = "\n".join(answer.strip().splitlines()[-40:])
+        print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
+        raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
     append(ctx.research, f"## Runner exploration — {today()}\n\n{answer.strip()}")
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
@@ -5289,7 +5521,24 @@ def run_attempts(
                     # The subject stays the subject; the format line of every attempt that ran the step
                     # stands below the heading, in the commit that holds the formatted bytes.
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                try:
+                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                except CheckpointRolledBack:
+                    # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
+                    # refused commit's restore just undid the work for; findings.md is kept by that
+                    # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
+                    # exists: after one, HEAD holds those statuses. A `Refused` stop (a credential, a
+                    # recovery the maintainer decided writes nothing) is never followed by a write
+                    # (runner review R-4). The explicit rollback signal excludes a failed `git commit`
+                    # that left the fix in place (P240-1). Unrelated leftovers, such as nested Git
+                    # repositories skipped by git clean, do not preserve statuses for removed fixes.
+                    try:
+                        moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    if kept is not None and not moved:
+                        restore_findings(kept)
+                    raise
                 if after_commit is not None:
                     after_commit()
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
@@ -5338,10 +5587,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else GLM_FLASH
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
@@ -5562,11 +5808,10 @@ def draft(root: Path, change: str) -> None:
     """
     ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
+    started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
     ignored_before = ignored_snapshot(root)
     tools = tool_state(root)  # before any model runs (R-21)
     routes = [
@@ -5638,6 +5883,7 @@ def draft(root: Path, change: str) -> None:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
+        put = [path for path in put if Path(path) not in started_with]
         if put:
             restored = protect_files(put_back_lines(put), key)
             listing = "\n".join(restored)
@@ -5724,10 +5970,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")

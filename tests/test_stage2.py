@@ -63,6 +63,7 @@ OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 # A stand-in: one template for both programs, the standard library only.
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
+import fcntl
 import json
 import os
 import sys
@@ -86,7 +87,18 @@ name = Path(sys.argv[0]).name
 alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
-previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def locked(shared):
+    # Parallel members append records larger than one atomic write; every read and append of the log
+    # takes this lock, so no member reads half a line (2026-10-25: JSONDecodeError under the full suite).
+    handle = (here / "calls.lock").open("a")
+    fcntl.flock(handle, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+    return handle
+
+
+with locked(True):
+    previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
@@ -130,7 +142,7 @@ if alias == "pi" and argv == ["--version"]:
 if alias == "pi" and "update" in argv and "--models" in argv:
     # The forced catalog refresh: logged with its scratch environment, never a
     # scripted step.
-    with log.open("a") as handle:
+    with locked(False), log.open("a") as handle:
         handle.write(
             json.dumps(
                 {
@@ -166,7 +178,7 @@ if alias == "pi" and "update" in argv and "--models" in argv:
 if alias == "pi" and "--list-models" in argv:
     # The catalog listing: logged like the refresh, fed from the scenario's
     # catalog so a test can plant a new model or a different provider.
-    with log.open("a") as handle:
+    with locked(False), log.open("a") as handle:
         handle.write(
             json.dumps(
                 {
@@ -221,7 +233,7 @@ record = {
     "marker_paths": found,
     "findings": findings.read_text() if findings.exists() else None,
 }
-with log.open("a") as handle:
+with locked(False), log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
 barrier = step.get("barrier")
 if barrier:
@@ -661,7 +673,8 @@ def test_a_stand_in_contacts_nothing() -> None:
     imported = {
         alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
     } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-    assert imported <= {"json", "os", "sys", "time", "pathlib"}
+    # `fcntl` locks the stand-in's own call log against parallel members; it opens no connection.
+    assert imported <= {"fcntl", "json", "os", "sys", "time", "pathlib"}
 
 
 @pytest.mark.usefixtures("world")
@@ -1410,7 +1423,7 @@ def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> N
 
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
     # Two Claude calls run: the spec review first, then the explorer.
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1436,7 +1449,7 @@ def test_the_foreign_environment_is_the_runners(world: World) -> None:
 
 def test_no_call_carries_another_endpoints_key(world: World) -> None:
     """Criterion 13: the OpenCode Go key and the GLM key never meet in one environment."""
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1601,7 +1614,7 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
 def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
     (world.root / "plans/changes/demo/spec.md").unlink()
     world.plan.unlink()
-    world.script(claude=[{"stdout": "A sourced fact."}])
+    world.script(claude=[{"stdout": "A sourced fact from `src/app.py`."}])
     assert world.run("explore") == 0
     world.research.write_text("# no header\n", encoding="utf-8")
     assert world.run("explore") == 2
@@ -1612,7 +1625,7 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
-    world.script(claude=[{"stdout": "Fallback fact."}])
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
     call = world.calls("claude")[0]
     argv, env = call["argv"], call["env"]
@@ -1654,7 +1667,7 @@ def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
-    world.script(claude=[{"stdout": "the credential was @KEY@"}])
+    world.script(claude=[{"stdout": "the credential was @KEY@ in src/app.py"}])
     assert world.run("explore") == 0
     text = world.research.read_text(encoding="utf-8")
     assert "[credential]" in text
@@ -2462,7 +2475,7 @@ def test_a_key_fragment_never_survives_the_relayed_streams(world: World, capsys:
     world.script(
         claude=[
             {"stdout": "the model saw @KEY@\n" + KEY[:8] + " tail", "stderr": KEY[10:20], "exit": 1},
-            {"stdout": f"fact {KEY[:8]} and {KEY[16:]}"},
+            {"stdout": f"fact {KEY[:8]} and {KEY[16:]} in src/app.py"},
         ]
     )
     assert world.run("explore") == 1
@@ -3305,6 +3318,35 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
     assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
     for path in ("`src/app.py`", "`src/new.py`", "`docs/adr/0007-existing-record.md`"):
         assert f"- {path}" in block, path
+
+
+def test_a_draft_does_not_blame_the_model_for_a_derived_leftover(world: World) -> None:
+    # P243-5. Planted fault: a leftover the run started with is put back and listed as what the model changed.
+    draft_world(world)
+    note = world.root / "docs" / "note.md"
+    note.write_text("---\ntitle: N\nupdated: 2026-01-01\n---\n\nNote\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "note")
+    note.write_text(note.read_text(encoding="utf-8").replace("2026-01-01", "2026-10-25"), encoding="utf-8")
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "src/app.py": "value = 2\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    block = quote_blocks(world.text())[0]
+    assert "- `src/app.py`" in block, "the model's own stray edit is still listed"
+    assert "docs/note.md" not in "\n".join(block), "a leftover the run started with is blamed on the model"
+    assert "2026-01-01" in git(world.root, "show", "HEAD:docs/note.md")
 
 
 def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
@@ -13874,6 +13916,741 @@ def test_a_non_string_header_value_does_not_break_activation(tmp_path: Path) -> 
     assert stage2.activate_overlay(tmp_path, store) == {"acme-v1-free": ["headers"]}
     active = json.loads((tmp_path / "models.json").read_text())
     assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "acme-v1-free"}]
+
+
+def test_the_stand_in_log_survives_parallel_members(world: World) -> None:
+    """A stand-in reads calls.jsonl while parallel members append large records to it; no read may see half a line.
+
+    Seen 2026-10-25 under the full suite: a Flash member failed with `JSONDecodeError: Unterminated string` from
+    the stand-in itself, so a round failed for the test harness, not for the runner. Unlocked, about half of the
+    single rounds below failed; three rounds make the planted fault show almost every time.
+    """
+    members = 64
+    env = {**os.environ, **{f"STAND_IN_BULK_{n}": "x" * 60_000 for n in range(4)}}
+    failures = []
+    for _round in range(3):
+        world.script(pi=[{"stdout": "No finding."}] * members)
+        started = [
+            subprocess.Popen(
+                [str(world.bin / "pi"), "--model", f"opencode-go/m{n}", "-p", "review"],
+                cwd=world.root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for n in range(members)
+        ]
+        for process in started:
+            _out, err = process.communicate(timeout=120)
+            if process.returncode != 0:
+                failures.append(err[-300:])
+    assert failures == [], failures[:2]
+    assert len(world.calls("pi")) == 3 * members
+
+
+# ---------------------------------------------------------------------------
+# verify-stages-new-files (bead coding-harness-fdz): new files are in the index when make verify runs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_make_verify_sees_the_attempts_new_files_in_git(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    # Planted fault: `make verify` runs while the attempt's new script is untracked, so a gate that
+    # reads `git ls-files` (the leerprobe gate's foreign repository) misses it.
+    original_launch = stage2.launch
+    seen: list[str] = []
+
+    def record(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            seen.append(git(root, "ls-files"))
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    if verb == "implement":
+        world.script(
+            claude=[
+                {
+                    "stdout": "implemented",
+                    "plant": {"scripts/new_tool.py": "VALUE = 1\n", "src/app.py": "value = 2\n"},
+                    "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+                }
+            ],
+            make=[{"stdout": "green\n"}],
+        )
+    else:
+        repair_world(world)
+        step = repair_step()
+        step["plant"] = {**step["plant"], "scripts/new_tool.py": "VALUE = 1\n"}
+        script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run(verb) == 0
+    assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
+    assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+
+
+def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F6-2: text-mode Git output folds CR into LF, so the LF path is added twice
+    # and the distinct CR path stays untracked when verification starts.
+    names = {"scripts/new\rtool.py", "scripts/new\ntool.py"}
+    for name in names:
+        (world.root / name).write_text("VALUE = 1\n")
+    original_launch = stage2.launch
+    seen = []
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = subprocess.run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(os.fsdecode(listed).split("\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = subprocess.run(
+        [GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True
+    ).stdout
+    assert not names.intersection(os.fsdecode(listed_after).split("\0"))
+
+
+@pytest.mark.parametrize("raw_name", [b"assets/new\xff.txt", b"assets/new\xc3\xbf.txt"])
+def test_make_verify_preserves_raw_byte_paths_and_drops_both_entries(
+    world: World, monkeypatch: pytest.MonkeyPatch, raw_name: bytes
+) -> None:
+    # F6-3: text-mode stdin replaces 0xff with '?', adding the question-mark
+    # path twice while the other path stays invisible to verification.
+    names = {raw_name, b"assets/new?.txt"}
+    (world.root / "assets").mkdir()
+    for name in names:
+        try:
+            with open(os.fsencode(world.root) + b"/" + name, "wb") as file:  # noqa: PTH123 — raw byte path
+                file.write(b"new\n")
+        except OSError:
+            if sys.platform == "darwin" and b"\xff" in name:
+                pytest.skip("This macOS filesystem refuses non-UTF-8 file names")
+            raise
+    original_launch = stage2.launch
+    original_run = subprocess.run
+    calls = []
+    seen = []
+
+    def record(command, *args, **kwargs):
+        if "--pathspec-from-file=-" in command:
+            calls.append((list(command), kwargs))
+        return original_run(command, *args, **kwargs)
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = original_run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(listed.split(b"\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = original_run([GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True).stdout
+    assert names.isdisjoint(listed_after.split(b"\0"))
+    writes = [(argv, kwargs) for argv, kwargs in calls if "--pathspec-from-file=-" in argv]
+    assert len(writes) == 2
+    for argv, kwargs in writes:
+        assert "--pathspec-file-nul" in argv
+        assert kwargs.get("text") is False
+        assert names | {b""} <= set(kwargs["input"].split(b"\0"))
+    assert writes[0][1]["input"] == writes[1][1]["input"]
+
+
+def test_intent_to_add_keeps_git_pathspecs_as_bytes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise the binary protocol even on filesystems that refuse non-UTF-8 names.
+    names = [b"assets/new?.txt", b"assets/new\xff.txt"]
+    payload = b"\0".join(names) + b"\0"
+    calls = []
+
+    def git_bytes(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return subprocess.CompletedProcess(command, 0, payload if "ls-files" in command else b"", b"")
+
+    monkeypatch.setattr(stage2.subprocess, "run", git_bytes)
+    intended = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, intended)
+    assert intended == names
+    assert len(calls) == 3
+    assert "-z" in calls[0][0]
+    for argv, kwargs in calls:
+        assert kwargs.get("text") is False
+        if "ls-files" not in argv:
+            assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+            assert kwargs["input"] == payload
+
+
+def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
+    # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
+    # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"scripts/new_tool.py": "VALUE = 1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    assert "scripts/new_tool.py" not in git(world.root, "ls-files").splitlines()
+    assert git(world.root, "diff", "--cached", "--name-only") == ""
+
+
+@pytest.mark.parametrize("verification", ["green", "red", "timeout"])
+@pytest.mark.parametrize("failure", ["index.lock", "oserror"])
+def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch, verification: str, failure: str
+) -> None:
+    # F6-1: a cleanup failure must reject even a green verifier, and remain visible beside a
+    # failed or timed-out verifier. Plant a real Git lock after intent-to-add has succeeded.
+    (world.root / "scripts/new_tool.py").write_text("VALUE = 1\n")
+    lock = world.root / ".git/index.lock"
+    original_launch = stage2.launch
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            if failure == "index.lock":
+                lock.write_text("interrupted Git operation\n")
+            if verification == "timeout":
+                raise stage2.StepTimedOut("test verifier timed out")
+            return subprocess.CompletedProcess(command, int(verification == "red"), "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    if failure == "oserror":
+
+        def fail_drop(*_args, **_kwargs):
+            raise OSError("test cleanup unavailable")
+
+        monkeypatch.setattr(stage2, "drop_intended", fail_drop)
+    monkeypatch.setattr(stage2, "launch", verify)
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan)
+    finally:
+        lock.unlink(missing_ok=True)
+    cleanup = [problem for problem in problems if "intent-to-add" in problem]
+    assert cleanup, problems
+    assert ("index.lock" if failure == "index.lock" else "test cleanup unavailable") in cleanup[0]
+    if verification == "red":
+        assert any("`make verify` exited 1" in problem for problem in problems)
+    elif verification == "timeout":
+        assert any("`make verify` did not finish" in problem for problem in problems)
+
+
+def test_intend_new_files_passes_no_file_name_on_the_command_line(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1 (pre-review of #242). Planted fault: every name is an argument, so ~30,000 untracked files
+    # raise OSError "Argument list too long". The names must travel on stdin, for the add and the drop.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    (world.root / "scripts/new_b.py").write_text("B = 1\n")
+    calls: list[tuple[list[str], bytes | None]] = []
+    original = subprocess.run
+
+    def record(command, *args, **kwargs):
+        calls.append((list(command), kwargs.get("input")))
+        return original(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    names = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, names)
+    monkeypatch.undo()
+    assert sorted(names) == [b"scripts/new_a.py", b"scripts/new_b.py"]
+    writes = [(argv, text) for argv, text in calls if "--intent-to-add" in argv or "--cached" in argv]
+    assert len(writes) == 2
+    for argv, text in writes:
+        assert not any(os.fsdecode(name) in argv for name in names), argv
+        assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+        assert text is not None and set(text.split(b"\0")) == {*names, b""}
+    assert "scripts/new_a.py" not in git(world.root, "ls-files").splitlines()
+    assert "scripts/new_a.py" in git(world.root, "ls-files", "--others", "--exclude-standard").splitlines()
+
+
+def test_an_oserror_from_the_intent_to_add_call_becomes_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # P242-1. Planted fault: "Argument list too long" (OSError) is not caught, so the run ends in a traceback.
+    original = subprocess.run
+
+    def fail(command, *args, **kwargs):
+        if "--intent-to-add" in command:
+            raise OSError(7, "Argument list too long")
+        return original(command, *args, **kwargs)
+
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts/new_a.py").write_text("A = 1\n")
+    monkeypatch.setattr(stage2.subprocess, "run", fail)
+    problems = stage2.verify_attempt(world.root, world.plan)
+    monkeypatch.undo()
+    assert len(problems) == 1 and "intent-to-add" in problems[0] and "Argument list too long" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone(world: World) -> None:
+    # P242-2 (a) and (c). Planted fault: a new file `[i].md` is read as a pattern that also matches the
+    # caller's staged `i.md`, and the drop (a reset to HEAD) unstages it; a staged `git rm --cached` is undone.
+    directory = world.root / "plans/changes/demo"
+    findings = directory / "findings.md"
+    findings.write_text("caller's change\n")
+    git(world.root, "add", "--", "plans/changes/demo/findings.md")
+    (directory / "[f]indings.md").write_text("new\n")
+    git(world.root, "rm", "--cached", "-q", "--", "plans/changes/demo/spec.md")
+    before = git(world.root, "diff", "--cached", "--name-status")
+    names = stage2.intend_new_files(world.root)
+    assert sorted(names) == [b"plans/changes/demo/[f]indings.md", b"plans/changes/demo/spec.md"]
+    stage2.drop_intended(world.root, names)
+    assert git(world.root, "diff", "--cached", "--name-status") == before
+    assert "plans/changes/demo/[f]indings.md" in git(world.root, "ls-files", "--others").splitlines()
+    assert "[f]indings.md" not in git(world.root, "ls-files").splitlines()
+
+
+def test_a_new_file_named_like_pathspec_magic_is_added_and_dropped(world: World) -> None:
+    # P242-2 (b). Planted fault: `:notes.md` is read as pathspec magic, so `git add -N` fails.
+    (world.root / ":notes.md").write_text("n\n")
+    names = stage2.intend_new_files(world.root)
+    assert names == [b":notes.md"]
+    assert ":notes.md" in git(world.root, "--literal-pathspecs", "ls-files").splitlines()
+    stage2.drop_intended(world.root, names)
+    assert ":notes.md" not in git(world.root, "ls-files").splitlines()
+    assert ":notes.md" in git(world.root, "ls-files", "--others").splitlines()
+
+
+# ---------------------------------------------------------------------------
+# explore-stage2-off-sonnet (bead coding-harness-e7m): the explorer knows its role; no research, no append
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("off", [False, True])
+def test_the_explore_prompt_states_the_models_role_and_tools(world: World, off: bool) -> None:
+    # Planted fault: the model is not told it is the explorer the runner started, with read-only tools.
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert stage2.EXPLORER_ROLE in prompt
+
+
+def test_an_exploration_answer_without_a_repository_path_fails_and_appends_nothing(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Planted fault: an answer that is no research (the 2026-10-20 Haiku refusal) is appended as research.
+    before = world.research.read_text(encoding="utf-8")
+    refusal = (
+        "I can't run phase 1: the Bash tool is disabled, and `stage2.py explore` has to be run through it. "
+        "Please rerun me with Bash."
+    )
+    world.script(claude=[{"stdout": refusal}])
+    capsys.readouterr()
+    assert world.run("explore", "demo", "--stage2-off", "GLM unavailable") == 1
+    text = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" not in text and "Bash tool is disabled" not in text
+    assert "seed fact" in text and text.count("## ") == before.count("## "), "research.md lost what it held"
+    err = capsys.readouterr().err
+    assert "names no file of the repository" in err and "Bash tool is disabled" in err
+
+
+def test_an_over_long_word_in_an_exploration_answer_fails_cleanly(world: World) -> None:
+    # Runner review R-6 (2026-10-25). Planted fault: path.exists() outside the try raises "File name too long"
+    # for a path-like token with a component over 255 bytes, so explore dies with a traceback.
+    word = "a" * 300 + ".md"
+    assert stage2.names_a_repository_file(world.root, f"see {word} and nothing else") is False
+    assert stage2.names_a_repository_file(world.root, f"see {word} and `src/app.py`") is True
+    world.script(claude=[{"stdout": f"see {word}"}])
+    assert world.run("explore") == 1
+
+
+# ---------------------------------------------------------------------------
+# explore-role pre-review repairs (PR #241, findings P241-1..P241-7)
+# ---------------------------------------------------------------------------
+
+
+def test_an_absolute_path_inside_the_worktree_counts_and_one_outside_does_not(world: World) -> None:
+    # P241-1. Planted fault: the token pattern cannot match a leading slash, so the absolute paths that
+    # Read and Glob return never count.
+    inside = f"{world.root}/src/app.py"
+    assert stage2.names_a_repository_file(world.root, f"The code is in {inside} only") is True
+    assert stage2.names_a_repository_file(world.root, "See /etc/passwd") is False
+
+
+def test_a_path_at_the_end_of_a_sentence_counts(world: World) -> None:
+    # P241-2. Planted fault: the full stop is glued onto the path, so the lookup misses the file.
+    for text in (
+        "The runner lives in src/app.py.",
+        "Files: src/app.py, and more",
+        "(see src/app.py)",
+        "see src/app.py; then",
+        "src/app.py:12 holds it",
+        "as in 'src/app.py'.",
+    ):
+        assert stage2.names_a_repository_file(world.root, text) is True, text
+
+
+def test_the_explorer_role_does_not_name_the_runner_script() -> None:
+    # P241-3. Planted fault: the role names `scripts/stage2.py`, so a refusal that echoes it passes the check.
+    assert "scripts/stage2.py" not in stage2.EXPLORER_ROLE
+    assert "use Grep" in stage2.EXPLORER_ROLE and "answer with the research now" in stage2.EXPLORER_ROLE
+
+
+def test_a_refusal_that_echoes_the_explorer_role_is_refused(world: World) -> None:
+    # P241-3. Planted fault: the echoed role wording names a repository file and the refusal passes.
+    (world.root / "scripts").mkdir(exist_ok=True)
+    (world.root / "scripts" / "stage2.py").write_text("", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, stage2.EXPLORER_ROLE) is False
+
+
+def test_a_path_after_the_five_thousandth_word_still_counts(world: World) -> None:
+    # P241-4a. Planted fault: the cap counts every word, so a path after the 5000th is never seen.
+    answer = "word " * 5001 + "src/app.py"
+    assert stage2.names_a_repository_file(world.root, answer) is True
+
+
+def test_a_windows_separator_in_a_path_counts(world: World) -> None:
+    # P241-4b. Planted fault: a backslash path is split at the separator and never found.
+    assert stage2.names_a_repository_file(world.root, r"see src\app.py for it") is True
+
+
+def test_a_bare_top_level_name_counts_only_if_it_is_a_root_entry(world: World) -> None:
+    # P241-4c. Planted fault: a token without a slash or dot is skipped, so `Makefile` never counts.
+    (world.root / "Makefile").write_text("all:\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "the Makefile drives it") is True
+    assert stage2.names_a_repository_file(world.root, "the Nonexistent drives it") is False
+    # A root folder named as a bare word is ordinary prose in a refusal, not a cited source.
+    (world.root / "tests").mkdir(exist_ok=True)
+    assert stage2.names_a_repository_file(world.root, "I cannot run the tests, please rerun me") is False
+
+
+@pytest.mark.parametrize("citation", ["tests/", "./tests/"])
+@pytest.mark.parametrize("off", [False, True])
+def test_an_exploration_answer_citing_only_a_root_directory_is_accepted(world: World, citation: str, off: bool) -> None:
+    # F-1. Planted fault: tokenization drops the trailing slash and rejects a root directory as prose.
+    (world.root / "tests").mkdir(exist_ok=True)
+    answer = f"The regression suite lives in `{citation}`."
+    world.script(claude=[{"stdout": answer}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    research = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" in research
+    assert answer in research
+
+
+def test_a_git_internal_path_does_not_count(world: World) -> None:
+    # P241-5. Planted fault: .git/config exists in every worktree and satisfies the check.
+    (world.root / ".git").mkdir(exist_ok=True)
+    (world.root / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+    assert stage2.names_a_repository_file(world.root, "only .git/config here") is False
+    assert stage2.names_a_repository_file(world.root, "only .git here") is False
+
+
+def test_a_refused_exploration_answer_shows_its_last_forty_lines(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # P241-7. Planted fault: the whole answer, or its head, is shown instead of the last 40 lines.
+    answer = "\n".join(f"line {n:02d}" for n in range(1, 61))
+    world.script(claude=[{"stdout": answer}])
+    capsys.readouterr()
+    assert world.run("explore") == 1
+    err = capsys.readouterr().err
+    assert "line 60" in err and "line 21" in err
+    assert "line 01" not in err and "line 20" not in err
+
+
+# tolerate-derived-leftovers (bead coding-harness-b5w): a failed run's derived writes do not block the next
+# ---------------------------------------------------------------------------
+
+
+def test_a_failed_runs_derived_writes_do_not_block_the_next_run(world: World) -> None:
+    # Planted fault: the rendered index and the date stamps a failed run left are refused as pre-existing.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"src/app.py": "value = 2\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    leftovers = stage2.changed_paths(world.root)
+    assert Path("plans/INDEX.md") in leftovers, "the failed run left no rendered index to tolerate"
+    # The work itself is put back by the operator; the runner's own writes stay, as a failed run leaves them.
+    git(world.root, "checkout", "--", "src/app.py")
+    git(world.root, "checkout", "--", "plans/changes/demo/plan.md")
+    stamp_only = world.research
+    stamp_only.write_text(
+        stamp_only.read_text(encoding="utf-8").replace("updated: 2026-09-30", "updated: 2026-10-25"), encoding="utf-8"
+    )
+    successful_implementation(world)
+    assert world.run("implement") == 0, "the runner refused its own derived writes"
+
+
+def test_a_hand_edit_beside_derived_writes_is_still_refused(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Guard: only a stamp-only diff, the rendered index and bytecode are tolerated; a content edit is not.
+    (world.root / "plans" / "INDEX.md").write_text("# rendered\n", encoding="utf-8")
+    world.research.write_text(world.research.read_text(encoding="utf-8") + "a hand-written line\n", encoding="utf-8")
+    successful_implementation(world)
+    capsys.readouterr()
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "plans/changes/demo/research.md" in err and "plans/INDEX.md" not in err
+    assert world.calls("claude") == []
+
+
+def test_a_content_edit_behind_dash_lines_is_no_derived_leftover(world: World) -> None:
+    # Runner review R-3 (2026-10-25). Planted fault: diff lines starting `--`/`++` are skipped as file headers,
+    # so a removed `---` rule and an added `++` line pass as a stamp-only change.
+    doc = world.root / "plans" / "changes" / "demo" / "notes.md"
+    doc.write_text("---\ntitle: T\nupdated: 2026-01-01\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "notes")
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n\n++ injected line\n", encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md"))
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    assert stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md")), "a stamp-only change was refused"
+
+
+_FM = "---\ntitle: T\nupdated: 2026-01-01\n---\n\nBody\n"
+_FM_NEW = _FM.replace("2026-01-01", "2026-10-25")
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_derived_leftover_refuses_a_stamp_with_a_mode_change(world: World, staged: bool) -> None:
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "regular document fixture")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    doc.chmod(0o755)
+    if staged:
+        git(world.root, "add", str(relative))
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+def test_derived_leftover_refuses_a_human_decided_document(world: World) -> None:
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected document fixture")
+    doc.write_text(_FM_NEW + "Substantive edit\n", encoding="utf-8")
+    # Admission must agree with the checkpoint's committed provenance guard.
+    assert relative.as_posix() in stage2.uncommittable(world.root, "demo")
+    # Assert the classification first so the baseline proves the fault by AssertionError.
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("fault", ["content", "mode"])
+def test_derived_leftover_refuses_a_substantive_staged_edit(world: World, fault: str) -> None:
+    # F-3: the working copy hides a human edit that remains in the index.
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "staged document fixture")
+    doc.write_text(_FM + ("Human edit\n" if fault == "content" else ""), encoding="utf-8")
+    if fault == "mode":
+        doc.chmod(0o755)
+    git(world.root, "add", str(relative))
+    doc.chmod(0o644)
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft", "repair"])
+def test_a_protected_stamp_leftover_is_admitted_and_restored(world: World, verb: str) -> None:
+    # F-4: admission accepts a stamp, but the checkpoint must never commit the protected document.
+    if verb == "draft":
+        draft_world(world)
+        passing_draft(world)
+    elif verb == "repair":
+        repair_world(world)
+    else:
+        successful_implementation(world)
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected stamp fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    stage2.refuse_preexisting(world.root, {world.findings.relative_to(world.root)})
+    assert world.run(verb) == 0
+    assert doc.read_text(encoding="utf-8") == _FM
+    assert git(world.root, "diff", baseline, "HEAD", "--", str(relative)) == ""
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+_LEFTOVER_CASES = [
+    # (id, path, HEAD bytes, worktree bytes, tolerated)
+    ("lf-stamp", "n.md", _FM, _FM_NEW, True),
+    ("bom-file", "n.md", "\ufeff" + _FM, "\ufeff" + _FM_NEW, True),
+    ("quoted-to-unquoted", "n.md", _FM.replace("2026-01-01", '"2026-01-01"'), _FM_NEW, True),
+    ("no-space-stamp", "n.md", _FM.replace("updated: ", "updated:"), _FM_NEW, True),
+    ("crlf-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW.replace("\n", "\r\n"), True),
+    ("crlf-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW, False),
+    ("lf-to-crlf-plus-stamp", "n.md", _FM, _FM_NEW.replace("\n", "\r\n"), False),
+    ("lone-cr-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r"), _FM_NEW, False),
+    (
+        "updated-prefixed-key-kept",
+        "n.md",
+        _FM.replace("title: T", "title: T\nupdatedby: a"),
+        _FM_NEW.replace("title: T", "title: T\nupdatedby: a"),
+        True,
+    ),
+    (
+        "second-frontmatter-updated-line-changed",
+        "n.md",
+        _FM.replace("updated: 2026-01-01", "updated: 2026-01-01\nupdated: a"),
+        _FM_NEW.replace("updated: 2026-10-25", "updated: 2026-10-25\nupdated: b"),
+        False,
+    ),
+    ("other-key-changed", "n.md", _FM, _FM_NEW.replace("title: T", "title: U"), False),
+    ("body-updated-line-changed", "n.md", _FM + "updated: old\n", _FM_NEW + "updated: new text\n", False),
+    ("body-updated-no-frontmatter", "n.md", "Body\nupdated: old\n", "Body\nupdated: new text\n", False),
+    ("non-date-value", "n.md", _FM, _FM.replace("2026-01-01", "2026-10-25 ; anything"), False),
+    ("python-file", "t.py", "# x\nupdated: 2026-01-01\n", "# x\nupdated: 2026-10-25\n", False),
+    ("inserted-stamp-line", "n.md", "---\ntitle: T\n---\n\nBody\n", _FM_NEW, False),
+    ("undecodable-bytes", "n.md", _FM, _FM_NEW + "\udcff", False),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "head", "now", "tolerated"),
+    [pytest.param(*case[1:], id=case[0]) for case in _LEFTOVER_CASES],
+)
+def test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else(
+    world: World, path: str, head: str, now: str, tolerated: bool
+) -> None:
+    # P243-1..6. Planted faults: HEAD read in text mode (CRLF/CR become LF), any `updated:` line masked, the
+    # mask `startswith("updated")`, any value accepted, the mask outside the frontmatter block.
+    def raw(text: str) -> bytes:
+        return text.encode("utf-8", errors="surrogateescape")
+
+    file = world.root / "plans" / "changes" / "demo" / path
+    file.write_bytes(raw(head))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "leftover fixture")
+    file.write_bytes(raw(now))
+    relative = Path("plans/changes/demo") / path
+    assert stage2.derived_leftover(world.root, relative) is tolerated
+
+
+@pytest.mark.parametrize("nested_repository", [False, True])
+def test_a_repair_refused_at_the_commit_guard_leaves_its_rows_taken(
+    world: World, monkeypatch: pytest.MonkeyPatch, nested_repository: bool
+) -> None:
+    # Bead coding-harness-rcyf. Planted fault: the fixed Status written before the commit guard survives
+    # the refusal, although the restore removed the test it names.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    before = world.text()
+    step = repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")
+    step["plant"] = {**step["plant"], "model-endpoints.yaml": "tampered: true\n"}
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    real_checkpoint = stage2.checkpoint
+
+    def checkpoint(*args, **kwargs):
+        if nested_repository:
+            # Plant the leftover at the guard boundary; git clean -fd must leave it alone.
+            nested = world.root / "leftover"
+            nested.mkdir()
+            git(nested, "init", "--quiet")
+        return real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 1
+    assert not (world.root / "tests" / "test_fix.py").exists(), "the refused attempt's test survived"
+    assert (world.root / "src" / "app.py").read_text() == "value = 1\n", "the refused fix survived"
+    if nested_repository:
+        assert (world.root / "leftover" / ".git").is_dir(), "the fixture lost the nested repository"
+    text = world.text()
+    assert "fixed — tests/test_fix.py::test_fix" not in text, "a row stayed fixed by a test the restore removed"
+    assert "| taken — test_a |" in text
+    rows_before = stage2.findings_rows(before)[1]
+    assert stage2.findings_rows(text)[1] == rows_before
+
+
+def test_findings_stay_when_the_commit_fails_without_a_rollback(world: World) -> None:
+    # Pre-review row P240-1 (2026-10-25). Planted fault: findings.md is rewound after `git commit` itself
+    # failed; the fix and its test stay in the tree, so the `fixed` status naming that test must stay too.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    hook = world.root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\necho hook says no >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD").strip() == head, "the hook did not stop the commit"
+    assert (world.root / "tests" / "test_fix.py").exists(), "the fixture lost the attempt's test"
+    assert "fixed — tests/test_fix.py::test_fix" in world.text(), "findings.md was rewound beside the kept fix"
+
+
+@pytest.mark.parametrize("failure", ["after-commit", "refused"])
+def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # Runner review R-4 (2026-10-25). Planted fault: findings.md is rewound after a failure raised once the
+    # commit exists (HEAD keeps the fixed statuses), or after a Refused stop that must write nothing.
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F6-1", "taken — test_a", "phase-6 finding")]))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "phase-6 row taken")
+    script_repair(
+        world, [repair_step(stdout="F6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    real = stage2.checkpoint
+
+    def failing(*args, **kwargs):
+        if failure == "refused":
+            raise stage2.Refused("a decided stop that writes nothing")
+        real(*args, **kwargs)
+        raise stage2.CallFailed("the runner checkpoint left a dirty worktree")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") == (2 if failure == "refused" else 1)
+    text = world.text()
+    if failure == "after-commit":
+        committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+        assert "fixed — tests/test_fix.py::test_fix" in committed
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was rewound behind the commit"
+    else:
+        assert "fixed — tests/test_fix.py::test_fix" in text, "findings.md was written after a Refused stop"
 
 
 def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
