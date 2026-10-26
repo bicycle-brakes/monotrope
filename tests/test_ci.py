@@ -2053,6 +2053,61 @@ def test_the_gate_goes_red(main):
     assert evidence("plans_registry.py", {Path("test_scope.py"): source}) == []
 
 
+def test_a_compared_path_constant_is_no_gate_evidence() -> None:
+    source = """
+SCRIPT = Path("scripts") / "plans_registry.py"
+
+def test_x_goes_red(cmd):
+    assert cmd[0] == SCRIPT
+"""
+    assert evidence("plans_registry.py", {Path("test_constant.py"): source}) == []
+
+
+def test_a_path_string_outside_a_run_call_is_no_gate_evidence() -> None:
+    shapes = [
+        'assert "a" in set(["scripts/plans_registry.py"])',
+        'assert ", ".join(["scripts/plans_registry.py"]) in cmd',
+        'assert Path(cmd[0]) == Path("scripts/plans_registry.py")',
+    ]
+    for shape in shapes:
+        source = f"def test_x_goes_red(cmd):\n    {shape}\n"
+        assert evidence("plans_registry.py", {Path("test_shape.py"): source}) == [], shape
+
+
+def test_a_parameter_shadowing_the_gate_entry_is_no_gate_evidence() -> None:
+    entry = """
+from plans_registry import main
+
+def test_x_goes_red(main):
+    assert main() == 1
+"""
+    helper = """
+import plans_registry
+
+def _run():
+    return plans_registry.main()
+
+def test_x_goes_red(_run):
+    assert _run() == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_entry.py"): entry}) == []
+    assert evidence("plans_registry.py", {Path("test_helper.py"): helper}) == []
+
+
+def test_a_command_list_bound_to_a_local_then_run_is_gate_evidence() -> None:
+    local = """
+def test_x_goes_red():
+    cmd = ["python3", "scripts/plans_registry.py"]
+    assert subprocess.run(cmd).returncode == 1
+"""
+    fstring = """
+def test_x_goes_red(root):
+    assert subprocess.run([f"{root}/scripts/plans_registry.py"]).returncode == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_local.py"): local})
+    assert evidence("plans_registry.py", {Path("test_fstring.py"): fstring})
+
+
 # Test files whose mutation-named test reaches the script it is evidence for:
 # a call into the module, a name imported from it, or a path to the file that a
 # call runs — in the test itself or through a helper of the same file.
