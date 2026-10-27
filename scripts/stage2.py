@@ -5896,7 +5896,13 @@ def run_attempts(
                     quote_block(
                         attempt_block(attempt, route, listing, files),
                         key,
-                        whole=[line for line in listing.splitlines() if evidence and evidence in line],
+                        # Conflict diagnostics already passed protection above. Keep every quoted
+                        # claim, even when a long preceding reason would push it past the line cut.
+                        whole=[
+                            line
+                            for line in listing.splitlines()
+                            if (evidence and evidence in line) or (retain_answer and ": several fixed lines (" in line)
+                        ],
                     ),
                 )
             record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]

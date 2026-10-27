@@ -161,7 +161,7 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MINOR | SPEC | phase-6 | scripts/stage2.py:5894-5900 | On the final repair attempt, two conflicting claims whose first `not a test` reason exceeds 500 characters lose the entire second claim from the persisted diagnostics: `quote_block` truncates their combined line, and only the answer locator is exempt. Reproduced with a 600-character reason. Preserve a quotation of each distinct contested claim in the rejection diagnostics. [Acceptance criterion 7] | Codex | taken — test: tests/test_stage2.py::test_repair_contested_claims_survive_the_quote_cut — each distinct contested claim must keep a quotation of its own in the persisted diagnostics, however long the one before it (orchestrator, 2026-10-27) | — |
+| F-1 | MINOR | SPEC | phase-6 | scripts/stage2.py:5894-5900 | On the final repair attempt, two conflicting claims whose first `not a test` reason exceeds 500 characters lose the entire second claim from the persisted diagnostics: `quote_block` truncates their combined line, and only the answer locator is exempt. Reproduced with a 600-character reason. Preserve a quotation of each distinct contested claim in the rejection diagnostics. [Acceptance criterion 7] | Codex | fixed — tests/test_stage2.py::test_repair_contested_claims_survive_the_quote_cut | — |
 
 Phase 6 verdict: codex 01a17a95-bc67-78c1-80b8-8bbd00df612e, 2026-10-27
 Reviewer session: codex 01a17a95-bc67-78c1-80b8-8bbd00df612e — a fresh session reviewed: no phase-2a session was recorded
@@ -205,3 +205,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-27: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 675 files, 2299 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 675 files, 2300 commits, 12 rules.

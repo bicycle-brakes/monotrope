@@ -10227,6 +10227,30 @@ def test_repair_conflict_diagnostics_quote_claims_and_answer_location(world: Wor
     assert saved.read_text(encoding="utf-8") == answer + "\n"
 
 
+@pytest.mark.parametrize("claim_count", [2, 3])
+def test_repair_contested_claims_survive_the_quote_cut(world: World, claim_count: int) -> None:
+    """F-1: a long first claim must not hide later claims in the final rejection's quote."""
+    repair_world(world)
+    claims = [f"fixed — not a test — reason {number}: " + "x" * 600 for number in range(claim_count)]
+    answer = "\n".join(f"L1-1: {claim}" for claim in claims)
+    script_repair(
+        world,
+        [repair_step(stdout=answer) for _ in range(3)],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 1
+    blocks = quote_blocks(world.text())
+    assert len(blocks) == 3, "each rejected attempt must leave persisted diagnostics"
+    for block in blocks:
+        diagnostics = "\n".join(block)
+        assert "L1-1: several fixed lines" in diagnostics
+        for claim in claims:
+            assert f"`{claim}`" in diagnostics, "a contested claim was cut from the persisted quotation"
+        named = next(line for line in block if "the attempt's protected answer is saved at " in line)
+        saved = Path(named.rpartition("saved at ")[2].strip())
+        assert saved.read_text(encoding="utf-8") == answer + "\n"
+
+
 def test_repair_retains_each_attempt_answer(world: World) -> None:
     """Criterion 6. Planted fault: success, failure, retry, restore or another invocation loses or overwrites the answer."""
     repair_world(world)
