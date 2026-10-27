@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -280,6 +281,26 @@ def research_declaration_problem(root: Path, endpoint: str, model: str, data_cla
     return None
 
 
+def research_terms_problem(runner, root: Path, endpoint: str, model: str) -> str | None:
+    """Re-read paid Go terms at the call boundary, independently of saved research selection."""
+    if endpoint != GO:
+        return None
+    data = read_declaration(root)
+    if isinstance(data, str):
+        return data
+    found = _endpoint(data, endpoint)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    return runner.terms_problem(found, model)
+
+
+def research_probe_problem(runner, root: Path, endpoint: str, model: str, data_class: str = "framework") -> str | None:
+    """Keep research-only declarations and paid terms binding on each probe, including retries."""
+    return research_declaration_problem(root, endpoint, model, data_class) or research_terms_problem(
+        runner, root, endpoint, model
+    )
+
+
 def _checked_probe(
     runner,
     root: Path,
@@ -296,13 +317,18 @@ def _checked_probe(
     `admission` (root, model -> problem or None) replaces the research declaration check for the review
     swarm's free class (ADR 0021, decision 3); the leak check stays mandatory either way.
     """
-    problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
+    problem = admission(root, model) if admission is not None else research_probe_problem(runner, root, endpoint, model)
     if problem:
         raise runner.Refused(problem)
     result = leakcheck.check(change, leakcheck.default_denylist(), root, [("prompt", text)])
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise runner.Refused("the leak check is not clean; the probe does not start.")
+    # Re-read admission after the scan, which can cross the terms' UTC cutoff.
+    # Do not record a call or dispatch a probe on yesterday's admission.
+    problem = admission(root, model) if admission is not None else research_probe_problem(runner, root, endpoint, model)
+    if problem:
+        raise runner.Refused(problem)
     audit.append(
         f"{verb} · endpoint {endpoint} · model {model} · leak check clean over "
         f"{result.files} files, {result.commits} commits, {result.rules} rules."
@@ -491,11 +517,15 @@ def probe_go(
             "Follow the appended availability instructions.",
         ]
         env = runner.foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = runner.launch(
+        done = runner.dispatch_go(
+            root,
+            model,
+            runner.launch,
             command,
             scratch,
             env,
             key,
+            admission=admission,
             timeout=timeout_seconds,
             limit=f"the probe limit of {timeout_seconds} seconds",
         )
@@ -775,7 +805,7 @@ class _Selection:
                         self.key,
                         self.audit,
                         self.models_store,
-                        admission=lambda root, ident: research_declaration_problem(root, GO, ident, data_class),
+                        admission=lambda root, ident: research_probe_problem(self.runner, root, GO, ident, data_class),
                     )
                 else:
                     probe_claude(self.runner, self.root, self.change, model, self.audit)
@@ -882,8 +912,28 @@ def _free_text(values: list[str]) -> str:
     return ", ".join(values) or "none"
 
 
+def capture_preparation_warnings(prepare):
+    """Scope dispatch warning evidence to this preparation, shared by its receipt."""
+
+    @functools.wraps(prepare)
+    def wrapped(root, change, runner, *args, **kwargs):
+        with runner.capture_terms_warnings():
+            return prepare(root, change, runner, *args, **kwargs)
+
+    return wrapped
+
+
+def preparation_terms(runner, entry: dict) -> dict:
+    """Both preparation paths announce and retain the same current warning evidence."""
+    warnings = runner.terms_warnings(entry)
+    for warning in warnings:
+        print(f"Terms warning: {warning}")
+    return {"terms_warnings": runner.retain_terms_warnings(warnings)}
+
+
 def research_report(state: dict) -> str:
     lines = [f"Availability checked: {state['checked_at']}"]
+    lines.extend(f"Terms warning: {warning}" for warning in state.get("availability", {}).get("terms_warnings", []))
     for label in ("repository", "online"):
         for item in state["seats"][label]:
             if item is None:
@@ -986,6 +1036,7 @@ def chosen_seats(seats: dict[str, list[dict]], choice: dict[str, list[str]] | No
     return result
 
 
+@capture_preparation_warnings
 def prepare_research(
     root: Path, change: str, runner, klass: str | None = None, choice: dict[str, list[str]] | None = None
 ) -> None:
@@ -1004,6 +1055,7 @@ def prepare_research(
     if klass not in runner.SWARM_CLASSES:
         raise runner.Refused(f"prepare-explore belongs to feature or architectural changes, not {klass}.")
     data, rule = research_settings(root, runner)
+    terms_evidence = preparation_terms(runner, _endpoint(data, GO) or {})
     neighbours = given_neighbours(root, change, runner)
     runner.require_pi()
     block = data["research_swarm"]
@@ -1036,6 +1088,7 @@ def prepare_research(
     terms = terms if isinstance(terms, dict) else {}
     state = {
         "checked_at": now().isoformat(timespec="seconds"),
+        "availability": terms_evidence,
         "catalog": {
             key: catalog[key]
             for key in (
@@ -1197,6 +1250,9 @@ def report(state: dict) -> str:
     ]
     lines.extend(f"Unavailable: {model}: {reason}" for model, reason in available["failed"].items())
     lines.extend(f"Skipped: {model}: {reason}" for model, reason in available["skipped"].items())
+    # A receipt of an older runner holds no warning list; its absence is no
+    # statement about current admission, which the round rechecks live.
+    lines.extend(f"Terms warning: {warning}" for warning in available.get("terms_warnings", []))
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
     # Escape untrusted controls per line, preserving only the runner's own separators.
     return "\n".join(
@@ -1205,6 +1261,7 @@ def report(state: dict) -> str:
     )
 
 
+@capture_preparation_warnings
 def prepare(root: Path, change: str, runner) -> None:
     """Probe candidates without source input or tools, then publish a report receipt."""
     folder = runner.folder_of(root, change)
@@ -1229,9 +1286,10 @@ def prepare(root: Path, change: str, runner) -> None:
     problem = runner.entry_problem(root, runner.OPENCODE)
     if problem:
         raise runner.Refused(problem)
+    entry = runner.endpoint_entry(root)
+    terms_evidence = preparation_terms(runner, entry)
     runner.require_pi()
     free = runner.discover_free(root, allow_empty=True)
-    entry = runner.endpoint_entry(root)
     paid = runner.ladder(root)
     skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
     # A free id discovery dropped (excluded, or not a plain id) is named, never probed (DL-B-2, DL-B-7).
@@ -1319,6 +1377,10 @@ def prepare(root: Path, change: str, runner) -> None:
         "slow": slow,
         "skipped": skipped,
         "terms_skipped": runner.skipped_models(root),
+        # Advance notice inside the seven-day window, expired records excluded:
+        # the warning travels in the receipt's digest and reaches the report
+        # here (bead coding-harness-abra). A warning grants no admission.
+        **terms_evidence,
     }
     print(report(state))
     for reason in state["availability"]["terms_skipped"]:

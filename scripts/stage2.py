@@ -143,6 +143,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import contextvars
 import datetime as dt
 import fcntl
 import functools
@@ -1137,6 +1138,7 @@ class Context:
     folder: Path
     bead: str
     models_store: dict | None = None
+    go_admission: Callable[[Path, str], str | None] | None = None
 
     @property
     def findings(self) -> Path:
@@ -1311,7 +1313,7 @@ def preflight(
     )
     if problem:
         raise Refused(problem)
-    return Context(root, change, folder, bead)
+    return Context(root, change, folder, bead, go_admission=admission_problem)
 
 
 def findings_header(ctx: Context, producer: str) -> str:
@@ -1375,6 +1377,15 @@ def checked_prompt(
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise Refused("the leak check is not clean; the call does not start.")
+    # A scan can cross UTC midnight: an earlier admission cannot authorize
+    # dispatch after expiry, including retry and replacement calls.
+    problem = (
+        admission_problem(ctx.root, endpoint[1])
+        if admission_problem is not None
+        else declaration_problem(ctx.root, endpoint[0], endpoint[1])
+    )
+    if problem:
+        raise Refused(problem)
     return result
 
 
@@ -1483,12 +1494,39 @@ def _terms(entry: dict, model: str) -> dict:
     return record if isinstance(record, dict) else {}
 
 
-def terms_problem(entry: dict, model: str) -> str | None:
-    """Why the paid model's data terms are not read (yet), or None when it is admitted.
+def terms_today() -> dt.date:
+    """The UTC calendar date terms expiry is judged against (a seam for tests).
 
-    A dated, sourced reading must explicitly rule out training. A dated skip
-    keeps the model out and names its reason for the handover (ADR 0021,
-    decision 5).
+    Terms are a UTC boundary (spec, terms): the local calendar date never
+    decides admission, so tests pin this seam alone and leave the runner's
+    accounting clocks live.
+    """
+    return dt.datetime.now(dt.UTC).date()
+
+
+def _valid_until(record: dict) -> tuple[dt.date | None, str]:
+    """The record's parsed `valid_until`, or why it is not a usable end date.
+
+    Only a quoted ISO calendar date counts (spec, terms): a missing value, a
+    YAML-native date, a timestamp and a malformed or impossible calendar date
+    are all refused, never repaired or inferred (fail closed).
+    """
+    value = record.get("valid_until")
+    if value is None:
+        return None, "valid_until is missing"
+    if not isinstance(value, str) or not DATE_ONLY.fullmatch(value) or not _valid_date(value):
+        return None, "valid_until is not a quoted ISO date YYYY-MM-DD"
+    return dt.date.fromisoformat(value), ""
+
+
+def terms_problem(entry: dict, model: str) -> str | None:
+    """Why the paid model's data terms are unread or no longer valid, or None when it is admitted.
+
+    A dated, sourced reading must explicitly rule out training and carry a
+    usable end date `valid_until`, valid through that UTC day; the following day
+    the reading is expired (bead coding-harness-abra). A dated skip keeps the
+    model out and names its reason for the handover (ADR 0021, decision 5).
+    The declared dates rule: the runner never infers, extends or renews one.
     """
     record = _terms(entry, model)
     if record.get("uebersprungen"):
@@ -1506,7 +1544,81 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
     if record.get("training") != "Not used":
         return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    expiry, why = _valid_until(record)
+    if expiry is None:
+        return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
+    if expiry < terms_today():
+        return f"the model {model}'s data terms expired on {expiry.isoformat()}; the reading admits no further call"
     return None
+
+
+TERMS_WARNING_DAYS = 7
+_terms_warning_evidence: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "terms_warning_evidence", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_terms_warnings() -> Iterator[list[str]]:
+    """Collect one operation's warnings, restoring the caller's scope even on refusal."""
+    warnings: list[str] = []
+    token = _terms_warning_evidence.set(warnings)
+    try:
+        yield warnings
+    finally:
+        _terms_warning_evidence.reset(token)
+
+
+def retain_terms_warnings(warnings: list[str]) -> list[str]:
+    """Keep each emitted warning in order, including changing day counts during probes."""
+    evidence = _terms_warning_evidence.get()
+    if evidence is None:
+        return warnings
+    evidence.extend(warning for warning in warnings if warning not in evidence)
+    return evidence
+
+
+def terms_warnings(entry: dict) -> list[str]:
+    """The declared paid models whose reading expires within seven UTC days, declared order.
+
+    Every declared record warns on a valid date inside the window, a skipped
+    record included: a warning is advance notice, never admission ([DETAIL],
+    2026-10-26). An expired date warns not — that is a skip with its reason —
+    and an unusable one warns not either, for it refuses admission outright.
+    """
+    today = terms_today()
+    warnings = []
+    for model in dict.fromkeys(str(model) for model in entry.get("modelle") or []):
+        expiry, _why = _valid_until(_terms(entry, model))
+        if expiry is None:
+            continue
+        days = (expiry - today).days
+        if 0 <= days <= TERMS_WARNING_DAYS:
+            left = "1 day" if days == 1 else f"{days} days"
+            warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
+    return warnings
+
+
+def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, **kwargs):
+    """The final shared Go send boundary, independent of tools, retries and saved admission.
+
+    Only a caller's checked discovered-free admission can replace paid terms.
+    A declared paid record always keeps its terms check, even with that callback.
+    All command construction and leak scans precede this function.
+    """
+    entry = endpoint_entry(root)
+    paid = model in (entry.get("modelle") or []) or model in (entry.get("modelle_terms") or {})
+    if paid or admission is None:
+        warnings = terms_warnings({**entry, "modelle": [model]})
+        retain_terms_warnings(warnings)
+        for warning in warnings:
+            print(f"Terms warning: {warning}")
+        problem = terms_problem(entry, model)
+    else:
+        problem = admission(root, model)
+    if problem:
+        raise Refused(problem)
+    return send(*args, **kwargs)
 
 
 def request_value(entry: dict, model: str) -> float | None:
@@ -2459,7 +2571,18 @@ def run_reviewer(
             limit = (
                 f"the round time limit of {REVIEWER_MINUTES:g} minutes ({seconds:.0f} seconds were left for this call)"
             )
-        done = launch(command, scratch if free else ctx.root, env, secrets, timeout=seconds, limit=limit)
+        done = dispatch_go(
+            ctx.root,
+            model,
+            launch,
+            command,
+            scratch if free else ctx.root,
+            env,
+            secrets,
+            admission=getattr(ctx, "go_admission", None),
+            timeout=seconds,
+            limit=limit,
+        )
         if done.returncode != 0:
             raise fail("pi", done, f"exit {done.returncode}", secrets, model)
         answer = scrub(done.stdout or "", secrets)
@@ -2505,11 +2628,21 @@ def run_swarm(
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error
 
-    threads = [threading.Thread(target=one, args=(member,), name=f"stage2-swarm-{member}") for member in members]
+    # Each worker has its own context, sharing this operation's warning list.
+    # New threads otherwise lose the dispatch evidence captured by the parent.
+    threads = [
+        threading.Thread(target=contextvars.copy_context().run, args=(one, member), name=f"stage2-swarm-{member}")
+        for member in members
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
+    # A dispatch-time admission refusal is not a failed answer to replace or
+    # overlook beside another member's success. It aborts without a round.
+    for outcome in answers.values():
+        if isinstance(outcome, Refused):
+            raise outcome
     return answers
 
 
@@ -7161,6 +7294,7 @@ def rate_limited(outcome: object) -> bool:
     )
 
 
+@capture_terms_warnings()
 def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
     """One round of phase 4b, until a round is clean (ADR 0021).
 
@@ -7216,6 +7350,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
+    # Warn before admission and leak checks can refuse a call, including saved runs.
+    for warning in retain_terms_warnings(terms_warnings(endpoint_entry(root))):
+        print(f"review-loop: Notice: {warning}.", file=sys.stderr)
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
@@ -7248,10 +7385,33 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 print(f"review-loop: {state['free']['skipped']}")
                 stage = next_stage(state)
         if stage is None:
-            raise Refused(
+            message = (
                 "every stage of this run is consumed and the last round was not clean; the loop stops and "
                 "reports to the maintainer. No model is substituted."
             )
+            # A run whose declaration names paid models while its snapshot holds no paid stage would
+            # stop without saying why: every reading was excluded at snapshot time (spec criteria 3
+            # and 9). Name each exclusion, so the spent run reports the expiry, not a bare stop.
+            try:
+                entry = endpoint_entry(root)
+            except Refused:
+                entry = None
+            if entry is not None:
+                declared = [str(model) for model in entry.get("modelle") or []]
+                paid = state["paid"]
+                if declared and not (paid.get("ladder") or paid.get("flash") or paid.get("rungs")):
+                    problems = "; ".join(
+                        reason
+                        for model in dict.fromkeys(declared)
+                        if (reason := terms_problem(entry, model)) is not None
+                    )
+                    if problems:
+                        message = (
+                            "every stage of this run is consumed and the last round was not clean; no paid "
+                            f"model of the declaration is admissible: {problems}. The loop stops and reports "
+                            "to the maintainer. No model is substituted."
+                        )
+            raise Refused(message)
         # The orchestrator decides and repairs before another review (ADR 0021, decision 6): a taken row of
         # this run that no repair has marked `fixed` holds the next round (DL-A-8 of the deep review). Spent
         # stages stop first: there is no next round to hold.
@@ -7324,15 +7484,10 @@ def _review_round(
         member: checked_prompt(ctx, endpoints[member], prompts[member], _free_admission(free, state))
         for member in members
     }
-    if not ctx.findings.exists():
-        ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
     audited = 0
     notes: list[str] = []
     malformed_blocks: list[str] = []
     try:
-        for member in members:
-            append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
-            audited += 1
         key = reviewer_key()
         if not state["consumed"]:
             if state["free"].get("skipped"):
@@ -7357,6 +7512,27 @@ def _review_round(
                 notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
             for note in notes:
                 print(f"review-loop: {note}", file=sys.stderr)
+        # Terms are evaluated on every round, fresh, legacy or resumed ([DETAIL],
+        # 2026-10-26): review_loop prints advance notice before admission checks.
+        # Keep current warnings in the round notes too, so the record and the
+        # released findings carry them. A warning neither admits nor refuses a member.
+        for warning in retain_terms_warnings(terms_warnings(endpoint_entry(root))):
+            notes.append(f"Notice: {warning}.")
+        # Expiry once more, immediately before the launch: a member whose terms
+        # expired after the batch checks above refuses the round here, without a
+        # call and without touching the run's history (spec criterion 5).
+        if not free:
+            entry = endpoint_entry(root)
+            for member in members:
+                problem = terms_problem(entry, member)
+                if problem:
+                    raise Refused(problem)
+        # Audit only after the final admission check allows the initial dispatch.
+        if not ctx.findings.exists():
+            ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
+        for member in members:
+            append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
+            audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
         deadline = time.monotonic() + REVIEWER_MINUTES * 60
@@ -7508,6 +7684,12 @@ def _review_round(
                 f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
                 "the change needs a round of its own."
             )
+        # Include warnings emitted at dispatch, including retries/replacements
+        # that crossed UTC midnight after the round's earlier terms checks.
+        for warning in retain_terms_warnings([]):
+            note = f"Notice: {warning}."
+            if note not in notes:
+                notes.append(note)
         parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
         for member, block in reviewer_blocks:
             # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.

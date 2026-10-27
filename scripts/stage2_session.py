@@ -530,11 +530,18 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
                 f"the dispatch command is {len(command.encode('utf-8'))} bytes; the launch transport takes at most {COMMAND_LIMIT}."
             )
         attempt = uuid.uuid4().hex[:12]
-        write_pending(ctx, runner, audit_line(runner, attempt, selection, endpoint, source, result), producer)
+
+        def send():
+            write_pending(ctx, runner, audit_line(runner, attempt, selection, endpoint, source, result), producer)
+            return dispatch(terminal, private / SCRIPT_NAME, command)
+
+        if endpoint[0] == "opencode-go":
+            accepted, detail = runner.dispatch_go(root, endpoint[1], send)
+        else:
+            accepted, detail = send()
     except BaseException:  # any failure before the dispatch, Ctrl-C included, leaves no private directory
         shutil.rmtree(private, ignore_errors=True)
         raise
-    accepted, detail = dispatch(terminal, private / SCRIPT_NAME, command)
     if not accepted:
         shutil.rmtree(private, ignore_errors=True)
         finalize(ctx, runner, attempt, f"failed ({detail})")
