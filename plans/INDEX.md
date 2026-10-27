@@ -262,6 +262,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/research.md`](changes/review-loop-deep-a/research.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/spec.md`](changes/review-loop-deep-a/spec.md) | draft | partial | 2026-10-25 | to be filed |
+| [`changes/review-loop-deep-b/decisions.md`](changes/review-loop-deep-b/decisions.md) | draft | partial | 2026-10-25 | coding-harness-pc7g |
+| [`changes/review-loop-deep-b/findings.md`](changes/review-loop-deep-b/findings.md) | draft | partial | 2026-10-25 | coding-harness-pc7g |
+| [`changes/review-loop-deep-b/plan.md`](changes/review-loop-deep-b/plan.md) | draft | partial | 2026-10-25 | coding-harness-pc7g |
+| [`changes/review-loop-deep-b/research.md`](changes/review-loop-deep-b/research.md) | draft | partial | 2026-10-25 | coding-harness-pc7g |
+| [`changes/review-loop-deep-b/spec.md`](changes/review-loop-deep-b/spec.md) | draft | partial | 2026-10-25 | coding-harness-pc7g |
 | [`changes/review-release-lock/decisions.md`](changes/review-release-lock/decisions.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/findings.md`](changes/review-release-lock/findings.md) | draft | partial | 2026-10-24 | coding-harness-751 |
 | [`changes/review-release-lock/plan.md`](changes/review-release-lock/plan.md) | draft | partial | 2026-10-24 | coding-harness-751 |

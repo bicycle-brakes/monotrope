@@ -476,8 +476,11 @@ if (runtime.getError() || result.errors.size) throw new Error(runtime.getError()
 console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? null));
 """
     observed = []
+    real_launch = stage2.launch
 
     def resolve_launch(command, cwd, env, *_args, **_kwargs):
+        if command[0] == "node":
+            return real_launch(command, cwd, env, *_args, **_kwargs)
         agent = Path(env["PI_CODING_AGENT_DIR"])
         if "update" in command:
             (agent / "models-store.json").write_text(json.dumps(store))
@@ -507,6 +510,8 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
     monkeypatch.setattr(
         stage2, "free_rule", lambda _root: {"provider": "opencode-go", "id_suffix": "", "include": [{"id": model_id}]}
     )
+    # Discovery reads the exclusions of the declaration (DL-B-2) and drops every id when it cannot.
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", tmp_path / "model-endpoints.yaml")
     discovery = stage2.discover_free(tmp_path)
     assert discovery["selected"] == [model_id]
     assert discovery["models_store"] == store
@@ -1157,7 +1162,7 @@ def test_contract_environment_excludes_parent_provider_keys(
 
 @pytest.mark.usefixtures("installed_pi")
 def test_real_catalog_headers_remain_literal(tmp_path: Path) -> None:
-    """P6-15: pinned Pi's real composer preserves catalog strings without executing them."""
+    """P6-15, as RS-3-3 changed it: pinned Pi's real composer sees no catalog header, so none is executed or sent."""
     headers = {
         "X-Command": "!printf catalog-command-ran",
         "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
@@ -1186,5 +1191,8 @@ console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefine
         check=False,
     )
     assert done.returncode == 0, done.stderr
-    assert json.loads(done.stdout) == headers, "Pi evaluated a catalog header instead of preserving its literal value"
+    # Since RS-3-3 (change review-loop-deep-b) catalog headers are not activated at all: Pi neither
+    # evaluates nor sends them.
+    assert "catalog-command-ran" not in done.stdout and "catalog-value" not in done.stdout
+    assert "headers" not in (tmp_path / "models.json").read_text()
     assert json.dumps(store) == evidence
