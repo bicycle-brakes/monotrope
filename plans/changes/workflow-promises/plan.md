@@ -20,7 +20,7 @@ tags: [plan, workflow]
 ```text
 For you:     The gate catalog and `make change`, `make index`, `/workflow-start` work as promised.
 Done when:   Catalog drift fails tests, shortcuts delegate correctly, and `make verify` is green.
-Appetite:    2 hours of phase 4 including repairs; stop at the limit.
+Appetite:    4 hours of phase 4 in total, repairs included; stop at the limit (maintainer, 2026-10-27).
 Not now:     The stop hook, the artefact validator, missing agents, and unrelated tracker drift.
 Pre-mortem:  suppose it failed: most likely because a wrapper duplicated existing behavior.
 Starts unless you say stop.
@@ -167,3 +167,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-27 20:16:22–21:11:01 UTC, 3278 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-27 21:11:07–21:55:07 UTC, 2639 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-27 21:55:15–22:07:37 UTC, 742 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+
+Appetite stop, 2026-10-27: 6659 s of 7200 s used before the review-loop repairs.
+Answer: continue — the maintainer named a new appetite of 4 hours in total
+(conversation, 2026-10-27).
