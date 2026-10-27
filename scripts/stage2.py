@@ -433,8 +433,8 @@ RED_PROBE_SOURCE = '''"""The red-first outcome probe of scripts/stage2.py: it re
 Loaded with `-p`, it writes one JSON record the runner reads back. The environment names the private
 report path, the fresh invocation token and the requested selector. The record holds the selected
 node ids, one entry per setup, call and teardown phase - the final outcome after pytest's own
-wrappers, the expected-result markers and whether a failing call raised an AssertionError -, the
-collection failures and the session's completion and exit status.
+wrappers, the expected-result markers and whether a failing call raised an AssertionError or
+pytest's own failed outcome -, the collection failures and the session's completion and exit status.
 """
 
 import json
@@ -489,6 +489,7 @@ def pytest_runtest_makereport(item, call):
             "phase": report.when,
             "outcome": report.outcome,
             "assertion": bool(report.failed and isinstance(raised, AssertionError)),
+            "pytest_failed": bool(report.failed and isinstance(raised, pytest.fail.Exception)),
             "exception": type(raised).__name__ if raised is not None else None,
             "expected": bool(item.get_closest_marker("xfail"))
             or bool(getattr(report, "wasxfail", False))
@@ -5237,9 +5238,13 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
 
     The record must be this selector's and this invocation's (a fresh token binds it to one run),
     show a finished session that pytest ended as a failing run, and hold phases that prove at least
-    one ordinary assertion-failing call of the requested test, passing setup and teardown for every
-    selected case and no other outcome among the calls. Text quoted from the record - a foreign
-    selector, a node id - is the caller's to scrub before it reaches a diagnostic.
+    one call of the requested test failing by an ordinary assertion or pytest's own failed outcome
+    (`pytest.fail.Exception`: a DID-NOT-RAISE `pytest.raises`, an explicit body `pytest.fail`, a
+    subclass included), passing setup and teardown for every selected case and no other outcome
+    among the calls. The fixed-code proof runs the same classifier with `passing`: the session must
+    have ended as a passing run and every selected call to have passed. Text quoted from the
+    record - a foreign selector, a node id - is the caller's to scrub before it reaches a
+    diagnostic.
     """
     if record is None:
         return "the outcome record is missing; the named test's outcome cannot be proven"
@@ -5285,6 +5290,7 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
             or name not in ("setup", "call", "teardown")
             or recorded not in ("passed", "failed", "skipped")
             or not isinstance(phase.get("assertion"), bool)
+            or not isinstance(phase.get("pytest_failed"), bool)
             or not isinstance(phase.get("expected"), bool)
             or not (phase.get("exception") is None or isinstance(phase.get("exception"), str))
         ):
@@ -5327,16 +5333,18 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
                 f"the call of `{_one_line(nodeid)}` ended {call['outcome']}; fixed-code proof needs every case to pass"
             )
         if call["outcome"] == "failed":
-            if not call["assertion"]:
+            # By the probe's exception-type flags, never by the recorded name: an application class
+            # merely named `Failed` refuses, and so does a missing helper's error.
+            if not (call["assertion"] or call["pytest_failed"]):
                 return (
                     f"the call of `{_one_line(nodeid)}` failed with {call['exception'] or 'an exception'}, "
-                    "not an AssertionError"
+                    "not an AssertionError or pytest's Failed"
                 )
             red = True
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
     if not passing and not red:
-        return "no selected call failed by assertion; the run is green for the requested test"
+        return "no selected call failed by an assertion or pytest's Failed; the run is green for the requested test"
     return None
 
 
@@ -5400,9 +5408,11 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     the temporary checkout and records, in a private JSON report outside the copied tests, which cases
     pytest selected and how every setup, call and teardown phase ended. The proof holds only when the
     report is this invocation's, the session finished as exit 1, at least one selected call of the
-    requested test failed on an ordinary assertion, every setup and teardown passed and no skip, xfail,
-    XPASS, collection error or non-assertion failure stands among them - so a missing dependency
-    failing its fixture refuses instead of certifying the repair (bead coding-harness-omp). Never is a
+    requested test failed by an ordinary assertion or pytest's own failed outcome (a DID-NOT-RAISE
+    `pytest.raises` or an explicit body `pytest.fail`, bead coding-harness-a7m), every setup and
+    teardown passed and no skip, xfail, XPASS, collection error or nonqualifying failure stands among
+    them - so a missing dependency failing its fixture refuses instead of certifying the repair (bead
+    coding-harness-omp). Never is a
     success inferred from terminal output or the exit code alone. Every ref's name and target is
     compared before and after: a difference fails the proof with the refs named and nothing is deleted,
     so another session's branch is never touched (phase 6, F-6 and F-7). The clean-up deletes the
@@ -5509,7 +5519,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 if done.returncode != 1:
                     outcome = (
                         f"{test}: pytest ended {done.returncode} on the baseline's code; "
-                        "red first needs exit 1 with an assertion failure"
+                        "red first needs exit 1 with an assertion failure or pytest's Failed"
                     )
                 else:
                     fault = _red_record_fault(_red_report_bytes(report), token, selector)

@@ -1,7 +1,7 @@
 ---
 title: "Plan — red-first-pytest-failed"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
 updated: 2026-10-27
@@ -118,7 +118,7 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_red_first_accepts_pytest_failed_call_outcomes — a complete qualifying run is refused
+- 1: tests/test_stage2.py::test_red_first_accepts_pytest_failed_call_outcomes — a complete qualifying run is refused
 - 1: tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — ordinary assertion evidence is refused
 - 2: tests/test_stage2.py::test_red_first_refuses_non_assertion_call_failures — an unrelated exception or mixed invalid run is accepted
 - 3: tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors — a setup or teardown error is accepted or the wrong phase is named
@@ -127,8 +127,11 @@ make verify
 - 4: tests/test_stage2.py::test_red_first_refuses_missing_or_invalid_evidence — stale, absent or malformed evidence is accepted
 - 4: tests/test_stage2.py::test_red_first_refuses_a_timed_out_run — a timed-out run qualifies
 - 4: tests/test_stage2.py::test_red_first_scrubs_outcome_diagnostics — a refusal leaks unredacted output
-- 5: not yet written tests/test_stage2.py::test_fixed_code_proof_keeps_pytest_failed_red — fixed-code Failed or malformed evidence is accepted, or all-pass is refused
-- 6: not yet written tests/test_stage2.py::test_repair_accepts_a_pytest_failed_baseline_proof — a valid repair is retried or lacks its fixed status or evidence mark
+- 5: tests/test_stage2.py::test_fixed_code_proof_keeps_pytest_failed_red — fixed-code Failed or malformed evidence is accepted, or all-pass is refused
+- 6: tests/test_stage2.py::test_repair_accepts_a_pytest_failed_baseline_proof — a valid repair is retried or lacks its fixed status or evidence mark
 - 6: tests/test_stage2.py::test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code — a still-failing fixed test receives the mark
 
 ## Time used
+
+2026-10-27 20:29:00–21:11:00 UTC, 2520 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-27 21:11:07–21:43:01 UTC, 1913 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

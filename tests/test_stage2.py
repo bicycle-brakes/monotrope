@@ -10991,7 +10991,7 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
     prompt = prompt_of(world.calls("codex")[1])
     assert (
         "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; "
-        "red first needs exit 1 with an assertion failure"
+        "red first needs exit 1 with an assertion failure or pytest's Failed"
     ) in prompt
 
 
@@ -11184,6 +11184,42 @@ def test_red_first_accepts_only_clean_assertion_runs(world: World) -> None:
     assert len(git(world.root, "worktree", "list").splitlines()) == 1
 
 
+def test_red_first_accepts_pytest_failed_call_outcomes(world: World) -> None:
+    """Criterion 1 (coding-harness-a7m). Planted fault: a call failing through pytest's own Failed
+    outcome - a DID-NOT-RAISE, a body `pytest.fail`, a subclass - is refused."""
+    repair_world(world)
+    # The expected-exception form: the baseline raises nothing, so `pytest.raises` fails DID NOT RAISE.
+    did_not_raise = "import pytest\n\n\ndef test_red():\n    with pytest.raises(ValueError):\n        pass\n"
+    outcome = red_first_planted(world, "test_red.py", did_not_raise, "tests/test_red.py::test_red")
+    assert outcome is None, outcome
+    body_fail = 'import pytest\n\n\ndef test_red():\n    pytest.fail("the body refuses")\n'
+    outcome = red_first_planted(world, "test_red.py", body_fail, "tests/test_red.py::test_red")
+    assert outcome is None, outcome
+    subclass = (
+        "import pytest\n\n\n"
+        "class OwnFailed(pytest.fail.Exception):\n"
+        "    pass\n\n\n"
+        "def test_red():\n"
+        '    raise OwnFailed("a Failed subclass")\n'
+    )
+    outcome = red_first_planted(world, "test_red.py", subclass, "tests/test_red.py::test_red")
+    assert outcome is None, outcome
+    mixed = (
+        "from pathlib import Path\n\n"
+        "import pytest\n\n\n"
+        '@pytest.mark.parametrize("round_number", [1, 2, 3])\n'
+        "def test_mixed(round_number):\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        "    if round_number == 2:\n"
+        '        assert "value = 2" in value\n'
+        "    if round_number == 3:\n"
+        '        pytest.fail("the Failed case")\n'
+    )
+    outcome = red_first_planted(world, "test_mixed.py", mixed, "tests/test_mixed.py::test_mixed")
+    assert outcome is None, outcome
+    assert len(git(world.root, "worktree", "list").splitlines()) == 1
+
+
 @pytest.mark.parametrize("plant_guard_fault", [False, True], ids=["missing-install", "stand-in-present"])
 def test_red_first_refuses_a_missing_pi_install(world: World, plant_guard_fault: bool) -> None:
     """Criterion 2. Planted fault: the absent ignored installation produces accepted fixture-error evidence."""
@@ -11232,24 +11268,63 @@ def test_red_first_refuses_setup_and_teardown_errors(world: World) -> None:
     assert outcome is not None and "the teardown phase of `tests/test_both.py::test_both` ended failed" in outcome, (
         outcome
     )
+    # Criterion 3 (coding-harness-a7m): pytest's own Failed in the teardown refuses beside a
+    # qualifying Failed call - the fixture-level failure is named as such, never read as the call's.
+    failed_teardown = (
+        "import pytest\n\n\n"
+        "@pytest.fixture\n"
+        "def failing_teardown():\n"
+        "    yield\n"
+        '    pytest.fail("the teardown fails")\n\n\n'
+        "def test_failed_teardown(failing_teardown):\n"
+        '    pytest.fail("the call fails too")\n'
+    )
+    outcome = red_first_planted(
+        world, "test_teardown_fail.py", failed_teardown, "tests/test_teardown_fail.py::test_failed_teardown"
+    )
+    assert (
+        outcome is not None
+        and "the teardown phase of `tests/test_teardown_fail.py::test_failed_teardown` ended failed" in outcome
+    ), outcome
 
 
 def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
-    """Criterion 4. Planted fault: RuntimeError, ImportError or pytest.fail counts as an assertion."""
+    """Criterion 2 (coding-harness-a7m). Planted fault: RuntimeError, ImportError, a missing helper's
+    NameError or AttributeError, or an application class merely named Failed counts as accepted."""
     repair_world(world)
     bodies = {
         "RuntimeError": '    raise RuntimeError("planted")\n',
         "ImportError": '    raise ImportError("planted")\n',
-        # `pytest.fail` raises its own `Failed` exception: named as the probe records the type.
-        "Failed": '    pytest.fail("planted")\n',
+        # The missing-helper forms: a helper the repair adds does not exist on the baseline's code.
+        "NameError": "    planted_helper()\n",
+        "AttributeError": "    pytest.planted_attribute\n",
     }
     for exception, body in bodies.items():
         source = f"import pytest\n\n\ndef test_breaks():\n{body}"
         outcome = red_first_planted(world, "test_breaks.py", source, "tests/test_breaks.py::test_breaks")
-        assert outcome is not None and f"failed with {exception}, not an AssertionError" in outcome, (
-            exception,
-            outcome,
-        )
+        assert outcome is not None, outcome
+        assert f"failed with {exception}, not an AssertionError or pytest's Failed" in outcome, (exception, outcome)
+    # Identified by exception type in the probe, never by the recorded name: an application class
+    # that only shares the name is not pytest's failed outcome.
+    application_failed = (
+        'class Failed(Exception):\n    pass\n\n\ndef test_breaks():\n    raise Failed("only the name is shared")\n'
+    )
+    outcome = red_first_planted(world, "test_breaks.py", application_failed, "tests/test_breaks.py::test_breaks")
+    assert outcome is not None, outcome
+    assert "failed with Failed, not an AssertionError or pytest's Failed" in outcome, outcome
+    # A mixed run is refused through its nonqualifying case, in either case order.
+    mixed = (
+        "import pytest\n\n\n"
+        '@pytest.mark.parametrize("round_number", [1, 2])\n'
+        "def test_mixed(round_number):\n"
+        "    if round_number == {}:\n"
+        '        raise RuntimeError("the nonqualifying case")\n'
+        '    assert False, "the qualifying assertion"\n'
+    )
+    for bad in (1, 2):
+        outcome = red_first_planted(world, "test_mixed.py", mixed.format(bad), "tests/test_mixed.py::test_mixed")
+        assert outcome is not None, outcome
+        assert "failed with RuntimeError, not an AssertionError or pytest's Failed" in outcome, (bad, outcome)
 
 
 @pytest.mark.parametrize(
@@ -11394,12 +11469,41 @@ def test_red_first_refuses_missing_or_invalid_evidence(world: World, monkeypatch
 
         return reader
 
+    def call_phase_field(value):
+        """A mutate that sets the call phase's `pytest_failed` to a given (possibly invalid) value."""
+
+        def mutate(record):
+            return {
+                **record,
+                "phases": [
+                    {**phase, "pytest_failed": value} if phase["phase"] == "call" else phase
+                    for phase in record["phases"]
+                ],
+            }
+
+        return mutate
+
+    def without_phase_field(record):
+        return {
+            **record,
+            "phases": [
+                {name: cell for name, cell in phase.items() if name != "pytest_failed"} for phase in record["phases"]
+            ],
+        }
+
     faults = {
         "absent": lambda _path: None,
         "malformed": lambda _path: b"{ not json",
         "incomplete": tampered(lambda record: {**record, "session": None}),
         "wrong-test": tampered(lambda record: {**record, "selector": "tests/test_red.py::test_other"}),
         "stale": tampered(lambda record: {**record, "token": "0" * 32}),
+        # The failure classification: a phase without the boolean field, or one that is not a
+        # boolean, is invalid evidence - including JSON's 0, 1 and null.
+        "phase-without-field": tampered(without_phase_field),
+        "pytest-failed-zero": tampered(call_phase_field(0)),
+        "pytest-failed-one": tampered(call_phase_field(1)),
+        "pytest-failed-null": tampered(call_phase_field(None)),
+        "pytest-failed-string": tampered(call_phase_field("yes")),
     }
     for name, fault in faults.items():
         monkeypatch.setattr(stage2, "_red_report_bytes", fault)
@@ -11429,6 +11533,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
                         "phase": "setup",
                         "outcome": "passed",
                         "assertion": False,
+                        "pytest_failed": False,
                         "exception": None,
                         "expected": False,
                     },
@@ -11437,6 +11542,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
                         "phase": "call",
                         "outcome": "failed",
                         "assertion": True,
+                        "pytest_failed": False,
                         "exception": "AssertionError",
                         "expected": False,
                     },
@@ -11490,6 +11596,92 @@ def test_red_first_scrubs_outcome_diagnostics(world: World, monkeypatch: pytest.
     assert outcome is not None, outcome
     assert secret not in outcome and "[credential]" in outcome, outcome
     assert RED_SELECTOR in outcome, outcome
+
+
+def test_fixed_code_proof_keeps_pytest_failed_red(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5 (coding-harness-a7m). Planted fault: a Failed call or malformed phase evidence
+    passes the fixed-code proof, or an all-pass case is refused by the shared probe."""
+    repair_world(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    all_pass = (
+        "from pathlib import Path\n\n\ndef test_fix():\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 2" in value\n'
+    )
+    (world.root / "tests" / "test_fix.py").write_text(all_pass, encoding="utf-8")
+    assert stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
+    mixed = (
+        "from pathlib import Path\n\n"
+        "import pytest\n\n\n"
+        '@pytest.mark.parametrize("round_number", [1, 2])\n'
+        "def test_fix(round_number):\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 2" in value\n'
+        "    if round_number == 2:\n"
+        '        pytest.fail("still red after the repair")\n'
+    )
+    (world.root / "tests" / "test_fix.py").write_text(mixed, encoding="utf-8")
+    outcome = stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    # A live mixed run ends its session 1, so the session verdict carries the refusal; the
+    # per-call verdict is only reachable on a record no live probe can write, proven directly.
+    assert outcome is not None and "pytest ended 1 on the fixed code" in outcome, outcome
+
+    def passing_phase(node: str, name: str) -> dict:
+        return {
+            "nodeid": node,
+            "phase": name,
+            "outcome": "passed",
+            "assertion": False,
+            "pytest_failed": False,
+            "exception": None,
+            "expected": False,
+        }
+
+    selector = "tests/test_fix.py::test_fix"
+    synthetic = {
+        "schema": 1,
+        "token": "t",
+        "selector": selector,
+        "collection_errors": [],
+        "selected": [selector + "[1]", selector + "[2]"],
+        "phases": [
+            passing_phase(selector + "[1]", "setup"),
+            passing_phase(selector + "[1]", "call"),
+            passing_phase(selector + "[1]", "teardown"),
+            passing_phase(selector + "[2]", "setup"),
+            {
+                **passing_phase(selector + "[2]", "call"),
+                "outcome": "failed",
+                "pytest_failed": True,
+                "exception": "Failed",
+            },
+            passing_phase(selector + "[2]", "teardown"),
+        ],
+        "session": {"finished": True, "exitstatus": 0},
+    }
+    # The shared classifier refuses a Failed call even beside a session that claims a green exit.
+    fault = stage2._red_record_fault(json.dumps(synthetic).encode("utf-8"), "t", selector, passing=True)
+    assert fault is not None and "fixed-code proof needs every case to pass" in fault, fault
+    # Malformed phase evidence refuses on the fixed-code path too, all-pass run notwithstanding.
+    original = stage2._red_report_bytes
+
+    def without_field(path: Path) -> bytes | None:
+        record = original(path)
+        assert record is not None, "the fixed-code proof left no outcome record"
+        return json.dumps(
+            {
+                **json.loads(record),
+                "phases": [
+                    {name: cell for name, cell in phase.items() if name != "pytest_failed"}
+                    for phase in json.loads(record)["phases"]
+                ],
+            }
+        ).encode("utf-8")
+
+    (world.root / "tests" / "test_fix.py").write_text(all_pass, encoding="utf-8")
+    monkeypatch.setattr(stage2, "_red_report_bytes", without_field)
+    outcome = stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    assert outcome is not None and "the outcome record holds a phase of an invalid form" in outcome, outcome
 
 
 def test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt(world: World) -> None:
@@ -11710,6 +11902,30 @@ def test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code(worl
     record = stage2.record_rows(world.record().read_text(encoding="utf-8"))
     assert record[0][7] == "taken — test_a" and record[0][8] == "no", "an unproven row was marked fixed"
     assert "fixed-code proof" in prompt_of(world.calls("codex")[1])
+
+
+def test_repair_accepts_a_pytest_failed_baseline_proof(world: World) -> None:
+    """Criterion 6 (coding-harness-a7m). Planted fault: a repair whose named test proves red through
+    pytest's Failed (DID NOT RAISE) is retried, or its fixed row lacks the test or the mark."""
+    repair_world(world)
+    # Baseline (`value = 1`): the `pytest.raises` block raises nothing, so the named test fails
+    # DID NOT RAISE - pytest's own Failed. Fixed (`value = 2`): the block catches, the test passes.
+    raises_test = (
+        "from pathlib import Path\n\n"
+        "import pytest\n\n\n"
+        "def test_fix():\n"
+        "    value = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text(encoding='utf-8')\n"
+        "    with pytest.raises(ValueError):\n"
+        "        if 'value = 2' in value:\n"
+        "            raise ValueError('the fixed code raises')\n"
+    )
+    step = repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": raises_test})
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert len(repair_calls(world)) == 1, "a valid repair was retried"
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — tests/test_fix.py::test_fix"
+    assert record["L1-1"][8] == "yes — tests/test_fix.py::test_fix", "the repair did not mark the proof it ran"
 
 
 def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(world: World) -> None:
