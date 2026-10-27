@@ -1198,7 +1198,11 @@ def report(state: dict) -> str:
     lines.extend(f"Unavailable: {model}: {reason}" for model, reason in available["failed"].items())
     lines.extend(f"Skipped: {model}: {reason}" for model, reason in available["skipped"].items())
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
-    return "\n".join(lines)
+    # Escape untrusted controls per line, preserving only the runner's own separators.
+    return "\n".join(
+        "".join(f"\\x{ord(char):02x}" if ord(char) < 32 or 127 <= ord(char) <= 159 else char for char in line)
+        for line in lines
+    )
 
 
 def prepare(root: Path, change: str, runner) -> None:

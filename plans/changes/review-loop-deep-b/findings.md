@@ -409,7 +409,9 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-6 | MINOR | MAINT | base | scripts/stage2_availability.py:1234,1199 | A catalog ID such as `bad\x1b[2J-free` is correctly dropped and escaped in discovery’s notice, but `prepare-loop` copies the raw ID into `availability.skipped`. `report()` then prints its terminal control bytes unchanged. Reproduced: the report contains an actual ESC followed by `[2J`, which clears the terminal. Escape control characters when rendering the availability report. | Codex | taken — test: tests/test_stage2_availability.py::test_availability_report_escapes_control_characters_in_skipped_ids — a skipped catalog id is stored raw but printed escaped, so no control byte reaches the terminal (security MINOR, repaired under the standing rule; orchestrator, 2026-10-27) | — |
+| F6-6 | MINOR | MAINT | base | scripts/stage2_availability.py:1234,1199 | A catalog ID such as `bad\x1b[2J-free` is correctly dropped and escaped in discovery’s notice, but `prepare-loop` copies the raw ID into `availability.skipped`. `report()` then prints its terminal control bytes unchanged. Reproduced: the report contains an actual ESC followed by `[2J`, which clears the terminal. Escape control characters when rendering the availability report. | Codex | fixed — tests/test_stage2_availability.py::test_availability_report_escapes_control_characters_in_skipped_ids | — |
 
 Phase 6 verdict: codex 01a17d07-19ba-7210-a12b-fba92364057b, 2026-10-27
 Reviewer session: codex 01a17d07-19ba-7210-a12b-fba92364057b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2332 commits, 12 rules.
