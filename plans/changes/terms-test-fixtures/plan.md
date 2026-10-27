@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-hxkw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "2026-10-27"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, tests, model-terms]
 ---
@@ -26,7 +26,7 @@ Pre-mortem:  suppose it failed: most likely because shared defaults conceal an i
 Starts unless you say stop.
 ```
 
-Baseline `e4f84f04`, inspected 2026-10-27. Bounded: no design or ADR.
+Baseline `454790ae`, inspected 2026-10-27. Bounded: no design or ADR.
 Explore used Stage 2, GLM 5.3 Flash via `glm-coding-plan`; no Stage-1 fallback
 is recorded. No plan template exists; this follows `prompts/03-plan.md`.
 
@@ -74,16 +74,13 @@ is recorded. No plan template exists; this follows `prompts/03-plan.md`.
     results/durations. No phase-2a rows were present at drafting. The runner
     records measured phase-4 time below and refreshes `plans/INDEX.md`.
 
-Full verification has not been green in a draft attempt yet, both blockers
-outside this package's files (`findings.md`, attempts 1 and 2): the
-plans-registry staleness drift of other changes (closed beads not archived,
-in-progress beads without artefacts), and this change's `decisions.md`
-carrying no document header. Attempt 2 added that header and the runner put
-it back — a draft may not change `decisions.md`; the header needs a hand edit
-outside the draft phase. Attempt 2's own run was stopped by the runner's step
-limit, not by a red tree. Report both to the orchestrator; do not repair
-other changes or the shared tracker in this package, and do not count a red
-or stopped run as completion evidence.
+Prior draft verification failed on tracker/artifact drift outside this
+package and a missing decisions header; one run hit the runner's step limit
+(`findings.md`, attempts 1–3). At `454790ae` the decisions header is present;
+its current-header and interview checks pass. Tracker drift has not been
+remeasured here, and full verification remains the runner's next check.
+Report remaining blockers without repairing other changes or the shared
+tracker; a red or stopped run is not completion evidence.
 
 ## Criterion ledger
 
@@ -100,8 +97,13 @@ or stopped run as completion evidence.
 
 ## Verification and boundaries
 
-Run `make verify` three times consecutively with normal parallelism, using
-this checkout's pinned environment and Pi installation; if not initialized,
+Run the following command three times consecutively with normal parallelism:
+
+```bash
+make verify
+```
+
+Use this checkout's pinned environment and Pi installation; if not initialized,
 the orchestrator first runs `make venv` and `bash tools/pi/install.sh`.
 For the historical flake, repeated full-run evidence replaces a forced red
 reproduction (`decisions.md`); do not weaken the runner to obtain it.

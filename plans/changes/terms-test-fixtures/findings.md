@@ -515,3 +515,46 @@ verification, and presents the plan card unchanged before phase 4.
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-27: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 708 files, 2390 commits, 12 rules.
+
+## Renewed draft validation — 2026-10-27
+
+Re-read the research, decisions, templates, prior draft diagnostics and the
+named production/test seams at `454790ae`. The existing bounded class,
+six acceptance criteria, two-hour appetite and plan card are unchanged.
+No phase-2a rows or open ambiguities were present. No design or ADR is due.
+
+Implemented in this draft: corrected the plan's obsolete missing-header
+blocker, named the current baseline and displayed the verification command
+verbatim. The decisions header is now present; its body is unchanged.
+Updated spec and plan provenance to this Codex drafting session. Earlier
+attempt records above remain historical evidence, not current-state claims.
+
+Measured in this draft:
+
+- `python3 scripts/check_interview_minimums.py --change terms-test-fixtures`
+  — exit 0; the bounded interview skip satisfies the minimum.
+- `python3 scripts/check_criterion_ledger.py` — exit 0; the existing test
+  references resolve, and both proposed helper tests remain not yet written.
+- `python3 scripts/check_research_handoff.py --change terms-test-fixtures`
+  — exit 0, explicitly exempt without research-swarm/v2 evidence.
+- `python3 scripts/check_frontmatter_current.py` — exit 0; current headers
+  include the decisions header repaired before this draft.
+- `git diff --check` and a draft structure check — exit 0; criteria,
+  decisions and card match `HEAD`, the time section is empty, and changed
+  paths stay inside this change folder.
+
+The requested `scripts/validate_change_artefacts.py` and `templates/plan.md`
+are absent from this tree. The plan follows `prompts/03-plan.md`; no passing
+result is claimed for the absent validator. Full `make verify`, helper
+contract-fault evidence and three loaded runs remain unperformed by this
+draft; the runner owns full verification and the commit. Earlier tracker
+drift was not remeasured. Current PR state, the shared tracker and external
+session registries were not read under the worktree-only read boundary.
+No tracker writes, implementation edits, commits or mutating git commands
+were made. The phase-4 time section remains empty.
+
+Resume: the orchestrator runs full verification and presents the unchanged
+plan card before phase 4; report any external blocker without weakening the
+criteria or repairing another change.

@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-hxkw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "2026-10-27"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, tests, model-terms]
 class: bounded
