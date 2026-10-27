@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -241,3 +241,16 @@ Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 619 files, 2273 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2318 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MAJOR | SPEC | base | scripts/stage2.py:1917–1919 | A refreshed catalog containing `bad id-free` aborts discovery before invalid IDs are dropped. Reproduced with pinned Pi’s real `listModels`: alongside `acme-v1-free`, the spaced ID produces a row that `parse_catalog` refuses with “wrong column count”. The invalid ID is never named as dropped, and valid reviewers cannot proceed. Validate catalog IDs before activating and listing them. [Criterion 8] | Codex | taken — test: tests/test_stage2.py::test_catalog_drops_an_invalid_id_before_listing — an id that cannot be a catalog id is named as dropped and the valid reviewers proceed (orchestrator, 2026-10-27) | — |
+| F6-4 | MINOR | SPEC | base | scripts/stage2.py:7058–7061 | Retained malformed answers bypass the new attribution boundary. Reproduced with acme returning prose, then valid rows, while beacon returns rows plus commentary: the record contains only `From beacon-2-free:`, followed later by acme’s malformed answer without its own boundary. `_record_lines` consequently classifies the runner’s “acme-v1-free’s first answer…” label as reviewer text. Every retained block needs the promised attribution and classification. [Criterion 4] | Codex | taken — test: tests/test_stage2.py::test_every_retained_answer_block_carries_its_attribution — each retained block, malformed answers included, starts with its member's boundary and the runner's labels are never read as reviewer text (orchestrator, 2026-10-27) | — |
+| F6-5 | MINOR | MAINT | base | tests/test_stage2.py:14231–14237 | The worker-interruption tests cannot detect surviving children on macOS: `_child_alive` reads Linux’s `/proc/<pid>/stat` and returns `False` when that file is unavailable. Both tests therefore accept a live child even if `kill_live` stops sending signals. The later main-thread tests exercise cleanup inside `launch`, leaving this worker cancellation path without an effective macOS assertion. | Codex | taken — test: tests/test_stage2.py::test_worker_interruption_leaves_no_live_child — the liveness check works where /proc is absent (for example os.kill(pid, 0) or ps), so the tests fail on macOS when a child survives (orchestrator, 2026-10-27) | — |
+
+Phase 6 verdict: codex 01a17c8f-5534-7a93-a2ae-7fcdc25203f6, 2026-10-27
+Reviewer session: codex 01a17c8f-5534-7a93-a2ae-7fcdc25203f6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
