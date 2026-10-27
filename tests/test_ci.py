@@ -35,6 +35,7 @@ RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
 from ci_gates import gates, misst_in  # noqa: E402
+from mutation_evidence import evidence, pruefling  # noqa: E402
 
 
 def _einschraenkungen() -> dict[str, list[str]]:
@@ -1102,6 +1103,67 @@ def test_the_runner_never_searches_other_environments(tmp_path: Path) -> None:
     assert "home" not in log.read_text(encoding="utf-8").split(), "the runner looked into $HOME/.venvs"
 
 
+@pytest.mark.parametrize("caller", ["tree", "outside"])
+def test_the_runner_exports_a_relative_python_as_an_absolute_path(tmp_path: Path, caller: str) -> None:
+    """A relative `$PYTHON` reaches every gate's children as an absolute path (bead coding-harness-4x2c).
+
+    `PYTHON=.venv/bin/python3 make verify` exported the relative path; a test that starts the runner in
+    another directory (the leerprobe gate's foreign repository) then found no interpreter there. The
+    path is read against the caller's directory, before the runner changes to the repository root.
+    """
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    cwd, relative = (tree, ".venv/bin/python3") if caller == "tree" else (tmp_path, "tree/.venv/bin/python3")
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": relative}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=cwd, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == str(tree / ".venv" / "bin" / "python3")
+
+
+def test_a_python_path_with_a_space_still_starts_the_gate(tmp_path: Path) -> None:
+    """The absolute `$PYTHON` is quoted where it replaces `python3` in a gate command.
+
+    A relative `.venv/bin/python3` used to reach the gate as one word; made absolute under a directory
+    with a space, it split into two and the gate failed (pre-review row P237-1, 2026-10-25).
+    """
+    base = tmp_path / "with space"
+    base.mkdir()
+    log = tmp_path / "log"
+    out = tmp_path / "gate-ran"
+    tree = _runner_tree(base, f"python3 -c \"open('{out}', 'w').write('ran')\"")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": ".venv/bin/python3"}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == "ran"
+
+
+@pytest.mark.parametrize("kind", ["absolute", "bare"])
+def test_an_absolute_or_bare_python_reaches_the_gate_unchanged(tmp_path: Path, kind: str) -> None:
+    """Criterion 2: an absolute `$PYTHON` and a bare name looked up on PATH pass through as given."""
+    out = tmp_path / "python-seen"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
+    elsewhere = tmp_path / "elsewhere" / "bin"
+    _interpreter_wrapper(elsewhere / "python3", "elsewhere", log)
+    given = str(elsewhere / "python3") if kind == "absolute" else "python3"
+    env = {"HOME": str(tmp_path), "PATH": f"{elsewhere}:/usr/bin:/bin", "PYTHON": given}
+    bash = shutil.which("bash") or "/bin/bash"
+    done = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert out.read_text(encoding="utf-8") == given
+
+
 def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> None:
     """`.venv/bin/python3` of the checkout comes before the `python3` on PATH."""
     log = tmp_path / "log"
@@ -1831,15 +1893,6 @@ def test_the_drift_job_holds_only_steps_that_can_run() -> None:
 # gate. Only the mutation test says something about the gate: **does it go red
 # if you break what it is meant to protect against?**
 #
-# These name forms count as mutation evidence. The list is deliberately bound to
-# names and not to comments: a name is carried along when something is renamed,
-# a comment is not.
-MUTATIONS_NAMEN = re.compile(
-    r"^def (test_\w*(?:goes_red|red_on|detects_tampering|refuses|is_caught|catches|"
-    r"not_a_write|is_an_error|is_exit_2|never_writes|is_not_a_pass|notices)\w*)\(",
-    re.M,
-)
-
 # Gates without mutation evidence — with the reason and the intent.
 #
 # This list is a **ratchet**: it may shrink, never grow. Whoever adds a gate
@@ -1877,25 +1930,6 @@ def _testdateien() -> list[Path]:
     return sorted((REPO_ROOT / "tests").glob("test_*.py"))
 
 
-def _pruefling(gate: dict) -> str:
-    """The subject of this gate — the script it runs."""
-    befehl = gate.get("command") or ""
-    # The subfolder has to be included: until 2026-09-08 the pattern ended before
-    # the second `/`, and a script under `scripts/kit/` was invisible to the
-    # ratchet — it reported "no script recognisable" and demanded an exception
-    # for a gate that had long had its mutation evidence.
-    m = re.search(r"(?:scripts|docs/patterns)/(?:[A-Za-z_]+/)*([A-Za-z_]+\.py)", befehl)
-    if m:
-        return m.group(1)
-    # A gate can also run a test file itself — `ruleset-drift` checks a statement
-    # about the repo configuration for which there is no script and there should
-    # be none: a tool that can change rulesets would be a greater risk than the
-    # finding it makes. Its mutation evidence then lies in exactly that file, and
-    # that is where the ratchet looks for it too.
-    m = re.search(r"(tests/[A-Za-z_]+\.py)", befehl)
-    return m.group(1) if m else ""
-
-
 def test_every_gate_step_has_a_mutation_test() -> None:
     """Every gate has a run that turns it red — or a reason in the ratchet.
 
@@ -1909,23 +1943,12 @@ def test_every_gate_step_has_a_mutation_test() -> None:
         gid = g["id"]
         if gid.endswith("setup-deps"):
             continue
-        ziel = _pruefling(g)
+        ziel = pruefling(g)
         if not ziel:
             if gid not in OHNE_MUTATIONSTEST:
                 ohne.append(f"{gid} (no script recognisable)")
             continue
-        if ziel.startswith("tests/"):
-            # If the gate runs a test file, its evidence lies IN that file. The
-            # search below would instead accept every file that merely MENTIONS
-            # the path — on 2026-09-08 that made `test_workflow_entry.py` the
-            # evidence for `ruleset-drift`, because it names the name in a list
-            # and has some mutation evidence of its own. A coverage that assumes
-            # from a mention covers nothing.
-            datei = REPO_ROOT / ziel
-            belegt = datei.is_file() and bool(MUTATIONS_NAMEN.search(datei.read_text(encoding="utf-8")))
-        else:
-            belegt = any(MUTATIONS_NAMEN.search(text) for p, text in quellen.items() if ziel in text)
-        if not belegt and gid not in OHNE_MUTATIONSTEST:
+        if not evidence(ziel, quellen) and gid not in OHNE_MUTATIONSTEST:
             ohne.append(f"{gid} → {ziel}")
 
     assert not ohne, (
@@ -1950,13 +1973,285 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ueberholt = []
     for gid in OHNE_MUTATIONSTEST:
-        ziel = _pruefling(bekannt[gid])
-        if ziel and any(MUTATIONS_NAMEN.search(t) for p, t in quellen.items() if ziel in t):
+        ziel = pruefling(bekannt[gid])
+        if ziel and evidence(ziel, quellen):
             ueberholt.append(gid)
     assert not ueberholt, f"long since covered, but still in the ratchet: {ueberholt}"
 
     ohne_grund = [g for g, grund in OHNE_MUTATIONSTEST.items() if len(grund.strip()) < 10]
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
+
+
+# Test files that name a gate's script without seeding a fault into it. Each
+# holds a mutation-named test that has nothing to do with the script (bead
+# coding-harness-a05). The second is the shape of the call-site test of
+# 2026-10-20 (PR #188), which made the plans-registry exceptions look stale.
+BARE_MENTIONS = {
+    "a mention in another test": """
+def test_the_drift_job_names_the_registry() -> None:
+    assert "plans_registry.py" in COMMAND
+
+
+def test_the_lock_goes_red_when_it_is_held() -> None:
+    assert lock.held()
+""",
+    "a call site that only identifies the script": """
+import plans_registry
+
+
+def test_the_runner_refuses_a_planted_renderer(tmp_path) -> None:
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    command = run_the_runner(tmp_path)
+    name = "renderer" if "plans_registry.py" in command[-2] else command[0]
+    assert name != "renderer"
+""",
+}
+
+
+@pytest.mark.parametrize("case", sorted(BARE_MENTIONS))
+def test_a_bare_mention_of_a_gate_script_is_no_mutation_evidence(case: str) -> None:
+    """Naming a gate's script is not seeding a fault into it (bead coding-harness-a05).
+
+    Until 2026-10-25 any test file that contained the script's file name and
+    some mutation-named test counted as evidence for that gate, so a mention
+    could empty the ratchet without a single seeded red run.
+    """
+    sources = {REPO_ROOT / "tests" / "test_foreign.py": BARE_MENTIONS[case]}
+    assert evidence("plans_registry.py", sources) == [], f"{case} counted as mutation evidence"
+
+
+def test_a_string_comparison_is_no_gate_evidence() -> None:
+    source = """
+def test_the_command_goes_red(command):
+    assert command[0].endswith("plans_registry.py")
+"""
+    assert evidence("plans_registry.py", {Path("test_command.py"): source}) == []
+
+
+def test_a_helper_reference_is_no_helper_call() -> None:
+    source = """
+import plans_registry
+
+def _run():
+    return plans_registry.main()
+
+def test_the_gate_goes_red():
+    assert callable(_run)
+"""
+    assert evidence("plans_registry.py", {Path("test_reference.py"): source}) == []
+
+
+def test_an_import_in_another_test_binds_nothing_here() -> None:
+    source = """
+def test_unrelated():
+    from plans_registry import main
+    assert main() == 0
+
+def test_the_gate_goes_red(main):
+    assert main() == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_scope.py"): source}) == []
+
+
+def test_a_compared_path_constant_is_no_gate_evidence() -> None:
+    source = """
+SCRIPT = Path("scripts") / "plans_registry.py"
+
+def test_x_goes_red(cmd):
+    assert cmd[0] == SCRIPT
+"""
+    assert evidence("plans_registry.py", {Path("test_constant.py"): source}) == []
+
+
+def test_a_path_string_outside_a_run_call_is_no_gate_evidence() -> None:
+    shapes = [
+        'assert "a" in set(["scripts/plans_registry.py"])',
+        'assert ", ".join(["scripts/plans_registry.py"]) in cmd',
+        'assert Path(cmd[0]) == Path("scripts/plans_registry.py")',
+    ]
+    for shape in shapes:
+        source = f"def test_x_goes_red(cmd):\n    {shape}\n"
+        assert evidence("plans_registry.py", {Path("test_shape.py"): source}) == [], shape
+
+
+def test_a_parameter_shadowing_the_gate_entry_is_no_gate_evidence() -> None:
+    entry = """
+from plans_registry import main
+
+def test_x_goes_red(main):
+    assert main() == 1
+"""
+    helper = """
+import plans_registry
+
+def _run():
+    return plans_registry.main()
+
+def test_x_goes_red(_run):
+    assert _run() == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_entry.py"): entry}) == []
+    assert evidence("plans_registry.py", {Path("test_helper.py"): helper}) == []
+
+
+@pytest.mark.parametrize(
+    "imports, call, params",
+    [
+        ("import asyncio", "asyncio.run", ""),
+        ("", "parser.run", "parser"),
+        ("", "runner.run", "runner"),
+        ("def run(c): return c", "run", ""),
+        ("from unrelated import run", "run", ""),
+        ("", "subprocess.run", ""),
+        ("import subprocess", "subprocess.run", "subprocess"),
+    ],
+)
+def test_a_run_named_call_outside_subprocess_is_no_gate_evidence(imports, call, params) -> None:
+    source = f'{imports}\ndef test_x_goes_red({params}):\n    {call}(["python", "scripts/plans_registry.py"])\n'
+    assert evidence("plans_registry.py", {Path("t.py"): source}) == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "['echo', 'see scripts/plans_registry.py']",
+        "['grep', 'x', 'scripts/plans_registry.py']",
+        "['cat', S]",
+        "['ls'], cwd=S",
+        "['python', 'other.py', S]",
+        "['scripts/plans_registry.py.backup']",
+    ],
+)
+def test_a_script_path_that_is_not_the_program_run_is_no_gate_evidence(command) -> None:
+    source = f"""import subprocess
+S = 'scripts/plans_registry.py'
+def test_x_goes_red():
+    subprocess.run({command})
+"""
+    assert evidence("plans_registry.py", {Path("t.py"): source}) == []
+
+
+@pytest.mark.parametrize(
+    "body, counts",
+    [
+        ("cmd=['python', 'scripts/plans_registry.py']\ncmd=['ls']\nsubprocess.run(cmd)", False),
+        ("subprocess.run(cmd)\ncmd=['python', 'scripts/plans_registry.py']", False),
+        ("cmd=['python', 'scripts/plans_registry.py']\nsubprocess.run(cmd)\ncmd=['ls']", True),
+        ("cmd=['ls']\ncmd=['python', 'scripts/plans_registry.py']\nsubprocess.run(cmd)", True),
+    ],
+)
+def test_a_reassigned_command_counts_by_its_last_value(body, counts) -> None:
+    source = "import subprocess\nS='scripts/plans_registry.py'\ndef test_x_goes_red():\n"
+    source += "\n".join("    " + line for line in body.splitlines())
+    assert bool(evidence("plans_registry.py", {Path("t.py"): source})) is counts
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        """import subprocess
+def _go(c):
+    return subprocess.run(c)
+def _forward(c):
+    return _go(c)
+def test_x_goes_red():
+    assert _forward(['python', 'scripts/plans_registry.py'])
+""",
+        """import plans_registry
+class T:
+    def test_x_goes_red(self):
+        plans_registry.main()
+""",
+        """from scripts import plans_registry
+def test_x_goes_red():
+    plans_registry.main()
+""",
+        """from subprocess import call as execute
+def test_x_goes_red():
+    execute(['python', 'scripts/plans_registry.py'])
+""",
+        """import subprocess as process
+def test_x_goes_red():
+    process.check_output(args=['scripts/plans_registry.py'])
+""",
+    ],
+)
+def test_a_helper_running_its_parameter_and_a_class_test_are_gate_evidence(source) -> None:
+    assert evidence("plans_registry.py", {Path("t.py"): source})
+
+
+def test_a_command_list_bound_to_a_local_then_run_is_gate_evidence() -> None:
+    local = """
+import subprocess
+def test_x_goes_red():
+    cmd = ["python3", "scripts/plans_registry.py"]
+    assert subprocess.run(cmd).returncode == 1
+"""
+    fstring = """
+import subprocess
+def test_x_goes_red(root):
+    assert subprocess.run([f"{root}/scripts/plans_registry.py"]).returncode == 1
+"""
+    assert evidence("plans_registry.py", {Path("test_local.py"): local})
+    assert evidence("plans_registry.py", {Path("test_fstring.py"): fstring})
+
+
+# Test files whose mutation-named test reaches the script it is evidence for:
+# a call into the module, a name imported from it, or a path to the file that a
+# call runs — in the test itself or through a helper of the same file.
+GENUINE_EVIDENCE = {
+    "a call into the imported module": """
+def test_the_gate_goes_red_when_a_link_is_broken(tmp_path) -> None:
+    import check_docs
+
+    assert check_docs.main(["--root", str(tmp_path)]) == 1
+""",
+    "a call through an alias": """
+import check_docs as gate
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert gate.main(["--root", str(tmp_path)]) == 1
+""",
+    "a name imported from the module": """
+from check_docs import main
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert main(["--root", str(tmp_path)]) == 1
+""",
+    "a script path run through a helper": """
+import subprocess
+import sys
+SCRIPT = REPO_ROOT / "scripts" / "check_docs.py"
+
+
+def _run(root):
+    return subprocess.run([sys.executable, str(SCRIPT), "--root", str(root)])
+
+
+def _broken(root):
+    return _run(root)
+
+
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    assert _broken(tmp_path).returncode == 1
+""",
+    "a script path in the command itself": """
+import subprocess
+import sys
+def test_a_broken_link_goes_red(tmp_path) -> None:
+    erg = subprocess.run([sys.executable, "scripts/check_docs.py", "--root", str(tmp_path)])
+    assert erg.returncode == 1
+""",
+}
+
+
+@pytest.mark.parametrize("case", sorted(GENUINE_EVIDENCE))
+def test_a_mutation_test_that_reaches_the_gate_script_is_evidence(case: str) -> None:
+    """The stricter rule still sees the forms the existing evidence takes."""
+    sources = {REPO_ROOT / "tests" / "test_own.py": GENUINE_EVIDENCE[case]}
+    assert evidence("check_docs.py", sources), f"{case} no longer counts as mutation evidence"
 
 
 def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1968,3 +2263,20 @@ def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatc
     steps = "\n".join(ci_gates._toolchain('"3.12"'))
     assert "actions/setup-node@v4" in steps
     assert "bash tools/pi/install.sh" in steps
+
+
+def test_research_handoff_blocks_local_and_hosted_verification() -> None:
+    """Criterion 32 of research-swarm: the handoff gate is one entry of the one list, blocking in both places.
+
+    Planted fault: the gate is absent from the list, only advisory, placed on one runner, or the derived
+    workflow does not run its command.
+    """
+    import ci_gates
+
+    (entry,) = [g for g in ci_gates.gates() if g["id"] == "research-handoff"]
+    assert entry["command"] == "python3 scripts/check_research_handoff.py"
+    assert entry["enforcement"] == "block" and entry["placement"] == "both" and entry["job"] == "verify"
+    assert entry["floor"] is False
+    ci = ci_gates.generate_ci()
+    assert "id: research-handoff" in ci and "python3 scripts/check_research_handoff.py" in ci
+    assert (REPO_ROOT / "scripts" / "check_research_handoff.py").is_file()

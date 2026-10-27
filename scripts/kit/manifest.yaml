@@ -76,6 +76,9 @@ rules:
   - prefix: scripts/ci_gates.py
     rolle: mechanismus
     reason: "liest decisions/gates.yaml als die eine Gate-Liste und leitet ci.yml ab, plus die Sperrklinken (D-10, bead bo0)"
+  - prefix: scripts/mutation_evidence.py
+    rolle: mechanismus
+    reason: "the gate ratchet's analyzer; tests/test_ci.py travels and imports it (bead coding-harness-diic)"
   - prefix: scripts/verify_all.sh
     rolle: mechanismus
     reason: "der lokale Lauf: haelt keine Kommandos, fragt ci_gates.py (bead bo0)"
@@ -97,6 +100,12 @@ rules:
   - prefix: scripts/check_criterion_ledger.py
     rolle: mechanismus
     reason: "the check behind the gate criterion-ledger — the gate file travels, so its script does (ADR 0013)"
+  - prefix: scripts/check_research_handoff.py
+    rolle: mechanismus
+    reason: "the check behind the gate research-handoff - the gate file travels, so its script does (bead coding-harness-icw)"
+  - prefix: scripts/research_handoff.py
+    rolle: mechanismus
+    reason: "the one derivation of the obligation inventory, shared by the research runner and the gate research-handoff, so it travels with the gate (bead coding-harness-icw)"
   - prefix: scripts/check_interview_minimums.py
     rolle: mechanismus
     reason: "the check behind the gate interview-minimums — the gate file travels, so its script does; the day it exempts from comes from the repository's own record (ADR 0014)"
@@ -177,6 +186,9 @@ rules:
   - prefix: tests/test_check_criterion_ledger.py
     rolle: mechanismus
     reason: "builds its own trees and reads only files that travel; holds in the probe copy"
+  - prefix: tests/test_research_handoff.py
+    rolle: mechanismus
+    reason: "builds its own trees from fixture records and reads only files that travel; holds in the probe copy"
   - prefix: tests/test_check_interview_minimums.py
     rolle: mechanismus
     reason: "builds its own git repositories; the half that reads AGENTS.md skips where that file does not travel (ADR 0014)"

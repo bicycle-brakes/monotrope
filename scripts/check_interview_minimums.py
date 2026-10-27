@@ -203,11 +203,37 @@ def _spec_class_and_date(spec: Path) -> tuple[str, date | None]:
     return klass, spec_date
 
 
+# CommonMark fences, the rule check_criterion_ledger.py and check_question_context.py apply: a fenced
+# example is documentation, never a record to count (bead coding-harness-k2r).
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+
+
+def _unfenced(text: str) -> str:
+    """The text with every line inside a fenced code block, fences included, blanked out."""
+    lines = text.split("\n")
+    marker, length = "", 0
+    for i, line in enumerate(lines):
+        bare = line.rstrip("\r")  # a CRLF file: the fence is matched without its \r
+        if marker:
+            closed = _FENCE_CLOSE.match(bare)
+            if closed and closed.group(1)[0] == marker and len(closed.group(1)) >= length:
+                marker, length = "", 0
+            lines[i] = ""
+            continue
+        opened = _FENCE.match(bare)
+        # CommonMark: the info string of a backtick fence holds no backtick (tildes may).
+        if opened and not (opened.group(1)[0] == "`" and "`" in bare[opened.end() :]):
+            marker, length = opened.group(1)[0], len(opened.group(1))
+            lines[i] = ""
+    return "\n".join(lines)
+
+
 def _parse_records(text: str) -> tuple[list[tuple[str, dict[str, str]]], list[dict[str, str]]]:
-    """Interview records as (id, fields) in document order, and skip records."""
+    """Interview records as (id, fields) in document order, and skip records; fenced examples are not read."""
     records: list[tuple[str, dict[str, str]]] = []
     skips: list[dict[str, str]] = []
-    for block in re.split(r"^## ", text, flags=re.M)[1:]:
+    for block in re.split(r"^## ", _unfenced(text), flags=re.M)[1:]:
         heading = block.split("\n", 1)[0]
         body = block[len(heading) :]
         fields: dict[str, str] = {}
