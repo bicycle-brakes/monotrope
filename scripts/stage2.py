@@ -5701,9 +5701,11 @@ def restoration_parent_problem(root: Path, path: Path) -> str | None:
     return None
 
 
-def refuse_unsafe_recovery(root: Path, path: Path) -> None:
-    """Raise the restoration refusal when `path`'s parents would carry a recovery outside the worktree."""
+def refuse_unsafe_recovery(root: Path, path: Path, *, aliases: AliasBaseline | None = None) -> None:
+    """Refuse linked or replaced parents before recovery, including contained unchanged links."""
     problem = restoration_parent_problem(root, path)
+    if problem is None:
+        problem = changed_alias_problem(root, path.relative_to(root), aliases or ({}, {}))
     if problem is not None:
         raise RestorationRefused(f"restoration of {path.relative_to(root).as_posix()} is refused: its parent {problem}")
 
@@ -5719,79 +5721,51 @@ def alias_changed(path: Path, local: Path, aliases: AliasBaseline) -> bool:
             info = path.lstat()
             return (info.st_mtime_ns, info.st_size) != ignored[local]
         return True
-    # Git lists an ignored link as a file; a directory standing there now replaced it.
-    return before is not None or (local in ignored and path.is_dir())
+    # The ignored snapshot contains leaves, never ordinary directories. Any such baseline
+    # entry in a parent position is unsafe, including a link replaced by a file or removed.
+    return before is not None or local in ignored
 
 
 def changed_alias_problem(root: Path, relative: Path, aliases: AliasBaseline) -> str | None:
-    """Name the first changed alias ancestor of `relative`, following every link a parent passes through.
+    """Refuse any baseline/current link or non-directory in a destination's parent chain.
 
-    Each ancestor is resolved component by component; every component inside the worktree, the
-    links met on the way included, is compared with the baseline record. Nothing is simulated:
-    a changed alias ancestor alone makes the destination unsafe (spec, Terms; decisions.md, Q-2).
-    The leaf itself is never followed.
+    Missing ordinary directories remain recoverable. Baseline tracked links and ignored
+    leaves remain unsafe even when removed or replaced. Never follow a parent link: even
+    an unchanged contained link can escape after another member of the batch is restored.
+    The destination leaf is excluded, preserving its safe detachment behavior.
     """
-    canonical = root.resolve()
-    for depth in range(1, len(relative.parts)):
-        pending = list(relative.parts[:depth])
-        parent = canonical
-        hops = 0
+    parent = root
+    for part in relative.parts[:-1]:
+        parent /= part
+        local = parent.relative_to(root)
         try:
-            while pending:
-                part = pending.pop(0)
-                if part in ("", "."):
-                    continue
-                if part == "..":
-                    parent = parent.parent
-                    continue
-                parent /= part
-                # Links outside the worktree are followed too, so a chain that leaves and comes
-                # back cannot hide an attempt's link inside; only inside components are compared.
-                if parent.is_relative_to(canonical):
-                    local = parent.relative_to(canonical)
-                    if alias_changed(parent, local, aliases):
-                        return f"{local.as_posix()} is a link the attempt created or changed"
-                if not parent.is_symlink():
-                    continue
-                hops += 1
-                if hops > RESTORATION_PARENT_LINK_LIMIT:
-                    return f"{Path(*relative.parts[:depth]).as_posix()} cannot be resolved (too many links)"
-                target = parent.readlink()
-                if target.is_absolute():
-                    parent = Path(target.anchor)
-                    pending = [*target.parts[1:], *pending]
-                else:
-                    parent = parent.parent
-                    pending = [*target.parts, *pending]
+            if alias_changed(parent, local, aliases):
+                return f"{local.as_posix()} is a link the attempt created or changed"
+            if parent.is_symlink():
+                return f"{local.as_posix()} is a symbolic link (including unchanged baseline links)"
+            if parent.exists() and not parent.is_dir():
+                return f"{local.as_posix()} is no longer a directory"
         except (OSError, RuntimeError, ValueError):
-            return f"{Path(*relative.parts[:depth]).as_posix()} cannot be resolved"
+            return f"{local.as_posix()} cannot be resolved"
     return None
 
 
 def preflight_recovery(root: Path, destinations: Iterable[Path], *, aliases: AliasBaseline) -> None:
-    """Validate the whole batch before its first mutation: no unsafe parent, no changed alias ancestor."""
-    destinations = list(destinations)
+    """Validate the whole batch before mutation; all linked or replaced parents refuse."""
     for path in destinations:
-        refuse_unsafe_recovery(root, path)
-    for path in destinations:
-        relative = path.relative_to(root)
-        problem = changed_alias_problem(root, relative, aliases)
-        if problem is not None:
-            raise RestorationRefused(f"restoration of {relative.as_posix()} is refused: its parent {problem}")
+        refuse_unsafe_recovery(root, path, aliases=aliases)
 
 
 def restore_work_input(root: Path, path: Path, content: bytes) -> None:
-    """Restore an input, detaching aliases from the worktree outward.
+    """Restore an input beneath ordinary parents, detaching aliases only at the leaf.
 
     Raise RestorationRefused before any tree write if a parent escapes the worktree or cannot
-    be resolved; otherwise replace aliases before inspecting or restoring the input.
+    be resolved, is linked or replaced; otherwise detach the leaf before restoring the input.
     """
     refuse_unsafe_recovery(root, path)
     parent = root
     for part in path.relative_to(root).parts[:-1]:
         parent /= part
-        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
-            parent.unlink()
         parent.mkdir(exist_ok=True)
     replace = path.is_symlink() or not path.is_file()
     if not replace:

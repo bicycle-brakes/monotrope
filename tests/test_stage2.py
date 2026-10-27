@@ -14713,8 +14713,8 @@ def test_replaced_baseline_parent_link_refuses_cleanup(world: World, kept: bool)
     assert victim.read_bytes() == b"attempt ignored file\n"
 
 
-def test_unchanged_baseline_parent_links_stay_recoverable(world: World) -> None:
-    """Criterion 6: a tracked link the attempt left as it was, and an untouched ignored one, recover as before."""
+def test_unchanged_baseline_parent_links_refuse_recovery(world: World) -> None:
+    """Strict recovery: unchanged tracked and ignored parent links both refuse without mutation."""
     (world.root / "deep/data").mkdir(parents=True)
     (world.root / "deep/data/input.md").write_bytes(b"baseline bytes\n")
     (world.root / "tracked").symlink_to("deep/data", target_is_directory=True)
@@ -14727,7 +14727,10 @@ def test_unchanged_baseline_parent_links_stay_recoverable(world: World) -> None:
     baseline = git(world.root, "rev-parse", "HEAD")
     aliases = stage2.alias_baseline(world.root, baseline, stage2.ignored_snapshot(world.root))
     batch = [world.root / "tracked/input.md", world.root / "local/input.md"]
-    stage2.preflight_recovery(world.root, batch, aliases=aliases)
+    for destination in batch:
+        with pytest.raises(stage2.RestorationRefused, match="parent .*symbolic link"):
+            stage2.preflight_recovery(world.root, [destination], aliases=aliases)
+    assert (world.root / "deep/data/input.md").read_bytes() == b"baseline bytes\n"
     (world.root / "local").unlink()
     (world.root / "local").symlink_to("deep", target_is_directory=True)
     with pytest.raises(stage2.RestorationRefused, match="local is a link the attempt created or changed"):
@@ -15188,6 +15191,84 @@ def test_recovery_batch_refuses_attempt_parent_links_in_any_order(tmp_path: Path
     assert prompt.read_bytes() == b"prompt bytes\n"
 
 
+@pytest.mark.parametrize("baseline", ["tracked", "ignored", "attempt"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("boundary", ["batch", "direct"])
+def test_recovery_refuses_any_linked_parent_before_mutation(
+    tmp_path: Path, baseline: str, reverse: bool, boundary: str
+) -> None:
+    """F6-5: even unchanged contained links can escape after an earlier input is detached."""
+    root = tmp_path / "w"
+    (root / "deep/more/sub/changes/demo").mkdir(parents=True)
+    plans, prompts = root / "plans", root / "prompts"
+    plans.symlink_to("deep/more/sub", target_is_directory=True)
+    prompts.symlink_to("plans/../../..", target_is_directory=True)
+    spec, prompt = plans / "changes/demo/spec.md", prompts / "04-implement.md"
+    spec.write_bytes(b"attempt spec\n")
+    prompt.write_bytes(b"attempt prompt\n")
+    safe = root / "safe.md"
+    safe.write_bytes(b"safe attempt\n")
+    assert spec.parent.resolve().is_relative_to(root)
+    assert prompt.parent.resolve() == root
+    links = {Path("plans"): plans.readlink(), Path("prompts"): prompts.readlink()}
+    ignored = {path: ((root / path).lstat().st_mtime_ns, (root / path).lstat().st_size) for path in links}
+    aliases = (links if baseline == "tracked" else {}, ignored if baseline == "ignored" else {})
+    batch = [safe, *([prompt, spec] if reverse else [spec, prompt])]
+    before = {path: path.read_bytes() for path in batch}
+    refusal = None
+    try:
+        if boundary == "batch":
+            stage2.preflight_recovery(root, batch, aliases=aliases)
+        else:
+            stage2.restore_work_input(root, batch[1], b"trusted bytes\n")
+    except (stage2.RestorationRefused, OSError) as error:
+        refusal = error
+    # Assert before restoring anything else: the baseline must fail with an assertion,
+    # rather than an incidental I/O error after detaching the first parent link.
+    assert isinstance(refusal, stage2.RestorationRefused), "recovery did not refuse the linked parent"
+    assert re.search(r"restoration of (plans|prompts)/.*parent", str(refusal))
+    assert plans.readlink() == Path("deep/more/sub")
+    assert prompts.readlink() == Path("plans/../../..")
+    assert {path: path.read_bytes() for path in batch} == before
+
+
+@pytest.mark.parametrize("replacement", ["file", "directory", "missing"])
+def test_recovery_refuses_a_baseline_link_replaced_by_a_file(world: World, replacement: str) -> None:
+    """F6-6: an ignored baseline parent link must refuse even after it becomes a regular file."""
+    prompts = world.root / "prompts"
+    source = world.root / "prompt-source"
+    prompts.rename(source)
+    prompts.symlink_to("prompt-source", target_is_directory=True)
+    # Force the ignored-link snapshot case, without changing the tracked baseline.
+    (world.root / ".gitignore").write_text("prompts\n", encoding="utf-8")
+    ignored = stage2.ignored_snapshot(world.root)
+    assert Path("prompts") in ignored
+    aliases = ({}, ignored)
+    prompts.unlink()
+    if replacement == "file":
+        prompts.write_bytes(b"attempt replacement\n")
+    elif replacement == "directory":
+        prompts.mkdir()
+    safe = world.root / "safe.md"
+    safe.write_bytes(b"safe attempt\n")
+    refusal = None
+    try:
+        stage2.preflight_recovery(world.root, [safe, prompts / "04-implement.md"], aliases=aliases)
+    except (stage2.RestorationRefused, OSError) as error:
+        refusal = error
+    assert isinstance(refusal, stage2.RestorationRefused), "recovery accepted a replaced baseline parent link"
+    assert re.search(r"prompts/04-implement.md.*parent", str(refusal))
+    assert safe.read_bytes() == b"safe attempt\n"
+    assert not prompts.is_symlink()
+    if replacement == "file":
+        assert prompts.read_bytes() == b"attempt replacement\n"
+    elif replacement == "directory":
+        assert list(prompts.iterdir()) == []
+    else:
+        assert not prompts.exists()
+    assert (source / "04-implement.md").is_file()
+
+
 def test_recovery_refuses_a_chain_through_a_restored_findings_link(tmp_path: Path) -> None:
     """F6-4 under Q-2: a link through the findings alias refuses before findings or inputs are written."""
     root = tmp_path / "w"
@@ -15206,8 +15287,8 @@ def test_recovery_refuses_a_chain_through_a_restored_findings_link(tmp_path: Pat
     assert findings.is_symlink() and (root / "prompts").is_symlink()
 
 
-def test_recovery_follows_an_outside_link_back_to_an_attempt_link(world: World, tmp_path: Path) -> None:
-    """Q-2: a baseline link that leaves the worktree and returns through the attempt's link refuses."""
+def test_recovery_refuses_an_unchanged_link_returning_inside(world: World, tmp_path: Path) -> None:
+    """Strict recovery refuses the first link, including an unchanged link resolving back inside."""
     outside = tmp_path / "relay-outside"
     outside.mkdir()
     (world.root / "deep").mkdir()
@@ -15220,7 +15301,7 @@ def test_recovery_follows_an_outside_link_back_to_an_attempt_link(world: World, 
     (world.root / "evil").symlink_to("deep", target_is_directory=True)
     destination = world.root / "cache/input.md"
     assert destination.parent.resolve() == world.root / "deep"
-    with pytest.raises(stage2.RestorationRefused, match="evil is a link the attempt created or changed"):
+    with pytest.raises(stage2.RestorationRefused, match="cache is a symbolic link"):
         stage2.preflight_recovery(world.root, [destination], aliases=aliases)
 
 

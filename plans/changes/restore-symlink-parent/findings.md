@@ -822,8 +822,26 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5771–5795 | Unchanged baseline links can still cause partial recovery. With worktree `/w`, baseline links `plans -> deep/more/sub` and `prompts -> plans/../../..` initially resolve inside the worktree, and batch preflight accepts them. Restoring `plans/changes/demo/spec.md` detaches `plans` and writes trusted bytes; `prompts` then resolves to `/`, so restoring `prompts/04-implement.md` refuses after earlier mutations. Source-extracted in-memory execution reproduces this. Unlike the earlier attempt-created-link case, neither link was changed by the attempt. The batch must remain unwritten when its own restoration makes a later parent unsafe. [Acceptance criterion 1] | Codex | taken — test: tests/test_stage2.py::test_recovery_refuses_any_linked_parent_before_mutation (maintainer, 2026-10-27: the strict rule — refuse recovery before any mutation when any directory on the path of a restored file, at baseline or now, is a symbolic link or no longer the same kind of entry; leaf aliases keep their current behaviour; the structural fix is attempt isolation, coding-harness-s9r) | — |
-| F6-6 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5711–5723 | Replacing an ignored baseline parent link with a regular file bypasses the changed-alias guard. For an ignored baseline `prompts -> prompt-source`, an attempt replacing `prompts` with a regular file makes `alias_changed` return false: its non-link branch recognizes ignored replacements only when they are directories. Recovery consequently unlinks the replacement, creates a directory and restores `prompts/04-implement.md`, instead of refusing before mutation. Source-extracted in-memory execution confirms this behavior. A baseline link that is no longer the same link must refuse recovery, including replacement by a regular file. [Acceptance criterion 1] | Codex | taken — test: tests/test_stage2.py::test_recovery_refuses_a_baseline_link_replaced_by_a_file (maintainer, 2026-10-27: the strict rule — refuse recovery before any mutation when any directory on the path of a restored file, at baseline or now, is a symbolic link or no longer the same kind of entry; leaf aliases keep their current behaviour; the structural fix is attempt isolation, coding-harness-s9r) | — |
+| F6-5 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5771–5795 | Unchanged baseline links can still cause partial recovery. With worktree `/w`, baseline links `plans -> deep/more/sub` and `prompts -> plans/../../..` initially resolve inside the worktree, and batch preflight accepts them. Restoring `plans/changes/demo/spec.md` detaches `plans` and writes trusted bytes; `prompts` then resolves to `/`, so restoring `prompts/04-implement.md` refuses after earlier mutations. Source-extracted in-memory execution reproduces this. Unlike the earlier attempt-created-link case, neither link was changed by the attempt. The batch must remain unwritten when its own restoration makes a later parent unsafe. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_recovery_refuses_any_linked_parent_before_mutation | — |
+| F6-6 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5711–5723 | Replacing an ignored baseline parent link with a regular file bypasses the changed-alias guard. For an ignored baseline `prompts -> prompt-source`, an attempt replacing `prompts` with a regular file makes `alias_changed` return false: its non-link branch recognizes ignored replacements only when they are directories. Recovery consequently unlinks the replacement, creates a directory and restores `prompts/04-implement.md`, instead of refusing before mutation. Source-extracted in-memory execution confirms this behavior. A baseline link that is no longer the same link must refuse recovery, including replacement by a regular file. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_recovery_refuses_a_baseline_link_replaced_by_a_file | — |
 
 Phase 6 verdict: codex 01a17d07-19ba-7011-a888-7d211fe391fe, 2026-10-27
 Reviewer session: codex 01a17d07-19ba-7011-a888-7d211fe391fe — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2336 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +27 -53
+> - `tests/test_stage2.py` +78 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-5: tests/test_stage2.py::test_recovery_refuses_any_linked_parent_before_mutation: the call of `tests/test_stage2.py::test_recovery_refuses_any_linked_parent_before_mutation[batch-False-tracked]` failed with OSError, not an AssertionError
+> - F6-6: tests/test_stage2.py::test_recovery_refuses_a_baseline_link_replaced_by_a_file: the call of `tests/test_stage2.py::test_recovery_refuses_a_baseline_link_replaced_by_a_file[file]` failed with Failed, not an AssertionError
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/restore-symlink-parent/stage2/attempts/restore-symlink-parent/attempt-1-20261027T114539311403Z-5f209e4c.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 682 files, 2340 commits, 12 rules.
