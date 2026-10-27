@@ -866,3 +866,14 @@ Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 684 files, 2310 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 685 files, 2313 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:1014–1121 | With UTC today set to 2026-10-27, `prepare-explore` selects and probes DeepSeek V4.1 Flash, whose terms expire on 2026-10-31, but prints no expiry warning and saves none in its receipt. Reproduced with external calls and writes stubbed. Research preparation evaluates paid terms yet omits the required advance notice and durable warning evidence. [Acceptance criteria 4 and 10] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_every_paid_dispatch_rechecks_terms_at_one_point — repaired structurally (maintainer, 2026-10-27): the terms check and the advance warning move to the one function that sends every paid OpenCode Go call and to the one shared preparation step, so no caller (review round, retry, replacement, probe, research preparation or run) can omit them; the per-caller checks may stay for early messages (orchestrator, 2026-10-27) | — |
+
+Phase 6 verdict: codex 01a17c86-9c8b-7471-bc55-b5147c0948ab, 2026-10-27
+Reviewer session: codex 01a17c86-9c8b-7471-bc55-b5147c0948ab — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
