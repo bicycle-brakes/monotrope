@@ -1415,6 +1415,40 @@ read-only Codex session, resuming neither the repair nor an earlier thread.
 The sandbox is the CLI's configured `workspace-write`; the tests show the
 configured call, not the CLI's confinement.
 
+### When the same mechanism returns
+
+On 2026-10-27 three runner pull requests (#228, #250, #258) took 14 phase-6
+rounds: each re-check found the next case of a mechanism already repaired
+(link chains, dispatch paths, refusal before a write). It stopped only when
+one central check point or a fail-closed rule replaced the case repairs
+(maintainer, 2026-10-27; bead coding-harness-7av1).
+
+- **The second finding of one mechanism ends case-by-case repair.** When a
+  phase-6 re-check finds a further case of a mechanism a repair already
+  addressed, the orchestrator does not take it as another row. It proposes
+  a structural remedy to the maintainer — one choke point every path goes
+  through, a fail-closed rule, or a structural bead — and names the rounds
+  so far. The maintainer chooses; a case repair stays possible when the
+  maintainer says so.
+- **By day the session stops and asks**; at night the rule below applies.
+
+### Night runs
+
+A night run works its queue alone and sequentially; two standing rules
+(maintainer, 2026-10-26; bead coding-harness-yuw.4) keep it moving where a
+day session would ask:
+
+1. **Codex at capacity:** wait four minutes and retry once. If the retry
+   fails too, Sonnet 5.5 takes that one step — a repair through
+   `stage2.py repair <change> --stage2-off "<reason>"`, a phase-6 review or
+   re-check through a read-only Sonnet 5.5 sub-agent whose rows the
+   orchestrator records unchanged. The step carries a note with the reason,
+   and the run continues. The runner automates this once bead
+   coding-harness-m98e lands.
+2. **A further case of the same mechanism at a phase-6 re-check:** record
+   the finding, park that pull request and continue with the next queue
+   item; the maintainer decides it in the morning.
+
 ### Two columns for every stage-2 change
 
 Beyond the vocabulary of §2, a stage-2 change's `findings.md` carries two
