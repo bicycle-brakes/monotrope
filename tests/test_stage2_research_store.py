@@ -6,6 +6,7 @@ snapshot tests, and real short-lived subprocesses for the SIGKILL and lock contr
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -183,21 +184,49 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
         stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         env={**os.environ, "XDG_STATE_HOME": str(state_home)},
     )
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    run_id = None
     try:
-        assert pipe_line(proc) == "TERMINAL s1"
-        assert pipe_line(proc) == "LAUNCHED s2"
-        proc.send_signal(signal.SIGKILL)
+        # Wait for the durable records instead of readiness on two pipe reads:
+        # under the full suite's parallel load a read deadline on the driver's
+        # stdout measures the machine's scheduling, not the contract (bead
+        # coding-harness-jik). The bounded wait reports the driver's own
+        # diagnostics when it ends or takes too long. The second launch record
+        # proves an audited attempt - audit precedes the launcher - never that
+        # the child has started.
+        deadline = time.monotonic() + 120.0
+        while True:
+            run_ids = [run["run_id"] for run in store.runs()]
+            if run_ids:
+                results, interrupted = store.slot_records(run_ids[0])
+                if "s1" in results and "s2" in interrupted:
+                    run_id = run_ids[0]
+                    break
+            if proc.poll() is not None:
+                pytest.fail(f"driver exited before its records were durable:\n{proc.stderr.read()}")
+            if time.monotonic() >= deadline:
+                proc.kill()
+                proc.wait(timeout=10)
+                pytest.fail(f"first result and second launch record not durable within 120s:\n{proc.stderr.read()}")
+            time.sleep(0.05)
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGKILL)
         proc.wait(timeout=10)
     finally:
         if proc.poll() is None:
             proc.kill()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=10)
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                stream.close()
+        gate.parent.mkdir(parents=True, exist_ok=True)
         gate.write_text("release")  # the orphaned s2 child outlives its killed driver and now ends
-    store = m.Store(m.research_dir("example", REPO_ROOT))
-    (run,) = store.runs()
-    results, interrupted = store.slot_records(run["run_id"])
+    results, interrupted = store.slot_records(run_id)
     assert results["s1"]["outcome"] == "ok"
     assert results["s1"]["report"].strip() == "x"
     assert "s2" not in results

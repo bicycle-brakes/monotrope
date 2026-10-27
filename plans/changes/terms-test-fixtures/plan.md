@@ -85,8 +85,8 @@ tracker; a red or stopped run is not completion evidence.
 ## Criterion ledger
 
 - 1: not a test — phase-6 source review checks all six suites' normal builders delegate to the shared helper; any duplicate required-field baseline refutes it.
-- 2: not yet written tests/test_terms_fixtures.py::test_default_terms_pass_production_admission — removing a required default or producing a YAML-native expiry causes refusal.
-- 3: not yet written tests/test_terms_fixtures.py::test_terms_overrides_and_mutations_are_isolated — one call's overrides or deletion alter a later call's defaults.
+- 2: tests/test_terms_fixtures.py::test_default_terms_pass_production_admission — removing a required default or producing a YAML-native expiry causes refusal.
+- 3: tests/test_terms_fixtures.py::test_terms_overrides_and_mutations_are_isolated — one call's overrides or deletion alter a later call's defaults.
 - 4: tests/test_stage2.py::test_terms_problem_requires_an_iso_reading_date — a malformed reading is admitted or a valid reading refused.
 - 4: tests/test_stage2.py::test_paid_terms_require_a_retention_reading — a missing/unreadable retention field is admitted.
 - 4: tests/test_stage2_terms_expiry.py::test_paid_terms_require_a_usable_expiry — a missing/malformed expiry is admitted.
@@ -116,4 +116,12 @@ parallelism, other changes or the living spec; no other files are deleted.
 `scripts/validate_change_artefacts.py` is absent: report it as unavailable,
 never as a passing check. Index preparation and commits belong to the runner.
 
+## Runner route — 2026-10-27
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-27 20:16:22–21:05:35 UTC, 2952 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-27 21:06:19–21:30:44 UTC, 1465 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-27 21:30:56–21:55:20 UTC, 1464 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
