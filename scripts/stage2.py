@@ -1428,7 +1428,7 @@ _terms_warning_evidence: contextvars.ContextVar[list[str] | None] = contextvars.
 
 @contextlib.contextmanager
 def capture_terms_warnings() -> Iterator[list[str]]:
-    """Collect one preparation's warnings, restoring the caller's scope even on refusal."""
+    """Collect one operation's warnings, restoring the caller's scope even on refusal."""
     warnings: list[str] = []
     token = _terms_warning_evidence.set(warnings)
     try:
@@ -2311,7 +2311,12 @@ def run_swarm(
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error
 
-    threads = [threading.Thread(target=one, args=(member,), name=f"stage2-swarm-{member}") for member in members]
+    # Each worker has its own context, sharing this operation's warning list.
+    # New threads otherwise lose the dispatch evidence captured by the parent.
+    threads = [
+        threading.Thread(target=contextvars.copy_context().run, args=(one, member), name=f"stage2-swarm-{member}")
+        for member in members
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -6656,6 +6661,7 @@ def rate_limited(outcome: object) -> bool:
     )
 
 
+@capture_terms_warnings()
 def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
     """One round of phase 4b, until a round is clean (ADR 0021).
 
@@ -6712,7 +6718,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
     # Warn before admission and leak checks can refuse a call, including saved runs.
-    for warning in terms_warnings(endpoint_entry(root)):
+    for warning in retain_terms_warnings(terms_warnings(endpoint_entry(root))):
         print(f"review-loop: Notice: {warning}.", file=sys.stderr)
     receipt_taken = False
     if record is None and state is None:
@@ -6875,7 +6881,7 @@ def _review_round(
         # 2026-10-26): review_loop prints advance notice before admission checks.
         # Keep current warnings in the round notes too, so the record and the
         # released findings carry them. A warning neither admits nor refuses a member.
-        for warning in terms_warnings(endpoint_entry(root)):
+        for warning in retain_terms_warnings(terms_warnings(endpoint_entry(root))):
             notes.append(f"Notice: {warning}.")
         # Expiry once more, immediately before the launch: a member whose terms
         # expired after the batch checks above refuses the round here, without a
@@ -7022,6 +7028,12 @@ def _review_round(
                 f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
                 "the change needs a round of its own."
             )
+        # Include warnings emitted at dispatch, including retries/replacements
+        # that crossed UTC midnight after the round's earlier terms checks.
+        for warning in retain_terms_warnings([]):
+            note = f"Notice: {warning}."
+            if note not in notes:
+                notes.append(note)
         parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
         for block in reviewer_blocks:
             parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")

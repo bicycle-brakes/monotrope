@@ -618,12 +618,19 @@ class Run:
                     )
 
                 if entry["endpoint"] == stage2_availability.GO:
-                    return self.runner.dispatch_go(
-                        self.root,
-                        entry["model"],
-                        send,
-                        admission=free_admission if entry["role"] == "online_free" else None,
-                    )
+                    with self.runner.capture_terms_warnings() as warnings:
+                        try:
+                            return self.runner.dispatch_go(
+                                self.root,
+                                entry["model"],
+                                send,
+                                admission=free_admission if entry["role"] == "online_free" else None,
+                            )
+                        finally:
+                            # Each launch may run on a later UTC day than its
+                            # selection. Preserve precisely what dispatch printed.
+                            for warning in warnings:
+                                self.line(f"Terms warning: {warning}")
                 return send()
         except BaseException:
             self.scratch.pop(slot.slot_id, None)

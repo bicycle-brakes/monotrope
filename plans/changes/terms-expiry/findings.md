@@ -1051,7 +1051,38 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-6 | MINOR | SPEC | implementation | scripts/stage2.py:6878; scripts/stage2.py:7022 | When a review crosses midnight into the seven-day warning window, dispatch prints the new warning but the completed round omits it: round notes collect warnings only before dispatch. Reproduced with expiry 2026-11-04 and UTC advancing from 2026-10-27 to 2026-10-28 before the reviewer call. Preserve dispatch-time warnings in the round record so release retains them. [Acceptance criterion 10] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence — repaired at the one point: dispatch_go collects every warning it prints, and each caller (preparation receipt, review round record and its release, research run) writes the collected warnings into its own evidence, so no further caller can drop one (same class as F6-5, which the maintainer chose to repair on 2026-10-27; orchestrator, 2026-10-27) | — |
+| F6-6 | MINOR | SPEC | implementation | scripts/stage2.py:6878; scripts/stage2.py:7022 | When a review crosses midnight into the seven-day warning window, dispatch prints the new warning but the completed round omits it: round notes collect warnings only before dispatch. Reproduced with expiry 2026-11-04 and UTC advancing from 2026-10-27 to 2026-10-28 before the reviewer call. Preserve dispatch-time warnings in the round record so release retains them. [Acceptance criterion 10] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence | — |
 
 Phase 6 verdict: codex 01a17d2e-5583-7820-94d1-6bd8d6a952da, 2026-10-27
 Reviewer session: codex 01a17d2e-5583-7820-94d1-6bd8d6a952da — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 686 files, 2337 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +16 -4
+> - `scripts/stage2_research_run.py` +13 -6
+> - `tests/test_stage2_terms_expiry.py` +66 -11
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-expiry/stage2/attempts/terms-expiry/attempt-1-20261027T114748502882Z-fb5dab88.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 686 files, 2341 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-6: tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence: fixed-code proof: refs changed while the fixed-code proof ran
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-expiry/stage2/attempts/terms-expiry/attempt-2-20261027T114748502882Z-fb5dab88.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 686 files, 2343 commits, 12 rules.

@@ -43,8 +43,10 @@ from test_stage2 import (  # noqa: E402
 )
 from test_stage2 import world as stage2_world  # noqa: E402
 from test_stage2_availability import enable, receipt  # noqa: E402
+from test_stage2_swarm import sworld as research_world  # noqa: E402
 
 world = stage2_world
+sworld = research_world
 
 
 def set_terms(w: World, model: str, **changes: object) -> None:
@@ -577,13 +579,28 @@ def test_expiry_preserves_prior_admission_guards(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("preparation", ["loop", "research"])
-@pytest.mark.parametrize("expiry", ["2026-11-04", "2026-10-31"])
-def test_preparation_receipt_keeps_warnings_emitted_during_probes(
-    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], preparation: str, expiry: str
+def _check_dispatch_time_warning_evidence(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preparation: str,
+    expiry: str,
 ) -> None:
-    """Every warning printed before or during probing survives in that preparation's sealed receipt."""
-    if preparation == "research":
+    """Warnings first emitted at dispatch survive each caller, including midnight and changed day counts."""
+    world = request.getfixturevalue("sworld" if preparation == "research-run" else "world")
+    if preparation == "research-run":
+        world.complete()
+        prepare = world.run
+        model = "mimo-v2.6-pro"
+    elif preparation == "review":
+        world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+        world.script(pi=[{"stdout": rows(1)}] * 3)
+
+        def prepare():
+            return world.run("review-loop")
+
+        model = TEST_LADDER[0]
+    elif preparation == "research":
         from test_stage2_research_availability import Fixture
 
         fx = Fixture(world, monkeypatch)
@@ -609,7 +626,7 @@ def test_preparation_receipt_keeps_warnings_emitted_during_probes(
         if ident == model:
             day = dt.date(2026, 10, 28)
         result = dispatch(root, ident, send, *args, **kwargs)
-        # By receipt creation even this dispatch's warning is out of date:
+        # By evidence creation even this dispatch's warning is out of date:
         # recomputing only at the end cannot recover what was printed.
         day = dt.date(2026, 10, 29) if ident == model else day
         return result
@@ -625,10 +642,47 @@ def test_preparation_receipt_keeps_warnings_emitted_during_probes(
     days = (dt.date.fromisoformat(expiry) - dt.date(2026, 10, 28)).days
     warning = f"the data terms of {model} expire on {expiry} ({days} days left)"
     assert warning in emitted, "the synthetic probe did not print the midnight warning"
-    saved = read_receipt()
-    assert availability.verify(saved, saved["report_id"]), "warning evidence must be sealed"
-    assert saved["state"]["availability"]["terms_warnings"] == emitted
-    assert stage2.retain_terms_warnings([]) == [], "preparation leaked warning evidence into later operations"
+    if preparation == "research-run":
+        evidence = world.research.read_text(encoding="utf-8")
+        assert emitted and all(item in evidence for item in emitted), "research publication lost dispatch warnings"
+    elif preparation == "review":
+        evidence = world.record().read_text(encoding="utf-8")
+        assert emitted and all(item in evidence for item in emitted), "round lost dispatch warnings"
+        decide_record(world, status=FIXED)
+        world.write_findings(VERDICT)
+        assert world.run("release-loop") == 0
+        assert all(item in world.text() for item in emitted), "release lost dispatch warnings"
+    else:
+        saved = read_receipt()
+        assert availability.verify(saved, saved["report_id"]), "warning evidence must be sealed"
+        assert saved["state"]["availability"]["terms_warnings"] == emitted
+    assert stage2.retain_terms_warnings([]) == [], "caller leaked warning evidence into later operations"
+
+
+@pytest.mark.parametrize("preparation", ["loop", "research", "review", "research-run"])
+@pytest.mark.parametrize("expiry", ["2026-11-04", "2026-10-31"])
+def test_dispatch_time_warnings_reach_every_callers_evidence(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preparation: str,
+    expiry: str,
+) -> None:
+    """Dispatch warnings survive receipts, review rounds and release, and research publication."""
+    _check_dispatch_time_warning_evidence(request, monkeypatch, capsys, preparation, expiry)
+
+
+@pytest.mark.parametrize("preparation", ["loop", "research"])
+@pytest.mark.parametrize("expiry", ["2026-11-04", "2026-10-31"])
+def test_preparation_receipt_keeps_warnings_emitted_during_probes(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preparation: str,
+    expiry: str,
+) -> None:
+    """Keep the regression named by the prior preparation repair evidence."""
+    _check_dispatch_time_warning_evidence(request, monkeypatch, capsys, preparation, expiry)
 
 
 def test_expiry_warnings_survive_receipt_round_and_release(
@@ -840,6 +894,7 @@ def _check_paid_dispatch(world: World, monkeypatch: pytest.MonkeyPatch, capsys: 
         root=world.root,
         entries={"saved": entry},
         scratch={},
+        line=lambda _text: None,
         pi_command=lambda *_args: (["synthetic-pi"], world.root, {}),
     )
     slot = Slot("saved", availability.GO, True, (0,), 60, {}, "prompt")
