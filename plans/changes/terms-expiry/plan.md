@@ -48,7 +48,7 @@ this follows the phase-3 card, ledger and time-section form.
    Also cross midnight after the parent's batch validation; tool-free paid
    probes must still be checked as paid calls.
 2. `scripts/stage2.py` — add a small UTC-date seam for terms and a strict
-   `gilt_bis` parser reusing `DATE_ONLY`/calendar validation. Extend
+   `valid_until` parser reusing `DATE_ONLY`/calendar validation. Extend
    `terms_problem` without changing its return contract or existing checks;
    absent/malformed/expired dates return model-specific reasons. Keep
    expiry authoritative over prose and never infer/renew dates at runtime.
@@ -81,9 +81,9 @@ this follows the phase-3 card, ledger and time-section form.
    starts no terminal/transport; existing declaration and leak tests stand.
 7. `model-endpoints.yaml` — done by the orchestrator by hand before phase 4
    (the runner holds this file): every Go `modelle_terms` record carries a
-   quoted `gilt_bis` (non-DeepSeek: `gelesen` + 30 days, so 2026-11-06,
+   quoted `valid_until` (non-DeepSeek: `gelesen` + 30 days, so 2026-11-06,
    2026-11-16 or 2026-11-21); both DeepSeek records carry `gelesen:
-   "2026-10-25"`, `gilt_bis: "2026-10-31"` and the monthly-agreement
+   "2026-10-25"`, `valid_until: "2026-10-31"` and the monthly-agreement
    qualification. The implementation must not edit this file; tests that need
    other dates use synthetic declarations.
 8. `docs/WORKFLOW.md` — document required expiry, inclusive UTC cutoff,

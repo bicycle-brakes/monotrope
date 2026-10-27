@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-26
+updated: 2026-10-27
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1183,10 +1183,10 @@ Existing snapshots and legacy declarations without the rule retain the
 behavior below. A run with history cannot be reset by preparation.
 
 **Paid terms expire (ADR 0022, bead coding-harness-abra).** Every
-`modelle_terms` record of a paid model carries `gilt_bis`, a quoted ISO
+`modelle_terms` record of a paid model carries `valid_until`, a quoted ISO
 calendar date the reading is valid through; the following UTC day it is
 expired, and the judgement reads UTC, never the local calendar. A record
-without a usable `gilt_bis` — missing, not a quoted date, or an impossible
+without a usable `valid_until` — missing, not a quoted date, or an impossible
 calendar date — grants no admission, and the runner never infers, extends or
 renews a date at runtime. A refusal names the model, says whether the expiry
 is missing, invalid or passed, and names the recorded date once it has

@@ -419,7 +419,7 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
             record.pop("grund", None)
             record.update(
                 gelesen="2026-10-25",
-                gilt_bis="2099-01-01",
+                valid_until="2099-01-01",
                 quelle="synthetic dispatcher terms",
                 aufbewahrung="0 days",
                 training="Not used",

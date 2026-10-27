@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-26
 last_reviewed: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-abra
@@ -44,14 +44,14 @@ recorded terms reading is valid, with advance notice of expiry
 
 - **Reading:** one paid model's sourced retention/training record under
   `modelle_terms` in the OpenCode Go endpoint declaration.
-- **Expiry:** `gilt_bis`, a quoted ISO calendar date `YYYY-MM-DD`, valid
+- **Expiry:** `valid_until`, a quoted ISO calendar date `YYYY-MM-DD`, valid
   through that UTC day; the following UTC day is expired.
 - **Warning window:** zero through seven calendar days before expiry,
   inclusive; an expired reading is a skip, not an upcoming-expiry warning.
 
 ## Acceptance criteria
 
-1. If a paid model's reading has no usable `gilt_bis`, that reading grants
+1. If a paid model's reading has no usable `valid_until`, that reading grants
    no admission.
    *Refuted by:* a missing, empty, non-string, timestamp, malformed or
    impossible calendar date admits the model, or the runtime invents a date.
@@ -76,12 +76,12 @@ recorded terms reading is valid, with advance notice of expiry
    or interactive Go session dispatches the expired model; a refusal must
    not fabricate a completed or clean round or reset prior run history.
 6. When existing non-DeepSeek readings are migrated, every record receives
-   `gilt_bis` equal to its recorded `gelesen` plus 30 calendar days.
+   `valid_until` equal to its recorded `gelesen` plus 30 calendar days.
    *Refuted by:* a record, including an explicitly skipped record, is left
    undated, receives another deadline, or has its reading date advanced
    without a new source reading.
 7. When the two DeepSeek readings are migrated, both record the documented
-   2026-10-25 source re-read with `gilt_bis: "2026-10-31"`.
+   2026-10-25 source re-read with `valid_until: "2026-10-31"`.
    *Refuted by:* either model receives the generic 30-day deadline, lacks
    the source and re-read date, or loses the monthly-agreement qualification
    from its retention explanation.
@@ -143,7 +143,7 @@ recorded terms reading is valid, with advance notice of expiry
 None open. The five maintainer answers in `decisions.md` settle the scope;
 the ADR proposal remains subject to the decision pull request's merge.
 
-- [DETAIL] Preserve retention prose beside the binding `gilt_bis`; compare
+- [DETAIL] Preserve retention prose beside the binding `valid_until`; compare
   inclusive expiry against UTC, as already recorded in `decisions.md`.
 - [DETAIL] Reject unusable dates without inference, using the existing
   reading-date string convention; this keeps malformed input fail-closed.

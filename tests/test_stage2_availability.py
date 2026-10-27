@@ -315,8 +315,8 @@ def test_preparation_warns_inside_the_window_and_never_probes_an_expired_model(
     path = world.root / "model-endpoints.yaml"
     data = yaml.safe_load(path.read_text())
     entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
-    entry["modelle_terms"][TEST_LADDER[0]]["gilt_bis"] = "2026-10-28"
-    entry["modelle_terms"][TEST_LADDER[1]]["gilt_bis"] = "2026-10-25"
+    entry["modelle_terms"][TEST_LADDER[0]]["valid_until"] = "2026-10-28"
+    entry["modelle_terms"][TEST_LADDER[1]]["valid_until"] = "2026-10-25"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     enable(world)
     world.script(pi=[{"stdout": "OK"}] * 5)

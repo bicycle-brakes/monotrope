@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-26
 last_reviewed: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-abra
@@ -124,3 +124,5 @@ the prose would drop the source's own words from the record.
 A model is admitted on its `gilt_bis` day and skipped from the next day on,
 compared in UTC. The DeepSeek footnote says "valid through October 31",
 which includes that day.
+
+Note (2026-10-27): the field the answers above call gilt_bis is named valid_until in the code, the declaration and the ADR (maintainer: repository artefacts are English).

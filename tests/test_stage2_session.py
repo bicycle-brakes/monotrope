@@ -189,7 +189,7 @@ class World:
             {
                 model: {
                     "gelesen": "2026-10-07",
-                    "gilt_bis": "2099-01-01",
+                    "valid_until": "2099-01-01",
                     "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
                     "aufbewahrung": "0 days",
                     "training": "Not used",
@@ -392,7 +392,7 @@ def test_an_expired_go_model_starts_no_interactive_session(
     path = world.tree / "model-endpoints.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
-    entry["modelle_terms"][GO_BARE]["gilt_bis"] = "2026-10-30"
+    entry["modelle_terms"][GO_BARE]["valid_until"] = "2026-10-30"
     path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 31))
     assert world.run(model=GO_MODEL) == 2

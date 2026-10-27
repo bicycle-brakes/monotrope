@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-abra
@@ -64,9 +64,9 @@ Whether the asterisk was already on the Flash row on 2026-10-07 was not read.
 ## What the maintainer decided (2026-10-25, conversation)
 
 Night-run plan, answer 2 (`docs/research/2026-10-25-night-run-plan.md`):
-- add a machine-readable `gilt_bis: YYYY-MM-DD` to each `modelle_terms`
+- add a machine-readable `valid_until: YYYY-MM-DD` to each `modelle_terms`
   record;
-- `terms_problem` skips a model whose `gilt_bis` has passed and names it;
+- `terms_problem` skips a model whose `valid_until` has passed and names it;
 - re-read the DeepSeek terms now and record the result (this file).
 
 The change is a decision pull request: `model-endpoints.yaml` is
@@ -77,14 +77,14 @@ The change is a decision pull request: `model-endpoints.yaml` is
 This is a feature. It needs at least three answers. If it amends ADR 0021
 (decision 5, terms reading), it needs five. Not asked yet:
 
-1. Does `gilt_bis` replace the prose date in `aufbewahrung`, or stand beside
+1. Does `valid_until` replace the prose date in `aufbewahrung`, or stand beside
    it?
-2. Is `gilt_bis` required on every record, or only where the source names a
+2. Is `valid_until` required on every record, or only where the source names a
    validity date?
-3. On the day itself (`gilt_bis` = today), is the model still admitted?
+3. On the day itself (`valid_until` = today), is the model still admitted?
 4. Does an expired record skip the model silently, or does the availability
    report name it on every run?
-5. Should `deepseek-v4.1-flash` get `gilt_bis: 2026-10-31` in this change,
+5. Should `deepseek-v4.1-flash` get `valid_until: 2026-10-31` in this change,
    from today's reading?
 6. Does this amend ADR 0021, decision 5, or only the declaration format?
 

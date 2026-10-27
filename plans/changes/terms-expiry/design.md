@@ -2,7 +2,7 @@
 title: "Design — terms-expiry"
 category: design
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 status: draft
 implementation_status: none
 date: 2026-10-26
@@ -41,7 +41,7 @@ takes effect when the decision pull request is merged.
 ## Interfaces
 
 - `model-endpoints.yaml` → `scripts/stage2.py`: each paid `modelle_terms`
-  record supplies a quoted ISO `gilt_bis`; a missing or invalid value is a
+  record supplies a quoted ISO `valid_until`; a missing or invalid value is a
   refusal, never a request to calculate a runtime default.
 - `terms_problem` → ladder selection and `declaration_problem`: retain the
   `str | None` contract. A problem names model, missing/invalid/passed date
@@ -68,7 +68,7 @@ takes effect when the decision pull request is merged.
 
 ## Data model
 
-- `gilt_bis` is a required string field for admission, beside `gelesen`,
+- `valid_until` is a required string field for admission, beside `gelesen`,
   `quelle`, `aufbewahrung` and `training`. Reuse strict calendar validation
   and one UTC date seam; tests control that seam without freezing unrelated
   runner accounting or document-stamp clocks.

@@ -1370,18 +1370,18 @@ def terms_today() -> dt.date:
     return dt.datetime.now(dt.UTC).date()
 
 
-def _gilt_bis(record: dict) -> tuple[dt.date | None, str]:
-    """The record's parsed `gilt_bis`, or why it is not a usable end date.
+def _valid_until(record: dict) -> tuple[dt.date | None, str]:
+    """The record's parsed `valid_until`, or why it is not a usable end date.
 
     Only a quoted ISO calendar date counts (spec, terms): a missing value, a
     YAML-native date, a timestamp and a malformed or impossible calendar date
     are all refused, never repaired or inferred (fail closed).
     """
-    value = record.get("gilt_bis")
+    value = record.get("valid_until")
     if value is None:
-        return None, "gilt_bis is missing"
+        return None, "valid_until is missing"
     if not isinstance(value, str) or not DATE_ONLY.fullmatch(value) or not _valid_date(value):
-        return None, "gilt_bis is not a quoted ISO date YYYY-MM-DD"
+        return None, "valid_until is not a quoted ISO date YYYY-MM-DD"
     return dt.date.fromisoformat(value), ""
 
 
@@ -1389,7 +1389,7 @@ def terms_problem(entry: dict, model: str) -> str | None:
     """Why the paid model's data terms are unread or no longer valid, or None when it is admitted.
 
     A dated, sourced reading must explicitly rule out training and carry a
-    usable end date `gilt_bis`, valid through that UTC day; the following day
+    usable end date `valid_until`, valid through that UTC day; the following day
     the reading is expired (bead coding-harness-abra). A dated skip keeps the
     model out and names its reason for the handover (ADR 0021, decision 5).
     The declared dates rule: the runner never infers, extends or renews one.
@@ -1410,7 +1410,7 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
     if record.get("training") != "Not used":
         return f"the model {model} has disallowed or unread training terms (training must be Not used)"
-    expiry, why = _gilt_bis(record)
+    expiry, why = _valid_until(record)
     if expiry is None:
         return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
     if expiry < terms_today():
@@ -1432,7 +1432,7 @@ def terms_warnings(entry: dict) -> list[str]:
     today = terms_today()
     warnings = []
     for model in dict.fromkeys(str(model) for model in entry.get("modelle") or []):
-        expiry, _why = _gilt_bis(_terms(entry, model))
+        expiry, _why = _valid_until(_terms(entry, model))
         if expiry is None:
             continue
         days = (expiry - today).days

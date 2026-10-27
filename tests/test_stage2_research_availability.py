@@ -104,7 +104,7 @@ def terms_record(value, **more) -> dict:
         "gelesen": "2026-10-17",
         # Every terms reading carries its expiry (ADR 0022); far ahead, so the
         # fixture never expires under the live clock.
-        "gilt_bis": "2099-12-31",
+        "valid_until": "2099-12-31",
         "quelle": "privacy table of the Go page",
         "aufbewahrung": "0 days",
         "training": "Not used",

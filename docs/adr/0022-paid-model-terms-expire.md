@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-26
 last_reviewed: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: Claude Code, version: "GLM 5.3, 2026-10-26"}
@@ -62,7 +62,7 @@ Chosen option: "Declared expiry with advance warnings", because it enforces
 the recorded maintainer answers without granting approval by omission.
 
 1. Every paid `modelle_terms` reading requires a quoted ISO calendar date
-   `gilt_bis`. Missing, unusable or passed dates exclude and name the model;
+   `valid_until`. Missing, unusable or passed dates exclude and name the model;
    expiry diagnostics include the recorded date when one has passed.
 2. A reading is valid through its named UTC day and expires on the next
    UTC day. The date stands beside retention prose; prose is not parsed for

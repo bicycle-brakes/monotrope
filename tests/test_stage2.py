@@ -456,7 +456,7 @@ def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | No
     entry["modelle_terms"] = {
         model: {
             "gelesen": "2026-10-07",
-            "gilt_bis": "2099-01-01",
+            "valid_until": "2099-01-01",
             "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
             "aufbewahrung": "0 days",
             "training": "Not used",
@@ -486,7 +486,7 @@ def pin_the_ladder(target: Path) -> None:
     entry["modelle_terms"] = {
         model: {
             "gelesen": "2026-10-07",
-            "gilt_bis": "2099-01-01",
+            "valid_until": "2099-01-01",
             "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
             "aufbewahrung": "0 days",
             "training": "Not used",
@@ -13580,8 +13580,8 @@ def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
 @pytest.mark.parametrize(
     ("record", "admitted"),
     [
-        ({"gelesen": "2026-10-07", "quelle": "src", "gilt_bis": "2099-01-01"}, True),
-        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "", "gilt_bis": "2099-01-01"}, True),
+        ({"gelesen": "2026-10-07", "quelle": "src", "valid_until": "2099-01-01"}, True),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "", "valid_until": "2099-01-01"}, True),
         ({"gelesen": "soon", "quelle": "src"}, False),
         ({"gelesen": True, "quelle": "src"}, False),
         ({"gelesen": "2026-13-45", "quelle": "src"}, False),
@@ -13740,7 +13740,7 @@ def test_adding_a_paid_model_requires_only_configuration(tmp_path: Path, monkeyp
     entry["modelle_terms"]["future-paid-model"] = copy.deepcopy(entry["modelle_terms"][entry["modelle"][0]])
     # The copied record's date is the real declaration's; a synthetic one keeps
     # this test from aging into a skip.
-    entry["modelle_terms"]["future-paid-model"]["gilt_bis"] = "2099-01-01"
+    entry["modelle_terms"]["future-paid-model"]["valid_until"] = "2099-01-01"
     # Run the declaration and doctrine contracts with only the YAML changed.
     for rel in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
         target = tmp_path / rel
@@ -13813,7 +13813,7 @@ def test_released_reviewer_words_cannot_supply_a_snapshot(world: World) -> None:
 @pytest.mark.parametrize("retention", [None, "", "   ", True, 30])
 def test_paid_terms_require_a_retention_reading(retention: object) -> None:
     # The far-future expiry keeps the retention rule itself the refusal reason.
-    record = {"gelesen": "2026-10-17", "quelle": "src", "training": "Not used", "gilt_bis": "2099-01-01"}
+    record = {"gelesen": "2026-10-17", "quelle": "src", "training": "Not used", "valid_until": "2099-01-01"}
     if retention is not None:
         record["aufbewahrung"] = retention
     assert stage2.terms_problem({"modelle_terms": {"m": record}}, "m") is not None
@@ -13857,7 +13857,7 @@ def test_paid_terms_doctrine_records_the_retention_decision() -> None:
         "quelle": "src",
         "aufbewahrung": "30 days",
         "training": "Not used",
-        "gilt_bis": "2099-01-01",
+        "valid_until": "2099-01-01",
     }
     assert stage2.terms_problem({"modelle_terms": {"reader": record}}, "reader") is None
 
