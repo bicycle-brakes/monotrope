@@ -20,7 +20,7 @@ tags: [plan, tests, model-terms]
 ```text
 For you:     Shared synthetic terms prevent fixture drift, and the process-kill test keeps its evidence under parallel load.
 Done when:   The shared builder passes production admission, deliberate refusals still hold, and three consecutive full make verify runs pass.
-Appetite:    2 hours of phase 4, repairs included; a stop, not an estimate.
+Appetite:    4 hours of phase 4 in total, repairs included; a stop, not an estimate (maintainer, 2026-10-27).
 Not now:     Production rules, real terms, runner gates, general fixture consolidation or other timing tests.
 Pre-mortem:  suppose it failed: most likely because shared defaults conceal an intentionally missing field.
 Starts unless you say stop.
@@ -125,3 +125,8 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-27 20:16:22–21:05:35 UTC, 2952 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-27 21:06:19–21:30:44 UTC, 1465 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-27 21:30:56–21:55:20 UTC, 1464 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+
+Appetite stop, 2026-10-27 22:32 UTC: 5881 s of 7200 s used, the three full
+`make verify` runs of the Definition of Done (about 75 minutes) do not fit.
+Answer: continue — the maintainer named a new appetite of 4 hours in total
+(conversation, 2026-10-27).
