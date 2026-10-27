@@ -1840,6 +1840,10 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
                 continue
             if extra:
                 dropped[str(definition.get("id") or label)] = extra
+            ident = definition.get("id")
+            if not isinstance(ident, str) or not MODEL_ID.fullmatch(ident):
+                dropped.setdefault(str(ident) if ident is not None else label, ["not a plain model id"])
+                continue
             models.append(model)
         if models:
             providers[provider] = {"models": models}
@@ -1899,6 +1903,34 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         if stripped:
             listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
             print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
+        fresh = {
+            str(model["id"])
+            for model in store.get(rule["provider"], {}).get("models", [])
+            if isinstance(model, dict) and model.get("id")
+        }
+        invalid = {model for model in fresh if not MODEL_ID.fullmatch(model)}
+        if invalid:
+            # Pi restores its remote cache before listing. Use a separate, validated cache for
+            # that command; the fetched store and the snapshot remain unchanged as evidence.
+            listing_agent = scratch / "listing-agent"
+            listing_agent.mkdir()
+            (listing_agent / "settings.json").write_bytes((agent / "settings.json").read_bytes())
+            safe_store = {
+                provider: {
+                    **entry,
+                    "models": [
+                        model
+                        for model in entry.get("models", [])
+                        if isinstance(model, dict)
+                        and isinstance(model.get("id"), str)
+                        and MODEL_ID.fullmatch(model["id"])
+                    ],
+                }
+                for provider, entry in store.items()
+            }
+            (listing_agent / "models-store.json").write_text(json.dumps(safe_store), encoding="utf-8")
+            activate_overlay(listing_agent, safe_store)
+            env = {**env, "PI_CODING_AGENT_DIR": str(listing_agent)}
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -1907,16 +1939,13 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
             raise Refused(
                 f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
             ) from None
-        fresh = {
-            str(model["id"])
-            for model in store.get(rule["provider"], {}).get("models", [])
-            if isinstance(model, dict) and model.get("id")
-        }
     if listing.returncode != 0:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
     # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
-    dropped = free_drops(root, rule, catalog, fresh)
+    dropped = free_drops(
+        root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
+    )
     selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
     if dropped:
         print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
@@ -6937,13 +6966,15 @@ def _review_round(
             notes.append(f"{member} was asked again with the format reminder: the first answer was malformed")
             print(f"review-loop: {notes[-1]}", file=sys.stderr)
             malformed_blocks.append(
-                f"{member}'s first answer, which was not in the required format:\n\n{quote_reviewer(first.answer.strip())}"
+                f"From {member}:\n\n{member}'s first answer, which was not in the required format:\n\n"
+                f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(first.answer.strip())}"
             )
             answers.update(run_swarm(ctx, [member], {member: retry_prompt}, key, free=free, deadline=deadline))
             second = answers[member]
             if isinstance(second, MalformedAnswer):
                 malformed_blocks.append(
-                    f"{member}'s second answer, which was not in the required format:\n\n"
+                    f"From {member}:\n\n{member}'s second answer, which was not in the required format:\n\n"
+                    f"{NOT_ROWS_NOTE}\n\n"
                     f"{quote_reviewer(second.answer.strip())}"
                 )
 

@@ -14189,6 +14189,31 @@ def test_each_kept_block_names_its_member(world: World) -> None:
     assert "From beacon-2-free:" in kept and "> see note (beta)" in kept
 
 
+@pytest.mark.parametrize("second_malformed", [False, True])
+def test_every_retained_answer_block_carries_its_attribution(world: World, second_malformed: bool) -> None:
+    """Criterion 4: retries keep attribution, including when another member's prose comes first."""
+    first = "The first answer is prose."
+    second = "The second answer is prose."
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": first},
+            {"model": "beacon-2-free", "stdout": rows(1, "B") + "\nBeacon commentary."},
+            {"model": "acme-v1-free", "stdout": second if second_malformed else rows(1, "A")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text()
+    for ordinal, words in [("first", first), *([("second", second)] if second_malformed else [])]:
+        label = f"acme-v1-free's {ordinal} answer, which was not in the required format:"
+        assert f"From acme-v1-free:\n\n{label}\n\n{stage2.NOT_ROWS_NOTE}\n\n> {words}" in text
+        classified = stage2._record_lines(text)
+        assert (label, False) in classified
+        assert (f"> {words}", True) in classified
+    assert ("From beacon-2-free:", False) in stage2._record_lines(text)
+    assert ("> Beacon commentary.", True) in stage2._record_lines(text)
+    assert len(stage2.record_rows(text)) == (1 if second_malformed else 2)
+
+
 def test_every_secrets_value_is_scrubbed_from_loop_answers_and_errors(world: World, capsys) -> None:
     """Criterion 5 (DL-B-4): the GLM key, like the OpenCode key, never reaches the record or stderr."""
     world.script(
@@ -14231,10 +14256,17 @@ def test_a_short_value_of_a_credential_named_key_is_scrubbed(world: World, capsy
 
 
 def _child_alive(pid: int) -> bool:
+    # kill(pid, 0) works on macOS too; a missing /proc is not evidence of death.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
     try:
         state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
     except OSError:
-        return False
+        return True
     return state != "Z"
 
 
@@ -14272,7 +14304,7 @@ def test_an_interrupted_runner_kills_its_running_programs(world: World, monkeypa
         raise KeyboardInterrupt
 
     verb, started = _interrupting_verb(tmp_path, interrupt)
-    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    monkeypatch.setattr(stage2, "explore", verb)
     with pytest.raises(KeyboardInterrupt):
         world.run("explore")
     end = time.monotonic() + 5
@@ -14293,7 +14325,7 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
         time.sleep(5)
 
     verb, started = _interrupting_verb(tmp_path, terminate)
-    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    monkeypatch.setattr(stage2, "explore", verb)
     assert world.run("explore") == 143
     end = time.monotonic() + 5
     while _child_alive(started["pid"]) and time.monotonic() < end:
@@ -14335,6 +14367,35 @@ def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
         )
         == []
     )
+
+
+@pytest.mark.parametrize("invalid", ["bad id-free", "bad|id-free", "bad\tid-free"])
+def test_catalog_drops_an_invalid_id_before_listing(world: World, monkeypatch, capsys, invalid: str) -> None:
+    """Criterion 8: invalid overlay ids never reach Pi's listing, even with a recent remote cache."""
+    world.script(pi=[{"stdout": rows(1)}], pi_overlay=["acme-v1-free", invalid])
+    launch = stage2.launch
+
+    def listing(command, cwd, env, *args, **kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "--list-models" in command:
+            active = json.loads((agent / "models.json").read_text())
+            cached = json.loads((agent / "models-store.json").read_text())
+            for definitions in (active["providers"][stage2.OPENCODE]["models"], cached[stage2.OPENCODE]["models"]):
+                assert all(model["id"] != invalid for model in definitions), "invalid id reached Pi before listing"
+            return subprocess.CompletedProcess(
+                command, 0, "provider model context input output\nopencode-go acme-v1-free 128000 0 0\n", ""
+            )
+        return launch(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", listing)
+    assert world.run("review-loop") == 0
+    text = world.record().read_text()
+    state = stage2.read_state(text, "")
+    assert state["free"]["selected"] == ["acme-v1-free"]
+    assert state["free"]["dropped"][invalid] == "not a plain model id"
+    assert any(model["id"] == invalid for model in state["free"]["models_store"][stage2.OPENCODE]["models"])
+    assert stage2.dropped_notice({invalid: "not a plain model id"}) in capsys.readouterr().err
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
 
 
 def test_render_table_escapes_a_pipe_in_a_cell() -> None:
@@ -16159,7 +16220,7 @@ def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
         stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
 
     monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
-    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    monkeypatch.setattr(stage2, "explore", verb)
     start = time.monotonic()
     try:
         if interruption is KeyboardInterrupt:
@@ -16204,7 +16265,7 @@ def test_a_launch_after_the_interrupt_starts_no_program(world: World, monkeypatc
     def verb(*_args):
         raise KeyboardInterrupt
 
-    monkeypatch.setitem(stage2.VERBS, "explore", verb)
+    monkeypatch.setattr(stage2, "explore", verb)
     try:
         with pytest.raises(KeyboardInterrupt):
             world.run("explore")
