@@ -15,6 +15,15 @@ wants to resolve. These rules keep each one small enough to merge:
   (`git merge-tree --write-tree origin/main origin/<branch>`): one that
   merges cleanly gets `main` merged and pushed, one that conflicts is
   reported with its files and resolved while the conflict is small.
+- **Small enough to review.** A pull request that would change more than
+  about `<lines, default 800>` lines (generated files not counted) is cut
+  into slices, one pull request per slice, each with its own review.
+- **Merged when green, without waiting.** A pull request the agent may merge
+  itself is armed with `gh pr merge <n> --auto --merge --match-head-commit
+  <full sha>`, never `--admin`; a decision pull request never is. This is
+  safe only while the default branch's ruleset requires the CI check and an
+  up-to-date branch (`templates/repo-settings.md`). After a branch update the
+  head changes: re-arm with the new head.
 - **Asked about after `<working days, default 5>` working days.** An older
   pull request is put to the maintainer: finish, shrink or close.
 - **Few at once on a hot file.** At most `<number, default 3>` open pull
