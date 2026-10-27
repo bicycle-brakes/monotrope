@@ -1044,3 +1044,14 @@ Phase 6 verdict: codex 01a17cee-14ff-71f3-81f4-d46307f4625c, 2026-10-27
 Reviewer session: codex 01a17cee-14ff-71f3-81f4-d46307f4625c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 686 files, 2331 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 686 files, 2336 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MINOR | SPEC | implementation | scripts/stage2.py:6878; scripts/stage2.py:7022 | When a review crosses midnight into the seven-day warning window, dispatch prints the new warning but the completed round omits it: round notes collect warnings only before dispatch. Reproduced with expiry 2026-11-04 and UTC advancing from 2026-10-27 to 2026-10-28 before the reviewer call. Preserve dispatch-time warnings in the round record so release retains them. [Acceptance criterion 10] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence — repaired at the one point: dispatch_go collects every warning it prints, and each caller (preparation receipt, review round record and its release, research run) writes the collected warnings into its own evidence, so no further caller can drop one (same class as F6-5, which the maintainer chose to repair on 2026-10-27; orchestrator, 2026-10-27) | — |
+
+Phase 6 verdict: codex 01a17d2e-5583-7820-94d1-6bd8d6a952da, 2026-10-27
+Reviewer session: codex 01a17d2e-5583-7820-94d1-6bd8d6a952da — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
