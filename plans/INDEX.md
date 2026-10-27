@@ -248,6 +248,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-swarm/plan.md`](changes/research-swarm/plan.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/spec.md`](changes/research-swarm/spec.md) | draft | partial | 2026-10-18 | coding-harness-icw |
+| [`changes/restore-symlink-parent/decisions.md`](changes/restore-symlink-parent/decisions.md) | draft | partial | 2026-10-23 | coding-harness-10w |
+| [`changes/restore-symlink-parent/findings.md`](changes/restore-symlink-parent/findings.md) | draft | partial | 2026-10-23 | coding-harness-10w |
+| [`changes/restore-symlink-parent/plan.md`](changes/restore-symlink-parent/plan.md) | draft | partial | 2026-10-23 | coding-harness-10w |
+| [`changes/restore-symlink-parent/research.md`](changes/restore-symlink-parent/research.md) | draft | partial | 2026-10-23 | coding-harness-10w |
+| [`changes/restore-symlink-parent/spec.md`](changes/restore-symlink-parent/spec.md) | draft | partial | 2026-10-23 | coding-harness-10w |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
