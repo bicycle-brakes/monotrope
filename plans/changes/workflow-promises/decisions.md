@@ -1,3 +1,20 @@
+---
+title: "Decisions — workflow-promises"
+status: draft
+implementation_status: none
+date: 2026-10-27
+last_reviewed: 2026-10-27
+updated: 2026-10-27
+supersedes: null
+superseded_by: null
+bead: coding-harness-i0l
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-27"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [decisions, interview]
+---
+
 # workflow-promises — Decisions
 
 Class: bounded (one counted interview record or a reasoned skip owed). One
