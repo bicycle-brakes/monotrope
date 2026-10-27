@@ -8562,6 +8562,52 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     assert git(world.root, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("alias", ["symlink", "hardlink"])
+def test_repair_failed_attempt_detaches_findings_leaf_before_restore_and_append(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, alias: str
+) -> None:
+    """L10-1: failed repair recovery never writes findings through a leaf alias."""
+    baseline = repair_world(world)
+    outside = tmp_path / "outside-findings.md"
+    sentinel = b"external findings sentinel\n"
+    outside.write_bytes(sentinel)
+    script_repair(world, [repair_step(append={})] * 3)
+    real_codex, real_work = stage2.run_codex, stage2.run_work_model
+    real_append = stage2.append
+    snapshots = []
+    restored = []
+
+    def plant_alias(call, *args, **kwargs):
+        snapshots.append(world.findings.read_bytes())
+        answer = call(*args, **kwargs)
+        world.findings.unlink()
+        if alias == "symlink":
+            world.findings.symlink_to(outside)
+        else:
+            world.findings.hardlink_to(outside)
+        return answer
+
+    def append(path, text):
+        if path == world.findings and "planted verification failure" in text:
+            # Inspect the boundary before diagnostic persistence, not only the final bytes.
+            assert outside.read_bytes() == sentinel
+            assert not path.is_symlink() and path.stat().st_nlink == 1
+            assert path.read_bytes() == snapshots[-1]
+            restored.append(path.read_bytes())
+        return real_append(path, text)
+
+    monkeypatch.setattr(stage2, "run_codex", lambda *a, **kw: plant_alias(real_codex, *a, **kw))
+    monkeypatch.setattr(stage2, "run_work_model", lambda *a, **kw: plant_alias(real_work, *a, **kw))
+    monkeypatch.setattr(stage2, "append", append)
+    monkeypatch.setattr(stage2, "verify_attempt", lambda *_args, **_kwargs: ["planted verification failure"])
+    assert world.run("repair") == 1
+    assert len(restored) == 3
+    assert outside.read_bytes() == sentinel
+    assert not world.findings.is_symlink() and world.findings.stat().st_nlink == 1
+    assert "planted verification failure" in world.text()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 def test_repair_retry_restores_aliased_and_directory_inputs_without_following(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -9168,10 +9214,16 @@ def test_runner_time_includes_postgate_credential_rejection(world: World, monkey
 
 
 def test_runner_retry_replaces_parent_alias_without_following(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """F-4: byte-identical inputs through a parent alias must not receive restoration writes."""
+    """F-4, and the decided stop (bead coding-harness-10w): a parent alias is never replaced.
+
+    The retry recovery the old expectation wanted - unlink the alias, rebuild the directory, write
+    the trusted bytes - is refused: the run ends as a refusal, the alias and the external directory
+    stand as the model left them, and no entry or retry follows.
+    """
     FakeClock(monkeypatch, UTC_START)
+    head = git(world.root, "rev-parse", "HEAD")
     target = tmp_path / "external-change"
     real_model = stage2.run_work_model
     original: dict[str, bytes] = {}
@@ -9183,17 +9235,340 @@ def test_runner_retry_replaces_parent_alias_without_following(
             original.update({p.name: p.read_bytes() for p in target.iterdir() if p.is_file()})
             shutil.rmtree(world.plan.parent)
             world.plan.parent.symlink_to(target, target_is_directory=True)
-        else:
-            assert not world.plan.parent.is_symlink()
-            assert "rejected" in runner_entries(world.plan)[0]
         return answer
 
     monkeypatch.setattr(stage2, "run_work_model", model)
-    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "green\n"}] * 2)
-    assert world.run("implement") == 0
+    _no_checkpoint(monkeypatch)
+    # The second call and make stand in the script to prove neither ever runs: the retry is refused.
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}]
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
     assert {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()} == original
-    first, second = runner_entries(world.plan)
-    assert "rejected" in first and "accepted" in second
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("kind", ["absolute", "relative", "missing", "sibling", "nested"])
+def test_restore_work_input_refuses_external_parent_without_writes(world: World, tmp_path: Path, kind: str) -> None:
+    """Criterion 1. Planted fault: recovery removes the parent alias or alters an external sentinel."""
+    outside = tmp_path / "outside-recovery"
+    outside.mkdir()
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_bytes(b"sentinel\n")
+    if kind == "sibling":
+        # A target whose name shares the worktree's string prefix: containment by prefix would pass it.
+        target = tmp_path / f"{world.root.name}-ext"
+        target.mkdir()
+    elif kind == "missing":
+        target = tmp_path / "gone-outside"
+    else:
+        target = outside
+    demo = world.root / "plans" / "changes" / "demo"
+    aliased = demo if kind != "nested" else demo / "deep"
+    if kind != "nested":
+        shutil.rmtree(demo)
+    if kind == "relative":
+        aliased.symlink_to(os.path.relpath(target, aliased.parent), target_is_directory=True)
+    else:
+        aliased.symlink_to(target, target_is_directory=True)
+    destination = aliased / "plan.md"
+
+    with pytest.raises(stage2.RestorationRefused) as expected:
+        stage2.restore_work_input(world.root, destination, b"trusted bytes\n")
+    message = str(expected.value)
+    assert destination.relative_to(world.root).as_posix() in message
+    assert "escapes the worktree" in message
+    assert isinstance(expected.value, stage2.Refused)
+    assert aliased.is_symlink()
+    if kind != "missing":
+        assert sentinel.read_bytes() == b"sentinel\n"
+        assert not (target / "plan.md").exists()
+
+
+@pytest.mark.parametrize("linked_parent", [False, True])
+def test_restore_parent_symlink_inspection_error_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, linked_parent: bool
+) -> None:
+    """A failed manual-chain inspection refuses recovery before touching the destination."""
+    root = tmp_path / "worktree"
+    root.mkdir()
+    target = root / "target"
+    target.mkdir()
+    parent = root / "parent"
+    if linked_parent:
+        parent.symlink_to("target", target_is_directory=True)
+    else:
+        parent.mkdir()
+    destination = parent / "input.md"
+    destination.write_bytes(b"unchanged\n")
+    real_is_symlink = Path.is_symlink
+    inspections = 0
+
+    def is_symlink(path: Path) -> bool:
+        nonlocal inspections
+        if path == (target if linked_parent else parent):
+            inspections += 1
+            # For an ordinary parent, let the initial ancestor check succeed;
+            # fail only when the manual chain inspects it again.
+            if linked_parent or inspections == 2:
+                raise OSError("ancestor inspection failed")
+        return real_is_symlink(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "is_symlink", is_symlink)
+        with pytest.raises(Exception) as refused:
+            stage2.restore_work_input(root, destination, b"replacement\n")
+        assert isinstance(refused.value, stage2.RestorationRefused)
+        assert re.search("parent/input.md.*parent.*cannot be resolved", str(refused.value))
+
+    assert destination.read_bytes() == b"unchanged\n"
+    assert parent.is_symlink() == linked_parent
+    if linked_parent:
+        assert parent.readlink() == Path("target")
+
+
+def test_restore_parent_resolution_failure_stops_without_writes(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a loop or resolution error permits mutation, fallback or an unnamed traceback."""
+    demo = world.root / "plans" / "changes" / "demo"
+    # A loop inside the change folder: resolving `demo/a` walks `a -> b -> a` and must refuse, named.
+    (demo / "a").symlink_to("b")
+    (demo / "b").symlink_to("a")
+    with pytest.raises(stage2.RestorationRefused) as expected:
+        stage2.restore_work_input(world.root, demo / "a" / "input.md", b"trusted bytes\n")
+    message = str(expected.value)
+    assert "plans/changes/demo/a/input.md" in message and "cannot be resolved" in message
+    assert isinstance(expected.value, stage2.Refused)
+    assert (demo / "a").is_symlink() and (demo / "b").is_symlink()
+    assert not (demo / "a").exists()
+    (demo / "a").unlink()
+    (demo / "b").unlink()
+
+    # The same stop at run level: a self-linked `plans` makes every input's parent chain
+    # unresolvable, and the run ends as the named refusal without a write or a checkpoint.
+    head = git(world.root, "rev-parse", "HEAD")
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        shutil.rmtree(world.root / "plans")
+        (world.root / "plans").symlink_to("plans", target_is_directory=True)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "cannot be resolved" in err
+    assert (world.root / "plans").is_symlink()
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("level", ["unit", "run"])
+def test_restore_baseline_refuses_external_parents_before_mutation(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], level: str
+) -> None:
+    """Criterion 1. Planted fault: Git rollback or ignored cleanup mutates before checking every target."""
+    outside = tmp_path / "outside-baseline"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("sentinel\n", encoding="utf-8")
+    deep = world.root / "src" / "deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("kept\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a tracked file below a parent that later escapes")
+
+    def escape() -> None:
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+
+    if level == "unit":
+        escape()
+        commands: list[tuple[str, ...]] = []
+        real_git_output = stage2._git_output
+
+        def git_output(root, *args, **kwargs):
+            commands.append(args)
+            return real_git_output(root, *args, **kwargs)
+
+        monkeypatch.setattr(stage2, "_git_output", git_output)
+        with pytest.raises(stage2.RestorationRefused) as expected:
+            stage2.restore_baseline(world.root, git(world.root, "rev-parse", "HEAD"), set())
+        message = str(expected.value)
+        assert "src/deep/keep.txt" in message and "escapes the worktree" in message
+        assert not any(args and args[0] in ("restore", "clean") for args in commands)
+        assert deep.is_symlink() and (outside / "keep.txt").read_text(encoding="utf-8") == "sentinel\n"
+        return
+
+    head = git(world.root, "rev-parse", "HEAD")
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        try:
+            # A failed call is exactly the case whose baseline recovery must stand guarded, so the
+            # escape is planted on the failure path too.
+            return real_model(*args, **kwargs)
+        finally:
+            escape()
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
+    # The refusal still stops recovery, while the failed call retains its own exit code.
+    assert world.run("implement") == 1
+    err = capsys.readouterr().err
+    assert "refused:" in err and "src/deep/keep.txt" in err and "escapes the worktree" in err
+    assert "claude call failed: exit 1 (boom)" in err
+    assert deep.is_symlink() and (outside / "keep.txt").read_text(encoding="utf-8") == "sentinel\n"
+    assert (world.root / "src/half.py").exists(), "the failed-call recovery ran against the refusal"
+    assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+def test_runner_restore_preflights_all_destinations(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Planted fault: a safe earlier input or plan is written before an unsafe later input is checked."""
+    head = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "outside-prompts"
+    outside.mkdir()
+    sentinel = outside / "sentinel.md"
+    sentinel.write_bytes(b"sentinel\n")
+    spec_before = (world.root / "plans/changes/demo/spec.md").read_bytes()
+    real_model, real_restore = stage2.run_work_model, stage2.restore_work_input
+    restored: list[Path] = []
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.rmtree(world.root / "prompts")
+            (world.root / "prompts").symlink_to(outside, target_is_directory=True)
+        return answer
+
+    def restore(root, path, content):
+        restored.append(path)
+        return real_restore(root, path, content)
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    world.script(
+        claude=[{"stdout": "one", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "two"}],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    # The scan skips unsafe paths; only the recovery that would write there refuses.
+    assert "refused:" in err and "restoration of prompts/04-implement.md" in err and "escapes the worktree" in err
+    assert restored == [], "a safe batch destination was restored before the unsafe one was checked"
+    assert (world.root / "plans/changes/demo/spec.md").read_bytes() == spec_before
+    assert runner_entries(world.plan) == []
+    assert "Attempt 1 (" not in world.text(), "the diagnostics were written against the refusal"
+    assert (world.root / "prompts").is_symlink() and sentinel.read_bytes() == b"sentinel\n"
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+def test_runner_parent_escape_stops_without_fallback(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criteria 2 and 3. Planted fault: another model, an ordinary failure exit or a checkpoint follows the
+    unsafe recovery, or stderr omits the destination or the outside-parent refusal reason."""
+    FakeClock(monkeypatch, UTC_START)
+    head = git(world.root, "rev-parse", "HEAD")
+    target = tmp_path / "outside-demo"
+    real_model = stage2.run_work_model
+    external: dict[str, bytes] = {}
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.copytree(world.plan.parent, target)
+            external.update({p.name: p.read_bytes() for p in target.iterdir()})
+            shutil.rmtree(world.plan.parent)
+            world.plan.parent.symlink_to(target, target_is_directory=True)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(
+        claude=[{"stdout": "one", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "red\n", "exit": 1}] * 3,
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == external
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("level", ["persist", "run"])
+@pytest.mark.parametrize("retry", [False, True], ids=["direct", "retry"])
+def test_runner_restore_refusal_bypasses_finalization(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    level: str,
+    retry: bool,
+) -> None:
+    """Criterion 5. Planted fault: an enclosing handler logs time, restores findings or saves the attempt after refusal."""
+    target = tmp_path / "outside-plan-dir"
+    shutil.copytree(world.plan.parent, target)
+    external = {p.name: p.read_bytes() for p in target.iterdir()}
+
+    def alias_demo() -> None:
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(target, target_is_directory=True)
+
+    if level == "persist":
+        alias_demo()
+        prior = world.plan.read_text(encoding="utf-8")
+        entry = "completed rejected span · measured by the runner"
+        with pytest.raises(stage2.RestorationRefused) as expected:
+            stage2.persist_time_entry(
+                world.root,
+                world.plan,
+                entry,
+                prior,
+                {world.plan: prior.encode("utf-8")},
+                accepted=False,
+                retry=retry,
+                original=stage2.Refused("early refusal"),
+            )
+        assert isinstance(expected.value, stage2.Refused)
+    else:
+        head = git(world.root, "rev-parse", "HEAD")
+        real_model = stage2.run_work_model
+
+        def model(*args, **kwargs):
+            answer = real_model(*args, **kwargs)
+            alias_demo()
+            return answer
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+        world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+        assert world.run("implement") == 2
+        err = capsys.readouterr().err
+        assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+        assert len(world.calls("claude")) == 1
+        assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == external
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
 
 
 @pytest.mark.parametrize("final_attempt", [False, True])
@@ -9607,9 +9982,13 @@ def test_runner_early_rejection_span_reaches_refusing_check(world: World, monkey
 
 @pytest.mark.parametrize("kind", ["deleted", "unreadable", "alias", "parent-alias"])
 def test_runner_early_refusal_recovers_time_destination_safely(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], kind: str
 ) -> None:
-    """Criterion 5. Planted fault: an early refusal loses the entry on a broken destination, or writes through it."""
+    """Criterion 5. Planted fault: an early refusal loses the entry on a broken destination, or writes through it.
+
+    The parent-alias case is the decided stop (bead coding-harness-10w): the recovery is refused
+    unwritten, the run ends as a refusal naming the destination, and no entry is written anywhere.
+    """
     FakeClock(monkeypatch, UTC_START)
     outside = tmp_path / "outside-plan.md"
     outside_dir = tmp_path / "outside-change"
@@ -9638,15 +10017,24 @@ def test_runner_early_refusal_recovers_time_destination_safely(
     monkeypatch.setattr(stage2, "run_work_model", model)
     _no_checkpoint(monkeypatch)
     assert world.run("implement") == 2
-    (entry,) = runner_entries(world.plan)
-    assert "rejected" in entry and "attempt 1 · route flash" in entry
-    assert b"title: Plan" in world.plan.read_bytes()
-    assert not world.plan.is_symlink() and world.plan.parent.is_dir() and not world.plan.parent.is_symlink()
+    err = capsys.readouterr().err
+    if kind == "parent-alias":
+        assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+        assert world.plan.parent.is_symlink()
+        assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
+        assert runner_entries(world.plan) == []
+    else:
+        (entry,) = runner_entries(world.plan)
+        assert "rejected" in entry and "attempt 1 · route flash" in entry
+        assert b"title: Plan" in world.plan.read_bytes()
+        assert not world.plan.is_symlink() and world.plan.parent.is_dir() and not world.plan.parent.is_symlink()
     if kind == "alias":
         assert outside.read_bytes() == b"untouched\n"
     if kind == "parent-alias":
-        assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
-    assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+        assert "was removed (src/app.py)" in err
+        assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+    else:
+        assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
     assert len(world.calls("claude")) == 1
 
 
@@ -9852,8 +10240,11 @@ def test_runner_terminal_failure_survives_failed_log_write(
     assert len(world.calls("claude")) == 1
 
 
-def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """F-3: Python 3.12 resolve raises RuntimeError on a loop; detach it and preserve the refusal."""
+def test_runner_early_refusal_stops_on_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-3, and the decided stop (bead coding-harness-10w): persisting the early refusal's entry
+    meets a self-linked plan parent, so the restoration refusal propagates unwritten - the link
+    stands, no attempt is saved and no entry is written, with the original refusal kept as cause.
+    """
     FakeClock(monkeypatch, UTC_START)
     world.script(claude=[{"stdout": "done"}])
     real_model = stage2.run_work_model
@@ -9871,12 +10262,13 @@ def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypa
     monkeypatch.setattr(stage2, "run_work_model", model)
     monkeypatch.setattr(stage2, "remove_changed_credential", scan)
     _no_checkpoint(monkeypatch)
-    with pytest.raises((stage2.Refused, RuntimeError, stage2.CallFailed)) as caught:
+    with pytest.raises(stage2.RestorationRefused) as caught:
         stage2.implement(world.root, "demo")
-    assert caught.value is refusal
-    (entry,) = runner_entries(world.plan)
-    assert "rejected" in entry and "attempt 1 · route flash" in entry
-    assert not world.plan.parent.is_symlink()
+    assert "plans/changes/demo" in str(caught.value) and "cannot be resolved" in str(caught.value)
+    assert caught.value.__context__ is refusal, "the original refusal was dropped silently"
+    assert world.plan.parent.is_symlink()
+    assert world.plan.parent.readlink() == Path(world.plan.parent.name)
+    assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
     assert len(world.calls("claude")) == 1
 
 
@@ -14094,6 +14486,915 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+@pytest.mark.parametrize("verb,stop", [("implement", "denylist"), ("repair", "denylist"), ("repair", "moved")])
+@pytest.mark.parametrize("unsafe", ["prompts", "findings"])
+def test_runner_early_exit_preflights_recovery_batch(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    verb: str,
+    stop: str,
+    unsafe: str,
+) -> None:
+    """L2-1/2/5: early exits must check the entire batch before findings or time writes."""
+    if verb == "repair":
+        repair_world(world)
+    else:
+        world.script(claude=[{"stdout": "done"}])
+    outside = tmp_path / "escaped-inputs"
+    parent = world.root / "prompts" if unsafe == "prompts" else world.plan.parent
+    escaped = False
+    snapshot = {}
+    plan_before = b""
+    findings_before = b""
+    real_launch, real_git = stage2.launch, stage2._git_output
+    real_write_text, real_write_bytes = Path.write_text, Path.write_bytes
+    writes: list[Path] = []
+
+    def write_text(path, *args, **kwargs):
+        if escaped and path.is_relative_to(world.root):
+            writes.append(path)
+        return real_write_text(path, *args, **kwargs)
+
+    def write_bytes(path, *args, **kwargs):
+        if escaped and path.is_relative_to(world.root):
+            writes.append(path)
+        return real_write_bytes(path, *args, **kwargs)
+
+    def escape():
+        nonlocal escaped, plan_before, findings_before
+        plan_before, findings_before = world.plan.read_bytes(), world.findings.read_bytes()
+        shutil.copytree(parent, outside)
+        snapshot.update({p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()})
+        shutil.rmtree(parent)
+        parent.symlink_to(outside, target_is_directory=True)
+        escaped = True
+
+    def launch(command, *args, **kwargs):
+        result = real_launch(command, *args, **kwargs)
+        if stop == "moved" and command[0] == "codex":
+            escape()
+        return result
+
+    def git_output(root, *args, **kwargs):
+        if stop == "moved" and escaped and args == ("rev-parse", "HEAD"):
+            return "f" * 40
+        return real_git(root, *args, **kwargs)
+
+    def verify(*_args, **_kwargs):
+        escape()
+        raise stage2.Refused("denylist blocked verification")
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(Path, "write_text", write_text)
+    monkeypatch.setattr(Path, "write_bytes", write_bytes)
+    _no_checkpoint(monkeypatch)
+    assert world.run(verb) == 2
+    error = capsys.readouterr().err
+    assert "restoration of" in error and "escapes the worktree" in error
+    assert ("prompts/04-" if unsafe == "prompts" else "plans/changes/demo/") in error
+    assert parent.is_symlink()
+    assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshot
+    assert world.plan.read_bytes() == plan_before
+    assert world.findings.read_bytes() == findings_before
+    assert writes == [], "even same-byte findings restoration must wait for the batch preflight"
+    assert len(repair_calls(world)) == 1
+
+
+@pytest.mark.parametrize("contained", [False, True], ids=["escaping", "contained-chain"])
+def test_baseline_cleanup_preflights_created_ignored_destination(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    contained: bool,
+) -> None:
+    """L2-3: isolate ignored-created cleanup, including a contained relative-chain control."""
+    outside = tmp_path / "ignored-outside"
+    outside.mkdir()
+    sentinel = outside / "new.txt"
+    sentinel.write_bytes(b"attempt-created ignored file\n")
+    if contained:
+        (world.root / "deep/sub").mkdir(parents=True)
+        (world.root / "a").symlink_to("deep/sub", target_is_directory=True)
+        (world.root / "deep/sub/x").symlink_to("../..", target_is_directory=True)
+        parent = world.root / "a/x/cache"
+        parent.mkdir()
+        (parent / "new.txt").write_bytes(b"attempt-created ignored file\n")
+    else:
+        parent = world.root / "cache"
+        parent.symlink_to(outside, target_is_directory=True)
+    relative = (parent / "new.txt").relative_to(world.root)
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_a, **_kw: set())
+    monkeypatch.setattr(stage2, "ignored_snapshot", lambda *_a: {relative: (1, 1)})
+    commands = []
+
+    def git_output(_root, *args, **_kwargs):
+        commands.append(args)
+        return ""
+
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    if contained:
+        # Q-2: the attempt's own links in the parent chain refuse the batch, contained or not.
+        with pytest.raises(stage2.RestorationRefused, match="a/x/cache/new.txt.*a is a link the attempt created"):
+            stage2.restore_baseline(world.root, "baseline", set(), ignored_before={})
+        assert (parent / "new.txt").exists()
+        assert (world.root / "a").is_symlink()
+    else:
+        with pytest.raises(stage2.RestorationRefused, match="cache/new.txt.*escapes the worktree"):
+            stage2.restore_baseline(world.root, "baseline", set(), ignored_before={})
+        assert parent.is_symlink()
+    assert not any(args[0] in ("restore", "clean") for args in commands), "rollback started before the preflight"
+    assert sentinel.read_bytes() == b"attempt-created ignored file\n"
+
+
+@pytest.mark.parametrize("level", ["unit", "run"])
+@pytest.mark.parametrize("chain", [False, True], ids=["direct", "baseline-chain"])
+def test_baseline_cleanup_refuses_reinstated_external_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    level: str,
+    chain: bool,
+) -> None:
+    """F6-1: rollback must not reinstate an escaping parent before ignored cleanup."""
+    clean_scan = leakcheck.check("demo", leakcheck.default_denylist(), world.root, [])
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "victim.txt"
+    sentinel.write_bytes(b"external sentinel\n")
+    cache = world.root / "cache"
+    cache.symlink_to("relay" if chain else "../outside", target_is_directory=True)
+    if chain:
+        (world.root / "relay").symlink_to("../outside", target_is_directory=True)
+    world.findings.write_text("# Findings\n", encoding="utf-8")
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a baseline parent alias")
+    head = git(world.root, "rev-parse", "HEAD")
+    findings_before = world.findings.read_bytes()
+    plan_before = world.plan.read_bytes()
+
+    def plant() -> None:
+        nonlocal findings_before, plan_before
+        findings_before = world.findings.read_bytes()
+        plan_before = world.plan.read_bytes()
+        cache.unlink()
+        cache.mkdir()
+        (cache / "victim.txt").write_bytes(b"attempt ignored file\n")
+        if chain:
+            (world.root / "relay").unlink()
+            (world.root / "relay").mkdir()
+
+    commands = []
+    real_git = stage2._git_output
+
+    def git_output(root, *args, **kwargs):
+        commands.append(args)
+        return real_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    if level == "unit":
+        before = stage2.ignored_snapshot(world.root)
+        plant()
+        refusal = None
+        try:
+            stage2.restore_baseline(world.root, head, set(), before)
+        except stage2.RestorationRefused as error:
+            refusal = str(error)
+        assert refusal is not None, "rollback reinstated an external parent without refusing cleanup"
+        assert "cache/victim.txt" in refusal and "cache is a link the attempt created or changed" in refusal
+    else:
+        real_model = stage2.run_work_model
+        # Isolate failed-call recovery: ordinary admission rejects directory links, but rollback
+        # must remain safe even when a baseline containing one reaches this boundary.
+        monkeypatch.setattr(leakcheck, "check", lambda *_args, **_kwargs: clean_scan)
+
+        def model(*args, **kwargs):
+            try:
+                return real_model(*args, **kwargs)
+            finally:
+                plant()
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+        world.script(claude=[{"stderr": "boom", "exit": 1}])
+        assert world.run("implement") == 1
+        error = capsys.readouterr().err
+        assert "cache/victim.txt" in error and "cache is a link the attempt created or changed" in error
+        assert len(world.calls("claude")) == 1
+        assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
+    assert not any(args[0] in ("restore", "clean") for args in commands)
+    assert sentinel.read_bytes() == b"external sentinel\n"
+    assert cache.is_dir() and not cache.is_symlink()
+    assert (cache / "victim.txt").read_bytes() == b"attempt ignored file\n"
+    assert world.findings.read_bytes() == findings_before
+    assert world.plan.read_bytes() == plan_before
+    assert git(world.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("kept", [False, True], ids=["contained-chain", "kept-external-link"])
+def test_replaced_baseline_parent_link_refuses_cleanup(world: World, kept: bool) -> None:
+    """Q-2: a baseline link the attempt replaced refuses cleanup, even when its chain stays inside."""
+    cache = world.root / "cache"
+    (world.root / "deep/data").mkdir(parents=True)
+    (world.root / "deep/sub").mkdir()
+    (world.root / "relay").symlink_to("deep/sub", target_is_directory=True)
+    cache.symlink_to("../outside" if kept else "relay/../data", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a baseline parent link")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    before = stage2.ignored_snapshot(world.root)
+    cache.unlink()
+    cache.mkdir()
+    victim = cache / "victim.txt"
+    victim.write_bytes(b"attempt ignored file\n")
+    keep = {Path("cache")} if kept else set()
+    with pytest.raises(stage2.RestorationRefused, match="cache/victim.txt.*cache is a link the attempt created"):
+        stage2.restore_baseline(world.root, baseline, keep, before)
+    assert not cache.is_symlink()
+    assert victim.read_bytes() == b"attempt ignored file\n"
+
+
+def test_unchanged_baseline_parent_links_refuse_recovery(world: World) -> None:
+    """Strict recovery: unchanged tracked and ignored parent links both refuse without mutation."""
+    (world.root / "deep/data").mkdir(parents=True)
+    (world.root / "deep/data/input.md").write_bytes(b"baseline bytes\n")
+    (world.root / "tracked").symlink_to("deep/data", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a contained parent link")
+    (world.root / ".gitignore").write_text("local\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore a local link")
+    (world.root / "local").symlink_to("deep/data", target_is_directory=True)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    aliases = stage2.alias_baseline(world.root, baseline, stage2.ignored_snapshot(world.root))
+    batch = [world.root / "tracked/input.md", world.root / "local/input.md"]
+    for destination in batch:
+        with pytest.raises(stage2.RestorationRefused, match="parent .*symbolic link"):
+            stage2.preflight_recovery(world.root, [destination], aliases=aliases)
+    assert (world.root / "deep/data/input.md").read_bytes() == b"baseline bytes\n"
+    (world.root / "local").unlink()
+    (world.root / "local").symlink_to("deep", target_is_directory=True)
+    with pytest.raises(stage2.RestorationRefused, match="local is a link the attempt created or changed"):
+        stage2.preflight_recovery(world.root, [world.root / "local/data/input.md"], aliases=aliases)
+
+
+def test_recovery_parent_chain_resolves_relative_target_at_real_depth(tmp_path: Path) -> None:
+    """L2-4: `..` is interpreted after resolving the symlinked containing directory."""
+    root = tmp_path / "tree"
+    (root / "deep/sub").mkdir(parents=True)
+    (root / "a").symlink_to("deep/sub", target_is_directory=True)
+    (root / "deep/sub/x").symlink_to("../..", target_is_directory=True)
+    destination = root / "a/x/input.md"
+    assert destination.parent.resolve() == root
+    assert stage2.restoration_parent_problem(root, destination) is None
+
+
+@pytest.mark.parametrize("boundary", ["scan", "checkpoint", "completed-call"])
+def test_credential_scan_skips_escaped_changed_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    boundary: str,
+) -> None:
+    """Unsafe scan paths are skipped; contained credentials are still scrubbed and reported."""
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_bytes(b"tracked\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "tracked nested credential destination")
+    outside = tmp_path / "credential-outside"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    exposed = KEY.encode() + b"\n"
+    sentinel.write_bytes(exposed)
+    real_read, real_write = Path.read_bytes, Path.write_bytes
+
+    def read(path):
+        assert path.parent != deep, "credential scan read through the escaped parent"
+        return real_read(path)
+
+    def write(path, content):
+        assert path.parent != deep, "credential scan wrote through the escaped parent"
+        return real_write(path, content)
+
+    def escape():
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+        (world.root / "src/app.py").write_bytes(exposed)
+        (world.root / "src/second.py").write_bytes(exposed)
+        monkeypatch.setattr(Path, "read_bytes", read)
+        monkeypatch.setattr(Path, "write_bytes", write)
+
+    if boundary == "completed-call":
+        world.script(claude=[{"stdout": "done"}])
+        real_model = stage2.run_work_model
+
+        def model(*args, **kwargs):
+            result = real_model(*args, **kwargs)
+            escape()
+            return result
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+        assert world.run("implement") == 2
+        diagnostic = capsys.readouterr().err
+        assert len(world.calls("claude")) == 1
+    else:
+        escape()
+        if boundary == "scan":
+            try:
+                found = stage2.remove_changed_credential(world.root, KEY)
+            except stage2.RestorationRefused as error:
+                raise AssertionError(
+                    f"credential scanning must skip escaped parents, not refuse recovery: {error}"
+                ) from error
+            assert found == [Path("src/app.py"), Path("src/second.py")]
+            diagnostic = stage2.credential_message(found)
+        else:
+            with pytest.raises(stage2.Refused) as caught:
+                stage2.checkpoint(world.root, "demo", git(world.root, "rev-parse", "HEAD"), key=KEY)
+            assert not isinstance(caught.value, stage2.RestorationRefused)
+            diagnostic = str(caught.value)
+    assert "was removed (src/app.py, src/second.py)" in diagnostic
+    assert "restoration" not in diagnostic
+    assert KEY not in diagnostic
+    assert sentinel.read_bytes() == exposed
+    assert (world.root / "src/app.py").read_bytes() == b"[credential]\n"
+    assert (world.root / "src/second.py").read_bytes() == b"[credential]\n"
+    assert deep.is_symlink()
+
+
+@pytest.mark.parametrize(
+    "failed_call,boundary", [(False, "persist"), (True, "persist"), (False, "run"), (True, "run"), (True, "model")]
+)
+def test_time_safety_refusal_reports_original_failure_and_exit(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    failed_call: bool,
+    boundary: str,
+) -> None:
+    """L2-7: finalization names both causes and retains a failed call's exit code."""
+    prior = world.plan.read_text()
+    outside = tmp_path / "time-outside"
+    original = stage2.CallFailed("original call failure") if failed_call else stage2.Refused("original leak BLOCK")
+
+    def escape():
+        shutil.copytree(world.plan.parent, outside)
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(outside, target_is_directory=True)
+
+    def finalize(*_args, **_kwargs):
+        stage2.persist_time_entry(
+            world.root,
+            world.plan,
+            "entry",
+            prior,
+            {},
+            accepted=False,
+            retry=False,
+            original=original,
+        )
+
+    if boundary == "persist":
+        escape()
+        monkeypatch.setitem(stage2.VERBS, "implement", finalize)
+    elif boundary == "run":
+        world.script(claude=[{"stdout": "done"}])
+
+        def verify(*_args, **_kwargs):
+            escape()
+            raise original
+
+        monkeypatch.setattr(stage2, "verify_attempt", verify)
+        _no_checkpoint(monkeypatch)
+    else:
+        world.script(claude=[{"stdout": "done"}])
+        real_model = stage2.run_work_model
+
+        def model(*args, **kwargs):
+            real_model(*args, **kwargs)
+            escape()
+            raise original
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+    assert world.run("implement") == (1 if failed_call else 2)
+    error = capsys.readouterr().err
+    assert error.startswith("failed: " if failed_call else "refused: ")
+    assert str(original) in error
+    assert "plans/changes/demo/" in error and "escapes the worktree" in error
+    assert runner_entries(world.plan) == []
+    if boundary == "persist":
+        assert world.plan.read_text() == prior
+    else:
+        assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("call_failed", [False, True])
+def test_moved_head_and_escaped_parent_report_both_without_writes(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    call_failed: bool,
+) -> None:
+    """L4-2: a recovery refusal must not hide the model's unverified commit."""
+    repair_world(world)
+    world.script(codex=[{"stderr": "boom", "exit": 1}] if call_failed else [codex_ok("T9", "done")])
+    outside = tmp_path / "moved-outside"
+    real_launch = stage2.launch
+    snapshots = {}
+    moved = []
+
+    def unexpected_write(*_args, **_kwargs):
+        pytest.fail("findings/time recovery or persistence followed the unsafe-parent stop")
+
+    def committing(command, cwd, env, *args, **kwargs):
+        result = real_launch(command, cwd, env, *args, **kwargs)
+        if command[0] == "codex":
+            git(Path(cwd), "commit", "--quiet", "--allow-empty", "-m", "model commit")
+            moved.append(git(Path(cwd), "rev-parse", "HEAD"))
+            shutil.copytree(world.plan.parent, outside)
+            snapshots.update({p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()})
+            shutil.rmtree(world.plan.parent)
+            world.plan.parent.symlink_to(outside, target_is_directory=True)
+            for name in ("append", "restore_work_input", "persist_time_entry", "stamp_updated", "save_attempt"):
+                monkeypatch.setattr(stage2, name, unexpected_write)
+        return result
+
+    monkeypatch.setattr(stage2, "launch", committing)
+    assert world.run("repair") == (1 if call_failed else 2)
+    err = capsys.readouterr().err
+    assert "moved HEAD from" in err and moved[0][:12] in err
+    assert "restoration of" in err and "escapes the worktree" in err
+    if call_failed:
+        assert "codex call failed" in err
+    assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshots
+    assert world.plan.parent.is_symlink()
+    assert git(world.root, "rev-parse", "HEAD") == moved[0]
+    assert len(world.calls("codex")) == 1 and world.calls("make") == []
+
+
+@pytest.mark.parametrize("escaped", [False, True])
+@pytest.mark.parametrize("verb", ["draft", "implement", "repair", "checkpoint"])
+def test_work_verbs_skip_escaped_scan_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    escaped: bool,
+    verb: str,
+) -> None:
+    """A passing run checkpoints equally with a contained or escaped changed scan path."""
+    if verb == "draft":
+        draft_world(world)
+        red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+        world.script(
+            codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
+            claude=[
+                {
+                    "stdout": "done",
+                    "plant": {
+                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                        "plans/changes/demo/plan.md": PLAN_CARD,
+                    },
+                }
+            ],
+            make=[red, red, {"stdout": "green\n"}],
+        )
+    elif verb == "repair":
+        repair_world(world)
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    else:
+        successful_implementation(world)
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_bytes(b"tracked\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "tracked scan destination")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "scan-outside"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_bytes(KEY.encode())
+
+    def change():
+        shutil.rmtree(deep)
+        if escaped:
+            deep.symlink_to(outside, target_is_directory=True)
+        else:
+            deep.mkdir()
+            (deep / "keep.txt").write_bytes(b"changed\n")
+
+    if verb == "checkpoint":
+        change()
+        try:
+            stage2.checkpoint(world.root, "demo", baseline, key=KEY)
+        except stage2.RestorationRefused as error:
+            raise AssertionError(
+                f"a checkpoint needing no restoration must skip escaped scan parents: {error}"
+            ) from error
+    else:
+        real_launch = stage2.launch
+
+        def launch(command, *args, **kwargs):
+            result = real_launch(command, *args, **kwargs)
+            if command[0] in ({"claude"} if verb == "draft" else {"claude", "codex"}):
+                change()
+            return result
+
+        monkeypatch.setattr(stage2, "launch", launch)
+        assert world.run(verb) == 0, capsys.readouterr().err + world.text()
+        assert len(world.calls("claude" if verb in {"draft", "implement"} else "codex")) == 1
+    diagnostic = capsys.readouterr().err
+    if escaped and verb != "repair":
+        assert "credential scan skipped src/deep/keep.txt" in diagnostic
+        assert "escapes the worktree" in diagnostic
+        assert "credential scan skipped src/deep/keep.txt" in world.text()
+        assert "escapes the worktree" in world.text()
+    else:
+        assert "credential scan skipped" not in diagnostic
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert sentinel.read_bytes() == KEY.encode()
+    # Draft retains its existing policy: put edits outside the change folder back.
+    assert deep.is_symlink() == (escaped and verb != "draft")
+
+
+@pytest.mark.parametrize("failure", ["blocked", "provenance"])
+def test_checkpoint_restore_refusal_preserves_original_failure(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    """A checkpoint rollback refusal reports the original classification failure as well."""
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("tracked\n")
+    if failure == "provenance":
+        (world.root / "provenance.yaml").write_text("paths: [unclosed\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "checkpoint refusal baseline")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "rollback-outside"
+    shutil.copytree(deep, outside)
+    shutil.rmtree(deep)
+    deep.symlink_to(outside, target_is_directory=True)
+    (world.root / "AGENTS.md").write_text("blocked edit\n")
+
+    def checkpoint(*_args, **_kwargs):
+        stage2.checkpoint(world.root, "demo", baseline)
+
+    monkeypatch.setitem(stage2.VERBS, "implement", checkpoint)
+    assert world.run("implement") == 2
+    diagnostic = capsys.readouterr().err
+    original = "AGENTS.md" if failure == "blocked" else "committed provenance map cannot be read"
+    assert original in diagnostic
+    assert "restoration of src/deep/keep.txt is refused" in diagnostic
+    assert "escapes the worktree" in diagnostic
+    assert (world.root / "AGENTS.md").read_text() == "blocked edit\n"
+    assert (outside / "keep.txt").read_text() == "tracked\n"
+    assert deep.is_symlink()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+@pytest.mark.parametrize("escaped", [True, False])
+def test_protected_stamp_reset_waits_for_the_rollback_preflight(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, escaped: bool
+) -> None:
+    """F6-7: a protected stamp must not be reset before the whole rollback is safe."""
+    agents = world.root / "AGENTS.md"
+    agents.write_text("---\nupdated: 2026-01-01\n---\n\nRules\n")
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("tracked\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected stamp rollback fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    agents.write_text(agents.read_text().replace("2026-01-01", "2026-10-27"))
+    prompt = world.root / "prompts/04-implement.md"
+    prompt.write_text(prompt.read_text() + "\nSubstantive protected edit\n")
+    outside = tmp_path / "stamp-rollback-outside"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_text("external sentinel\n")
+    if escaped:
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+    else:
+        (deep / "keep.txt").write_text("attempt edit\n")
+    before = (agents.read_bytes(), prompt.read_bytes(), git(world.root, "diff", "--binary", "HEAD"))
+    mutations = []
+    preflights = []
+    real_git, real_preflight = stage2._git_output, stage2.preflight_recovery
+
+    def git_output(root, *args, **kwargs):
+        if args and args[0] in ("restore", "clean", "add", "commit"):
+            mutations.append(args)
+        return real_git(root, *args, **kwargs)
+
+    def preflight(root, destinations, **kwargs):
+        batch = list(destinations)
+        preflights.append(set(batch))
+        assert not mutations, "rollback was mutated before its complete preflight"
+        return real_preflight(root, batch, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    monkeypatch.setattr(stage2, "preflight_recovery", preflight)
+    expected = stage2.RestorationRefused if escaped else stage2.CheckpointRolledBack
+    with pytest.raises(expected) as refusal:
+        stage2.checkpoint(world.root, "demo", baseline)
+    assert len(preflights) == 1
+    assert {agents, prompt, deep / "keep.txt"} <= preflights[0]
+    if escaped:
+        assert "src/deep/keep.txt" in str(refusal.value)
+        assert "escapes the worktree" in str(refusal.value)
+        assert not mutations
+        assert before == (agents.read_bytes(), prompt.read_bytes(), git(world.root, "diff", "--binary", "HEAD"))
+        assert deep.is_symlink() and deep.readlink() == outside
+    else:
+        assert agents.read_text().startswith("---\nupdated: 2026-01-01\n")
+        assert git(world.root, "status", "--porcelain") == ""
+    assert sentinel.read_text() == "external sentinel\n"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+@pytest.mark.parametrize("parent_kind", ["escape", "loop", "error"])
+def test_credential_scan_reports_skipped_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    parent_kind: str,
+) -> None:
+    """L9-1: skipped paths are named without opening them, including resolution errors."""
+    deep = world.root / "src/deep"
+    outside = tmp_path / "scan-external"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_bytes(KEY.encode())
+    if parent_kind == "escape":
+        deep.symlink_to(outside, target_is_directory=True)
+    elif parent_kind == "loop":
+        deep.symlink_to("deep", target_is_directory=True)
+    else:
+        deep.mkdir()
+        real_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path == deep:
+                raise OSError("planted resolution error")
+            return real_resolve(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", resolve)
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {Path("src/deep/keep.txt")})
+    real_read, real_write = Path.read_bytes, Path.write_bytes
+
+    def read(path):
+        assert path.parent != deep, "scan read the skipped path"
+        return real_read(path)
+
+    def write(path, content):
+        assert path.parent != deep, "scan wrote the skipped path"
+        return real_write(path, content)
+
+    monkeypatch.setattr(Path, "read_bytes", read)
+    monkeypatch.setattr(Path, "write_bytes", write)
+    assert stage2.remove_changed_credential(world.root, KEY, findings=world.findings) == []
+    assert "credential scan skipped src/deep/keep.txt" in world.text()
+    diagnostic = capsys.readouterr().err
+    assert "credential scan skipped src/deep/keep.txt" in diagnostic
+    assert ("escapes the worktree" if parent_kind == "escape" else "cannot be resolved") in diagnostic
+    assert sentinel.read_bytes() == KEY.encode()
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+@pytest.mark.parametrize("boundary", ["batch", "findings"])
+def test_failed_verify_recovery_refusal_preserves_diagnostics(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    verb: str,
+    boundary: str,
+) -> None:
+    """L9-2: a safety stop keeps the failed verifier's evidence without recovery writes."""
+    if verb == "repair":
+        repair_world(world)
+        script_repair(world, [repair_step()])
+    else:
+        successful_implementation(world)
+    outside = tmp_path / "verify-outside"
+    baseline = git(world.root, "rev-parse", "HEAD")
+    snapshots = {}
+
+    def unexpected_write(*_args, **_kwargs):
+        pytest.fail("recovery wrote after its unsafe-parent refusal")
+
+    def escape():
+        shutil.copytree(world.plan.parent, outside)
+        snapshots.update({p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()})
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(outside, target_is_directory=True)
+        for name in ("append", "restore_work_input", "persist_time_entry", "stamp_updated", "save_attempt"):
+            monkeypatch.setattr(stage2, name, unexpected_write)
+
+    def verify(*_args, **_kwargs):
+        if boundary == "batch":
+            escape()
+        return ["`make verify` failed: planted verifier evidence"]
+
+    if boundary == "findings":
+        real_preflight = stage2.preflight_recovery
+        checked = False
+
+        def preflight(root, destinations, **kwargs):
+            nonlocal checked
+            # The first post-verification batch is safe; the findings restore must recheck.
+            if not checked:
+                real_preflight(root, destinations, **kwargs)
+                checked = True
+                escape()
+            else:
+                real_preflight(root, destinations, **kwargs)
+
+        monkeypatch.setattr(stage2, "preflight_recovery", preflight)
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    _no_checkpoint(monkeypatch)
+    assert world.run(verb) == 2
+    diagnostic = capsys.readouterr().err
+    assert "planted verifier evidence" in diagnostic
+    assert "restoration of plans/changes/demo/" in diagnostic and "escapes the worktree" in diagnostic
+    assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshots
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert len(world.calls("codex" if verb == "repair" else "claude")) == 1
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["unsafe-order", "safe-order"])
+def test_recovery_batch_refuses_attempt_parent_links_in_any_order(tmp_path: Path, reverse: bool) -> None:
+    """F6-2 under Q-2: the attempt's parent links refuse the batch before a mutation, in either order."""
+    root = tmp_path / "tree"
+    (root / "deep/more/sub/changes/demo").mkdir(parents=True)
+    (root / "plans").symlink_to("deep/more/sub", target_is_directory=True)
+    (root / "prompts").symlink_to("plans/../../..", target_is_directory=True)
+    spec = root / "plans/changes/demo/spec.md"
+    spec.write_bytes(b"attempt bytes\n")
+    prompt = root / "prompts/04-implement.md"
+    prompt.write_bytes(b"prompt bytes\n")
+    batch = [prompt, spec] if reverse else [spec, prompt]
+    with pytest.raises(stage2.RestorationRefused, match="is a link the attempt created or changed"):
+        stage2.preflight_recovery(root, batch, aliases=({}, {}))
+    assert (root / "plans").is_symlink() and (root / "prompts").is_symlink()
+    assert spec.read_bytes() == b"attempt bytes\n"
+    assert prompt.read_bytes() == b"prompt bytes\n"
+
+
+@pytest.mark.parametrize("baseline", ["tracked", "ignored", "attempt"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("boundary", ["batch", "direct"])
+def test_recovery_refuses_any_linked_parent_before_mutation(
+    tmp_path: Path, baseline: str, reverse: bool, boundary: str
+) -> None:
+    """F6-5: even unchanged contained links can escape after an earlier input is detached."""
+    root = tmp_path / "w"
+    (root / "deep/more/sub/changes/demo").mkdir(parents=True)
+    plans, prompts = root / "plans", root / "prompts"
+    plans.symlink_to("deep/more/sub", target_is_directory=True)
+    prompts.symlink_to("plans/../../..", target_is_directory=True)
+    spec, prompt = plans / "changes/demo/spec.md", prompts / "04-implement.md"
+    spec.write_bytes(b"attempt spec\n")
+    prompt.write_bytes(b"attempt prompt\n")
+    safe = root / "safe.md"
+    safe.write_bytes(b"safe attempt\n")
+    assert spec.parent.resolve().is_relative_to(root)
+    assert prompt.parent.resolve() == root
+    links = {Path("plans"): plans.readlink(), Path("prompts"): prompts.readlink()}
+    ignored = {path: ((root / path).lstat().st_mtime_ns, (root / path).lstat().st_size) for path in links}
+    aliases = (links if baseline == "tracked" else {}, ignored if baseline == "ignored" else {})
+    batch = [safe, *([prompt, spec] if reverse else [spec, prompt])]
+    before = {path: path.read_bytes() for path in batch}
+    refusal = None
+    try:
+        if boundary == "batch":
+            stage2.preflight_recovery(root, batch, aliases=aliases)
+        else:
+            stage2.restore_work_input(root, batch[1], b"trusted bytes\n")
+    except (stage2.RestorationRefused, OSError) as error:
+        refusal = error
+    # Assert before restoring anything else: the baseline must fail with an assertion,
+    # rather than an incidental I/O error after detaching the first parent link.
+    assert isinstance(refusal, stage2.RestorationRefused), "recovery did not refuse the linked parent"
+    assert re.search(r"restoration of (plans|prompts)/.*parent", str(refusal))
+    assert plans.readlink() == Path("deep/more/sub")
+    assert prompts.readlink() == Path("plans/../../..")
+    assert {path: path.read_bytes() for path in batch} == before
+
+
+@pytest.mark.parametrize("replacement", ["file", "directory", "missing"])
+def test_recovery_refuses_a_baseline_link_replaced_by_a_file(world: World, replacement: str) -> None:
+    """F6-6: an ignored baseline parent link must refuse even after it becomes a regular file."""
+    prompts = world.root / "prompts"
+    source = world.root / "prompt-source"
+    prompts.rename(source)
+    prompts.symlink_to("prompt-source", target_is_directory=True)
+    # Force the ignored-link snapshot case, without changing the tracked baseline.
+    (world.root / ".gitignore").write_text("prompts\n", encoding="utf-8")
+    ignored = stage2.ignored_snapshot(world.root)
+    assert Path("prompts") in ignored
+    aliases = ({}, ignored)
+    prompts.unlink()
+    if replacement == "file":
+        prompts.write_bytes(b"attempt replacement\n")
+    elif replacement == "directory":
+        prompts.mkdir()
+    safe = world.root / "safe.md"
+    safe.write_bytes(b"safe attempt\n")
+    refusal = None
+    try:
+        stage2.preflight_recovery(world.root, [safe, prompts / "04-implement.md"], aliases=aliases)
+    except (stage2.RestorationRefused, OSError) as error:
+        refusal = error
+    assert isinstance(refusal, stage2.RestorationRefused), "recovery accepted a replaced baseline parent link"
+    assert re.search(r"prompts/04-implement.md.*parent", str(refusal))
+    assert safe.read_bytes() == b"safe attempt\n"
+    assert not prompts.is_symlink()
+    if replacement == "file":
+        assert prompts.read_bytes() == b"attempt replacement\n"
+    elif replacement == "directory":
+        assert list(prompts.iterdir()) == []
+    else:
+        assert not prompts.exists()
+    assert (source / "04-implement.md").is_file()
+
+
+def test_recovery_refuses_a_chain_through_a_restored_findings_link(tmp_path: Path) -> None:
+    """F6-4 under Q-2: a link through the findings alias refuses before findings or inputs are written."""
+    root = tmp_path / "w"
+    (root / "deep/a/b/c/d").mkdir(parents=True)
+    folder = root / "plans/changes/demo"
+    folder.mkdir(parents=True)
+    findings = folder / "findings.md"
+    findings.symlink_to(root / "deep/a/b/c/d", target_is_directory=True)
+    (root / "prompts").symlink_to("plans/changes/demo/findings.md/../../../../..", target_is_directory=True)
+    prompt = root / "prompts/04-implement.md"
+    assert prompt.parent.resolve().is_relative_to(root)
+    with pytest.raises(
+        stage2.RestorationRefused, match="prompts/04-implement.md.*prompts is a link the attempt created"
+    ):
+        stage2.preflight_recovery(root, [findings, prompt], aliases=({}, {}))
+    assert findings.is_symlink() and (root / "prompts").is_symlink()
+
+
+def test_recovery_refuses_an_unchanged_link_returning_inside(world: World, tmp_path: Path) -> None:
+    """Strict recovery refuses the first link, including an unchanged link resolving back inside."""
+    outside = tmp_path / "relay-outside"
+    outside.mkdir()
+    (world.root / "deep").mkdir()
+    (world.root / "cache").symlink_to(outside / "back", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a link that leaves the worktree")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    aliases = stage2.alias_baseline(world.root, baseline, stage2.ignored_snapshot(world.root))
+    (outside / "back").symlink_to(world.root / "evil", target_is_directory=True)
+    (world.root / "evil").symlink_to("deep", target_is_directory=True)
+    destination = world.root / "cache/input.md"
+    assert destination.parent.resolve() == world.root / "deep"
+    with pytest.raises(stage2.RestorationRefused, match="cache is a symbolic link"):
+        stage2.preflight_recovery(world.root, [destination], aliases=aliases)
+
+
+def test_baseline_cleanup_refuses_replaced_link_returning_inside(world: World) -> None:
+    """F6-3 superseded by Q-2: a replaced baseline link refuses cleanup even when it resolved back inside."""
+    (world.root / "data").mkdir()
+    cache = world.root / "cache"
+    cache.symlink_to(f"../{world.root.name}/data", target_is_directory=True)
+    assert cache.resolve() == world.root / "data"
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a contained returning link")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    before = stage2.ignored_snapshot(world.root)
+    cache.unlink()
+    cache.mkdir()
+    victim = cache / "victim.txt"
+    victim.write_bytes(b"ignored attempt bytes\n")
+    with pytest.raises(stage2.RestorationRefused, match="cache is a link the attempt created or changed"):
+        stage2.restore_baseline(world.root, baseline, set(), before)
+    assert victim.read_bytes() == b"ignored attempt bytes\n"
+    assert not cache.is_symlink()
 
 
 # ---------------------------------------------------------------------------
