@@ -815,3 +815,15 @@ Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint 
 > ```
 
 Stage-2 call, 2026-10-24: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 546 files, 1987 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2331 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-5 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5771–5795 | Unchanged baseline links can still cause partial recovery. With worktree `/w`, baseline links `plans -> deep/more/sub` and `prompts -> plans/../../..` initially resolve inside the worktree, and batch preflight accepts them. Restoring `plans/changes/demo/spec.md` detaches `plans` and writes trusted bytes; `prompts` then resolves to `/`, so restoring `prompts/04-implement.md` refuses after earlier mutations. Source-extracted in-memory execution reproduces this. Unlike the earlier attempt-created-link case, neither link was changed by the attempt. The batch must remain unwritten when its own restoration makes a later parent unsafe. [Acceptance criterion 1] | Codex | open | — |
+| F6-6 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5711–5723 | Replacing an ignored baseline parent link with a regular file bypasses the changed-alias guard. For an ignored baseline `prompts -> prompt-source`, an attempt replacing `prompts` with a regular file makes `alias_changed` return false: its non-link branch recognizes ignored replacements only when they are directories. Recovery consequently unlinks the replacement, creates a directory and restores `prompts/04-implement.md`, instead of refusing before mutation. Source-extracted in-memory execution confirms this behavior. A baseline link that is no longer the same link must refuse recovery, including replacement by a regular file. [Acceptance criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17d07-19ba-7011-a888-7d211fe391fe, 2026-10-27
+Reviewer session: codex 01a17d07-19ba-7011-a888-7d211fe391fe — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
