@@ -305,6 +305,37 @@ def test_catalog_presence_does_not_admit_unread_or_unpriced_paid_models(world: W
     assert any("mimo-v2.6-pro" in reason for reason in state["availability"]["terms_skipped"])
 
 
+def test_preparation_warns_inside_the_window_and_never_probes_an_expired_model(
+    world: World, monkeypatch, capsys
+) -> None:
+    """The terms date seam governs preparation (bead coding-harness-abra): a record inside the
+    seven-day window warns with model and date, an expired one is filtered before its probe and
+    named with its reason — receipt age and reachability stay independent of that seam."""
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle_terms"][TEST_LADDER[0]]["valid_until"] = "2026-10-28"
+    entry["modelle_terms"][TEST_LADDER[1]]["valid_until"] = "2026-10-25"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    enable(world)
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert world.run("prepare-loop") == 0
+    state = receipt(world)["state"]
+    assert state["availability"]["terms_warnings"] == [
+        f"the data terms of {TEST_LADDER[0]} expire on 2026-10-28 (2 days left)"
+    ]
+    assert all(TEST_LADDER[1] not in model for model in state["paid"]["ladder"])
+    assert any(
+        TEST_LADDER[1] in reason and "expired on 2026-10-25" in reason
+        for reason in state["availability"]["terms_skipped"]
+    )
+    probed = [call["argv"][call["argv"].index("--model") + 1] for call in world.reviews()]
+    assert not any(TEST_LADDER[1] in model for model in probed), "an expired model was probed"
+    out = capsys.readouterr().out
+    assert "Terms warning:" in out and "Paid admission skipped:" in out
+
+
 @pytest.mark.parametrize("invalid", [None, True, "900", 0, -1, 3601])
 def test_invalid_freshness_rule_never_calls_a_model(world: World, invalid) -> None:
     """Criterion 17: an unusable freshness policy cannot silently enable legacy review."""

@@ -192,15 +192,17 @@ endpunkte:
       - qwen3.8-max
     modelle_terms:
       deepseek-v4.1-flash:
-        gelesen: "2026-10-07"
+        gelesen: "2026-10-25"
+        valid_until: "2026-10-31"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
-        aufbewahrung: "0 days"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31)"
         training: "Not used"
         anfragen_5h: 34670
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
         gelesen: "2026-10-07"
+        valid_until: "2026-11-06"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -209,6 +211,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       longcat-2.0:
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -217,6 +220,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       glm-5.3-flash:
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -227,6 +231,7 @@ endpunkte:
         uebersprungen: "2026-10-17"
         grund: "wire API not measured"
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -237,6 +242,7 @@ endpunkte:
         uebersprungen: "2026-10-17"
         grund: "wire API not measured"
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
         training: "Not used"
@@ -247,6 +253,7 @@ endpunkte:
         uebersprungen: "2026-10-17"
         grund: "wire API not measured"
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
         training: "Not used"
@@ -257,6 +264,7 @@ endpunkte:
         uebersprungen: "2026-10-17"
         grund: "wire API not measured"
         gelesen: "2026-10-17"
+        valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -264,15 +272,17 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       deepseek-v4-pro:
-        gelesen: "2026-10-22"
+        gelesen: "2026-10-25"
+        valid_until: "2026-10-31"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, valid through 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31)"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       glm-5.2:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -281,6 +291,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       glm-5.3:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -289,6 +300,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       hy3:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -297,6 +309,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       hy4-preview:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -305,6 +318,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.5:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -313,6 +327,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.5-pro:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -321,6 +336,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-flash:
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -331,6 +347,7 @@ endpunkte:
         uebersprungen: "2026-10-22"
         grund: "wire API not measured"
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
@@ -341,6 +358,7 @@ endpunkte:
         uebersprungen: "2026-10-22"
         grund: "wire API not measured"
         gelesen: "2026-10-22"
+        valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
