@@ -836,3 +836,14 @@ runner left it in the worktree. Measured: the F6-1 and F6-2 tests fail on
 fe2fd3b0's code (6 failed) and pass with attempt 1's change; the
 research-availability and terms-expiry tests pass (135 passed).
 
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 684 files, 2307 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:783; scripts/stage2_research_run.py:475 | A paid research model selected before expiry remains callable afterward. With DeepSeek V4.1 Flash expiring on 2026-10-31 and UTC today set to 2026-11-01, `terms_problem` refuses admission, but both the research probe check and `Run.gate` allow it: their declaration predicates never check current terms. Recheck expiry before research probes and dispatch so preparation or saved selection cannot authorize expired calls. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17c15-b59c-7ba1-8997-a1cbf7f6c603, 2026-10-27
+Reviewer session: codex 01a17c15-b59c-7ba1-8997-a1cbf7f6c603 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
