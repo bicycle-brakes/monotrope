@@ -482,3 +482,15 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a17dbc-9e88-7b23-bb7e-f3bd287b1990, 2026-10-27
 Reviewer session: codex 01a17dbc-9e88-7b23-bb7e-f3bd287b1990 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 698 files, 2362 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-9 | MINOR | SPEC | impl | scripts/stage2.py:2570–2584 | The launch deadline is checked before `dispatch_go` performs its final admission read. Reproduced with 50 ms remaining and a 200 ms admission check: the timed program started about 160 ms after the deadline and returned `No finding.`. A replacement following this path is consumed instead of reported as not started. Recheck the absolute deadline after admission, at launch. [Criterion 9] | Codex | open | — |
+| F6-10 | MINOR | SPEC | impl | scripts/stage2.py:625–635 | Short credentials under names such as `AUTH` and `APIKEY` escape scrubbing. Reproduced with synthetic entries `AUTH=abc123` and `APIKEY=xyz456`: `secret_values()` returned an empty list, and scrubbing preserved both values verbatim. Reviewer answers, failure messages and stderr consequently retain these credentials; the earlier repair covers only names matching its restricted regular expression. [Criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17e1a-9fb9-7490-85b3-72fdce01d692, 2026-10-27
+Reviewer session: codex 01a17e1a-9fb9-7490-85b3-72fdce01d692 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
