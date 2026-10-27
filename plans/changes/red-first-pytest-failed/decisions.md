@@ -4,6 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-27
 last_reviewed: 2026-10-27
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-a7m
@@ -20,6 +21,17 @@ Interview for a `bounded` change (at least one counted record).
 
 ## Q-1 · Which call-phase failures prove a test red first
 
+context: |
+  Topic: the runner's red-first check, which proves a repair's test fails on
+  the baseline code before the repair counts as fixed.
+  Intention: on 2026-10-27 the check rejected correct repairs whose tests were
+  written as `with pytest.raises(...)` (14 of 32 rejected attempts that day).
+  Today: only an uncaught AssertionError counts as red; pytest's own `Failed`
+  outcome ("DID NOT RAISE") is refused.
+  Repository change: the classifier in `scripts/stage2.py` and its tests.
+  Architecture change: none; the red-first contract of red-first-install
+  gains one accepted failure shape.
+  Question: which call-phase failures should prove a test red first?
 asked: 2026-10-27, the directing conversation
 answer: option 1 — an uncaught `AssertionError` and pytest's own `Failed`
   outcome (a `pytest.raises` block that did not raise, an explicit
