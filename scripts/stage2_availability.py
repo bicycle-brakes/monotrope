@@ -280,6 +280,26 @@ def research_declaration_problem(root: Path, endpoint: str, model: str, data_cla
     return None
 
 
+def research_terms_problem(runner, root: Path, endpoint: str, model: str) -> str | None:
+    """Re-read paid Go terms at the call boundary, independently of saved research selection."""
+    if endpoint != GO:
+        return None
+    data = read_declaration(root)
+    if isinstance(data, str):
+        return data
+    found = _endpoint(data, endpoint)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    return runner.terms_problem(found, model)
+
+
+def research_probe_problem(runner, root: Path, endpoint: str, model: str, data_class: str = "framework") -> str | None:
+    """Keep research-only declarations and paid terms binding on each probe, including retries."""
+    return research_declaration_problem(root, endpoint, model, data_class) or research_terms_problem(
+        runner, root, endpoint, model
+    )
+
+
 def _checked_probe(
     runner,
     root: Path,
@@ -296,7 +316,7 @@ def _checked_probe(
     `admission` (root, model -> problem or None) replaces the research declaration check for the review
     swarm's free class (ADR 0021, decision 3); the leak check stays mandatory either way.
     """
-    problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
+    problem = admission(root, model) if admission is not None else research_probe_problem(runner, root, endpoint, model)
     if problem:
         raise runner.Refused(problem)
     result = leakcheck.check(change, leakcheck.default_denylist(), root, [("prompt", text)])
@@ -305,7 +325,7 @@ def _checked_probe(
         raise runner.Refused("the leak check is not clean; the probe does not start.")
     # Re-read admission after the scan, which can cross the terms' UTC cutoff.
     # Do not record a call or dispatch a probe on yesterday's admission.
-    problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
+    problem = admission(root, model) if admission is not None else research_probe_problem(runner, root, endpoint, model)
     if problem:
         raise runner.Refused(problem)
     audit.append(
@@ -780,7 +800,7 @@ class _Selection:
                         self.key,
                         self.audit,
                         self.models_store,
-                        admission=lambda root, ident: research_declaration_problem(root, GO, ident, data_class),
+                        admission=lambda root, ident: research_probe_problem(self.runner, root, GO, ident, data_class),
                     )
                 else:
                     probe_claude(self.runner, self.root, self.change, model, self.audit)

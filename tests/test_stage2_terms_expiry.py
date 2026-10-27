@@ -673,3 +673,87 @@ def test_spent_refusal_says_no_model_is_substituted(
     assert "No model is substituted." in error
     assert world.reviews() == []
     assert world.record().read_bytes() == before
+
+
+@pytest.mark.parametrize("boundary", ["probe", "selected-probe", "dispatch"])
+@pytest.mark.parametrize("cross_during_scan", [False, True])
+def test_research_probes_and_dispatch_recheck_expiry(
+    world: World, monkeypatch: pytest.MonkeyPatch, boundary: str, cross_during_scan: bool
+) -> None:
+    """Criterion 5: saved research admission cannot outlive paid terms, even across a leak scan."""
+    from types import SimpleNamespace
+
+    import stage2_research_run as research
+    from stage2_research_dispatch import Slot
+
+    model = TEST_LADDER[0]
+    set_terms(world, model, gilt_bis="2026-10-31")
+    day = dt.date(2026, 10, 31)
+    monkeypatch.setattr(stage2, "terms_today", lambda: day)
+    launches = []
+
+    def launch(*args, **_kwargs):
+        launches.append(args)
+        return SimpleNamespace(returncode=0, stdout="OK", stderr="")
+
+    def scan(*_args, **_kwargs):
+        nonlocal day
+        if cross_during_scan and expire:
+            day = dt.date(2026, 11, 1)
+        return SimpleNamespace(
+            verdict=SimpleNamespace(render=lambda: "clean", exit_code=lambda: 0),
+            files=1,
+            commits=0,
+            rules=1,
+        )
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2.leakcheck, "check", scan)
+    entry = {"role": "repository", "endpoint": availability.GO, "model": model}
+    run = SimpleNamespace(root=world.root, runner=stage2, change="demo", free=[], entries={"saved": entry})
+    slot = Slot("saved", availability.GO, True, (0,), 60, {}, "research prompt")
+    audit = []
+    expire = False
+
+    def probe():
+        if boundary == "selected-probe":
+            selection = SimpleNamespace(
+                runner=stage2,
+                root=world.root,
+                change="demo",
+                key="test-key",
+                audit=audit,
+                models_store=None,
+                probed={},
+                models={f"{availability.GO}/{model}": {"state": "not-probed", "admitted": True}},
+            )
+            return availability._Selection.reachable(selection, availability.GO, model, "framework")
+        return availability.probe_go(stage2, world.root, "demo", model, "test-key", audit)
+
+    if boundary != "dispatch":
+        probe()
+        assert len(launches) == 1
+    else:
+        assert not research.Run.gate(run, slot).blocked
+
+    # The selection and its admission were made on the inclusive expiry day.
+    # Either resume tomorrow or cross midnight inside the per-call leak scan.
+    expire = True
+    if not cross_during_scan:
+        day = dt.date(2026, 11, 1)
+    before = (list(launches), list(audit), dict(run.entries))
+    if boundary != "dispatch":
+        refusal = None
+        try:
+            probe()
+        except stage2.Refused as error:
+            refusal = str(error)
+        assert refusal is not None, "expired research terms still authorized a probe"
+        assert model in refusal
+        assert "expired on 2026-10-31" in refusal
+    else:
+        verdict = research.Run.gate(run, slot)
+        assert verdict.blocked, verdict
+        assert model in verdict.record["refused"]
+        assert "expired on 2026-10-31" in verdict.record["refused"]
+    assert (launches, audit, run.entries) == before

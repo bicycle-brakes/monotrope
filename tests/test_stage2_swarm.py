@@ -406,6 +406,25 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
     shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
+    # A consumed synthetic selection needs admitted synthetic terms too: the
+    # real declaration may skip a fixture member, and its dates must not age
+    # these dispatcher tests into refusals. Expiry boundaries have their own tests.
+    declaration = root / "model-endpoints.yaml"
+    data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
+    go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
+    for seat in [*REPOSITORY_SEATS, *ONLINE_SEATS]:
+        if seat["endpoint"] == "opencode-go":
+            record = go["modelle_terms"][seat["model"]]
+            record.pop("uebersprungen", None)
+            record.pop("grund", None)
+            record.update(
+                gelesen="2026-10-25",
+                gilt_bis="2099-01-01",
+                quelle="synthetic dispatcher terms",
+                aufbewahrung="0 days",
+                training="Not used",
+            )
+    declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
 
     home = tmp_path / "home"
     home.mkdir()

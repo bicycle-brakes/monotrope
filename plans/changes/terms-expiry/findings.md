@@ -843,7 +843,26 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-3 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:783; scripts/stage2_research_run.py:475 | A paid research model selected before expiry remains callable afterward. With DeepSeek V4.1 Flash expiring on 2026-10-31 and UTC today set to 2026-11-01, `terms_problem` refuses admission, but both the research probe check and `Run.gate` allow it: their declaration predicates never check current terms. Recheck expiry before research probes and dispatch so preparation or saved selection cannot authorize expired calls. [Acceptance criterion 5] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_research_probes_and_dispatch_recheck_expiry — the research swarm's probe check and Run.gate refuse a model whose terms expired, before probe and before dispatch (maintainer, 2026-10-27: repair, not a known limit) | — |
+| F6-3 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:783; scripts/stage2_research_run.py:475 | A paid research model selected before expiry remains callable afterward. With DeepSeek V4.1 Flash expiring on 2026-10-31 and UTC today set to 2026-11-01, `terms_problem` refuses admission, but both the research probe check and `Run.gate` allow it: their declaration predicates never check current terms. Recheck expiry before research probes and dispatch so preparation or saved selection cannot authorize expired calls. [Acceptance criterion 5] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_research_probes_and_dispatch_recheck_expiry | — |
 
 Phase 6 verdict: codex 01a17c15-b59c-7ba1-8997-a1cbf7f6c603, 2026-10-27
 Reviewer session: codex 01a17c15-b59c-7ba1-8997-a1cbf7f6c603 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 684 files, 2310 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_availability.py` +23 -3
+> - `scripts/stage2_research_run.py` +13 -2
+> - `tests/test_stage2_swarm.py` +16 -0
+> - `tests/test_stage2_terms_expiry.py` +78 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2_swarm.py`.
+> - F6-3: tests/test_stage2_terms_expiry.py::test_research_probes_and_dispatch_recheck_expiry: the call of `tests/test_stage2_terms_expiry.py::test_research_probes_and_dispatch_recheck_expiry[False-probe]` failed with Failed, not an AssertionError
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-expiry/stage2/attempts/terms-expiry/attempt-1-20261027T070727689703Z-23906187.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 684 files, 2310 commits, 12 rules.
