@@ -188,8 +188,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   five working days, at most three open on one hot file (`docs/WORKFLOW.md` §3).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
-  MINOR rows on tests, security or false statements are repaired without
-  asking; style rows are named in the pull request as accepted limits.
+  MINOR rows on tests, security or false statements are repaired without asking; style rows
+  are accepted limits named in the PR. A second finding of one mechanism ends case repair (`docs/WORKFLOW.md` §4).
 
 ## Sibling repositories
 
