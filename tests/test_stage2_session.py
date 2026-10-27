@@ -708,8 +708,10 @@ def test_a_stamp_failure_after_the_update_is_reported(
     real = stage2.stamp_updated
 
     def flaky(path: Path) -> None:
+        # The session's own re-stamp after its status update is the first call: `append` stamps the bytes it
+        # writes in one atomic replacement, not through this function (deep review RS-2-6).
         calls["n"] += 1
-        if calls["n"] >= 2:
+        if calls["n"] >= 1:
             raise OSError("no stamp today")
         real(path)
 

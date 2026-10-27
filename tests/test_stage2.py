@@ -556,7 +556,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
     )
     (root / "plans" / "changes" / "demo" / "research.md").write_text(
-        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Research\n\nseed fact\n",
+        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: bounded\n---\n\n# Research\n\nseed fact\n",
         encoding="utf-8",
     )
     (root / "plans" / "changes" / "demo" / "plan.md").write_text(
@@ -1696,6 +1696,14 @@ def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
                 entry["modelle"].append("claude-haiku-4-5")
             problems = anthropic_haiku_problems(planted)
             assert problems and all(problem.startswith(f"{name}:") for problem in problems), (name, fault)
+
+
+@pytest.mark.parametrize("verb", ["implement", "review"])
+def test_the_class_argument_belongs_to_explore_alone(world: World, verb: str) -> None:
+    # Criterion 3's guard: --class is the explore verb's early routing input, no other verb's.
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run(verb, "demo", "--class", "bounded") == 2
+    assert world.calls() == []
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
@@ -9941,7 +9949,7 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
         ),
         pytest.param(
             [("L1-1", "taken — test_a", "no")],
-            "L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_other.py::test_other",
             "L1-1: fixed — tests/test_fix.py::test_fix",
             "L1-1: several fixed lines",
             id="doubled",
@@ -10114,7 +10122,7 @@ def test_repair_ignores_l_prefix_prose_without_loop_rows(world: World) -> None:
 
 
 def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
-    """Criterion 4. Planted fault: prose alone passes, or duplicates spaced by prose escape the count."""
+    """Criterion 4. Planted fault: prose alone passes, or a second distinct claim beside the fix escapes the count."""
     repair_world(world)
     prose = "\n".join(
         [
@@ -10139,17 +10147,211 @@ def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
     (world.bin / "calls.jsonl").unlink()
     world.write_record([("L2-1", "taken — test_b", "no")])
     fixed = "L2-1: fixed — tests/test_other.py::test_other"
-    duplicated = "\n".join([fixed, "expected: one line per row", fixed])
+    conflicted = "\n".join([fixed, "expected: one line per row", "L2-1: fixed — tests/test_seed.py::test_seed"])
     plant = {"src/other.py": "value = 2\n", "tests/test_other.py": OTHER_TEST}
     script_repair(
         world,
-        [repair_step(stdout=duplicated, plant=plant), repair_step(stdout=fixed, plant=plant)],
+        [repair_step(stdout=conflicted, plant=plant), repair_step(stdout=fixed, plant=plant)],
         make=[{"stdout": "green\n"}] * 2,
     )
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert "L2-1: several fixed lines" in prompt
     assert "expected: no taken row carries this id" not in prompt
+
+
+def test_repair_ignores_explanations_for_a_taken_id(world: World) -> None:
+    """Criterion 1. Planted fault: an explanation before or after the unique valid claim rejects the answer."""
+    repair_world(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — crit 1", "a phase finding")]))
+    answer = "\n".join(
+        [
+            "## Repair report",
+            "F-1: the finding stands in the spec's first criterion, and the test below shows the fix",
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-1: the fix plants the value the finding names, with the test that fails without it",
+            "F-1: fixed — tests/test_fix.py::test_fix",
+            "Resume: when I start, I will run make verify",
+        ]
+    )
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 1, "an explanation beside the unique fixed line failed the answer"
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    _, phase6 = stage2.findings_rows(world.text())
+    assert {row[0]: row for row in phase6}["F-1"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_repair_deduplicates_identical_fixed_claims(world: World) -> None:
+    """Criterion 2. Planted fault: identical normalized claims trigger a retry."""
+    repair_world(world)
+    claim = "fixed — tests/test_fix.py::test_fix"
+    answer = "\n".join(
+        [
+            f"L1-1: {claim}",
+            "L1-1: the fix is the one the finding asked for",
+            f"- **L1-1**: {claim}",
+        ]
+    )
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 1, "an identical repetition, decorated or not, failed the answer"
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        pytest.param("L1-1: fixed — tests/test_other.py::test_other", id="distinct-valid"),
+        pytest.param("L1-1: fixed — not a test — actually no test can show it", id="distinct-not-a-test"),
+        pytest.param("L1-1: fixed — tests/../escape.py::test_x", id="distinct-malformed"),
+    ],
+)
+def test_repair_rejects_distinct_fixed_claims(world: World, second: str) -> None:
+    """Criterion 3. Planted fault: a valid claim hides a second distinct or malformed claim."""
+    repair_world(world)
+    claim = "fixed — tests/test_fix.py::test_fix"
+    answer = f"## Report\nL1-1: {claim}\n{second}"
+    script_repair(world, [repair_step(stdout=answer), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2, "the valid claim hid a second distinct claim"
+    prompt = prompt_of(world.calls("codex")[1])
+    assert f"L1-1: several fixed lines (`{claim}`; `{second.partition(': ')[2]}`)" in prompt, prompt
+
+
+def test_repair_conflict_diagnostics_quote_claims_and_answer_location(world: World) -> None:
+    """Criterion 7. Planted fault: the failure omits a conflicting claim or a retrievable protected answer locator."""
+    repair_world(world)
+    claim = "fixed — tests/test_fix.py::test_fix"
+    other = "fixed — tests/test_other.py::test_other"
+    answer = f"## Report\nL1-1: {claim}\nL1-1: {other}"
+    script_repair(world, [repair_step(stdout=answer), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[1])
+    assert f"L1-1: several fixed lines (`{claim}`; `{other}`)" in prompt, prompt
+    named = [line for line in prompt.splitlines() if "the attempt's protected answer is saved at " in line]
+    assert named, "the diagnostics never name the saved answer"
+    saved = Path(named[-1].rpartition("saved at ")[2].strip())
+    assert saved.is_file(), "the locator points at no retrievable answer"
+    assert saved.read_text(encoding="utf-8") == answer + "\n"
+
+
+@pytest.mark.parametrize("claim_count", [2, 3])
+def test_repair_contested_claims_survive_the_quote_cut(world: World, claim_count: int) -> None:
+    """F-1: a long first claim must not hide later claims in the final rejection's quote."""
+    repair_world(world)
+    claims = [f"fixed — not a test — reason {number}: " + "x" * 600 for number in range(claim_count)]
+    answer = "\n".join(f"L1-1: {claim}" for claim in claims)
+    script_repair(
+        world,
+        [repair_step(stdout=answer) for _ in range(3)],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 1
+    blocks = quote_blocks(world.text())
+    assert len(blocks) == 3, "each rejected attempt must leave persisted diagnostics"
+    for block in blocks:
+        diagnostics = "\n".join(block)
+        assert "L1-1: several fixed lines" in diagnostics
+        for claim in claims:
+            assert f"`{claim}`" in diagnostics, "a contested claim was cut from the persisted quotation"
+        named = next(line for line in block if "the attempt's protected answer is saved at " in line)
+        saved = Path(named.rpartition("saved at ")[2].strip())
+        assert saved.read_text(encoding="utf-8") == answer + "\n"
+
+
+def test_repair_retains_each_attempt_answer(world: World) -> None:
+    """Criterion 6. Planted fault: success, failure, retry, restore or another invocation loses or overwrites the answer."""
+    repair_world(world)
+    evidence = world.root / ".git" / "stage2" / "attempts" / "demo"
+    long_line = "detail line: the fix stands in src/app.py and names the test that fails without it " * 8
+    conflicted = (
+        f"## Repair report\nL1-1: fixed — tests/test_fix.py::test_fix\n{long_line}\n"
+        "L1-1: fixed — tests/test_other.py::test_other"
+    )
+    script_repair(world, [repair_step(stdout=conflicted), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    saved = sorted(evidence.glob("attempt-*.md"))
+    assert [file.name[:10] for file in saved] == ["attempt-1-", "attempt-2-"]
+    assert saved[0].read_text(encoding="utf-8") == conflicted + "\n", "the rejected answer was truncated or lost"
+    assert saved[1].read_text(encoding="utf-8") == "L1-1: fixed — tests/test_fix.py::test_fix\n"
+    first_run = {file.name: file.read_text(encoding="utf-8") for file in saved}
+    # A second invocation keeps the first run's evidence and writes its own file beside it. The run
+    # stands on run 1's commit, so it repairs a fresh row with a fresh red pair, as in the prose test.
+    (world.root / "src" / "other.py").write_text("value = 1\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed other")
+    (world.bin / "calls.jsonl").unlink()
+    world.write_record([("L2-1", "taken — test_b", "no")])
+    fixed = "L2-1: fixed — tests/test_other.py::test_other"
+    plant = {"src/other.py": "value = 2\n", "tests/test_other.py": OTHER_TEST}
+    script_repair(world, [repair_step(stdout=fixed, plant=plant)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    kept = sorted(evidence.glob("attempt-*.md"))
+    assert len(kept) == 3, "the second invocation overwrote or lost earlier evidence"
+    for file in kept:
+        if file.name in first_run:
+            assert file.read_text(encoding="utf-8") == first_run[file.name], f"{file.name} was overwritten"
+    # A failed call keeps the output it returned, in its own file; nothing is retried after it.
+    (world.root / "src" / "third.py").write_text("value = 1\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed third")
+    (world.bin / "calls.jsonl").unlink()
+    world.write_record([("L3-1", "taken — test_c", "no")])
+    partial = "the call died mid-answer, but this line stood in its answer file\n" + long_line
+    world.script(codex=[{"exit": 1, "answer": partial}])
+    assert world.run("repair") == 1
+    files = sorted(evidence.glob("attempt-*.md"))
+    assert len(files) == 4, "the failed call's answer was not retained"
+    written = [file for file in files if file.read_text(encoding="utf-8") == partial + "\n"]
+    assert len(written) == 1 and written[0].name.startswith("attempt-1-"), files
+
+
+def test_repair_answer_evidence_is_protected_on_every_route(world: World) -> None:
+    """Criterion 8. Planted fault: a keyless Codex or Sonnet answer writes a matching secret into the evidence."""
+    repair_world(world)
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    secret = f"the token is {FIXTURE_SECRET}\nnothing else was done"
+    plain = repair_step(stdout="L1-1: I fixed it, see the diff")
+    script_repair(
+        world,
+        [repair_step(stdout=secret), plain, repair_step(stdout=secret)],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 1, "the probe answers were expected to fail the answer check"
+    saved = sorted((world.root / ".git" / "stage2" / "attempts" / "demo").glob("attempt-*.md"))
+    assert [file.name[:9] for file in saved] == ["attempt-1", "attempt-2", "attempt-3"]
+    for file in saved:
+        body = file.read_text(encoding="utf-8")
+        assert FIXTURE_SECRET not in body, file.name
+        if file.name[:9] != "attempt-2":
+            assert f"the token is {FIXTURE_MARKER}" in body, file.name
+
+
+def test_repair_answer_evidence_failure_stops_safely(world: World) -> None:
+    """Criterion 8. Planted fault: protection failure or an unsafe destination causes a raw write or a checkpoint."""
+    repair_world(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    # A blocking rule refuses the protection itself; nothing is written, and no checkpoint stands.
+    # The step plants nothing: the refusal still saves the attempt and restores model edits.
+    set_denylist(DENYLIST + "blocked = FIXKEY-[0-9]{6}\n")
+    script_repair(world, [{"stdout": f"the token is {FIXTURE_SECRET}\n"}], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 2
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    assert not (world.root / ".git" / "stage2").exists(), "a refused protection still wrote evidence"
+    # Only the runner's measured time entry remains; clear it to isolate the next scenario.
+    git(world.root, "checkout", "--", "plans/changes/demo/plan.md")
+    # An aliased evidence directory stops the run before anything is written through the alias.
+    set_denylist(DENYLIST)
+    outside = world.state / "elsewhere"
+    outside.mkdir(parents=True, exist_ok=True)
+    (world.root / ".git" / "stage2").symlink_to(outside)
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    assert not any(outside.iterdir()), "the aliased destination received evidence"
 
 
 @pytest.mark.parametrize(
@@ -10201,6 +10403,10 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
         "ignored",
         "finding id",
         "right side is a fixed status",
+        "exactly one distinct fixed line",
+        "a repeated identical line counts once",
+        "two different fixed lines for one row fail the attempt",
+        "protected local evidence",
         "; fixed by",
         "; fixed:",
         "; repaired by",
@@ -10215,6 +10421,12 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
         for needle in (
             "fixed — tests/<path>::<function>",
             "fixed — not a test — <reason>",
+            "exactly one distinct fixed line",
+            "a repeated identical fixed line counts once",
+            "two different fixed lines for one row fail the attempt as `several fixed lines`",
+            "protected local evidence",
+            "stage2/attempts/<change>/attempt-<n>-<token>.md",
+            "written before any post-run check can stop the run",
             "replace the finished row's `taken — …` with one of the two fixed statuses",
             "set the loop row's `Broke a test` mark from the evidence",
             "if the row is not repaired yet, reword its reason so it names no fix",
@@ -12781,8 +12993,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Ten verbs exist" in four or "Eleven verbs exist" not in four:
-        found.append("section 4 does not say eleven verbs")
+    if "Eleven verbs exist" in four or "Twelve verbs exist" not in four:
+        found.append("section 4 does not say twelve verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
@@ -12809,7 +13021,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Eleven verbs exist", "Ten verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Twelve verbs exist", "Eleven verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — Codex, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -13133,7 +13345,41 @@ def test_pi_wrapper_is_repository_local() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
+# Seat selection receipt: where no swarm runs (research-swarm, criteria 20 and 44)
+# ---------------------------------------------------------------------------
+
+RECEIPT_ID = "a" * 64
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", f"class: {klass}")
+    world.research.write_text(text, encoding="utf-8")
+    # The one call that does run is the bounded route at the end; its answer names a repository file,
+    # as research must (bead coding-harness-e7m).
+    world.script(claude=[{"stdout": "Facts from `src/app.py`."}])
+    assert world.run("explore", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("prepare-explore") == 2, "preparation ran where no swarm runs"
+    assert world.run("explore", "demo", "--stage2-off", "r", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("implement", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.calls() == []
+    assert world.run("explore") == 0, "the bounded or spike route itself still works without a receipt"
+
+
+def test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument(world: World) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: nonsense\nneighbours: nope")
+    world.research.write_text(text, encoding="utf-8")
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
+    assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    call = world.calls("claude")[0]
+    assert call["argv"][call["argv"].index("--model") + 1] == "claude-haiku-5-5"
+    note = world.research.read_text(encoding="utf-8")
+    assert "route stage-1" in note and "reason Z.ai unavailable" in note
+    assert world.run("explore", "demo", "--stage2-off", "r", "--class", "feature") == 2
+    assert len(world.calls("claude")) == 1, "--class permitted a call beside --stage2-off"
+
+
+# ---------------------------------------------------------------------------# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
 # ---------------------------------------------------------------------------
 
 
@@ -14359,7 +14605,9 @@ def test_a_release_block_without_its_snapshot_refuses_the_loop(
 
 def crash_the_release_after_the_append(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Run release-loop once and stop it between the append and the record's removal."""
-    real = stage2.shutil.rmtree
+    # The release removes its record through `remove_loop_record` (it keeps the research files beside it,
+    # deep review RS-2-1), so the crash is planted there.
+    real = stage2.remove_loop_record
     calls = {"n": 0}
 
     def flaky(path, *args, **kwargs):
@@ -14368,7 +14616,7 @@ def crash_the_release_after_the_append(world: World, monkeypatch: pytest.MonkeyP
             raise KeyboardInterrupt("simulated crash after the append")
         return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(stage2.shutil, "rmtree", flaky)
+    monkeypatch.setattr(stage2, "remove_loop_record", flaky)
     with pytest.raises(KeyboardInterrupt):
         world.run("release-loop")
 
@@ -16056,3 +16304,112 @@ def test_a_flash_member_malformed_twice_is_still_replaced(world: World) -> None:
     assert "deepseek-v4.1-flash was asked again with the format reminder" in text
     assert "replaced by mimo-v2.6-pro" in text
     assert "rung:mimo-v2.6-pro" in stage2.read_state(text, "")["consumed"]
+
+
+@pytest.mark.parametrize("failed_call", [False, True])
+@pytest.mark.parametrize("failure", ["protection", "write"])
+def test_repair_answer_evidence_failure_restores_the_attempt(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failed_call: bool,
+    failure: str,
+) -> None:
+    """A failed evidence save must preserve the edits on an attempt ref, then undo them."""
+    baseline = repair_world(world)
+    world.write_findings(VERDICT)
+    original_findings = world.text()
+    real_codex = stage2.run_codex
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        world.findings.write_text("model damaged findings\n", encoding="utf-8")
+        if failed_call:
+            raise stage2.CallFailed("original model transport failure", partial_answer="partial answer")
+        return result
+
+    def fail_evidence(*_args, **_kwargs):
+        if failure == "protection":
+            raise stage2.Refused("evidence protection refused")
+        raise stage2.CallFailed("evidence write failed")
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "save_answer_evidence", fail_evidence)
+    assert world.run("repair") == (2 if failure == "protection" else 1)
+    error = capsys.readouterr().err
+    assert "evidence protection refused" in error if failure == "protection" else "evidence write failed" in error
+    if failed_call:
+        assert "original model transport failure" in error
+    assert "the attempt is saved at refs/stage2/attempts/demo/" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+    assert not (world.root / "tests/test_fix.py").exists()
+    assert "model damaged findings" not in world.text()
+    assert original_findings in world.text()
+    refs = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo").splitlines()
+    assert len(refs) == 1
+    assert git(world.root, "show", f"{refs[0]}:src/app.py") == "value = 2"
+    assert world.calls("make") == []
+    assert len(world.calls("codex")) == 1
+
+
+def test_repair_answer_evidence_locator_survives_the_quote_cut(world: World) -> None:
+    """A long absolute evidence path must still name its complete file in findings."""
+    repair_world(world)
+    # Move the disposable repository under a path longer than the quote limit.
+    parent = world.state / ("a" * 180) / ("b" * 180) / ("c" * 180)
+    parent.mkdir(parents=True)
+    destination = parent / "repo"
+    shutil.move(str(world.root), destination)
+    world.root = destination
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    answer = "L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_other.py::test_other"
+    script_repair(world, [repair_step(stdout=answer)] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    saved = sorted((world.root / ".git/stage2/attempts/demo").glob("attempt-*.md"))
+    assert len(saved) == 3
+    for path in saved:
+        assert len(str(path)) > stage2.QUOTE_LINE_CHARS
+        assert str(path) in world.text(), "the quoted locator lost its evidence filename"
+        assert path.read_text(encoding="utf-8") == answer + "\n"
+
+
+def test_repair_answer_evidence_failed_write_leaves_no_file(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A write error after exclusive creation must remove the incomplete evidence."""
+    real_fdopen = stage2.os.fdopen
+
+    class BrokenWriter:
+        def __init__(self, handle, *args, **kwargs):
+            self.file = real_fdopen(handle, *args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def write(self, body):
+            self.file.write(body[:5])
+            self.file.flush()
+            raise OSError("planted short write")
+
+        def __exit__(self, *args):
+            self.file.close()
+
+    monkeypatch.setattr(stage2.os, "fdopen", BrokenWriter)
+    with pytest.raises(stage2.CallFailed, match="planted short write"):
+        stage2.save_answer_evidence(world.root, "demo", "write-failure", 1, "complete answer", None)
+    directory = world.root / ".git/stage2/attempts/demo"
+    assert list(directory.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "malformed", ["fixed —", "fixed—tests/test_fix.py::test_fix", "fixed —tests/test_fix.py::test_fix"]
+)
+def test_repair_malformed_fixed_claim_still_conflicts(world: World, malformed: str) -> None:
+    """A malformed dash claim beside a valid one must conflict rather than disappear."""
+    repair_world(world)
+    answer = f"L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: {malformed}"
+    script_repair(world, [repair_step(stdout=answer), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "L1-1: several fixed lines" in prompt
+    assert f"`{malformed}`" in prompt

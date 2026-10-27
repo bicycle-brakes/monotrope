@@ -212,11 +212,21 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/research.md`](changes/provenance-location/research.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/spec.md`](changes/provenance-location/spec.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
+| [`changes/ratchet-mutation-evidence/decisions.md`](changes/ratchet-mutation-evidence/decisions.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/findings.md`](changes/ratchet-mutation-evidence/findings.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/plan.md`](changes/ratchet-mutation-evidence/plan.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/research.md`](changes/ratchet-mutation-evidence/research.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/ratchet-mutation-evidence/spec.md`](changes/ratchet-mutation-evidence/spec.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/red-first-install/decisions.md`](changes/red-first-install/decisions.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/findings.md`](changes/red-first-install/findings.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/research.md`](changes/repair-fixed-line-format/research.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
+| [`changes/repair-fixed-line-format/spec.md`](changes/repair-fixed-line-format/spec.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-lines/decisions.md`](changes/repair-fixed-lines/decisions.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/findings.md`](changes/repair-fixed-lines/findings.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
@@ -232,6 +242,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-swarm/decisions.md`](changes/research-swarm/decisions.md) | draft | none | 2026-10-14 | coding-harness-icw |
+| [`changes/research-swarm/design.md`](changes/research-swarm/design.md) | draft | partial | 2026-10-18 | coding-harness-icw |
+| [`changes/research-swarm/findings.md`](changes/research-swarm/findings.md) | draft | none | 2026-10-17 | coding-harness-icw |
+| [`changes/research-swarm/plan.md`](changes/research-swarm/plan.md) | draft | partial | 2026-10-18 | coding-harness-icw |
+| [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-18 | coding-harness-icw |
+| [`changes/research-swarm/spec.md`](changes/research-swarm/spec.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |

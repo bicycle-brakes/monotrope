@@ -8,11 +8,16 @@ discovered free-model swarm first, the declared Flash swarm next, then one
 declared paid model per round (ADR 0021); Codex drafts the spec, the design
 and the plan (2, 2b and 3; GLM 5.3 after two failed Codex attempts) and
 reviews the change (6); Opus 5.5 reviews the spec (2a); GLM 5.3 Flash
-explores (phase 1) and implements (phase 4). A declaration in
-`model-endpoints.yaml` stops nothing; this runner
-stands between the rule and the call.
+implements (phase 4) and explores (phase 1) a `bounded` change or a `spike`,
+while a `feature` or `architectural` change explores through the research
+swarm (ADR 0020 draft: a finder trio maps the sources; three repository
+seats cover topics 1–8, three online seats plus selected Go free models
+cover topics 9–11; fresh tool-free Opus 5.5 reconciles all eleven topics).
+A declaration in `model-endpoints.yaml` stops nothing; this runner stands
+between the rule and the call.
 
-    python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
+    python3 scripts/stage2.py prepare-explore <change> # report seat and free-model availability before phase 1
+    python3 scripts/stage2.py explore      <change>   # the swarm or GLM Flash by class, phase 1
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
@@ -106,7 +111,12 @@ were measured once by hand on the pinned version; the suite starts no real
 Pi, and the version pin (`require_pi`) is what ties the measurement to the
 call. The Codex review calls run in the CLI's read-only sandbox; a draft's
 Codex call runs in `workspace-write`, and the runner puts back what lands
-outside the change folder.
+outside the change folder. The swarm's free researcher contexts are a
+different route: fresh scratch working directory, home and agent directory,
+every discovery surface off, only the runner-owned research-tools extension
+loaded, and no repository path in play - the offline capture on the pinned Pi
+with synthetic private canaries, not this suite, is their isolation evidence
+(ADR 0020 draft).
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`):
@@ -185,6 +195,12 @@ CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
 CODEX = ("openai-codex", "gpt-6.1-sol", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
+# The change classes (check_interview_minimums.py's vocabulary). Explore routes on
+# one: the swarm for the two large classes, the single explorer for the two small
+# ones (ADR 0020 draft). Stated before the spec exists - explore-only `--class`
+# or the headers of `research.md` and `spec.md` - and every available statement must agree.
+CLASSES = ("spike", "bounded", "feature", "architectural")
+SWARM_CLASSES = ("feature", "architectural")
 # A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
 # merge base of the baseline and origin/main, so a second draft may edit the ADR the first one committed.
 NEW_ADR = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
@@ -259,12 +275,17 @@ REPAIR_ANSWER = (
     "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
     "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
     "A colon line whose right side is a fixed status (`fixed — …`) also fails when its id names no\n"
-    "taken row, whatever the id's shape. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "taken row, whatever the id's shape. A taken row takes exactly one distinct fixed line: a repeated\n"
+    "identical line counts once, and two different fixed lines for one row fail the attempt, so give\n"
+    "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
+    "A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
     "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
-    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
+    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
+    "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
+    "the attempt's diagnostics, where a rejected answer can be read again."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -506,6 +527,11 @@ class Refused(Exception):
 
 class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
+
+    def __init__(self, message: str, *, partial_answer: str = "", receipts_text: str = "") -> None:
+        super().__init__(message)
+        self.partial_answer = partial_answer
+        self.receipts_text = receipts_text
 
 
 class NotStarted(CallFailed):
@@ -908,6 +934,18 @@ def fail(
     return CallFailed(f"{program} call failed: {reason}{detail}")
 
 
+def failed_with_answer_file(error: CallFailed, answer_file: Path) -> CallFailed:
+    """A failed Codex call keeps whatever its answer file already held, as its partial answer.
+
+    The repair evidence saves a failed call's available output too (bead coding-harness-hgvp); the
+    message and the failure class stay as `fail` built them, so failure classification and the retry
+    behavior are unchanged.
+    """
+    with contextlib.suppress(OSError, UnicodeDecodeError):
+        error.partial_answer = answer_file.read_text(encoding="utf-8")
+    return error
+
+
 # ---------------------------------------------------------------------------
 # Tables and findings.md
 # ---------------------------------------------------------------------------
@@ -969,13 +1007,51 @@ def render_table(columns: list[str], rows: list[list[str]]) -> str:
 
 
 def append(path: Path, text: str) -> None:
-    """Add a block at the end, separated by one blank line."""
-    existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    joined = f"{existing}\n{text.rstrip()}\n" if existing else f"{text.rstrip()}\n"
-    path.write_text(joined, encoding="utf-8")
-    stamp_updated(path)
+    """Add a block at the end, separated by one blank line, and stamp `updated:` - in one atomic replacement.
+
+    The earlier bytes stay exactly as they were (CRLF, lone CR, anything not LF; deep review RS-1-8): the new
+    content is built from the file's bytes, never from text read with universal newlines. The appended and
+    stamped result goes to a temporary file in the same directory, is flushed to disk and then replaces the
+    file in one step, so a crash, a kill or a full disk leaves either the old file or the new one, never a
+    truncated one (deep review RS-2-6).
+    """
+    existing = path.read_bytes() if path.exists() else b""
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if existing.endswith(b"\n") else b"\n") + b"\n"
+    joined = existing + separator + addition if existing else addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+    write_atomic(path, stamped)
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Replace ``path`` with ``data``: temporary file, fsync, rename, directory fsync; the mode is kept."""
+    try:
+        mode = path.stat().st_mode & 0o7777
+    except FileNotFoundError:
+        path.write_bytes(data)  # nothing earlier to lose; the process umask applies as for any new file
+        return
+    handle, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+        temporary.chmod(mode)
+        temporary.replace(path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def stamp_updated(path: Path) -> None:
@@ -1066,41 +1142,16 @@ def excluded_problem(root: Path, model: str) -> str | None:
     """Why `ausgeschlossen` in `model-endpoints.yaml` denies this model, or None (R-4 of the review-swarm review).
 
     The list was prose the runner never read: a denied provider's new free id would have reviewed diffs
-    without a decision. An entry binds by naming the ids or id prefixes it excludes in `modelle`; an
-    entry without that field documents a decision but names nothing the code can match. One predicate,
-    read by the free class and by the paid declaration, so both paths answer the same way.
+    without a decision. One predicate (`stage2_swarm.exclusion_problem`), read by the free class, the paid
+    declaration and every research path, with each research role checking its own data class (PR #208).
     """
+    import stage2_swarm
+
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return "model-endpoints.yaml cannot be read"
-    if not isinstance(data, dict):
-        return "model-endpoints.yaml has malformed exclusions: the declaration must be a mapping"
-    entries = data.get("ausgeschlossen", [])
-    if not isinstance(entries, list):
-        return "model-endpoints.yaml has malformed exclusions: ausgeschlossen must be a list"
-    full = model.lower()
-    names = model.rsplit("/", 1)[-1].lower()
-    for number, entry in enumerate(entries, 1):
-        malformed = f"model-endpoints.yaml has a malformed exclusion at entry {number}"
-        if not isinstance(entry, dict):
-            return malformed + ": a mapping is required"
-        data_class = entry.get("klasse", "framework")
-        if not isinstance(data_class, str) or not data_class.strip():
-            return malformed + ": klasse must name a data class"
-        if data_class != "framework":
-            continue
-        if "modelle" not in entry:
-            continue  # A legacy prose-only decision has no machine-readable model ids.
-        listed = entry.get("modelle")
-        if not isinstance(listed, list) or any(not isinstance(item, str) or not item.strip() for item in listed):
-            return malformed + ": modelle must be a list of nonempty model ids or prefixes"
-        for item in listed:
-            prefix = item.strip().lower()
-            if prefix and any(value == prefix or value.startswith(prefix) for value in (full, names)):
-                reason = str(entry.get("was") or "excluded by the maintainer").strip()
-                return f"the model {model} is excluded by model-endpoints.yaml: {reason}"
-    return None
+    return stage2_swarm.exclusion_problem(data, model)
 
 
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
@@ -1133,6 +1184,30 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     residency = found.get("residenz")
     if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {endpoint} states no data residency"
+    return None
+
+
+def public_declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
+    """Why the declaration does not clear this endpoint and model for public-web data, or None.
+
+    The swarm's free researchers are the only role on the public class (ADR 0020
+    draft): the endpoint must be cleared for `public-web` and nothing else, and
+    the model must be listed. Unknown residency does not refuse here - it is
+    what the declaration honestly records - while the framework check above
+    still refuses every public-only endpoint and every residency it cannot
+    read (spec, criterion 11).
+    """
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return "model-endpoints.yaml cannot be read"
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    if model not in (found.get("modelle") or []):
+        return f"the endpoint {endpoint} does not list the model {model}"
+    if found.get("darf_sehen") != ["public-web"]:
+        return f"the endpoint {endpoint} is not cleared for public-web data only"
     return None
 
 
@@ -2028,6 +2103,25 @@ FREE_REVIEW_BODY = (
 )
 
 
+def free_round_prompt(head: str, diff: str) -> str:
+    """The free round's prompt; the review and the availability probe of a free model build it alike."""
+    return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+
+
+FREE_PROBE_HEAD = "Availability probe only. Reply with OK. Do not review the diff and do not request tools."
+
+
+def free_probe_prompt(root: Path) -> str | None:
+    """A free model's availability probe: the real free-round prompt over the bounded free diff, asking for OK.
+
+    None without a free diff: the free stage is skipped then, so there is nothing to probe at real size.
+    """
+    diff, _cut = free_diff(root)
+    if not diff.strip():
+        return None
+    return free_round_prompt(FREE_PROBE_HEAD, bounded_review_diff(diff)[0])
+
+
 def reviewer_key() -> str:
     """The OpenCode Go key, read from the secrets file at call time. Never an argument."""
     key = read_secret("OPENCODE_GO_KEY")
@@ -2088,9 +2182,9 @@ def run_codex(
         done = launch(command, ctx.root, foreign_env({}))
         thread = thread_id(done.stdout or "")
         if done.returncode != 0:
-            raise fail("codex", done, f"exit {done.returncode}")
+            raise failed_with_answer_file(fail("codex", done, f"exit {done.returncode}"), answer_file)
         if thread is None:
-            raise fail("codex", done, "no thread.started event")
+            raise failed_with_answer_file(fail("codex", done, "no thread.started event"), answer_file)
         try:
             answer = answer_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:
@@ -3163,7 +3257,7 @@ def release(root: Path, change: str) -> list[list[str]]:
             block = heading + "\n" + block.split("\n", 1)[1]
             replace_record(findings, text[:start] + block + text[end:])
             stamp_updated(findings)
-        shutil.rmtree(record_dir(change, root))
+        remove_loop_record(record_dir(change, root))
         rows = record_rows(record)
         print(
             f"release-loop: the record was released already ({record_digest(record)}); nothing is appended, "
@@ -3204,9 +3298,28 @@ def release(root: Path, change: str) -> list[list[str]]:
     if refusal:
         raise Refused(refusal)
     append(findings, release_block(record, text))
-    shutil.rmtree(record_dir(change, root))
+    remove_loop_record(record_dir(change, root))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
     return rows
+
+
+def remove_loop_record(directory: Path) -> None:
+    """Delete the review loop's record, never the phase-1 research files beside it (deep review RS-2-1).
+
+    The change's record directory also holds the research state store (`research/`, with the lock a running
+    research run holds) and research preparation's receipt and probe audits (`research-*`). Deleting those
+    would lose the reusable results of an interrupted run and let a second run take a fresh lock while the
+    first still holds the old one. The directory goes only when nothing else is left in it.
+    """
+    for entry in directory.iterdir():
+        if entry.name == "research" or entry.name.startswith("research-"):
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    with contextlib.suppress(OSError):
+        directory.rmdir()
 
 
 def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
@@ -3767,6 +3880,58 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
+def save_answer_evidence(root: Path, change: str, token: str, attempt: int, answer: str, key: str | None) -> str:
+    """Save one attempt's full answer as protected evidence below the worktree's own git directory.
+
+    Written at the model-return boundary, before any HEAD check, verification or answer check can
+    stop the run, so a rejected answer stays diagnosable from what the model actually returned (bead
+    coding-harness-hgvp). The directory is git's resolved per-worktree `stage2/attempts/<change>/` - in
+    a linked worktree below the main checkout's `.git/worktrees/<name>/`, which the diagnostics name
+    as an absolute path - local evidence like `refs/stage2/attempts/`, tracked by no path and carried by no branch push.
+    The answer passes `protect_diagnostics` once on every route, the keyless ones included; an empty
+    or unavailable answer is recorded as such, never fabricated or retried. The file is created
+    exclusively, so an earlier attempt's evidence is never overwritten; an aliased destination, a
+    protection failure or a failed write raises, so no checkpoint stands on lost or unprotected
+    evidence. Returns the saved file, as the diagnostics name it.
+    """
+    try:
+        git_dir = Path(_git_output(root, "rev-parse", "--absolute-git-dir").strip())
+    except Refused as error:
+        raise CallFailed(f"the answer evidence directory could not be resolved ({error})") from error
+    if not git_dir.is_absolute():
+        git_dir = root / git_dir
+    body = protect_diagnostics(answer, key) if answer.strip() else "(no answer was returned)\n"
+    directory = git_dir / "stage2" / "attempts" / change
+    expected = Path(os.path.realpath(git_dir)) / "stage2" / "attempts" / change
+    if directory.is_symlink() or os.path.realpath(directory) != str(expected):
+        raise CallFailed(
+            f"the answer evidence directory {directory} is not this worktree's own stage2/attempts/{change}; "
+            "no evidence is written and no checkpoint is made"
+        )
+    destination = directory / f"attempt-{attempt}-{token}.md"
+    created = False
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        handle = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
+        with os.fdopen(handle, "w", encoding="utf-8") as file:
+            file.write(body if body.endswith("\n") else body + "\n")
+        if destination.is_symlink() or destination.stat().st_nlink > 1:
+            raise OSError(f"the destination is aliased ({destination})")
+    except OSError as error:
+        # Remove only the file this call created, never an earlier exclusive destination.
+        cleanup = "no evidence is written"
+        if created:
+            try:
+                destination.unlink()
+            except OSError as cleanup_error:
+                cleanup = f"incomplete evidence remains at {destination} (cleanup failed: {cleanup_error})"
+        raise CallFailed(
+            f"the answer evidence could not be saved ({error}); {cleanup} and no checkpoint is made"
+        ) from error
+    return str(destination)
+
+
 def restore_baseline(
     root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
 ) -> str:
@@ -3903,6 +4068,8 @@ def run_work_model(
     endpoint: tuple[str, str, str | None],
     writable: bool,
     key: str | None = None,
+    timeout: float | None = None,
+    limit: str | None = None,
 ) -> str:
     """One non-interactive Claude Code work call with file tools only."""
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
@@ -3939,9 +4106,12 @@ def run_work_model(
             config_dir = Path(tmp) / "claude-config"
             config_dir.mkdir()
             env = glm_env(key, config_dir, endpoint[1])
-        done = launch(command, ctx.root, env, key)
+        done = launch(command, ctx.root, env, key, timeout=timeout, limit=limit)
     if done.returncode != 0:
-        raise fail("claude", done, f"exit {done.returncode}", key)
+        error = fail("claude", done, f"exit {done.returncode}", key)
+        # A failed call's printed answer travels along for the repair evidence; nothing else changes.
+        error.partial_answer = scrub(done.stdout or "", key)
+        raise error
     answer = scrub(done.stdout or "", key)
     if not answer.strip():
         raise fail("claude", done, "the answer is empty", key)
@@ -5055,7 +5225,12 @@ def check_repair_answer(
 
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
     active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
-    status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
+    status. A finding-shaped id or claimed fix that names no taken row still fails. A taken row's
+    claims are its collected lines whose right side starts `fixed` followed by a dash, including
+    malformed spacing: explanations beside them are prose, identical claims count once, two distinct
+    claims fail as `several fixed lines`, and with
+    no claim at all the missing or malformed diagnostics stand as they did (spec, criteria 1-4).
+    Every row of
     findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
     rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
@@ -5094,16 +5269,25 @@ def check_repair_answer(
     fixes: dict[str, str] = {}
     for _place, row in taken:
         ident, given = row[0], parsed.pop(row[0], [])
-        if not given:
-            problems.append(f"{ident}: no fixed line")
+        # A claim starts with fixed and a dash, including malformed spacing; other text is report
+        # prose (spec, criterion 1). Claims are deduplicated in their normalized form as the parser
+        # collected them, before `fixed_status` rewrites anything, so two different claims can never
+        # collapse into one (spec, criterion 2); identical repetitions count once, in encounter order.
+        claims = list(dict.fromkeys(line for line in given if re.match(r"^fixed\s*[—–-]", line)))
+        if not claims:
+            # Explanations alone, or a lone malformed line, keep the missing or malformed diagnostic
+            # rather than passing as a repair (spec, criterion 4).
+            problems.append(f"{ident}: no fixed line" if not given else fixed_status(ident, given[0]))
             continue
-        if len(given) > 1:
-            problems.append(f"{ident}: several fixed lines")
+        if len(claims) > 1:
+            quoted = "; ".join(f"`{claim}`" for claim in claims)
+            problems.append(f"{ident}: several fixed lines ({quoted})")
             continue
-        outcome = fixed_status(ident, given[0])
+        outcome = fixed_status(ident, claims[0])
         if outcome.startswith("fixed — "):
             fixes[ident] = outcome
         else:
+            # A malformed fixed claim stays a claim: it is validated here, or it conflicted above.
             problems.append(outcome)
     for ident in parsed:
         problems.append(f"{ident}: no taken row carries this id")
@@ -5319,9 +5503,143 @@ def names_a_repository_file(root: Path, answer: str) -> bool:
     return False
 
 
-def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 1: GLM Flash, or explicit Haiku fallback, appends repository facts."""
-    endpoint = HAIKU if stage2_off is not None else GLM_FLASH
+def declared_class(root: Path, change: str, klass: str | None) -> str:
+    """The one class every available statement states, or the refusal before any call.
+
+    Sources: the explore-only `--class` argument and the `class:` of
+    `research.md`'s and `spec.md`'s headers. Every statement that is present
+    must name a class and agree with the others - a header that does not
+    parse, or a `class:` key with an empty value, is a present statement that
+    names none and refuses; an explicit argument does not cure a stated one,
+    and none present refuses, because a silently assumed
+    small change would keep a large change off the swarm (spec, criteria 3
+    and 4).
+    """
+    folder = root / "plans" / "changes" / change
+    found: dict[str, str] = {}
+    for name in ("research.md", "spec.md"):
+        try:
+            text = (folder / name).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue  # not written yet is the normal state before the spec
+        except (OSError, UnicodeDecodeError) as error:
+            raise Refused(
+                f"plans/changes/{change}/{name} cannot be read; repair the file and its class header ({error})."
+            ) from error
+        match = re.match(r"---\n(.*?)\n---(?:\n|$)", text, re.S)
+        if not match:
+            if text.split("\n", 1)[0].rstrip("\r") == "---":
+                raise Refused(f"plans/changes/{change}/{name}: repair the unterminated front matter header.")
+            continue
+        try:
+            node = yaml.compose(match.group(1), Loader=yaml.SafeLoader)
+            if isinstance(node, yaml.MappingNode):
+                class_keys = [
+                    key for key, _ in node.value if key.tag == "tag:yaml.org,2002:str" and key.value == "class"
+                ]
+                if len(class_keys) > 1:
+                    raise Refused(
+                        f"plans/changes/{change}/{name} states class more than once; "
+                        "repair the header to contain exactly one `class:` declaration."
+                    )
+            header = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            header = None
+        if not isinstance(header, dict):
+            # A present header that does not read is no statement of "no class":
+            # it may say `bounded`, so an explicit argument cannot cure it.
+            raise Refused(
+                f"plans/changes/{change}/{name} has a header that does not read as YAML fields; "
+                "the class it states cannot be known."
+            )
+        if "class" not in header:
+            continue
+        stated = header["class"]
+        if not isinstance(stated, str) or stated not in CLASSES:
+            raise Refused(
+                f"plans/changes/{change}/{name} states the class '{stated}', which is none of {', '.join(CLASSES)}."
+            )
+        found[name] = stated
+    if klass is not None and klass not in CLASSES:
+        raise Refused(f"--class {klass} is none of {', '.join(CLASSES)}.")
+    for name, stated in found.items():
+        if klass is not None and stated != klass:
+            raise Refused(
+                f"--class {klass} contradicts the class '{stated}' of plans/changes/{change}/{name}; "
+                "the runner does not override a stated class."
+            )
+    if len(set(found.values())) > 1:
+        listing = ", ".join(f"{name} says {stated}" for name, stated in sorted(found.items()))
+        raise Refused(f"the stated classes disagree: {listing}.")
+    if klass is not None:
+        return klass
+    if found:
+        return next(iter(found.values()))
+    raise Refused(
+        f"no class is stated for {change}: pass --class <{'|'.join(CLASSES)}> or state `class:` in "
+        "research.md's header - a change must say which before phase 1 routes."
+    )
+
+
+def seat_choice(values: list[str] | None) -> dict[str, list[str]] | None:
+    """`--seats repository=a,b` and `--seats online=x,y,z` as {trio: models}, or a refusal naming the fault."""
+    if not values:
+        return None
+    choice: dict[str, list[str]] = {}
+    for value in values:
+        label, sep, models = value.partition("=")
+        names = [name.strip() for name in models.split(",") if name.strip()]
+        if not sep or not names or label in choice:
+            raise Refused(f"--seats takes TRIO=model,model once per trio (repository, online), not `{value}`.")
+        choice[label] = names
+    return choice
+
+
+def prepare_explore(root: Path, change: str, klass: str | None = None, seats: list[str] | None = None) -> None:
+    """Phase 1, step one for a swarm class: select and probe the six seats and print the report.
+
+    Writes a single-use receipt outside the worktree; `explore <change> --availability-reported <id>`
+    consumes it once the maintainer has answered which models to use (Q-18). `seats` carries that answer
+    when it differs from the recommendation.
+    """
+    import stage2_availability
+
+    path = stage2_availability.research_receipt_path(change, sys.modules[__name__], root)
+    with stage2_availability.receipt_lock(path):
+        path.unlink(missing_ok=True)
+    stage2_availability.prepare_research(root, change, sys.modules[__name__], klass, seat_choice(seats))
+
+
+def explore(
+    root: Path,
+    change: str,
+    stage2_off: str | None = None,
+    klass: str | None = None,
+    availability_reported: str | None = None,
+) -> None:
+    """Phase 1: the swarm for a feature or architectural change, GLM Flash for a bounded
+    change or a spike, or the explicit Haiku fallback - the answer lands in research.md."""
+    if stage2_off is None:
+        klass = declared_class(root, change, klass)
+        if klass in SWARM_CLASSES:
+            import stage2_availability
+            import stage2_swarm
+
+            # The reported receipt comes first: no research call, probe or catalog read starts without it.
+            selection = stage2_availability.consume_research(
+                root, change, availability_reported, sys.modules[__name__], klass
+            )
+            stage2_swarm.run(root, change, sys.modules[__name__], klass, selection=selection)
+            return
+        if availability_reported is not None:
+            raise Refused(f"--availability-reported belongs to a swarm class; this change is {klass}.")
+        endpoint = GLM_FLASH
+    else:
+        if availability_reported is not None or klass is not None:
+            raise Refused("--stage2-off explores without a class or a selection receipt.")
+        # The explicit Stage-1 route skips the class entirely: Haiku explores,
+        # and only the reason is carried for the later plan (spec, criterion 20).
+        endpoint = HAIKU
     ctx = preflight(root, change, endpoint, bead_file="research.md")
     key = None
     route = "stage-1" if stage2_off is not None else "flash"
@@ -5343,8 +5661,19 @@ def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
         tail = "\n".join(answer.strip().splitlines()[-40:])
         print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{answer.strip()}")
+    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
+
+
+def quote_research_records(text: str) -> str:
+    """A model answer with every research-swarm/v2 run marker and record fence made inert (deep review RS-1-10).
+
+    The research-handoff gate trusts each well-formed run envelope in `research.md`; only the research runner
+    writes one. A single explorer's answer is appended as prose, so a forged envelope or record fence in it is
+    quoted: the marker no longer matches the gate's envelope or record syntax and is read as plain text.
+    """
+    text = re.sub(r"<!--(\s*/?)research-swarm/v2", r"<!--\1research-swarm/v2 (quoted)", text)
+    return re.sub(r"(?m)^([ \t]*`{3,}[ \t]*)research-swarm/v2", r"\1quoted-research-swarm/v2", text)
 
 
 def implementation_prompt(
@@ -5462,6 +5791,7 @@ def run_attempts(
     snapshot_findings=None,  # () -> the findings text as it stands right before the model call
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
+    retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -5471,6 +5801,12 @@ def run_attempts(
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
     F-2).
+
+    A verb that passes `retain_answer` keeps every attempt's full answer: right at the model-return
+    boundary, before any HEAD check, verification or answer check can stop the run, the protected
+    answer is saved as local evidence and its location joins the attempt's diagnostics - the parser's
+    rejections, the call and verify failures included - and is printed on success (bead
+    coding-harness-hgvp). A failed call keeps the output it returned.
 
     The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
     every route, the keyless ones included; the block in findings.md and the retry prompt both take that
@@ -5505,6 +5841,9 @@ def run_attempts(
     # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
     # next attempt's reference by taking the digest again (P1 of the #188 review).
     tools = tool_state(root) if tools is None else tools
+    # One token per invocation: every attempt's evidence file carries it beside its attempt number,
+    # so a rerun of the verb never overwrites an earlier run's evidence (spec, criterion 6).
+    token = f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -5535,6 +5874,7 @@ def run_attempts(
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
         answer = ""
+        evidence: str | None = None
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
         # A completed call keeps its measured entry whatever post-call check then stops the run; a
         # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
@@ -5560,6 +5900,40 @@ def run_attempts(
                 call_error = error
             else:
                 completed = True
+            if retain_answer:
+                # Before the HEAD checks, verification or the answer check can stop the run: the
+                # whole answer, a failed call's available output included, protected once for the
+                # route it arrived on. A protection or write failure raises and stops the run with
+                # no checkpoint (spec, criteria 6 and 8).
+                output = answer if completed else (call_error.partial_answer if call_error is not None else "")
+                try:
+                    evidence = save_answer_evidence(root, ctx.change, token, attempt, output, key)
+                except (Refused, CallFailed, OSError) as evidence_error:
+                    # Evidence is a terminal boundary, but the model's edits still need the same
+                    # recovery as a failed call. Keep both failures and the snapshot location.
+                    if kept is not None:
+                        restore_findings(kept)
+                    exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
+                    try:
+                        saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+                    except OSError as save_error:
+                        saved = f"saving the attempt failed ({save_error})"
+                    # As in the normal HEAD check, never rewrite a commit made by the model.
+                    try:
+                        moved = endpoint == CODEX and _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    restored = (
+                        "HEAD moved or could not be read; history was not rewritten"
+                        if moved
+                        else restore_baseline(root, baseline, allowed, ignored_before)
+                    )
+                    failures = [str(call_error)] if call_error is not None else []
+                    failures += [str(evidence_error), saved, restored]
+                    if exposed:
+                        failures.append(credential_message(exposed))
+                    failure_type = Refused if isinstance(evidence_error, Refused) else CallFailed
+                    raise failure_type("; ".join(failures)) from evidence_error
             if endpoint == CODEX:
                 try:
                     head_now = _git_output(root, "rev-parse", "HEAD").strip()
@@ -5585,6 +5959,8 @@ def run_attempts(
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"
+                    if retain_answer and evidence is not None:
+                        listing += f"\n- the attempt's protected answer is saved at {evidence}"
                     append(
                         ctx.findings,
                         quote_block(
@@ -5596,6 +5972,7 @@ def run_attempts(
                                 moved_head=True,
                             ),
                             key,
+                            whole=[line for line in listing.splitlines() if evidence and evidence in line],
                         ),
                     )
                     raise CallFailed(problem) from call_error
@@ -5613,7 +5990,10 @@ def run_attempts(
                     saved = f"saving the attempt failed ({save_error})"
                 restored = restore_baseline(root, baseline, allowed, ignored_before)
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
-                raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
+                ended = f"{error}; {saved}; {restored}{leaked}"
+                if retain_answer and evidence is not None:
+                    ended += f"\nthe attempt's protected answer is saved at {evidence}"
+                raise CallFailed(ended) from error
             if key is not None:
                 # Every route scans with the key read in this run - the Sonnet fallback included - before
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -5671,6 +6051,10 @@ def run_attempts(
                 # The format line stands first: the step ran before `make verify`, and the next model
                 # learns that the runner formats and whether ruff left findings it could not fix.
                 problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
+                if retain_answer and evidence is not None:
+                    # The locator stands last, so tailing the listing keeps it even where the
+                    # displayed diagnostics are cut (spec, criterion 7).
+                    problems.append(f"the attempt's protected answer is saved at {evidence}")
                 if kept is not None:
                     # Before the block is appended, so the quoted diagnostics stand beside the rows as
                     # they were, not beside the model's edits of them.
@@ -5681,7 +6065,20 @@ def run_attempts(
                 listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
                 files = protect_files(files, key)
                 diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-                append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+                append(
+                    ctx.findings,
+                    quote_block(
+                        attempt_block(attempt, route, listing, files),
+                        key,
+                        # Conflict diagnostics already passed protection above. Keep every quoted
+                        # claim, even when a long preceding reason would push it past the line cut.
+                        whole=[
+                            line
+                            for line in listing.splitlines()
+                            if (evidence and evidence in line) or (retain_answer and ": several fixed lines (" in line)
+                        ],
+                    ),
+                )
             record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
             exposed = []
             if key is not None:
@@ -5757,6 +6154,8 @@ def run_attempts(
                     raise
                 if after_commit is not None:
                     after_commit()
+                if retain_answer and evidence is not None:
+                    print(f"{verb}: the attempt's protected answer is saved at {evidence}")
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
                 return
             if attempt < len(routes):
@@ -6280,6 +6679,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
         tools=tools,
+        retain_answer=True,
     )
 
 
@@ -6457,7 +6857,7 @@ def _review_round(
     def prompt_for(member: str) -> str:
         head = f"This is round {round_number}; you are `{member}`."
         if free:
-            return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+            return free_round_prompt(head, diff)
         # The request comes before the diff and again after it: a long diff would bury it.
         return "\n\n".join([body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
 
@@ -6829,7 +7229,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted([*VERBS, "session"]))
+    parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "--stage2-off",
@@ -6843,6 +7243,30 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         default=None,
         help="session only: the model id, exactly as model-endpoints.yaml lists it",
+    )
+    parser.add_argument(
+        "--class",
+        dest="klass",
+        default=None,
+        choices=CLASSES,
+        help="explore only: the change class before a spec exists, agreeing with every stated one",
+    )
+    parser.add_argument(
+        "--availability-reported",
+        dest="availability_reported",
+        default=None,
+        metavar="ID",
+        help=(
+            "the id printed by prepare-loop (review-loop) or prepare-explore (explore, swarm classes) "
+            "after its selection was reported to the maintainer"
+        ),
+    )
+    parser.add_argument(
+        "--seats",
+        action="append",
+        default=None,
+        metavar="TRIO=MODELS",
+        help="prepare-explore only: the maintainer's Go models for a trio, e.g. repository=a,b",
     )
     parser.add_argument(
         "--handover",
@@ -6867,11 +7291,6 @@ def main(argv: list[str] | None = None) -> int:
         help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--availability-reported",
-        default=None,
-        help="review-loop only: report id printed by prepare-loop after its selection was shown in the main conversation",
-    )
     args = parser.parse_args(argv)
     _LAUNCH_STOPPED.clear()
     # SIGTERM stops the run like Ctrl-C: the running programs' groups are killed before the exit
@@ -6911,8 +7330,12 @@ def _run(args: argparse.Namespace) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
-        if args.availability_reported is not None and args.verb != "review-loop":
-            raise Refused("--availability-reported belongs to review-loop alone.")
+        if args.klass is not None and args.verb not in {"explore", "prepare-explore"}:
+            raise Refused("--class belongs to the explore and prepare-explore verbs alone.")
+        if args.seats is not None and args.verb != "prepare-explore":
+            raise Refused("--seats belongs to prepare-explore alone.")
+        if args.availability_reported is not None and args.verb not in {"explore", "review-loop"}:
+            raise Refused("--availability-reported belongs to the explore and review-loop verbs alone.")
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
@@ -6930,7 +7353,11 @@ def _run(args: argparse.Namespace) -> int:
             # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
             with holding_record(args.change, Path(args.root)):
                 repair(Path(args.root), args.change, args.stage2_off)
-        elif args.verb in {"explore", "implement"}:
+        elif args.verb == "prepare-explore":
+            prepare_explore(Path(args.root), args.change, args.klass, args.seats)
+        elif args.verb == "explore":
+            explore(Path(args.root), args.change, args.stage2_off, args.klass, args.availability_reported)
+        elif args.verb == "implement":
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)

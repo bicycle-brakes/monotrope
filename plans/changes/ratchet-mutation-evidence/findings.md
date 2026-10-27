@@ -1,0 +1,276 @@
+---
+title: "Findings — ratchet-mutation-evidence"
+status: draft
+implementation_status: partial
+date: 2026-10-25
+last_reviewed: 2026-10-25
+updated: 2026-10-26
+supersedes: null
+superseded_by: null
+bead: coding-harness-a05
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-10-25"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [findings]
+---
+
+# Findings — ratchet-mutation-evidence
+
+## Implementation, 2026-10-25
+
+Implemented by a Claude Code sub-agent (Opus 5.5) in a cloud container, at
+the orchestrating session's instruction, on a tree branched from
+`origin/main` `f8a6b33`.
+
+**Red first.** Step 1 moved today's mention rule unchanged into
+`_evidence`; the three mutation-coverage tests stayed green. The new tests
+of step 2, run against that rule
+(`pytest -k "bare_mention or reaches_the_gate_script or mutation"`):
+6 failed, 4 passed.
+
+- Both cases of `test_a_bare_mention_of_a_gate_script_is_no_mutation_evidence`
+  failed: "a mention in another test counted as mutation evidence" and
+  "a call site that only identifies the script counted as mutation
+  evidence" (criterion 1).
+- `test_the_mutation_ratchet_only_turns_one_way` failed with "long since
+  covered, but still in the ratchet: ['plans-registry',
+  'plans-registry-strict']" — the new test data in `tests/test_ci.py` named
+  `plans_registry.py` beside mutation-named tests, which reproduced the
+  bead's case on the live tree.
+- Three cases of `test_a_mutation_test_that_reaches_the_gate_script_is_evidence`
+  failed too (a call into the module, an alias, a name imported from it):
+  the mention rule also misses genuine evidence that never spells the `.py`
+  name. The two path shapes passed.
+
+**After step 3** (`_tests_reaching`): all new tests green, the ratchet green,
+and `test_every_gate_step_has_a_mutation_test` red with exactly one gate,
+"ramp-valves → ramp_valves.py" — the one gate whose evidence was only
+mentions (`research.md`). **After step 4** (the seeded ramp-valves run):
+`tests/test_ci.py` and `tests/test_gate_machinery.py` green, 114 passed,
+2 skipped. Per gate the shared rule now names the reaching tests; the
+exemption list is unchanged at seven entries.
+
+Cost: the coverage test parses every test file that names a gate's module
+once (cached), about 1 s on this container, where the text search took
+0.04 s.
+
+**`PYTHON=$PWD/.venv/bin/python3 make verify`, 2026-10-25:** red on two
+blocking gates, both for this container only. `pytest`: 1 failed, 2505
+passed, 30 skipped, 16 errors — the failure is
+`test_an_unreadable_target_is_named_by_its_repository_path` (the container
+runs as root) and the errors are `tests/test_pi_contract.py` (no pinned Pi);
+none touches this change. `ruleset`: needs network and a `gh` login.
+`leerprobe` and every other blocking gate green; `docs-links` and
+`markdownlint` red as report-only gates, as on `main`.
+
+## Self-review, 2026-10-25
+
+Read by the implementing session, so it is no independent review.
+
+- The reading is syntactic: a test that copies a script by a path built
+  with `/` (as the stage-2 tests plant the renderer) would reach it in this
+  sense without running it. No mutation-named test does so on
+  `f8a6b33`; a later one would make an exemption look stale, and the
+  ratchet's message names the gate.
+- A local variable that shares the alias of an imported gate module is read
+  as the module (scope is not tracked).
+- Fixtures, `conftest.py` and helpers in another file are not followed
+  (non-goal); evidence that lives only there would go unseen and turn the
+  coverage check red, not green.
+- `MUTATIONS_NAMEN` still matches raw text for a `tests/` subject (the
+  ruleset gate), as before.
+- New identifiers are English; the section's German names stay (D-4).
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2190 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-1 | MAJOR | SPEC | implementation | tests/test_ci.py:2010–2015 | A mutation-named test containing only `assert command[0].endswith("plans_registry.py")` is returned as evidence for the registry script. Every call argument is treated as a script path, including strings used solely to compare commands. This reproduces the false evidence the change must reject and can force removal of an exemption without a reaching test. [Acceptance criterion 1] | Codex | fixed — tests/test_ci.py::test_a_string_comparison_is_no_gate_evidence | — |
+| R6-2 | MAJOR | SPEC | implementation | tests/test_ci.py:2083–2089 | Helper references count as helper calls. With `_run()` calling `plans_registry.main()`, a mutation-named test containing only `assert callable(_run)` is returned as registry evidence although it never invokes `_run` or the gate. Reachability must follow invocations; merely referencing a callable cannot establish execution. [Acceptance criterion 1] | Codex | fixed — tests/test_ci.py::test_a_helper_reference_is_no_helper_call | — |
+| R6-3 | MAJOR | MAINT | implementation | tests/test_ci.py:2027–2031 | Imports inside unrelated functions become bindings for every test in the file. Reproduced with `from plans_registry import main` inside a normal test and a separate mutation-named test calling its own `main` fixture: `_evidence` credits the registry script although the mutation test never imports or calls it. Preserve import scope when resolving names so unrelated tests cannot supply false gate coverage. | Codex | fixed — tests/test_ci.py::test_an_import_in_another_test_binds_nothing_here | — |
+
+Phase 6 verdict: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43, 2026-10-26
+Reviewer session: codex 01a175fa-3ebc-7151-80c0-fd1cdb4f6b43 — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_ci.py` +105 -24
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: tests/test_ci.py::test_a_string_comparison_is_no_gate_evidence: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - R6-2: tests/test_ci.py::test_a_helper_reference_is_no_helper_call: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - R6-3: tests/test_ci.py::test_an_import_in_another_test_binds_nothing_here: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: no fixed line
+> - R6-2: no fixed line
+> - R6-3: no fixed line
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 593 files, 2192 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R6-1: several fixed lines
+> - R6-2: several fixed lines
+> - R6-3: several fixed lines
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 619 files, 2255 commits, 12 rules.
+
+## Phase 6 — Sonnet 5.5, 2026-10-26
+
+Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude Code session: the maintainer moved the Codex tasks to Sonnet for two hours (2026-10-26, 17:26–19:26 CET). Its rows are recorded unchanged; its checked line: R6-1, R6-2 and R6-3 are each fixed and covered by their named tests, which would fail on the old code; no regression from the repair; the 13 mutation/evidence/gate_step tests in tests/test_ci.py pass.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R7-1 | MAJOR | SPEC | base | `scripts/mutation_evidence.py:199` | A bare reference to a path constant counts as reaching. Repro (.venv/bin/python): `SCRIPT = Path("scripts") / "plans_registry.py"` plus `def test_x_goes_red(cmd): assert cmd[0] == SCRIPT` makes `evidence("plans_registry.py", ...)` return `t.py::test_x_goes_red`. This is a comparison against a command, and criterion 1 requires no evidence for it. The `fn.names & path_names` test needs a call that runs or opens the constant, not a mention. Same class as R6-1/R6-2, which the repair fixed only for direct strings and helper references. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_compared_path_constant_is_no_gate_evidence | — |
+| R7-2 | MAJOR | SPEC | base | `scripts/mutation_evidence.py:87–105` | `_path_strings` accepts a string as a path or command when it sits in a list or tuple handed to ANY call, or inside any `Path(...)` constructor. Repro: `assert "a" in set(["scripts/plans_registry.py"])`, `assert ", ".join(["scripts/plans_registry.py"]) in cmd` and `assert Path(cmd[0]) == Path("scripts/plans_registry.py")` each return the mutation-named test as evidence. Nothing runs the script, so criterion 1 (a comparison is no evidence) is violated. The allow-list should be limited to run/Popen/check_* callees. The `Path`/`PurePath` names and the generic list-in-Call rule are too broad. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_path_string_outside_a_run_call_is_no_gate_evidence | — |
+| R7-3 | MINOR | SPEC | base | `scripts/mutation_evidence.py:194–199` | Parameter and local shadowing is ignored. With module-level `from plans_registry import main` and `def test_x_goes_red(main): assert main() == 1`, the test is credited, although `main` is a fixture. The same happens for a helper `_run` shadowed by a parameter of the same name (`def test_x_goes_red(_run): assert _run() == 1`). R6-3 fixed imports in other functions, but not shadowing within the test itself. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_parameter_shadowing_the_gate_entry_is_no_gate_evidence | — |
+| R7-4 | MINOR | SPEC | base | `scripts/mutation_evidence.py:94–105` | A legitimate reaching test is rejected when the command list is first bound to a local and then run. Repro: `cmd = ["python3", "scripts/plans_registry.py"]` followed by `assert subprocess.run(cmd).returncode == 1` returns []. The same happens with an f-string path (`subprocess.run([f"{root}/scripts/plans_registry.py"])`). Criterion 2 lists "a command list naming the script path" as evidence. Both shapes are also rejected by the pre-repair code (11774aa6^), so this is not a regression. A shape using `m = plans_registry; m.main()` is likewise rejected, which is arguably "the same through an alias". | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_command_list_bound_to_a_local_then_run_is_gate_evidence | — |
+
+Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2262 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/mutation_evidence.py` +78 -55
+> - `tests/test_ci.py` +50 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R7-1: several fixed lines
+> - R7-2: several fixed lines
+> - R7-3: several fixed lines
+> - R7-4: several fixed lines
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2266 commits, 12 rules.
+
+## Phase 6 — Sonnet 5.5, 2026-10-26 (re-check after R7)
+
+Re-check in a fresh read-only Sonnet 5.5 sub-agent of the orchestrating Claude Code session, inside the maintainer's Sonnet window. Its rows are recorded unchanged; its checked line: R7-1..R7-4 are each fixed and the four named tests fail on fb268b3d^; the real repository loses no evidence (old and new counts identical for all 17 gates); `pytest -q tests/test_ci.py` 96 passed, 2 skipped; 28 adversarial shapes probed.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R8-1 | MAJOR | SPEC | base | `scripts/mutation_evidence.py:75–80` (`_is_run_call`) | The run-call test is not the decided allow-list. It matches any callee named `run`, `Popen`, `check_call` or `check_output`, whether a bare name or any attribute, and does not check that the callee is `subprocess`. Repro with `evidence("plans_registry.py", {Path("t.py"): src})`, where the test body is `asyncio.run('scripts/plans_registry.py')` (after `import asyncio`): it returns the test as evidence. `def test_x_goes_red(parser): parser.run('scripts/plans_registry.py')` is credited too. Neither runs the script. A local `run` helper or a Click/pytest `runner.run` is credited the same way. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_run_named_call_outside_subprocess_is_no_gate_evidence | — |
+| R8-2 | MAJOR | SPEC | base | `scripts/mutation_evidence.py:155–163, 207–217` (`runs`, `runs_script`) | Any string in a run call's arguments that contains the script name counts, and any Name in its arguments that is a path constant counts. The script does not have to be the thing run. Each of these returns evidence, and each should return `[]`: `subprocess.run(['echo','see scripts/plans_registry.py'])`; `subprocess.run(['grep','x','scripts/plans_registry.py'])`; `S='scripts/plans_registry.py'` at module level with `subprocess.run(['cat',S])`; and `subprocess.run(['ls'], cwd=S)`. This is the mention-as-evidence shape the spec rules out (criterion 1), now sitting inside a run call. The fix is to require the script path to be the program or script argument, e.g. the element after the interpreter, or the callee being the script. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_script_path_that_is_not_the_program_run_is_no_gate_evidence | — |
+| R8-3 | MAJOR | SPEC | base | `scripts/mutation_evidence.py:136–143` (`assigned`) and `scripts/mutation_evidence.py:207–213` (`runs_script`) | `locals` collects the strings of every assignment to a name, not the value the name holds at the run call. Repro: `cmd=['python','scripts/plans_registry.py']`, then `cmd=['ls']`, then `subprocess.run(cmd)`. This is the "cmd reassigned before the call" case, and it is credited. Dropping the first assignment, or running before the script is bound, would not change the verdict either. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_reassigned_command_counts_by_its_last_value | — |
+| R8-4 | MINOR | SPEC | base | `scripts/mutation_evidence.py:196–200` and `scripts/mutation_evidence.py:224–227` | The allow-list wrongly rejects a legitimate helper shape. The test calls a same-file helper `_go(c)` that does `subprocess.run(c)`, and passes the command: `assert _go(['python','scripts/plans_registry.py'])`. The helper's run uses a parameter, so it is not credited. The test's own run-call strings are not examined either, so the whole test returns `[]`. Criterion 2 allows a path through a helper chain, and the decision says a call of a helper that does a run counts. Also rejected: a test method inside a class (`class T: def test_x_goes_red(self): plans_registry.main()`), because only module-level `FunctionDef`s are read, and `from scripts import plans_registry` followed by `plans_registry.main()`. Both rejections only cause false negatives. The class-method case did not regress, because the old code rejected it too. | Sonnet 5.5 | fixed — tests/test_ci.py::test_a_helper_running_its_parameter_and_a_class_test_are_gate_evidence | — |
+
+Phase 6 verdict: sonnet-5.5 sub-agent, 2026-10-26
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason maintainer: Sonnet replaces Codex for two hours (2026-10-26) · leak check clean over 619 files, 2272 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/mutation_evidence.py` +139 -56
+> - `tests/test_ci.py` +65 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R8-1: several fixed lines
+> - R8-2: several fixed lines
+> - R8-3: several fixed lines
+> - R8-4: several fixed lines
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 619 files, 2276 commits, 12 rules.
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 669 files, 2281 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R9-1 | MAJOR | SPEC | implementation | scripts/mutation_evidence.py:113–118 | A mutation-named test calling `subprocess.run("echo scripts/plans_registry.py", shell=True)` is returned as registry evidence, although it only prints the path. Reproduced with a passing test that asserts that output. Matching the final path component of the whole shell command credits a mere mention and can remove an exemption without a reaching test. [Acceptance criterion 1] | Codex | rejected — known limit, moved to coding-harness-up2m: the maintainer decided on 2026-10-26 that an edge case after the last strict round becomes a known limit with its own bead; no real test uses this shape (orchestrator, 2026-10-26) | — |
+| R9-2 | MAJOR | SPEC | integration | tests/test_ci.py:1954 | On commit `56478395`, `test_every_gate_step_has_a_mutation_test` fails because the research-to-spec handoff gate (`research-handoff`) has no recognized evidence and is not exempted. Its test file contains no name matching `MUTATIONS_NAMEN`; the old mention rule returned true, while the new predicate returns `[]`. The current repository therefore fails the required coverage check. [Acceptance criterion 3] | Codex | taken — test: tests/test_ci.py::test_every_gate_step_has_a_mutation_test (orchestrator, 2026-10-26; a different mechanism: the research-handoff gate from #158 needs a mutation test that reaches its script) | — |
+
+Phase 6 verdict: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245, 2026-10-26
+Reviewer session: codex 01a179ba-4444-7a91-aa83-ea7cf0df5245 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 669 files, 2282 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_research_handoff.py` +16 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: tests/test_ci.py::test_every_gate_step_has_a_mutation_test: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 669 files, 2283 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: no fixed line
+> ```
+
+Stage-2 call, 2026-10-26: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 669 files, 2283 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - R9-2: tests/test_ci.py::test_every_gate_step_has_a_mutation_test: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-26: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 670 files, 2288 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R10-1 | MAJOR | SPEC | implementation | scripts/mutation_evidence.py:204–208 | Branch assignments are discarded before subsequent calls are analyzed. A mutation-named test initializes `cmd=['python','scripts/plans_registry.py']`, replaces it with an echo command in both branches of an `if`, then calls `subprocess.run(cmd)`. The passing test only runs echo, but `evidence()` credits the registry script using the obsolete command. This permits coverage without a reaching test. [Acceptance criterion 1] | Codex | accepted limit — maintainer, 2026-10-26; follow-up coding-harness-4ft9 | — |
+| R10-2 | MINOR | SPEC | implementation | scripts/mutation_evidence.py:231–232 | Helper defaults are evaluated again when analyzing each invocation. With `def _helper(value=plans_registry.main()): return value`, a mutation-named test containing only `assert _helper('no run') == 'no run'` is credited as registry evidence. Runtime verification confirms the gate runs during module import and zero times during the test. The helper invocation must not attribute its definition-time default call to the test. [Acceptance criterion 1] | Codex | accepted limit — maintainer, 2026-10-26; follow-up coding-harness-4ft9 | — |
+
+Phase 6 verdict: codex 01a17a1d-f207-77d2-8d2e-20c378cdf96f, 2026-10-26
+Reviewer session: codex 01a17a1d-f207-77d2-8d2e-20c378cdf96f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

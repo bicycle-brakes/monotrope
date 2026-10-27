@@ -77,9 +77,9 @@ handover to the next phase — not the chat history.**
 
 | # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
-| 1 | Explore | `plans/changes/<name>/research.md` | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
-| 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
-| 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
+| 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — eleven topics from a finder map for a `feature` or `architectural` change, one report otherwise | the `research-handoff` check for a complete swarm run, otherwise — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
+| 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason; after a research swarm every obligation item answered and linked (`research_items`, `research_neighbours`; minimums are no ceiling) | [`01a-interview.md`](../prompts/01a-interview.md) |
+| 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]`; after a research swarm `neighbours:` and every criterion's `*Basis:*` match the research (`research-handoff`) | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
@@ -458,7 +458,7 @@ none, because the registry keeps counting it as protection.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
+| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0020) |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
@@ -710,15 +710,23 @@ and dropped (ADR 0007).
 | `feature`, `architectural` | Opus 5.5 | the ladder | Codex, a fresh session |
 
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
-review and is reviewed by Opus 5.5 where §3 asks for a review. Explore, the
-draft and implement are not routed by class — the class is stated in the spec,
-after phase 1 — and are set by the table below.
+review and is reviewed by Opus 5.5 where §3 asks for a review. The draft and
+implement are not routed by class; phase 1 now is: a `feature` or
+`architectural` change explores through the research swarm (ADR 0020), a
+`bounded` change or a `spike` through the single explorer of this section's
+routing table. The class is therefore needed before the spec exists: explore
+takes the class from the explicit `--class` argument and the headers of
+`research.md` and `spec.md`, wherever stated. All available declarations must
+agree; missing, invalid or disagreeing declarations refuse before any model
+call. `--stage2-off [REASON]` keeps the Stage-1 route and
+skips class derivation and class/neighbour header checks. Passing `--class`
+beside `--stage2-off` is refused with exit 2 before any call; the class has
+no effect on that route.
 
-**Nothing checks a change's class.** A `feature` stated as a `spike` skips every
-stage-2 review, and one stated as `bounded` may skip the spec review, which is
-optional there; only the review before the merge catches either. The runner
-below does not read the class either: whoever runs the change runs the verbs
-its row allows.
+**Nothing checks a change's class beyond explore.** A `feature` stated as a
+`spike` skips every stage-2 review, and one stated as `bounded` may skip the
+spec review, which is optional there; only the review before the merge catches
+either. Whoever runs the change runs the verbs its row allows.
 
 ### The routing
 
@@ -729,7 +737,8 @@ admission and cost values live in `model-endpoints.yaml`.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
+| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
+| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online; the Go seats are open and filled per run with the maintainer's choice on a cost-against-intelligence recommendation, Q-18) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
 | 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
 | 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
@@ -763,13 +772,86 @@ files under `scripts/` and `tests/`; what that changed stands first in a failed
 attempt's diagnostics and in the checkpoint commit's message, and a ruff that
 cannot run or leaves findings leaves the verdict to `make verify`.
 
+**The swarm row is live through the runner too, and fails closed.** A swarm run
+is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
+models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
+topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
+for topics 9-11, 3 per free model for the online topics) and one fresh Opus
+5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+time, required slots before free ones; the Opus calls ride official Claude
+Code without tools. Online contexts expose only public search and page
+retrieval, and the topic sentence is mechanically filtered; no repository
+content reaches them (the offline capture on the real pinned Pi with synthetic
+private canaries, finding F-1, is still open and qualifies that boundary before
+the first live free call). Deadlines are monotonic — the judge keeps a reserved
+15 minutes inside a 150-minute run — with no retry and no debate. A failed
+participant preserves its partial evidence; an incomplete run exits 1, a
+declaration or leak refusal records the blocked slot, exits 2 and makes no
+further call. Only the runner writes `research.md`: one buffered append at the
+end of the run (reports, scores, obligation inventory, partial output); no
+participant edits the repository, and a frozen input digest is re-checked
+before publication.
+
+**Preparation before a run (Q-12).** `prepare-explore <change> [--class CLASS]`
+forces a fresh Go catalog from the pinned Pi, cross-checks it against
+models.dev tool-call and deprecation data, probes the admitted models
+with a tool-free call and fills each open Go seat with the cheapest reachable
+admitted Go model of its trio (a pinned seat's unreachable model gets a named
+substitute). It reads the Artificial Analysis Intelligence Index live
+(`ARTIFICIAL_ANALYSIS_API_KEY`; without it the index is "not read" and cost
+alone decides) and prints every reachable candidate with its request cost and
+index, a recommendation and a single-use receipt id. **Before every research
+run the orchestrator asks the maintainer which models to use**, with the
+recommendation and its reason (Q-18); a different answer goes back as
+`prepare-explore <change> --seats repository=<models> --seats online=<models>`,
+and a chosen model that is not reachable stops the preparation instead of being
+replaced. Then `explore <change> --availability-reported <id>` consumes the
+receipt before the first model call. A Pi refresh failure or a seat with no
+reachable model exits 1; a missing, stale, consumed or mismatched receipt
+exits 2. Neither verb runs for a `bounded` change, a `spike` or beside
+`--stage2-off`.
+
+**Resume after an abort (Q-13).** The runner keeps every finished contribution
+in a store outside the repository (`stage2_research_store.py`). A later run of
+the same change resumes: a slot is reused only when its resume binding (the
+digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
+prompt hash match and its result was ok and validates; nothing else is reused,
+and the run gets its own run id, deadlines and receipt.
+
+**The handoff is checked (gate `research-handoff`).** The runner derives an
+obligation inventory from the reports (accepted `[DECISION]` questions, class
+disagreements, judge disagreements, neighbour items). The check
+`scripts/check_research_handoff.py` re-derives it from the stored reports using
+`research_handoff.derive_inventory`, the same function the runner uses. It
+checks the stored inventory against that result, independently of the judge,
+but cannot detect an obligation that the shared derivation itself omits.
+Tests and phase-6 review must catch that shared failure. It holds the
+maintainer's answers to it: every item closed by a maintainer-answered record
+that links it (`research_items`), `neighbours:` of the spec equal to the given
+or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
+answered records. It reads no tracker, history or network and runs at both
+placements.
+
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Eleven verbs exist:
+into a shell. Twelve verbs exist:
 
-- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5. The runner states the explorer's role and read-only tools in the prompt, and an answer that names no file of the repository fails instead of being appended (bead coding-harness-e7m).
+- `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
+  swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
+  class is read wherever stated in `--class` and the headers of `research.md`
+  and `spec.md`; missing, invalid or disagreeing declarations refuse before any
+  model call; a swarm run needs `--availability-reported <id>` from
+  `prepare-explore`; `--stage2-off [REASON]` uses Haiku 5.5 and skips class derivation
+  and class/neighbour header checks; combining it with `--class` is refused
+  with exit 2 before any call. The runner states
+  the explorer's role and read-only tools in the prompt, and an answer that
+  names no file of the repository fails instead of being appended (bead
+  coding-harness-e7m).
+- `prepare-explore` — the swarm's preparation (Q-12): fresh Go catalog, tool-free
+  reachability probes, the six seats and their substitutes, a printed report
+  and a single-use receipt; refuses for `bounded`, `spike` and `--stage2-off`.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
@@ -1231,8 +1313,12 @@ doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the
-fixed lines are ignored; a colon line whose id looks like a finding id
-(`L1-2`, `F-12`) and names no taken row still fails the attempt. Loop ids
+fixed lines are ignored, and so is an explanation beside a row's one fixed
+line; a colon line whose id looks like a finding id
+(`L1-2`, `F-12`) and names no taken row still fails the attempt. A row takes
+exactly one distinct fixed line: a repeated identical fixed line counts once,
+and two different fixed lines for one row fail the attempt as `several fixed
+lines`, with both claims quoted and the attempt's saved answer named. Loop ids
 always count; letters-hyphen-digits ids count only when their prefix occurs
 in the change's row ids, including rejected and fixed rows; `L` counts only
 when the change has a loop row. A colon line whose right side is a fixed
@@ -1257,7 +1343,15 @@ with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
 only after two failed post-run checks; a failed call stops the run without a
 fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
 leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
-stops the run unrewritten. A fixed row counts as a taken one for the next
+stops the run unrewritten. Every attempt's complete answer is kept as
+protected local evidence below the worktree's own git directory (git's
+per-worktree directory: in a linked worktree that is
+`.git/worktrees/<name>/` of the main checkout),
+`stage2/attempts/<change>/attempt-<n>-<token>.md`, written before any
+post-run check can stop the run and named in the attempt's diagnostics, so a
+rejected answer can be read after the fact; a failed call keeps the output it
+returned, and an evidence or protection failure stops the run before any
+checkpoint. A fixed row counts as a taken one for the next
 round and for the run count; **`Broke a test` stays the orchestrator's mark**,
 written from the run's evidence before the next round or the release. The
 rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which

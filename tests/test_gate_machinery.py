@@ -341,6 +341,26 @@ def test_the_ramp_valve_check_runs_green_here() -> None:
     assert erg.returncode == 0, erg.stdout + erg.stderr
 
 
+def test_the_ramp_valve_gate_goes_red_when_a_valve_is_due(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A valve whose condition holds and still sits open turns the gate red.
+
+    Until 2026-10-25 the `ramp-valves` gate counted as covered because files
+    named its script beside unrelated mutation tests; none seeded a fault into
+    it (bead coding-harness-a05).
+    """
+    import ramp_valves
+    from _verdict import Ramp
+
+    waiting = Ramp(name="seeded-waiting", condition="a condition that does not hold", predicate=lambda: False)
+    due = Ramp(name="seeded-due", condition="a condition that holds", predicate=lambda: True)
+    monkeypatch.setattr(sys, "argv", ["ramp_valves.py"])
+
+    monkeypatch.setattr(ramp_valves, "valves", lambda: [waiting])
+    assert ramp_valves.main() == 0, "precondition: a valve that still waits keeps the gate green"
+    monkeypatch.setattr(ramp_valves, "valves", lambda: [waiting, due])
+    assert ramp_valves.main() == 1, "a due valve left open did not turn the gate red"
+
+
 # --------------------------------------------------------------------------
 # dangling-beads — cited ticket IDs resolve in the export
 # --------------------------------------------------------------------------
