@@ -143,6 +143,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import contextvars
 import datetime as dt
 import fcntl
 import functools
@@ -1420,6 +1421,29 @@ def terms_problem(entry: dict, model: str) -> str | None:
 
 
 TERMS_WARNING_DAYS = 7
+_terms_warning_evidence: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "terms_warning_evidence", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_terms_warnings() -> Iterator[list[str]]:
+    """Collect one preparation's warnings, restoring the caller's scope even on refusal."""
+    warnings: list[str] = []
+    token = _terms_warning_evidence.set(warnings)
+    try:
+        yield warnings
+    finally:
+        _terms_warning_evidence.reset(token)
+
+
+def retain_terms_warnings(warnings: list[str]) -> list[str]:
+    """Keep each emitted warning in order, including changing day counts during probes."""
+    evidence = _terms_warning_evidence.get()
+    if evidence is None:
+        return warnings
+    evidence.extend(warning for warning in warnings if warning not in evidence)
+    return evidence
 
 
 def terms_warnings(entry: dict) -> list[str]:
@@ -1453,7 +1477,9 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, *
     entry = endpoint_entry(root)
     paid = model in (entry.get("modelle") or []) or model in (entry.get("modelle_terms") or {})
     if paid or admission is None:
-        for warning in terms_warnings({**entry, "modelle": [model]}):
+        warnings = terms_warnings({**entry, "modelle": [model]})
+        retain_terms_warnings(warnings)
+        for warning in warnings:
             print(f"Terms warning: {warning}")
         problem = terms_problem(entry, model)
     else:

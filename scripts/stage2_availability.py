@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -911,12 +912,23 @@ def _free_text(values: list[str]) -> str:
     return ", ".join(values) or "none"
 
 
+def capture_preparation_warnings(prepare):
+    """Scope dispatch warning evidence to this preparation, shared by its receipt."""
+
+    @functools.wraps(prepare)
+    def wrapped(root, change, runner, *args, **kwargs):
+        with runner.capture_terms_warnings():
+            return prepare(root, change, runner, *args, **kwargs)
+
+    return wrapped
+
+
 def preparation_terms(runner, entry: dict) -> dict:
     """Both preparation paths announce and retain the same current warning evidence."""
     warnings = runner.terms_warnings(entry)
     for warning in warnings:
         print(f"Terms warning: {warning}")
-    return {"terms_warnings": warnings}
+    return {"terms_warnings": runner.retain_terms_warnings(warnings)}
 
 
 def research_report(state: dict) -> str:
@@ -1024,6 +1036,7 @@ def chosen_seats(seats: dict[str, list[dict]], choice: dict[str, list[str]] | No
     return result
 
 
+@capture_preparation_warnings
 def prepare_research(
     root: Path, change: str, runner, klass: str | None = None, choice: dict[str, list[str]] | None = None
 ) -> None:
@@ -1244,6 +1257,7 @@ def report(state: dict) -> str:
     return "\n".join(lines)
 
 
+@capture_preparation_warnings
 def prepare(root: Path, change: str, runner) -> None:
     """Probe candidates without source input or tools, then publish a report receipt."""
     folder = runner.folder_of(root, change)

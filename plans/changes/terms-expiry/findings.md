@@ -1038,7 +1038,9 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MINOR | SPEC | implementation | scripts/stage2_availability.py:1272,1363; scripts/stage2.py:1456 | If preparation starts eight UTC days before expiry and crosses midnight before probing, dispatch prints the new seven-day warning, but the successful receipt retains the earlier empty warning list. Reproduced with expiry 2026-11-04 and the terms clock advancing from 2026-10-27 to 2026-10-28. Warnings emitted during preparation must also reach its durable evidence. [Acceptance criterion 10] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_preparation_receipt_keeps_warnings_emitted_during_probes — every warning dispatch_go prints during a preparation is also kept in that preparation's receipt, including one that starts after midnight UTC (maintainer, 2026-10-27: repair) | — |
+| F6-5 | MINOR | SPEC | implementation | scripts/stage2_availability.py:1272,1363; scripts/stage2.py:1456 | If preparation starts eight UTC days before expiry and crosses midnight before probing, dispatch prints the new seven-day warning, but the successful receipt retains the earlier empty warning list. Reproduced with expiry 2026-11-04 and the terms clock advancing from 2026-10-27 to 2026-10-28. Warnings emitted during preparation must also reach its durable evidence. [Acceptance criterion 10] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_preparation_receipt_keeps_warnings_emitted_during_probes | — |
 
 Phase 6 verdict: codex 01a17cee-14ff-71f3-81f4-d46307f4625c, 2026-10-27
 Reviewer session: codex 01a17cee-14ff-71f3-81f4-d46307f4625c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 686 files, 2331 commits, 12 rules.

@@ -577,6 +577,60 @@ def test_expiry_preserves_prior_admission_guards(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("preparation", ["loop", "research"])
+@pytest.mark.parametrize("expiry", ["2026-11-04", "2026-10-31"])
+def test_preparation_receipt_keeps_warnings_emitted_during_probes(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], preparation: str, expiry: str
+) -> None:
+    """Every warning printed before or during probing survives in that preparation's sealed receipt."""
+    if preparation == "research":
+        from test_stage2_research_availability import Fixture
+
+        fx = Fixture(world, monkeypatch)
+        prepare, read_receipt = fx.prepare, fx.receipt
+        model = "deepseek-v4.1-flash"
+    else:
+        enable(world)
+
+        def prepare():
+            return world.run("prepare-loop")
+
+        def read_receipt():
+            return receipt(world)
+
+        model = TEST_LADDER[0]
+    set_terms(world, model, valid_until=expiry)
+    day = dt.date(2026, 10, 27)
+    monkeypatch.setattr(stage2, "terms_today", lambda: day)
+    dispatch = stage2.dispatch_go
+
+    def cross_midnight(root, ident, send, *args, **kwargs):
+        nonlocal day
+        if ident == model:
+            day = dt.date(2026, 10, 28)
+        result = dispatch(root, ident, send, *args, **kwargs)
+        # By receipt creation even this dispatch's warning is out of date:
+        # recomputing only at the end cannot recover what was printed.
+        day = dt.date(2026, 10, 29) if ident == model else day
+        return result
+
+    monkeypatch.setattr(stage2, "dispatch_go", cross_midnight)
+    assert prepare() == 0
+    output = capsys.readouterr().out
+    emitted = list(
+        dict.fromkeys(
+            line.removeprefix("Terms warning: ") for line in output.splitlines() if line.startswith("Terms warning: ")
+        )
+    )
+    days = (dt.date.fromisoformat(expiry) - dt.date(2026, 10, 28)).days
+    warning = f"the data terms of {model} expire on {expiry} ({days} days left)"
+    assert warning in emitted, "the synthetic probe did not print the midnight warning"
+    saved = read_receipt()
+    assert availability.verify(saved, saved["report_id"]), "warning evidence must be sealed"
+    assert saved["state"]["availability"]["terms_warnings"] == emitted
+    assert stage2.retain_terms_warnings([]) == [], "preparation leaked warning evidence into later operations"
+
+
 def test_expiry_warnings_survive_receipt_round_and_release(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
