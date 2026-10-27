@@ -873,7 +873,161 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-4 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:1014–1121 | With UTC today set to 2026-10-27, `prepare-explore` selects and probes DeepSeek V4.1 Flash, whose terms expire on 2026-10-31, but prints no expiry warning and saves none in its receipt. Reproduced with external calls and writes stubbed. Research preparation evaluates paid terms yet omits the required advance notice and durable warning evidence. [Acceptance criteria 4 and 10] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_every_paid_dispatch_rechecks_terms_at_one_point — repaired structurally (maintainer, 2026-10-27): the terms check and the advance warning move to the one function that sends every paid OpenCode Go call and to the one shared preparation step, so no caller (review round, retry, replacement, probe, research preparation or run) can omit them; the per-caller checks may stay for early messages (orchestrator, 2026-10-27) | — |
+| F6-4 | MAJOR | SPEC | implementation | scripts/stage2_availability.py:1014–1121 | With UTC today set to 2026-10-27, `prepare-explore` selects and probes DeepSeek V4.1 Flash, whose terms expire on 2026-10-31, but prints no expiry warning and saves none in its receipt. Reproduced with external calls and writes stubbed. Research preparation evaluates paid terms yet omits the required advance notice and durable warning evidence. [Acceptance criteria 4 and 10] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_every_paid_dispatch_rechecks_terms_at_one_point | — |
 
 Phase 6 verdict: codex 01a17c86-9c8b-7471-bc55-b5147c0948ab, 2026-10-27
 Reviewer session: codex 01a17c86-9c8b-7471-bc55-b5147c0948ab — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 685 files, 2320 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/terms-expiry/plan.md` +14 -2
+> - `scripts/stage2.py` +32 -2
+> - `scripts/stage2_availability.py` +18 -5
+> - `scripts/stage2_research_run.py` +30 -11
+> - `scripts/stage2_session.py` +9 -2
+> - `tests/test_stage2_session.py` +28 -0
+> - `tests/test_stage2_terms_expiry.py` +92 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 113 lines of this gate left out …]
+> E   AttributeError: 'types.SimpleNamespace' object has no attribute 'go_admission'
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:519: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:512: in reviewer_flags
+>     stage2.run_reviewer(
+> scripts/stage2.py:2235: in run_reviewer
+>     admission=ctx.go_admission,
+> E   AttributeError: 'types.SimpleNamespace' object has no attribute 'go_admission'
+> =================================== FAILURES ===================================
+> __ test_the_gate_command_may_run_the_live_test_in_other_ways[the-whole-suite] __
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/terms-expiry/.venv/bin/python3
+>
+> command = 'RULESET_ASSERT=1 python3 -m pytest tests -q -x'
+>
+>     @pytest.mark.parametrize(
+>         "command",
+>         [
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs", id="the-gate-as-it-is"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest {LIVE_TEST} -q", id="the-live-test-alone"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -k master", id="selected-by-name"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests -q -x", id="the-whole-suite"),
+>         ],
+>     )
+>     def test_the_gate_command_may_run_the_live_test_in_other_ways(command: str) -> None:
+>         """The tie asks whether the live test runs, not whether the words are the usual ones."""
+> >       assert _command_findings(command) == []
+> E       AssertionError: assert ['command doe...ired_checks`'] == []
+> E         
+> E         Left contains one more item: 'command does not run `tests/test_repo_settings.py::test_master_has_a_ruleset_with_required_checks`'
+> E         Use -v to get more diff
+>
+> tests/test_repo_settings.py:1063: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=59147) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/terms-expiry/tests/test_stage2.py:14473: DeprecationWarning: This process (pid=59132) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_repo_settings.py::test_the_gate_command_may_run_the_live_test_in_other_ways[the-whole-suite]
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> ERROR tests/test_pi_contract.py - AttributeError: 'types.SimpleNamespace' obj...
+> 1 failed, 3869 passed, 17 skipped, 5 warnings, 8 errors in 1041.96s (0:17:21)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [ruleset] $ lauf_cmd
+> ........................................................................ [ 80%]
+> ..........F.......                                                       [100%]
+> =================================== FAILURES ===================================
+> __ test_the_gate_command_may_run_the_live_test_in_other_ways[the-whole-suite] __
+>
+> command = 'RULESET_ASSERT=1 python3 -m pytest tests -q -x'
+>
+>     @pytest.mark.parametrize(
+>         "command",
+>         [
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs", id="the-gate-as-it-is"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest {LIVE_TEST} -q", id="the-live-test-alone"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -k master", id="selected-by-name"),
+>             pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests -q -x", id="the-whole-suite"),
+>         ],
+>     )
+>     def test_the_gate_command_may_run_the_live_test_in_other_ways(command: str) -> None:
+>         """The tie asks whether the live test runs, not whether the words are the usual ones."""
+> >       assert _command_findings(command) == []
+> E       AssertionError: assert ['command doe...ired_checks`'] == []
+> E         
+> E         Left contains one more item: 'command does not run `tests/test_repo_settings.py::test_master_has_a_ruleset_with_required_checks`'
+> E         Use -v to get more diff
+>
+> tests/test_repo_settings.py:1063: AssertionError
+> 1 failed, 89 passed in 30.68s
+> ── [ruleset] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 19286 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-expiry/stage2/attempts/terms-expiry/attempt-1-20261027T091912019119Z-7d40515e.md
+> ````
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 685 files, 2323 commits, 12 rules.

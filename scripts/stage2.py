@@ -1009,6 +1009,7 @@ class Context:
     folder: Path
     bead: str
     models_store: dict | None = None
+    go_admission: Callable[[Path, str], str | None] | None = None
 
     @property
     def findings(self) -> Path:
@@ -1183,7 +1184,7 @@ def preflight(
     )
     if problem:
         raise Refused(problem)
-    return Context(root, change, folder, bead)
+    return Context(root, change, folder, bead, go_admission=admission_problem)
 
 
 def findings_header(ctx: Context, producer: str) -> str:
@@ -1440,6 +1441,26 @@ def terms_warnings(entry: dict) -> list[str]:
             left = "1 day" if days == 1 else f"{days} days"
             warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
     return warnings
+
+
+def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, **kwargs):
+    """The final shared Go send boundary, independent of tools, retries and saved admission.
+
+    Only a caller's checked discovered-free admission can replace paid terms.
+    A declared paid record always keeps its terms check, even with that callback.
+    All command construction and leak scans precede this function.
+    """
+    entry = endpoint_entry(root)
+    paid = model in (entry.get("modelle") or []) or model in (entry.get("modelle_terms") or {})
+    if paid or admission is None:
+        for warning in terms_warnings({**entry, "modelle": [model]}):
+            print(f"Terms warning: {warning}")
+        problem = terms_problem(entry, model)
+    else:
+        problem = admission(root, model)
+    if problem:
+        raise Refused(problem)
+    return send(*args, **kwargs)
 
 
 def request_value(entry: dict, model: str) -> float | None:
@@ -2203,11 +2224,15 @@ def run_reviewer(
             task or f"Review the change {ctx.change} as the appended instructions say.",
         ]
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = launch(
+        done = dispatch_go(
+            ctx.root,
+            model,
+            launch,
             command,
             scratch if free else ctx.root,
             env,
             key,
+            admission=getattr(ctx, "go_admission", None),
             timeout=timeout_seconds or remaining(deadline),
             limit=(
                 f"the availability probe limit of {timeout_seconds} seconds"
@@ -2265,6 +2290,11 @@ def run_swarm(
         thread.start()
     for thread in threads:
         thread.join()
+    # A dispatch-time admission refusal is not a failed answer to replace or
+    # overlook beside another member's success. It aborts without a round.
+    for outcome in answers.values():
+        if isinstance(outcome, Refused):
+            raise outcome
     return answers
 
 

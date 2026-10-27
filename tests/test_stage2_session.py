@@ -401,6 +401,34 @@ def test_an_expired_go_model_starts_no_interactive_session(
     assert "expired on 2026-10-30" in capsys.readouterr().err
 
 
+def test_go_session_rechecks_terms_after_command_construction(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A final scan cannot authorize a terminal dispatch after UTC midnight."""
+    world.declare_go()
+    world.script(pi=pi_steps())
+    path = world.tree / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle_terms"][GO_BARE]["valid_until"] = "2026-10-31"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    day = dt.date(2026, 10, 31)
+    monkeypatch.setattr(stage2, "terms_today", lambda: day)
+    original = stage2_session.terminal_command
+
+    def cross_midnight(*args, **kwargs):
+        nonlocal day
+        command = original(*args, **kwargs)
+        day = dt.date(2026, 11, 1)
+        return command
+
+    monkeypatch.setattr(stage2_session, "terminal_command", cross_midnight)
+    assert world.run(model=GO_MODEL) == 2
+    assert not world.calls("osascript"), "expired terms reached the terminal"
+    assert not world.findings.exists(), "the refusal fabricated a pending launch"
+    assert "expired on 2026-10-31" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "changes",
     [{"darf_sehen": "not-framework"}, {"darf_sehen": "framework"}, {"residenz": ""}, {"residenz": "  "}],

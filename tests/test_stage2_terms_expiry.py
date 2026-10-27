@@ -757,3 +757,95 @@ def test_research_probes_and_dispatch_recheck_expiry(
         assert model in verdict.record["refused"]
         assert "expired on 2026-10-31" in verdict.record["refused"]
     assert (launches, audit, run.entries) == before
+
+
+def _check_paid_dispatch(world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """Direct sends cannot rely on caller admission, even tool-free probes and research launches."""
+    from types import SimpleNamespace
+
+    import stage2_research_run as research
+    from stage2_research_dispatch import Slot
+
+    model = TEST_LADDER[0]
+    set_terms(world, model, valid_until="2026-10-31")
+    day = dt.date(2026, 10, 27)
+    monkeypatch.setattr(stage2, "terms_today", lambda: day)
+    sent = []
+
+    def send(*args, **kwargs):
+        sent.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout="OK", stderr="")
+
+    monkeypatch.setattr(stage2, "launch", send)
+    monkeypatch.setattr(research.subprocess, "Popen", send)
+    monkeypatch.setattr(availability, "_checked_probe", lambda *_args: None)
+    ctx = stage2.Context(world.root, "demo", world.research.parent, "test-bead")
+    entry = {"program": "pi", "model": model, "endpoint": availability.GO, "role": "repository"}
+    run = SimpleNamespace(
+        runner=stage2,
+        root=world.root,
+        entries={"saved": entry},
+        scratch={},
+        pi_command=lambda *_args: (["synthetic-pi"], world.root, {}),
+    )
+    slot = Slot("saved", availability.GO, True, (0,), 60, {}, "prompt")
+    calls = [
+        lambda: stage2.run_reviewer(ctx, model, "prompt", "key"),
+        lambda: stage2.run_reviewer(ctx, model, "prompt", "key", free=True),
+        lambda: availability.probe_go(stage2, world.root, "demo", model, "key", []),
+        lambda: research.Run.launch(run, slot, 60),
+        lambda: stage2.run_swarm(ctx, [model], {model: "prompt"}, "key", free=False),
+    ]
+    for call in calls:
+        capsys.readouterr()
+        call()
+        output = capsys.readouterr()
+        assert model in output.out and "2026-10-31" in output.out, "dispatch omitted the advance warning"
+        for scratch in run.scratch.values():
+            scratch.cleanup()
+        run.scratch.clear()
+    assert len(sent) == len(calls)
+    day = dt.date(2026, 11, 1)
+    for call in calls:
+        with pytest.raises(stage2.Refused, match="expired on 2026-10-31"):
+            call()
+    assert len(sent) == len(calls), "an expired call reached the transport"
+
+
+def _check_research_preparation_warnings(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Research preparation prints current warnings before probing and seals them in its receipt."""
+    from test_stage2_research_availability import Fixture
+
+    fx = Fixture(world, monkeypatch)
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 27))
+    model = "deepseek-v4.1-flash"
+    set_terms(world, model, valid_until="2026-10-31")
+    warning = f"the data terms of {model} expire on 2026-10-31 (4 days left)"
+    real_probe = availability.probe_go
+    seen = []
+
+    def probe(*args, **kwargs):
+        seen.append(capsys.readouterr().out)
+        return real_probe(*args, **kwargs)
+
+    monkeypatch.setattr(availability, "probe_go", probe)
+    assert fx.prepare() == 0
+    assert seen and warning in seen[0], "preparation did not warn before its first probe"
+    state = fx.receipt()["state"]
+    assert warning in state["availability"]["terms_warnings"]
+    assert warning in availability.research_report(state)
+    del state["availability"]
+    assert availability.research_report(state), "legacy receipts without warnings must remain readable"
+
+
+@pytest.mark.parametrize("boundary", ["dispatch", "preparation"])
+def test_every_paid_dispatch_rechecks_terms_at_one_point(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], boundary: str
+) -> None:
+    """The shared send guard and shared preparation evidence protect every paid route."""
+    if boundary == "preparation":
+        _check_research_preparation_warnings(world, monkeypatch, capsys)
+    else:
+        _check_paid_dispatch(world, monkeypatch, capsys)

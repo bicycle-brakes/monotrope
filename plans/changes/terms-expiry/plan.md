@@ -148,9 +148,11 @@ release exemption, and the drafting agent must not create an answer file.
 - 2: tests/test_stage2_terms_expiry.py::test_expiry_is_inclusive_on_the_utc_day — admission uses the local date or the wrong side of midnight
 - 3: tests/test_stage2_terms_expiry.py::test_expiry_skips_name_model_and_reason — preparation or review hides the model, reason or expired date
 - 4: tests/test_stage2_terms_expiry.py::test_expiry_warning_window_on_preparation_and_review — warning boundaries or fresh, legacy and resumed display differ
+- 4: tests/test_stage2_terms_expiry.py::test_every_paid_dispatch_rechecks_terms_at_one_point — a paid send bypasses the shared terms guard or research preparation omits visible and durable warnings
 - 5: tests/test_stage2_terms_expiry.py::test_saved_admission_cannot_authorize_an_expired_call — a fresh receipt or saved round dispatches an expired member or alters prior history
 - 5: tests/test_stage2_terms_expiry.py::test_paid_retries_and_replacements_recheck_expiry — a probe retry, compatibility probe, replacement or malformed-answer retry bypasses the date guard
 - 5: tests/test_stage2_session.py::test_an_expired_go_model_starts_no_interactive_session — interactive launch starts a terminal or transport after expiry
+- 5: tests/test_stage2_session.py::test_go_session_rechecks_terms_after_command_construction — terms expire after command construction but the interactive transport still starts
 - 6: tests/test_stage2_terms_expiry.py::test_non_deepseek_records_receive_reading_plus_thirty_days — a record is missed, has the wrong deadline or a fabricated re-read
 - 7: tests/test_stage2_terms_expiry.py::test_both_deepseek_records_use_the_documented_expiry — either record lacks the October 25 reading, October 31 deadline or retention qualification
 - 8: not a test — phase-6 review reads docs/WORKFLOW.md and ADR 0022 against the renewal decision; red if source/date evidence or maintainer merge is optional
@@ -189,3 +191,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-27 01:00:12–01:09:51 UTC, 580 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-27 07:07:33–07:31:57 UTC, 1464 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-27 07:32:03–07:51:32 UTC, 1169 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-27 09:19:18–09:51:26 UTC, 1928 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 09:52:21–10:33:46 UTC, 2485 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

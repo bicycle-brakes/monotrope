@@ -516,11 +516,15 @@ def probe_go(
             "Follow the appended availability instructions.",
         ]
         env = runner.foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = runner.launch(
+        done = runner.dispatch_go(
+            root,
+            model,
+            runner.launch,
             command,
             scratch,
             env,
             key,
+            admission=admission,
             timeout=timeout_seconds,
             limit=f"the probe limit of {timeout_seconds} seconds",
         )
@@ -907,8 +911,17 @@ def _free_text(values: list[str]) -> str:
     return ", ".join(values) or "none"
 
 
+def preparation_terms(runner, entry: dict) -> dict:
+    """Both preparation paths announce and retain the same current warning evidence."""
+    warnings = runner.terms_warnings(entry)
+    for warning in warnings:
+        print(f"Terms warning: {warning}")
+    return {"terms_warnings": warnings}
+
+
 def research_report(state: dict) -> str:
     lines = [f"Availability checked: {state['checked_at']}"]
+    lines.extend(f"Terms warning: {warning}" for warning in state.get("availability", {}).get("terms_warnings", []))
     for label in ("repository", "online"):
         for item in state["seats"][label]:
             if item is None:
@@ -1029,6 +1042,7 @@ def prepare_research(
     if klass not in runner.SWARM_CLASSES:
         raise runner.Refused(f"prepare-explore belongs to feature or architectural changes, not {klass}.")
     data, rule = research_settings(root, runner)
+    terms_evidence = preparation_terms(runner, _endpoint(data, GO) or {})
     neighbours = given_neighbours(root, change, runner)
     runner.require_pi()
     block = data["research_swarm"]
@@ -1061,6 +1075,7 @@ def prepare_research(
     terms = terms if isinstance(terms, dict) else {}
     state = {
         "checked_at": now().isoformat(timespec="seconds"),
+        "availability": terms_evidence,
         "catalog": {
             key: catalog[key]
             for key in (
@@ -1254,9 +1269,7 @@ def prepare(root: Path, change: str, runner) -> None:
     if problem:
         raise runner.Refused(problem)
     entry = runner.endpoint_entry(root)
-    terms_warnings = runner.terms_warnings(entry)
-    for warning in terms_warnings:
-        print(f"Terms warning: {warning}")
+    terms_evidence = preparation_terms(runner, entry)
     runner.require_pi()
     free = runner.discover_free(root, allow_empty=True)
     paid = runner.ladder(root)
@@ -1347,7 +1360,7 @@ def prepare(root: Path, change: str, runner) -> None:
         # Advance notice inside the seven-day window, expired records excluded:
         # the warning travels in the receipt's digest and reaches the report
         # here (bead coding-harness-abra). A warning grants no admission.
-        "terms_warnings": terms_warnings,
+        **terms_evidence,
     }
     print(report(state))
     for reason in state["availability"]["terms_skipped"]:

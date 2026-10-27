@@ -595,17 +595,36 @@ class Run:
                 command, cwd, env = self.pi_command(entry, slot.prompt, scratch)
             with contextlib.ExitStack() as stack:
                 stdin = stack.enter_context(data.open("rb")) if data is not None else subprocess.DEVNULL
-                return subprocess.Popen(  # noqa: S603 - fixed argv, no shell
-                    command,
-                    cwd=cwd,
-                    env=env,
-                    stdin=stdin,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    errors="replace",
-                    start_new_session=True,
-                )
+
+                def send():
+                    return subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+                        command,
+                        cwd=cwd,
+                        env=env,
+                        stdin=stdin,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        errors="replace",
+                        start_new_session=True,
+                    )
+
+                def free_admission(root, model):
+                    data = stage2_availability.read_declaration(root)
+                    if isinstance(data, str):
+                        return data
+                    return stage2_swarm.invocation_problem(
+                        data, "online_free", entry["endpoint"], model, selected_free=self.free
+                    )
+
+                if entry["endpoint"] == stage2_availability.GO:
+                    return self.runner.dispatch_go(
+                        self.root,
+                        entry["model"],
+                        send,
+                        admission=free_admission if entry["role"] == "online_free" else None,
+                    )
+                return send()
         except BaseException:
             self.scratch.pop(slot.slot_id, None)
             tmp.cleanup()

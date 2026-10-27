@@ -36,6 +36,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -52,6 +53,25 @@ SENTINEL_IN = "INSIDE-CONTENT-7f3a41"
 SENTINEL_OUT = "OUTSIDE-SENTINEL-b2c95e"
 GO_NATIVE = "https://opencode.ai/zen/go/v1"
 ZEN_NATIVE = "https://opencode.ai/zen/v1"
+
+
+def declare_contract_models(root: Path) -> None:
+    """Synthetic, dated admission for loopback wire tests; never use live terms."""
+    models = ["contract-rung", "acme-1-free", "synthetic-protocol-check-free", "deepseek-v4.1-flash"]
+    terms = {
+        model: {
+            "gelesen": "2026-10-25",
+            "quelle": "synthetic loopback contract",
+            "aufbewahrung": "0 days",
+            "training": "Not used",
+            "valid_until": "2099-01-01",
+        }
+        for model in models
+    }
+    (root / "model-endpoints.yaml").write_text(
+        yaml.safe_dump({"endpunkte": [{"name": "opencode-go", "modelle": models, "modelle_terms": terms}]}),
+        encoding="utf-8",
+    )
 
 
 class ContractFailure(Exception):
@@ -367,6 +387,7 @@ def project(tmp_path: Path) -> Path:
     """A controlled project: one sentinel file a tool may read."""
     root = tmp_path / "project"
     root.mkdir()
+    declare_contract_models(root)
     (root / "sentinel.txt").write_text(SENTINEL_IN + "\n", encoding="utf-8")
     return root
 
@@ -489,6 +510,7 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
     discovery = stage2.discover_free(tmp_path)
     assert discovery["selected"] == [model_id]
     assert discovery["models_store"] == store
+    declare_contract_models(tmp_path)
     ctx = types.SimpleNamespace(change="demo", root=tmp_path, models_store=discovery["models_store"])
     for free in (True, False):
         stage2.run_reviewer(ctx, model_id, "Review demo.", SYNTHETIC_KEY, free=free)
@@ -508,9 +530,11 @@ def reviewer_flags() -> list[str]:
         commands.append(command)
         return subprocess.CompletedProcess(command, 0, "captured", "")
 
-    with patch.object(stage2, "launch", capture):
+    with tempfile.TemporaryDirectory(prefix="pi-flags-") as tmp, patch.object(stage2, "launch", capture):
+        root = Path(tmp)
+        declare_contract_models(root)
         stage2.run_reviewer(
-            types.SimpleNamespace(change="contract", root=REPO_ROOT), "contract-rung", "capture only", SYNTHETIC_KEY
+            types.SimpleNamespace(change="contract", root=root), "contract-rung", "capture only", SYNTHETIC_KEY
         )
     command = commands[0]
     return command[1 : command.index("--tools")]
@@ -597,6 +621,7 @@ def test_real_free_reviewer_has_only_the_implementation_diff(transport, tmp_path
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    declare_contract_models(root)
     _git(root, "init", "--quiet", "--initial-branch=main")
     _git(root, "add", "-A")
     _git(root, "commit", "--quiet", "-m", "base")
