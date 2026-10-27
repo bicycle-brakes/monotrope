@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-26
+updated: 2026-10-27
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
 | 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
-| 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
+| 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
 
 Phase 1a is **owed where a minimum stands** (maintainer, 2026-10-08): a
@@ -650,6 +650,38 @@ devcontainer is an operating resource of this repository; the concept document
 on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
+
+### Pull requests stay mergeable
+
+On 2026-10-27 five runner pull requests could not merge `main` any more:
+they had been open since 2026-10-24/25, all changed the same two large
+files, three were stacked, and a generated index conflicted on every merge
+(bead coding-harness-s05q; assessment in
+`docs/research/2026-10-27-parked-runner-prs.md`). These rules keep a pull
+request small enough to merge (maintainer, 2026-10-27); the portable form
+for another repository is `templates/agents-mergeable-prs.md`.
+
+- **Synced daily, automatically.** Every working day each open pull request
+  is test-merged against `main` (`git merge-tree --write-tree origin/main
+  origin/<branch>`): one that merges cleanly gets `main` merged and pushed,
+  one that conflicts is reported to the maintainer with its files, and the
+  conflict is resolved while it is small (bead coding-harness-eq6y).
+- **Asked about after five working days.** A pull request open longer than
+  five working days is put to the maintainer: finish, shrink or close.
+- **Few at once on a hot file.** At most three open pull requests change the
+  same hot file — here `scripts/stage2.py` and `tests/test_stage2.py`, one
+  per foreign-model lane. The oldest is finished before a new one opens
+  (bead coding-harness-6y0t).
+- **Reviewed on a current base.** Phase 6 reviews the branch after it has
+  merged `main`; a verdict holds only for the commit it saw.
+- **Not stacked without a reason.** A pull request built on another names
+  the reason in its body; the base merges before the next opens.
+- **Generated files are regenerated.** `plans/INDEX.md` is rebuilt
+  (`scripts/plans_registry.py --index`) on a conflict, never merged by hand
+  (bead coding-harness-hfsz).
+- **Hot files are split.** A file that most changes touch is split by
+  responsibility, and each change gets its own test file (bead
+  coding-harness-67yk).
 
 ## 4 · Stage 2 — Codex and the review loop on OpenCode Go (active for framework content)
 
