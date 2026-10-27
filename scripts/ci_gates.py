@@ -11,6 +11,8 @@ Dieses Modul ist ihr einziger Leser und leitet daraus alles ab:
   --check-schema    prueft die Gate-Datei gegen ihr eigenes Schema
   --generate-ci     erzeugt `.github/workflows/ci.yml` aus der Liste
   --check-ci        schlaegt Alarm, wenn die committete ci.yml abweicht
+  --catalog         the one list as a Markdown table on stdout — the
+                    inventory of docs/governance/gate-catalog.md (bead i0l)
 
 `ci.yml` wird nie von Hand editiert: der Gate `ci-drift` haelt die committete
 Datei an die Ableitung. Der Runner (`verify_all.sh`) haelt seinerseits keine
@@ -395,6 +397,42 @@ def interpreters() -> list[str]:
     return list(doc["tools"]["python"])
 
 
+def _zelle(text: Any) -> str:
+    """One Markdown table cell: a pipe or newline in the content cannot break the row."""
+    return str(text).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+
+
+def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
+    """The one list as a Markdown table — the inventory of docs/governance/gate-catalog.md.
+
+    Deterministic and unfiltered: every declared gate, in list order, with the
+    fields the catalog promises (id, title, command or action, job,
+    enforcement, floor, placement, reason). A command gate and a hosted action
+    are rendered distinctly, and an action with a local equivalent names it —
+    the reader must see what runs where. `tests/test_gate_catalog.py` holds
+    the committed inventory to this rendering.
+    """
+    if alle is None:
+        alle = gates()
+    zeilen = [
+        "| id | title | command / action | job | enforcement | floor | placement | reason |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for g in alle:
+        if g["action"]:
+            einsatz = f"action `{g['action']}` (hosted CI only)"
+            if g["via_local_equivalent"]:
+                einsatz = f"action `{g['action']}`; locally: `{g['command']}`"
+        else:
+            einsatz = f"`{g['command']}`"
+        zeilen.append(
+            f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
+            f"{_zelle(g['enforcement'])} | {'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
+            f"{_zelle(g['reason'])} |"
+        )
+    return "\n".join(zeilen)
+
+
 def _git(*args: str) -> str | None:
     try:
         erg = subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
@@ -686,6 +724,11 @@ def main() -> int:
     ap.add_argument("--check-schema", action="store_true", help="Gate-Datei gegen ihr Schema pruefen")
     ap.add_argument("--generate-ci", action="store_true", help="ci.yml auf stdout erzeugen")
     ap.add_argument("--check-ci", action="store_true", help="committete ci.yml gegen die Ableitung pruefen")
+    ap.add_argument(
+        "--catalog",
+        action="store_true",
+        help="the one list as a Markdown table on stdout (docs/governance/gate-catalog.md)",
+    )
     args = ap.parse_args()
 
     try:
@@ -713,6 +756,10 @@ def main() -> int:
 
     if args.report:
         print(json.dumps(report(args.job), indent=2))
+        return 0
+
+    if args.catalog:
+        print(catalog_rows())
         return 0
 
     if args.format == "json":

@@ -131,14 +131,14 @@ its command and commit; do not relax a gate or claim the package is done.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_gate_catalog.py::test_catalog_matches_declared_gates — a missing, extra, duplicate or inaccurate row passes comparison.
-- 1: not yet written tests/test_gate_catalog.py::test_catalog_renders_commands_and_actions — a hosted action is rendered as a local command or Markdown cell content breaks a row.
-- 2: not yet written tests/test_gate_catalog.py::test_catalog_drift_is_rejected — mutated catalog rows or declared metadata remain accepted.
-- 3: not yet written tests/test_workflow_entry.py::test_make_change_delegates_to_scaffold — the real recipe fails to produce the direct script's scaffold, index or guidance.
-- 4: not yet written tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree — a rejected request succeeds or changes the folder/index state.
-- 5: not yet written tests/test_workflow_entry.py::test_make_index_delegates_to_registry — a stale index stays stale or a delegate failure is hidden.
-- 6: not yet written tests/test_workflow_entry.py::test_make_help_lists_targets_without_side_effects — an entry/input is absent or help invokes a mutating or verification command.
-- 7: not yet written tests/test_workflow_entry.py::test_workflow_start_delegates_to_scaffold — the Markdown wrapper loses name/bead, supplies its own scaffold or omits failure handling.
+- 1: tests/test_gate_catalog.py::test_catalog_matches_declared_gates — a missing, extra, duplicate or inaccurate row passes comparison.
+- 1: tests/test_gate_catalog.py::test_catalog_renders_commands_and_actions — a hosted action is rendered as a local command or Markdown cell content breaks a row.
+- 2: tests/test_gate_catalog.py::test_catalog_drift_is_rejected — mutated catalog rows or declared metadata remain accepted.
+- 3: tests/test_workflow_entry.py::test_make_change_delegates_to_scaffold — the real recipe fails to produce the direct script's scaffold, index or guidance.
+- 4: tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree — a rejected request succeeds or changes the folder/index state.
+- 5: tests/test_workflow_entry.py::test_make_index_delegates_to_registry — a stale index stays stale or a delegate failure is hidden.
+- 6: tests/test_workflow_entry.py::test_make_help_lists_targets_without_side_effects — an entry/input is absent or help invokes a mutating or verification command.
+- 7: tests/test_workflow_entry.py::test_workflow_start_delegates_to_scaffold — the Markdown wrapper loses name/bead, supplies its own scaffold or omits failure handling.
 - 7: not a test — the phase-6 review runs the command once in Claude Code where available; an unrun live check is reported as such.
 - 8: not a test — the phase-6 review compares the dated notice with the pull request's file list and the remaining gaps; a supplied piece still listed absent, a dropped absence or an undated re-check refutes it.
 - 9: not a test — the phase-6 review follows the §2 link to the English heading and reads the rule there; a dead link, the German fragment or an empty section refutes it.
@@ -158,4 +158,12 @@ already present. No design phase runs for this bounded class. Exploration
 used Stage 2, GLM 5.3 Flash on 2026-10-27, as recorded in research; no
 Stage-1 fallback was recorded.
 
+## Runner route — 2026-10-27
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-27 20:16:22–21:11:01 UTC, 3278 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-27 21:11:07–21:55:07 UTC, 2639 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-27 21:55:15–22:07:37 UTC, 742 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
