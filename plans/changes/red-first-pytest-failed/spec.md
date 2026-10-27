@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-a7m
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "2026-10-27"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage2, red-first]
 class: bounded
@@ -29,10 +29,10 @@ scope: `decisions.md#Q-1`.
 
 The runner's red-first classifier `_red_record_fault` refuses every failed
 call that did not raise an `AssertionError` (the branch ending "not an
-AssertionError", `scripts/stage2.py`, read at `eff79689` on 2026-10-27), and
+AssertionError", `scripts/stage2.py`, read at `4a81fc9a` on 2026-10-27), and
 the probe records only `assertion` and the exception's type name
-(`RED_PROBE_SOURCE`). Two legitimate red-first forms therefore refuse on
-every attempt, with real cost:
+(`RED_PROBE_SOURCE`). The expected-exception form therefore refuses on
+every attempt; the research also records the separate missing-helper case:
 
 - Phase 6 of `red-first-install` rejected its F-2 for exactly this
   (2026-10-16): a test written `with pytest.raises(...)` whose baseline does
@@ -43,8 +43,6 @@ every attempt, with real cost:
   needs an AssertionError"; both named tests drive the behavior under test
   through `pytest.raises`, the orchestrator had to measure by hand, and
   `make verify` then hit the 30-minute step limit during the retries.
-- Scale (`research.md`, textual count): `pytest.raises` occurs 157 times
-  across 25 files under `tests/`.
 
 The maintainer settled the scope (`decisions.md#Q-1`): an uncaught
 `AssertionError` and pytest's own `Failed` outcome both count as red; a
@@ -76,8 +74,8 @@ stays untouched as the record of the preceding contract.
    `pytest.raises`, an explicit `pytest.fail` in the body, a `Failed`
    subclass, an ordinary assertion, or a parameterized mixture of passing
    and such failing cases — the proof succeeds.
-   *Refuted by:* any of those forms still refused with "not an
-   AssertionError".
+   *Refuted by:* any complete run containing only those forms being
+   refused, regardless of its diagnostic wording.
    *Basis:* `decisions.md#Q-1`.
 2. If any selected call fails with an exception that is neither an uncaught
    `AssertionError` nor pytest's own `Failed` — a missing helper's
@@ -97,8 +95,8 @@ stays untouched as the record of the preceding contract.
 4. If the run is not a complete proof — an exit other than the expected one,
    a collection error, an empty or foreign selection, a skip, xfail or
    XPASS, a timeout, or missing, stale, malformed or wrong-selector
-   evidence, a missing or non-boolean `pytest_failed` field included — the
-   proof is refused with scrubbed diagnostics.
+   evidence, including absent or wrongly typed failure classification —
+   the proof is refused with scrubbed diagnostics.
    *Refuted by:* any such run accepted, or unredacted run output in the
    refusal.
    *Basis:* `research.md` (the existing proof requirements).
@@ -121,16 +119,17 @@ stays untouched as the record of the preceding contract.
   names stays refused — widening it is a separate decision, not this one.
 - Distinguishing DID-NOT-RAISE from an explicit body `pytest.fail`: the
   probe records the exception type only, and Q-1 accepts both forms.
-- The guard-test policy — which repair rows owe baseline proof (bead
-  `coding-harness-0ho`) — and the test-strength strand (bead
-  `coding-harness-y17`); both are separate changes.
+- The guard-test policy — which repair rows owe baseline proof
+  (bead `coding-harness-0ho`) — and the test-strength strand about tests
+  that already pass on baseline (bead `coding-harness-y17`); both are
+  separate changes.
 - Provisioning baseline dependencies, and any change to routing, attempts,
   timeouts, scratch-checkout construction, cleanup, ref protection or
   credential scrubbing.
 - Editing the predecessor artifacts under `plans/changes/red-first-install/`
   or any other change folder: the amendment lives in this spec.
-- A `design.md` or an ADR: a `bounded` change never runs phase 2b (D-14),
-  and no file under `docs/adr/` changes.
+- A `design.md` or an ADR: the class-based design rule excludes phase 2b
+  for a `bounded` change, and no file under `docs/adr/` changes.
 
 ## Protected areas
 
@@ -151,9 +150,10 @@ stays untouched as the record of the preceding contract.
   request's file list.
 - Bead: the pull request closes `coding-harness-a7m`, and its last commit
   carries the trailer `Closes-Bead: coding-harness-a7m`.
-- Special runs: the new acceptance regressions measured red on the baseline
-  code and green after the change, with the tested commit in the pull
-  request body.
+- Special runs: the new pytest-`Failed` acceptance cases measured red on
+  the baseline code and green after the change, with the tested commit in
+  the pull request body; existing refusal and fixed-code behavior stays
+  covered by regression tests.
 
 ## Open decisions
 
