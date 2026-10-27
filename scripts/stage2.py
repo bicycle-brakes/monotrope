@@ -5133,6 +5133,12 @@ def findings_body_problem(before: str, now: str) -> str | None:
     """Protect the whole file, allowing only the runner's one frontmatter date refresh."""
     if now == before:
         return None
+    # The runner's own record of a skipped credential scan lands at the end of the call record
+    # (`record_credential_scan_skips`): it is bookkeeping, not an edit of a finding.
+    if now.startswith(before) and all(
+        not line.strip() or line.startswith("> credential scan skipped ") for line in now[len(before) :].splitlines()
+    ):
+        return None
     masked = _mask_stamp(before, dated=False)
     if masked is not None and _mask_stamp(now, dated=True) == masked:
         return None
