@@ -661,15 +661,17 @@ files, three were stacked, and a generated index conflicted on every merge
 request small enough to merge (maintainer, 2026-10-27); the portable form
 for another repository is `templates/agents-mergeable-prs.md`.
 
-- **Short-lived.** A pull request is merged or closed within two working
-  days. An older one merges `main` before any further work on it.
+- **Synced daily, automatically.** Every working day each open pull request
+  is test-merged against `main` (`git merge-tree --write-tree origin/main
+  origin/<branch>`): one that merges cleanly gets `main` merged and pushed,
+  one that conflicts is reported to the maintainer with its files, and the
+  conflict is resolved while it is small (bead coding-harness-eq6y).
+- **Asked about after five working days.** A pull request open longer than
+  five working days is put to the maintainer: finish, shrink or close.
 - **Few at once on a hot file.** At most three open pull requests change the
-  same hot file — here `scripts/stage2.py` and `tests/test_stage2.py`. The
-  oldest is finished before a new one opens (bead coding-harness-6y0t).
-- **Checked daily.** Every morning each open pull request is test-merged
-  against `main` without changing anything (`git merge-tree --write-tree
-  origin/main origin/<branch>`); a conflict is resolved while it is small
-  (bead coding-harness-eq6y).
+  same hot file — here `scripts/stage2.py` and `tests/test_stage2.py`, one
+  per foreign-model lane. The oldest is finished before a new one opens
+  (bead coding-harness-6y0t).
 - **Reviewed on a current base.** Phase 6 reviews the branch after it has
   merged `main`; a verdict holds only for the commit it saw.
 - **Not stacked without a reason.** A pull request built on another names
