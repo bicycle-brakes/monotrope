@@ -415,3 +415,15 @@ Phase 6 verdict: codex 01a17d07-19ba-7210-a12b-fba92364057b, 2026-10-27
 Reviewer session: codex 01a17d07-19ba-7210-a12b-fba92364057b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2332 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2336 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-7 | BLOCKER | SPEC | impl | scripts/stage2.py:1828–1850,2308–2309 | The catalog allowlist fails open when an allowed field invalidates Pi’s configuration. Reproduced with `name: ""`, `samplingParams: {"model":"kimi-k3"}` and a catalog date newer than Pi’s shipped data: activation reports the forbidden fields dropped, but Pi rejects `models.json` and restores the unfiltered `models-store.json`. Pi’s real resolver selects `synthetic-free`, while its request builder produces `model: "kimi-k3"` and restores catalog headers. Dropped fields must remain unavailable when explicit configuration fails. [Criterion 13] | Codex | open | — |
+| F6-8 | MAJOR | SPEC | impl | scripts/stage2.py:864–882 | A termination signal during process creation can leave the timed program running. Reproduced by delivering real SIGTERM immediately after `_fork_exec` creates a sleep child, before `Popen` returns: `process` remains `None`, cleanup skips it, and no process group was registered. The actual runner entry point returns 143 reporting zero groups killed, while `waitpid(..., WNOHANG)` confirms the child still runs. Cancellation must also cover the interval between child creation and registration. [Criterion 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17d2e-551e-7b30-b4bc-b8bab59ba680, 2026-10-27
+Reviewer session: codex 01a17d2e-551e-7b30-b4bc-b8bab59ba680 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
