@@ -1,0 +1,390 @@
+// The public research tools of the swarm's free researchers (ADR 0020 draft).
+//
+// A free researcher runs in a fresh scratch context with every built-in local
+// tool and discovery surface disabled; the ONLY extension loaded is this file,
+// copied to a generic scratch path before loading (plans/changes/research-swarm/
+// design.md). It exposes exactly two tools — public search and page retrieval —
+// and blocks every other tool call, built-ins included. Destinations must be
+// HTTPS, credential-free and public: every DNS result is checked, the connection
+// is pinned to a validated address, and every redirect is re-validated with a
+// fresh lookup, so a private address cannot enter through a redirect or a
+// rebinding lookup. Web content is data; nothing here executes it.
+//
+// Source receipts (URL, final URL, status, title, retrieval time, excerpt,
+// size) are appended as JSON lines to $STAGE2_PUBLIC_RECEIPTS; the runner
+// validates public citations against them, never against a model's word.
+//
+// Search uses the DuckDuckGo HTML endpoint — no paid API, no new credential.
+// Its redirect wrappers are decoded to the destination URL before a result
+// reaches the researcher, so what it fetches and cites is the real page.
+//
+// The pure helpers are exported so tests can inject a scripted transport
+// (tests/test_stage2_research_tools.py) and run without Pi and without network.
+import https from "node:https";
+import { appendFileSync } from "node:fs";
+import { lookup as dnsLookup } from "node:dns/promises";
+import { isIP } from "node:net";
+
+const MAX_REDIRECTS = 3;
+const MAX_BYTES = 5 * 1024 * 1024;
+const USER_AGENT =
+  "research-swarm public researcher; retrieves public pages as data, no repository content";
+const PUBLIC_TOOLS = ["public_search", "public_fetch"];
+
+// --- destinations -------------------------------------------------------------------------------
+
+// Address ranges that are never public: unspecified, this host, private,
+// carrier-grade NAT, link-local, protocol assignments, documentation,
+// benchmarking, multicast and reserved space. Ordered [first address, bits].
+const PRIVATE_V4 = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 3],
+];
+
+function v4ToInt(text) {
+  const parts = text.split(".");
+  if (parts.length !== 4) return null;
+  let value = 0;
+  for (const part of parts) {
+    const n = Number(part);
+    if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+    value = value * 256 + n;
+  }
+  return value;
+}
+
+function isPrivateV4(ip) {
+  const value = v4ToInt(ip);
+  if (value === null) return true; // not a parseable v4 address — refuse it
+  for (const [base, bits] of PRIVATE_V4) {
+    const width = 32 - bits;
+    if (width === 0 ? value === v4ToInt(base) : Math.floor(value / 2 ** width) === Math.floor(v4ToInt(base) / 2 ** width)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isPrivateIp(ip) {
+  const lower = String(ip ?? "").toLowerCase();
+  const family = isIP(lower);
+  if (family === 4) return isPrivateV4(lower);
+  if (family !== 6 || lower.includes("%")) return true;
+  // URL normalization expands embedded IPv4 into hex; numeric comparison
+  // makes compressed, expanded and mapped spellings obey the same policy.
+  const normalized = new URL(`https://[${lower}]/`).hostname.slice(1, -1);
+  const halves = normalized.split("::");
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length > 1 && halves[1] ? halves[1].split(":") : [];
+  const words = halves.length === 1 ? left : [...left, ...Array(8 - left.length - right.length).fill("0"), ...right];
+  const value = words.reduce((n, word) => (n << 16n) | BigInt(`0x${word}`), 0n);
+  if ((value >> 32n) === 0xffffn) {
+    const v4 = Number(value & 0xffffffffn);
+    return isPrivateV4([24, 16, 8, 0].map((shift) => (v4 >>> shift) & 255).join("."));
+  }
+  // Admit global unicast only (2000::/3), excluding special-purpose,
+  // documentation and transition allocations within it. Conservative
+  // exclusions also refuse globally reachable exceptions inside these blocks.
+  if ((value >> 125n) !== 1n) return true;
+  return (value >> 105n) === (0x2001n << 7n) // 2001::/23 protocol assignments
+    || (value >> 96n) === 0x20010db8n // 2001:db8::/32 documentation
+    || (value >> 112n) === 0x2002n // 2002::/16 transition addresses
+    || (value >> 108n) === 0x3fff0n; // 3fff::/20 documentation
+}
+
+// Validates one destination: HTTPS only, no embedded credentials, port 443,
+// a public hostname. Throws with the reason; the message travels to the
+// researcher and the audit, so it states the rule, not the fix.
+export function validateDestination(raw) {
+  if (typeof raw !== "string" || !raw.trim()) throw new Error("a destination URL is required");
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("the destination is not a valid URL");
+  }
+  if (url.protocol !== "https:") throw new Error("only https:// destinations are fetched — no http, no file");
+  if (url.username || url.password) throw new Error("destinations with embedded credentials are refused");
+  if (url.port && url.port !== "443") throw new Error("only port 443 is fetched");
+  if (!url.hostname) throw new Error("the destination has no host");
+  if (url.hostname === "localhost" || url.hostname.endsWith(".localhost") || url.hostname.endsWith(".local")) {
+    throw new Error("local host names are refused");
+  }
+  return url;
+}
+
+// --- transports ---------------------------------------------------------------------------------
+
+// The transport the tools use under Pi: real DNS, real TLS. `get` pins the
+// connection to the pre-validated address by overriding the agent's lookup,
+// so the certificate and SNI still name the requested host.
+export function nodeTransport() {
+  return {
+    lookup: async (hostname) => await dnsLookup(hostname, { all: true, verbatim: true }),
+    get: ({ url, pinnedIp, pinnedFamily, headers }) =>
+      new Promise((resolve, reject) => {
+        const request = https.get(
+          url,
+          {
+            lookup: (_host, options, callback) => options?.all
+              ? callback(null, [{ address: pinnedIp, family: pinnedFamily }])
+              : callback(null, pinnedIp, pinnedFamily),
+            headers,
+            timeout: 20000,
+          },
+          resolve,
+        );
+        request.on("error", reject);
+        request.on("timeout", () => request.destroy(new Error("the request timed out")));
+      }),
+  };
+}
+
+// Resolves a host and checks every address. Keeps the chosen address's family
+// with it, including when IPv6 is the first or only answer.
+async function validatedAddress(hostname, deps) {
+  const results = await deps.lookup(hostname);
+  if (!Array.isArray(results) || results.length === 0) {
+    throw new Error(`the lookup of ${hostname} returned no address`);
+  }
+  // Scripted transports may supply bare IPs; real DNS supplies address/family records.
+  const addresses = results.map((entry) => typeof entry === "string"
+    ? { address: entry, family: isIP(entry) } : entry);
+  for (const { address, family } of addresses) {
+    if (isPrivateIp(address)) {
+      throw new Error(`the lookup of ${hostname} returned the private address ${address} — refused`);
+    }
+    if (!family || family !== isIP(address)) throw new Error("the lookup returned an invalid address family");
+  }
+  return addresses[0];
+}
+
+function readBody(response) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    response.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BYTES) {
+        response.destroy(new Error("the page exceeds the size limit"));
+        reject(new Error("the page exceeds the size limit"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    response.on("error", reject);
+  });
+}
+
+// Retrieves one page. Every hop re-validates the destination and resolves it
+// anew, so a redirect cannot smuggle in a private address and a rebinding
+// lookup cannot swap one in after the check.
+export async function fetchPage(raw, deps, depth = 0) {
+  const url = validateDestination(raw);
+  const { address: pinnedIp, family: pinnedFamily } = await validatedAddress(url.hostname, deps);
+  const response = await deps.get({
+    url,
+    pinnedIp,
+    pinnedFamily,
+    headers: { host: url.hostname, "user-agent": USER_AGENT, accept: "text/html" },
+  });
+  const status = response.statusCode;
+  const location = response.headers && (response.headers.location || "");
+  if ([301, 302, 303, 307, 308].includes(status)) {
+    if (depth >= MAX_REDIRECTS) throw new Error(`more than ${MAX_REDIRECTS} redirects`);
+    response.resume();
+    return fetchPage(new URL(location, url).href, deps, depth + 1);
+  }
+  if (status !== 200) {
+    response.resume();
+    throw new Error(`the page answered ${status}, not 200`);
+  }
+  const body = await readBody(response);
+  return { finalUrl: url.href, status, body };
+}
+
+// --- search -------------------------------------------------------------------------------------
+
+const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'" };
+
+function unescapeText(text) {
+  return text.replace(/&(?:amp|lt|gt|quot|#x27|#39);/g, (m) => ENTITIES[m] || m);
+}
+
+// The destination a DuckDuckGo result anchor points at. The HTML endpoint
+// wraps every result in a redirect (`//duckduckgo.com/l/?uddg=<destination>`);
+// the wrapper is decoded so the researcher fetches, and cites, the real page.
+// The decoded destination is validated like any other: a result whose
+// destination is not a fetchable public https URL — or a DuckDuckGo link that
+// carries no destination, such as an advert — is dropped (null).
+export function resultDestination(href) {
+  let url;
+  try {
+    url = new URL(href, "https://duckduckgo.com/");
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === "duckduckgo.com" || host.endsWith(".duckduckgo.com")) {
+    const target = url.pathname === "/l/" ? url.searchParams.get("uddg") : null;
+    return target ? resultDestination(target) : null;
+  }
+  try {
+    return validateDestination(url.href).href;
+  } catch {
+    return null;
+  }
+}
+
+// Parses the DuckDuckGo HTML answer: result anchors of the class `result__a`.
+export function parseResults(html) {
+  const results = [];
+  const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  for (const match of html.matchAll(pattern)) {
+    const destination = resultDestination(unescapeText(match[1]).trim());
+    if (destination === null) continue;
+    const snippetMatch = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(html.slice(match.index, match.index + 2000));
+    results.push({
+      title: unescapeText(match[2].replace(/<[^>]*>/g, "")).trim(),
+      url: destination,
+      snippet: snippetMatch ? unescapeText(snippetMatch[1].replace(/<[^>]*>/g, "")).trim() : "",
+    });
+  }
+  return results;
+}
+
+export async function searchWeb(query, deps) {
+  if (typeof query !== "string" || !query.trim()) throw new Error("a search query is required");
+  const url = validateDestination(
+    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+  );
+  const page = await fetchPage(url.href, deps);
+  return parseResults(page.body);
+}
+
+// --- receipts -----------------------------------------------------------------------------------
+
+function receiptPath() {
+  const path = process.env.STAGE2_PUBLIC_RECEIPTS;
+  if (!path) throw new Error("STAGE2_PUBLIC_RECEIPTS is not set — no receipt, no retrieval");
+  return path;
+}
+
+function titleOf(body) {
+  const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(body);
+  return match ? unescapeText(match[1]).trim().slice(0, 300) : "";
+}
+
+export function recordReceipt(sink, receipt) {
+  sink(`${JSON.stringify(receipt)}\n`);
+}
+
+// The full tool step: validate, retrieve, record the receipt, return JSON.
+export async function executeFetch(raw, deps, sink = (line) => appendFileSync(receiptPath(), line)) {
+  const page = await fetchPage(raw, deps);
+  const receipt = {
+    kind: "fetch",
+    url: raw,
+    final_url: page.finalUrl,
+    status: page.status,
+    title: titleOf(page.body),
+    retrieved: new Date().toISOString(),
+    excerpt: page.body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
+    bytes: Buffer.byteLength(page.body),
+  };
+  recordReceipt(sink, receipt);
+  return JSON.stringify(receipt);
+}
+
+export async function executeSearch(query, deps, sink = (line) => appendFileSync(receiptPath(), line)) {
+  const results = await searchWeb(query, deps);
+  const receipt = {
+    kind: "search",
+    url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+    final_url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+    status: 200,
+    title: "",
+    retrieved: new Date().toISOString(),
+    excerpt: JSON.stringify(results).slice(0, 400),
+    bytes: results.length,
+  };
+  recordReceipt(sink, receipt);
+  return JSON.stringify(results);
+}
+
+// --- the extension Pi loads ---------------------------------------------------------------------
+
+// Pi 1.1.0 validates a tool's parameters against a JSON schema (a TypeBox
+// schema or a plain one; pi-ai's `validateToolArguments`), calls
+// `execute(toolCallId, params, signal, onUpdate, ctx)` and expects a result of
+// model-facing `content` plus `details` (docs/extensions.md, "Tools"). The
+// extension is loaded from a scratch copy, so it imports nothing from Pi and
+// declares plain JSON schemas.
+const SEARCH_PARAMETERS = {
+  type: "object",
+  properties: { query: { type: "string", description: "The public web search query." } },
+  required: ["query"],
+  additionalProperties: false,
+};
+const FETCH_PARAMETERS = {
+  type: "object",
+  properties: { url: { type: "string", description: "The public https:// page to retrieve." } },
+  required: ["url"],
+  additionalProperties: false,
+};
+
+function toolResult(text) {
+  return { content: [{ type: "text", text }], details: undefined };
+}
+
+// Registers the two tools and the gate. `transport` and `sink` are seams for
+// the tests; under Pi the default export passes neither.
+export function registerResearchTools(pi, transport = nodeTransport, sink = undefined) {
+  if (!pi || typeof pi.registerTool !== "function") {
+    throw new Error("this extension needs a Pi host with registerTool; it refuses to load anywhere else");
+  }
+  pi.registerTool({
+    name: "public_search",
+    label: "Public search",
+    description:
+      "Search the public web with a query. Returns result titles, destination URLs and snippets; a " +
+      "snippet is not a retrieved page. Records a source receipt. No local access exists.",
+    parameters: SEARCH_PARAMETERS,
+    execute: async (_toolCallId, params) => toolResult(await executeSearch(params?.query, transport(), sink)),
+  });
+  pi.registerTool({
+    name: "public_fetch",
+    label: "Public fetch",
+    description: "Retrieve one public https page. Records a source receipt. No local access exists.",
+    parameters: FETCH_PARAMETERS,
+    execute: async (_toolCallId, params) => toolResult(await executeFetch(params?.url, transport(), sink)),
+  });
+  pi.on("tool_call", async (event) => {
+    const name = event && event.toolName;
+    if (PUBLIC_TOOLS.includes(name)) return undefined;
+    return {
+      block: true,
+      reason:
+        `the tool '${name}' does not exist in a free researcher context: only ` +
+        "public_search and public_fetch are available, and every file, shell and " +
+        "network tool is blocked at the extension boundary",
+    };
+  });
+}
+
+export default function (pi) {
+  registerResearchTools(pi);
+}
