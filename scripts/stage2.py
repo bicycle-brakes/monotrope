@@ -4680,20 +4680,25 @@ def checkpoint(
         )
         if exposed:
             raise Refused(credential_message(exposed))
+    stamps: set[Path] = set()
     try:
         # A protected document's derived stamp may enter the run, but must not enter its commit.
         # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
         held = _held_prefixes(root)
-        for path in sorted(changed_paths(root)):
-            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path):
-                _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", path.as_posix())
-        blocked = uncommittable(root, change, keep)
+        stamps = {
+            path
+            for path in changed_paths(root)
+            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path)
+        }
+        # Classify without resetting stamps: a later rollback must check its entire batch
+        # before even these derived bytes are restored.
+        blocked = uncommittable(root, change, set(keep or ()) | stamps)
     except Refused as error:
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
         # first, so nothing the runner could not classify stays in the tree (O192-5). Preserve the
         # classification failure if the rollback itself must refuse.
         try:
-            restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+            restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
         except RestorationRefused as safety_error:
             preserve_attempt_failure(safety_error, error)
             raise
@@ -4706,11 +4711,17 @@ def checkpoint(
             f"`{path}`" for path in blocked
         )
         try:
-            restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+            restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
         except RestorationRefused as safety_error:
             preserve_attempt_failure(safety_error, Refused(reason))
             raise
         raise CheckpointRolledBack(f"{reason}; {restored}")
+    if stamps:
+        preflight_recovery(
+            root, [root / path for path in sorted(stamps)], aliases=alias_baseline(root, baseline, ignored_before)
+        )
+        for path in sorted(stamps):
+            _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", path.as_posix())
     try:
         _git_output(root, "add", "-A")
         _git_output(

@@ -15061,6 +15061,67 @@ def test_checkpoint_restore_refusal_preserves_original_failure(
     assert git(world.root, "rev-parse", "HEAD") == baseline
 
 
+@pytest.mark.parametrize("escaped", [True, False])
+def test_protected_stamp_reset_waits_for_the_rollback_preflight(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, escaped: bool
+) -> None:
+    """F6-7: a protected stamp must not be reset before the whole rollback is safe."""
+    agents = world.root / "AGENTS.md"
+    agents.write_text("---\nupdated: 2026-01-01\n---\n\nRules\n")
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("tracked\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected stamp rollback fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    agents.write_text(agents.read_text().replace("2026-01-01", "2026-10-27"))
+    prompt = world.root / "prompts/04-implement.md"
+    prompt.write_text(prompt.read_text() + "\nSubstantive protected edit\n")
+    outside = tmp_path / "stamp-rollback-outside"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_text("external sentinel\n")
+    if escaped:
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+    else:
+        (deep / "keep.txt").write_text("attempt edit\n")
+    before = (agents.read_bytes(), prompt.read_bytes(), git(world.root, "diff", "--binary", "HEAD"))
+    mutations = []
+    preflights = []
+    real_git, real_preflight = stage2._git_output, stage2.preflight_recovery
+
+    def git_output(root, *args, **kwargs):
+        if args and args[0] in ("restore", "clean", "add", "commit"):
+            mutations.append(args)
+        return real_git(root, *args, **kwargs)
+
+    def preflight(root, destinations, **kwargs):
+        batch = list(destinations)
+        preflights.append(set(batch))
+        assert not mutations, "rollback was mutated before its complete preflight"
+        return real_preflight(root, batch, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    monkeypatch.setattr(stage2, "preflight_recovery", preflight)
+    expected = stage2.RestorationRefused if escaped else stage2.CheckpointRolledBack
+    with pytest.raises(expected) as refusal:
+        stage2.checkpoint(world.root, "demo", baseline)
+    assert len(preflights) == 1
+    assert {agents, prompt, deep / "keep.txt"} <= preflights[0]
+    if escaped:
+        assert "src/deep/keep.txt" in str(refusal.value)
+        assert "escapes the worktree" in str(refusal.value)
+        assert not mutations
+        assert before == (agents.read_bytes(), prompt.read_bytes(), git(world.root, "diff", "--binary", "HEAD"))
+        assert deep.is_symlink() and deep.readlink() == outside
+    else:
+        assert agents.read_text().startswith("---\nupdated: 2026-01-01\n")
+        assert git(world.root, "status", "--porcelain") == ""
+    assert sentinel.read_text() == "external sentinel\n"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 @pytest.mark.parametrize("parent_kind", ["escape", "loop", "error"])
 def test_credential_scan_reports_skipped_parent(
     world: World,
