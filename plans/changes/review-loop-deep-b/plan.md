@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-26
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: to be filed
@@ -95,9 +95,16 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet r
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet replaces Codex for two hours (2026-10-26).
 
+## Runner route — 2026-10-27
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-26 00:48:46–01:06:31 UTC, 1066 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-26 17:18:57–17:32:01 UTC, 784 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-26 17:32:44–17:39:48 UTC, 424 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-26 17:51:48–18:11:38 UTC, 1190 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-27 08:58:18–09:19:16 UTC, 1258 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 09:19:22–09:48:15 UTC, 1733 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 09:48:38–10:18:41 UTC, 1803 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
