@@ -32,6 +32,13 @@ datenklassen:
     bemerkung: >-
       Verlaesst die Umgebung des Kunden nicht. Kein hier gelisteter Endpunkt ist
       dafuer zugelassen; die Reconciliation laeuft im Warehouse, nicht im Modell.
+  public-web:
+    was: "Oeffentlich zugaengliche Quellen: Suchergebnisse und abgerufene Webseiten"
+    bemerkung: >-
+      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0020,
+      vorgeschlagen bis zum Merge). Kein Repositorien-Inhalt und keine Kundenbezuege — zu einem Aufruf
+      auf dieser Klasse verlaesst nur der gefilterte Ein-Satz-Themensatz die
+      Grenze; die Antworten der Modelle sind Daten, kein Beweis fuer Lokales.
 
 # ---------------------------------------------------------------------------
 # Die zugelassenen Endpunkte
@@ -120,7 +127,10 @@ endpunkte:
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. No review phase routes to it since 2026-10-07 (ADR 0011): the
       review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
-      (phase 1) through `stage2.py explore` and implements (phase 4) through
+      (phase 1) through `stage2.py explore` — since ADR 0020 only for a
+      `bounded` or `spike` change, while a `feature` or `architectural` change
+      explores through the research swarm declared below — and implements
+      (phase 4) through
       `stage2.py implement` (maintainer, 2026-10-06; bead
       coding-harness-qcp). `glm-5.3` repaired the findings the orchestrator took
       until ADR 0017, which moved `stage2.py repair` to Codex (maintainer,
@@ -396,8 +406,10 @@ endpunkte:
         purpose alone — no paid model, no Zen id and no interactive session
         runs on it.
     bemerkung: >-
-      The review loop (phase 4b) and the interactive session verb (`stage2.py
-      session`, ADR 0012) run here — and nothing else; the spec review (phase
+      The review loop (phase 4b), the interactive session verb (`stage2.py
+      session`, ADR 0012) and, since ADR 0020, the research swarm's Go calls
+      declared below (finders, repository-topic and online seats, free seats;
+      their number per run grows with the free seats) run here; the spec review (phase
       2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
       `python3
       scripts/stage2.py` and Pi at the version the runner pins — the exact
@@ -474,6 +486,52 @@ endpunkte:
       implementation diff only: no tools and no other content, and no paid
       model, Zen id or interactive session on that acceptance (ADR 0021,
       decision 3).
+
+# ---------------------------------------------------------------------------
+# Der Recherche-Schwarm (ADR 0020, vorgeschlagen bis zum Merge) — wer in welcher Rolle laeuft
+# ---------------------------------------------------------------------------
+#
+# Die Rollen sind hier DEKLARIERT, nicht in einem Skript hardkodiert: der
+# Schwarm-Lauf liest diesen Block und lehnt jede Rolle ab, deren Endpunkt oder
+# Modell hier nicht so steht, wie die Rolle sie braucht. Ausnahme: fehlt
+# `finder_merge`, nimmt der Lauf still das Modell von `judge`
+# (scripts/stage2_availability.py); wer `judge` aendert, aendert also auch den
+# Merge der Finder. Der Block aendert
+# NICHT die Reihenfolge von `opencode-go.modelle` — die bleibt die Leiter der
+# Review-Schleife (phase 4b).
+research_swarm:
+  paid_endpoint: claude-code-plan
+  topic_author: claude-opus-5-5
+  judge: claude-opus-5-5
+  # Six seats (Q-12, Q-14, Q-18). A seat is either pinned to one `{endpoint,
+  # model}` or open (`{endpoint: opencode-go}` alone). At preparation
+  # (`stage2.py prepare-explore`) the runner probes the admitted Go models and
+  # fills each open seat with the cheapest reachable one (`anfragen_5h`
+  # descending, ties by id) that no other seat of its trio holds; an unreachable
+  # pinned model is replaced the same way and reported as "substitute for <seat>".
+  # It prints every reachable candidate with its request cost and its Artificial
+  # Analysis Intelligence Index, read live at each preparation, and a
+  # recommendation. The orchestrator asks the maintainer which models to use
+  # before the run; a different answer goes back as `prepare-explore --seats`
+  # and is never silently replaced. A `modelle_terms` record alone admits a Go
+  # model for research; `opencode-go.modelle` stays the review ladder. Go seats
+  # name no model since 2026-10-21: the Flash models change too often (Q-18).
+  repository_seats:
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
+    - {endpoint: claude-code-plan, model: claude-haiku-5-5}
+  online_seats:
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
+  # Go id -> Artificial Analysis slug, only where the id does not match the
+  # slug or name by itself; an unmatched model shows its intelligence as not read.
+  intelligence_slugs: {}
+  availability_preflight:
+    max_age_seconds: 900
+    exclude_until: []
+    measured_wire_apis: [openai-completions]
+  online_free: {provider: opencode-go, suffix: "-free", include: [], exclude: []}
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft
