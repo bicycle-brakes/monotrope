@@ -588,6 +588,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # The runner's one path to Pi is patched to the wrapper stand-in: its records
     # carry the program path, so a call that bypasses the wrapper cannot hide.
     monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
+    # These runner unit tests use a stand-in Pi. The offline real-Pi resolver is exercised
+    # separately by the overlay regression and the Pi contract suite.
+    if hasattr(stage2, "check_overlay"):
+        monkeypatch.setattr(stage2, "check_overlay", lambda *_args: None)
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
@@ -16474,3 +16478,143 @@ def test_repair_malformed_fixed_claim_still_conflicts(world: World, malformed: s
     prompt = prompt_of(world.calls("codex")[1])
     assert "L1-1: several fixed lines" in prompt
     assert f"`{malformed}`" in prompt
+
+
+@pytest.mark.parametrize("route", ["discovery", "reviewer"])
+@pytest.mark.parametrize("invalid_name", ["", []])
+def test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str, invalid_name
+) -> None:
+    """F6-7: a rejected explicit config must never restore request parameters from the raw cache."""
+    from types import SimpleNamespace
+
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", tmp_path / "model-endpoints.yaml")
+    definition = {
+        "id": "synthetic-free",
+        "name": invalid_name,
+        "api": "openai-completions",
+        "baseUrl": "https://catalog.example.invalid/v1",
+        "samplingParams": {"model": "kimi-k3"},
+        "headers": {"x-catalog": "forbidden"},
+    }
+    store = {stage2.OPENCODE: {"models": [definition], "lastModified": 9999999999999}}
+    original = copy.deepcopy(store)
+    real_launch = stage2.launch
+    calls = []
+
+    def launch(command, cwd, env, *args, **kwargs):
+        if command[0] == "node":
+            return real_launch(command, cwd, env, *args, **kwargs)
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "update" in command:
+            (agent / "models-store.json").write_text(json.dumps(store))
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "provider model\nopencode-go synthetic-free\n", "")
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2, "reviewer_key", lambda: "synthetic-key")
+    monkeypatch.setattr(stage2, "secret_values", lambda: [])
+    monkeypatch.setattr(stage2, "free_rule", lambda _root: {"provider": stage2.OPENCODE, "id_suffix": "-free"})
+    with pytest.raises(stage2.Refused, match="(?i)overlay"):
+        if route == "discovery":
+            stage2.discover_free(tmp_path)
+        else:
+            ctx = SimpleNamespace(root=tmp_path, change="demo", models_store=store)
+            stage2.run_reviewer(ctx, "synthetic-free", "Review.", "synthetic-key", free=True)
+    assert calls == [], "Pi was allowed to list or review after rejecting the filtered configuration"
+    assert store == original, "retrieval evidence was changed"
+
+
+@pytest.mark.parametrize("signum", ["SIGTERM", "SIGINT"])
+@pytest.mark.parametrize("worker", [False, True])
+def test_a_signal_during_process_creation_leaves_no_child(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, signum: str, worker: bool
+) -> None:
+    """F6-8: deliver the real signal after fork/exec but before Popen can return its child."""
+    import signal
+
+    real_fork_exec = subprocess._fork_exec
+    children = []
+    threads = []
+
+    def fork_exec(*args, **kwargs):
+        pid = real_fork_exec(*args, **kwargs)
+        children.append(pid)
+        os.kill(os.getpid(), getattr(signal, signum))
+        return pid
+
+    def start():
+        with contextlib.suppress(stage2.NotStarted):
+            stage2.launch(["/bin/sleep", "30"], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=60)
+
+    def verb(*_args):
+        if worker:
+            thread = threading.Thread(target=start)
+            threads.append(thread)
+            thread.start()
+            thread.join(timeout=10)
+        else:
+            start()
+
+    monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)
+    monkeypatch.setattr(stage2, "explore", verb)
+    try:
+        if signum == "SIGINT":
+            with pytest.raises(KeyboardInterrupt):
+                world.run("explore")
+        else:
+            assert world.run("explore") == 143
+        assert children
+        deadline = time.monotonic() + 3
+        while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
+    finally:
+        for pid in children:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
+            # The interrupted constructor may not even have reached setsid yet.
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, 0)
+        for thread in threads:
+            thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("fault", [None, "samplingParams", "headers", "missing-model", "changed-id"])
+def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str | None) -> None:
+    """The guard accepts a safe overlay, but refuses fallback, restored fields and another selected model."""
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    definition = {
+        "id": "synthetic-free",
+        "name": "Synthetic",
+        "api": "openai-completions",
+        "baseUrl": "https://catalog.example.invalid/v1",
+        "samplingParams": {"model": "kimi-k3"},
+        "headers": {"x-forbidden": "catalog"},
+    }
+    store = {stage2.OPENCODE: {"models": [definition], "lastModified": 9999999999999}}
+    evidence = json.dumps(store)
+    (agent / "models-store.json").write_text(evidence)
+    stage2.activate_overlay(agent, store)
+    path = agent / "models.json"
+    config = json.loads(path.read_text())
+    model = config["providers"][stage2.OPENCODE]["models"][0]
+    if fault in ("samplingParams", "headers"):
+        # Plant the forbidden field after filtering: schema validation alone would accept it.
+        model[fault] = definition[fault]
+    elif fault == "changed-id":
+        model["id"] = "other-free"
+    path.write_text(json.dumps(config))
+    selected = "absent-free" if fault == "missing-model" else "synthetic-free"
+    if fault is None:
+        stage2.check_overlay(agent, home, selected)
+    else:
+        with pytest.raises(stage2.Refused, match="overlay validation failed"):
+            stage2.check_overlay(agent, home, selected)
+    assert (agent / "models-store.json").read_text() == evidence

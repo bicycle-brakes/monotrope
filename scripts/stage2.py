@@ -828,6 +828,30 @@ class Terminated(Exception):
     """The runner received SIGTERM: the running programs are killed and the run stops (exit 143)."""
 
 
+@contextlib.contextmanager
+def defer_launch_signals():
+    """On the main thread, deliver cancellation only after Popen's child is registered.
+
+    Blocking signals with pthread_sigmask would pass the blocked mask to the child. Temporary
+    handlers defer Python's exceptions instead; workers are already protected by _LIVE_LOCK,
+    since Python delivers their signals on the main thread.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    pending = []
+    previous = {}
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous[signum] = signal.signal(signum, lambda received, _frame: pending.append(received))
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        for signum in pending:
+            signal.raise_signal(signum)
+
+
 def launch(
     command: list[str],
     root: Path,
@@ -861,18 +885,19 @@ def launch(
             with _LIVE_LOCK:
                 if _LAUNCH_STOPPED.is_set():
                     raise NotStarted("the runner was interrupted; no program starts")
-                process = subprocess.Popen(
-                    command,
-                    cwd=root,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    errors="replace",
-                    start_new_session=True,
-                )
-                _LIVE_GROUPS.add(process.pid)
+                with defer_launch_signals():
+                    process = subprocess.Popen(
+                        command,
+                        cwd=root,
+                        env=env,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        errors="replace",
+                        start_new_session=True,
+                    )
+                    _LIVE_GROUPS.add(process.pid)
             # Cancellation may have arrived while Popen was starting in a worker.
             if _LAUNCH_STOPPED.is_set():
                 raise NotStarted("the runner was interrupted during launch")
@@ -1851,6 +1876,76 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
     return dropped
 
 
+def check_overlay(agent: Path, home: Path, model: str | None = None) -> None:
+    """Refuse before any call if pinned Pi rejects or broadens the filtered configuration.
+
+    Pi can report a configuration error yet resolve a model from its unfiltered remote cache.
+    Exercise its real offline resolver, without credentials, and check both the error and the
+    resolved definitions. The fetched store stays untouched as evidence.
+    """
+    runtime = REPO_ROOT / "tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js"
+    script = r"""
+import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
+globalThis.fetch = async () => { throw new Error('overlay validation forbids network'); };
+try {
+    const { ModelRuntime } = await import(process.argv[1]);
+    const path = process.argv[2];
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    const runtime = await ModelRuntime.create({
+        credentials: { async read() {}, async list() { return []; } },
+        modelsPath: path, refreshOnCreate: false,
+    });
+    const result = await runtime.refresh({ allowNetwork: false });
+    if (runtime.getError() || result.errors.size) throw new Error('Pi rejected the configuration');
+    const allowed = new Set(JSON.parse(process.argv[3]).concat(['provider']));
+    let selected = !process.argv[4];
+    for (const [provider, entry] of Object.entries(config.providers)) {
+        for (const definition of entry.models) {
+            const resolved = runtime.getModel(provider, definition.id);
+            if (!resolved) throw new Error('Pi did not resolve a configured model');
+            if (resolved.provider !== provider) throw new Error('Pi changed the provider');
+            for (const [field, value] of Object.entries(resolved)) {
+                // Pi adds the chat discriminator itself; it is not a request parameter.
+                if (field === 'type' && value === 'chat') continue;
+                if (value !== undefined && !allowed.has(field)) throw new Error('Pi restored a dropped field');
+            }
+            for (const [field, value] of Object.entries(definition)) {
+                if (!isDeepStrictEqual(resolved[field], value)) throw new Error('Pi changed a configured field');
+            }
+            if (provider === 'opencode-go' && definition.id === process.argv[4]) selected = true;
+        }
+    }
+    if (!selected) throw new Error('the requested model is absent from the filtered configuration');
+} catch {
+    // Do not print untrusted catalog data or a path that might carry a credential.
+    console.error('Pi overlay validation failed');
+    process.exitCode = 1;
+}
+"""
+    try:
+        done = launch(
+            [
+                "node",
+                "--input-type=module",
+                "-e",
+                script,
+                runtime.as_uri(),
+                str(agent / "models.json"),
+                json.dumps(OVERLAY_FIELDS),
+                model or "",
+            ],
+            agent,
+            foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PI_OFFLINE": "1"}),
+            timeout=PI_DISCOVERY_SECONDS,
+            limit="the offline overlay validation limit",
+        )
+    except CallFailed:
+        raise Refused("Pi overlay validation could not complete; no listing or reviewer starts.") from None
+    if done.returncode:
+        raise Refused("Pi overlay validation failed; no listing or reviewer starts.")
+
+
 def dropped_notice(dropped: dict[str, str]) -> str:
     """Name rejected ids as visible text, without terminal controls or table delimiters."""
 
@@ -1931,6 +2026,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
             (listing_agent / "models-store.json").write_text(json.dumps(safe_store), encoding="utf-8")
             activate_overlay(listing_agent, safe_store)
             env = {**env, "PI_CODING_AGENT_DIR": str(listing_agent)}
+        check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home)
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -2309,6 +2405,8 @@ def run_reviewer(
             activate_overlay(agent, store)
         home = scratch / "home"
         home.mkdir()
+        if store is not None:
+            check_overlay(agent, home, model)
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [

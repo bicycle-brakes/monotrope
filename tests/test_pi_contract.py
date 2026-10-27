@@ -455,8 +455,11 @@ if (runtime.getError() || result.errors.size) throw new Error(runtime.getError()
 console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? null));
 """
     observed = []
+    real_launch = stage2.launch
 
     def resolve_launch(command, cwd, env, *_args, **_kwargs):
+        if command[0] == "node":
+            return real_launch(command, cwd, env, *_args, **_kwargs)
         agent = Path(env["PI_CODING_AGENT_DIR"])
         if "update" in command:
             (agent / "models-store.json").write_text(json.dumps(store))
