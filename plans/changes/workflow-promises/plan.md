@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-i0l
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm-5.3, version: "2026-10-27"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, workflow]
 ---
@@ -18,16 +18,11 @@ tags: [plan, workflow]
 # Plan — workflow-promises
 
 ```text
-For you:     The gate catalog and the documented entry shortcuts (`make change`,
-             `make index`, `/workflow-start`) work as the workflow promises.
-Done when:   Catalog drift fails the new tests, each shortcut delegates to its
-             existing script unchanged, and this package's checks run green;
-             baseline reds outside it are reported, not inherited.
+For you:     The gate catalog and `make change`, `make index`, `/workflow-start` work as promised.
+Done when:   Catalog drift fails tests, shortcuts delegate correctly, and `make verify` is green.
 Appetite:    2 hours of phase 4 including repairs; stop at the limit.
-Not now:     The stop hook, the artefact validator, the missing agents, and the
-             tracker drift in other changes' folders.
-Pre-mortem:  suppose it failed: most likely because a wrapper duplicated
-             behavior instead of delegating to its existing script.
+Not now:     The stop hook, the artefact validator, missing agents, and unrelated tracker drift.
+Pre-mortem:  suppose it failed: most likely because a wrapper duplicated existing behavior.
 Starts unless you say stop.
 ```
 
@@ -49,7 +44,9 @@ Starts unless you say stop.
 2. Add `tests/test_gate_catalog.py`: compare the real catalog inventory
    with the shared reader's rendering; counter-check missing, extra and
    duplicate rows and metadata changes using fixture gate data and catalog
-   text.
+   text. Independently authored expected rows must check every displayed
+   field, commands versus hosted actions, and escaped pipes/newlines; a
+   renderer compared only with itself cannot hold criterion 1.
 3. Extend `scripts/ci_gates.py` with a deterministic `catalog_rows()`
    renderer and a `--catalog` stdout mode using `gates()`, without
    filtering job or placement. Render command and hosted action
@@ -70,7 +67,9 @@ Starts unless you say stop.
 5. Extend `Makefile` with phony `change`, `index` and `help` targets;
    retain `verify` as the default. Check nonempty NAME and BEAD before
    invoking `python3 scripts/new_change.py` with separately quoted
-   arguments, forward failures, and delegate index to
+   arguments passed through exported NAME and BEAD environment variables
+   (`"$$NAME"`, `"$$BEAD"`), rather than interpolating their values into
+   shell code. Forward failures and delegate index to
    `python3 scripts/plans_registry.py --index`. Help lists all public
    targets and the required change inputs without executing them. The
    W-6 pin in `tests/test_ci.py` holds only the two verbatim recipes, so
@@ -85,13 +84,12 @@ Starts unless you say stop.
    check, not claimed by the fixture test.
 7. Update only the missing-pieces notice and the §2 catalog anchor in
    `docs/WORKFLOW.md`, dating the new measurement and preserving the
-   remaining gaps; keep the file's `updated:` date current. Add the
-   lifecycle and provenance header to
-   `plans/changes/workflow-promises/decisions.md` — frontmatter only, body
-   unchanged; the drafting runner reverts a draft's edit of that file, so
-   the repair lands here. Regenerate `plans/INDEX.md`. Maintain this
-   folder's `spec.md`, `plan.md` and `findings.md` only for actual
-   implementation evidence and ledger-marker updates.
+   remaining gaps; keep the file's `updated:` date current. Regenerate
+   `plans/INDEX.md`. Update `plans/changes/workflow-promises/spec.md` and
+   `plans/changes/workflow-promises/plan.md` for implementation status,
+   ledger markers and time actually used; append implementation evidence
+   to `plans/changes/workflow-promises/findings.md`, preserving previous
+   records. No files are deleted.
 
 ## Verification
 
@@ -107,13 +105,13 @@ python3 scripts/plans_registry.py --index
 make verify
 ```
 
-Baseline, measured 2026-10-27 at `78970dfd` (draft attempts 1–3, their
-records in `findings.md`):
+Historical baseline: draft attempts 1–3 on 2026-10-27, starting at
+`78970dfd`, as recorded in `findings.md`:
 
 - `scripts/validate_change_artefacts.py` does not exist; the phase prompts'
   validator command is not runnable at this baseline. Do not build it here.
-- `make verify` is red outside this package before any of its files are
-  touched: the staleness test
+- The recorded `make verify` runs were red outside this package: the
+  staleness test
   `tests/test_gate_machinery.py::test_the_plans_registry_staleness_check_runs_green_here`
   and the plans-registry gate fail on tracker/lifecycle drift in other
   changes' folders (closed beads whose artefacts are not archived;
@@ -122,9 +120,14 @@ records in `findings.md`):
   bt8, markdownlint is report by decision). Do not alter other changes'
   artefacts, tracker states or gate enforcement to change that; report
   what remains.
-- The one baseline BLOCK inside this package is
-  `plans/changes/workflow-promises/decisions.md: no-frontmatter`
-  (frontmatter-current); step 7 repairs it in this pull request.
+- Those runs also reported a missing header in this change's
+  `decisions.md`; commit `6f350742` supplied it on 2026-10-27. Do not repeat
+  that repair or alter its decisions. At that commit the interview check
+  and criterion-ledger check were rerun green on 2026-10-27; the complete
+  `make verify` result for this draft is for the runner to measure.
+
+Any remaining baseline failure still blocks completion. Report it with
+its command and commit; do not relax a gate or claim the package is done.
 
 ## Criterion ledger
 
@@ -149,8 +152,10 @@ configuration, README, ADR or tracker policy is changed. Neither
 catch-all rules already classify every new file (`docs/`, `tests/`,
 `.claude/`), and the non-travelling cases skip in themselves (step 1).
 The existing scaffold and registry scripts remain the sole
-implementations of their behavior. No design phase runs for this bounded class. Exploration used
-Stage 2, GLM 5.3 Flash on 2026-10-27, as recorded in research; no Stage-1
-fallback was recorded.
+implementations of their behavior. Preserve
+`plans/changes/workflow-promises/decisions.md`; its required header is
+already present. No design phase runs for this bounded class. Exploration
+used Stage 2, GLM 5.3 Flash on 2026-10-27, as recorded in research; no
+Stage-1 fallback was recorded.
 
 ## Time used

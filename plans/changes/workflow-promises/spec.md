@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-i0l
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm-5.3, version: "2026-10-27"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, workflow]
 class: bounded
@@ -141,10 +141,11 @@ but the tree lacks, with its check date and commit.
 
 ## Definition of Done
 
-- `make verify` green at the implementation commit; where a red predates
-  this change (named in `plan.md`, Verification), it is reported to the
-  maintainer, not repaired here. Targeted tests demonstrate the catalog and
-  entry failures above before their corresponding repairs.
+- `make verify` green at the implementation commit. Pre-existing failures
+  named in `plan.md`, Verification, remain blockers to report to the
+  maintainer; they do not waive this gate or authorize unrelated repairs.
+  Targeted tests demonstrate the catalog and entry failures above before
+  their corresponding repairs.
 - Documents moved with the behavior: `docs/governance/gate-catalog.md`,
   `docs/WORKFLOW.md`, `.claude/commands/workflow-start.md`, and the
   generated `plans/INDEX.md`; no ADR.
@@ -175,9 +176,7 @@ recorded here so implementation does not silently supply defaults.
   `78970dfd` (2026-10-27); use the phase-3 prompt's card, file list,
   verification, ledger and empty time section, following existing plan
   headers.
-- [DETAIL] `decisions.md` receives the lifecycle and provenance header that
-  `plans/` requires — its absence has blocked the frontmatter-current gate
-  since the interview commit. Frontmatter only, body unchanged: metadata,
-  not a maintainer answer. The drafting runner reverts a draft's edit of
-  `decisions.md`, so the header lands in phase 4, inside this change's pull
-  request.
+- [DETAIL] The lifecycle and provenance header of `decisions.md` is already
+  present at `6f350742` (2026-10-27); preserve it and the recorded decisions.
+  Earlier draft diagnostics describe its absence at their older baseline,
+  not an outstanding implementation task.
