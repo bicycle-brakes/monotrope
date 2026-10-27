@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-27
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-hxkw
@@ -755,3 +755,53 @@ Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 710 files, 2396 commits, 12 rules.
 
 Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 710 files, 2396 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 710 files, 2398 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/terms-test-fixtures/decisions.md` +1 -1
+> - `plans/changes/terms-test-fixtures/plan.md` +21 -1
+> - `plans/changes/terms-test-fixtures/research.md` +5 -14
+> - `plans/changes/terms-test-fixtures/spec.md` +1 -1
+> - `tests/test_stage2_research_store.py` +13 -13
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-1-20261027T223311593315Z-fe7f964b.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 710 files, 2401 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/terms-test-fixtures/decisions.md` +1 -1
+> - `plans/changes/terms-test-fixtures/plan.md` +18 -1
+> - `plans/changes/terms-test-fixtures/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-2-20261027T223311593315Z-fe7f964b.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 710 files, 2401 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/terms-test-fixtures/decisions.md` +1 -1
+> - `plans/changes/terms-test-fixtures/plan.md` +1 -1
+> - `plans/changes/terms-test-fixtures/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-2: `tests/test_terms_fixtures.py::test_default_terms_pass_production_admission (the test plants the missing-expiry fault itself and asserts the refusal. I could not record command output in `findings.md`, which I may not edit.)` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-3-20261027T223311593315Z-fe7f964b.md
+> ```

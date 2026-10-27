@@ -1,10 +1,10 @@
 ---
 title: "Research — terms-test-fixtures"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-hxkw
@@ -17,20 +17,11 @@ tags: [research]
 
 # terms test fixtures — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-10-27: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 704 files, 2375 commits, 12 rules.
 
 ## Runner exploration — 2026-10-27
 
-Exploration complete. Below is the research, ready to append to `plans/changes/terms-test-fixtures/research.md`.
+Exploration findings are recorded below; the later draft-time gap checks update this initial exploration.
 
 ---
 
@@ -42,7 +33,7 @@ neighbours:
   - plans/specs/implementation-verification/spec.md
 ```
 
-`plans/changes/terms-expiry/spec.md` is the closest active change (bead coding-harness-abra); its `findings.md`, `plan.md` and `decisions.md` carry the incident this change responds to. `plans/specs/implementation-verification/spec.md` is the repository's only living spec and has **not been read** in this exploration — it is listed so it gets reported on, not because its content is known here.
+`plans/changes/terms-expiry/spec.md` is the closest active change (bead coding-harness-abra); its `findings.md`, `plan.md` and `decisions.md` carry the incident this change responds to. `plans/specs/implementation-verification/spec.md` is the repository's only living spec. It was not read during the initial exploration; the later draft-time gap checks record its reading and the resulting constraints.
 
 ## What exists today
 
@@ -67,7 +58,7 @@ Two further coupling mechanisms are documented in the terms-expiry review rows: 
 
 ## Where it lives
 
-- Incident record: `plans/changes/terms-expxiry/findings.md` — correction: `plans/changes/terms-expiry/findings.md` (attempt diagnostics and the "Cause, measured by the orchestrator" block, phase-4b section; F6-1/F6-2/F6-3 and L1-1…L1-10 rows).
+- Incident record: `plans/changes/terms-expiry/findings.md` (attempt diagnostics and the "Cause, measured by the orchestrator" block, phase-4b section; F6-1/F6-2/F6-3 and L1-1…L1-10 rows).
 - Doctrine and decision: `docs/WORKFLOW.md` ("Paid terms expire"); `docs/adr/0022-paid-model-terms-expire.md`; `plans/changes/terms-expiry/decisions.md` (Q-1…Q-7; the note that the field first named `gilt_bis` is `valid_until` in code and declaration).
 - Production seam: `scripts/stage2.py` (`endpoint_entry`, `_terms`, `terms_today`, `_valid_until`, `terms_problem`, `terms_warnings`, `retain_terms_warnings`, `capture_terms_warnings`); `scripts/stage2_availability.py` (`research_terms_problem`, `preparation_terms`, the report rendering of `Terms warning:`); `scripts/stage2_research_run.py` (the two `research_terms_problem` call sites in the gate path).
 - Real declaration: `model-endpoints.yaml` at the repository root (the `opencode-go` entry: `modelle`, 18 `modelle_terms` records — six with `uebersprungen` skip markers — plus `availability_preflight`, `flash_swarm`, `free_stage`, and the `research_swarm` block).
@@ -77,7 +68,7 @@ Two further coupling mechanisms are documented in the terms-expiry review rows: 
 
 - The bead's exact current text and scope: the tracker is the Dolt database under `.beads/`, which this read-only exploration cannot open; the handover sentence is the only in-repository statement of the assignment. Open question for the interview.
 - Whether the terms-expiry decision pull request has actually merged (see above) — for the orchestrator or maintainer to confirm, not a repository question.
-- `plans/specs/implementation-verification/spec.md` exists but was not read; whether it constrains test-fixture changes is an open question.
+- `plans/specs/implementation-verification/spec.md` was initially unread; the draft-time gap checks below resolve this question and record its constraints.
 - "Not found" vs "not there": a dedicated cross-suite fixture-compatibility gate is **not there** — no test asserts that one suite's terms records satisfy `terms_problem`, and no shared helper exists; the only compatibility mechanism today is the full suite in `make verify` (`plans/changes/terms-expiry/plan.md`, Verification section: "The full suite checks fixture compatibility"). Whether any *other* mechanism was intended is not found anywhere in the change folder.
 
 ## Which files a change would have to touch

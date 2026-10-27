@@ -183,8 +183,8 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate), root=str(REPO_ROOT))
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         text=True,
         env={**os.environ, "XDG_STATE_HOME": str(state_home)},
     )
@@ -194,24 +194,27 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
         # Wait for the durable records instead of readiness on two pipe reads:
         # under the full suite's parallel load a read deadline on the driver's
         # stdout measures the machine's scheduling, not the contract (bead
-        # coding-harness-jik). The bounded wait reports the driver's own
-        # diagnostics when it ends or takes too long. The second launch record
-        # proves an audited attempt - audit precedes the launcher - never that
-        # the child has started.
+        # coding-harness-jik). The bounded wait reports the driver's exit
+        # status on early exit and the run ids on timeout. Output goes to a
+        # sink, so neither pipe capacity nor an orphan holding a pipe delays
+        # cleanup. The second launch record proves an audited attempt - audit
+        # precedes the launcher - never that the child has started.
         deadline = time.monotonic() + 120.0
         while True:
             run_ids = [run["run_id"] for run in store.runs()]
+            assert len(run_ids) <= 1, f"expected exactly one driver run, found {run_ids}"
             if run_ids:
-                results, interrupted = store.slot_records(run_ids[0])
+                (candidate_run_id,) = run_ids
+                results, interrupted = store.slot_records(candidate_run_id)
                 if "s1" in results and "s2" in interrupted:
-                    run_id = run_ids[0]
+                    run_id = candidate_run_id
                     break
             if proc.poll() is not None:
-                pytest.fail(f"driver exited before its records were durable:\n{proc.stderr.read()}")
+                pytest.fail(f"driver exited before its records were durable: exit {proc.returncode}; runs {run_ids}")
             if time.monotonic() >= deadline:
                 proc.kill()
                 proc.wait(timeout=10)
-                pytest.fail(f"first result and second launch record not durable within 120s:\n{proc.stderr.read()}")
+                pytest.fail(f"first result and second launch record not durable within 120s: runs {run_ids}")
             time.sleep(0.05)
         if proc.poll() is None:
             proc.send_signal(signal.SIGKILL)
@@ -221,9 +224,6 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
             proc.kill()
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=10)
-        for stream in (proc.stdout, proc.stderr):
-            if stream is not None:
-                stream.close()
         gate.parent.mkdir(parents=True, exist_ok=True)
         gate.write_text("release")  # the orphaned s2 child outlives its killed driver and now ends
     results, interrupted = store.slot_records(run_id)

@@ -1,10 +1,10 @@
 ---
 title: "Plan — terms-test-fixtures"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-hxkw
@@ -120,6 +120,10 @@ never as a passing check. Index preparation and commits belong to the runner.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-28
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-27 20:16:22–21:05:35 UTC, 2952 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -130,3 +134,6 @@ Appetite stop, 2026-10-27 22:32 UTC: 5881 s of 7200 s used, the three full
 `make verify` runs of the Definition of Done (about 75 minutes) do not fit.
 Answer: continue — the maintainer named a new appetite of 4 hours in total
 (conversation, 2026-10-27).
+2026-10-27 22:33:21–23:05:40 UTC, 1938 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 23:05:49–23:36:55 UTC, 1866 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 23:37:07–23:58:39 UTC, 1293 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
