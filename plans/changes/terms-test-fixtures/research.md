@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-hxkw
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -81,3 +83,37 @@ Two further coupling mechanisms are documented in the terms-expiry review rows: 
 ## Which files a change would have to touch
 
 The eight fixture sites listed above, if the fixture builders are consolidated or made rule-proof: `tests/test_stage2.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_research_availability.py`, `tests/test_pi_contract.py`, `tests/test_model_endpoints.py`. Any new shared helper must live as a plain importable module (no `conftest.py` exists; imports resolve through `pythonpath = ["."]` and the suite runs under `pytest-xdist` with `-n auto`). `plans/INDEX.md` regenerates through `scripts/plans_registry.py --index` as usual. A test-only change also interacts with the runner's red-first check (the coding-harness-0ho exception the handover records), which shapes how such a change can be implemented and repaired — stated here as a fact of the process, not as a design choice.
+
+## Draft-time gap checks — 2026-10-27
+
+Read at baseline `e4f84f04`, before writing the spec and plan:
+
+- `decisions.md` settles the scope as a bounded package: shared admissible
+  terms records plus the process-kill test's load sensitivity. Its reasoned
+  interview skip is the scope source; the shared tracker was not read.
+- `tests/test_stage2_research_store.py` already reads pipe markers with
+  `os.read` and `select`, with a 120-second deadline. Its regression
+  `test_terminal_markers_already_in_one_pipe_write_are_read_in_order`
+  covers buffered markers. The kill test still waits for two pipe lines;
+  its second child waits for a release file. Keep the buffered-marker repair
+  and the assertions that the first result survives and the second launch
+  remains interrupted. The historical timeout is recorded in `decisions.md`;
+  it has not been reproduced on this baseline, and no load run was made here.
+- `scripts/stage2_research_dispatch.py` calls `audit` before `launcher`:
+  the second launch record proves an audited attempt, not necessarily a
+  running child. The test must not silently strengthen that interpretation.
+- `plans/specs/implementation-verification/spec.md` was read. Its derived
+  metadata preparation contract requires genuine failures to remain failures;
+  it requires no fixture change. Do not alter the runner or its red-first gate.
+- Six suites own admissible record construction: `test_stage2`,
+  `test_stage2_terms_expiry`, `test_stage2_session`, `test_stage2_swarm`,
+  `test_stage2_research_availability`, and `test_pi_contract`.
+  `test_stage2_availability` mutates the shared world's records;
+  `test_model_endpoints` checks live declarations or deliberately partial
+  cost metadata. These last two need coverage, not an automatic rewrite.
+- There is no `templates/plan.md` or
+  `scripts/validate_change_artefacts.py` in this tree. Use the phase-3
+  prompt's plan form and the existing interview and criterion-ledger checks;
+  the absent validator cannot supply evidence. The runner owns index refresh
+  and full verification. GitHub PR state was not read: `gh pr view` failed
+  to connect on 2026-10-27.
