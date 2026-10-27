@@ -226,7 +226,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-pytest-failed/decisions.md`](changes/red-first-pytest-failed/decisions.md) | draft | none | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/findings.md`](changes/red-first-pytest-failed/findings.md) | draft | none | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | none | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | none | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | none | 2026-10-27 | coding-harness-a7m |
 | [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
