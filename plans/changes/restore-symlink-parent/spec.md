@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -51,11 +51,16 @@ a restoration refusal (`research.md`, draft investigation).
   changed, or that was a symbolic link at the attempt's baseline and is no
   longer the same link. The attempt's own links in a parent chain are never
   simulated: their presence alone makes the batch unsafe (Q-2, 2026-10-24).
+- **Parent link:** an ancestor below the worktree root of a recovery
+  destination that is a symbolic link now or was one at the attempt's
+  baseline, changed or not. Since Q-3 (2026-10-27) a parent link alone makes
+  the batch unsafe, whatever it resolves to; leaf aliases are not parent
+  links.
 
 ## Acceptance criteria
 
-1. When any destination in a recovery batch has an unsafe parent or a
-   changed alias ancestor, the operation refuses before its first
+1. When any destination in a recovery batch has an unsafe parent, a
+   changed alias ancestor or a parent link, the operation refuses before its first
    filesystem mutation.
    *Refuted by:* a preceding safe destination, the alias itself, an external
    sentinel or a cleanup target is created, rewritten, removed or stamped
@@ -83,7 +88,7 @@ a restoration refusal (`research.md`, draft investigation).
    time entry, saves an attempt or runs further cleanup after the refusal.
 
 6. When parent chains are resolvable, remain inside the worktree and hold
-   no changed alias ancestor, recovery retains the existing behavior for ordinary files, missing
+   no parent link, recovery retains the existing behavior for ordinary files, missing
    directories, leaf aliases and hard links.
    *Refuted by:* a safe retry loses trusted input bytes or measured time,
    ordinary failed-call rollback stops working, or detaching a leaf alias or
@@ -95,9 +100,10 @@ a restoration refusal (`research.md`, draft investigation).
   runs without a restoration safety refusal.
 - Rejecting a leaf-file alias solely because its target is external when
   its parents are contained and existing recovery safely detaches the leaf.
-- Recovering a batch whose parent chains hold a changed alias ancestor,
-  even when every link in it would resolve inside the worktree: such a run
-  is refused, accepting that some harmless cases end the run (Q-2).
+- Recovering a batch whose parent chains hold a parent link, changed or
+  unchanged, even when every link in it would resolve inside the worktree:
+  such a run is refused, accepting that a linked directory in the worktree
+  blocks every recovery through it (Q-2, Q-3).
 - OS-level isolation or race-proofing against concurrent filesystem mutation.
 - Extending this fix to draft, review or unrelated runner verbs.
 - A design document or ADR: phase 2b does not run for this bounded change.

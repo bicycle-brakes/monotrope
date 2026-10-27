@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-25
+updated: 2026-10-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -72,3 +72,31 @@ chains a simulation keeps missing, we decided that a changed alias ancestor
 alone refuses the batch before its first mutation, to achieve that the whole
 class closes instead of one chain per review, accepting that some harmless
 runs end and need the maintainer. — 2026-10-24
+
+## Q-3 · Any linked directory on a restored path refuses recovery
+
+context: |
+  Topic: recovery through a directory that is a symbolic link.
+  Intention: the phase-6 re-check found two more link chains (F6-5, F6-6)
+  after the Q-2 rule, the fourth and fifth of the same mechanism.
+  Today: only a link the attempt created or changed refuses the batch.
+  Repository change: the parent-chain check refuses any directory on a
+  restored path that is a symbolic link at the baseline or now; leaf aliases
+  stay as they are; spec terms, criteria 1 and 6 and a non-goal.
+  Architecture change: none; the structural fix is bead coding-harness-s9r.
+asked: 2026-10-27, conversation 2026-10-27
+answer: "Strenge Regel (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+The option chosen, as put to the maintainer (translated): Codex rebuilds the
+check so that any directory on the path that is a symbolic link refuses
+before anything is written; F6-5 and F6-6 close with it. Consequence named
+in the option: complete and simpler, and a linked directory in the worktree
+then blocks every recovery.
+
+In the context of recovery after a failed attempt, facing link chains that
+each re-check extends, we decided that any parent link, changed or not,
+refuses the batch before its first mutation, to achieve that the class
+closes without modelling link targets, accepting that a linked directory in
+the worktree blocks recovery. — 2026-10-27
