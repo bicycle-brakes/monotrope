@@ -184,8 +184,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
   and a visible queue.
-- **Pull requests stay mergeable:** synced with `main` daily, asked about after
-  five working days, at most three open on one hot file (`docs/WORKFLOW.md` §3).
+- **Pull requests stay mergeable:** synced daily, asked about after five working
+  days, three per hot file, sliced over ~800 lines; questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without
