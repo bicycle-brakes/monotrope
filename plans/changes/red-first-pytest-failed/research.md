@@ -4,33 +4,28 @@ status: draft
 implementation_status: none
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-a7m
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-27"}
+review: {status: pending, approved_by: null, approved_at: null}
+neighbours:
+  - plans/changes/red-first-install/spec.md
+  - plans/changes/review-loop-deep-b/spec.md
+  - plans/changes/stage2-repair/spec.md
+  - plans/changes/repair-fixed-lines/spec.md
+  - plans/changes/repair-fixed-line-format/spec.md
 tags: [research]
 ---
 
 # red first pytest failed — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-10-27: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 704 files, 2375 commits, 12 rules.
 
 ## Runner exploration — 2026-10-27
-
-Exploration complete. Here is the research, ready to append to `plans/changes/red-first-pytest-failed/research.md`.
-
----
 
 ## What exists today
 
@@ -76,5 +71,3 @@ Exploration complete. Here is the research, ready to append to `plans/changes/re
 - `tests/test_stage2.py` — `test_red_first_refuses_non_assertion_call_failures` (its `Failed` case asserts today's refusal and would change meaning), the plants beside it (`MISSING_PI_TEST` keeps a fixture-level `pytest.fail`, which fails the setup phase and is refused by the setup check regardless of any call-phase rule), and new cases for whichever failure shape becomes acceptable, on the established `repair_world`/`red_first_planted` pattern.
 - `plans/changes/red-first-install/spec.md` — its term "Assertion failure" and criterion 4 are the contract a change would amend; how the amendment relates to that living spec is a workflow question for the spec phase, stated here only as the point of contact.
 - `prompts/04-implement.md` / `docs/WORKFLOW.md` — only if the doctrine wording ("fails on the baseline's code") needs to name the accepted evidence classes; the current wording is generic and may stand unchanged.
-
-**Suggested `neighbours:` header** (specs of active changes known to this exploration): `plans/changes/red-first-install/spec.md`, `plans/changes/review-loop-deep-b/spec.md`, `plans/changes/stage2-repair/spec.md`, `plans/changes/repair-fixed-lines/spec.md`, `plans/changes/repair-fixed-line-format/spec.md`. Two related strands have no spec to list: `plans/changes/test-strength-rows/` (research only) and the guard-test change (no folder in this worktree).

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-a7m
@@ -131,7 +131,36 @@ make verify
 - 6: tests/test_stage2.py::test_repair_accepts_a_pytest_failed_baseline_proof — a valid repair is retried or lacks its fixed status or evidence mark
 - 6: tests/test_stage2.py::test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code — a still-failing fixed test receives the mark
 
+## Runner route — 2026-10-28
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
+## Appetite record
+
+The card's one-hour stop (3600 s of phase 4, repairs included) was passed
+without the four-line stop: the two implement attempts measured 2520 s and
+1913 s, 4433 s together, before any repair ran. The Stage-2 runner drove those
+attempts unattended and has no stop of its own, so no session read the clock
+against the appetite and no maintainer answer (continue, cut, park or drop)
+was asked for or recorded. The run continued through review round 1 and the
+repair attempts below on the strength of the plan's "Starts unless you say
+stop". The maintainer decides whether this stands as *continue* with a new
+total appetite or narrows the done-criterion; until then the record shows the
+change over its appetite.
+
+Red-then-green evidence for the three new acceptance tests
+(`test_red_first_accepts_pytest_failed_call_outcomes`,
+`test_fixed_code_proof_keeps_pytest_failed_red`,
+`test_repair_accepts_a_pytest_failed_baseline_proof`): not yet measured. The
+runner's evidence in `findings.md` holds a failing run of
+`test_fixed_code_proof_keeps_pytest_failed_red` on the implemented code, not a
+red-on-baseline run, and no green run of the three. The session that measures
+them with `make verify` records commit and result here.
+
 ## Time used
 
 2026-10-27 20:29:00–21:11:00 UTC, 2520 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-27 21:11:07–21:43:01 UTC, 1913 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-10-27 22:22:00–22:36:14 UTC, 854 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 22:36:36–23:08:04 UTC, 1887 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 23:08:26–23:39:06 UTC, 1840 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
