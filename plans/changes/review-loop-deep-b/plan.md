@@ -99,6 +99,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: maintainer: Sonnet r
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-27
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-26 00:48:46–01:06:31 UTC, 1066 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
@@ -110,3 +114,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-27 09:48:38–10:18:41 UTC, 1803 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-27 10:21:18–10:50:46 UTC, 1768 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-27 11:06:01–11:17:31 UTC, 690 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-27 11:56:40–12:41:32 UTC, 2692 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 12:41:45–13:10:54 UTC, 1749 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 13:11:01–13:30:33 UTC, 1171 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

@@ -427,3 +427,45 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a17d2e-551e-7b30-b4bc-b8bab59ba680, 2026-10-27
 Reviewer session: codex 01a17d2e-551e-7b30-b4bc-b8bab59ba680 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 682 files, 2340 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +110 -12
+> - `tests/test_pi_contract.py` +3 -0
+> - `tests/test_stage2.py` +144 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/review-loop-deep-b/stage2/attempts/review-loop-deep-b/attempt-1-20261027T115600420520Z-ccd44f66.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 682 files, 2341 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-7: tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay: the call of `tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay[-discovery]` failed with Failed, not an AssertionError
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/review-loop-deep-b/stage2/attempts/review-loop-deep-b/attempt-2-20261027T115600420520Z-ccd44f66.md
+> ```
+
+Stage-2 call, 2026-10-27: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 682 files, 2342 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-7: tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay: the call of `tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay[-discovery]` failed with Failed, not an AssertionError
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/review-loop-deep-b/stage2/attempts/review-loop-deep-b/attempt-3-20261027T115600420520Z-ccd44f66.md
+> ```
