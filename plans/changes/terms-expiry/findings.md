@@ -752,8 +752,8 @@ Stage-2 call, 2026-10-27: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | implementation | scripts/stage2.py:6696; scripts/stage2_availability.py:304 | A paid retry can dispatch after expiry when UTC midnight occurs during its leak check: admission is checked before the scan, with no expiry check afterward. Reproduced with expiry 2026-10-31: the malformed-answer retry dispatched on 2026-11-01 and completed the round. Recheck expiry after scanning and before dispatch, including replacements and preparation probes. [Acceptance criterion 5] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_paid_retries_and_replacements_recheck_expiry — expiry is rechecked after the leak scan and before dispatch, for retries, replacements and preparation probes (orchestrator, 2026-10-27) | — |
-| F6-2 | MAJOR | SPEC | tests | tests/test_stage2_terms_expiry.py:333; tests/test_stage2_terms_expiry.py:542 | Two preparation tests patch `stage2.run_reviewer`, but preparation now calls `stage2_availability.probe_go`. Their timeout/date-change and refusal callbacks never execute; successful preparation returns 0 where both tests require 2. Update the tests to intercept the active probe path and exercise expiry between probe attempts. [Acceptance criterion 5; Definition of Done] | Codex | taken — test: tests/test_stage2_terms_expiry.py::test_expiry_warnings_print_before_a_refused_call — measured at 87df6f7b (after merging origin/main): this test's prepare-leak and prepare-probe cases and test_paid_retries_and_replacements_recheck_expiry fail, because preparation now probes through stage2_availability.probe_go; the tests must intercept the active probe path (orchestrator, 2026-10-27) | — |
+| F6-1 | MAJOR | SPEC | implementation | scripts/stage2.py:6696; scripts/stage2_availability.py:304 | A paid retry can dispatch after expiry when UTC midnight occurs during its leak check: admission is checked before the scan, with no expiry check afterward. Reproduced with expiry 2026-10-31: the malformed-answer retry dispatched on 2026-11-01 and completed the round. Recheck expiry after scanning and before dispatch, including replacements and preparation probes. [Acceptance criterion 5] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_paid_calls_recheck_expiry_after_leak_scan | yes — tests/test_stage2_terms_expiry.py::test_paid_calls_recheck_expiry_after_leak_scan; Codex repair attempt 1's change, committed by the orchestrator (see the attempt block below) |
+| F6-2 | MAJOR | SPEC | tests | tests/test_stage2_terms_expiry.py:333; tests/test_stage2_terms_expiry.py:542 | Two preparation tests patch `stage2.run_reviewer`, but preparation now calls `stage2_availability.probe_go`. Their timeout/date-change and refusal callbacks never execute; successful preparation returns 0 where both tests require 2. Update the tests to intercept the active probe path and exercise expiry between probe attempts. [Acceptance criterion 5; Definition of Done] | Codex | fixed — tests/test_stage2_terms_expiry.py::test_expiry_warnings_print_before_a_refused_call | yes — tests/test_stage2_terms_expiry.py::test_expiry_warnings_print_before_a_refused_call; Codex repair attempt 1's change, committed by the orchestrator (see the attempt block below) |
 
 Phase 6 verdict: codex 01a17ab0-232a-7971-b408-10ef2a399257, 2026-10-27
 Reviewer session: codex 01a17ab0-232a-7971-b408-10ef2a399257 — a fresh session reviewed: no phase-2a session was recorded
@@ -801,3 +801,38 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-27: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 679 files, 2303 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 679 files, 2304 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 679 files, 2304 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 679 files, 2304 commits, 12 rules.
+
+**Reconstructed by the orchestrator (2026-10-27).** The runner wrote the
+three rejected attempt blocks here; the orchestrator discarded them by
+mistake (`git checkout` of this file) before committing. The lines above and
+below are rebuilt from the runner output the orchestrator had read; the
+diagnostics are shortened.
+
+> Attempt 1 (codex) failed its post-run checks.
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +9 -0
+> - `scripts/stage2_availability.py` +5 -0
+> - `tests/test_stage2_terms_expiry.py` +101 -7
+> Diagnostics: runner format changed no file; `make verify` exited 2; the
+> pytest gate failed in `tests/test_stage2_research_availability.py`
+> (55 failed in that file, measured by the orchestrator).
+>
+> Attempt 2 (codex-repair) failed its post-run checks. Files the attempt changed: none.
+>
+> Attempt 3 (stage-1) failed its post-run checks. Files the attempt changed: none.
+
+Cause, measured by the orchestrator: not the repair. Merging origin/main
+(87df6f7b) brought in the research-availability tests, whose fixture terms
+records carry no `gilt_bis`; under this change every such record is
+excluded, so no seat had an admitted candidate. The orchestrator added
+`gilt_bis: "2099-12-31"` to that fixture and kept attempt 1's change as the
+runner left it in the worktree. Measured: the F6-1 and F6-2 tests fail on
+fe2fd3b0's code (6 failed) and pass with attempt 1's change; the
+research-availability and terms-expiry tests pass (135 passed).
+

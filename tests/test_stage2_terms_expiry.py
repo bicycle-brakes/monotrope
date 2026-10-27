@@ -319,7 +319,7 @@ def test_paid_retries_and_replacements_recheck_expiry(
     enable(world)
     tries: list[str] = []
 
-    def probe(_ctx, model, _prompt, _key, **_options):
+    def probe(_runner, _root, _change, model, _key, _audit, _store, **_options):
         if model == TEST_LADDER[0]:
             tries.append(model)
             if len(tries) == 1:
@@ -329,14 +329,14 @@ def test_paid_retries_and_replacements_recheck_expiry(
                 )
         return "OK"
 
-    real_run_reviewer = stage2.run_reviewer
-    monkeypatch.setattr(stage2, "run_reviewer", probe)
+    real_probe_go = availability.probe_go
+    monkeypatch.setattr(availability, "probe_go", probe)
     assert world.run("prepare-loop") == 2
     assert tries == [TEST_LADDER[0]]
     assert not availability.receipt_path(world.root, "demo", stage2).exists(), "a refused attempt left a receipt"
     capsys.readouterr()
     # Act 2: the compatibility probe names the expired model and calls it never.
-    monkeypatch.setattr(stage2, "run_reviewer", real_run_reviewer)
+    monkeypatch.setattr(availability, "probe_go", real_probe_go)
     world.script(pi=[{"stdout": "OK"}] * 4)
     assert world.run("probe") == 0
     probed = [rung_of(call) for call in world.reviews("pi")]
@@ -378,6 +378,83 @@ def test_paid_retries_and_replacements_recheck_expiry(
     assert "audit calls: 2" in text
     assert "was asked again with the format reminder" not in text
     assert world.record().read_text(encoding="utf-8") == record_before
+
+
+@pytest.mark.parametrize("path", ["retry", "replacement", "prepare", "prepare-retry", "compatibility"])
+def test_paid_calls_recheck_expiry_after_leak_scan(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], path: str
+) -> None:
+    """UTC midnight inside a clean scan must refuse the next paid dispatch, without a completed round."""
+    clock = {"day": dt.date(2026, 10, 31)}
+    monkeypatch.setattr(stage2, "terms_today", lambda: clock["day"])
+    target = TEST_RUNGS[0] if path == "replacement" else TEST_LADDER[0]
+    set_terms(world, target, gilt_bis="2026-10-31")
+    record_before = None
+    if path.startswith("prepare"):
+        enable(world)
+    elif path != "compatibility":
+        world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+        record_before = world.record().read_bytes()
+
+    real_check = stage2.leakcheck.check
+    scans = []
+
+    def cross_midnight(*args, **kwargs):
+        result = real_check(*args, **kwargs)
+        prompt = dict(args[3])["prompt"] if len(args) > 3 else ""
+        # Paid review scans identify the member in the prompt; preparation
+        # probes use identical text, so identify their current model below.
+        if path in ("retry", "replacement"):
+            hit = f"you are `{target}`" in prompt and (path == "replacement" or stage2.FORMAT_REMINDER in prompt)
+        else:
+            hit = active_model[0] == target and (path != "prepare-retry" or probe_attempts[0] == 2)
+        if hit:
+            scans.append(target)
+            clock["day"] = dt.date(2026, 11, 1)
+        return result
+
+    active_model = [None]
+    probe_attempts = [0]
+    if path.startswith("prepare"):
+        real_probe = availability.probe_go
+
+        def probe(runner, root, change, model, key, audit, store, **options):
+            active_model[0] = model
+            if model == target:
+                probe_attempts[0] += 1
+                if path == "prepare-retry" and probe_attempts[0] == 1:
+                    raise stage2.CallFailed("pi was stopped by the probe limit")
+            return real_probe(runner, root, change, model, key, audit, store, **options)
+
+        monkeypatch.setattr(availability, "probe_go", probe)
+    elif path == "compatibility":
+        real_checked = stage2.checked_prompt
+
+        def checked(ctx, endpoint, prompt, admission_problem=None):
+            active_model[0] = endpoint[1]
+            return real_checked(ctx, endpoint, prompt, admission_problem)
+
+        monkeypatch.setattr(stage2, "checked_prompt", checked)
+
+    monkeypatch.setattr(stage2.leakcheck, "check", cross_midnight)
+    if path == "replacement":
+        world.script(pi=[{"model": TEST_FLASH[0], "exit": 1, "stderr": "down"}, {"stdout": rows(1)}])
+    elif path == "retry":
+        world.script(pi=[{"model": TEST_FLASH[0], "stdout": MALFORMED_ANSWER}, {"stdout": rows(1)}])
+    else:
+        world.script(pi=[{"stdout": "OK"}] * 10)
+    verb = "prepare-loop" if path.startswith("prepare") else "probe" if path == "compatibility" else "review-loop"
+    assert world.run(verb) == 2
+    assert scans == [target], "the test did not cross midnight in the target's scan"
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls.count(target) == (1 if path == "retry" else 0), (
+        "a paid call dispatched after its scan crossed midnight"
+    )
+    assert "expired on 2026-10-31" in capsys.readouterr().err
+    if record_before is not None:
+        assert world.record().read_bytes() == record_before, "the refusal changed prior run history"
+    if path.startswith("prepare"):
+        assert not availability.receipt_path(world.root, "demo", stage2).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +598,7 @@ def test_expiry_warnings_survive_receipt_round_and_release(
     assert warning in world.text(), "releasing the round lost the warning"
 
 
-@pytest.mark.parametrize("case", ["prepare-leak", "prepare-probe", "review-expired", "review-leak"])
+@pytest.mark.parametrize("case", ["prepare-leak", "prepare-probe", "prepare-expiry", "review-expired", "review-leak"])
 def test_expiry_warnings_print_before_a_refused_call(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
 ) -> None:
@@ -539,9 +616,24 @@ def test_expiry_warnings_print_before_a_refused_call(
     if case.startswith("prepare"):
         enable(world)
         if case == "prepare-probe":
-            monkeypatch.setattr(stage2, "run_reviewer", refuse)
+            monkeypatch.setattr(availability, "probe_go", refuse)
+        elif case == "prepare-expiry":
+            # Skip the free probes so the first scan belongs to the expiring
+            # paid model. A warning must precede its post-scan refusal too.
+            monkeypatch.setattr(stage2, "free_diff", lambda _root: ("", None))
+            set_terms(world, TEST_LADDER[0], gilt_bis="2026-10-26")
+            real_check = availability.leakcheck.check
+
+            def expire_during_scan(*args, **kwargs):
+                output = capsys.readouterr()
+                seen.append(output.out + output.err)
+                result = real_check(*args, **kwargs)
+                monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 27))
+                return result
+
+            monkeypatch.setattr(availability.leakcheck, "check", expire_during_scan)
         else:
-            monkeypatch.setattr(stage2, "checked_prompt", refuse)
+            monkeypatch.setattr(availability.leakcheck, "check", refuse)
         verb = "prepare-loop"
     else:
         world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
@@ -553,6 +645,8 @@ def test_expiry_warnings_print_before_a_refused_call(
     assert world.run(verb) == 2
     output = capsys.readouterr()
     assert warning in "".join(seen) + output.out + output.err
+    if case != "review-expired":
+        assert seen, "the active call path never reached the refusal callback"
     if seen:
         assert warning in seen[0], "warning was emitted only after the refused call"
     assert world.reviews() == []

@@ -1226,6 +1226,15 @@ def checked_prompt(
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise Refused("the leak check is not clean; the call does not start.")
+    # A scan can cross UTC midnight: an earlier admission cannot authorize
+    # dispatch after expiry, including retry and replacement calls.
+    problem = (
+        admission_problem(ctx.root, endpoint[1])
+        if admission_problem is not None
+        else declaration_problem(ctx.root, endpoint[0], endpoint[1])
+    )
+    if problem:
+        raise Refused(problem)
     return result
 
 

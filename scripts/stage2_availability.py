@@ -303,6 +303,11 @@ def _checked_probe(
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise runner.Refused("the leak check is not clean; the probe does not start.")
+    # Re-read admission after the scan, which can cross the terms' UTC cutoff.
+    # Do not record a call or dispatch a probe on yesterday's admission.
+    problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
+    if problem:
+        raise runner.Refused(problem)
     audit.append(
         f"{verb} · endpoint {endpoint} · model {model} · leak check clean over "
         f"{result.files} files, {result.commits} commits, {result.rules} rules."
