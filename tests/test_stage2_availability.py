@@ -507,6 +507,47 @@ def test_receipts_of_two_worktrees_do_not_meet(world: World) -> None:
     assert other.run("review-loop", "demo", "--availability-reported", receipt(other)["report_id"]) == 0
 
 
+def test_availability_names_a_dropped_free_id_as_skipped(world: World) -> None:
+    """Criterion 2 of review-loop-deep-b (DL-B-2): an excluded free id is not probed and is named as skipped."""
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [{"was": "beacon dropped", "klasse": "framework", "modelle": ["beacon"]}]
+    path.write_text(yaml.safe_dump(data))
+    assert world.run("prepare-loop") == 0
+    probed = {call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in world.reviews()}
+    assert "beacon-2-free" not in probed and "acme-v1-free" in probed
+    state = receipt(world)["state"]
+    assert "beacon dropped" in state["availability"]["skipped"]["beacon-2-free"]
+    assert state["free"]["selected"] == ["acme-v1-free"]
+
+
+def test_availability_report_escapes_control_characters_in_skipped_ids(world: World, capsys) -> None:
+    """F6-6: keep rejected catalog evidence raw, but never print its terminal controls."""
+    enable(world)
+    bad = "bad\x1b[2J-free"
+    world.script(
+        pi_catalog="provider model context input output\nopencode-go acme-v1-free 128000 0 0\n"
+        + f"opencode-go {bad} 128000 0 0\n",
+        pi=[{"stdout": "OK"}] * 5,
+    )
+    assert world.run("prepare-loop") == 0
+    state = receipt(world)["state"]
+    assert bad in state["availability"]["skipped"]
+    output = capsys.readouterr().out
+    assert "\x1b" not in output
+    assert r"Skipped: bad\x1b[2J-free:" in output
+
+    # Reasons must not inject new report lines, and C1 controls are unsafe too.
+    controls = "\x00\t\n\r\x1b\x7f\x9b"
+    state["availability"]["skipped"][bad] = "reason " + controls + " café"
+    before = json.dumps(state)
+    rendered = availability.report(state)
+    assert r"reason \x00\x09\x0a\x0d\x1b\x7f\x9b café" in rendered
+    assert all(ord(char) >= 32 and not 127 <= ord(char) <= 159 for char in rendered if char != "\n")
+    assert json.dumps(state) == before, "rendering changed the raw receipt evidence"
+
+
 def test_a_free_model_is_probed_with_the_real_size_request_and_a_paid_one_is_not(world: World, monkeypatch) -> None:
     """Bead k9rw: a free model passed the tiny probe and failed every real request; it is probed at real size."""
     enable(world)

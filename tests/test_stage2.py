@@ -16,6 +16,7 @@ its fault on a planted copy of the text in the same test.
 from __future__ import annotations
 
 import ast
+import contextlib
 import copy
 import datetime as dt
 import fcntl
@@ -26,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +45,14 @@ import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def isolated_launch_cancellation(monkeypatch):
+    """Each test represents a separate runner process, including its cancellation latch."""
+    if hasattr(stage2, "_LAUNCH_STOPPED"):
+        monkeypatch.setattr(stage2, "_LAUNCH_STOPPED", threading.Event())
+
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -584,6 +594,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # The runner's one path to Pi is patched to the wrapper stand-in: its records
     # carry the program path, so a call that bypasses the wrapper cannot hide.
     monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
+    # These runner unit tests use a stand-in Pi. The offline real-Pi resolver is exercised
+    # separately by the overlay regression and the Pi contract suite.
+    if hasattr(stage2, "check_overlay"):
+        monkeypatch.setattr(stage2, "check_overlay", lambda *_args: None)
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
@@ -6780,7 +6794,8 @@ def test_a_call_over_the_time_limit_is_stopped(
     assert world.run("review-loop") == 1
     assert time.monotonic() - started < 15
     assert not world.record().exists()
-    assert "stopped by the reviewer time limit" in capsys.readouterr().err
+    # Since DL-B-14 the stop names the round's one deadline, which a single member's call shares.
+    assert "stopped by the round time limit of" in capsys.readouterr().err
 
 
 def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -14396,7 +14411,7 @@ def test_free_admission_requires_the_launch_provider(world: World) -> None:
 
 
 def test_catalog_headers_are_activated_as_literal_data(tmp_path: Path) -> None:
-    """P6-15: only active config escapes Pi expressions; retrieval evidence stays exact."""
+    """P6-15, superseded by RS-3-3 (review-loop-deep-b criterion 13): catalog headers never reach Pi's config; the evidence stays exact."""
     headers = {
         "X-Command": "!printf catalog-command-ran",
         "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
@@ -14405,15 +14420,9 @@ def test_catalog_headers_are_activated_as_literal_data(tmp_path: Path) -> None:
     }
     store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
     original = copy.deepcopy(store)
-    stage2.activate_overlay(tmp_path, store)
+    assert stage2.activate_overlay(tmp_path, store) == {"synthetic-free": ["headers"]}
     active = json.loads((tmp_path / "models.json").read_text())
-    encoded = active["providers"][stage2.OPENCODE]["models"][0]["headers"]
-    assert encoded == {
-        "X-Command": "$!printf catalog-command-ran",
-        "X-Env": "$$CATALOG_SECRET/$${CATALOG_SECRET}",
-        "X-Escapes": "$$$$ $$! ! trailing$$",
-        "X-Plain": "catalog-value",
-    }
+    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "synthetic-free"}]
     assert store == original, "activation modified the retrieved catalog"
 
 
@@ -15402,6 +15411,515 @@ def test_baseline_cleanup_refuses_replaced_link_returning_inside(world: World) -
         stage2.restore_baseline(world.root, baseline, set(), before)
     assert victim.read_bytes() == b"ignored attempt bytes\n"
     assert not cache.is_symlink()
+
+
+# ---------------------------------------------------------------------------
+# Deep review of the review loop, part B (change review-loop-deep-b, 2026-10-25)
+# ---------------------------------------------------------------------------
+
+
+def _declare(w: World, change) -> None:
+    """Edit the test world's declaration in place."""
+    path = w.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    change(data, next(e for e in data["endpunkte"] if e["name"] == "opencode-go"))
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def _flash_next(w: World) -> None:
+    """A record whose free round is decided, so the next call is the Flash swarm."""
+    # Repaired, not only taken: the next round waits for every taken row (DL-A-8 of part A).
+    w.write_record([("L1-1", "fixed — tests/test_x.py::test_y", "no")], state=loop_state(("free",)))
+
+
+def test_a_refused_flash_replacement_is_named_and_the_round_kept(world: World) -> None:
+    """Criterion 1 (DL-B-1): a replacement the declaration refuses is named, never called or consumed."""
+    _flash_next(world)
+
+    def skip(_data: dict, entry: dict) -> None:
+        entry["modelle_terms"]["mimo-v2.6-pro"].update(uebersprungen="2026-10-20", grund="terms changed")
+
+    _declare(world, skip)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(2, "M")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "mimo-v2.6-pro not admitted: the model mimo-v2.6-pro was skipped on 2026-10-20" in text
+    assert "deepseek-v4.1-flash failed:" in text and "no replacement is left on the ladder" in text
+    assert len(stage2.round_rows(stage2.record_rows(text), 2)) == 2
+    assert stage2.read_state(text, "")["consumed"] == ["free", "flash"]
+
+
+def test_an_excluded_free_id_is_dropped_and_named(world: World) -> None:
+    """Criterion 2 (DL-B-2): an excluded free id leaves the selection, named; the others review."""
+    _declare(
+        world,
+        lambda data, _entry: data.update(
+            ausgeschlossen=[{"was": "beacon dropped", "klasse": "framework", "modelle": ["beacon"]}]
+        ),
+    )
+    world.script(pi=[{"stdout": rows(1, "A")}])
+    assert world.run("review-loop") == 0
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "## Round 1 — acme-v1-free," in text
+    assert "beacon-2-free (the model beacon-2-free is excluded by model-endpoints.yaml: beacon dropped)" in text
+    assert stage2.read_state(text, "")["free"]["selected"] == ["acme-v1-free"]
+
+
+def test_an_excluded_paid_model_leaves_the_ladder_and_is_named(world: World) -> None:
+    """Criterion 3 (DL-B-2): an excluded paid model is no rung and no Flash member, and is named."""
+    _declare(
+        world,
+        lambda data, _entry: data.update(
+            ausgeschlossen=[{"was": "mimo dropped", "klasse": "framework", "modelle": ["mimo-v2.6-flash"]}]
+        ),
+    )
+    assert stage2.ladder(world.root) == ["deepseek-v4.1-flash", "mimo-v2.6-pro"]
+    assert stage2.new_state(world.root, {"selected": []})["paid"]["flash"] == ["deepseek-v4.1-flash"]
+    assert any(
+        item.startswith("mimo-v2.6-flash (") and "mimo dropped" in item for item in stage2.skipped_models(world.root)
+    )
+
+
+def test_each_kept_block_names_its_member(world: World) -> None:
+    """Criterion 4 (DL-B-3): every kept non-row block carries its member; the record reads it as the runner's."""
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": rows(1, "A") + "\nThe whole module is broken (alpha)."},
+            {"model": "beacon-2-free", "stdout": rows(1, "B") + "\nsee note (beta)"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    for member, words in (("acme-v1-free", "(alpha)"), ("beacon-2-free", "(beta)")):
+        line = f"From {member}:"
+        assert f"{line}\n\n{stage2.NOT_ROWS_NOTE}\n\n> " in text
+        block = text.split(line, 1)[1].split("From ", 1)[0]
+        assert words in block
+    own = [line for line, reviewer in stage2._record_lines(text) if not reviewer]
+    assert "From acme-v1-free:" in own and "From beacon-2-free:" in own
+    assert all(not line.startswith("> ") for line in own)
+    assert len(stage2.record_rows(text)) == 2
+    kept = stage2.kept_lines(text)
+    assert "From beacon-2-free:" in kept and "> see note (beta)" in kept
+
+
+@pytest.mark.parametrize("second_malformed", [False, True])
+def test_every_retained_answer_block_carries_its_attribution(world: World, second_malformed: bool) -> None:
+    """Criterion 4: retries keep attribution, including when another member's prose comes first."""
+    first = "The first answer is prose."
+    second = "The second answer is prose."
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": first},
+            {"model": "beacon-2-free", "stdout": rows(1, "B") + "\nBeacon commentary."},
+            {"model": "acme-v1-free", "stdout": second if second_malformed else rows(1, "A")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text()
+    for ordinal, words in [("first", first), *([("second", second)] if second_malformed else [])]:
+        label = f"acme-v1-free's {ordinal} answer, which was not in the required format:"
+        assert f"From acme-v1-free:\n\n{label}\n\n{stage2.NOT_ROWS_NOTE}\n\n> {words}" in text
+        classified = stage2._record_lines(text)
+        assert (label, False) in classified
+        assert (f"> {words}", True) in classified
+    assert ("From beacon-2-free:", False) in stage2._record_lines(text)
+    assert ("> Beacon commentary.", True) in stage2._record_lines(text)
+    assert len(stage2.record_rows(text)) == (1 if second_malformed else 2)
+
+
+def test_every_secrets_value_is_scrubbed_from_loop_answers_and_errors(world: World, capsys) -> None:
+    """Criterion 5 (DL-B-4): the GLM key, like the OpenCode key, never reaches the record or stderr."""
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": f"| X1 | MAJOR | MAINT | impl | x | the file holds {KEY} and @KEY@ |"},
+            {"model": "beacon-2-free", "exit": 1, "stderr": f"auth failed for {KEY}\n"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert KEY not in text and OKEY not in text
+    assert KEY not in err and OKEY not in err
+    assert "the file holds [credential] and [credential]" in text
+    assert "beacon-2-free failed: pi call failed: exit 1 (auth failed for [credential])" in text
+    # A short flag value is no credential: it is left in the answer.
+    assert "MAINT" in text
+
+
+@pytest.mark.parametrize("name", ["FOO_TOKEN", "SERVICE_PASSWORD", "client_secret", "API_KEY"])
+def test_a_short_value_of_a_credential_named_key_is_scrubbed(world: World, capsys, name: str) -> None:
+    """Short credentials are scrubbed from answers, failure lines and stderr, while flags remain readable."""
+    secret = "abc123"
+    with stage2.secrets_path().open("a", encoding="utf-8") as handle:
+        handle.write(f"{name}={secret}\n")
+    assert "1" not in stage2.secret_values(), "the fixture's OTHER=1 is a flag"
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": f"| X1 | MAJOR | MAINT | impl | x | credential {secret}, flag 1 |"},
+            {"model": "beacon-2-free", "exit": 1, "stderr": f"auth failed for {secret}\n"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert secret not in text and secret not in err
+    assert "credential [credential], flag 1" in text
+    assert "beacon-2-free failed: pi call failed: exit 1 (auth failed for [credential])" in text
+    assert "auth failed for [credential]" in err
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        spelling
+        for credential in (
+            "AUTH",
+            "APIKEY",
+            "API_KEY",
+            "BEARER",
+            "PASS",
+            "PAT",
+            "KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "PASSWD",
+            "CREDENTIAL",
+            "CREDENTIALS",
+        )
+        for spelling in (credential, f"service_{credential.lower()}_value")
+    ],
+)
+def test_short_credentials_under_common_names_are_scrubbed(world: World, capsys, name: str) -> None:
+    """Criterion 5: whole names and underscore parts identify even short credentials."""
+    with stage2.secrets_path().open("a", encoding="utf-8") as handle:
+        handle.write(f"{name}=abc123\nAUTH=\nOTHER=1\nAUTHOR=plain\nCOMPASS=north\nPATCH=patch\n")
+    values = stage2.secret_values()
+    assert "abc123" in values
+    assert not {"", "1", "plain", "north", "patch"}.intersection(values)
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": "| X1 | MAJOR | MAINT | impl | x | credential abc123, flag 1 |"},
+            {"model": "beacon-2-free", "exit": 1, "stderr": "auth failed for abc123\n"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "abc123" not in text and "abc123" not in err
+    assert "credential [credential], flag 1" in text
+    assert "beacon-2-free failed: pi call failed: exit 1 (auth failed for [credential])" in text
+    assert "auth failed for [credential]" in err
+
+
+def _child_alive(pid: int) -> bool:
+    # kill(pid, 0) works on macOS too; a missing /proc is not evidence of death.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return True
+    return state != "Z"
+
+
+def _interrupting_verb(tmp: Path, interrupt):
+    """A stand-in verb: start a long program through `launch` in a thread, then interrupt the runner."""
+    pidfile = tmp / "child.pid"
+    started: dict[str, object] = {}
+
+    def verb(_root: Path, _change: str, *_rest) -> None:
+        def one() -> None:
+            with contextlib.suppress(Exception):
+                stage2.launch(
+                    ["/bin/sh", "-c", f"echo $$ > {pidfile}; exec sleep 30"],
+                    tmp,
+                    {"PATH": "/usr/bin:/bin"},
+                    timeout=60,
+                )
+
+        thread = threading.Thread(target=one, daemon=True)
+        thread.start()
+        started["thread"] = thread
+        end = time.monotonic() + 10
+        while not (pidfile.exists() and pidfile.read_text().strip()) and time.monotonic() < end:
+            time.sleep(0.05)
+        started["pid"] = int(pidfile.read_text())
+        interrupt()
+
+    return verb, started
+
+
+def test_an_interrupted_runner_kills_its_running_programs(world: World, monkeypatch, tmp_path: Path, capsys) -> None:
+    """Criterion 6 (DL-B-5): Ctrl-C kills every running program's group before the interrupt leaves the runner."""
+
+    def interrupt() -> None:
+        raise KeyboardInterrupt
+
+    verb, started = _interrupting_verb(tmp_path, interrupt)
+    monkeypatch.setattr(stage2, "explore", verb)
+    with pytest.raises(KeyboardInterrupt):
+        world.run("explore")
+    end = time.monotonic() + 5
+    while _child_alive(started["pid"]) and time.monotonic() < end:
+        time.sleep(0.05)
+    assert not _child_alive(started["pid"]), "the launched program outlived the interrupted runner"
+    assert "interrupted" in capsys.readouterr().err
+
+
+def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatch, tmp_path: Path) -> None:
+    """Criterion 6 (DL-B-5): SIGTERM kills every running program's group before the runner exits 143."""
+    import signal as signal_
+
+    before = signal_.getsignal(signal_.SIGTERM)
+
+    def terminate() -> None:
+        os.kill(os.getpid(), signal_.SIGTERM)
+        time.sleep(5)
+
+    verb, started = _interrupting_verb(tmp_path, terminate)
+    monkeypatch.setattr(stage2, "explore", verb)
+    assert world.run("explore") == 143
+    end = time.monotonic() + 5
+    while _child_alive(started["pid"]) and time.monotonic() < end:
+        time.sleep(0.05)
+    assert not _child_alive(started["pid"]), "the launched program outlived the terminated runner"
+    assert signal_.getsignal(signal_.SIGTERM) is before, "the runner's handler leaked past main"
+
+
+def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
+    """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
+    monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
+    escape = "import subprocess, time; subprocess.Popen(['sleep', '8'], start_new_session=True); time.sleep(100)"
+    start = time.monotonic()
+    with pytest.raises(stage2.StepTimedOut):
+        stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
+    assert time.monotonic() - start < 5
+
+
+def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
+    """Criterion 8 (DL-B-7): a catalog id outside the charset never reviews and is named."""
+    catalog = (
+        "provider model context input output\n"
+        "opencode-go deepseek-v4.1-flash 128000 0.15 0.60\n"
+        "opencode-go mimo-v2.6-flash 128000 0.14 0.28\n"
+        "opencode-go mimo-v2.6-pro 128000 0.435 0.87\n"
+        "opencode-go acme|rejected-free 128000 0 0\n"
+        "opencode-go acme-v1-free 128000 0 0\n"
+    )
+    world.script(pi_catalog=catalog, pi=[{"stdout": rows(2, "A")}])
+    assert world.run("review-loop") == 0
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "## Round 1 — acme-v1-free," in text
+    assert "acme\\|rejected-free (not a plain model id)" in text
+    assert [row[6] for row in stage2.record_rows(text)] == ["acme-v1-free", "acme-v1-free"]
+    assert (
+        stage2.select_free(
+            {"provider": "opencode-go", "id_suffix": "-free"}, [{"provider": "opencode-go", "model": "a|b-free"}]
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize("invalid", ["bad id-free", "bad|id-free", "bad\tid-free"])
+def test_catalog_drops_an_invalid_id_before_listing(world: World, monkeypatch, capsys, invalid: str) -> None:
+    """Criterion 8: invalid overlay ids never reach Pi's listing, even with a recent remote cache."""
+    world.script(pi=[{"stdout": rows(1)}], pi_overlay=["acme-v1-free", invalid])
+    launch = stage2.launch
+
+    def listing(command, cwd, env, *args, **kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "--list-models" in command:
+            active = json.loads((agent / "models.json").read_text())
+            cached = json.loads((agent / "models-store.json").read_text())
+            for definitions in (active["providers"][stage2.OPENCODE]["models"], cached[stage2.OPENCODE]["models"]):
+                assert all(model["id"] != invalid for model in definitions), "invalid id reached Pi before listing"
+            return subprocess.CompletedProcess(
+                command, 0, "provider model context input output\nopencode-go acme-v1-free 128000 0 0\n", ""
+            )
+        return launch(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", listing)
+    assert world.run("review-loop") == 0
+    text = world.record().read_text()
+    state = stage2.read_state(text, "")
+    assert state["free"]["selected"] == ["acme-v1-free"]
+    assert state["free"]["dropped"][invalid] == "not a plain model id"
+    assert any(model["id"] == invalid for model in state["free"]["models_store"][stage2.OPENCODE]["models"])
+    assert stage2.dropped_notice({invalid: "not a plain model id"}) in capsys.readouterr().err
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+
+
+def test_render_table_escapes_a_pipe_in_a_cell() -> None:
+    """Criterion 8 (DL-B-7): a `|` in a cell is escaped once, so the columns stay."""
+    table = stage2.render_table(["A", "B", "C"], [["x|y", "already \\| escaped", "z"]])
+    line = table.splitlines()[-1]
+    assert stage2.split_row(line) == ["x\\|y", "already \\| escaped", "z"]
+
+
+def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkeypatch) -> None:
+    """Criterion 9 (DL-B-10): a rung whose launch the deadline prevented writes no call line and is not consumed."""
+    _flash_next(world)
+    monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 3 / 60)
+    original = stage2.checked_prompt
+
+    def slow(ctx, endpoint, prompt, admission=None):
+        if endpoint[1] == "mimo-v2.6-pro":
+            time.sleep(2.5)
+        return original(ctx, endpoint, prompt, admission)
+
+    monkeypatch.setattr(stage2, "checked_prompt", slow)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M"), "sleep": 1},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert stage2.read_state(text, "")["consumed"] == ["free", "flash"]
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash," in text
+    assert "the round time limit expired; no replacement starts" in text
+    assert not any("mimo-v2.6-pro" in line for line in world.text().splitlines() if line.startswith("Stage-2 call,"))
+    decide_record(world, "fixed — tests/test_x.py::test_y")  # repaired: the next round waits for taken rows (DL-A-8)
+    world.script(pi=[{"model": "mimo-v2.6-pro", "stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    assert rung_of(world.reviews("pi")[-1]) == "mimo-v2.6-pro"
+
+
+def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, monkeypatch) -> None:
+    """Criterion 9: the final admission read can exhaust the deadline without consuming a rung."""
+    from types import SimpleNamespace
+
+    _flash_next(world)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(stage2, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_dispatch = stage2.dispatch_go
+    original_problem = stage2.terms_problem
+    in_dispatch = threading.local()
+    admission_finished = []
+
+    def dispatch(root, model, send, *args, **kwargs):
+        in_dispatch.active = True
+        try:
+            return original_dispatch(root, model, send, *args, **kwargs)
+        finally:
+            in_dispatch.active = False
+
+    def admission(entry, model):
+        problem = original_problem(entry, model)
+        if model == "mimo-v2.6-pro" and getattr(in_dispatch, "active", False):
+            clock[0] += stage2.REVIEWER_MINUTES * 60 + 1
+            admission_finished.append(model)
+        return problem
+
+    monkeypatch.setattr(stage2, "dispatch_go", dispatch)
+    monkeypatch.setattr(stage2, "terms_problem", admission)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    assert admission_finished == ["mimo-v2.6-pro"]
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "mimo-v2.6-pro did not start: the round time limit expired" in text
+    assert "it is not consumed" in text
+    assert stage2.read_state(text, "")["consumed"] == ["free", "flash"]
+    assert len(stage2.round_rows(stage2.record_rows(text), 2)) == 1
+
+
+def test_a_header_named_by_its_columns_is_furniture() -> None:
+    """Criterion 10 (DL-B-11): a header with another first cell is no finding row."""
+    answer = (
+        "| # | Severity | Dimension | Origin | Where | Finding |\n"
+        "|---|---|---|---|---|---|\n"
+        "| 1 | MAJOR | CODE | base | src/app.py:1 | broken |\n"
+        "| No. | severity | DIMENSION | origin | where | finding |\n"
+    )
+    found, rest = stage2.parse_rows(answer)
+    assert found == [["1", "MAJOR", "CODE", "base", "src/app.py:1", "broken"]]
+    assert rest == ""
+
+
+def test_the_real_declaration_excludes_kimi_and_no_declared_model() -> None:
+    """Criterion 11 (DL-B-12): ADR 0007 decision 3 binds on the real declaration, and excludes nothing declared."""
+    for model in ("kimi-k3-free", "k3-free", "kimi-for-coding", "moonshot/k3", "moonshotai/kimi-k3"):
+        assert stage2.excluded_problem(REPO_ROOT, model) is not None, model
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    declared = {str(m) for e in data["endpunkte"] if isinstance(e, dict) for m in e.get("modelle") or []}
+    assert declared
+    for model in sorted(declared):
+        assert stage2.excluded_problem(REPO_ROOT, model) is None, model
+
+
+def test_a_deadline_stop_names_the_round_limit(world: World, monkeypatch) -> None:
+    """Criterion 12 (DL-B-14): a call stopped by the round deadline names that limit, not 45 minutes."""
+    _flash_next(world)
+    monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 2 / 60)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited", "sleep": 0.5},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P"), "sleep": 10},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    stop = next(line for line in text.splitlines() if line.startswith("mimo-v2.6-pro failed:"))
+    assert "was stopped by the round time limit of" in stop and "seconds were left for this call" in stop
+    assert "reviewer time limit" not in stop
+
+
+def test_activation_copies_only_the_allowed_definition_fields(tmp_path: Path) -> None:
+    """Criterion 13 (RS-3-3): samplingParams, headers and compat never reach the active configuration."""
+    definition = {
+        "id": "deepseek-v4.1-flash",
+        "name": "DeepSeek",
+        "api": "openai-completions",
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "reasoning": True,
+        "input": ["text"],
+        "contextWindow": 128000,
+        "maxTokens": 8192,
+        "cost": {"input": 0.15, "output": 0.6},
+        "samplingParams": {"model": "kimi-k3"},
+        "headers": {"x-forged": "1"},
+        "compat": {"supportsStore": False},
+        "provider": stage2.OPENCODE,
+    }
+    store = {stage2.OPENCODE: {"models": [definition], "lastModified": 0}}
+    original = copy.deepcopy(store)
+    dropped = stage2.activate_overlay(tmp_path, store)
+    active = json.loads((tmp_path / "models.json").read_text())["providers"][stage2.OPENCODE]["models"][0]
+    assert set(active) == {*stage2.OVERLAY_FIELDS, "provider"}
+    assert "kimi-k3" not in json.dumps(active) and "x-forged" not in json.dumps(active)
+    assert dropped == {"deepseek-v4.1-flash": ["compat", "headers", "samplingParams"]}
+    assert store == original
+
+
+def test_a_non_string_header_value_does_not_break_activation(tmp_path: Path) -> None:
+    """Criterion 14 (RS-3-8): a catalog header that is no string is dropped with the headers, not a crash."""
+    store = {stage2.OPENCODE: {"models": [{"id": "acme-v1-free", "headers": {"X-Number": 7, "X-None": None}}]}}
+    assert stage2.activate_overlay(tmp_path, store) == {"acme-v1-free": ["headers"]}
+    active = json.loads((tmp_path / "models.json").read_text())
+    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "acme-v1-free"}]
 
 
 # ---------------------------------------------------------------------------
@@ -17081,6 +17599,160 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
     assert problems and "plan" in problems[0]
 
 
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, stage2.Terminated])
+def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
+    world: World, monkeypatch, tmp_path: Path, interruption
+) -> None:
+    """An exception inside main-thread communicate must kill the leader and its descendant."""
+    import signal
+
+    pidfile = tmp_path / "descendant.pid"
+    heartbeat = tmp_path / "heartbeat"
+    processes = []
+    original = subprocess.Popen.communicate
+
+    def interrupt(process, *args, **kwargs):
+        if not processes:
+            processes.append(process)
+            end = time.monotonic() + 2
+            while not heartbeat.exists() and time.monotonic() < end:
+                time.sleep(0.01)
+            raise interruption()
+        return original(process, *args, **kwargs)
+
+    def verb(*_args):
+        child = (
+            "import os, time; from pathlib import Path; "
+            f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
+            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(150)]"
+        )
+        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(3)"
+        stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
+
+    monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
+    monkeypatch.setattr(stage2, "explore", verb)
+    start = time.monotonic()
+    try:
+        if interruption is KeyboardInterrupt:
+            with pytest.raises(KeyboardInterrupt):
+                world.run("explore")
+        else:
+            assert world.run("explore") == 143
+        time.sleep(0.1)
+        first = heartbeat.read_text()
+        time.sleep(0.15)
+        assert heartbeat.read_text() == first, "descendant survived main's interrupt handler"
+        assert processes[0].poll() is not None, "group leader survived the interrupt"
+        assert time.monotonic() - start < 2, "Popen cleanup waited for natural child completion"
+    finally:
+        for process in processes:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+
+
+def test_a_launch_after_the_interrupt_starts_no_program(world: World, monkeypatch, tmp_path: Path) -> None:
+    """A worker released after main has handled the interrupt cannot start another program."""
+    release = threading.Event()
+    errors = []
+    marker = tmp_path / "late"
+
+    def worker():
+        release.wait()
+        try:
+            stage2.launch(
+                [sys.executable, "-c", f"from pathlib import Path; Path({str(marker)!r}).write_text('started')"],
+                tmp_path,
+                dict(os.environ),
+                timeout=2,
+            )
+        except stage2.NotStarted as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+
+    def verb(*_args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(stage2, "explore", verb)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            world.run("explore")
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not marker.exists(), "a late worker started a program after cancellation"
+    assert len(errors) == 1
+
+
+def test_a_leak_refusal_for_a_replacement_stops_the_run(world: World, monkeypatch) -> None:
+    """The declaration's recoverable refusal must not swallow the mandatory leak check."""
+    _flash_next(world)
+    original = stage2.leakcheck.check
+    checks = []
+
+    def refuse_replacement(*args, **kwargs):
+        checks.append(1)
+        if len(checks) == 3:
+            raise stage2.Refused("replacement leak check BLOCK")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2.leakcheck, "check", refuse_replacement)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+        ]
+    )
+    assert world.run("review-loop") == 2
+    assert "## Round 2" not in world.record().read_text()
+    assert "rung:mimo-v2.6-pro" not in stage2.read_state(world.record().read_text(), "")["consumed"]
+
+
+def test_a_dropped_catalog_id_carries_no_control_bytes(world: World, capsys) -> None:
+    """Untrusted rejected ids are rendered visibly without terminal control bytes."""
+    bad = "acme\x1b[31m\x00-free"
+    world.script(
+        pi_catalog="provider model context input output\nopencode-go acme-v1-free 128000 0 0\n"
+        + f"opencode-go {bad} 128000 0 0\n",
+        pi=[{"stdout": rows(1, "A")}] * 2,
+    )
+    assert world.run("review-loop") == 0
+    for text in (capsys.readouterr().err, world.record().read_text()):
+        assert "\x1b" not in text and "\x00" not in text
+        assert r"acme\x1b[31m\x00-free" in text
+
+
+def test_a_not_activated_catalog_field_carries_no_control_bytes(world: World, monkeypatch, capsys) -> None:
+    """Discovery escapes controls in both catalog ids and dropped field names on stderr."""
+    model = "a\x1b[31mX"
+    field = "ev\x1b]0;pwn\x07il"
+    store = {stage2.OPENCODE: {"models": [{"id": model, "samplingParams": {}, field: 1}]}}
+    original = copy.deepcopy(store)
+    monkeypatch.setattr(stage2, "overlay_store", lambda *_args: store)
+    stage2.discover_free(world.root, allow_empty=True)
+    err = capsys.readouterr().err
+    assert "catalog fields not activated:" in err
+    assert "\x1b" not in err and "\x07" not in err
+    assert r"a\x1b[31mX (ev\x1b]0;pwn\x07il, samplingParams)" in err
+    assert store == original
+
+
+def test_a_malformed_catalog_definition_is_dropped_whole_and_named(tmp_path: Path) -> None:
+    """Malformed definitions are named by position, without an empty model or a shared None key."""
+    store = {stage2.OPENCODE: {"models": [{"headers": {}}, {"compat": {}}, None, "bad", {"id": "good"}]}}
+    original = copy.deepcopy(store)
+    dropped = stage2.activate_overlay(tmp_path, store)
+    active = json.loads((tmp_path / "models.json").read_text())
+    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "good"}]
+    assert len(dropped) == 4
+    for position in range(1, 5):
+        assert any(f"definition {position}" in name for name in dropped)
+    assert store == original
+
+
 def test_a_flash_member_malformed_twice_is_still_replaced(world: World) -> None:
     """Criterion 3, as today. Planted fault: the asked-again pass runs after the ladder replacement, so a Flash
     member whose second answer is malformed too is neither replaced nor stated - the ladder model it was owed
@@ -17212,3 +17884,143 @@ def test_repair_malformed_fixed_claim_still_conflicts(world: World, malformed: s
     prompt = prompt_of(world.calls("codex")[1])
     assert "L1-1: several fixed lines" in prompt
     assert f"`{malformed}`" in prompt
+
+
+@pytest.mark.parametrize("route", ["discovery", "reviewer"])
+@pytest.mark.parametrize("invalid_name", ["", []])
+def test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str, invalid_name
+) -> None:
+    """F6-7: a rejected explicit config must never restore request parameters from the raw cache."""
+    from types import SimpleNamespace
+
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", tmp_path / "model-endpoints.yaml")
+    definition = {
+        "id": "synthetic-free",
+        "name": invalid_name,
+        "api": "openai-completions",
+        "baseUrl": "https://catalog.example.invalid/v1",
+        "samplingParams": {"model": "kimi-k3"},
+        "headers": {"x-catalog": "forbidden"},
+    }
+    store = {stage2.OPENCODE: {"models": [definition], "lastModified": 9999999999999}}
+    original = copy.deepcopy(store)
+    real_launch = stage2.launch
+    calls = []
+
+    def launch(command, cwd, env, *args, **kwargs):
+        if command[0] == "node":
+            return real_launch(command, cwd, env, *args, **kwargs)
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "update" in command:
+            (agent / "models-store.json").write_text(json.dumps(store))
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "provider model\nopencode-go synthetic-free\n", "")
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2, "reviewer_key", lambda: "synthetic-key")
+    monkeypatch.setattr(stage2, "secret_values", lambda: [])
+    monkeypatch.setattr(stage2, "free_rule", lambda _root: {"provider": stage2.OPENCODE, "id_suffix": "-free"})
+    with pytest.raises(stage2.Refused, match="(?i)overlay"):
+        if route == "discovery":
+            stage2.discover_free(tmp_path)
+        else:
+            ctx = SimpleNamespace(root=tmp_path, change="demo", models_store=store)
+            stage2.run_reviewer(ctx, "synthetic-free", "Review.", "synthetic-key", free=True)
+    assert calls == [], "Pi was allowed to list or review after rejecting the filtered configuration"
+    assert store == original, "retrieval evidence was changed"
+
+
+@pytest.mark.parametrize("signum", ["SIGTERM", "SIGINT"])
+@pytest.mark.parametrize("worker", [False, True])
+def test_a_signal_during_process_creation_leaves_no_child(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, signum: str, worker: bool
+) -> None:
+    """F6-8: deliver the real signal after fork/exec but before Popen can return its child."""
+    import signal
+
+    real_fork_exec = subprocess._fork_exec
+    children = []
+    threads = []
+
+    def fork_exec(*args, **kwargs):
+        pid = real_fork_exec(*args, **kwargs)
+        children.append(pid)
+        os.kill(os.getpid(), getattr(signal, signum))
+        return pid
+
+    def start():
+        with contextlib.suppress(stage2.NotStarted):
+            stage2.launch(["/bin/sleep", "30"], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=60)
+
+    def verb(*_args):
+        if worker:
+            thread = threading.Thread(target=start)
+            threads.append(thread)
+            thread.start()
+            thread.join(timeout=10)
+        else:
+            start()
+
+    monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)
+    monkeypatch.setattr(stage2, "explore", verb)
+    try:
+        if signum == "SIGINT":
+            with pytest.raises(KeyboardInterrupt):
+                world.run("explore")
+        else:
+            assert world.run("explore") == 143
+        assert children
+        deadline = time.monotonic() + 3
+        while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
+    finally:
+        for pid in children:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
+            # The interrupted constructor may not even have reached setsid yet.
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, 0)
+        for thread in threads:
+            thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("fault", [None, "samplingParams", "headers", "missing-model", "changed-id"])
+def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str | None) -> None:
+    """The guard accepts a safe overlay, but refuses fallback, restored fields and another selected model."""
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    definition = {
+        "id": "synthetic-free",
+        "name": "Synthetic",
+        "api": "openai-completions",
+        "baseUrl": "https://catalog.example.invalid/v1",
+        "samplingParams": {"model": "kimi-k3"},
+        "headers": {"x-forbidden": "catalog"},
+    }
+    store = {stage2.OPENCODE: {"models": [definition], "lastModified": 9999999999999}}
+    evidence = json.dumps(store)
+    (agent / "models-store.json").write_text(evidence)
+    stage2.activate_overlay(agent, store)
+    path = agent / "models.json"
+    config = json.loads(path.read_text())
+    model = config["providers"][stage2.OPENCODE]["models"][0]
+    if fault in ("samplingParams", "headers"):
+        # Plant the forbidden field after filtering: schema validation alone would accept it.
+        model[fault] = definition[fault]
+    elif fault == "changed-id":
+        model["id"] = "other-free"
+    path.write_text(json.dumps(config))
+    selected = "absent-free" if fault == "missing-model" else "synthetic-free"
+    if fault is None:
+        stage2.check_overlay(agent, home, selected)
+    else:
+        with pytest.raises(stage2.Refused, match="overlay validation failed"):
+            stage2.check_overlay(agent, home, selected)
+    assert (agent / "models-store.json").read_text() == evidence

@@ -1254,7 +1254,11 @@ def report(state: dict) -> str:
     # statement about current admission, which the round rechecks live.
     lines.extend(f"Terms warning: {warning}" for warning in available.get("terms_warnings", []))
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
-    return "\n".join(lines)
+    # Escape untrusted controls per line, preserving only the runner's own separators.
+    return "\n".join(
+        "".join(f"\\x{ord(char):02x}" if ord(char) < 32 or 127 <= ord(char) <= 159 else char for char in line)
+        for line in lines
+    )
 
 
 @capture_preparation_warnings
@@ -1288,6 +1292,8 @@ def prepare(root: Path, change: str, runner) -> None:
     free = runner.discover_free(root, allow_empty=True)
     paid = runner.ladder(root)
     skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
+    # A free id discovery dropped (excluded, or not a plain id) is named, never probed (DL-B-2, DL-B-7).
+    skipped.update(free.get("dropped") or {})
     candidates = list(free["selected"])
     if not runner.free_diff(root)[0].strip():
         free["skipped"] = "free stage skipped: no implementation source diff"
