@@ -15576,6 +15576,50 @@ def test_a_short_value_of_a_credential_named_key_is_scrubbed(world: World, capsy
     assert "auth failed for [credential]" in err
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        spelling
+        for credential in (
+            "AUTH",
+            "APIKEY",
+            "API_KEY",
+            "BEARER",
+            "PASS",
+            "PAT",
+            "KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "PASSWD",
+            "CREDENTIAL",
+            "CREDENTIALS",
+        )
+        for spelling in (credential, f"service_{credential.lower()}_value")
+    ],
+)
+def test_short_credentials_under_common_names_are_scrubbed(world: World, capsys, name: str) -> None:
+    """Criterion 5: whole names and underscore parts identify even short credentials."""
+    with stage2.secrets_path().open("a", encoding="utf-8") as handle:
+        handle.write(f"{name}=abc123\nAUTH=\nOTHER=1\nAUTHOR=plain\nCOMPASS=north\nPATCH=patch\n")
+    values = stage2.secret_values()
+    assert "abc123" in values
+    assert not {"", "1", "plain", "north", "patch"}.intersection(values)
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": "| X1 | MAJOR | MAINT | impl | x | credential abc123, flag 1 |"},
+            {"model": "beacon-2-free", "exit": 1, "stderr": "auth failed for abc123\n"},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "abc123" not in text and "abc123" not in err
+    assert "credential [credential], flag 1" in text
+    assert "beacon-2-free failed: pi call failed: exit 1 (auth failed for [credential])" in text
+    assert "auth failed for [credential]" in err
+
+
 def _child_alive(pid: int) -> bool:
     # kill(pid, 0) works on macOS too; a missing /proc is not evidence of death.
     try:
@@ -15754,6 +15798,51 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
     world.script(pi=[{"model": "mimo-v2.6-pro", "stdout": "No finding."}])
     assert world.run("review-loop") == 0
     assert rung_of(world.reviews("pi")[-1]) == "mimo-v2.6-pro"
+
+
+def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, monkeypatch) -> None:
+    """Criterion 9: the final admission read can exhaust the deadline without consuming a rung."""
+    from types import SimpleNamespace
+
+    _flash_next(world)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(stage2, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_dispatch = stage2.dispatch_go
+    original_problem = stage2.terms_problem
+    in_dispatch = threading.local()
+    admission_finished = []
+
+    def dispatch(root, model, send, *args, **kwargs):
+        in_dispatch.active = True
+        try:
+            return original_dispatch(root, model, send, *args, **kwargs)
+        finally:
+            in_dispatch.active = False
+
+    def admission(entry, model):
+        problem = original_problem(entry, model)
+        if model == "mimo-v2.6-pro" and getattr(in_dispatch, "active", False):
+            clock[0] += stage2.REVIEWER_MINUTES * 60 + 1
+            admission_finished.append(model)
+        return problem
+
+    monkeypatch.setattr(stage2, "dispatch_go", dispatch)
+    monkeypatch.setattr(stage2, "terms_problem", admission)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    assert admission_finished == ["mimo-v2.6-pro"]
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "mimo-v2.6-pro did not start: the round time limit expired" in text
+    assert "it is not consumed" in text
+    assert stage2.read_state(text, "")["consumed"] == ["free", "flash"]
+    assert len(stage2.round_rows(stage2.record_rows(text), 2)) == 1
 
 
 def test_a_header_named_by_its_columns_is_furniture() -> None:

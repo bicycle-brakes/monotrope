@@ -622,7 +622,10 @@ def read_secret(name: str) -> str | None:
 
 # Credential-named entries are scrubbed whatever their length; other values must be long
 # enough to distinguish them from ordinary flags (DL-B-4 of the loop's deep review).
-CREDENTIAL_NAME = re.compile(r"(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(?:_|$)", re.I)
+CREDENTIAL_NAME = re.compile(
+    r"(?:^|_)(?:AUTH|APIKEY|API_KEY|BEARER|PASS|PAT|KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(?:_|$)",
+    re.I,
+)
 
 
 def secret_values() -> list[str]:
@@ -873,6 +876,7 @@ def launch(
     secret: str | list[str] | None = None,
     timeout: float | None = None,
     limit: str | None = None,
+    deadline: float | None = None,
 ) -> subprocess.CompletedProcess:
     """Start a foreign program: empty standard input, the worktree as its directory.
 
@@ -883,7 +887,7 @@ def launch(
     `KILL_DRAIN_SECONDS`: a descendant that left the group is abandoned, not waited for.
     """
     try:
-        if timeout is None:
+        if timeout is None and deadline is None:
             return subprocess.run(
                 command,
                 cwd=root,
@@ -900,6 +904,11 @@ def launch(
                 if _LAUNCH_STOPPED.is_set():
                     raise NotStarted("the runner was interrupted; no program starts")
                 with defer_launch_signals():
+                    # Admission and waiting for the launch lock use the same round budget.
+                    # Recheck at process creation so a late replacement is never consumed.
+                    if deadline is not None:
+                        left = remaining(deadline)
+                        timeout = left if timeout is None else min(timeout, left)
                     process = subprocess.Popen(
                         command,
                         cwd=root,
@@ -2582,6 +2591,7 @@ def run_reviewer(
             admission=getattr(ctx, "go_admission", None),
             timeout=seconds,
             limit=limit,
+            **({"deadline": deadline} if deadline is not None else {}),
         )
         if done.returncode != 0:
             raise fail("pi", done, f"exit {done.returncode}", secrets, model)
