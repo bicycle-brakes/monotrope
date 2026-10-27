@@ -355,13 +355,18 @@ def test_paid_retries_and_replacements_recheck_expiry(
     record_before = world.record().read_text(encoding="utf-8")
     dispatched = len(world.reviews("pi"))
     world.script(pi=[{"model": TEST_FLASH[0], "exit": 1, "stderr": "down"}, {"stdout": rows(1)}])
-    assert world.run("review-loop") == 2
+    # The expired replacement is skipped as not admitted, never called; the round keeps the
+    # surviving member's real rows (review-loop-deep-b criterion 1), so nothing is fabricated.
+    assert world.run("review-loop") == 0
     made = [rung_of(call) for call in world.reviews("pi")[dispatched:]]
     assert sorted(made) == sorted(TEST_FLASH), "the expired rung was called"
-    assert world.record().read_text(encoding="utf-8") == record_before
-    assert "replaced by" in world.text() and "no round was written" in world.text()
-    assert "expired on 2026-10-31" in capsys.readouterr().err
+    assert world.record().read_text(encoding="utf-8") != record_before
+    err = capsys.readouterr().err
+    assert f"{TEST_RUNGS[0]} not admitted" in err and "expired on 2026-10-31" in err
     # Act 4: a malformed first answer is asked again only while the terms hold.
+    # Act 3 kept its round, so the Flash stage is set up again from the same record.
+    world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
+    record_before = world.record().read_text(encoding="utf-8")
     set_terms(world, TEST_LADDER[0], valid_until="2026-10-31")
     set_terms(world, TEST_LADDER[1], valid_until="2026-10-31")
     set_terms(world, TEST_RUNGS[0], valid_until="2026-10-31")
