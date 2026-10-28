@@ -133,20 +133,28 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_pr_sync.py::test_merge_renders_all_merged_inputs — either parent's added artefact is missing, even on a textually clean merge.
-- 2: not yet written tests/test_pr_sync.py::test_index_only_conflict_is_regenerated — only-index conflict stops or markers are committed.
-- 3: not yet written tests/test_pr_sync.py::test_other_conflicts_preserve_target — a non-index conflict advances the target or loses its diagnostic.
-- 4: not yet written tests/test_pr_sync.py::test_make_index_uses_existing_generator — the target is absent or differs from the direct generator.
-- 5: not yet written tests/test_pr_sync.py::test_sync_pushes_clean_and_index_only_merges — no push, lost PR ancestry or wrong merged render.
-- 6: not yet written tests/test_pr_sync.py::test_sync_reports_conflicting_paths_without_push — an ordinary conflict is hidden or pushed.
-- 7: not yet written tests/test_pr_sync.py::test_sync_skips_protected_work — decision, held-path, dirty or unpushed cases are updated or unreported.
-- 8: not yet written tests/test_pr_sync.py::test_uncertain_sync_state_never_pushes — discovery, fetch, metadata, policy, worktree or merge failure permits a push or false success.
-- 9: not yet written tests/test_pr_sync.py::test_moved_remote_head_is_preserved — a racing writer's head is overwritten or called a successful update.
-- 10: not yet written tests/test_pr_sync.py::test_overdue_report_counts_weekdays — five/six-day boundary, weekend or protected-PR reporting differs.
-- 11: not yet written tests/test_pr_sync.py::test_sync_does_not_update_forks_or_other_bases — an out-of-scope branch receives a push.
-- 12: not yet written tests/test_pr_sync.py::test_repeated_merge_and_sync_are_unchanged — a second invocation changes a current head or pushes again.
-- 13: not yet written tests/test_pr_sync.py::test_bad_merged_inputs_or_renderer_preserve_target — invalid frontmatter, markers or generator failure is published.
+- 1: tests/test_pr_sync.py::test_merge_renders_all_merged_inputs — either parent's added artefact is missing, even on a textually clean merge.
+- 2: tests/test_pr_sync.py::test_index_only_conflict_is_regenerated — only-index conflict stops or markers are committed.
+- 3: tests/test_pr_sync.py::test_other_conflicts_preserve_target — a non-index conflict advances the target or loses its diagnostic.
+- 4: tests/test_pr_sync.py::test_make_index_uses_existing_generator — the target is absent or differs from the direct generator.
+- 5: tests/test_pr_sync.py::test_sync_pushes_clean_and_index_only_merges — no push, lost PR ancestry or wrong merged render.
+- 6: tests/test_pr_sync.py::test_sync_reports_conflicting_paths_without_push — an ordinary conflict is hidden or pushed.
+- 7: tests/test_pr_sync.py::test_sync_skips_protected_work — decision, held-path, dirty or unpushed cases are updated or unreported.
+- 8: tests/test_pr_sync.py::test_uncertain_sync_state_never_pushes — discovery, fetch, metadata, policy, worktree or merge failure permits a push or false success.
+- 9: tests/test_pr_sync.py::test_moved_remote_head_is_preserved — a racing writer's head is overwritten or called a successful update.
+- 10: tests/test_pr_sync.py::test_overdue_report_counts_weekdays — five/six-day boundary, weekend or protected-PR reporting differs.
+- 11: tests/test_pr_sync.py::test_sync_does_not_update_forks_or_other_bases — an out-of-scope branch receives a push.
+- 12: tests/test_pr_sync.py::test_repeated_merge_and_sync_are_unchanged — a second invocation changes a current head or pushes again.
+- 13: tests/test_pr_sync.py::test_bad_merged_inputs_or_renderer_preserve_target — invalid frontmatter, markers or generator failure is published.
 - 14: not a test — phase-6 review reads docs/WORKFLOW.md, prompts/06-review.md and templates/agents-mergeable-prs.md against both CLI help texts; a missing shared command or reviewer-side merge refutes it.
-- 15: not yet written tests/test_pr_sync.py::test_registry_still_blocks_without_repair — a stale index passes or checking writes it.
+- 15: tests/test_pr_sync.py::test_registry_still_blocks_without_repair — a stale index passes or checking writes it.
+
+## Runner route — 2026-10-28
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-10-28 17:07:57–18:44:56 UTC, 5819 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 18:45:32–19:28:57 UTC, 2604 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 19:29:04–19:42:19 UTC, 795 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
