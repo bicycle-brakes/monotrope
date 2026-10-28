@@ -75,3 +75,23 @@ By today's facts, the candidates are: `scripts/plans_registry.py` (the remedy te
 ---
 
 **Suggested `neighbours:` header value:** `plans/changes/dirty-index/spec.md`, `plans/specs/implementation-verification/spec.md`, `plans/changes/archive/2026-10-08-rb-g7-merge-freshness/spec.md`, `plans/changes/restore-symlink-parent/spec.md`, `plans/changes/research-currency/spec.md`.
+
+## Draft gap checks — 2026-10-28
+
+Read at `41e7cabf`, without accessing another checkout or the tracker:
+
+- `scripts/merge_guard.py` is the permission-rule catalogue for merging a
+  pull request into main, not a branch-sync or generated-file helper.
+  `prompts/06-review.md` starts a read-only reviewer; branch preparation
+  therefore belongs to its orchestrator before that reviewer starts.
+- `scripts/stage2.py` declares `RUNNER_HELD` and `_held_prefixes`, reading
+  human-decided prefixes from committed `provenance.yaml`. Those are concrete
+  sources for conservative sync exclusions; they are distinct from the
+  per-change loop-record advisory lock, which is not a branch lock.
+- `templates/` has no plan template. Existing `plan.md` files and
+  `prompts/03-plan.md` supply the card/ledger/time-section form.
+  `scripts/validate_change_artefacts.py` does not exist in this tree; do not
+  report that named gate as passed. The separate interview, research-handoff
+  and criterion-ledger checks exist.
+- `gh pr view --json number,url,state,headRefName` could not reach
+  api.github.com during drafting. The current hosted PR state is **not read**.
