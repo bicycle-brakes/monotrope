@@ -395,3 +395,5 @@ Measured by the orchestrator (Claude Code, Opus 5.5) for loop row L1-4, because
   `AssertionError` (1 failed each; the first one's message: "failed with
   Failed, not an AssertionError").
 - Branch head `b7048d9c`, same command over the three tests: **3 passed**.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 708 files, 2410 commits, 12 rules.
