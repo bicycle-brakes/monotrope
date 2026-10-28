@@ -819,8 +819,8 @@ After that format step and still before `make verify`, the runner runs an
 implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check` and
 `.venv/bin/ruff format --check` over the same changed Python files, then
-`.venv/bin/python3 -m pytest -q` over exactly the selected tests — the
-surviving changed `tests/**/test_*.py` files, the surviving test files that
+`.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
+over exactly the selected tests — the surviving changed `tests/**/test_*.py` files, the surviving test files that
 statically import a changed `scripts/` module (a deleted module's importer
 included), and the accepted plan's criterion-ledger test references in both
 forms, deduplicated and sorted. A command with no target is skipped; a red,

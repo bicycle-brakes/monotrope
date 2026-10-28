@@ -5210,7 +5210,7 @@ MUST_RUN_COMMANDS = (
     "Before you hand back, run the must-run checks yourself and leave them green: "
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
-    "`.venv/bin/python3 -m pytest -q` over the ledger tests below. The runner runs the same cheap "
+    "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
     "checks and full `make verify` after the call. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )

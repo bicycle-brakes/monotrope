@@ -92,7 +92,7 @@ def test_red_selected_pytest_skips_full_verification(world: World, case: str) ->
     assert world.calls("make") == [], "a red selected pytest still started `make verify`"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     text = world.text()
-    assert "`.venv/bin/python3 -m pytest -q` exited" in text
+    assert "`.venv/bin/python3 -m pytest -q -n auto` exited" in text
     assert ("FAILED tests/test_new.py::test_new" if case == "failing" else "ImportError") in text
 
 
@@ -146,7 +146,7 @@ def test_cheap_test_selection_matches_changed_importers_and_ledger(world: World)
     assert world.run("implement") == 1
     calls = world.calls("python3")
     assert len(calls) == 3 and world.calls("make") == []
-    head = ["-m", "pytest", "-q"]
+    head = ["-m", "pytest", "-q", "-n", "auto"]
     assert calls[0]["argv"] == [
         *head,
         "tests/test_direct.py",

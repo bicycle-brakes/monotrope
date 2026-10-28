@@ -395,3 +395,19 @@ Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint cl
 > - Runner format before `make verify`: ruff changed no file.
 > - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
 > ```
+
+Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason four attempts rejected; the cheap check now runs in parallel (84c1bfab); six pre-existing tests and the pinned cheap-check command left; about 1.4 h of the 5.5 h appetite left · leak check clean over 718 files, 2491 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +2 -2
+> - `scripts/stage2.py` +1 -1
+> - `tests/test_stage2.py` +1 -1
+> - `tests/test_stage2_fail_fast.py` +2 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> ```

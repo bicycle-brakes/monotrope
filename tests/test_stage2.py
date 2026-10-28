@@ -4708,7 +4708,7 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
         ["check", "--force-exclude", "--no-cache", *targets],
         ["format", "--check", "--force-exclude", "--no-cache", *targets],
     ]
-    assert world.calls("python3")[0]["argv"] == ["-m", "pytest", "-q", "tests/test_b.py"]
+    assert world.calls("python3")[0]["argv"] == ["-m", "pytest", "-q", "-n", "auto", "tests/test_b.py"]
     for call in world.calls("ruff"):
         assert call["cwd"] == str(world.root)
 
