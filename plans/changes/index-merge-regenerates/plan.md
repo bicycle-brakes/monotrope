@@ -172,3 +172,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-28 17:07:57–18:44:56 UTC, 5819 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-28 18:45:32–19:28:57 UTC, 2604 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-28 19:29:04–19:42:19 UTC, 795 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-28 22:20:21–22:28:00 UTC, 459 s — review loop round 1 · rows decided; text and code rows repaired by the orchestrator, each code test red first · measured from the commit times
