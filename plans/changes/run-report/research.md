@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-o2yc
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-28"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 class: bounded
 ---
@@ -66,3 +68,40 @@ No artifact today consolidates one run: the pieces sit in four places — `findi
 ## Which files a change would have to touch
 
 Whichever form it takes, the centre is `scripts/stage2.py` — the call-line writers (`call_line`, `begin_call`, `begin_work_call`), `write_round`, the verb ends, and `record_dir` for anything placed beside the record. If the count grows, `scripts/stage2_runs.py` and `tests/test_stage2_runs.py`; if receipts or the run store feed it, `scripts/stage2_availability.py`, `scripts/stage2_research_store.py`, `scripts/stage2_research_run.py`. Existing pins live in `tests/test_stage2.py`; documentation to move in the same pull request would be `docs/WORKFLOW.md` §3–§4 (the loop record, the generated-count block) and possibly `templates/findings.md`. A text-only wording change in `docs/WORKFLOW.md` alone would skip local `make verify` per AGENTS.md.
+
+## Draft gap check — 2026-10-28
+
+Read at input commit `6daf7b17`. The interview skip and agent details in
+`decisions.md` supersede the explorer's uncertainty about intent and its
+conditional file list: this is a separate read-only report, and
+`scripts/stage2.py` must stay unchanged. The bead itself was not read by
+this drafting session; the orchestrator's recorded brief is its source.
+
+- `stage2.time_log(path)` reads only the section boundaries and returns
+  text; `stage2.time_entry(...)` writes the canonical seconds, attempt,
+  route, model and verdict. `stage2.card_problem(text)` validates card
+  labels but does not extract an appetite. `stage2_runs.CALL_LINE`
+  recognises audit lines and exposes their remainder, without parsing
+  attempt durations. Reuse these existing boundaries and constants; the
+  new report still needs local field extraction, without changing either
+  existing module or duplicating their format-recognition expressions.
+- Existing time sections contain prose and unmeasured entries as well as
+  canonical runner lines (`plans/changes/runner-time-line/plan.md`). The
+  research-swarm plan also holds dated orchestrator spans with ISO UTC
+  endpoints, approximate spans and overlapping narrative evidence. A
+  number in prose is not by itself a measured duration: unread entries
+  must remain visible rather than being guessed from arbitrary numbers.
+- `Makefile` has no report target. `templates/` has a spec and design
+  template, but no plan template; use the phase-3 prompt's required form
+  and the neighbouring runner-time-line plan's structure.
+- `scripts/validate_change_artefacts.py` does not exist at this commit.
+  The interview and criterion-ledger checks exist. Registry checking also
+  checks the generated index and reads the tracker through
+  `scripts/bead_render.py`; the runner owns that preparation and full
+  verification after this draft.
+- The latest handover read is
+  `docs/journal/handover/2026-10-28-three-lane-night.md`. Its measured
+  verification contention explains the report's advisory resource check;
+  automatic verification locking remains separate work. The current PR
+  state could not be read because GitHub was unreachable. The live session
+  registry was not read: it is outside this draft's permitted read boundary.
