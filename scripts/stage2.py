@@ -5091,9 +5091,27 @@ def _test_functions(source: str, filename: str) -> dict[str, str]:
 
 
 def _top_level_names(source: str, filename: str) -> set[str]:
-    """The names of a test file's top-level functions and classes; parsed, never imported."""
+    """A test file's standing names: top-level functions and classes, and `Class::method` for each
+    method of a top-level class; parsed, never imported."""
     tree = ast.parse(source, filename=filename)
-    return {node.name for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)}
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            names.add(node.name)
+        if isinstance(node, ast.ClassDef):
+            names.update(
+                f"{node.name}::{item.name}"
+                for item in node.body
+                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)
+            )
+    return names
+
+
+def _id_stands(rest: str, names: set[str]) -> bool:
+    """Whether a node id's part after the file names a standing test: `test_x[...]` or
+    `Class::method[...]` (review row L5-2); a deeper id is judged by its first two parts."""
+    parts = rest.split("[", 1)[0].split("::")
+    return "::".join(parts[:2]) in names if len(parts) > 1 else parts[0] in names
 
 
 def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
@@ -5145,7 +5163,7 @@ def selected_tests(
             # the run on its id alone (review row L1-12).
             if posix not in standing:
                 standing[posix] = _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
-            if not rest or rest.split("::", 1)[0].split("[", 1)[0] in standing[posix]:
+            if not rest or _id_stands(rest, standing[posix]):
                 targets.add(ident)
         # A whole file covers its ids, but only those whose function stands in it: a ledger test
         # the new file lacks stays a target, so pytest names it missing (review row L3-1).
@@ -5156,7 +5174,7 @@ def selected_tests(
             for t in targets
             if "::" not in t
             or (posix := t.split("::", 1)[0]) not in whole
-            or t.split("::", 1)[1].split("::", 1)[0].split("[", 1)[0] not in names[posix]
+            or not _id_stands(t.split("::", 1)[1], names[posix])
         )
     except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
@@ -6901,6 +6919,12 @@ def run_attempts(
                 if retain_answer and evidence is not None:
                     ended += f"\nthe attempt's protected answer is saved at {evidence}"
                 raise CallFailed(ended) from error
+            # What the attempt itself left in findings.md, read before the runner's scan below can append
+            # its own skipped-scan record (review rows L1-2, L5-3).
+            try:
+                findings_after_call: bytes | None = ctx.findings.read_bytes()
+            except OSError:
+                findings_after_call = None
             if key is not None:
                 # Every route scans with the key read in this run - the Sonnet fallback included - before
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -6927,16 +6951,10 @@ def run_attempts(
             # change folder the model deleted must still bring every snapshotted input back.
             parent_gone = not ctx.plan.parent.is_dir()
             if kept is not None:
-                # The credential scan above may have appended the runner's own skipped-scan record:
-                # that is not the attempt's edit, so it is neither restored away nor credited to the
-                # attempt (review row L1-2).
-                try:
-                    now_bytes = ctx.findings.read_bytes()
-                    unchanged = now_bytes == findings_before or only_scan_records_added(
-                        findings_before.decode("utf-8"), now_bytes.decode("utf-8")
-                    )
-                except (OSError, UnicodeDecodeError):
-                    unchanged = False
+                # Judged on the bytes the attempt left, before the runner's scan appended anything: the
+                # runner's own record is never the attempt's edit, and a line the attempt shaped like
+                # one is (review rows L1-2, L5-3).
+                unchanged = findings_after_call == findings_before
                 if not unchanged:
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
                     restore_findings(kept)
