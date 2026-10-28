@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-a7m
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage2, red-first]
 class: bounded
-appetite: 1
+appetite: 4
 adr_files: []
 ---
 
@@ -48,10 +48,11 @@ The maintainer settled the scope (`decisions.md#Q-1`): an uncaught
 `AssertionError` and pytest's own `Failed` outcome both count as red; a
 missing helper (`NameError`, `ImportError`, `AttributeError` on a name the
 baseline lacks) stays not red. This spec amends the term "Assertion failure"
-and criterion 4 of `plans/changes/red-first-install/spec.md`. That spec
+and criteria 1 and 4 of `plans/changes/red-first-install/spec.md`. That spec
 keeps its original text as the record of the preceding contract; it only
-gains an amendment note on the term and on criterion 4 pointing here, so a
-reader of the predecessor alone is not misled (review loop row L1-5).
+gains one amendment note pointing here, and the predecessor's
+`decisions.md` detail 1 gains a one-line pointer to Q-1, so a reader of the
+predecessor alone is not misled (review loop rows L1-5, L3-1, L3-4, L3-8).
 
 ## Terms
 
@@ -60,7 +61,9 @@ reader of the predecessor alone is not misled (review loop row L1-5).
 - **Qualifying failure:** an uncaught `AssertionError` or an exception of
   pytest's own failed-outcome class (`pytest.fail.Exception`, subclasses
   included) raised in a test body's call phase — a `pytest.raises` block
-  that did not raise, or an explicit `pytest.fail` in the body. It is
+  that did not raise, a `pytest.warns` or `pytest.deprecated_call` block
+  whose warning never came (DID-NOT-WARN, also pytest's `Failed`), or an
+  explicit `pytest.fail` in the body. It is
   identified by exception type in the runner-owned probe, never by the
   recorded type name: an application class merely named `Failed` does not
   qualify.
@@ -119,8 +122,9 @@ reader of the predecessor alone is not misled (review loop row L1-5).
 
 - Accepting any other call-phase exception; the missing-helper form F-2
   names stays refused — widening it is a separate decision, not this one.
-- Distinguishing DID-NOT-RAISE from an explicit body `pytest.fail`: the
-  probe records the exception type only, and Q-1 accepts both forms.
+- Distinguishing DID-NOT-RAISE, DID-NOT-WARN and an explicit body
+  `pytest.fail`: the probe records the exception type only, and Q-1 accepts
+  pytest's own `Failed` in every form.
 - The guard-test policy — which repair rows owe baseline proof
   (bead `coding-harness-0ho`) — and the test-strength strand about tests
   that already pass on baseline (bead `coding-harness-y17`); both are
@@ -130,7 +134,8 @@ reader of the predecessor alone is not misled (review loop row L1-5).
   credential scrubbing.
 - Rewriting the predecessor artifacts under `plans/changes/red-first-install/`
   or any other change folder: the amendment lives in this spec; the
-  predecessor spec carries only the amendment note named above.
+  predecessor carries only the amendment note and the decisions pointer
+  named above.
 - A `design.md` or an ADR: the class-based design rule excludes phase 2b
   for a `bounded` change, and no file under `docs/adr/` changes.
 
@@ -138,7 +143,8 @@ reader of the predecessor alone is not misled (review loop row L1-5).
 
 - `plans/changes/red-first-install/` and every other change folder: archived
   ledgers hold their named tests, and the predecessor spec is the amended
-  contract of record.
+  contract of record; the two pointers named in the Problem are the only
+  edits there.
 - `prompts/04-implement.md` and `docs/WORKFLOW.md`: their wording "fails on
   the baseline's code" already covers the accepted forms.
 - `tools/pi/`, `decisions/`, `docs/adr/` and `plans/INDEX.md` (the runner
@@ -168,7 +174,10 @@ None open. Decisions this draft made visibly, each freely revisable:
 - [DETAIL] The probe record stays schema 1 with one new boolean field: the
   record is ephemeral (a fresh token per run in a temporary directory), so
   no stored record migrates.
-- [DETAIL] The predecessor folder stays unchanged; this spec's Problem and
-  criteria state the amendment, keeping the diff inside this change.
+- [DETAIL] The predecessor keeps its text; this spec's Problem and criteria
+  state the amendment, and the predecessor gains only the two pointers the
+  Problem names (review loop rows L1-5, L3-1, L3-4).
 - [DETAIL] One hour of phase 4, repairs included — the code change is two
-  seams in one file plus tests; a stop, not an estimate.
+  seams in one file plus tests; a stop, not an estimate. At the stop on
+  2026-10-27 the maintainer named a new appetite of four hours in total
+  (`plan.md`, Time used; review loop row L3-2).

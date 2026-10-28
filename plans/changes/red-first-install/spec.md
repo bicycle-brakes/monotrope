@@ -25,11 +25,12 @@ the named test, never through a missing runtime dependency (bead
 `coding-harness-omp` — missing Pi installation misread as red-first evidence).
 Research: `research.md`. Settled choices: `decisions.md`.
 
-Amendment — 2026-10-27: the assertion-only classification below is the
-historical contract. The term **Assertion failure** and criterion 4 are
-amended by [red-first-pytest-failed](../red-first-pytest-failed/spec.md),
-which governs the current qualifying call failures. Setup and teardown
-failures remain refused.
+Amendment — 2026-10-27: this spec is kept as written; its classification is
+the historical contract. Where the term **Assertion failure** and criteria 1
+and 4 below speak of an assertion failure, the successor
+[red-first-pytest-failed](../red-first-pytest-failed/spec.md) governs: its
+**Qualifying failure** also counts pytest's own `pytest.fail.Exception` in
+the call phase as red. Setup and teardown failures remain refused.
 
 ## Problem
 
@@ -46,11 +47,7 @@ there from the earlier review.
 ## Terms
 
 - **Red first:** evidence that the attempted repair's named test fails on the baseline's code.
-- **Assertion failure (amended):** originally an uncaught `AssertionError`,
-  including a subclass, during the test body's call phase. The current
-  qualifying failure also includes pytest's own `pytest.fail.Exception`
-  and subclasses in that phase, including DID-NOT-RAISE and explicit body
-  `pytest.fail`; see the successor spec's **Qualifying failure** term.
+- **Assertion failure:** an uncaught `AssertionError`, including a subclass, during the test body's call phase, reported by pytest as an ordinary failure.
 - **Complete run:** pytest finishes the selected invocation with recorded collection and setup, call and teardown outcomes for its selected cases.
 
 ## Acceptance criteria
@@ -68,14 +65,10 @@ there from the earlier review.
    even when a selected call also fails by assertion.
    *Refuted by:* accepting an assertion in a fixture or accepting a call
    assertion accompanied by a teardown error.
-4. **Amended by red-first-pytest-failed, criteria 1–2:** a selected test
-   call may fail through an uncaught `AssertionError` or pytest's own
-   `pytest.fail.Exception`, subclasses included. Other exceptions remain
-   refused, including missing-helper failures and an application exception
-   merely named `Failed`.
-   *Refuted by:* accepting `RuntimeError`, `ImportError`, `NameError` or
-   `AttributeError`, or refusing a complete qualifying proof solely because
-   its call uses DID-NOT-RAISE or explicit body `pytest.fail`.
+4. If a selected test call fails with an exception other than
+   `AssertionError`, the red-first outcome is refused.
+   *Refuted by:* accepting `RuntimeError`, `ImportError`, or a call to
+   `pytest.fail` in the test body as assertion evidence.
 5. If the invocation passes, collects no selected case, has a collection
    error, is interrupted, has an internal or usage error, or includes a
    skipped, expected-failing or unexpectedly-passing case, the red-first

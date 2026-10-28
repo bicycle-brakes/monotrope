@@ -101,9 +101,10 @@ phase-3 prompt's form and report the missing validator, never green.
   and verification evidence, preserving prior records.
 
 No deletions. Leave `decisions.md` unchanged: the maintainer's answer is
-settled. Do not touch other change folders, including the predecessor
-`plans/changes/red-first-install/`; this spec explicitly states its
-amendment. Leave `prompts/04-implement.md` and `docs/WORKFLOW.md` unchanged:
+settled. Do not touch other change folders. The one exception is the
+predecessor `plans/changes/red-first-install/`: its spec keeps its text and
+gains one amendment note, and its `decisions.md` detail 1 gains a one-line
+pointer to Q-1 (review loop rows L1-5, L3-1, L3-4). Leave `prompts/04-implement.md` and `docs/WORKFLOW.md` unchanged:
 "fails on the baseline's code" already covers the accepted forms. Do not
 change `docs/adr/`, `decisions/`, `tools/pi/`, routing, retry policy,
 credentials, timeouts, scratch-checkout construction, cleanup or ref

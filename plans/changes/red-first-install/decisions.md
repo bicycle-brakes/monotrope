@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-omp
@@ -36,6 +36,10 @@ none of them changes a decision of record.
    worktree. Classifying the outcome keeps the check honest about what it
    proves. The other direction (provision the pinned install) stays open
    as a later change if the classification proves too narrow.
+   Amended 2026-10-27: the maintainer's answer recorded in
+   [red-first-pytest-failed](../red-first-pytest-failed/decisions.md), Q-1,
+   also counts pytest's own `Failed` in the call phase as red; this detail
+   stays as the historical record.
 2. **Setup failures refuse instead of passing.** An outcome that is neither a
    test failure nor a pass ends the repair as "red first could not be
    established", naming the cause, so a repair cannot pass the check on

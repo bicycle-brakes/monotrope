@@ -5239,8 +5239,8 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
     The record must be this selector's and this invocation's (a fresh token binds it to one run),
     show a finished session that pytest ended as a failing run, and hold phases that prove at least
     one call of the requested test failing by an ordinary assertion or pytest's own failed outcome
-    (`pytest.fail.Exception`: a DID-NOT-RAISE `pytest.raises`, an explicit body `pytest.fail`, a
-    subclass included), passing setup and teardown for every selected case and no other outcome
+    (`pytest.fail.Exception`: a DID-NOT-RAISE `pytest.raises`, a DID-NOT-WARN `pytest.warns`, an
+    explicit body `pytest.fail`, a subclass included), passing setup and teardown for every selected case and no other outcome
     among the calls. The fixed-code proof runs the same classifier with `passing`: the session must
     have ended as a passing run and every selected call to have passed. Text quoted from the
     record - a foreign selector, a node id - is the caller's to scrub before it reaches a
@@ -5338,13 +5338,13 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
             if not (call["assertion"] or call["pytest_failed"]):
                 return (
                     f"the call of `{_one_line(nodeid)}` failed with {call['exception'] or 'an exception'}, "
-                    "not an AssertionError or pytest's Failed"
+                    "not an AssertionError or pytest's own pytest.fail.Exception"
                 )
             red = True
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
     if not passing and not red:
-        return "no selected call failed by an assertion or pytest's Failed; the run is green for the requested test"
+        return "no selected call failed by an assertion or pytest's own pytest.fail.Exception; the run is green for the requested test"
     return None
 
 

@@ -11167,7 +11167,7 @@ def plant_ignored_pi_stand_in(world: World) -> None:
 
 
 def test_red_first_accepts_only_clean_assertion_runs(world: World) -> None:
-    """Criterion 1. Planted fault: a clean or mixed-parameter assertion failure is refused."""
+    """Criterion 1 (coding-harness-a7m; criterion 1 of red-first-install). Planted fault: a clean or mixed-parameter assertion failure is refused."""
     repair_world(world)
     outcome = red_first_planted(world, "test_red.py", RED_ASSERT_TEST, RED_SELECTOR)
     assert outcome is None, outcome
@@ -11186,7 +11186,7 @@ def test_red_first_accepts_only_clean_assertion_runs(world: World) -> None:
 
 def test_red_first_accepts_pytest_failed_call_outcomes(world: World) -> None:
     """Criterion 1 (coding-harness-a7m). Planted fault: a call failing through pytest's own Failed
-    outcome - a DID-NOT-RAISE, a body `pytest.fail`, a subclass - is refused."""
+    outcome - a DID-NOT-RAISE, a DID-NOT-WARN, a body `pytest.fail`, a subclass - is refused."""
     repair_world(world)
     # The expected-exception form: the baseline raises nothing, so `pytest.raises` fails DID NOT RAISE.
     did_not_raise = "import pytest\n\n\ndef test_red():\n    with pytest.raises(ValueError):\n        pass\n"
@@ -11194,6 +11194,10 @@ def test_red_first_accepts_pytest_failed_call_outcomes(world: World) -> None:
     assert outcome is None, outcome
     body_fail = 'import pytest\n\n\ndef test_red():\n    pytest.fail("the body refuses")\n'
     outcome = red_first_planted(world, "test_red.py", body_fail, "tests/test_red.py::test_red")
+    assert outcome is None, outcome
+    # The expected-warning form: no warning comes, so `pytest.warns` fails DID NOT WARN, pytest's Failed too.
+    did_not_warn = "import pytest\n\n\ndef test_red():\n    with pytest.warns(UserWarning):\n        pass\n"
+    outcome = red_first_planted(world, "test_red.py", did_not_warn, "tests/test_red.py::test_red")
     assert outcome is None, outcome
     subclass = (
         "import pytest\n\n\n"
@@ -11222,7 +11226,7 @@ def test_red_first_accepts_pytest_failed_call_outcomes(world: World) -> None:
 
 @pytest.mark.parametrize("plant_guard_fault", [False, True], ids=["missing-install", "stand-in-present"])
 def test_red_first_refuses_a_missing_pi_install(world: World, plant_guard_fault: bool) -> None:
-    """Criterion 2. Planted fault: the absent ignored installation produces accepted fixture-error evidence."""
+    """Criterion 3 (coding-harness-a7m; criterion 2 of red-first-install). Planted fault: the absent ignored installation produces accepted fixture-error evidence."""
     repair_world(world)
     plant_ignored_pi_stand_in(world)
     source = MISSING_PI_TEST
@@ -11242,7 +11246,7 @@ def test_red_first_refuses_a_missing_pi_install(world: World, plant_guard_fault:
 
 
 def test_red_first_refuses_setup_and_teardown_errors(world: World) -> None:
-    """Criterion 3. Planted fault: a fixture assertion or teardown error passes the proof."""
+    """Criterion 3 (coding-harness-a7m; criterion 3 of red-first-install). Planted fault: a fixture assertion or teardown error passes the proof."""
     repair_world(world)
     outcome = red_first_planted(
         world, "test_broken.py", FIXTURE_ASSERT_TEST, "tests/test_broken.py::test_fixture_assert"
@@ -11303,7 +11307,10 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
         source = f"import pytest\n\n\ndef test_breaks():\n{body}"
         outcome = red_first_planted(world, "test_breaks.py", source, "tests/test_breaks.py::test_breaks")
         assert outcome is not None, outcome
-        assert f"failed with {exception}, not an AssertionError or pytest's Failed" in outcome, (exception, outcome)
+        assert f"failed with {exception}, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, (
+            exception,
+            outcome,
+        )
     # Identified by exception type in the probe, never by the recorded name: an application class
     # that only shares the name is not pytest's failed outcome.
     application_failed = (
@@ -11311,7 +11318,7 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     )
     outcome = red_first_planted(world, "test_breaks.py", application_failed, "tests/test_breaks.py::test_breaks")
     assert outcome is not None, outcome
-    assert "failed with Failed, not an AssertionError or pytest's Failed" in outcome, outcome
+    assert "failed with Failed, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, outcome
     # A mixed run is refused through its nonqualifying case, in either case order.
     mixed = (
         "import pytest\n\n\n"
@@ -11324,7 +11331,10 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     for bad in (1, 2):
         outcome = red_first_planted(world, "test_mixed.py", mixed.format(bad), "tests/test_mixed.py::test_mixed")
         assert outcome is not None, outcome
-        assert "failed with RuntimeError, not an AssertionError or pytest's Failed" in outcome, (bad, outcome)
+        assert "failed with RuntimeError, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, (
+            bad,
+            outcome,
+        )
 
 
 @pytest.mark.parametrize(
@@ -11444,7 +11454,7 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     ],
 )
 def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dict, selector: str, cause: str) -> None:
-    """Criterion 5. Planted fault: pass, empty selection, collection failure, interruption, internal or
+    """Criterion 4 (coding-harness-a7m; criterion 5 of red-first-install). Planted fault: pass, empty selection, collection failure, interruption, internal or
     usage error, skip, xfail or XPASS is accepted."""
     repair_world(world)
     for name, source in plants.items():
@@ -11455,7 +11465,7 @@ def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dic
 
 
 def test_red_first_refuses_missing_or_invalid_evidence(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 6. Planted fault: absent, malformed, incomplete, wrong-test or stale evidence passes."""
+    """Criterion 4 (coding-harness-a7m; criterion 6 of red-first-install). Planted fault: absent, malformed, incomplete, wrong-test or stale evidence passes."""
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
@@ -11512,7 +11522,7 @@ def test_red_first_refuses_missing_or_invalid_evidence(world: World, monkeypatch
 
 
 def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 6. Planted fault: a timed-out process is accepted through partial evidence."""
+    """Criterion 4 (coding-harness-a7m; criterion 6 of red-first-install). Planted fault: a timed-out process is accepted through partial evidence."""
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
@@ -11579,7 +11589,7 @@ def test_repair_refuses_environment_only_red_first_evidence(world: World) -> Non
 
 
 def test_red_first_scrubs_outcome_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 7. Planted fault: a credential reaches a refusal diagnostic."""
+    """Criterion 4 (coding-harness-a7m; criterion 7 of red-first-install). Planted fault: a credential reaches a refusal diagnostic."""
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
@@ -11623,8 +11633,9 @@ def test_fixed_code_proof_keeps_pytest_failed_red(world: World, monkeypatch: pyt
     (world.root / "tests" / "test_fix.py").write_text(mixed, encoding="utf-8")
     outcome = stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None)
     # A live mixed run ends its session 1, so the session verdict carries the refusal; the
-    # per-call verdict is only reachable on a record no live probe can write, proven directly.
+    # per-call verdict is shown below through fixed_test_proof on a forged record.
     assert outcome is not None and "pytest ended 1 on the fixed code" in outcome, outcome
+    original = stage2._red_report_bytes
 
     def passing_phase(node: str, name: str) -> dict:
         return {
@@ -11659,11 +11670,20 @@ def test_fixed_code_proof_keeps_pytest_failed_red(world: World, monkeypatch: pyt
         ],
         "session": {"finished": True, "exitstatus": 0},
     }
-    # The shared classifier refuses a Failed call even beside a session that claims a green exit.
-    fault = stage2._red_record_fault(json.dumps(synthetic).encode("utf-8"), "t", selector, passing=True)
-    assert fault is not None and "fixed-code proof needs every case to pass" in fault, fault
+
+    def forged_failed_call(path: Path) -> bytes | None:
+        # A live all-pass run ends 0; its record is swapped for one whose second call failed by
+        # pytest's Failed, bound to this invocation's own token, so only the per-call verdict refuses.
+        record = original(path)
+        assert record is not None, "the fixed-code proof left no outcome record"
+        return json.dumps({**synthetic, "token": json.loads(record)["token"]}).encode("utf-8")
+
+    (world.root / "tests" / "test_fix.py").write_text(all_pass, encoding="utf-8")
+    with monkeypatch.context() as patch:
+        patch.setattr(stage2, "_red_report_bytes", forged_failed_call)
+        outcome = stage2.fixed_test_proof(world.root, selector, None)
+    assert outcome is not None and "fixed-code proof needs every case to pass" in outcome, outcome
     # Malformed phase evidence refuses on the fixed-code path too, all-pass run notwithstanding.
-    original = stage2._red_report_bytes
 
     def without_field(path: Path) -> bytes | None:
         record = original(path)
