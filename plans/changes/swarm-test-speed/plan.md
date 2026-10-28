@@ -117,4 +117,14 @@ appetite and report unmet criteria; do not weaken them. The advertised
 `scripts/validate_change_artefacts.py` is absent, so it cannot be reported green;
 index generation and tracker-dependent gates remain the runner's responsibility.
 
+## Baseline measurement — 2026-10-28
+
+Measured by the orchestrator at `7bc010f0` (before any production change),
+with the verbatim single-test command above, three times in a row:
+22.22 s, 16.70 s, 15.48 s real; median 16.70 s. **Not alone on the
+machine:** another worktree's `make verify` (a runner attempt) ran during
+all three runs, so these numbers are disturbed. The after-measurement
+repeats both sides under the same load, or both alone, before any speedup
+is claimed.
+
 ## Time used
