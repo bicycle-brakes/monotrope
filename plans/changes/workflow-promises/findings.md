@@ -829,3 +829,7 @@ The orchestrator (Claude Code, Opus 5.5) accepted them by hand:
   21 passed; full `make verify` alone, 00:42:29–00:54:10 UTC, VERIFY GREEN.
 - The text rows (L1-2, L1-3, L1-8, L1-9, L1-12) were checked against the diff
   `e61554b0..fe85b3e1`.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 711 files, 2408 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 711 files, 2412 commits, 12 rules.
