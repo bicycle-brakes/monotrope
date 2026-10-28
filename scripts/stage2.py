@@ -163,7 +163,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -5036,29 +5036,22 @@ def _is_test_module(posix: str) -> bool:
     return len(parts) >= 2 and parts[0] == "tests" and posix.endswith(".py") and parts[-1].startswith("test_")
 
 
-def _imports_changed_scripts(path: Path, stems: set[str]) -> bool:
-    """Whether the test file statically imports one of the changed `scripts/` modules.
+FAILED_LINE = re.compile(r"^[ \t]*FAILED (tests/\S.*?)(?: - .*)?[ \t]*$", re.MULTILINE)
 
-    The file is parsed, never imported: a test file's module-level code must not run for selection.
-    `import x`, `import scripts.x`, `from x import y` and `from scripts import x` count when the
-    changed module's name matches; a relative import, a dynamic import and a transitive dependency
-    do not (spec, "Selected tests"). A file that cannot be read or parsed raises; the caller turns
-    that into a red diagnostic, never an empty green set.
+
+def failed_test_ids(problems: list[str]) -> list[str]:
+    """The test ids pytest reported as failed in an attempt's diagnostics, in order, without duplicates.
+
+    Read from the `FAILED <node id>` lines of pytest's short summary, in the cheap run's output and
+    in `make verify`'s alike; a line cut by the summary's width (`...`) names no usable id.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                parts = alias.name.split(".")
-                if (len(parts) == 1 or parts[0] == "scripts") and parts[-1] in stems:
-                    return True
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            parts = node.module.split(".")
-            if (len(parts) == 1 or parts[0] == "scripts") and parts[-1] in stems:
-                return True
-            if node.module == "scripts" and any(alias.name.split(".")[0] in stems for alias in node.names):
-                return True
-    return False
+    found: dict[str, None] = {}
+    for problem in problems:
+        for match in FAILED_LINE.finditer(problem):
+            ident = match.group(1).strip()
+            if not ident.endswith("..."):
+                found[ident] = None
+    return list(found)
 
 
 def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
@@ -5110,16 +5103,19 @@ def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
     return [f"{posix}::{name}" for name, dump in new.items() if old.get(name) != dump]
 
 
-def selected_tests(root: Path, env: dict[str, str], plan: bytes) -> tuple[list[str] | None, str | None]:
+def selected_tests(
+    root: Path, env: dict[str, str], plan: bytes, previous: Sequence[str] = ()
+) -> tuple[list[str] | None, str | None]:
     """The cheap pytest run's explicit targets, deduplicated and sorted, or why they cannot stand.
 
     Sources (spec, "Selected tests", amended by decisions.md Q-3): in each surviving changed
     `tests/**/test_*.py` file, the test functions that are new or differ from HEAD (a new file
-    whole); and the accepted plan's ledger test references in both forms, as function ids. A test
-    named by the ledger but not yet written stays a target: pytest then fails the attempt with the
-    missing id named, which is the attempt's own gap. Importers of changed `scripts/` modules are
-    not selected. `None` targets with a reason - a selection failure is a diagnostic, never an
-    empty green set (spec, criterion 3).
+    whole); the accepted plan's ledger test references in both forms, as function ids; and, on a
+    retry, the ids `previous` names - the tests pytest reported as failed in the attempt before -
+    whose test file still stands. A test named by the ledger but not yet written stays a target:
+    pytest then fails the attempt with the missing id named, which is the attempt's own gap.
+    Importers of changed `scripts/` modules are not selected. `None` targets with a reason - a
+    selection failure is a diagnostic, never an empty green set (spec, criterion 3).
     """
     try:
         changed = changed_paths(root, env=env)
@@ -5134,6 +5130,10 @@ def selected_tests(root: Path, env: dict[str, str], plan: bytes) -> tuple[list[s
     except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
     targets.update(refs)
+    for ident in previous:
+        posix = ident.split("::", 1)[0]
+        if _is_test_module(posix) and (root / posix).is_file():
+            targets.add(ident)
     whole = {target for target in targets if "::" not in target}
     return sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole), None
 
@@ -5144,10 +5144,12 @@ def cheap_checks(
     plan: Path,
     key: str | None,
     accepted_plan: bytes | None,
+    previous: Sequence[str] = (),
 ) -> list[str]:
     """An attempt's own cheap checks: ruff lint, ruff format check, pytest over the selected tests.
 
-    Empty when all applicable commands are green. A command with no target is skipped (spec,
+    `previous` is the test ids the attempt before reported as failed, on a retry. Empty when all
+    applicable commands are green. A command with no target is skipped (spec,
     criterion 4); a red, an unstartable or an over-bound command returns that one bounded,
     protected diagnostic and the attempt ends before derived preparation and `make verify` (spec,
     criteria 1, 2 and 10). The ledger references come from `accepted_plan` - the accepted plan's
@@ -5167,7 +5169,7 @@ def cheap_checks(
             accepted_plan = plan.read_bytes()
         except OSError as error:
             return [protect_diagnostics(f"the accepted plan could not be read for the cheap tests: {error}", key)]
-    tests, fault = selected_tests(root, env, accepted_plan)
+    tests, fault = selected_tests(root, env, accepted_plan, previous)
     if fault is not None:
         lines = protect_diagnostics(f"the cheap tests could not be selected: {fault}", key).splitlines()
         return ["\n".join(_shrink(lines, TAIL_LINES))]
@@ -5215,7 +5217,8 @@ def must_run_refs(plan: bytes | None) -> str:
 MUST_RUN_DELEGATED = (
     "You cannot run commands, so the runner runs this attempt's must-run checks itself, before full "
     "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
-    "the selected tests - the changed and importing test files and the accepted plan's ledger tests. "
+    "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
+    "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
     "ledger test fails the attempt before `make verify`. Execute nothing yourself - delegation to the "
     "runner is the contract, and no extra tool is yours."
@@ -5237,6 +5240,7 @@ def verify_attempt(
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
     accepted_plan: bytes | None = None,
+    previous_failures: Sequence[str] = (),
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -5282,7 +5286,7 @@ def verify_attempt(
             formatted.append(line)
         # The attempt's own cheap checks, before anything derived: a planted fault stops here
         # (bead coding-harness-5tyh). Cheap green continues into the clearing below.
-        cheap = cheap_checks(root, env, plan, key, accepted_plan)
+        cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
         if cheap:
             return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
         check_criterion_ledger.clear_written(root, plan)
@@ -6669,6 +6673,8 @@ def run_attempts(
             prompt_input(path, inputs)
     diagnostics: list[str] = []
     record: list[str] = []
+    # The tests pytest reported as failed in the attempt before; the next cheap run selects them too.
+    previous_failures: list[str] = []
     # The tools the runner itself starts, as they were before the first model ran. One digest for the
     # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
     # next attempt's reference by taking the digest again (P1 of the #188 review).
@@ -6897,7 +6903,7 @@ def run_attempts(
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             try:
-                problems = verify_attempt(root, ctx.plan, key, formatted, tools, inputs[ctx.plan])
+                problems = verify_attempt(root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures)
             except Refused as error:
                 put_findings_back(original=error)
                 raise
@@ -6945,6 +6951,7 @@ def run_attempts(
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
             if problems:
+                previous_failures = failed_test_ids(problems)
                 # The restore note stands first, then the format line: the next model learns that its
                 # findings edits went back, that the runner formatted, and what failed after.
                 problems = [

@@ -99,71 +99,96 @@ def test_red_selected_pytest_skips_full_verification(world: World, case: str) ->
 def test_cheap_test_selection_matches_changed_importers_and_ledger(world: World) -> None:
     """Ledger 3. Planted fault: selection omits or duplicates a source, or replaces it by broad discovery.
 
-    The changed set spans every source at once: a modified tracked `scripts/helper.py`, a deleted
-    `scripts/_verdict.py` whose surviving committed importer must still run, a new test file that
-    imports the changed modules three ways (plain, qualified, aliased), the plan's ledger ids in
-    both forms — one planted, so it overlaps the changed set and must not be run twice, one still
-    unwritten and absent, which keeps the attempt red — and a retained file a preceding failed
-    attempt left in the tree. The explicit argv of each attempt's pytest run is the assertion.
+    The name predates the amendment of `decisions.md#Q-3`: importers are no longer selected. The
+    changed set spans every source at once — in a modified tracked test file only the new and the
+    edited function, a new test file whole, the plan's ledger ids in both forms (one inside the new
+    file, so it must not run twice; one in an untouched file; one still unwritten and absent, which
+    keeps the attempt red), and on a retry exactly the ids the attempt before reported as failed
+    whose file still stands. A modified script, a deleted script's committed importer and a deleted
+    test file are not selected. The explicit argv of each attempt's pytest run is the assertion.
     """
-    (world.root / "tests").mkdir()
-    (world.root / "tests/test_imports_verdict.py").write_text(
-        "import scripts._verdict  # noqa: F401\n", encoding="utf-8"
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_existing.py").write_text(
+        "def test_keep():\n    assert 1\n\n\ndef test_edit():\n    assert 1\n", encoding="utf-8"
     )
+    (tests / "test_ledger_old.py").write_text("def test_old():\n    assert 1\n", encoding="utf-8")
+    (tests / "test_imports_verdict.py").write_text("import scripts._verdict  # noqa: F401\n", encoding="utf-8")
+    (tests / "test_gone.py").write_text("def test_gone():\n    assert 1\n", encoding="utf-8")
     venv_ruff(world)
     venv_pytest(world)
     world.plan.write_text(
         "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
-        "- 1: tests/test_ledger.py::test_one — the attempt writes it\n"
-        "- 2: not yet written tests/test_missing.py::test_later — nobody writes it\n\n## Time used\n",
+        "- 1: tests/test_new.py::test_new — the attempt writes it\n"
+        "- 2: tests/test_ledger_old.py::test_old — written on an earlier change\n"
+        "- 3: not yet written tests/test_missing.py::test_later — nobody writes it\n\n## Time used\n",
         encoding="utf-8",
     )
     git(world.root, "add", "-A")
-    git(world.root, "commit", "--quiet", "-m", "a committed importer and a plan with ledger tests")
-    not_found = {"stderr": "ERROR: file or directory not found: tests/test_missing.py\n", "exit": 4}
+    git(world.root, "commit", "--quiet", "-m", "committed tests, an importer and a plan with ledger tests")
     attempt = {
         "stdout": "implemented",
         "plant": {
             "scripts/helper.py": "VALUE = 3\n",
-            "tests/test_direct.py": (
-                "import helper\nimport scripts.helper as sh\nfrom scripts import helper as aliased\n"
+            "tests/test_existing.py": (
+                "def test_keep():\n    assert 1\n\n\n"
+                "def test_edit():\n    assert 2\n\n\n"
+                "def test_added():\n    assert 1\n"
             ),
-            "tests/test_ledger.py": "def test_one():\n    assert 1\n",
+            "tests/test_new.py": "def test_new():\n    assert 1\n",
         },
-        "delete": ["scripts/_verdict.py"],
+        "delete": ["scripts/_verdict.py", "tests/test_gone.py"],
         "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
     }
-    retained = {
-        "stdout": "second",
-        "plant": {"tests/test_retained.py": "def test_retained():\n    assert 1\n"},
-        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:05–10:10, 5 min\n"},
+    second = {"stdout": "second", "append": {"plans/changes/demo/plan.md": "2026-10-07 10:05–10:10, 5 min\n"}}
+    # `test_keep` is unchanged and `test_gone` no longer stands: only the first is selected next.
+    first_red = {
+        "stdout": "FAILED tests/test_existing.py::test_keep - boom\nFAILED tests/test_gone.py::test_gone - boom\n",
+        "exit": 1,
     }
+    second_red = {"stdout": "nothing that names a test\n", "exit": 1}
     world.script(
-        claude=[attempt, retained, {"stdout": "third"}],
-        python3=[not_found] * 3,
+        claude=[attempt, second, {"stdout": "third"}],
+        python3=[first_red, second_red, second_red],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 1
     calls = world.calls("python3")
     assert len(calls) == 3 and world.calls("make") == []
     head = ["-m", "pytest", "-q", "-n", "auto"]
-    assert calls[0]["argv"] == [
+    first = [
         *head,
-        "tests/test_direct.py",
-        "tests/test_imports_verdict.py",
-        "tests/test_ledger.py",
-        "tests/test_missing.py",
+        "tests/test_existing.py::test_added",
+        "tests/test_existing.py::test_edit",
+        "tests/test_ledger_old.py::test_old",
+        "tests/test_missing.py::test_later",
+        "tests/test_new.py",
     ]
-    assert calls[1]["argv"] == [
-        *head,
-        "tests/test_direct.py",
-        "tests/test_imports_verdict.py",
-        "tests/test_ledger.py",
-        "tests/test_missing.py",
-        "tests/test_retained.py",
+    assert calls[0]["argv"] == first
+    # The retry adds exactly the surviving failed id; the deleted file's id is dropped.
+    expected = sorted([*first[len(head) :], "tests/test_existing.py::test_keep"])
+    assert calls[1]["argv"] == [*head, *expected]
+    # The attempt before reported no id, so the third run holds the changed and ledger sources only.
+    assert calls[2]["argv"] == first
+    assert "tests/test_missing.py::test_later" in world.text(), "the missing ledger test was not named"
+
+
+def test_failed_test_ids_are_read_from_the_pytest_summary() -> None:
+    """Ledger 3, retry source. Planted fault: a width-cut line, a repeat or a non-test line is taken as an id."""
+    output = (
+        "`.venv/bin/python3 -m pytest -q -n auto` exited 1\n"
+        "FAILED tests/test_a.py::test_a[x y] - assert 1 == 2\n"
+        "FAILED tests/test_a.py::test_a[x y] - assert 1 == 2\n"
+        "FAILED tests/test_b.py::TestB::test_b\n"
+        "FAILED tests/test_c.py::test_a_very_long_name_that_the_summary_cut - File...\n"
+        "FAILED tests/test_d.py::test_d...\n"
+        "ERROR tests/test_e.py - ImportError\n"
+    )
+    assert stage2.failed_test_ids([output]) == [
+        "tests/test_a.py::test_a[x y]",
+        "tests/test_b.py::TestB::test_b",
+        "tests/test_c.py::test_a_very_long_name_that_the_summary_cut",
     ]
-    assert calls[2]["argv"] == calls[1]["argv"]
-    assert "tests/test_missing.py" in world.text(), "the missing ledger test was not named"
 
 
 def test_empty_targets_skip_their_command(world: World) -> None:

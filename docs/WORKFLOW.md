@@ -820,10 +820,13 @@ implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check` and
 `.venv/bin/ruff format --check` over the same changed Python files, then
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
-over exactly the selected tests — the surviving changed `tests/**/test_*.py` files, the surviving test files that
-statically import a changed `scripts/` module (a deleted module's importer
-included), and the accepted plan's criterion-ledger test references in both
-forms, deduplicated and sorted. A command with no target is skipped; a red,
+over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
+file the top-level test functions that are new or differ from HEAD (a new file
+whole), the accepted plan's criterion-ledger test references in both forms as
+function ids, and, on a retry, the test ids pytest reported as failed in the
+previous attempt of the same run whose file still stands; deduplicated and
+sorted, and no importer of a changed `scripts/` module is selected
+(`decisions.md` Q-3 of the change). A command with no target is skipped; a red,
 unstartable or over-bound command fails the attempt before `make verify`
 starts, and its identified command, exit and protected output stand in that
 attempt's diagnostics and the next attempt's prompt. Cheap green replaces

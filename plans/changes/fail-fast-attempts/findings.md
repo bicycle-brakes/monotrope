@@ -411,3 +411,98 @@ Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint cl
 > - Runner format before `make verify`: ruff changed no file.
 > - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
 > ```
+
+Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason selection amended by the maintainer (decisions.md Q-3); bootstrap edit 8cbdbac3 in place; left: previous-attempt failures on a retry, selection tests, docs; about 1.2 h of the 5.5 h appetite left · leak check clean over 718 files, 2494 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +7 -4
+> - `scripts/stage2.py` +42 -35
+> - `tests/test_stage2_fail_fast.py` +62 -37
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         (tests / "test_existing.py").write_text(
+>             "def test_keep():\n    assert 1\n\n\ndef test_edit():\n    assert 1\n", encoding="utf-8"
+>         )
+>         (tests / "test_ledger_old.py").write_text("def test_old():\n    assert 1\n", encoding="utf-8")
+>         (tests / "test_imports_verdict.py").write_text("import scripts._verdict  # noqa: F401\n", encoding="utf-8")
+>         (tests / "test_gone.py").write_text("def test_gone():\n    assert 1\n", encoding="utf-8")
+>         venv_ruff(world)
+>         venv_pytest(world)
+>         world.plan.write_text(
+>             "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+>             "- 1: tests/test_new.py::test_new — the attempt writes it\n"
+>             "- 2: tests/test_ledger_old.py::test_old — written on an earlier change\n"
+>             "- 3: not yet written tests/test_missing.py::test_later — nobody writes it\n\n## Time used\n",
+>             encoding="utf-8",
+>         )
+>         git(world.root, "add", "-A")
+>         git(world.root, "commit", "--quiet", "-m", "committed tests, an importer and a plan with ledger tests")
+>         attempt = {
+>             "stdout": "implemented",
+>             "plant": {
+>                 "scripts/helper.py": "VALUE = 3\n",
+>                 "tests/test_existing.py": (
+>                     "def test_keep():\n    assert 1\n\n\n"
+>                     "def test_edit():\n    assert 2\n\n\n"
+>                     "def test_added():\n    assert 1\n"
+>                 ),
+>                 "tests/test_new.py": "def test_new():\n    assert 1\n",
+>             },
+>             "delete": ["scripts/_verdict.py", "tests/test_gone.py"],
+>             "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+>         }
+>         second = {"stdout": "second", "append": {"plans/changes/demo/plan.md": "2026-10-07 10:05–10:10, 5 min\n"}}
+>         # `test_keep` is unchanged and `test_gone` no longer stands: only the first is selected next.
+>         first_red = {
+>             "stdout": "FAILED tests/test_existing.py::test_keep - boom\nFAILED tests/test_gone.py::test_gone - boom\n",
+>             "exit": 1,
+>         }
+>         second_red = {"stdout": "nothing that names a test\n", "exit": 1}
+>         world.script(
+>             claude=[attempt, second, {"stdout": "third"}],
+>             python3=[first_red, second_red, second_red],
+>             make=[{"stdout": "green\n"}],
+>         )
+>         assert world.run("implement") == 1
+>         calls = world.calls("python3")
+>         assert len(calls) == 3 and world.calls("make") == []
+>         head = ["-m", "pytest", "-q", "-n", "auto"]
+>         first = [
+>             *head,
+>             "tests/test_existing.py::test_added",
+>             "tests/test_existing.py::test_edit",
+>             "tests/test_ledger_old.py::test_old",
+>             "tests/test_missing.py::test_later",
+>             "tests/test_new.py",
+>         ]
+>         assert calls[0]["argv"] == first
+>         # The retry adds exactly the surviving failed id; the deleted file's id is dropped.
+>         expected = sorted([*first[len(head) :], "tests/test_existing.py::test_keep"])
+>         assert calls[1]["argv"] == [*head, *expected]
+>         # The attempt before reported no id, so the third run holds the changed and ledger sources only.
+>         assert calls[2]["argv"] == first
+> >       assert "tests/test_missing.py::test_later" in world.text(), "the missing ledger test was not named"
+> E       AssertionError: the missing ledger test was not named
+> E       assert 'tests/test_missing.py::test_later' in '---\ntitle: "Findings — demo"\ncategory: findings\nstatus: draft\nimplementation_status: none\ndate: 2026-10-28\ncrea...p checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1\n> nothing that names a test\n> ```\n'
+> E        +  where '---\ntitle: "Findings — demo"\ncategory: findings\nstatus: draft\nimplementation_status: none\ndate: 2026-10-28\ncrea...p checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1\n> nothing that names a test\n> ```\n' = text()
+> E        +    where text = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1126/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1126/popen-gw1/test_cheap_test_selection_matc0/state')).text
+>
+> tests/test_stage2_fail_fast.py:173: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> failed: implementation post-run checks failed after the allowed attempts; why each attempt failed and the files it changed: plans/changes/demo/findings.md
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_importers_and_ledger
+> 1 failed, 15 passed in 8.48s
+> ````
