@@ -431,3 +431,61 @@ def test_unstartable_or_timed_out_cheap_checks_never_pass(world: World, case: st
         "timeout": "did not finish",
     }[case]
     assert expected in world.text()
+
+
+# Review loop round 1 (2026-10-28), rows the orchestrator repaired by hand; each test was red on
+# the code before its fix.
+
+
+def test_a_failed_id_with_a_dash_in_its_parameter_is_read_whole() -> None:
+    """Rows L1-3, L1-20. Planted fault: a parameter id holding ` - ` was cut at the separator."""
+    output = "FAILED tests/test_a.py::test_p[x - y] - assert 0\nFAILED tests/test_a.py::test_q[a - b]\n"
+    assert stage2.failed_test_ids([output]) == ["tests/test_a.py::test_p[x - y]", "tests/test_a.py::test_q[a - b]"]
+
+
+def test_a_retry_drops_a_failed_test_the_attempt_removed(world: World) -> None:
+    """Row L1-12. Planted fault: a failed id whose function no longer stands was handed to pytest."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_r.py").write_text("def test_keep():\n    assert 1\n\n\ndef test_old():\n    assert 1\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a test file")
+    (tests / "test_r.py").write_text("def test_keep():\n    assert 1\n\n\ndef test_new():\n    assert 1\n")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    plan = b"---\ntitle: Plan\n---\n\n# Plan\n"
+    previous = ["tests/test_r.py::test_old", "tests/test_r.py::test_keep", "tests/test_r.py::test_keep[1]"]
+    targets, fault = stage2.selected_tests(world.root, env, plan, previous)
+    assert fault is None
+    assert targets == ["tests/test_r.py::test_keep", "tests/test_r.py::test_keep[1]", "tests/test_r.py::test_new"]
+
+
+def test_a_timed_out_cheap_pytest_names_its_selected_tests(world: World, monkeypatch) -> None:
+    """Row L1-10. Planted fault: the timeout diagnostic named only the command, not what it ran."""
+    venv_ruff(world)
+    venv_pytest(world)
+    monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[{"sleep": 2}] * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert "did not finish" in world.text()
+    assert "selected tests: tests/test_new.py" in world.text()
+
+
+def test_the_runners_scan_record_is_not_an_attempt_edit(world: World, monkeypatch) -> None:
+    """Row L1-2. Planted fault: the runner's own scan record was restored away and credited to the attempt."""
+    original = stage2.remove_changed_credential
+    record = "credential scan skipped scratch/x: its parent is planted; contents were not inspected"
+
+    def planted(root, key, *args, **kwargs):
+        stage2.record_credential_scan_skips(root, kwargs.get("findings"), [record], key)
+        return original(root, key, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "remove_changed_credential", planted)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert record in committed, "the runner's own record was deleted by the restoration"
+    assert NOTICE not in committed, "the runner's own record was credited to the attempt as an edit"

@@ -826,7 +826,7 @@ over exactly the selected tests — in each surviving changed `tests/**/test_*.p
 file the top-level test functions that are new or differ from HEAD (a new file
 whole), the accepted plan's criterion-ledger test references in both forms as
 function ids, and, on a retry, the test ids pytest reported as failed in the
-previous attempt of the same run whose file still stands; deduplicated and
+previous attempt of the same run whose file and test still stand; deduplicated and
 sorted, and no importer of a changed `scripts/` module is selected
 (`decisions.md` Q-3 of the change). A command with no target is skipped; a red,
 unstartable or over-bound command fails the attempt before `make verify`

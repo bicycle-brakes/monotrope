@@ -5036,7 +5036,9 @@ def _is_test_module(posix: str) -> bool:
     return len(parts) >= 2 and parts[0] == "tests" and posix.endswith(".py") and parts[-1].startswith("test_")
 
 
-FAILED_LINE = re.compile(r"^[ \t]*FAILED (tests/\S.*?)(?: - .*)?[ \t]*$", re.MULTILINE)
+# The id is the bare node path plus an optional `[...]` parameter part, which may itself hold ` - `
+# (review rows L1-3, L1-20); the message after the separator is never part of it.
+FAILED_LINE = re.compile(r"^[ \t]*FAILED (tests/[^\s\[]+(?:\[.*?\])?)(?: - .*)?[ \t]*$", re.MULTILINE)
 
 
 def failed_test_ids(problems: list[str]) -> list[str]:
@@ -5088,6 +5090,12 @@ def _test_functions(source: str, filename: str) -> dict[str, str]:
     }
 
 
+def _top_level_names(source: str, filename: str) -> set[str]:
+    """The names of a test file's top-level functions and classes; parsed, never imported."""
+    tree = ast.parse(source, filename=filename)
+    return {node.name for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)}
+
+
 def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
     """In one changed test file, the ids of the test functions that are new or differ from HEAD.
 
@@ -5112,7 +5120,7 @@ def selected_tests(
     `tests/**/test_*.py` file, the test functions that are new or differ from HEAD (a new file
     whole); the accepted plan's ledger test references in both forms, as function ids; and, on a
     retry, the ids `previous` names - the tests pytest reported as failed in the attempt before -
-    whose test file still stands. A test named by the ledger but not yet written stays a target:
+    whose test file and top-level test or class still stand. A test named by the ledger but not yet written stays a target:
     pytest then fails the attempt with the missing id named, which is the attempt's own gap.
     Importers of changed `scripts/` modules are not selected. `None` targets with a reason - a
     selection failure is a diagnostic, never an empty green set (spec, criterion 3).
@@ -5127,13 +5135,20 @@ def selected_tests(
             if _is_test_module(posix) and (root / posix).is_file():
                 targets.update(_changed_test_ids(root, env, posix))
         refs, _whole = _ledger_test_refs(plan)
+        targets.update(refs)
+        standing: dict[str, set[str]] = {}
+        for ident in previous:
+            posix, _, rest = ident.partition("::")
+            if not (_is_test_module(posix) and (root / posix).is_file()):
+                continue
+            # A failed test the attempt removed or renamed no longer stands: pytest would refuse
+            # the run on its id alone (review row L1-12).
+            if posix not in standing:
+                standing[posix] = _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
+            if not rest or rest.split("::", 1)[0].split("[", 1)[0] in standing[posix]:
+                targets.add(ident)
     except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
-    targets.update(refs)
-    for ident in previous:
-        posix = ident.split("::", 1)[0]
-        if _is_test_module(posix) and (root / posix).is_file():
-            targets.add(ident)
     whole = {target for target in targets if "::" not in target}
     return sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole), None
 
@@ -5188,7 +5203,11 @@ def cheap_checks(
             limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
         )
     except StepTimedOut as error:
-        return [protect_diagnostics(f"{identity} did not finish: {error}", key)]
+        # Name what ran, bounded: a timeout has no output of its own (review row L1-10).
+        shown = ", ".join(tests[:TAIL_LINES]) + (
+            f" and {len(tests) - TAIL_LINES} more" if len(tests) > TAIL_LINES else ""
+        )
+        return [protect_diagnostics(f"{identity} did not finish: {error}\nselected tests: {shown}", key)]
     except CallFailed as error:
         return [protect_diagnostics(f"{identity} could not be run: {error}", key)]
     if done.returncode:
@@ -5872,15 +5891,20 @@ def fixed_status(ident: str, rest: str) -> str:
     return f"{ident}: `{body}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
 
 
+def only_scan_records_added(before: str, now: str) -> bool:
+    """Whether `now` is `before` plus nothing but the runner's own skipped-scan records.
+
+    `record_credential_scan_skips` appends them at the end of the call record: bookkeeping, not an
+    edit of a finding.
+    """
+    return now.startswith(before) and all(
+        not line.strip() or line.startswith("> credential scan skipped ") for line in now[len(before) :].splitlines()
+    )
+
+
 def findings_body_problem(before: str, now: str) -> str | None:
     """Protect the whole file, allowing only the runner's one frontmatter date refresh."""
-    if now == before:
-        return None
-    # The runner's own record of a skipped credential scan lands at the end of the call record
-    # (`record_credential_scan_skips`): it is bookkeeping, not an edit of a finding.
-    if now.startswith(before) and all(
-        not line.strip() or line.startswith("> credential scan skipped ") for line in now[len(before) :].splitlines()
-    ):
+    if now == before or only_scan_records_added(before, now):
         return None
     masked = _mask_stamp(before, dated=False)
     if masked is not None and _mask_stamp(now, dated=True) == masked:
@@ -6892,9 +6916,15 @@ def run_attempts(
             # change folder the model deleted must still bring every snapshotted input back.
             parent_gone = not ctx.plan.parent.is_dir()
             if kept is not None:
+                # The credential scan above may have appended the runner's own skipped-scan record:
+                # that is not the attempt's edit, so it is neither restored away nor credited to the
+                # attempt (review row L1-2).
                 try:
-                    unchanged = ctx.findings.read_bytes() == findings_before
-                except OSError:
+                    now_bytes = ctx.findings.read_bytes()
+                    unchanged = now_bytes == findings_before or only_scan_records_added(
+                        findings_before.decode("utf-8"), now_bytes.decode("utf-8")
+                    )
+                except (OSError, UnicodeDecodeError):
                     unchanged = False
                 if not unchanged:
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
