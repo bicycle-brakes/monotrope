@@ -139,7 +139,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/explore-role/plan.md`](changes/explore-role/plan.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/explore-role/research.md`](changes/explore-role/research.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/explore-role/spec.md`](changes/explore-role/spec.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/fail-fast-attempts/decisions.md`](changes/fail-fast-attempts/decisions.md) | draft | none | 2026-10-28 | coding-harness-5tyh |
+| [`changes/fail-fast-attempts/findings.md`](changes/fail-fast-attempts/findings.md) | draft | none | 2026-10-28 | coding-harness-5tyh |
+| [`changes/fail-fast-attempts/plan.md`](changes/fail-fast-attempts/plan.md) | draft | none | 2026-10-28 | coding-harness-5tyh |
 | [`changes/fail-fast-attempts/research.md`](changes/fail-fast-attempts/research.md) | draft | none | 2026-10-27 | coding-harness-5tyh |
+| [`changes/fail-fast-attempts/spec.md`](changes/fail-fast-attempts/spec.md) | draft | none | 2026-10-28 | coding-harness-5tyh |
 | [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |

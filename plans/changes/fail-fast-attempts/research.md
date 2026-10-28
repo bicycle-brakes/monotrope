@@ -96,3 +96,45 @@ failed attempts. The maintainer approved one package of three levers on
    already does, and the rest of the attempt is checked; the repair prompt
    names `findings.md` as runner-owned.
 
+## Drafting gap check — 2026-10-28
+
+Read at `1cd54168`, before drafting spec and plan:
+
+- `verify_attempt` already applies safe ruff fixes and formatting, clears
+  written ledger markers, prepares derived files and runs `make verify`.
+  `format_step` currently reduces a failing ruff result to a summary; the
+  new read-only checks must retain their actual output. `verify_draft` is
+  a separate path and need not change.
+- `implementation_prompt`, `WORK_WRITE_TOOLS` and
+  `REPAIR_FORMAT_FILE_TOOLS` permit file tools only; `REPAIR_FORMAT` permits
+  Codex to run commands. Thus a must-run instruction needs an explicit
+  runner execution path for file-only attempts, not additional model tools.
+- `check_criterion_ledger.py` exposes `ledger_sections` and `parse_entry`;
+  both test entry forms identify the required test, while `not a test`
+  entries name no executable test. Ledger tests can join the runner's
+  cheap pytest selection without a second list in the plan.
+- Both `implement` and `repair` snapshot findings after the current audit
+  line, but `run_attempts` normally restores them only after failure.
+  Implement's answer check rejects body edits; repair also checks the
+  audit, rows and body in `check_repair_answer`. Restore before verification
+  and these answer checks, preserving the existing whole-batch recovery
+  preflight, model-file snapshot, HEAD check and credential scan.
+- Existing regressions explicitly demand retries for findings edits and
+  leave ruff failures to the full verification. Their expectations must
+  change with this approved package; their protection against forged loop
+  state, erased evidence and writes through aliases must remain.
+- `RUNNER_HELD` protects `prompts/` even from an accepted implementation
+  attempt. The orchestrator must apply and checkpoint the phase-4 prompt
+  edit before starting that attempt; widening the protected-path allow-list
+  is unnecessary.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` do not
+  exist. The phase-3 prompt supplies the plan form; the available interview,
+  criterion-ledger and registry checks supply the named existing gates.
+  The first interview check, before a spec existed, returned exit 1 with
+  “nothing was measured”; it must be rerun after the spec is written.
+- The latest in-tree handover is `docs/journal/handover/2026-10-27-night-run.md`;
+  this branch's research/interview commits are newer and settle this
+  change's objective. GitHub PR state could not be read: `gh pr view`
+  could not connect. The session registry and tracker outside this
+  worktree were not read under the drafting call's read boundary.
+
