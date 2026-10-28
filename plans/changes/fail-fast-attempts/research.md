@@ -9,8 +9,11 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-5tyh
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-28"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+class: bounded
 ---
 
 # fail fast attempts — Research
@@ -62,3 +65,34 @@ Exploration complete. Here is the research, ready to append to `plans/changes/fa
 By sense: work ladders → `scripts/stage2.py` (route lists, shared loop, closing messages, time-entry retry flag) + `tests/test_stage2.py` (the five retry-chain tests are pinned text per `attempt-diagnostics` criterion 16) + `docs/WORKFLOW.md` routing; loop → `run_swarm`/round assembly + loop tests + ADR 0021 amendment if stage semantics move; swarm → `scripts/stage2_research_run.py`/`stage2_swarm.py`/`stage2_availability.py`; session → `scripts/stage2_session.py` + its tests.
 
 **Neighbours for the header:** `plans/changes/attempt-diagnostics/` (cit, partial), `plans/changes/free-member-rate-limit/` (pj98, partial), `plans/changes/failed-check-spans/` and `failed-check-secrets/` (8hr), `plans/changes/research-swarm/` (icw), `plans/changes/terms-expiry/` (abra, PR #258), `plans/changes/stage2-session/` (amp), `plans/changes/codex-drafts/` (rhq), `plans/specs/implementation-verification/spec.md`, archived `plans/changes/archive/2026-10-07-stage2-flash-runner/`.
+
+## Orchestrator addendum — 2026-10-28
+
+The explorer could not read the tracker, so it names the objective and the
+class as unread. Both are in the bead (coding-harness-5tyh, read through
+`tools/bd show` on 2026-10-28): class `bounded`, runner behaviour inside the
+existing phases, no ADR. The objective is the first sense the exploration
+lists, the work verbs' attempt ladders (`implement`, `repair`), not the
+review loop or the research swarm.
+
+The bead records the measurement behind it (2026-10-27, three parallel
+lanes): every first GLM Flash implement attempt failed, and each cost 40–55
+minutes because every attempt ends in the full `make verify` (15–24 minutes
+under that load). In one lane, attempt 1 (2952 s) failed on ruff findings
+the runner had already detected before `make verify`, plus the test the
+plan card's pre-mortem had named; attempt 2 (1465 s) was rejected whole
+because it edited `findings.md`. All three plans passed their appetite on
+failed attempts. The maintainer approved one package of three levers on
+2026-10-27:
+
+1. Cheap checks first: after an attempt, ruff and the tests of the changed
+   files run before `make verify`; red there ends the attempt and hands
+   exactly that output to the next one.
+2. The plan's pre-mortem tests as a must-run: the implement and repair
+   prompts tell the model to run them, and ruff, before handing back
+   (`prompts/04-implement.md` has no such instruction, grep 2026-10-27).
+3. Protected files restored: an attempt's edit to a runner-owned file
+   (`findings.md` outside its bookkeeping) is put back, as the draft verb
+   already does, and the rest of the attempt is checked; the repair prompt
+   names `findings.md` as runner-owned.
+
