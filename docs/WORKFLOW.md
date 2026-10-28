@@ -194,6 +194,13 @@ reads first. A question about mechanics put to the owner of the intent breaks
 the protocol; it is not thoroughness. An earlier session failed exactly there,
 asking questions that lay too deep technically to be answerable.
 
+**One decision block a day** (maintainer, 2026-10-27). Questions and merge
+requests for the maintainer are collected and put in one block at 15:00
+local time, each in the protocol's form; work that does not depend on the
+answer goes on meanwhile. A security question, a leak-check block or a
+stop that blocks every lane is asked at once. A night run keeps its own
+rule (record, park, continue).
+
 The form of a question to a person is set out in
 [`prompts/02-spec.md`](../prompts/02-spec.md): the goal in one sentence, the
 options as **consequences** rather than mechanisms, a recommendation with its
@@ -669,6 +676,11 @@ for another repository is `templates/agents-mergeable-prs.md`.
   conflict is resolved while it is small (bead coding-harness-eq6y).
 - **Asked about after five working days.** A pull request open longer than
   five working days is put to the maintainer: finish, shrink or close.
+- **Small enough to review.** A pull request that would change more than
+  about 800 lines (code, tests and prose, generated files not counted) is
+  cut into slices, one pull request per slice, each with its own phase 6.
+  On 2026-10-27 the largest of three runner pull requests took eight
+  phase-6 findings over four rounds (bead coding-harness-usp8).
 - **Few at once on a hot file.** At most three open pull requests change the
   same hot file — here `scripts/stage2.py` and `tests/test_stage2.py`, one
   per foreign-model lane. The oldest is finished before a new one opens

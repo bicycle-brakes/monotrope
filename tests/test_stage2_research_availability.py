@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
 import stage2_swarm as swarm  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 from test_stage2 import OKEY, World  # noqa: E402
 from test_stage2 import git as run_git  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
@@ -100,15 +101,9 @@ OVERLAY_ONLY = ("noterms-model",)
 
 
 def terms_record(value, **more) -> dict:
-    record = {
-        "gelesen": "2026-10-17",
-        # Every terms reading carries its expiry (ADR 0022); far ahead, so the
-        # fixture never expires under the live clock.
-        "valid_until": "2099-12-31",
-        "quelle": "privacy table of the Go page",
-        "aufbewahrung": "0 days",
-        "training": "Not used",
-    }
+    # The shared builder's far-future expiry: every reading carries one (ADR
+    # 0022), far ahead, so the fixture never expires under the live clock.
+    record = admissible_terms()
     if value is not None:
         record.update(anfragen_5h=value, anfragen_gelesen="2026-10-17", anfragen_quelle="requests table")
     record.update(more)

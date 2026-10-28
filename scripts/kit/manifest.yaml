@@ -278,6 +278,12 @@ rules:
   - prefix: templates/agents-mergeable-prs.md
     rolle: mechanismus
     reason: "the portable AGENTS.md section that keeps pull requests mergeable; a repository copies it and fills its placeholders (maintainer, 2026-10-27)"
+  - prefix: templates/agents-working-pace.md
+    rolle: mechanismus
+    reason: "the portable AGENTS.md section for the working pace: one decision block, busy lanes, the mechanism rule, night runs (maintainer, 2026-10-27)"
+  - prefix: templates/repo-settings.md
+    rolle: mechanismus
+    reason: "the hosting settings the rules rely on: the default-branch ruleset, auto-merge only with it, night-run permissions as a manual step (maintainer, 2026-10-27)"
   - prefix: .github/PULL_REQUEST_TEMPLATE/
     rolle: mechanismus
     reason: "the decision pull request's template — a decision takes effect by its merge"
