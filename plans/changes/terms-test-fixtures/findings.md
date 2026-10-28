@@ -821,3 +821,18 @@ write it.
   admission".
 - The default was restored (`git diff tests/terms_fixtures.py` empty), and
   `tests/test_terms_fixtures.py` ran again: **2 passed**.
+
+## Three consecutive full verification runs — 2026-10-28
+
+Measured by the orchestrator (Claude Code, Opus 5.5) for loop row L1-10 (spec
+Definition of Done, plan step 10), one lane at a time on the machine, command
+`make verify`, head `98682973`:
+
+| Run | Start–end (UTC) | Duration | Outcome |
+|---|---|---|---|
+| 1 | 00:56:22–01:07:42 | 680 s | VERIFY GREEN |
+| 2 | 01:07:42–01:19:20 | 698 s | VERIFY GREEN |
+| 3 | 01:19:20–01:31:03 | 703 s | VERIFY GREEN |
+
+`test_terminal_record_survives_sigkill_after_the_outcome` failed in none of
+them (no mention of it in any run's output).
