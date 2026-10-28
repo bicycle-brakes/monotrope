@@ -889,3 +889,43 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-28: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 710 files, 2420 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 710 files, 2422 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_research_store.py` +33 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: tests/test_stage2_research_store.py::test_kill_regression_refuses_a_driver_not_terminated_by_sigkill: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-1-20261028T061128203956Z-f1c2d9aa.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 710 files, 2423 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-2-20261028T061128203956Z-f1c2d9aa.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 710 files, 2424 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: tests/test_stage2_research_store.py::test_kill_regression_refuses_a_driver_not_terminated_by_sigkill: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-3-20261028T061128203956Z-f1c2d9aa.md
+> ```

@@ -203,22 +203,23 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
         while True:
             run_ids = [run["run_id"] for run in store.runs()]
             assert len(run_ids) <= 1, f"expected exactly one driver run, found {run_ids}"
+            if proc.poll() is not None:
+                pytest.fail(f"driver exited before SIGKILL: exit {proc.returncode}; runs {run_ids}")
             if run_ids:
                 (candidate_run_id,) = run_ids
                 results, interrupted = store.slot_records(candidate_run_id)
                 if "s1" in results and "s2" in interrupted:
                     run_id = candidate_run_id
                     break
-            if proc.poll() is not None:
-                pytest.fail(f"driver exited before its records were durable: exit {proc.returncode}; runs {run_ids}")
             if time.monotonic() >= deadline:
                 proc.kill()
                 proc.wait(timeout=10)
                 pytest.fail(f"first result and second launch record not durable within 120s: runs {run_ids}")
             time.sleep(0.05)
-        if proc.poll() is None:
-            proc.send_signal(signal.SIGKILL)
-        proc.wait(timeout=10)
+        if proc.poll() is not None:
+            pytest.fail(f"driver exited before SIGKILL: exit {proc.returncode}; runs {run_ids}")
+        proc.send_signal(signal.SIGKILL)
+        assert proc.wait(timeout=10) == -signal.SIGKILL, "driver was not terminated by SIGKILL"
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -231,6 +232,33 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     assert results["s1"]["report"].strip() == "x"
     assert "s2" not in results
     assert interrupted == ["s2"]  # a launch record only
+
+
+@pytest.mark.parametrize("already_exited", [True, False], ids=["already-exited", "wrong-termination"])
+def test_kill_regression_refuses_a_driver_not_terminated_by_sigkill(state_home, monkeypatch, already_exited):
+    from types import SimpleNamespace
+
+    store = module().Store(module().research_dir("example", REPO_ROOT))
+    run = begin(store)
+    store.write_result(run, "s1", terminal(key("s1"), report="x"))
+    store.write_launch(run, "s2", key("s2"))
+    signals = []
+    proc = SimpleNamespace(returncode=1 if already_exited else None)
+    proc.poll = lambda: proc.returncode
+
+    def send_signal(sig):
+        signals.append(sig)
+        proc.returncode = 1  # Records alone must not disguise an ordinary error exit.
+
+    proc.send_signal = send_signal
+    proc.kill = lambda: send_signal(signal.SIGKILL)
+    proc.wait = lambda **_kwargs: proc.returncode
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_kwargs: proc)
+    error = pytest.fail.Exception if already_exited else AssertionError
+    message = "driver exited" if already_exited else "driver was not terminated by SIGKILL"
+    with pytest.raises(error, match=message):
+        test_terminal_record_survives_sigkill_after_the_outcome(state_home)
+    assert signals == ([] if already_exited else [signal.SIGKILL])
 
 
 def test_temporary_or_torn_files_never_read_as_results(store):
