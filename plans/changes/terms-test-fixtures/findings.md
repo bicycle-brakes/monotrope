@@ -805,3 +805,19 @@ Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-2: `tests/test_terms_fixtures.py::test_default_terms_pass_production_admission (the test plants the missing-expiry fault itself and asserts the refusal. I could not record command output in `findings.md`, which I may not edit.)` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/terms-test-fixtures/stage2/attempts/terms-test-fixtures/attempt-3-20261027T223311593315Z-fe7f964b.md
 > ```
+
+## Contract-fault demonstration — 2026-10-28
+
+Measured by the orchestrator (Claude Code, Opus 5.5) for loop row L1-2 (plan
+step 2), because `findings.md` is runner-owned and a repair attempt may not
+write it.
+
+- At `0b77e00e`, the `valid_until` default was removed from
+  `admissible_terms` in `tests/terms_fixtures.py` (working tree only), then
+  `python -m pytest -q -p no:cacheprovider
+  tests/test_terms_fixtures.py::test_default_terms_pass_production_admission`
+  ran: **1 failed**, `AssertionError` with the production refusal "the model m
+  has no usable terms expiry (valid_until is missing); the reading grants no
+  admission".
+- The default was restored (`git diff tests/terms_fixtures.py` empty), and
+  `tests/test_terms_fixtures.py` ran again: **2 passed**.
