@@ -5336,12 +5336,11 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
             # By the probe's exception-type flags, never by the recorded name: an application class
             # merely named `Failed` refuses, and so does a missing helper's error.
             if not (call["assertion"] or call["pytest_failed"]):
-                raised = call["exception"] or "an exception"
-                if raised == "Failed":
-                    raised = "an exception named Failed that is not pytest's own"
+                # One wording for every name: a class merely named `Failed` or `AssertionError`
+                # reads as what it is, without a special case per name.
                 return (
-                    f"the call of `{_one_line(nodeid)}` failed with {raised}: neither an AssertionError nor "
-                    "pytest's own failed outcome (pytest.fail.Exception)"
+                    f"the call of `{_one_line(nodeid)}` failed with {call['exception'] or 'an exception'}, "
+                    "which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)"
                 )
             red = True
         elif call["outcome"] != "passed":

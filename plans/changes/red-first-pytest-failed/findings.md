@@ -485,3 +485,5 @@ Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 717 files, 2450 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 717 files, 2451 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 717 files, 2452 commits, 12 rules.

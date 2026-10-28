@@ -185,5 +185,6 @@ None open. Decisions this draft made visibly, each freely revisable:
   Problem names (review loop rows L1-5, L3-1, L3-4).
 - [DETAIL] Four hours of phase 4 in total, repairs included — a stop, not
   an estimate. The draft set one hour (two seams in one file plus tests);
-  at that stop on 2026-10-27 the maintainer named four hours in total
-  (`plan.md`, Time used; review loop rows L3-2, L6-1).
+  the unattended runner passed that stop without asking, and afterwards, on
+  2026-10-27, the maintainer named four hours in total (`plan.md`, Appetite
+  record; review loop rows L3-2, L6-1, L8-2).
