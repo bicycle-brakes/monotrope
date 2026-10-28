@@ -151,10 +151,12 @@ Besides the files named above, the review-loop repairs touched two
 governance pages: `docs/governance/regelwerk.md` §8 and
 `docs/governance/quality-gates.md` now describe the new gate catalog
 where they used to describe an older one, and drop a dead reference
-(rows L1-2 and L5-3). No other production files are added, changed or
-deleted. In particular, no
+(rows L1-2 and L5-3). `README.md` loses three items from its "Not built
+yet" list — the slash command, the `make change` shortcut and the gate
+catalog — because this change supplies them (row L6-1). No other
+production files are added, changed or deleted. In particular, no
 stop hook, validator, agent, gate definition, CI workflow, user
-configuration, README, ADR or tracker policy is changed. The kit files
+configuration, other README text, ADR or tracker policy is changed. The kit files
 change in two lines each, added by the review-loop repair (rows L1-3 and
 L1-11): `scripts/kit/manifest.yaml` declares `docs/governance/gate-catalog.md`
 as travelling mechanism, because the travelling workflow documents link to

@@ -120,7 +120,9 @@ but the tree lacks, with its check date and commit.
   the stop hook is split out to the daily decision block (`decisions.md`).
 - A second audit report: the exploration is the comparison, as
   `decisions.md` records. Broader README and how-it-works reconciliation
-  remains separate.
+  remains separate; only the README's "Not built yet" list drops the three
+  pieces this change supplies, so the front page does not contradict the
+  workflow (review loop row L6-1).
 - Changing gate definitions, enforcement, workflow phases, tracker policy,
   scaffold validation or the registry's rendering and lifecycle semantics.
 - Repairing the plans-registry drift findings in other changes' folders or
@@ -137,7 +139,8 @@ but the tree lacks, with its check date and commit.
 - `scripts/new_change.py` and `scripts/plans_registry.py`: reuse their
   behavior.
 - `README.md`, `docs/how-it-works.md` and existing agent definitions:
-  outside this bounded package.
+  outside this bounded package, except the README's "Not built yet" list
+  named in the Non-goals (review loop rows L6-1, L7-1).
 
 ## Definition of Done
 
@@ -147,8 +150,10 @@ but the tree lacks, with its check date and commit.
   Targeted tests demonstrate the catalog and entry failures above before
   their corresponding repairs.
 - Documents moved with the behavior: `docs/governance/gate-catalog.md`,
-  `docs/WORKFLOW.md`, `.claude/commands/workflow-start.md`, and the
-  generated `plans/INDEX.md`; no ADR.
+  `docs/WORKFLOW.md`, `.claude/commands/workflow-start.md`, the generated
+  `plans/INDEX.md`, and the review-loop edits `plan.md` names under
+  Boundaries and route (README "Not built yet", two governance pages, two
+  kit lines); no ADR.
 - Protected areas untouched and non-goals unbuilt, shown by the file list.
 - The pull request names all bundled tracker items from `decisions.md`;
   tracker ownership determines who updates them. The final commit carries
