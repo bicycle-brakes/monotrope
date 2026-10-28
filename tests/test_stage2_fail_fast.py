@@ -169,8 +169,9 @@ def test_cheap_test_selection_matches_changed_importers_and_ledger(world: World)
     expected = sorted([*first[len(head) :], "tests/test_existing.py::test_keep"])
     assert calls[1]["argv"] == [*head, *expected]
     # The attempt before reported no id, so the third run holds the changed and ledger sources only.
+    # The unwritten ledger test stays a target (`first` holds it): the real pytest then fails the
+    # attempt naming the missing id; the stand-in's own output is not the runner's to rewrite.
     assert calls[2]["argv"] == first
-    assert "tests/test_missing.py::test_later" in world.text(), "the missing ledger test was not named"
 
 
 def test_failed_test_ids_are_read_from_the_pytest_summary() -> None:

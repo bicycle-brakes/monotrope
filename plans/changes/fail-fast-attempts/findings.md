@@ -506,3 +506,5 @@ Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_importers_and_ledger
 > 1 failed, 15 passed in 8.48s
 > ````
+
+Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one cheap-check test left red (a missing ledger test is not named in the diagnostic); about 1.2 h of the 5.5 h appetite left · leak check clean over 718 files, 2496 commits, 12 rules.
