@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-o2yc
@@ -111,19 +111,19 @@ No existing file is deleted. Keep `spec.md` as the yardstick and
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_run_report.py::test_default_lists_active_changes_then_live — an archive appears or a plan-less active folder disappears
-- 2: not yet written tests/test_run_report.py::test_selection_is_confined_and_never_falls_back — traversal, shell syntax or a missing name selects other inputs
-- 3: not yet written tests/test_run_report.py::test_attempts_and_unfinished_calls_keep_recorded_metadata — repeated attempt numbers overwrite history or clean calls acquire an accepted verdict
-- 4: not yet written tests/test_run_report.py::test_measured_durations_sum_without_audit_or_live_double_counting — accepted, rejected or exact orchestrator seconds are omitted or counted twice
-- 5: not yet written tests/test_run_report.py::test_unread_time_is_visible_and_totals_are_partial — malformed or approximate records supply a guessed duration or a false complete total
-- 6: not yet written tests/test_run_report.py::test_card_appetite_warns_at_half_including_rejected_time — the boundary, unit conversion or card authority is wrong
-- 7: not yet written tests/test_run_report.py::test_unread_appetite_never_becomes_zero — absent, conflicting or non-positive card values yield a ratio
-- 8: not yet written tests/test_run_report.py::test_process_filter_emits_only_permitted_fields — options hide a runner, substring matches add unrelated processes or extra arguments leak
-- 9: not yet written tests/test_run_report.py::test_memory_sources_preserve_units_and_unknowns — page size, resident compressor usage, zswap units or physical denominator is wrong
-- 10: not yet written tests/test_run_report.py::test_low_memory_warning_is_advisory_and_strictly_below_floor — 24 percent fails to warn, 25 warns or a verification command launches
-- 11: not yet written tests/test_run_report.py::test_source_failures_are_independent_bounded_and_exit_zero — timeout or unreadable input crashes, hangs or suppresses valid output
-- 12: not yet written tests/test_run_report.py::test_report_is_read_only_local_and_does_not_echo_prose — sentinels leak, filesystem entries change or forbidden commands run
-- 12: not yet written tests/test_run_report.py::test_make_report_passes_change_as_data_and_is_not_a_gate — make interpolation executes selection text or reporting enters verification
+- 1: tests/test_run_report.py::test_default_lists_active_changes_then_live — an archive appears or a plan-less active folder disappears
+- 2: tests/test_run_report.py::test_selection_is_confined_and_never_falls_back — traversal, shell syntax or a missing name selects other inputs
+- 3: tests/test_run_report.py::test_attempts_and_unfinished_calls_keep_recorded_metadata — repeated attempt numbers overwrite history or clean calls acquire an accepted verdict
+- 4: tests/test_run_report.py::test_measured_durations_sum_without_audit_or_live_double_counting — accepted, rejected or exact orchestrator seconds are omitted or counted twice
+- 5: tests/test_run_report.py::test_unread_time_is_visible_and_totals_are_partial — malformed or approximate records supply a guessed duration or a false complete total
+- 6: tests/test_run_report.py::test_card_appetite_warns_at_half_including_rejected_time — the boundary, unit conversion or card authority is wrong
+- 7: tests/test_run_report.py::test_unread_appetite_never_becomes_zero — absent, conflicting or non-positive card values yield a ratio
+- 8: tests/test_run_report.py::test_process_filter_emits_only_permitted_fields — options hide a runner, substring matches add unrelated processes or extra arguments leak
+- 9: tests/test_run_report.py::test_memory_sources_preserve_units_and_unknowns — page size, resident compressor usage, zswap units or physical denominator is wrong
+- 10: tests/test_run_report.py::test_low_memory_warning_is_advisory_and_strictly_below_floor — 24 percent fails to warn, 25 warns or a verification command launches
+- 11: tests/test_run_report.py::test_source_failures_are_independent_bounded_and_exit_zero — timeout or unreadable input crashes, hangs or suppresses valid output
+- 12: tests/test_run_report.py::test_report_is_read_only_local_and_does_not_echo_prose — sentinels leak, filesystem entries change or forbidden commands run
+- 12: tests/test_run_report.py::test_make_report_passes_change_as_data_and_is_not_a_gate — make interpolation executes selection text or reporting enters verification
 
 ## Verification
 
@@ -147,3 +147,6 @@ Research records Stage-2 explore on route `flash`, endpoint
 is recorded. The stopped low-memory attempt is evidence, not a fallback.
 
 ## Time used
+
+2026-10-28 22:41:23–23:33:17 UTC, 3114 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 23:33:23–23:49:18 UTC, 955 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

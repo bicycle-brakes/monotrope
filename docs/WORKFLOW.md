@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-29
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -461,6 +461,30 @@ The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
 none, because the registry keeps counting it as protection.
+
+### The run report (`make report`)
+
+`make report` prints one local, read-only snapshot: per active `plans/changes/`
+folder (or only `make report CHANGE=<name>`), the measured attempt rows of the
+plan's `## Time used` section with the recorded time against the opening plan
+card's `Appetite:` line, the calls `findings.md` records as call evidence, and
+one live block with runner and verification processes (`scripts/stage2.py`
+invocations, `make verify`, `scripts/verify_all.sh`) and memory figures
+(macOS `memory_pressure`, `vm_stat`, `hw.memsize`; Linux `MemAvailable`,
+`MemTotal`, `Zswap`). The direct form is `python3 scripts/run_report.py
+[--change NAME]`; the default root is the checkout the script lives in.
+
+It is a snapshot to read before a verify-bearing step, **not a gate** — it
+never enters `make verify`. It warns, and only warns: when the recorded time
+has reached half the card's appetite (rejected attempts count; the boundary is
+inclusive), and when available memory is below 25 percent. It starts, stops
+and locks nothing. What it cannot read, it names: an unreadable time record is
+counted (`unread lines: N`) and marks the subtotal incomplete instead of
+guessing a duration; a missing section or unreadable plan is `time not read`,
+never zero; an unreadable card is `appetite not read`, never a fabricated
+ratio; a failing source (`ps`, a memory command, `meminfo`) is `not read`
+while the rest of the report stands. It writes nothing and runs no model,
+tracker or network call.
 
 ### Model routing
 
