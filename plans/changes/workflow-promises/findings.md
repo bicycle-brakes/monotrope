@@ -2,7 +2,7 @@
 title: "Findings — workflow-promises"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-27
 created: 2026-10-27
 last_reviewed: 2026-10-27
@@ -812,3 +812,20 @@ Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-7: answered `not a test`, but the row is a code row; it needs a test that was red first
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-3-20261028T000210037922Z-9c65a354.md
 > ```
+
+## Orchestrator acceptance of the loop-round-1 repairs — 2026-10-28
+
+The repair verb's edits for round 1 were committed onto the branch after its
+attempts failed (step limit under three-lane load, then fixed-line format), so
+a rerun found the fixes already in its baseline and could not prove red first.
+The orchestrator (Claude Code, Opus 5.5) accepted them by hand:
+
+- Red first, at `e61554b0` with this branch's `tests/test_workflow_entry.py`:
+  `test_workflow_notice_records_supplied_commands` and
+  `test_missing_workflow_start_fails_outside_kit_probe` each failed with an
+  `AssertionError`; `test_snapshot_detects_residual_empty_directory` passed,
+  because the helper it pins lives in the same test file.
+- At `fe85b3e1`: `tests/test_workflow_entry.py` and `tests/test_gate_catalog.py`,
+  21 passed; full `make verify` alone, 00:42:29–00:54:10 UTC, VERIFY GREEN.
+- The text rows (L1-2, L1-3, L1-8, L1-9, L1-12) were checked against the diff
+  `e61554b0..fe85b3e1`.
