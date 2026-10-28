@@ -194,3 +194,9 @@ Answer: continue — the maintainer named a new appetite of 4 hours in total
 2026-10-28 00:02:16–00:15:28 UTC, 792 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 00:15:34–00:28:32 UTC, 778 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 00:28:38–00:41:01 UTC, 742 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+
+Appetite stop, 2026-10-28 07:06 UTC: the runner spans above sum to 13971 s
+(3.9 h) of the 4-hour total, before the orchestrator's hand acceptances.
+Review-loop round 6 left five rows (one MAJOR) undecided.
+Answer: park — the orchestrator parks the change on its branch until the
+maintainer names a new appetite or cuts the done-criterion.
