@@ -1,7 +1,7 @@
 ---
 title: "Plan — swarm-test-speed"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
 updated: 2026-10-28
@@ -30,8 +30,8 @@ Baseline `ae855930`, inspected 2026-10-28. Implements `spec.md` and the
 maintainer's production-scope answer (`decisions.md#Q-1`). Bounded: no design
 phase or ADR. No `templates/plan.md` exists; this follows `prompts/03-plan.md`.
 Explore used Stage 2, GLM 5.3 Flash via `glm-coding-plan`; no Stage-1 fallback
-is recorded. This runner draft stops before implementation; the orchestrator
-shows the card unchanged before phase 4.
+is recorded. The card was shown to the maintainer unchanged before phase 4;
+implementation was accepted at `e7046a39` (runner, attempt 2).
 
 ## Files and steps
 
@@ -117,15 +117,57 @@ appetite and report unmet criteria; do not weaken them. The advertised
 `scripts/validate_change_artefacts.py` is absent, so it cannot be reported green;
 index generation and tracker-dependent gates remain the runner's responsibility.
 
-## Baseline measurement — 2026-10-28
+## Measurement — 2026-10-28
 
-Measured by the orchestrator at `7bc010f0` (before any production change),
-with the verbatim single-test command above, three times in a row:
-22.22 s, 16.70 s, 15.48 s real; median 16.70 s. **Not alone on the
-machine:** another worktree's `make verify` (a runner attempt) ran during
-all three runs, so these numbers are disturbed. The after-measurement
-repeats both sides under the same load, or both alone, before any speedup
-is claimed.
+All runs by the orchestrator on 2026-10-28, macOS, 8 cores, Python 3.12.15,
+the pinned `.venv`, with the verbatim single-test command above. "Before" is
+the baseline commit `5c4ddcbd` (the plan with no production change; spec and
+plan as drafted at `7bc010f0`); "after" is `e7046a39`, the accepted
+implementation. The header's `ae855930` is the commit the drafter inspected;
+the code under test is identical at all three baseline commits, which differ
+only in this folder's documents.
+
+**Matched comparison** (finished 18:05 UTC). Before and after alternated in
+one sequence, before first, so both sides ran under the same load: one other
+lane's `make verify` was running throughout, so the machine was shared, not
+isolated. pytest's reported time per run:
+
+| Run | Before (`5c4ddcbd`) | After (`e7046a39`) |
+|---|---|---|
+| 1 | 49.27 s | 22.48 s |
+| 2 | 45.42 s | 22.76 s |
+| 3 | 39.13 s | 15.27 s |
+| Median | **45.42 s** | **22.48 s** |
+
+Wall times (`/usr/bin/time -p`, real) were 129.94 / 45.81 / 39.47 s before
+and 22.97 / 23.13 / 15.59 s after; the first before-run includes a cold start
+after the worktree was created. The median falls by about half.
+
+An earlier, unmatched set (`7bc010f0`, before only, 16:3x UTC, also beside a
+running `make verify`: 22.22 / 16.70 / 15.48 s real) is superseded by the
+matched set above; it is kept here because review rows L1-1 and L1-2 refer
+to it.
+
+**The new regressions against the old reader** (plan step 2; review rows
+L1-8, L1-11). `tests/test_stage2_declaration.py` from `e7046a39`, run against
+the scripts of `5c4ddcbd`: 5 failed, 19 passed. The five failures:
+`test_reader_selects_safe_loader_with_fallback` ("the C safe loader was not
+chosen although it is available"), `test_unchanged_contents_reuse_a_bounded_parse_cache`
+("an unchanged declaration was parsed again on an immediate repeat"),
+`test_changed_contents_are_read_without_metadata_shortcuts` ("an unchanged
+declaration was parsed again"), `test_read_failure_never_returns_a_cached_declaration`
+(the injected read failure did not reach the old reader, which reads with
+`read_text`), and `test_warm_cache_preserves_live_research_admission` ("an
+unchanged declaration was parsed again at the guard"). At `e7046a39`: 24
+passed.
+
+**Preserved tests** (criterion 8). `pytest --collect-only` over `tests/`:
+4079 node ids at `5c4ddcbd`, 4103 at `e7046a39`; none removed or renamed,
+and all 24 new ids are in `tests/test_stage2_declaration.py`. The
+implementation diff changes no existing test file, gate or pytest option.
+
+**Full suite.** Timed with the next full `make verify` after the review
+repairs; recorded below when it has run.
 
 ## Time used
 
