@@ -397,3 +397,38 @@ Measured by the orchestrator (Claude Code, Opus 5.5) for loop row L1-4, because
 - Branch head `b7048d9c`, same command over the three tests: **3 passed**.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 708 files, 2410 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 708 files, 2412 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 708 files, 2412 commits, 12 rules.
+
+Loop attempt: 2026-10-28 — no round was written; the review-loop calls above consumed no stage; audit calls: 2
+
+Notice: the data terms of deepseek-v4.1-flash expire on 2026-10-31 (3 days left).
+
+Notice: the data terms of deepseek-v4-pro expire on 2026-10-31 (3 days left).
+
+glm-5.3-flash was asked again with the format reminder: the first answer was malformed
+
+From glm-5.3-flash:
+
+glm-5.3-flash's first answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | L3-1 | MINOR | SPEC | glm-5.3-flash | scripts/stage2.py — RED_PROBE_SOURCE `pytest_failed` flag / `_red_record_fault` failed-call branch | The acceptance rule keys on `pytest.fail.Exception`, which pytest also raises for a DID-NOT-WARN from `pytest.warns` or `pytest.deprecated_call`; a named test whose only red evidence is an unraised warning therefore certifies a repair, but the decision record (decisions.md Q-1) and the spec's Qualifying-failure term enumerate only DID-NOT-RAISE and an explicit body `pytest.fail`, and no test pins this third form as accepted or refused — a maintainer applying the answer as written would expect it refused.
+> | L3-2 | MINOR | MAINT | glm-5.3-flash | tests/test_stage2.py::test_fixed_code_proof_keeps_pytest_failed_red (live mixed-run leg) | The live mixed pass/Failed leg asserts only the pre-existing session refusal "pytest ended 1 on the fixed code", which `fixed_test_proof` already emitted before this change, so that leg is green on the baseline and adds no red-then-green evidence; the criterion-5 fault "a Failed call passes the fixed-code proof" is shown only on a synthetic record fed directly to `_red_record_fault` and never through `fixed_test_proof`, while the test's docstring claims the live probe proves it.
+> | L3-3 | MINOR | SPEC | glm-5.3-flash | plans/changes/red-first-pytest-failed/spec.md (frontmatter `appetite: 1` and the one-hour [DETAIL]) versus plan.md (Appetite record) | The spec still states "One hour of phase 4, repairs included — a stop, not an estimate" while the same change's plan records the maintainer replacing that appetite with four hours in total after it was passed; the two artifacts of one change disagree on the stop a maintainer reads, and the spec was not amended when the answer changed.
+
+From glm-5.3-flash:
+
+glm-5.3-flash's second answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | R3-1 | MAJOR | SPEC | promise not kept | plans/changes/red-first-pytest-failed/plan.md (Files and limits) | The plan forbids touching any other change folder, naming the predecessor `plans/changes/red-first-install/` explicitly, yet the change edits `plans/changes/red-first-install/spec.md` (repair attempt 1, +20 −6). The plan and the successor spec contradict each other about whether the predecessor may be written, and the diff violates the plan's own stated limit; one of the two artifacts must be brought in line with what was done.
+> | R3-2 | MAJOR | SPEC | promise not kept | plans/changes/red-first-install/spec.md (Terms, criterion 4) | The successor spec promises the predecessor "only gains an amendment note ... pointing here" and "keeps its original text as the record", but the predecessor's criterion 4 is replaced wholesale and the term rewritten inline with substantive amended content. The governing contract is now stated twice (inline paraphrase and successor criteria 1–2) and can drift; the original criterion 4 text — which explicitly refused a body `pytest.fail` — no longer exists anywhere in the tree's current text.
+> | R3-3 | MINOR | SPEC | maintainer trip | plans/changes/red-first-install/decisions.md | The predecessor's decisions.md keeps the settled detail "Count only an assertion failure as red" with no superseded or amendment pointer, unlike the spec, which gained one; a maintainer reading the decision record alone holds a rule that no longer governs.
+> | R3-4 | MINOR | SPEC | promise not kept | plans/changes/red-first-pytest-failed/spec.md (frontmatter) | The spec frontmatter still reads `appetite: 1` while the maintainer's recorded answer re-set the appetite to 4 hours in total (plan.md Appetite record and card); the spec's stated stop was never amended, so two artifacts state different appetites.
+> | R3-5 | MINOR | MAINT | maintainer trip | tests/test_stage2.py (docstrings of the untouched red-first tests vs plan.md Criterion ledger) | The new criterion ledger maps existing tests to the new spec's numbering (e.g. criterion 4 to `test_red_first_refuses_non_proving_pytest_outcomes`), but those tests' docstrings still cite the old spec's numbers ("Criterion 5.", "Criterion 6.") without a change marker, so a reader cannot tell which contract a docstring's criterion refers to.
+> | R3-6 | MINOR | MAINT | maintainer trip | scripts/stage2.py (`_red_record_fault`, the nonqualifying-call diagnostic) | The refusal reads "failed with Failed, not an AssertionError or pytest's Failed" when an application class merely named `Failed` is raised: the diagnostic names the exception and then appears to deny what it just named. The distinction lives only in a code comment and the spec; the diagnostic itself should say "not pytest's own Failed" or similar to be readable without the surrounding contract.
