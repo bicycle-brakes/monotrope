@@ -20,7 +20,7 @@ tags: [plan, stage2, red-first]
 ```text
 For you:     Repairs using pytest.raises or a test-body pytest.fail can prove red on baseline; missing helpers still prove nothing.
 Done when:   Both accepted failure types pass baseline proof, other failures stay refused, fixed-code proof requires every case to pass, and make verify is green.
-Appetite:    One hour of phase 4, repairs included — a stop, not an estimate.
+Appetite:    4 hours of phase 4 in total, repairs included — a stop, not an estimate (maintainer, 2026-10-27).
 Not now:     Other exception types, distinguishing the two Failed forms, policy on which rows need baseline proof, dependency provisioning.
 Pre-mortem:  suppose it failed: most likely because a fixture-level pytest.fail was read as a test-body failure.
 Starts unless you say stop.
@@ -144,18 +144,16 @@ attempts unattended and has no stop of its own, so no session read the clock
 against the appetite and no maintainer answer (continue, cut, park or drop)
 was asked for or recorded. The run continued through review round 1 and the
 repair attempts below on the strength of the plan's "Starts unless you say
-stop". The maintainer decides whether this stands as *continue* with a new
-total appetite or narrows the done-criterion; until then the record shows the
-change over its appetite.
+stop". Answer: continue — the maintainer named a new appetite of 4 hours in total
+(conversation, 2026-10-27).
 
 Red-then-green evidence for the three new acceptance tests
 (`test_red_first_accepts_pytest_failed_call_outcomes`,
 `test_fixed_code_proof_keeps_pytest_failed_red`,
-`test_repair_accepts_a_pytest_failed_baseline_proof`): not yet measured. The
-runner's evidence in `findings.md` holds a failing run of
-`test_fixed_code_proof_keeps_pytest_failed_red` on the implemented code, not a
-red-on-baseline run, and no green run of the three. The session that measures
-them with `make verify` records commit and result here.
+`test_repair_accepts_a_pytest_failed_baseline_proof`): measured by the
+orchestrator on 2026-10-28 — each fails with an `AssertionError` at the
+baseline `0872d0cc` and the three pass at `b7048d9c`; command and results in
+`findings.md`, "Red-then-green measurement of the new tests".
 
 ## Time used
 
