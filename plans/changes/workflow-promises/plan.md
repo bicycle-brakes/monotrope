@@ -1,10 +1,10 @@
 ---
 title: "Plan — workflow-promises"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-i0l
@@ -162,6 +162,10 @@ Stage-1 fallback was recorded.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-28
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-27 20:16:22–21:11:01 UTC, 3278 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -171,3 +175,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 Appetite stop, 2026-10-27: 6659 s of 7200 s used before the review-loop repairs.
 Answer: continue — the maintainer named a new appetite of 4 hours in total
 (conversation, 2026-10-27).
+2026-10-27 22:36:51–23:11:28 UTC, 2076 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 23:12:17–23:43:25 UTC, 1868 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-27 23:43:43–2026-10-28 00:01:19 UTC, 1056 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

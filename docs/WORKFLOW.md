@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-27
+updated: 2026-10-28
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -32,13 +32,13 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
 > (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-10-27 against the
-> tree at `3426bb4`, these pieces it names are **not** in this repository:
+> tree at `e61554b0`, these pieces it names are **not** in this repository:
 > `scripts/validate_change_artefacts.py`, the sub-agents
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
-> `.claude/hooks/session-stop/check-tests-green.sh`, and `.claude/commands/`
-> (the entry is `python3 scripts/new_change.py <name> --bead <id>`).
+> `.claude/hooks/session-stop/check-tests-green.sh`.
 > Supplied since the last check: `docs/governance/gate-catalog.md` and the
-> targets `make change` and `make index`. Where the text below says one of
+> targets `make change` and `make index`, plus `.claude/commands/` with
+> `/workflow-start`. Where the text below says one of
 > the missing pieces does something, it describes the target, not this tree.
 > Since 2026-10-05, `tests/test_repo_settings.py`
 > exists: it asserts the branch ruleset (rule RB-M6); the container fence §3

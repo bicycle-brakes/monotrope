@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-27
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-i0l
@@ -702,3 +702,67 @@ Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model mimo-v2.5
 Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 710 files, 2397 commits, 12 rules.
 
 Stage-2 call, 2026-10-27: review-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 710 files, 2397 commits, 12 rules.
+
+Stage-2 call, 2026-10-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 711 files, 2400 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +4 -4
+> - `docs/governance/quality-gates.md` +7 -5
+> - `docs/governance/regelwerk.md` +2 -2
+> - `plans/INDEX.md` +4 -4
+> - `plans/changes/workflow-promises/decisions.md` +1 -1
+> - `plans/changes/workflow-promises/plan.md` +13 -7
+> - `plans/changes/workflow-promises/research.md` +4 -11
+> - `plans/changes/workflow-promises/spec.md` +1 -1
+> - `scripts/kit/manifest.yaml` +3 -0
+> - `scripts/kit/probe.py` +2 -0
+> - `tests/test_workflow_entry.py` +76 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-1-20261027T223630313846Z-307e8f97.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 711 files, 2401 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/workflow-promises/decisions.md` +1 -1
+> - `plans/changes/workflow-promises/plan.md` +1 -1
+> - `plans/changes/workflow-promises/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-12: no fixed line
+> - L1-13: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-2-20261027T223630313846Z-307e8f97.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 711 files, 2402 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/workflow-promises/decisions.md` +1 -1
+> - `plans/changes/workflow-promises/plan.md` +1 -1
+> - `plans/changes/workflow-promises/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-2: the line is neither `<ID>: fixed — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`
+> - L1-3: the line is neither `<ID>: fixed — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`
+> - L1-7: `spec criterion 8: the WORKFLOW notice now lists `.claude/commands/` among the supplied pieces. The test for this is `tests/test_workflow_entry.py::test_workflow_notice_names_supplied_pieces`; I did not look inside it, only that `.claude/commands/` is among the pieces the notice must name.` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
+> - L1-8: the line is neither `<ID>: fixed — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`
+> - L1-9: the line is neither `<ID>: fixed — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`
+> - L1-11: `spec criterion 7: `.claude/commands/workflow-start.md` exists. The skip guard on `tests/test_workflow_entry.py::test_workflow_start_delegates_to_scaffold` now skips only when `HARNESS_KIT_PROBE=1` and the file is absent. `tests/test_workflow_entry.py::test_missing_workflow_start_fails_outside_kit_probe` checks that a missing command fails outside the kit probe.` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
+> - L1-12: the line is neither `<ID>: fixed — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`
+> - L1-13: `spec criterion 4: `_snapshot` now records directories as well as files. `tests/test_workflow_entry.py::test_snapshot_detects_residual_empty_directory` shows that an empty residual change folder changes the snapshot.` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-3-20261027T223630313846Z-307e8f97.md
+> ```

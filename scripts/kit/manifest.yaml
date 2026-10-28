@@ -245,6 +245,9 @@ rules:
   - prefix: docs/governance/regelwerk.md
     rolle: mechanismus
     reason: "die Regeltabelle mit ihrer Grammatik. Die Domaenen-Nennungen darin sind beim Uebergeben zu pruefen"
+  - prefix: docs/governance/gate-catalog.md
+    rolle: mechanismus
+    reason: "the machine-gate inventory and enabling rule linked by the travelling workflow, ruleset and quality-gates documents"
   - prefix: docs/governance/quality-gates.md
     rolle: mechanismus
     reason: "was eine Unterschrift bedeutet, die vier Human Gates, die vier Bedingungen fuer ACCEPTED"

@@ -9,7 +9,7 @@ change started by hand.
 The wrapper and make-target shortcuts measure here since bead
 coding-harness-i0l. The Makefile and `.claude/commands/` are inventory of
 this repository and do not travel with the kit, so those cases skip where
-their object is absent — the travelling copy stays green without a new
+their object is absent inside the kit probe — the travelling copy stays green without a new
 `REIST_NICHT` entry, whose cap may only sink.
 
 Every rule here stands next to its counter-check. A check that was never red
@@ -18,7 +18,9 @@ measures nothing — the missing guard learned that the hard way.
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -161,7 +163,7 @@ MAKE_SKIP = pytest.mark.skipif(
     reason="the Makefile is inventory of this repository and does not travel (kit probe)",
 )
 COMMAND_SKIP = pytest.mark.skipif(
-    not COMMAND.is_file(),
+    os.environ.get("HARNESS_KIT_PROBE") == "1" and not COMMAND.is_file(),
     reason=".claude/commands is inventory of this repository and does not travel (kit probe)",
 )
 
@@ -237,12 +239,12 @@ def _run_entry(tree: Path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
-def _snapshot(root: Path) -> dict[str, bytes]:
-    """Every file of the tree except git's own, as bytes — rejections change nothing."""
+def _snapshot(root: Path) -> dict[str, bytes | None]:
+    """Files as bytes and directories as None, except git's own tree."""
     return {
-        str(p.relative_to(root)): p.read_bytes()
+        str(p.relative_to(root)): p.read_bytes() if p.is_file() else None
         for p in sorted(root.rglob("*"))
-        if p.is_file() and p.relative_to(root).parts[0] != ".git"
+        if (p.is_file() or p.is_dir()) and p.relative_to(root).parts[0] != ".git"
     }
 
 
@@ -403,3 +405,71 @@ def test_workflow_start_delegates_to_scaffold(workflow) -> None:
         new_change.main(["probe2"])
     assert auf.value.code != 0
     assert not (workflow / "changes" / "probe2").exists()
+
+
+def test_snapshot_detects_residual_empty_directory(tmp_path: Path) -> None:
+    """Criterion 4's counter-check must see a folder even without files."""
+    before = _snapshot(tmp_path)
+    (tmp_path / "residual-change").mkdir()
+    assert _snapshot(tmp_path) != before
+
+
+def test_missing_workflow_start_fails_outside_kit_probe(tmp_path: Path, monkeypatch) -> None:
+    """Deleting the command must fail here; only the kit probe may skip it."""
+    tree = tmp_path / "copy"
+    (tree / "tests").mkdir(parents=True)
+    (tree / "scripts").mkdir()
+    shutil.copy(__file__, tree / "tests" / "test_workflow_entry.py")
+    for name in ENTRY_SCRIPTS:
+        shutil.copy(REPO_ROOT / "scripts" / name, tree / "scripts" / name)
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    env.pop("HARNESS_KIT_PROBE", None)
+    args = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_workflow_entry.py::test_workflow_start_delegates_to_scaffold",
+    ]
+    ordinary = subprocess.run(args, cwd=tree, env=env, capture_output=True, text=True)
+    assert ordinary.returncode != 0, ordinary.stdout + ordinary.stderr
+    assert "1 failed" in ordinary.stdout, ordinary.stdout + ordinary.stderr
+    probe = subprocess.run(args, cwd=tree, env={**env, "HARNESS_KIT_PROBE": "1"}, capture_output=True, text=True)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    assert "1 skipped" in probe.stdout, probe.stdout + probe.stderr
+
+    # The production probe must set the exemption itself; ordinary test runs
+    # never inherit it merely because a command happens to be missing.
+    spec = importlib.util.spec_from_file_location("workflow_kit_probe", REPO_ROOT / "scripts/kit/probe.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    calls = []
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **kwargs: calls.append(kwargs))
+    monkeypatch.delenv("HARNESS_KIT_PROBE", raising=False)
+    module._faelle(tree)
+    assert calls[0]["env"].get("HARNESS_KIT_PROBE") == "1"
+
+
+def test_workflow_notice_records_supplied_commands() -> None:
+    """Criterion 8: the notice separates supplied pieces from the remaining gaps."""
+    workflow_doc = REPO_ROOT / "docs" / "WORKFLOW.md"
+    if not workflow_doc.is_file():
+        pytest.skip("the workflow document does not travel to this fixture")
+    notice = (
+        workflow_doc.read_text(encoding="utf-8")
+        .split("**Not all of it is here yet.**", 1)[1]
+        .split("One thing is missing on purpose", 1)[0]
+    )
+    absent, supplied = notice.split("Supplied since the last check:", 1)
+    assert ".claude/commands/" not in absent
+    for piece in (".claude/commands/", "docs/governance/gate-catalog.md", "make change", "make index"):
+        assert piece in supplied
+    for piece in (
+        "scripts/validate_change_artefacts.py",
+        ".claude/agents/explorer.md",
+        "reviewer.md",
+        ".claude/hooks/session-stop/check-tests-green.sh",
+    ):
+        assert piece in absent
