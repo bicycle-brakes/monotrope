@@ -20,7 +20,7 @@ tags: [plan, workflow]
 ```text
 For you:     The gate catalog and `make change`, `make index`, `/workflow-start` work as promised.
 Done when:   Catalog drift fails tests, shortcuts delegate correctly, and `make verify` is green.
-Appetite:    4 hours of phase 4 in total, repairs included; stop at the limit (maintainer, 2026-10-27).
+Appetite:    5 hours of phase 4 in total, repairs included; stop at the limit (maintainer, 2026-10-28; 4 hours from 2026-10-27).
 Not now:     The stop hook, the artefact validator, missing agents, and unrelated tracker drift.
 Pre-mortem:  suppose it failed: most likely because a wrapper duplicated existing behavior.
 Starts unless you say stop.

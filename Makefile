@@ -55,12 +55,13 @@ lock:
 	uv pip compile pyproject.toml --group dev --universal --generate-hashes --exclude-newer "$$(date -u +%Y-%m-%dT00:00:00Z)" -o requirements-ci.txt
 
 # The entry the workflow promises (docs/WORKFLOW.md, bead coding-harness-i0l).
-# NAME and BEAD are checked on the make level, and the recipe passes them to
+# NAME and BEAD are checked on the make level — given on the command line, never
+# taken from a stray exported variable — and the recipe passes them to
 # the entry script through its exported environment — their values are never
 # interpolated into the shell line, so arguments stay data, never code.
 change:
-	$(if $(NAME),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id>))
-	$(if $(BEAD),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id>))
+	$(if $(and $(NAME),$(filter command line,$(origin NAME))),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id> — both on the command line))
+	$(if $(and $(BEAD),$(filter command line,$(origin BEAD))),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id> — both on the command line))
 	@export NAME BEAD; python3 scripts/new_change.py "$$NAME" --bead "$$BEAD"
 
 index:

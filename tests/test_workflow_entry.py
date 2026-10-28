@@ -205,7 +205,7 @@ def _controlled_python(tree: Path, log: Path) -> None:
     wrapper.chmod(0o755)
 
 
-def _run_make(tree: Path, log: Path, *args: str) -> subprocess.CompletedProcess:
+def _run_make(tree: Path, log: Path, *args: str, ambient: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """A real `make` run inside the tree, with the controlled python3 first on the path.
 
     The log starts empty: whatever it holds afterwards, the controlled
@@ -222,6 +222,8 @@ def _run_make(tree: Path, log: Path, *args: str) -> subprocess.CompletedProcess:
         # Bytecode caches in scripts/__pycache__/ are interpreter residue, not
         # tree state — the tree-preservation cases measure the latter.
         "PYTHONDONTWRITEBYTECODE": "1",
+        # A variable exported in the caller's shell, not given to make (loop row L9-2).
+        **(ambient or {}),
     }
     return subprocess.run([make, *args], cwd=tree, env=env, capture_output=True, text=True)
 
@@ -293,8 +295,19 @@ def test_make_change_delegates_to_scaffold(tmp_path: Path) -> None:
         (["change", "NAME=probe", f"BEAD={CLOSED_BEAD}"], None),  # closed bead
         (["change", "NAME=probe", f"BEAD={OPEN_BEAD}"], "duplicate"),  # name taken
         (["change", "NAME=probe", f"BEAD={OPEN_BEAD}"], "detached"),  # no branch
+        (["change", f"BEAD={OPEN_BEAD}"], "ambient-name"),  # NAME only exported
+        (["change", "NAME=probe"], "ambient-bead"),  # BEAD only exported
     ],
-    ids=["empty-name", "empty-bead", "unknown-bead", "closed-bead", "duplicate-name", "detached-head"],
+    ids=[
+        "empty-name",
+        "empty-bead",
+        "unknown-bead",
+        "closed-bead",
+        "duplicate-name",
+        "detached-head",
+        "ambient-name",
+        "ambient-bead",
+    ],
 )
 def test_make_change_rejections_preserve_tree(
     tmp_path: Path, argv: list[str], plant: str | None, request: pytest.FixtureRequest
@@ -320,12 +333,13 @@ def test_make_change_rejections_preserve_tree(
             capture_output=True,
             text=True,
         )
+    ambient = {"ambient-name": {"NAME": "probe"}, "ambient-bead": {"BEAD": OPEN_BEAD}}.get(plant or "")
     davor = _snapshot(tree)
 
-    ergebnis = _run_make(tree, log, *argv)
+    ergebnis = _run_make(tree, log, *argv, ambient=ambient)
     assert ergebnis.returncode != 0, f"{request.node.callspec.id} succeeded: {ergebnis.stdout}"
     assert _snapshot(tree) == davor, f"{request.node.callspec.id} changed the tree"
-    if "empty" in request.node.callspec.id:
+    if "empty" in request.node.callspec.id or "ambient" in request.node.callspec.id:
         assert "usage" in ergebnis.stderr, "the empty-input refusal does not say what was missing"
         assert log.read_text(encoding="utf-8") == "", "the empty-input check still started the entry script"
 

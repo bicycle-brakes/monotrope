@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, workflow]
 class: bounded
-appetite: 4
+appetite: 5
 adr_files: []
 neighbours: []
 ---
@@ -177,7 +177,8 @@ recorded here so implementation does not silently supply defaults.
   surface usage, never inferred identifiers.
 - [DETAIL] Allow two hours of phase 4 including repairs, then stop and
   report remaining work. At the stop on 2026-10-27 the maintainer named a
-  new appetite of four hours in total (`plan.md`, Time used).
+  new appetite of four hours in total, and on 2026-10-28 five hours in total
+  (`plan.md`, Time used; review loop row L9-3).
 - [DETAIL] There is no plan template in `templates/` at baseline
   `78970dfd` (2026-10-27); use the phase-3 prompt's card, file list,
   verification, ledger and empty time section, following existing plan
