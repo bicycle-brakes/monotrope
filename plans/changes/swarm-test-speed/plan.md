@@ -169,7 +169,14 @@ implementation diff changes no existing test file, gate or pytest option.
 **Full suite.** Timed with the next full `make verify` after the review
 repairs; recorded below when it has run.
 
+## Runner route — 2026-10-28
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-28 16:40:39–17:18:51 UTC, 2291 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-28 17:18:59–17:40:17 UTC, 1278 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-10-28 18:07:44–18:19:38 UTC, 713 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-28 18:19:45–18:37:47 UTC, 1083 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-28 18:38:00–18:53:02 UTC, 902 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

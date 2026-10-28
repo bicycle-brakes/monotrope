@@ -200,3 +200,46 @@ Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 719 files, 2484 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 719 files, 2484 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 719 files, 2486 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_declaration.py` +55 -14
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-4: tests/test_stage2_declaration.py::test_read_failure_never_returns_a_cached_declaration: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - L1-5: tests/test_stage2_declaration.py::test_returned_declarations_are_isolated_across_threads: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-test-speed/stage2/attempts/swarm-test-speed/attempt-1-20261028T180737723958Z-c2ccb98f.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 719 files, 2487 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-4: no fixed line
+> - L1-5: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-test-speed/stage2/attempts/swarm-test-speed/attempt-2-20261028T180737723958Z-c2ccb98f.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 719 files, 2488 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-4: tests/test_stage2_declaration.py::test_read_failure_never_returns_a_cached_declaration: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - L1-5: tests/test_stage2_declaration.py::test_returned_declarations_are_isolated_across_threads: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-test-speed/stage2/attempts/swarm-test-speed/attempt-3-20261028T180737723958Z-c2ccb98f.md
+> ```

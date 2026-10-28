@@ -27,6 +27,7 @@ import datetime as dt
 import os
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -305,7 +306,7 @@ def test_changed_contents_are_read_without_metadata_shortcuts(
 # ---------------------------------------------------------------------------
 
 
-def test_read_failure_never_returns_a_cached_declaration(root: Path) -> None:
+def test_read_failure_never_returns_a_cached_declaration(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 4: deletion, bad UTF-8, malformed YAML and a read error refuse; recovery needs a valid file."""
     text = "failure-test: warm\n"
     path = write(root, text)
@@ -326,9 +327,13 @@ def test_read_failure_never_returns_a_cached_declaration(root: Path) -> None:
     assert availability.read_declaration(root) == warm
 
     # Malformed YAML fails the parse, and the refusal itself is not cached.
-    path.write_text("malformed: {b: c\n", encoding="utf-8")
+    calls = patch_load_counter(monkeypatch)
+    malformed = "malformed: {b: c\n"
+    path.write_text(malformed, encoding="utf-8")
     assert availability.read_declaration(root) == REFUSAL
-    assert availability.read_declaration(root) == REFUSAL, "the refusal was cached and stopped being attempted"
+    assert len(calls) == 1 and calls[0][0] == malformed
+    assert availability.read_declaration(root) == REFUSAL
+    assert len(calls) == 2 and calls[1][0] == malformed, "the malformed declaration was not parsed again"
     write(root, text)
     assert availability.read_declaration(root) == warm
 
@@ -347,7 +352,7 @@ def test_read_failure_never_returns_a_cached_declaration(root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_returned_declarations_are_isolated_across_threads(root: Path) -> None:
+def test_returned_declarations_are_isolated_across_threads(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 5: mutating a returned declaration never reaches another caller or a later read."""
     text = "isolation: yes\nnested:\n  list: [1, 2]\n  map: {keep: me}\n"
     write(root, text)
@@ -362,23 +367,59 @@ def test_returned_declarations_are_isolated_across_threads(root: Path) -> None:
     assert availability.read_declaration(root) == pristine, "the first caller's mutation polluted the cache"
 
     workers = 4
-    barrier = threading.Barrier(workers)
-    after: list[dict] = []
+    barrier = threading.Barrier(workers, timeout=10)
+    parsing = threading.Barrier(workers + 1, timeout=10)
+    release = threading.Event()
+    # A distinct key has never been read: every worker must reach the parser
+    # before any worker can store it. Keep the earlier initial-miss check too.
+    cold_text = text + f"cold-key: {root.as_posix()}\n"
+    write(root, cold_text)
+    pristine["cold-key"] = root.as_posix()
+    real_load = yaml.load
+    parses: list[str] = []
 
-    def mutate_and_reread() -> None:
+    def held_load(document: str, *args: object, **kwargs: object) -> object:
+        if document == cold_text:
+            parses.append(document)
+            parsing.wait()
+            assert release.wait(timeout=10), "cold parses were not released"
+        return real_load(document, *args, **kwargs)
+
+    monkeypatch.setattr(yaml, "load", held_load)
+
+    def mutate_and_reread() -> dict:
         mine = availability.read_declaration(root)
+        assert mine == pristine
         barrier.wait()  # everyone holds a result before anyone mutates
         mine["isolation"] = f"mutated-{threading.get_ident()}"
         mine["nested"]["list"].append(threading.get_ident())
         barrier.wait()  # everyone has mutated before anyone re-reads
-        after.append(availability.read_declaration(root))
+        return availability.read_declaration(root)
 
-    threads = [threading.Thread(target=mutate_and_reread) for _ in range(workers)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(mutate_and_reread) for _ in range(workers)]
+        try:
+            parsing.wait()  # all workers missed the same key and are parsing
+            assert len(parses) == workers
+            # Evict entries while the cold parses are in flight, without
+            # changing the declaration those workers will later re-read.
+            other = root / "eviction"
+            other.mkdir()
+            bound = availability._DECLARATION_CACHE_SIZE
+            for number in range(bound + 1):
+                write(other, f"concurrent-eviction: {number}\n")
+                assert availability.read_declaration(other) == {"concurrent-eviction": number}
+            assert len(availability._DECLARATION_CACHE) == bound
+            assert (cold_text, availability._safe_yaml_loader()) not in availability._DECLARATION_CACHE
+        finally:
+            release.set()
+        # Future.result propagates every worker exception to pytest; an empty
+        # result collection must never make the isolation assertion pass.
+        after = [future.result(timeout=15) for future in futures]
+    assert len(after) == workers
     assert all(item == pristine for item in after), "a nested mutation reached another caller's read"
+    assert len(parses) == workers, "concurrent stores failed to retain the shared key"
+    assert len(availability._DECLARATION_CACHE) == bound, "concurrent stores broke the cache bound"
     assert availability.read_declaration(root) == pristine
 
 
