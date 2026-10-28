@@ -847,3 +847,13 @@ Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 711 files, 2439 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 720 files, 2446 commits, 12 rules.
+
+## Review loop ended without a clean round, 2026-10-28
+
+The review loop (phase 4b) ran nine rounds; every row was fixed or rejected
+with its reason, and a full `make verify` was green after each repair
+(last at `dcb9af49`). Round 10 was refused: every stage of the run was
+consumed and the last round was not clean. The last rounds saw the change
+diff cut at 2000 of 2470 lines. The maintainer answered on 2026-10-28 (the
+directing conversation): run phase 6 now rather than restart the loop. The
+pull request is merged by the maintainer, because no round was clean.
