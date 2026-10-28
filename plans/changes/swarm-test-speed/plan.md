@@ -82,13 +82,13 @@ are reversible implementation details chosen to retain freshness and portability
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_declaration.py::test_reader_matches_safe_load_contract — values, types or refusal differ from the old reader.
-- 1: not yet written tests/test_stage2_declaration.py::test_reader_selects_safe_loader_with_fallback — unsafe loading or missing C support breaks a valid read.
-- 2: not yet written tests/test_stage2_declaration.py::test_unchanged_contents_reuse_a_bounded_parse_cache — repeated reads parse again or distinct inputs grow the cache beyond its bound.
-- 3: not yet written tests/test_stage2_declaration.py::test_changed_contents_are_read_without_metadata_shortcuts — edits, replacement or a different root return stale data.
-- 4: not yet written tests/test_stage2_declaration.py::test_read_failure_never_returns_a_cached_declaration — a bad/missing/unreadable current file returns an earlier mapping or recovery fails.
-- 5: not yet written tests/test_stage2_declaration.py::test_returned_declarations_are_isolated_across_threads — nested mutation leaks to another caller or a later read.
-- 6: not yet written tests/test_stage2_declaration.py::test_warm_cache_preserves_live_research_admission — a declaration edit or UTC expiry is ignored by the production guard.
+- 1: tests/test_stage2_declaration.py::test_reader_matches_safe_load_contract — values, types or refusal differ from the old reader.
+- 1: tests/test_stage2_declaration.py::test_reader_selects_safe_loader_with_fallback — unsafe loading or missing C support breaks a valid read.
+- 2: tests/test_stage2_declaration.py::test_unchanged_contents_reuse_a_bounded_parse_cache — repeated reads parse again or distinct inputs grow the cache beyond its bound.
+- 3: tests/test_stage2_declaration.py::test_changed_contents_are_read_without_metadata_shortcuts — edits, replacement or a different root return stale data.
+- 4: tests/test_stage2_declaration.py::test_read_failure_never_returns_a_cached_declaration — a bad/missing/unreadable current file returns an earlier mapping or recovery fails.
+- 5: tests/test_stage2_declaration.py::test_returned_declarations_are_isolated_across_threads — nested mutation leaks to another caller or a later read.
+- 6: tests/test_stage2_declaration.py::test_warm_cache_preserves_live_research_admission — a declaration edit or UTC expiry is ignored by the production guard.
 - 6: tests/test_stage2_terms_expiry.py::test_research_probes_and_dispatch_recheck_expiry — research launches after expiry, including a cutoff during a leak scan.
 - 6: tests/test_stage2_swarm.py::test_launch_record_keeps_individual_leak_check_before_launch — a launch lacks its own preceding clean scan.
 - 6: tests/test_stage2_swarm.py::test_leak_block_cancels_queued_dispatch — queued calls launch after a BLOCK.
@@ -128,3 +128,6 @@ repeats both sides under the same load, or both alone, before any speedup
 is claimed.
 
 ## Time used
+
+2026-10-28 16:40:39–17:18:51 UTC, 2291 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 17:18:59–17:40:17 UTC, 1278 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
