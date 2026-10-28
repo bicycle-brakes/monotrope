@@ -546,3 +546,5 @@ Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.5
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 718 files, 2508 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 718 files, 2520 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 718 files, 2522 commits, 12 rules.
