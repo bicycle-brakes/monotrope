@@ -4911,7 +4911,7 @@ def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: st
         "format-error": "`.venv/bin/ruff format --check` exited 2",
     }[case]
     assert expected in text
-    later = Path(world.calls("claude")[1]["prompt_file"]).read_text(encoding="utf-8")
+    later = world.calls("claude")[1]["prompt_file"]
     assert expected in later, "the next attempt was not told why its predecessor stopped"
 
 

@@ -6868,6 +6868,9 @@ def run_attempts(
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
             # propagates unwritten, as every recovery refusal does.
             findings_restored = False
+            # Measured before the restore below: writing findings.md recreates its parents, and a
+            # change folder the model deleted must still bring every snapshotted input back.
+            parent_gone = not ctx.plan.parent.is_dir()
             if kept is not None:
                 try:
                     unchanged = ctx.findings.read_bytes() == findings_before
@@ -6920,7 +6923,7 @@ def run_attempts(
                 if problems:
                     preserve_attempt_failure(safety_error, Refused(protect_diagnostics("\n".join(problems), key)))
                 raise
-            if aliased_parent or not ctx.plan.parent.is_dir():
+            if aliased_parent or parent_gone or not ctx.plan.parent.is_dir():
                 # Detach an alias itself, never a document in its target; recreate missing parents too.
                 # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
                 for path, content in batch.items():
