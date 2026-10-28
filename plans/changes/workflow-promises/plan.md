@@ -147,10 +147,12 @@ its command and commit; do not relax a gate or claim the package is done.
 
 No other production files are added, changed or deleted. In particular, no
 stop hook, validator, agent, gate definition, CI workflow, user
-configuration, README, ADR or tracker policy is changed. Neither
-`scripts/kit/manifest.yaml` nor `scripts/kit/probe.py` changes: the
-catch-all rules already classify every new file (`docs/`, `tests/`,
-`.claude/`), and the non-travelling cases skip in themselves (step 1).
+configuration, README, ADR or tracker policy is changed. The kit files
+change in two lines each, added by the review-loop repair (rows L1-3 and
+L1-11): `scripts/kit/manifest.yaml` declares `docs/governance/gate-catalog.md`
+as travelling mechanism, because the travelling workflow documents link to
+it, and `scripts/kit/probe.py` sets `HARNESS_KIT_PROBE=1`, so the
+`/workflow-start` test skips only inside the kit probe.
 The existing scaffold and registry scripts remain the sole
 implementations of their behavior. Preserve
 `plans/changes/workflow-promises/decisions.md`; its required header is
