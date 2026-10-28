@@ -766,3 +766,49 @@ Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-13: `spec criterion 4: `_snapshot` now records directories as well as files. `tests/test_workflow_entry.py::test_snapshot_detects_residual_empty_directory` shows that an empty residual change folder changes the snapshot.` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-3-20261027T223630313846Z-307e8f97.md
 > ```
+
+Stage-2 call, 2026-10-28: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 711 files, 2406 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - L1-2: no fixed line
+> - L1-3: no fixed line
+> - L1-7: no fixed line
+> - L1-8: no fixed line
+> - L1-9: no fixed line
+> - L1-11: no fixed line
+> - L1-12: no fixed line
+> - L1-13: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-1-20261028T000210037922Z-9c65a354.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 711 files, 2406 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - L1-12: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-2-20261028T000210037922Z-9c65a354.md
+> ```
+
+Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 711 files, 2406 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/INDEX.md` +1 -1
+> - `plans/changes/workflow-promises/findings.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand
+> - L1-7: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/workflow-promises/stage2/attempts/workflow-promises/attempt-3-20261028T000210037922Z-9c65a354.md
+> ```
