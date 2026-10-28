@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: gpt-6.1-sol, version: "2026-10-28"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, verification]
 class: bounded
-appetite: 4
+appetite: 5.5
 adr_files: []
 ---
 
@@ -49,7 +49,7 @@ Research: `research.md`. Decisions: `decisions.md`.
   untracked files and work retained from preceding failed attempts.
 - **Selected tests** (amended 2026-10-28, `decisions.md#Q-3`): in a changed
   `tests/**/test_*.py` file, the top-level test functions that are new or
-  whose source differs from HEAD (a new file whole); the accepted plan's
+  whose parsed code differs from HEAD (comments and layout alone do not count) (a new file whole); the accepted plan's
   criterion-ledger test references in either test form, as function ids;
   and, on a retry, the test ids pytest reported as failed in the previous
   attempt of the same run; without duplicates. Importers of changed

@@ -96,11 +96,10 @@ def test_red_selected_pytest_skips_full_verification(world: World, case: str) ->
     assert ("FAILED tests/test_new.py::test_new" if case == "failing" else "ImportError") in text
 
 
-def test_cheap_test_selection_matches_changed_importers_and_ledger(world: World) -> None:
+def test_cheap_test_selection_matches_changed_functions_and_ledger(world: World) -> None:
     """Ledger 3. Planted fault: selection omits or duplicates a source, or replaces it by broad discovery.
 
-    The name predates the amendment of `decisions.md#Q-3`: importers are no longer selected. The
-    changed set spans every source at once — in a modified tracked test file only the new and the
+    Importers are not selected (`decisions.md#Q-3`). The changed set spans every source at once — in a modified tracked test file only the new and the
     edited function, a new test file whole, the plan's ledger ids in both forms (one inside the new
     file, so it must not run twice; one in an untouched file; one still unwritten and absent, which
     keeps the attempt red), and on a retry exactly the ids the attempt before reported as failed

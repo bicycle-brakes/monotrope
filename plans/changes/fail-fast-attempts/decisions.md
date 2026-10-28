@@ -43,6 +43,10 @@ because none was given, facing two, three or four hours, we decided on four
 hours of phase 4 including repairs, to achieve a stop the maintainer named,
 accepting that the review loop may still reach it. — 2026-10-28
 
+*Raised on 2026-10-28:* at the appetite stop after 14164 s the maintainer
+answered continue, with 5.5 hours of phase 4 in total (`plan.md`, Time used).
+The card and the spec now state 5.5 hours (review rows L1-5, L1-13, L1-17).
+
 ## Q-2 · Who runs the must-run checks before an attempt counts
 
 context: |
@@ -82,6 +86,9 @@ next route receives it, and `make verify` does not run for that attempt.
 Green goes on to the full `make verify` as today, so the final verdict is
 unchanged. Reason: the measured failures were ruff findings and a named
 test, both visible in seconds; the full run stays the one gate.
+*Superseded in its selection on 2026-10-28 by Q-3:* pytest runs on the
+changed or new test functions and the ledger's ids, not on whole changed
+files or importers (review row L1-4).
 
 [DETAIL] **The pre-mortem tests are the plan's criterion ledger.** The
 implement and repair prompts name the test ids of the plan's criterion
@@ -162,6 +169,10 @@ tests; dynamic and transitive imports stay with the full suite. Deduplicate
 targets and let a selected whole file cover its ledger ids. Reason: this
 makes the approved "tests of the changed files" checkable without a new
 dependency graph or unrestricted pytest discovery.
+*Superseded on 2026-10-28 by Q-3:* no importers and no whole changed files
+are selected; the selection is the changed or new test functions, the
+ledger's ids and, on a retry, the previous attempt's failed tests (review
+rows L1-4, L1-9).
 
 [DETAIL] **Keep safe formatting before read-only cheap checks.** Existing
 safe fixes and formatting still run; then read-only ruff check/format-check
@@ -182,3 +193,4 @@ visible without manufacturing a rejected attempt or accepting forged state.
 This stop bounds the local runner, prompt and regression work without
 promising a performance improvement in minutes. No live model benchmark is
 needed for acceptance.
+*Raised to 5.5 hours in total on 2026-10-28; see Q-1.*

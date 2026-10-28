@@ -20,7 +20,7 @@ tags: [plan, stage-2, verification]
 ```text
 For you:     Work attempts stop on cheap failures before full verification; restoring findings no longer discards otherwise valid work.
 Done when:   Deterministic tests prove the early exits, required tests and safe findings restoration, and make verify is green.
-Appetite:    4 hours of phase 4, repairs included; a stop, not an estimate.
+Appetite:    5.5 hours of phase 4 in total, repairs included; a stop, not an estimate (raised from 4 hours by the maintainer on 2026-10-28, see Time used).
 Not now:     New routes, extra attempts, model command permissions, review/research swarms or a replacement for full verification.
 Pre-mortem:  suppose it failed: most likely because test selection misses the test that would have refuted the attempt.
 Starts unless you say stop.
@@ -115,8 +115,8 @@ this draft.
 The orchestrator ensures `make venv` and `bash tools/pi/install.sh` have
 completed once in this worktree before full verification. Demonstrate new
 behavioral tests red against the baseline implementation, then green;
-restore baseline faults after each proof. Selection tests include imports
-with aliases, a deleted script's importer, ledger/file overlap, missing
+restore baseline faults after each proof. Selection tests include changed and
+unchanged functions in one file (no importers, decisions.md Q-3), ledger/file overlap, missing
 ledger tests, and zero targets. Restoration tests include forged statuses,
 erased earlier audit/diagnostics, deletion, a leaf alias and a refusing
 parent; no external target may be written. Diagnostic tests use synthetic
@@ -145,7 +145,7 @@ The tracker-backed registry and full verification remain for the runner.
 
 - 1: tests/test_stage2_fail_fast.py::test_red_ruff_skips_full_verification — lint or format red still starts make or accepts the attempt
 - 2: tests/test_stage2_fail_fast.py::test_red_selected_pytest_skips_full_verification — a failing or uncollectable selected test still starts make
-- 3: tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_importers_and_ledger — a changed/retained file, direct importer or ledger id is omitted, duplicated or replaced by broad discovery
+- 3: tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_functions_and_ledger — a new or modified test function, a ledger id or a previous attempt's failed test is omitted or duplicated, or a whole changed file that is not new, an importer or broad discovery is selected (amended by decisions.md Q-3)
 - 4: tests/test_stage2_fail_fast.py::test_empty_targets_skip_their_command — a zero-target check starts ruff/pytest or rejects a valid text-only attempt
 - 5: tests/test_stage2_fail_fast.py::test_cheap_green_still_requires_full_verification — cheap green checkpoints without make or despite its red result
 - 6: tests/test_stage2_fail_fast.py::test_cheap_failures_reach_findings_and_next_route_safely — original failure evidence is lost, a credential escapes, a rejected span disappears or the ladder changes
@@ -214,3 +214,4 @@ Appetite stop at 14164 s of 4 h (2026-10-28 18:2x UTC, three implement attempts 
 2026-10-28 19:37:05–19:41:38 UTC, 273 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-28 19:42:20–19:55:10 UTC, 770 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-28 20:51:05–21:04:30 UTC, 804 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-10-28 21:36:58–21:38:32 UTC, 94 s — review loop round 1 · decisions and text repairs by the orchestrator · measured with `date -u`
