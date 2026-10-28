@@ -243,3 +243,5 @@ Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-5: tests/test_stage2_declaration.py::test_returned_declarations_are_isolated_across_threads: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-test-speed/stage2/attempts/swarm-test-speed/attempt-3-20261028T180737723958Z-c2ccb98f.md
 > ```
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 719 files, 2511 commits, 12 rules.
