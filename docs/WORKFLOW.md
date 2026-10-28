@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-27
+updated: 2026-10-28
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -31,15 +31,16 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 >
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
-> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-09-30 against the
-> tree at `41abf42`, these pieces it names are **not** in this repository:
+> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-10-27 against the
+> tree at `e61554b0`, these pieces it names are **not** in this repository:
 > `scripts/validate_change_artefacts.py`, the sub-agents
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
-> `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
-> targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), and `docs/governance/gate-catalog.md`.
-> Where the text below says one of them does something, it describes the
-> target, not this tree. Since 2026-10-05, `tests/test_repo_settings.py`
+> `.claude/hooks/session-stop/check-tests-green.sh`.
+> Supplied since the last check: `docs/governance/gate-catalog.md` and the
+> targets `make change` and `make index`, plus `.claude/commands/` with
+> `/workflow-start`. Where the text below says one of
+> the missing pieces does something, it describes the target, not this tree.
+> Since 2026-10-05, `tests/test_repo_settings.py`
 > exists: it asserts the branch ruleset (rule RB-M6); the container fence §3
 > describes is not in it yet.
 >
@@ -283,7 +284,7 @@ at the next reading, no longer a departure but the plan.
 
 **A gate is sensible, proportionate and more than an end in itself.** Its
 checklist stands once, in
-[`gate-catalog.md`](governance/gate-catalog.md#bevor-ein-gate-scharfgestellt-wird)
+[`gate-catalog.md`](governance/gate-catalog.md#before-enabling-a-gate)
 — not kept twice here, with a gap that has cost this file once already. Only the
 gates of phase 2 and phase 3 are pure presence checklists — *is it there?* —, run
 as one line that ends with the next step, by `validate_change_artefacts.py`.

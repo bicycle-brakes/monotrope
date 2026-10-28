@@ -146,7 +146,9 @@ decided and none is accepted.
 
 The loop stops at a clean round, when the ladder is exhausted, or after two
 consecutive rounds accepted only findings that earlier repairs introduced. The
-last is a brake: a person decides. A spent ladder is not refilled.
+last is a brake: a person decides. A spent ladder is not refilled. A reviewer
+whose answer cannot be read is asked once more with a format reminder, and a
+free round that is rate-limited moves on to the Flash swarm.
 
 **What a round sees.** The free round sees bounded source and test hunks
 against the merge base with `origin/main`; the paid rounds see the whole change
@@ -163,18 +165,37 @@ candidate, including the expensive end, not a review round; the details are in
 
 - All calls go through one runner: endpoint allowlist, a leak check before
   every call, no fallback. Free models run under unread terms, diff-only and
-  without tools; a paid model needs a dated terms reading.
+  without tools. A paid model needs a terms reading with a declared expiry
+  date; once that date has passed it gets no calls until a renewed reading
+  is merged, and the runner warns before it runs out
+  ([ADR 0022](docs/adr/0022-paid-model-terms-expire.md)).
 - A finding needs a test or the spec; a disagreement blocks like a defect.
 - Reviewer and repairer are separate sessions. The final review may resume the
   recorded 2a thread, a re-check starts fresh, and its verdict comes before any
   loop row.
 - Paid rounds get read-only tools; that boundary is a prompt, not a sandbox.
 
-### The research swarm
+### The research swarm (phase 1)
 
-Phase 1 would run three independent researchers — the existing system, outside
-practice, and integration — then one critique round and a fresh judge. The
-result becomes `research.md`; the proposal is a draft, not built.
+A `feature` or `architectural` change explores through a swarm
+([ADR 0020](docs/adr/0020-phase-1-research-swarm.md)); a `bounded` change
+or a `spike` keeps a single explorer. The swarm runs in stages:
+
+1. **Finders** — three repository seats map the sources independently; one
+   Opus 5.5 context merges their maps.
+2. **Topics** — eleven topics on the same brief: eight about the repository
+   (code, interfaces, rules, architecture, neighbours, history, tests,
+   risks), each read by the three repository seats, and three about outside
+   practice (best practice, existing tools, public failure reports), each
+   read by three online seats. Selected free models add public topics, best
+   effort.
+3. **Judge** — one fresh Opus 5.5 context reconciles the reports into
+   `research.md`.
+
+Every call goes through the runner and its leak check; a run that misses a
+required part is marked incomplete and exits with an error. A gate then checks
+that the interview answers each item the research raised and that the spec
+names the same neighbours and cites the research for each criterion.
 
 ### What the swarms do not prove
 
@@ -211,6 +232,39 @@ silently. The workflow makes the boundaries explicit:
    worktree; concurrent claims have one winner (measured 2026-09-23 with bd
    1.3.0). Push tracker first, git second: CI renders the gate from the
    tracker, so a git push that outruns it goes red.
+
+### Pull requests stay mergeable
+
+On 2026-10-27 five open pull requests could no longer merge `main`. The rules
+since then (maintainer, 2026-10-27; [`docs/WORKFLOW.md`](docs/WORKFLOW.md),
+§3):
+
+- **Synced daily.** Each open pull request is test-merged against `main`;
+  a clean one gets `main` merged in, a conflicting one is reported with its
+  files.
+- **Asked about after five working days:** finish, shrink or close.
+- **Small enough to review:** above about 800 changed lines, a change is cut
+  into slices, one pull request each.
+- **Few at once on a hot file:** at most three open pull requests change the
+  same heavily used file; the oldest is finished first.
+- **Reviewed on a current base:** the final review runs after `main` is
+  merged, and its verdict holds only for the commit it saw.
+- **Generated files are regenerated** on a conflict, never merged by hand.
+
+### The rhythm of a working day
+
+- **One decision block a day.** Questions and merge requests for the
+  maintainer are collected for one block at 15:00 local time; work that
+  does not depend on them goes on. A security question, a leak-check block
+  or a stop that blocks every lane is asked at once.
+- **The second finding of one mechanism ends case-by-case repair.** When the
+  final review finds another case of a mechanism a repair already
+  addressed, the orchestrator proposes a structural remedy and the
+  maintainer chooses.
+- **Night runs** work their queue alone and in order. When Codex is at
+  capacity they wait and retry once, then let Sonnet 5.5 take that one step;
+  a further case of the same mechanism is recorded and parked for the
+  morning.
 
 What is not enforced: the one-writer rule is a working agreement until the
 write guard exists; worktrees share git's refs, hooks and configuration, so
@@ -278,7 +332,7 @@ mechanics and the test count, with what it does not prove, are in
 
 ## What works today
 
-Checked on 2026-10-22 against `main` at `72935a6`.
+Checked on 2026-10-28 against `main` at `a6ddd9d1`.
 
 ### Enforced by tooling
 
@@ -289,6 +343,15 @@ Checked on 2026-10-22 against `main` at `72935a6`.
   implementing, repairing and reviewing by other models all go through it.
 - The review loop runs until a round is clean or a named stop (ADR 0021), with
   the availability probe and its receipt before a fresh run.
+- The research swarm explores `feature` and `architectural` changes
+  (ADR 0020), and gates check that the interview and the spec carry what it
+  found.
+- A paid model whose terms reading has passed its declared date gets no calls
+  (ADR 0022).
+- A repair counts only when its test fails on the code before the repair —
+  by an assertion or pytest's own failed outcome, never by a crash.
+- `main` takes a pull request only when it is up to date with `main` and the
+  `verify` check is green (repository ruleset).
 
 ### Written rules agents follow, not enforced by a tool
 
@@ -297,15 +360,21 @@ Checked on 2026-10-22 against `main` at `72935a6`.
 - The communication form: a gate checks that the context is there, not how it
   is worded.
 - One writer per tracker, until the write guard exists.
+- The rules that keep pull requests mergeable, the daily decision block and
+  the night-run rules: the daily sync is done by hand or by an agent until
+  its script exists.
 
 ### Not built yet
 
-- A validator for the change files, a stop hook that blocks a session end on a
-  red tree, slash commands, a `make change` shortcut (the script
-  `scripts/new_change.py` exists; the target does not), and a catalogue of
-  every gate: described in the doctrine, not built.
-- The research swarm for larger changes (a draft proposal), a sandbox around
-  paid reviewers, and keeping the work of a failed model call (partly built).
+- A validator for the change files and a stop hook that blocks a session end
+  on a red tree: described in the doctrine, not built. The `/workflow-start`
+  command, the `make change` and `make index` targets and the gate catalogue
+  (`docs/governance/gate-catalog.md`) exist since bead coding-harness-i0l.
+- A sandbox around paid reviewers, and keeping the work of a failed model
+  call (partly built).
+- The daily pull-request sync as a script, and regenerating `plans/INDEX.md`
+  on a merge conflict (in work, beads coding-harness-eq6y and
+  coding-harness-hfsz).
 - Orchestration of many agents in parallel: evaluated, not built.
 
 ## See a completed change
@@ -337,7 +406,8 @@ page is still being built. Until then, [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 is the reference.
 
 To start a change, create its bead (the tracker item) first, with the class in
-its description, then `python3 scripts/new_change.py <name> --bead <id>`, and
+its description, then `make change NAME=<name> BEAD=<id>` (in Claude Code:
+`/workflow-start <name> --bead <id>`), and
 read [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
 
 ## Go deeper
@@ -346,8 +416,8 @@ read [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
   which job, the change and data classes, and the swarms.
 - [The doctrine](docs/WORKFLOW.md): every rule, gate and route in full.
 - [Architecture decisions](docs/adr/): why it is built this way.
-- [Research swarm proposal](docs/research/2026-10-08-explore-swarm-proposal.md):
-  the draft that is not built yet.
+- [The research swarm](docs/adr/0020-phase-1-research-swarm.md): how phase 1
+  explores a larger change.
 - [Session handovers](docs/journal/handover/): what each session left for the
   next one.
 - [`model-endpoints.yaml`](model-endpoints.yaml): which model may see which
