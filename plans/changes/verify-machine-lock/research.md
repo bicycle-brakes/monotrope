@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-p6mu
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-28"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 class: bounded
 ---
@@ -72,3 +74,12 @@ These are the open questions for the interview (research-handoff):
 - `plans/changes/review-release-lock/spec.md` — active change; the loop-record lock (R-14, bead coding-harness-1wo, PR #190) and its refusal semantics, the closest precedent.
 - `plans/changes/research-swarm/spec.md` — the runner change whose `design.md` (line 474) specifies the state-store flock.
 - `plans/specs/implementation-verification/spec.md` — living spec; pins the ordering "stamping precedes index rendering, which precedes make verify on every attempt", i.e. where verification sits in the attempt pipeline.
+
+## Draft-time repository gaps resolved — 2026-10-28
+
+Read against `8b1f2d98` in this worktree:
+
+- [GAP] There is no separate general cheap-pytest preflight in `scripts/stage2.py` at this commit. The existing selected-test executions are `red_first` and `fixed_test_proof`; the former also starts an interpreter import probe. The plan guards these existing local pytest executions and adds no new checking stage. Both `verify_attempt` and `verify_draft` launch `make verify` through `launch(timeout=VERIFY_SECONDS)`; admission must precede that timed launch.
+- [GAP] `templates/plan.md` and `scripts/validate_change_artefacts.py` do not exist in this tree. The plan therefore follows `prompts/03-plan.md`; available checks are the interview, criterion-ledger and registry checks. The missing validator cannot supply evidence of a passing gate.
+- [DETAIL] FIFO means order of registration with the shared queue, not process creation time. An explicit live-waiter order is needed alongside the exclusive file lock to make the decision's first-come-first-served promise testable.
+- Not read: live pull-request state, live session registry and tracker contents. Those sources are outside the draft's permitted file-reading boundary; the handover describes earlier parallel lanes, not current ownership of this checkout. This draft writes no tracker state.
