@@ -187,3 +187,20 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-28 18:07:44–18:19:38 UTC, 713 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 18:19:45–18:37:47 UTC, 1083 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 18:38:00–18:53:02 UTC, 902 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+
+## Appetite stop — 2026-10-28
+
+At 21:47 UTC, after phase 6 (Codex session 01a18477) found two MAJOR rows. The
+measured spans under Time used sum to 6267 s, 1.74 h of the 2-hour appetite.
+The orchestrator's hand repairs of review round 1 were not timed, so the
+real use is higher. The two rows need more than the time left: F6-1
+(CSafeLoader accepts a tab before a comment that SafeLoader refuses,
+criterion 1) and F6-2 (the before/after runs were not isolated,
+criterion 7). Both need a code or scope change, an isolated
+re-measurement in the verify slot and a full `make verify`.
+
+Answer (orchestrator, night rule of 2026-10-28/29, which allows cut, park
+or drop but never continue): **park**. Proposed for the maintainer: a cut
+that keeps only the parse cache, drops the C loader (and with it F6-1),
+re-measures three isolated runs per revision for F6-2, and comes with a new
+appetite of 1 hour.
