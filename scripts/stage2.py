@@ -5085,43 +5085,57 @@ def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
     return sorted(dict.fromkeys(refs)), whole
 
 
+def _test_functions(source: str, filename: str) -> dict[str, str]:
+    """The file's top-level `test_*` functions by name, each as its AST dump; parsed, never imported."""
+    tree = ast.parse(source, filename=filename)
+    return {
+        node.name: ast.dump(node)
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test_")
+    }
+
+
+def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
+    """In one changed test file, the ids of the test functions that are new or differ from HEAD.
+
+    A file absent at HEAD is selected whole. Helpers, fixtures and classes are not compared: a
+    failure reached only through a changed helper waits for `make verify` (decisions.md, Q-3).
+    """
+    try:
+        before = _git_bytes(root, "show", f"HEAD:{posix}", env=env).decode("utf-8")
+    except Refused:
+        return [posix]
+    old = _test_functions(before, posix)
+    new = _test_functions((root / posix).read_text(encoding="utf-8"), posix)
+    return [f"{posix}::{name}" for name, dump in new.items() if old.get(name) != dump]
+
+
 def selected_tests(root: Path, env: dict[str, str], plan: bytes) -> tuple[list[str] | None, str | None]:
     """The cheap pytest run's explicit targets, deduplicated and sorted, or why they cannot stand.
 
-    Three sources (spec, "Selected tests"): the surviving changed `tests/**/test_*.py` files against
-    HEAD - new, modified and retained; the direct static importers among all surviving test files of
-    the changed `scripts/` modules, deleted modules included; and the accepted plan's ledger test
-    references in both forms, a whole-file target subsuming the file's function ids. A test named by
-    the ledger but not yet written stays a target: pytest then fails the attempt with the missing
-    path named, which is the attempt's own gap. `None` targets with a reason - a selection failure
-    is a diagnostic, never an empty green set (spec, criterion 3).
+    Sources (spec, "Selected tests", amended by decisions.md Q-3): in each surviving changed
+    `tests/**/test_*.py` file, the test functions that are new or differ from HEAD (a new file
+    whole); and the accepted plan's ledger test references in both forms, as function ids. A test
+    named by the ledger but not yet written stays a target: pytest then fails the attempt with the
+    missing id named, which is the attempt's own gap. Importers of changed `scripts/` modules are
+    not selected. `None` targets with a reason - a selection failure is a diagnostic, never an
+    empty green set (spec, criterion 3).
     """
     try:
         changed = changed_paths(root, env=env)
     except (Refused, OSError) as error:
         return None, str(error)
-    targets = {
-        posix
-        for posix in (relative.as_posix() for relative in changed)
-        if _is_test_module(posix) and (root / posix).is_file()
-    }
+    targets: set[str] = set()
     try:
-        stems = {
-            relative.stem
-            for relative in changed
-            if relative.as_posix().startswith("scripts/") and relative.as_posix().endswith(".py")
-        }
-        if stems:
-            for candidate in sorted({*root.glob("tests/**/test_*.py"), *root.glob("tests/test_*.py")}):
-                posix = candidate.relative_to(root).as_posix()
-                if _is_test_module(posix) and posix not in targets and _imports_changed_scripts(candidate, stems):
-                    targets.add(posix)
-        refs, whole = _ledger_test_refs(plan)
+        for posix in sorted(relative.as_posix() for relative in changed):
+            if _is_test_module(posix) and (root / posix).is_file():
+                targets.update(_changed_test_ids(root, env, posix))
+        refs, _whole = _ledger_test_refs(plan)
     except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
-    targets.update(whole)
-    targets.update(ref.split("::", 1)[0] for ref in refs)
-    return sorted(targets), None
+    targets.update(refs)
+    whole = {target for target in targets if "::" not in target}
+    return sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole), None
 
 
 def cheap_checks(
