@@ -22,8 +22,8 @@ clock and logs its own spans, as the appetite rule below says.
 **Run the cheap checks before you hand back.** These are ruff (`ruff check` and
 `ruff format --check` on the changed Python files) and the tests the plan's
 `## Criterion ledger` names. With a command tool, run them and hand back only
-when they are green. On a file-only route (any model given file tools but no
-command tool, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
+when they are green. On a file-only route (any model that can edit files but
+cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
 `make verify`. It runs ruff, then pytest over the changed or new test functions,
 the ledger's test ids and, on a retry, the tests the attempt before failed. The
 first red check ends the attempt with exactly that output (bead
