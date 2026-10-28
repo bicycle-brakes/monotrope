@@ -819,8 +819,8 @@ verdict: a ruff that cannot run or leaves findings fails the attempt in the chea
 checks below.
 After that format step and still before `make verify`, the runner runs an
 implement or repair attempt's cheap checks and stops at the first red one
-(bead coding-harness-5tyh): read-only `.venv/bin/ruff check` and
-`.venv/bin/ruff format --check` over the same changed Python files, then
+(bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
+`.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
 over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
 file the top-level test functions that are new or differ from HEAD (a new file
