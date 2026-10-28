@@ -489,3 +489,19 @@ def test_the_runners_scan_record_is_not_an_attempt_edit(world: World, monkeypatc
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     assert record in committed, "the runner's own record was deleted by the restoration"
     assert NOTICE not in committed, "the runner's own record was credited to the attempt as an edit"
+
+
+def test_a_ledger_test_missing_from_a_new_file_is_still_selected(world: World) -> None:
+    """Row L3-1. Planted fault: a new test file selected whole hid the ledger test it lacks."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_fresh.py").write_text("def test_other():\n    assert 1\n\n\ndef test_named():\n    assert 1\n")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    plan = (
+        "---\ntitle: Plan\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: tests/test_fresh.py::test_named — written in the new file\n"
+        "- 2: not yet written tests/test_fresh.py::test_required — the attempt left it out\n"
+    ).encode()
+    targets, fault = stage2.selected_tests(world.root, env, plan)
+    assert fault is None
+    assert targets == ["tests/test_fresh.py", "tests/test_fresh.py::test_required"]

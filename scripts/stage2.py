@@ -5147,10 +5147,20 @@ def selected_tests(
                 standing[posix] = _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
             if not rest or rest.split("::", 1)[0].split("[", 1)[0] in standing[posix]:
                 targets.add(ident)
+        # A whole file covers its ids, but only those whose function stands in it: a ledger test
+        # the new file lacks stays a target, so pytest names it missing (review row L3-1).
+        whole = {target for target in targets if "::" not in target}
+        names = {posix: _top_level_names((root / posix).read_text(encoding="utf-8"), posix) for posix in whole}
+        kept = sorted(
+            t
+            for t in targets
+            if "::" not in t
+            or (posix := t.split("::", 1)[0]) not in whole
+            or t.split("::", 1)[1].split("::", 1)[0].split("[", 1)[0] not in names[posix]
+        )
     except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
-    whole = {target for target in targets if "::" not in target}
-    return sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole), None
+    return kept, None
 
 
 def cheap_checks(
@@ -5934,8 +5944,9 @@ def check_repair_answer(
     claims fail as `several fixed lines`, and with
     no claim at all the missing or malformed diagnostics stand as they did (spec, criteria 1-4).
     Every row of
-    findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
-    rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
+    findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: the runner restores an edit
+    outside the taken rows' Status before this check (spec, criterion 8), and the comparison stays as
+    the guard that the restore held, so such an edit is never checkpointed (phase 6, F-3; review row L3-2). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
     may be refreshed by the runner. Only when no problem stands do the red-first runs start, one pytest run
     per named test; every text is scrubbed with the key.
@@ -7180,8 +7191,9 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         return text
 
     def check(_answer: str) -> list[str]:
-        # The implementing model writes code, never loop state: findings.md's body stands as it stood
-        # right before the call, or the attempt fails and findings.md is put back (DL-A-2).
+        # The implementing model writes code, never loop state. The runner puts findings.md back
+        # before this check (spec, criterion 8), so a model edit alone never fails here; the
+        # comparison stays as the guard that the restore held (review row L3-2).
         now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
         problem = findings_body_problem(standing.get("text", ""), now)
         return [problem] if problem else []
