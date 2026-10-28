@@ -11597,7 +11597,11 @@ def test_red_first_scrubs_outcome_diagnostics(world: World, monkeypatch: pytest.
 
 def test_fixed_code_proof_keeps_pytest_failed_red(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 5 (coding-harness-a7m). Planted fault: a Failed call or malformed phase evidence
-    passes the fixed-code proof, or an all-pass case is refused by the shared probe."""
+    passes the fixed-code proof, or an all-pass case is refused by the shared probe.
+
+    The live mixed leg guards the session verdict (exit 1), which held before this change; the
+    per-call Failed refusal is proven through fixed_test_proof on a record bound to the live token,
+    because no live run can end 0 with a failed call."""
     repair_world(world)
     (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
     all_pass = (

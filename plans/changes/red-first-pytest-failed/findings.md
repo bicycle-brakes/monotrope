@@ -477,3 +477,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model hy3 · leak check clean over 708 files, 2433 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 717 files, 2441 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 717 files, 2447 commits, 12 rules.

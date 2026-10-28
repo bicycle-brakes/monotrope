@@ -155,8 +155,11 @@ predecessor alone is not misled (review loop rows L1-5, L3-1, L3-4, L3-8).
 ## Definition of Done
 
 - `make verify` green.
-- Moved in the same pull request: this change's `spec.md` and `plan.md`,
-  and the runner's `findings.md` evidence; no models and no ADRs change.
+- Moved in the same pull request: this change's folder (`research.md`,
+  `decisions.md`, `spec.md`, `plan.md`, the runner's `findings.md`
+  evidence), the rendered `plans/INDEX.md` row, and the two pointers in
+  `plans/changes/red-first-install/` the Problem names; no models and no
+  ADRs change.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes `coding-harness-a7m`, and its last commit
