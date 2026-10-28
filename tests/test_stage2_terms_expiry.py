@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 from test_stage2 import (  # noqa: E402
     FIXED,
     MALFORMED_ANSWER,
@@ -69,15 +70,7 @@ def disable_preparation(w: World) -> None:
 
 def a_record(**changes: object) -> dict:
     """One admissible record, dated far ahead, with the given fields replaced."""
-    record = {
-        "gelesen": "2026-10-25",
-        "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
-        "aufbewahrung": "0 days",
-        "training": "Not used",
-        "valid_until": "2099-01-01",
-    }
-    record.update(changes)
-    return {"modelle_terms": {"m": record}}
+    return {"modelle_terms": {"m": admissible_terms(**changes)}}
 
 
 # ---------------------------------------------------------------------------
@@ -548,15 +541,7 @@ def test_expiry_preserves_prior_admission_guards(
     monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 10, 26))
 
     def entry_with(model: str, **changes: object) -> dict:
-        record = {
-            "gelesen": "2026-10-07",
-            "quelle": "src",
-            "aufbewahrung": "0 days",
-            "training": "Not used",
-            "valid_until": "2099-01-01",
-        }
-        record.update(changes)
-        return {"modelle_terms": {model: record}}
+        return {"modelle_terms": {model: admissible_terms(**changes)}}
 
     problem = stage2.terms_problem(entry_with("m", uebersprungen="2026-10-17", grund="wire API"), "m")
     assert problem and "was skipped on 2026-10-17" in problem and "valid_until" not in problem, problem

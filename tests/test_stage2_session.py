@@ -35,6 +35,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_session  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
@@ -182,21 +183,10 @@ class World:
         }
         entry.update(changes)
         # A paid model needs a dated reading of its data terms to be admitted (ADR 0021, decision 5),
-        # valid through a quoted expiry date (bead coding-harness-abra); the far-future date keeps
-        # every fixture from aging into a skip, and a boundary test sets its own.
-        entry.setdefault(
-            "modelle_terms",
-            {
-                model: {
-                    "gelesen": "2026-10-07",
-                    "valid_until": "2099-01-01",
-                    "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
-                    "aufbewahrung": "0 days",
-                    "training": "Not used",
-                }
-                for model in entry["modelle"]
-            },
-        )
+        # valid through a quoted expiry date (bead coding-harness-abra); the shared builder's
+        # far-future expiry keeps every fixture from aging into a skip, and a boundary test sets
+        # its own (tests/terms_fixtures.py).
+        entry.setdefault("modelle_terms", {model: admissible_terms() for model in entry["modelle"]})
         path = self.tree / "model-endpoints.yaml"
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         data["endpunkte"] = [e for e in data["endpunkte"] if e.get("name") != "opencode-go"]

@@ -42,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 
 PKG = "@earendil-works/pi-coding-agent"
 GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
@@ -58,16 +59,7 @@ ZEN_NATIVE = "https://opencode.ai/zen/v1"
 def declare_contract_models(root: Path) -> None:
     """Synthetic, dated admission for loopback wire tests; never use live terms."""
     models = ["contract-rung", "acme-1-free", "synthetic-protocol-check-free", "deepseek-v4.1-flash"]
-    terms = {
-        model: {
-            "gelesen": "2026-10-25",
-            "quelle": "synthetic loopback contract",
-            "aufbewahrung": "0 days",
-            "training": "Not used",
-            "valid_until": "2099-01-01",
-        }
-        for model in models
-    }
+    terms = {model: admissible_terms(quelle="synthetic loopback contract") for model in models}
     (root / "model-endpoints.yaml").write_text(
         yaml.safe_dump({"endpunkte": [{"name": "opencode-go", "modelle": models, "modelle_terms": terms}]}),
         encoding="utf-8",

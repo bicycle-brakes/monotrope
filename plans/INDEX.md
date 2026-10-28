@@ -316,6 +316,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/terms-expiry/plan.md`](changes/terms-expiry/plan.md) | draft | none | 2026-10-26 | coding-harness-abra |
 | [`changes/terms-expiry/research.md`](changes/terms-expiry/research.md) | draft | none | 2026-10-25 | coding-harness-abra |
 | [`changes/terms-expiry/spec.md`](changes/terms-expiry/spec.md) | draft | none | 2026-10-26 | coding-harness-abra |
+| [`changes/terms-test-fixtures/decisions.md`](changes/terms-test-fixtures/decisions.md) | draft | partial | 2026-10-27 | coding-harness-hxkw |
+| [`changes/terms-test-fixtures/findings.md`](changes/terms-test-fixtures/findings.md) | draft | partial | 2026-10-27 | coding-harness-hxkw |
+| [`changes/terms-test-fixtures/plan.md`](changes/terms-test-fixtures/plan.md) | draft | partial | 2026-10-27 | coding-harness-hxkw |
+| [`changes/terms-test-fixtures/research.md`](changes/terms-test-fixtures/research.md) | draft | partial | 2026-10-27 | coding-harness-hxkw |
+| [`changes/terms-test-fixtures/spec.md`](changes/terms-test-fixtures/spec.md) | draft | partial | 2026-10-27 | coding-harness-hxkw |
 | [`changes/test-key-runtime/decisions.md`](changes/test-key-runtime/decisions.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-key-runtime/findings.md`](changes/test-key-runtime/findings.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-key-runtime/plan.md`](changes/test-key-runtime/plan.md) | draft | partial | 2026-10-26 | coding-harness-05op |
