@@ -91,7 +91,7 @@ tracks no credentials.
 
 ## Review and research swarms
 
-The review loop uses swarms. The research swarm remains a proposal.
+The review loop (phase 4b) and the research of larger changes (phase 1) use swarms.
 
 ### Review swarm
 
@@ -119,10 +119,12 @@ flowchart LR
 
 [ADR 0021](adr/0021-review-swarms-until-clean.md) defines the loop. The
 refreshed catalog comes from Pi’s intermediary `pi.dev`; membership does not
-measure actual free billing. Paid models require a dated retention reading and
-terms excluding training; ineligible members are skipped and named. The loop
-stops when clean, when the paid ladder is exhausted, or after two consecutive
-rounds accepting only findings caused by the preceding repairs.
+measure actual free billing. Paid models require a retention reading with a
+declared expiry date and terms excluding training
+([ADR 0022](adr/0022-paid-model-terms-expire.md)); ineligible members are
+skipped and named. The loop stops when clean, when the paid ladder is
+exhausted, or after two consecutive rounds accepting only findings caused by
+the preceding repairs.
 
 ### Runner details
 
@@ -142,26 +144,32 @@ These are operator details; you can skip them on a first read.
   rung; a failed single rung is retired with
   `release-loop --stage-failed <model> --reason <text>`.
 - Free models are admitted for the diff-only review under retention and
-  training terms that have not been read. A paid model needs a dated terms
-  reading.
+  training terms that have not been read. A paid model needs a terms reading
+  whose declared `valid_until` date has not passed; the runner warns before
+  it does.
 
 ### Research swarm
 
-Phase 1 would run three independent researchers: one on the existing system,
-one on outside practice, one on how the change fits the rest. Then one round
-of critique, and a fresh judge settles the result, which becomes
-`research.md`. All calls go through the runner, behind the leak check. The
-proposal is a draft
-([`docs/research/2026-10-08-explore-swarm-proposal.md`](research/2026-10-08-explore-swarm-proposal.md));
-its implementation is not built.
+A `feature` or `architectural` change explores through the research swarm
+([ADR 0020](adr/0020-phase-1-research-swarm.md)); a `bounded` change or a
+`spike` keeps the single explorer. Three repository seats first map the
+sources independently, and one Opus 5.5 context merges the maps. Then eleven
+topics run on the same brief: eight about the repository, each read by the
+three repository seats, and three about outside practice, each read by three
+online seats; selected free models add public topics, best effort. One fresh
+Opus 5.5 context reconciles the reports into `research.md`. Every call goes
+through the runner and its leak check; a run that misses a required part is
+marked incomplete and exits with an error. The `research-handoff` and
+`interview-minimums` gates then check that the spec and the interview carry
+what the research found.
 
 ```mermaid
 flowchart LR
-    Q[Question for phase 1] --> R1[Researcher: existing system]
-    Q --> R2[Researcher: outside practice]
-    Q --> R3[Researcher: integration]
-    R1 & R2 & R3 --> CR[One critique round]
-    CR --> J[Fresh judge]
+    Q[Question for phase 1] --> F[Three finders map the sources]
+    F --> M[One merged map]
+    M --> T1[Eight repository topics, three seats each]
+    M --> T2[Three outside-practice topics, three online seats each]
+    T1 & T2 --> J[Fresh judge]
     J --> OUT[research.md]
 ```
 
