@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock
+.PHONY: verify test staleness gates leakcheck venv lock change index help
 
 verify:
 	bash scripts/verify_all.sh
@@ -53,3 +53,29 @@ venv:
 
 lock:
 	uv pip compile pyproject.toml --group dev --universal --generate-hashes --exclude-newer "$$(date -u +%Y-%m-%dT00:00:00Z)" -o requirements-ci.txt
+
+# The entry the workflow promises (docs/WORKFLOW.md, bead coding-harness-i0l).
+# NAME and BEAD are checked on the make level — given on the command line, never
+# taken from a stray exported variable — and the recipe passes them to
+# the entry script through its exported environment — their values are never
+# interpolated into the shell line, so arguments stay data, never code.
+change:
+	$(if $(and $(NAME),$(filter command line,$(origin NAME))),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id> — both on the command line))
+	$(if $(and $(BEAD),$(filter command line,$(origin BEAD))),,$(error usage: make change NAME=<name> BEAD=<existing-bead-id> — both on the command line))
+	@export NAME BEAD; python3 scripts/new_change.py "$$NAME" --bead "$$BEAD"
+
+index:
+	@python3 scripts/plans_registry.py --index
+
+help:
+	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
+	@echo 'make test                               the test suite, by hand'
+	@echo 'make staleness                          hygiene of the plans/ artefacts'
+	@echo 'make gates                              what the CI runs, read from decisions/gates.yaml'
+	@echo 'make leakcheck NAME=<name>              the leak check before a foreign call'
+	@echo 'make venv [PYTHON=<interpreter>]        build .venv from the hash-checked lock'
+	@echo 'make lock                               rewrite requirements-ci.txt from pyproject.toml'
+	@echo 'make change NAME=<name> BEAD=<existing-bead-id>'
+	@echo '                                        create plans/changes/<name>/ linked to an existing bead'
+	@echo 'make index                              regenerate plans/INDEX.md from the registry'
+	@echo 'make help                               this list'
