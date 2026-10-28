@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-27
+updated: 2026-10-28
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -815,6 +815,31 @@ Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
 files under `scripts/` and `tests/`; what that changed stands first in a failed
 attempt's diagnostics and in the checkpoint commit's message, and a ruff that
 cannot run or leaves findings leaves the verdict to `make verify`.
+After that format step and still before `make verify`, the runner runs an
+implement or repair attempt's cheap checks and stops at the first red one
+(bead coding-harness-5tyh): read-only `.venv/bin/ruff check` and
+`.venv/bin/ruff format --check` over the same changed Python files, then
+`.venv/bin/python3 -m pytest -q` over exactly the selected tests — the
+surviving changed `tests/**/test_*.py` files, the surviving test files that
+statically import a changed `scripts/` module (a deleted module's importer
+included), and the accepted plan's criterion-ledger test references in both
+forms, deduplicated and sorted. A command with no target is skipped; a red,
+unstartable or over-bound command fails the attempt before `make verify`
+starts, and its identified command, exit and protected output stand in that
+attempt's diagnostics and the next attempt's prompt. Cheap green replaces
+nothing: full `make verify` and the existing answer checks still decide every
+attempt. An implement or repair attempt's edit of the change's `findings.md`
+is not a failure: the runner restores its own pre-call snapshot before any
+check reads model-written state — through the recovery preflight, never
+through a linked parent — and records the restoration in the attempt's
+bookkeeping with its real verdict: a note beside the failure for a rejected
+attempt, a quoted notice under the audit line of one that passes. The
+implement and repair prompts carry the accepted plan's ledger test references
+as must-runs before handback, taken from the plan's snapshot so a retry
+rereads nothing its predecessor may have edited: a command-capable Codex runs
+ruff and the named tests itself before handing back, while the file-only Flash
+and Sonnet routes delegate the same checks to the runner, with no extra tool
+of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
 is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
@@ -1401,7 +1426,16 @@ reword its reason so it names no fix instead of marking it fixed.
 **Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
-only when pytest exits 1 or 2 there. When every post-run check passes —
+only when pytest exits 1 or 2 there. The repair prompt names the accepted
+plan's ledger tests as must-runs before handback, and commands Codex to run
+ruff and them itself; a file-only fallback delegates the same cheap checks to
+the runner, which stops at the first red one before `make verify`. An
+attempt's edit of the change's `findings.md` is restored from the runner's
+pre-call snapshot before any check reads model-written state: the fixed lines
+are validated against the restored file, and the restoration stands in the
+attempt's bookkeeping with its real verdict — a note beside the failure when
+the attempt is rejected, a quoted notice under its audit line when it passes.
+When every post-run check passes —
 `make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt

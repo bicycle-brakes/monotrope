@@ -142,6 +142,7 @@ Exit: 0 done, 1 a call or implementation post-check failed, 2 refused.
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import contextvars
 import datetime as dt
@@ -281,7 +282,9 @@ REPAIR_ANSWER = (
     "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
     "A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
-    "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
+    "answered `not a test`. Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
+    "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
+    "is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
     "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
@@ -3761,6 +3764,30 @@ RUFF_COMMANDS = (
 FORMAT_LABEL = "Runner format before `make verify`"
 FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
 
+# After the safe formatting the runner runs an attempt's cheap checks, before derived preparation and
+# `make verify` (bead coding-harness-5tyh): read-only ruff lint and format checks over the changed
+# Python files the format step selected, then pytest over exactly the selected tests. Explicit
+# targets only, passed as argv - never a shell, never a bare discovery run - and a command with no
+# target is skipped. The first red, launch error or timeout ends the attempt before `make verify`
+# starts, so a planted fault costs seconds instead of a full verification; cheap green never
+# replaces full verification, it only earns the right to run it.
+RUFF_CHECK = ("check", "--force-exclude", "--no-cache")
+RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
+PYTEST = (".venv/bin/python3", "-m", "pytest", "-q")
+CHEAP_LABEL = "Runner cheap checks before `make verify`"
+
+# An attempt's edits to its own findings.md are put back before any post-run check reads model-written
+# state, so the edit alone never spends the attempt (spec, criterion 8). The rejected note joins the
+# attempt's problems (block and retry prompt); the accepted notice is quoted under the audit line the
+# checkpoint commits - a passing restored attempt is never labelled failed (spec, criterion 9).
+FINDINGS_RESTORED = (
+    "the attempt's edits to findings.md were restored before the checks; the file stands as it stood "
+    "before the call, and the attempt failed for the reasons below"
+)
+FINDINGS_RESTORED_NOTICE = (
+    "The attempt edited findings.md; the runner restored it before the post-run checks, and the attempt passed them."
+)
+
 
 # The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
 # before the model ran: a step that hangs, and a tool the attempt overwrote, both abort the attempt
@@ -4955,21 +4982,259 @@ def format_step(
     return protect_diagnostics(line + ".", key)
 
 
+def _cheap_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
+    """The bounded evidence of a red cheap command: both streams protected whole, then the tail.
+
+    As `verify_evidence`: the complete concatenated streams are checked before any reduction, and
+    a refusal of that protection propagates - a red attempt whose output cannot be made publishable
+    stops the run instead of passing silently (spec, criterion 6).
+    """
+    raw_stdout = done.stdout or ""
+    output, _boundary = _protect_diagnostics(raw_stdout + (done.stderr or ""), key, len(raw_stdout))
+    return scrub("\n".join(output.splitlines()[-TAIL_LINES:]), key)
+
+
+def _cheap_ruff(root: Path, env: dict[str, str], key: str | None, targets: list[str]) -> str | None:
+    """The read-only ruff half of the cheap checks: lint, then the format check, over the targets.
+
+    `None` when both are green. A missing ruff, a target that cannot be read, a non-zero exit, a
+    timeout and a program that cannot start are all red: a cheap check that never ran is never
+    cheap-green (spec, criterion 10). The targets are the format step's - ordinary, surviving,
+    changed `.py` files under `scripts/` and `tests/` - so links and hard links stay out and their
+    final verdict stays with the unchanged gates.
+    """
+    if not (root / RUFF).is_file():
+        return protect_diagnostics(f"no ruff at `{RUFF}`; `make venv` builds it.", key)
+    for target in targets:
+        try:
+            (root / target).read_bytes()
+        except OSError:
+            return protect_diagnostics(f"cannot read `{target}`; the cheap checks cannot run", key)
+    for command, name in ((RUFF_CHECK, "check"), (RUFF_FORMAT_CHECK, "format --check")):
+        identity = f"`{RUFF} {name}`"
+        try:
+            done = launch(
+                [RUFF, *command, *targets],
+                root,
+                env,
+                key,
+                timeout=TOOL_SECONDS,
+                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+            )
+        except StepTimedOut as error:
+            return protect_diagnostics(f"{identity} did not finish: {error}", key)
+        except CallFailed as error:
+            return protect_diagnostics(f"{identity} could not be run: {error}", key)
+        if done.returncode:
+            return f"{identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"
+    return None
+
+
+def _is_test_module(posix: str) -> bool:
+    """Whether a repository path names a `tests/**/test_*.py` file."""
+    parts = posix.split("/")
+    return len(parts) >= 2 and parts[0] == "tests" and posix.endswith(".py") and parts[-1].startswith("test_")
+
+
+def _imports_changed_scripts(path: Path, stems: set[str]) -> bool:
+    """Whether the test file statically imports one of the changed `scripts/` modules.
+
+    The file is parsed, never imported: a test file's module-level code must not run for selection.
+    `import x`, `import scripts.x`, `from x import y` and `from scripts import x` count when the
+    changed module's name matches; a relative import, a dynamic import and a transitive dependency
+    do not (spec, "Selected tests"). A file that cannot be read or parsed raises; the caller turns
+    that into a red diagnostic, never an empty green set.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                if (len(parts) == 1 or parts[0] == "scripts") and parts[-1] in stems:
+                    return True
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            parts = node.module.split(".")
+            if (len(parts) == 1 or parts[0] == "scripts") and parts[-1] in stems:
+                return True
+            if node.module == "scripts" and any(alias.name.split(".")[0] in stems for alias in node.names):
+                return True
+    return False
+
+
+def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
+    """The accepted plan's criterion-ledger test references: `tests/x.py::test_y` ids and whole files.
+
+    Both test forms count - a written entry and one still marked `not yet written`; a `not a test`
+    row names no test, and lines inside a fence are examples, never references. The bytes are the
+    accepted plan's snapshot, so a rejected attempt's own plan edits never change this list (spec,
+    criterion 7). A plan that cannot be decoded or read raises.
+    """
+    lines = check_criterion_ledger._lines(plan.decode("utf-8"))
+    fenced = check_criterion_ledger._fenced(lines)
+    refs: list[str] = []
+    whole: set[str] = set()
+    for section in check_criterion_ledger.ledger_sections(lines):
+        for number, line in section:
+            if fenced[number - 1]:
+                continue
+            entry = check_criterion_ledger.parse_entry(line, number)
+            if entry is None or entry.kind == "not a test" or not entry.path:
+                continue
+            refs.append(f"{entry.path}::{entry.function}")
+            whole.add(entry.path)
+    return sorted(dict.fromkeys(refs)), whole
+
+
+def selected_tests(root: Path, env: dict[str, str], plan: bytes) -> tuple[list[str] | None, str | None]:
+    """The cheap pytest run's explicit targets, deduplicated and sorted, or why they cannot stand.
+
+    Three sources (spec, "Selected tests"): the surviving changed `tests/**/test_*.py` files against
+    HEAD - new, modified and retained; the direct static importers among all surviving test files of
+    the changed `scripts/` modules, deleted modules included; and the accepted plan's ledger test
+    references in both forms, a whole-file target subsuming the file's function ids. A test named by
+    the ledger but not yet written stays a target: pytest then fails the attempt with the missing
+    path named, which is the attempt's own gap. `None` targets with a reason - a selection failure
+    is a diagnostic, never an empty green set (spec, criterion 3).
+    """
+    try:
+        changed = changed_paths(root, env=env)
+    except (Refused, OSError) as error:
+        return None, str(error)
+    targets = {
+        posix
+        for posix in (relative.as_posix() for relative in changed)
+        if _is_test_module(posix) and (root / posix).is_file()
+    }
+    try:
+        stems = {
+            relative.stem
+            for relative in changed
+            if relative.as_posix().startswith("scripts/") and relative.as_posix().endswith(".py")
+        }
+        if stems:
+            for candidate in sorted({*root.glob("tests/**/test_*.py"), *root.glob("tests/test_*.py")}):
+                posix = candidate.relative_to(root).as_posix()
+                if _is_test_module(posix) and posix not in targets and _imports_changed_scripts(candidate, stems):
+                    targets.add(posix)
+        refs, whole = _ledger_test_refs(plan)
+    except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
+        return None, str(error)
+    targets.update(whole)
+    targets.update(ref.split("::", 1)[0] for ref in refs)
+    return sorted(targets), None
+
+
+def cheap_checks(
+    root: Path,
+    env: dict[str, str],
+    plan: Path,
+    key: str | None,
+    accepted_plan: bytes | None,
+) -> list[str]:
+    """An attempt's own cheap checks: ruff lint, ruff format check, pytest over the selected tests.
+
+    Empty when all applicable commands are green. A command with no target is skipped (spec,
+    criterion 4); a red, an unstartable or an over-bound command returns that one bounded,
+    protected diagnostic and the attempt ends before derived preparation and `make verify` (spec,
+    criteria 1, 2 and 10). The ledger references come from `accepted_plan` - the accepted plan's
+    snapshot; without one the working plan stands in, as a direct `verify_attempt` call does.
+    """
+    try:
+        targets = format_targets(root, env)
+    except (Refused, OSError) as error:
+        lines = protect_diagnostics(f"the cheap lint targets could not be listed: {error}", key).splitlines()
+        return ["\n".join(_shrink(lines, TAIL_LINES))]
+    if targets:
+        problem = _cheap_ruff(root, env, key, targets)
+        if problem:
+            return [problem]
+    if accepted_plan is None:
+        try:
+            accepted_plan = plan.read_bytes()
+        except OSError as error:
+            return [protect_diagnostics(f"the accepted plan could not be read for the cheap tests: {error}", key)]
+    tests, fault = selected_tests(root, env, accepted_plan)
+    if fault is not None:
+        lines = protect_diagnostics(f"the cheap tests could not be selected: {fault}", key).splitlines()
+        return ["\n".join(_shrink(lines, TAIL_LINES))]
+    if not tests:
+        return []
+    identity = "`" + " ".join(PYTEST) + "`"
+    if not (root / PYTEST[0]).is_file():
+        return [protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)]
+    try:
+        done = launch(
+            [*PYTEST, *tests],
+            root,
+            env,
+            key,
+            timeout=TOOL_SECONDS,
+            limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+        )
+    except StepTimedOut as error:
+        return [protect_diagnostics(f"{identity} did not finish: {error}", key)]
+    except CallFailed as error:
+        return [protect_diagnostics(f"{identity} could not be run: {error}", key)]
+    if done.returncode:
+        return [f"{identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"]
+    return []
+
+
+def must_run_refs(plan: bytes | None) -> str:
+    """The accepted plan's ledger test references as the prompts' must-run list, or why there is none.
+
+    A reference still marked `not yet written` is listed as it stands - the instruction says to
+    write it, never that it exists (spec, criterion 7). A ledger that cannot be read names the
+    section to follow instead of a list, so the prompt build never fails on it.
+    """
+    if plan is None:
+        return "none - follow the plan's `## Criterion ledger` section itself"
+    try:
+        refs, _whole = _ledger_test_refs(plan)
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+        return "the plan's criterion ledger could not be read for test names; follow its `## Criterion ledger` section itself"
+    if not refs:
+        return "none - the plan's criterion ledger names no test; write every test the plan asks for"
+    return "\n".join(f"- {ref}" for ref in refs)
+
+
+MUST_RUN_DELEGATED = (
+    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before full "
+    "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
+    "the selected tests - the changed and importing test files and the accepted plan's ledger tests. "
+    "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
+    "ledger test fails the attempt before `make verify`. Execute nothing yourself - delegation to the "
+    "runner is the contract, and no extra tool is yours."
+)
+MUST_RUN_COMMANDS = (
+    "Before you hand back, run the must-run checks yourself and leave them green: "
+    "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
+    "--force-exclude --no-cache` over the Python files you changed, and "
+    "`.venv/bin/python3 -m pytest -q` over the ledger tests below. The runner runs the same cheap "
+    "checks and full `make verify` after the call. Findings.md is the runner's audit file: an edit "
+    "of it is restored before the checks, so never put a verdict there."
+)
+
+
 def verify_attempt(
     root: Path,
     plan: Path,
     key: str | None = None,
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
+    accepted_plan: bytes | None = None,
 ) -> list[str]:
-    """Format, clear derivable ledger markers, stamp changed documents, render the index, `make verify`.
+    """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
     Preparation writes to the tree and executes its registry renderer. Before `make verify` the
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
-    and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
-    diagnostics for failed preparation or postconditions, naming the gates that blocked.
-    The time section must still be readable; the entry itself is the runner's (`run_attempts`), so the
-    model adds none and nothing is compared with the pre-call plan.
+    and `tests/`; when `formatted` is given, the step's line lands there. The cheap checks follow:
+    read-only ruff lint and format checks, then pytest over the selected tests, with the first red,
+    launch error or timeout ending the attempt before the ledger clearing, the derived preparation
+    and `make verify` (spec, criteria 1, 2 and 10). Cheap green never replaces full verification.
+    Return bounded diagnostics for failed preparation or postconditions, naming the gates that
+    blocked. The time section must still be readable; the entry itself is the runner's
+    (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
     """
     env = runner_env(
         foreign_env(
@@ -5001,6 +5266,11 @@ def verify_attempt(
         line = format_step(root, env, key, tools)
         if formatted is not None and line is not None:
             formatted.append(line)
+        # The attempt's own cheap checks, before anything derived: a planted fault stops here
+        # (bead coding-harness-5tyh). Cheap green continues into the clearing below.
+        cheap = cheap_checks(root, env, plan, key, accepted_plan)
+        if cheap:
+            return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
         check_criterion_ledger.clear_written(root, plan)
     except (OSError, RuntimeError, ValueError) as error:
         return [
@@ -6070,13 +6340,19 @@ def quote_research_records(text: str) -> str:
 def implementation_prompt(
     ctx: Context, baseline: str, diagnostics: list[str], inputs: dict[Path, bytes] | None = None
 ) -> str:
-    """The accepted inputs and the bounded evidence from earlier attempts."""
+    """The accepted inputs, the must-run checks and the bounded evidence from earlier attempts."""
     spec = prompt_input(ctx.folder / "spec.md", inputs)
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         "Implement only the accepted plan with the available file tools. You cannot run commands. "
         "Write no entry under `## Time used` in plan.md: the runner measures this attempt and writes "
         "its span itself. The runner runs `make verify`, stages the result and creates the checkpoint commit.",
+        # The references come from the accepted plan's cached snapshot, so a rejected attempt's own
+        # plan edits never change the list on a retry (spec, criterion 7).
+        "## Must-run checks before handback\n\n"
+        + MUST_RUN_DELEGATED
+        + "\n\nLedger tests:\n"
+        + must_run_refs(plan.encode("utf-8")),
         f"Implementation baseline: {baseline}",
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
@@ -6337,7 +6613,9 @@ def run_attempts(
     `snapshot_findings` and `restore_findings` puts findings.md back as it stood right before the model
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
-    F-2).
+    F-2). Before the failure is decided, findings.md is restored outright: every post-run check, cheap
+    or full, reads the runner's file, an edit alone fails nothing, and a completed attempt that edited
+    it carries a quoted restore notice under its audit line (spec, criteria 8 and 9).
 
     A verb that passes `retain_answer` keeps every attempt's full answer: right at the model-return
     boundary, before any HEAD check, verification or answer check can stop the run, the protected
@@ -6585,10 +6863,24 @@ def run_attempts(
                     files = str(error)
             else:
                 files = unmeasured
+            # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
+            # post-run check reads model-written state, so the edit alone never spends the attempt
+            # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
+            # propagates unwritten, as every recovery refusal does.
+            findings_restored = False
+            if kept is not None:
+                try:
+                    unchanged = ctx.findings.read_bytes() == findings_before
+                except OSError:
+                    unchanged = False
+                if not unchanged:
+                    preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
+                    restore_findings(kept)
+                    findings_restored = True
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             try:
-                problems = verify_attempt(root, ctx.plan, key, formatted, tools)
+                problems = verify_attempt(root, ctx.plan, key, formatted, tools, inputs[ctx.plan])
             except Refused as error:
                 put_findings_back(original=error)
                 raise
@@ -6599,6 +6891,12 @@ def run_attempts(
                 cannot_start = error
                 lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
                 problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+            except (OSError, RuntimeError, ValueError) as error:
+                # A model that deleted or replaced its own inputs must not break the attempt boundary:
+                # the checks' unexpected filesystem failure is this attempt's diagnostic, the inputs go
+                # back through the batch restore below, and the verdict stays rejected (F-5).
+                put_findings_back()
+                problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -6630,9 +6928,13 @@ def run_attempts(
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
             if problems:
-                # The format line stands first: the step ran before `make verify`, and the next model
-                # learns that the runner formats and whether ruff left findings it could not fix.
-                problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
+                # The restore note stands first, then the format line: the next model learns that its
+                # findings edits went back, that the runner formatted, and what failed after.
+                problems = [
+                    *([FINDINGS_RESTORED] if findings_restored else []),
+                    *(f"{FORMAT_LABEL}: {line}" for line in formatted),
+                    *problems,
+                ]
                 if retain_answer and evidence is not None:
                     # The locator stands last, so tailing the listing keeps it even where the
                     # displayed diagnostics are cut (spec, criterion 7).
@@ -6709,6 +7011,11 @@ def run_attempts(
             if terminal_failure is not None:
                 raise terminal_failure
             if not problems:
+                if findings_restored:
+                    # The restore is part of this attempt's record: the quoted notice lands under its
+                    # audit line and is committed with the checkpoint - never a failed label, never a
+                    # fabricated review row (spec, criterion 9).
+                    append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
                 if before_commit is not None:
                     before_commit()
                 message = commit_message
@@ -7168,12 +7475,19 @@ def repair_prompt(
     endpoint: tuple[str, str, str | None] = CODEX,
     inputs: dict[Path, bytes] | None = None,
 ) -> str:
-    """The implement contract with the repair block: the format, the baseline, the taken rows, the inputs."""
+    """The implement contract with the repair block: the format, the must-runs, the baseline, the rows."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
     spec = prompt_input(ctx.folder / "spec.md", inputs)
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
+        # A command-capable Codex runs the must-runs itself; the file-tools route delegates the same
+        # checks to the runner. The references come from the accepted plan's cached snapshot, so a
+        # retry rereads nothing the attempt may have edited (spec, criterion 7).
+        "## Must-run checks before handback\n\n"
+        + (MUST_RUN_COMMANDS if endpoint == CODEX else MUST_RUN_DELEGATED)
+        + "\n\nLedger tests:\n"
+        + must_run_refs(plan.encode("utf-8")),
         f"Repair baseline: {baseline}",
         f"## Taken rows\n\n{rows}",
         f"## Accepted spec\n\n{spec}",

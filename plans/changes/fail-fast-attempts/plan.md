@@ -141,17 +141,17 @@ The tracker-backed registry and full verification remain for the runner.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_fail_fast.py::test_red_ruff_skips_full_verification — lint or format red still starts make or accepts the attempt
-- 2: not yet written tests/test_stage2_fail_fast.py::test_red_selected_pytest_skips_full_verification — a failing or uncollectable selected test still starts make
-- 3: not yet written tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_importers_and_ledger — a changed/retained file, direct importer or ledger id is omitted, duplicated or replaced by broad discovery
-- 4: not yet written tests/test_stage2_fail_fast.py::test_empty_targets_skip_their_command — a zero-target check starts ruff/pytest or rejects a valid text-only attempt
-- 5: not yet written tests/test_stage2_fail_fast.py::test_cheap_green_still_requires_full_verification — cheap green checkpoints without make or despite its red result
-- 6: not yet written tests/test_stage2_fail_fast.py::test_cheap_failures_reach_findings_and_next_route_safely — original failure evidence is lost, a credential escapes, a rejected span disappears or the ladder changes
-- 7: not yet written tests/test_stage2_fail_fast.py::test_prompts_require_ledger_tests_with_file_only_delegation — a ledger reference or must-run is missing, retries reread edited inputs or model tools broaden
-- 8: not yet written tests/test_stage2_fail_fast.py::test_findings_edits_are_restored_without_spending_an_attempt — forged state reaches checks, good code is lost or an otherwise valid attempt is retried
-- 8: not yet written tests/test_stage2_fail_fast.py::test_findings_restore_preserves_recovery_and_repair_guards — restoration writes through an alias or bypasses fixed-line/red-first validation
-- 9: not yet written tests/test_stage2_fail_fast.py::test_findings_restore_notice_matches_the_verdict — restore evidence disappears, overwrites history or calls an accepted attempt failed
-- 10: not yet written tests/test_stage2_fail_fast.py::test_unstartable_or_timed_out_cheap_checks_never_pass — missing/non-executable tools or a timeout reach full verification as green
+- 1: tests/test_stage2_fail_fast.py::test_red_ruff_skips_full_verification — lint or format red still starts make or accepts the attempt
+- 2: tests/test_stage2_fail_fast.py::test_red_selected_pytest_skips_full_verification — a failing or uncollectable selected test still starts make
+- 3: tests/test_stage2_fail_fast.py::test_cheap_test_selection_matches_changed_importers_and_ledger — a changed/retained file, direct importer or ledger id is omitted, duplicated or replaced by broad discovery
+- 4: tests/test_stage2_fail_fast.py::test_empty_targets_skip_their_command — a zero-target check starts ruff/pytest or rejects a valid text-only attempt
+- 5: tests/test_stage2_fail_fast.py::test_cheap_green_still_requires_full_verification — cheap green checkpoints without make or despite its red result
+- 6: tests/test_stage2_fail_fast.py::test_cheap_failures_reach_findings_and_next_route_safely — original failure evidence is lost, a credential escapes, a rejected span disappears or the ladder changes
+- 7: tests/test_stage2_fail_fast.py::test_prompts_require_ledger_tests_with_file_only_delegation — a ledger reference or must-run is missing, retries reread edited inputs or model tools broaden
+- 8: tests/test_stage2_fail_fast.py::test_findings_edits_are_restored_without_spending_an_attempt — forged state reaches checks, good code is lost or an otherwise valid attempt is retried
+- 8: tests/test_stage2_fail_fast.py::test_findings_restore_preserves_recovery_and_repair_guards — restoration writes through an alias or bypasses fixed-line/red-first validation
+- 9: tests/test_stage2_fail_fast.py::test_findings_restore_notice_matches_the_verdict — restore evidence disappears, overwrites history or calls an accepted attempt failed
+- 10: tests/test_stage2_fail_fast.py::test_unstartable_or_timed_out_cheap_checks_never_pass — missing/non-executable tools or a timeout reach full verification as green
 
 ## Not touched
 
@@ -162,4 +162,12 @@ maintainer answers. Research and decisions are inputs after this draft;
 spec criteria are not rewritten during implementation. No live benchmark,
 tracker write, commit or push belongs to this drafting call.
 
+## Runner route — 2026-10-28
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-28 14:11:49–16:24:46 UTC, 7977 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 16:25:26–17:54:28 UTC, 5342 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-28 17:54:35–18:08:41 UTC, 845 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

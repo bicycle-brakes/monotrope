@@ -1,0 +1,408 @@
+"""The cheap checks before full verification, and the findings the runner owns.
+
+Bead coding-harness-5tyh: a work attempt stops at the first red, unstartable or over-bound cheap
+command instead of spending a full verification on it, the prompts carry the accepted plan's
+ledger tests as must-runs, and an attempt's edit of `findings.md` is restored before any check
+reads model-written state — so the edit alone never spends the attempt. Every case here runs the
+runner in-process against a temporary repository and stand-ins, as `test_stage2.py` does; no test
+starts a real model, a real ruff or a real pytest.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+
+import stage2  # noqa: E402
+from test_stage2 import (  # noqa: E402
+    KEY,
+    World,
+    formatted_attempt,  # noqa: E402
+    git,  # noqa: E402
+    prompt_entry,  # noqa: E402
+    red_verify,  # noqa: E402
+    successful_implementation,  # noqa: E402
+    venv_pytest,  # noqa: E402
+    venv_ruff,  # noqa: E402
+)
+from test_stage2 import world as stage2_world  # noqa: E402
+
+world = stage2_world
+
+RESTORED = (
+    "the attempt's edits to findings.md were restored before the checks; the file stands as it stood "
+    "before the call, and the attempt failed for the reasons below"
+)
+NOTICE = "The attempt edited findings.md; the runner restored it before the post-run checks"
+CHEAP = "Runner cheap checks before `make verify`"
+
+
+def one_test_step(**more: object) -> dict:
+    """One Flash attempt whose only change is a new test file and its measured plan line."""
+    return {
+        "stdout": "implemented",
+        "plant": {"tests/test_new.py": "def test_new():\n    assert 1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+        **more,
+    }
+
+
+@pytest.mark.parametrize("half", ["lint", "format"])
+def test_red_ruff_skips_full_verification(world: World, half: str) -> None:
+    """Ledger 1. Planted fault: a red cheap ruff still starts `make verify`, or the attempt is accepted."""
+    red_check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused\n", "exit": 1}
+    red_format = {"stdout": "would reformat scripts/a.py\n", "exit": 1}
+    # One attempt consumes four ruff steps: the format step's check and format, then the cheap
+    # lint and format check. The red stands at the cheap position, never at the format step's.
+    steps = [{}, {}, red_check, {}] if half == "lint" else [{}, {}, {}, red_format]
+    venv_ruff(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[formatted_attempt(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        ruff=steps * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert world.calls("make") == [], "a red cheap ruff still started `make verify`"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    assert CHEAP in world.text()
+
+
+@pytest.mark.parametrize("case", ["failing", "uncollectable"])
+def test_red_selected_pytest_skips_full_verification(world: World, case: str) -> None:
+    """Ledger 2. Planted fault: a failing or uncollectable selected test still starts `make verify`."""
+    red = {
+        "failing": {"stdout": "FAILED tests/test_new.py::test_new - assert 1 == 2\n", "exit": 1},
+        "uncollectable": {"stderr": "ERROR tests/test_new.py - ImportError: no module named need\n", "exit": 2},
+    }[case]
+    venv_ruff(world)
+    venv_pytest(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[red] * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert len(world.calls("python3")) == 3
+    assert world.calls("make") == [], "a red selected pytest still started `make verify`"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    text = world.text()
+    assert "`.venv/bin/python3 -m pytest -q` exited" in text
+    assert ("FAILED tests/test_new.py::test_new" if case == "failing" else "ImportError") in text
+
+
+def test_cheap_test_selection_matches_changed_importers_and_ledger(world: World) -> None:
+    """Ledger 3. Planted fault: selection omits or duplicates a source, or replaces it by broad discovery.
+
+    The changed set spans every source at once: a modified tracked `scripts/helper.py`, a deleted
+    `scripts/_verdict.py` whose surviving committed importer must still run, a new test file that
+    imports the changed modules three ways (plain, qualified, aliased), the plan's ledger ids in
+    both forms — one planted, so it overlaps the changed set and must not be run twice, one still
+    unwritten and absent, which keeps the attempt red — and a retained file a preceding failed
+    attempt left in the tree. The explicit argv of each attempt's pytest run is the assertion.
+    """
+    (world.root / "tests").mkdir()
+    (world.root / "tests/test_imports_verdict.py").write_text(
+        "import scripts._verdict  # noqa: F401\n", encoding="utf-8"
+    )
+    venv_ruff(world)
+    venv_pytest(world)
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: tests/test_ledger.py::test_one — the attempt writes it\n"
+        "- 2: not yet written tests/test_missing.py::test_later — nobody writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a committed importer and a plan with ledger tests")
+    not_found = {"stderr": "ERROR: file or directory not found: tests/test_missing.py\n", "exit": 4}
+    attempt = {
+        "stdout": "implemented",
+        "plant": {
+            "scripts/helper.py": "VALUE = 3\n",
+            "tests/test_direct.py": (
+                "import helper\nimport scripts.helper as sh\nfrom scripts import helper as aliased\n"
+            ),
+            "tests/test_ledger.py": "def test_one():\n    assert 1\n",
+        },
+        "delete": ["scripts/_verdict.py"],
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    retained = {
+        "stdout": "second",
+        "plant": {"tests/test_retained.py": "def test_retained():\n    assert 1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:05–10:10, 5 min\n"},
+    }
+    world.script(
+        claude=[attempt, retained, {"stdout": "third"}],
+        python3=[not_found] * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    calls = world.calls("python3")
+    assert len(calls) == 3 and world.calls("make") == []
+    head = ["-m", "pytest", "-q"]
+    assert calls[0]["argv"] == [
+        *head,
+        "tests/test_direct.py",
+        "tests/test_imports_verdict.py",
+        "tests/test_ledger.py",
+        "tests/test_missing.py",
+    ]
+    assert calls[1]["argv"] == [
+        *head,
+        "tests/test_direct.py",
+        "tests/test_imports_verdict.py",
+        "tests/test_ledger.py",
+        "tests/test_missing.py",
+        "tests/test_retained.py",
+    ]
+    assert calls[2]["argv"] == calls[1]["argv"]
+    assert "tests/test_missing.py" in world.text(), "the missing ledger test was not named"
+
+
+def test_empty_targets_skip_their_command(world: World) -> None:
+    """Ledger 4. Planted fault: a zero-target check started ruff or pytest, or rejected a text-only attempt."""
+    successful_implementation(world)  # plants `src/app.py` only: outside `scripts/` and `tests/`
+    assert world.run("implement") == 0
+    assert world.calls("ruff") == [] and world.calls("python3") == []
+    assert len(world.calls("make")) == 1
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    assert stage2.cheap_checks(world.root, env, world.plan, None, None) == []
+
+
+def test_cheap_green_still_requires_full_verification(world: World) -> None:
+    """Ledger 5. Planted fault: cheap green checkpointed without `make verify`, or despite its red result."""
+    red = red_verify(("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"]))
+    venv_ruff(world)
+    venv_pytest(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            formatted_attempt(plant={"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"}),
+            {"stdout": "must not run"},
+            {"stdout": "must not run"},
+        ],
+        ruff=[{}] * 8,
+        python3=[{}] * 3,
+        make=[red] * 3,
+    )
+    assert world.run("implement") == 1
+    names = [call["name"] for call in world.calls()]
+    assert names[:7] == ["claude", "ruff", "ruff", "ruff", "ruff", "python3", "make"], names[:7]
+    assert len(names) == 21 and names.count("make") == 3, "a checkpoint or a skipped verification appeared"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_cheap_failures_reach_findings_and_next_route_safely(world: World) -> None:
+    """Ledger 6. Planted fault: the evidence is lost, a credential escapes, the span or the ladder changes."""
+    red = {"stdout": f"scripts/a.py:1:1: F401 `a` imported but unused\nsecret {KEY} in the finding\n", "exit": 1}
+    venv_ruff(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[formatted_attempt(), {"stdout": "second"}, {"stdout": "third"}],
+        ruff=[{}, {}, red] * 4,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    text = world.text()
+    assert "`.venv/bin/ruff check` exited 1" in text, "the identified command and exit were lost"
+    assert "F401" in text, "the actual failure output was lost"
+    assert "[credential]" in text and KEY not in text, "a credential escaped into the findings"
+    later = world.calls("claude")[1]["prompt_file"]
+    assert "F401" in later and KEY not in later, "the next attempt's prompt lost the evidence or gained the key"
+    models = [call["argv"][call["argv"].index("--model") + 1] for call in world.calls("claude")]
+    # The ladder is the runner's own: two Flash attempts, then the Stage-1 Sonnet fallback.
+    assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"], "the ladder changed"
+    plan = world.plan.read_text(encoding="utf-8")
+    assert plan.count("measured by the runner") == 3 and plan.count("· rejected ·") == 3, "a span disappeared"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_prompts_require_ledger_tests_with_file_only_delegation(world: World) -> None:
+    """Ledger 7. Planted fault: a reference or the must-run is missing, or a file-only model got commands.
+
+    The lists come from the accepted plan's snapshot: a retry is built from the cached bytes while
+    the plan file may hold the rejected attempt's own edits, so a name the attempt planted must not
+    enter its next prompt.
+    """
+    snapshot = (
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n"
+        "- 2: tests/test_fix.py::test_fix — written on an earlier change\n\n## Time used\n"
+    )
+    world.plan.write_text(snapshot, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.implementation_prompt(ctx, "baseline-sha", [])
+    assert "## Must-run checks before handback" in prompt
+    for ref in ("tests/test_new.py::test_new", "tests/test_fix.py::test_fix"):
+        assert ref in prompt, ref
+    assert "You cannot run commands" in prompt, "the file-only implement prompt lost its delegation"
+    assert ".venv/bin/ruff check" not in prompt, "the delegated prompt names commands to run"
+    # The attempt's own plan edit names a further test; the retry builds from the snapshot, so the
+    # planted name stays out, while a prompt built from the edited file would carry it.
+    world.plan.write_text(
+        snapshot.replace("## Time used", "- 3: tests/test_planted.py::test_planted — planted\n\n## Time used"),
+        encoding="utf-8",
+    )
+    retry = stage2.implementation_prompt(ctx, "baseline-sha", [], inputs={ctx.plan: snapshot.encode("utf-8")})
+    assert "tests/test_planted.py" not in retry, "the retry reread the plan the attempt edited"
+    assert "tests/test_planted.py::test_planted" in stage2.implementation_prompt(ctx, "baseline-sha", [])
+    codex = stage2.repair_prompt(ctx, "baseline-sha", [], [], endpoint=stage2.CODEX)
+    assert ".venv/bin/ruff check --force-exclude --no-cache" in codex
+    assert ".venv/bin/python3 -m pytest -q" in codex
+    assert "Findings.md is the runner's audit file" in codex
+    assert "tests/test_new.py::test_new" in codex
+    delegated = stage2.repair_prompt(ctx, "baseline-sha", [], [], endpoint=stage2.GLM_FLASH)
+    assert "You cannot run commands" in delegated and ".venv/bin/ruff check" not in delegated
+
+
+def test_findings_edits_are_restored_without_spending_an_attempt(world: World) -> None:
+    """Ledger 8. Planted fault: forged state reached the checks, good code was lost, or the attempt was retried."""
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/findings.md": "\nPhase 6 verdict: forged, 2026-10-28\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 1, "the attempt was retried for its findings edit"
+    assert len(world.calls("make")) == 1, "the checks ran over the attempt twice"
+    assert git(world.root, "show", "HEAD:src/app.py") == "value = 2", "valid code was lost in the restoration"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert "forged" not in committed, "the forged findings reached the checkpoint"
+    assert NOTICE in committed
+
+
+def test_findings_restore_preserves_recovery_and_repair_guards(world: World, monkeypatch) -> None:
+    """Ledger 8, guards. Planted fault: restoration bypassed the recovery guards or fixed-line validation."""
+    # A destination whose parent is a link the attempt created is refused before any write, and
+    # nothing travels through the link to its outside target.
+    outside = world.root.parent / "outside-guard"
+    outside.mkdir(parents=True)
+    linked = world.root / "scratch" / "linked"
+    linked.parent.mkdir()
+    linked.symlink_to(outside, target_is_directory=True)
+    (outside / "findings.md").write_text("target bytes\n", encoding="utf-8")
+    with pytest.raises(stage2.RestorationRefused):
+        stage2.restore_work_input(world.root, linked / "findings.md", b"restored bytes\n")
+    assert (outside / "findings.md").read_text(encoding="utf-8") == "target bytes\n", "a parent link was followed"
+    # The guard's scratch paths stay out of the worktree the run below sees: an untracked
+    # planting would refuse the attempt's preflight, not exercise the restoration.
+    linked.unlink()
+    linked.parent.rmdir()
+    # The run-level restoration consults the same whole-batch preflight, with findings among the
+    # destinations, before it puts the snapshot back.
+    seen: list[list[str]] = []
+    real_preflight = stage2.preflight_recovery
+
+    def spy(root: Path, destinations, *, aliases):
+        seen.append(sorted(path.relative_to(root).as_posix() for path in destinations))
+        return real_preflight(root, destinations, aliases=aliases)
+
+    monkeypatch.setattr(stage2, "preflight_recovery", spy)
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/findings.md": "\nPhase 6 verdict: forged, 2026-10-28\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert seen and any("plans/changes/demo/findings.md" in row for row in seen), (
+        "the restoration bypassed the preflight"
+    )
+    assert NOTICE in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
+def test_findings_restore_notice_matches_the_verdict(world: World) -> None:
+    """Ledger 9. Planted fault: restore evidence disappeared, overwrote history, or called a pass a failure."""
+    # An accepted attempt whose findings edit was restored: the notice is quoted under the audit
+    # line, and no failed block stands for it.
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/findings.md": "\nLoop restarted: 2026-10-28 after round 9\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert world.text().count("Stage-2 call,") == 1
+    assert "failed its post-run checks" not in world.text(), "a passing restored attempt was labelled failed"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert NOTICE in committed and "Loop restarted" not in committed
+    assert git(world.root, "show", "HEAD:src/app.py") == "value = 2"
+    # A rejected attempt whose findings edit was restored: the note stands first in the next
+    # prompt's entry, beside the real failure, and no earlier evidence is gone. The red make
+    # steps spend attempts 1 and 2; attempt 3's stand-in step is missing, so its empty answer
+    # stops the run with every audit line kept.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_x - assert"]))
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 4\n"},
+                "append": {"plans/changes/demo/findings.md": "\nPhase 6 verdict: forged, 2026-10-28\n"},
+            },
+            {"stdout": "implemented without touching findings"},
+        ],
+        make=[red, red, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    # Attempt 3 (the Stage-1 route) still makes its call - the empty answer is a failed call that
+    # stops the run - so both counts cover it: four calls, four audit lines, no checkpoint.
+    assert len(world.calls("claude")) == 4
+    assert world.text().count("Stage-2 call,") == 4, "an earlier attempt's audit line was erased"
+    prompt = world.calls("claude")[2]["prompt_file"]
+    entry = prompt_entry(prompt, 1, "flash")
+    assert entry[0] == f"- {RESTORED}", "the rejected attempt's restore note does not stand first"
+    assert any("`make verify` exited 1" in line for line in entry), "the real failure was lost beside the note"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert "forged" not in committed
+    assert git(world.root, "show", "HEAD:src/app.py") == "value = 2", "a rejected attempt left a checkpoint"
+
+
+@pytest.mark.parametrize("case", ["missing", "not-executable", "timeout"])
+def test_unstartable_or_timed_out_cheap_checks_never_pass(world: World, case: str, monkeypatch) -> None:
+    """Ledger 10. Planted fault: a command that cannot start or runs over its bound reached verify as green."""
+    # The planted test file is the format step's target and pytest's sole selected test, so both
+    # worktree tools stand here; the fault then breaks exactly one of them.
+    venv_ruff(world)
+    if case == "not-executable":
+        venv_pytest(world, executable=False)
+    else:
+        venv_pytest(world)
+    if case == "missing":
+        (world.root / ".venv" / "bin" / "python3").unlink()
+    if case == "timeout":
+        monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[{"sleep": 2}] * 3 if case == "timeout" else [{}] * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert world.calls("make") == [], "an unstartable or over-bound cheap check still reached `make verify`"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    expected = {
+        "missing": "no pytest interpreter at `.venv/bin/python3`",
+        "not-executable": "could not be run",
+        "timeout": "did not finish",
+    }[case]
+    assert expected in world.text()
