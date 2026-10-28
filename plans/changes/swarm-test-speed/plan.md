@@ -166,8 +166,15 @@ passed.
 and all 24 new ids are in `tests/test_stage2_declaration.py`. The
 implementation diff changes no existing test file, gate or pytest option.
 
-**Full suite.** Timed with the next full `make verify` after the review
-repairs; recorded below when it has run.
+**Full suite.** Full `make verify` at `cf71a96c` (after the round-1
+repairs), 2026-10-28 22:14–22:25 UTC, run `nice -n 10` with `-n 4` while one
+review loop ran remotely: green; pytest 4086 passed, 17 skipped in 514.89 s;
+wall time 648 s. The slowest test calls are still in `tests/test_stage2_swarm.py`
+(the slowest 29.61 s). An earlier full run at the same stand under memory
+pressure (1861 s, 12 `TimeoutExpired`) is void and not counted. No full-suite
+baseline before the change was taken under the same conditions, so this is a
+reading, not a before/after comparison; the matched comparison above stays the
+evidence for the speed criterion.
 
 ## Runner route — 2026-10-28
 
