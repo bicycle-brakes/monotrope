@@ -167,7 +167,7 @@ and all 24 new ids are in `tests/test_stage2_declaration.py`. The
 implementation diff changes no existing test file, gate or pytest option.
 
 **Full suite.** Full `make verify` at `cf71a96c` (after the round-1
-repairs), 2026-10-28 22:14–22:25 UTC, run `nice -n 10` with `-n 4` while one
+repairs), 2026-10-28 21:14–21:25 UTC, run `nice -n 10` with `-n 4` while one
 review loop ran remotely: green; pytest 4086 passed, 17 skipped in 514.89 s;
 wall time 648 s. The slowest test calls are still in `tests/test_stage2_swarm.py`
 (the slowest 29.61 s). An earlier full run at the same stand under memory
