@@ -392,8 +392,8 @@ def branch_checkouts(root: Path, branch: str) -> list[tuple[Path, str]]:
     records: list[dict[str, str]] = []
     # With -z every attribute is its own NUL-terminated field and a record ends
     # on an empty field; a `worktree` field opens the next record.
-    for field in out.split("\0"):
-        key, _, value = field.partition(" ")
+    for attribute in out.split("\0"):
+        key, _, value = attribute.partition(" ")
         if key == "worktree":
             records.append({})
         if key and records:
