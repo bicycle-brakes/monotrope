@@ -111,6 +111,13 @@ so no lane is idle while the queue has work.
    handling; then merge `main` in, `make verify`, phase 6.
 3. coding-harness-k93f (bounded): the runner writes the fixed-line skeleton
    per taken row; the model fills only the test or the reason.
+4. coding-harness-6ie (bounded): the Sonnet fallback continues from Flash's
+   edits, and a Flash call error does not wipe them.
+5. coding-harness-mfth (bounded): a review member with no readable content
+   after the format feedback is replaced for that round only.
+6. coding-harness-pj98 (bounded): a free model that passes the probe but
+   answers 429 no longer blocks the loop.
+7. coding-harness-1gzo (bounded): a clean free round ends the loop.
 
 ### Lane B — test speed, then monitoring
 
@@ -123,6 +130,11 @@ so no lane is idle while the queue has work.
 3. Explore only, for the morning interview: coding-harness-0ho with
    coding-harness-y17 (a red-first form for fixes that live only in test
    code; seen twice on 2026-10-28), class feature.
+4. coding-harness-s9m (spike, research note only): trial the
+   criterion-ledger gate against an instance whose plans are laid out
+   differently.
+5. coding-harness-wpv (spike, research note only): an adoption date for
+   instances that receive the criterion-ledger gate later.
 
 ### Lane C — machine rules and merges
 
@@ -138,6 +150,12 @@ so no lane is idle while the queue has work.
    paths to online models through Pi's system prompt.
 4. Explore only, for the morning interview: coding-harness-3g53 (re-read
    the Go terms table at every availability preparation), class feature.
+5. coding-harness-ut8q (spike, research note only): a diff over the
+   2000-line bound can never end the review loop cleanly.
+6. coding-harness-km1 (spike, research note only): compare OpenCode Go
+   models as reviewers on a change with known findings.
+7. coding-harness-yim (bounded), the part outside `scripts/` and `tests/`:
+   translate the remaining German in `docs/governance/`, one pull request.
 
 ## Not tonight
 
