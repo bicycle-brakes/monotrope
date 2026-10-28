@@ -48,8 +48,10 @@ The maintainer settled the scope (`decisions.md#Q-1`): an uncaught
 `AssertionError` and pytest's own `Failed` outcome both count as red; a
 missing helper (`NameError`, `ImportError`, `AttributeError` on a name the
 baseline lacks) stays not red. This spec amends the term "Assertion failure"
-and criterion 4 of `plans/changes/red-first-install/spec.md`; that folder
-stays untouched as the record of the preceding contract.
+and criterion 4 of `plans/changes/red-first-install/spec.md`. That spec
+keeps its original text as the record of the preceding contract; it only
+gains an amendment note on the term and on criterion 4 pointing here, so a
+reader of the predecessor alone is not misled (review loop row L1-5).
 
 ## Terms
 
@@ -126,8 +128,9 @@ stays untouched as the record of the preceding contract.
 - Provisioning baseline dependencies, and any change to routing, attempts,
   timeouts, scratch-checkout construction, cleanup, ref protection or
   credential scrubbing.
-- Editing the predecessor artifacts under `plans/changes/red-first-install/`
-  or any other change folder: the amendment lives in this spec.
+- Rewriting the predecessor artifacts under `plans/changes/red-first-install/`
+  or any other change folder: the amendment lives in this spec; the
+  predecessor spec carries only the amendment note named above.
 - A `design.md` or an ADR: the class-based design rule excludes phase 2b
   for a `bounded` change, and no file under `docs/adr/` changes.
 
