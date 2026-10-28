@@ -836,3 +836,5 @@ Definition of Done, plan step 10), one lane at a time on the machine, command
 
 `test_terminal_record_survives_sigkill_after_the_outcome` failed in none of
 them (no mention of it in any run's output).
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 710 files, 2417 commits, 12 rules.
