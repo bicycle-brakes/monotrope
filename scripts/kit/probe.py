@@ -344,6 +344,8 @@ def _faelle(ziel: Path) -> dict[str, bool]:
     # Wegwerf-Repo gegen unseren Stand gruen werden — die Quote stiege, ohne
     # dass etwas reist (bead 1jg.3).
     umgebung = {k: v for k, v in os.environ.items() if k != "BEAD_RENDER"}
+    # Only the isolated probe may skip repository commands that do not travel.
+    umgebung["HARNESS_KIT_PROBE"] = "1"
     subprocess.run(
         [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-p", "no:cacheprovider", f"--junit-xml={bericht}"],
         cwd=ziel,

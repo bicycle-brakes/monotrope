@@ -354,10 +354,10 @@ Checked on 2026-10-22 against `main` at `72935a6`.
 
 ### Not built yet
 
-- A validator for the change files, a stop hook that blocks a session end on a
-  red tree, slash commands, a `make change` shortcut (the script
-  `scripts/new_change.py` exists; the target does not), and a catalogue of
-  every gate: described in the doctrine, not built.
+- A validator for the change files and a stop hook that blocks a session end
+  on a red tree: described in the doctrine, not built. The `/workflow-start`
+  command, the `make change` and `make index` targets and the gate catalogue
+  (`docs/governance/gate-catalog.md`) exist since bead coding-harness-i0l.
 - The research swarm for larger changes (a draft proposal), a sandbox around
   paid reviewers, and keeping the work of a failed model call (partly built).
 - Orchestration of many agents in parallel: evaluated, not built.

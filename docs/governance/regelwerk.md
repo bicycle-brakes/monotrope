@@ -6,7 +6,7 @@ status: current
 version: 5.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-10-08
+updated: 2026-10-28
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -334,7 +334,7 @@ Dauerzustand werden, der es sonst immer wird.
 ## 8 Verwandte Seiten
 
 - [Quality Gates](quality-gates.md) — was HG-1…HG-4 und MG-0…MG-3 bedeuten und wer unterschreibt
-- [Gate-Katalog](gate-catalog.md) — die zwölf Gate-Familien, nach *was findet es* sortiert
+- [Gate catalog](gate-catalog.md) — the declared machine gates, their execution and enforcement metadata, and the existing rule for enabling a gate
 - [Fehler-Katalog](fehler-katalog.md) — die Befunde, aus denen diese Regeln entstanden sind
 - [Component Guardrails](component-guardrails.md) — die Leiter aus §3 und was eine Kontrolle kostet
 - [ADR-027](../adr/027-evidenz-und-provenienz.md) · [ADR-028](../adr/028-gate-und-guard-design.md)
