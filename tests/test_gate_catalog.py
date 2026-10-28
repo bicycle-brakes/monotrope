@@ -83,6 +83,11 @@ def _rows(block: str) -> list[dict[str, str]]:
     return out
 
 
+def _shown(text: str) -> str:
+    """A declared value as a table cell shows it: a cell holds one line, so a line break reads as a space."""
+    return text.replace("\n", " ")
+
+
 def _expected_cells(g: dict[str, Any]) -> dict[str, str]:
     """One declared gate, formatted independently of the renderer under test."""
     if g["action"]:
@@ -93,14 +98,14 @@ def _expected_cells(g: dict[str, Any]) -> dict[str, str]:
     else:
         einsatz = f"`{g['command']}`"
     return {
-        "id": g["id"],
-        "title": g["name"],
-        "command / action": einsatz,
-        "job": g["job"],
-        "enforcement": g["enforcement"],
+        "id": _shown(g["id"]),
+        "title": _shown(g["name"]),
+        "command / action": _shown(einsatz),
+        "job": _shown(g["job"]),
+        "enforcement": _shown(g["enforcement"]),
         "floor": "yes" if g["floor"] else "no",
-        "placement": g["placement"],
-        "reason": g["reason"],
+        "placement": _shown(g["placement"]),
+        "reason": _shown(g["reason"]),
     }
 
 
@@ -209,6 +214,8 @@ def test_catalog_renders_commands_and_actions() -> None:
     rows = _rows("\n".join(zeilen))
     assert rows[0]["title"] == "a | b", "the pipe must survive escaped"
     assert rows[0]["reason"] == "first line second line", "the newline must not break the row"
+    # Freshly regenerated multiline metadata is not drift (phase-6 row F6-1).
+    assert _drift(pipig, rows) == [], "a regenerated multiline value reads as drift"
 
 
 def test_catalog_drift_is_rejected() -> None:
