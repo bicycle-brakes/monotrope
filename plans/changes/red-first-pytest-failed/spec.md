@@ -182,7 +182,7 @@ None open. Decisions this draft made visibly, each freely revisable:
 - [DETAIL] The predecessor keeps its text; this spec's Problem and criteria
   state the amendment, and the predecessor gains only the two pointers the
   Problem names (review loop rows L1-5, L3-1, L3-4).
-- [DETAIL] One hour of phase 4, repairs included — the code change is two
-  seams in one file plus tests; a stop, not an estimate. At the stop on
-  2026-10-27 the maintainer named a new appetite of four hours in total
-  (`plan.md`, Time used; review loop row L3-2).
+- [DETAIL] Four hours of phase 4 in total, repairs included — a stop, not
+  an estimate. The draft set one hour (two seams in one file plus tests);
+  at that stop on 2026-10-27 the maintainer named four hours in total
+  (`plan.md`, Time used; review loop rows L3-2, L6-1).
