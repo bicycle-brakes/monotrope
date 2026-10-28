@@ -54,14 +54,15 @@ this draft.
    ordinary changed `.py` paths; skip aliases/hard links as existing format
    selection does and leave their final verdict to the unchanged gates.
    Pass paths as argv, never a shell command.
-4. In `scripts/stage2.py`, select surviving changed `tests/**/test_*.py`
-   files, direct static importers under that test pattern of changed
-   `scripts/` modules (deleted modules included), and the snapshotted plan's
-   ledger ids using `check_criterion_ledger.ledger_sections`/`parse_entry`.
-   Both test entry forms count; ignore fenced examples and `not a test`.
-   Match AST `import`/`from` statements, including aliases and `scripts.`
-   qualification, without importing files; do not follow dynamic/transitive
-   dependencies. Deduplicate/sort; whole-file selection subsumes its ids.
+4. In `scripts/stage2.py`, select (amended 2026-10-28, `decisions.md#Q-3`):
+   in each surviving changed `tests/**/test_*.py` file, the top-level
+   `test_*` functions that are new or whose AST differs from HEAD's (a file
+   absent at HEAD whole); the snapshotted plan's ledger ids as function ids,
+   using `check_criterion_ledger.ledger_sections`/`parse_entry`, both test
+   entry forms, ignoring fenced examples and `not a test`; and, on a retry,
+   the `FAILED <node id>` lines pytest printed in the previous attempt of the
+   same run. Parse files, never import them. No importer selection.
+   Deduplicate and sort.
    A selection/read/parse failure is a diagnostic, never an empty green set.
    Run `.venv/bin/python3 -m pytest -q -n auto` with the explicit targets
    only (revised 2026-10-28, see "Plan revision" below).

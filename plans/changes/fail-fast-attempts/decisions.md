@@ -99,6 +99,44 @@ checks the rest of the attempt as usual. The repair prompt names
 way; rejecting the whole attempt cost 1465 s on 2026-10-27 for an edit the
 runner can undo.
 
+## Q-3 · Which tests the cheap pytest check selects
+
+context: |
+  Topic: the selection of the cheap pytest check before make verify
+  (spec criterion 3, plan step 4).
+  Intention: two implement attempts on 2026-10-28 were refused because the
+  cheap check over the selected targets passed the runner's five-minute
+  tool limit; the selection had to change before another attempt.
+  Today: changed test files as a whole, every test file that imports a
+  changed scripts/ module, and the ledger's tests. For scripts/stage2.py
+  that is 13 of 59 test files with about 1076 of 2153 test functions
+  (measured 2026-10-28 at 1dabcabf). Measured under load: the two changed
+  test files alone took 5:11 min; only the changed or new test functions
+  plus the new test file, 82 tests, took 48 s.
+  Repository change: criterion 3 and plan step 4; the selection becomes
+  changed or new test functions instead of whole files, the ledger's test
+  functions, and on a retry the tests the previous attempt reported as
+  failed; importers drop out.
+  Architecture change: none; make verify still runs after a green cheap
+  check.
+  Question: should the cheap check select that way?
+asked: 2026-10-28, the directing conversation (asked three times; the
+  maintainer twice asked to think again and to check, then answered)
+answer: option 1 — yes, changed or new test functions, the ledger's test
+  functions and the previous attempt's failed tests, without importers;
+  a failure only an unchanged test using a changed test helper finds shows
+  up in make verify
+answered_by: maintainer
+status: answered
+
+In the context of a cheap pre-check that must stay inside the runner's
+five-minute tool limit, facing whole-file and importer selection that grew
+to half the suite for scripts/stage2.py, we decided to select changed or
+new test functions, the ledger's test functions and the previous attempt's
+failed tests, to achieve that a repeated failure stops in seconds, accepting
+that a failure reached only through a changed test helper waits for make
+verify. — 2026-10-28
+
 ## Drafting details — 2026-10-28
 
 The drafting call (Codex, attempt 1) wrote these details; the runner put

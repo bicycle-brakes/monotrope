@@ -47,10 +47,13 @@ Research: `research.md`. Decisions: `decisions.md`.
   formatting and before `make verify`.
 - **Changed files:** changes against the invocation's HEAD, including new
   untracked files and work retained from preceding failed attempts.
-- **Selected tests:** surviving changed `tests/**/test_*.py` files, direct
-  static test-file importers of changed `scripts/` Python modules, and test
-  references in either test form of the accepted plan's criterion ledger;
-  whole-file targets cover references within that file, without duplicates.
+- **Selected tests** (amended 2026-10-28, `decisions.md#Q-3`): in a changed
+  `tests/**/test_*.py` file, the top-level test functions that are new or
+  whose source differs from HEAD (a new file whole); the accepted plan's
+  criterion-ledger test references in either test form, as function ids;
+  and, on a retry, the test ids pytest reported as failed in the previous
+  attempt of the same run; without duplicates. Importers of changed
+  `scripts/` modules are not selected.
 - **Findings snapshot:** the runner's findings immediately before the model
   call, including this attempt's audit and all preceding evidence.
 
@@ -68,9 +71,11 @@ Research: `research.md`. Decisions: `decisions.md`.
 
 3. When an implement or repair attempt reaches cheap pytest, its explicit
    targets equal the selected tests defined above.
-   *Refuted by:* omitting a new/modified test, a direct importer, a ledger
-   test (including one marked not yet written), or retained changes; naming
-   a deleted test file or adding unrelated discovery also refutes it.
+   *Refuted by:* omitting a new or modified test function, a ledger test
+   (including one marked not yet written) or, on a retry, a test the
+   previous attempt reported as failed; selecting a whole changed file that
+   is not new, an importer, a deleted test file or unrelated discovery also
+   refutes it. (Amended 2026-10-28, `decisions.md#Q-3`.)
 
 4. If a cheap command's target set is empty, that command is skipped.
    *Refuted by:* invoking ruff or pytest without explicit targets, or
