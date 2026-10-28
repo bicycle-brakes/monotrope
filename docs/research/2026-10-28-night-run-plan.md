@@ -84,14 +84,14 @@ Unchanged (`docs/WORKFLOW.md`, "Night runs"; maintainer, 2026-10-26):
 
 Also tonight:
 
-3. **An interview question parks the change, not the lane.** A `feature`
+1. **An interview question parks the change, not the lane.** A `feature`
    change owes at least three maintainer answers. At night such a change
    runs its explore and stops before the interview; the lane takes its next
    item. A `bounded` change takes a reasoned skip or details where the
    decision is the agent's, and parks on a real `[DECISION]`.
-4. **An appetite stop parks the change.** The orchestrator may answer cut,
+2. **An appetite stop parks the change.** The orchestrator may answer cut,
    park or drop, never continue; the lane takes its next item.
-5. **Only one lane changes `scripts/stage2.py`** (lane A).
+3. **Only one lane changes `scripts/stage2.py`** (lane A).
 
 ## The three queues
 
@@ -124,13 +124,16 @@ so no lane is idle while the queue has work.
    coding-harness-y17 (a red-first form for fixes that live only in test
    code; seen twice on 2026-10-28), class feature.
 
-### Lane C — merges and machine rules
+### Lane C — machine rules and merges
 
-1. `index-merge-regenerates` (coding-harness-njtm, -hfsz, -eq6y): full
+1. coding-harness-p6mu (bounded, raised to P0): a machine-wide lock and a
+   memory floor for every verify-bearing run, so lanes queue instead of
+   overloading the machine. **The maintainer, 2026-10-28: "sowas wie eben
+   darf nicht mehr passieren" — a memory stop must not happen again.** Its
+   explore and draft start at once (remote steps); its implement takes the
+   first free verify slot after lane A's runner attempt.
+2. `index-merge-regenerates` (coding-harness-njtm, -hfsz, -eq6y): full
    `make verify` in its slot; then the review loop, phase 6, pull request.
-2. coding-harness-p6mu (bounded): one `make verify` per machine — parallel
-   lanes queue the full run instead of overloading the machine. Tonight's
-   resource rule, built into the tooling.
 3. coding-harness-xul8 (bounded): the research swarm sends local absolute
    paths to online models through Pi's system prompt.
 4. Explore only, for the morning interview: coding-harness-3g53 (re-read
