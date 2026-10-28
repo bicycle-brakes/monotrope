@@ -83,7 +83,10 @@ Starts unless you say stop.
   frontmatter for every artefact the existing renderer consumes, and reject
   unresolved conflict markers in those inputs. Handle missing parents and
   index creation/deletion without reading either parent's output as truth.
-- Run the invoking committed renderer against that merged data, using the
+- Run the renderer of the fetched `origin/main` (revised 2026-10-28, review
+  row L1-10: the invoking checkout may be behind or on another branch, and
+  then renders with code the pushed branch's gate does not run; main is
+  merged, reviewed code, never candidate PR code) against that merged data, using the
   scratch-mirror pattern of `stage2.trusted_registry`: committed `scripts/`,
   candidate plans data, private HOME/TMPDIR, no candidate program or hook
   execution, and no symlink escape or hardlink write into a checkout.

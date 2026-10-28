@@ -891,3 +891,112 @@ def test_registry_still_blocks_without_repair(tmp_path: Path, monkeypatch: pytes
     assert blocked.exit_code(strict=False) != 0, "a stale index passed the gate"
     assert "deviates from its inputs" in blocked.render()
     assert reg.INDEX.read_bytes() == before, "checking repaired the index instead of measuring it"
+
+
+# ---------------------------------------------------------------------------
+# Review loop round 1 (2026-10-28): rows the orchestrator repaired by hand; each
+# test was red on the code before its fix.
+# ---------------------------------------------------------------------------
+
+
+def _pr_sync():
+    import importlib
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    return importlib.import_module("pr_sync")
+
+
+def _repo(path: Path) -> Path:
+    path.mkdir(parents=True)
+    _git(path, "init", "--quiet", "--initial-branch=main")
+    _git(path, "config", "user.email", "test@example.invalid")
+    _git(path, "config", "user.name", "Test")
+    return path
+
+
+RENDERER_SAYING = """#!/usr/bin/env python3
+from pathlib import Path
+
+(Path(__file__).resolve().parent.parent / "plans" / "INDEX.md").write_text({!r}, encoding="utf-8")
+"""
+
+
+def test_a_decision_label_is_protected_in_any_case() -> None:
+    """Row L1-15. Planted fault: a label `Decision` was treated as ordinary work."""
+    m = _pr_sync()
+    pull = m.Pull(
+        number=1,
+        url="https://github.invalid/o/r/pull/1",
+        title="a change",
+        created=dt.datetime(2026, 10, 20, tzinfo=dt.UTC),
+        base="main",
+        branch="feat/a",
+        head="0" * 40,
+        cross_repository=False,
+        labels=["Decision"],
+    )
+    assert (m.classify_skip(pull, []) or "").startswith("protected: decision")
+
+
+def test_a_plans_file_in_the_tree_is_a_reported_failure(tmp_path: Path) -> None:
+    """Row L1-7. Planted fault: a regular file named `plans` crashed the run with IsADirectoryError."""
+    m = _pr_sync()
+    repo = _repo(tmp_path / "repo")
+    (repo / "plans").write_text("not a directory\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "plans_registry.py").write_text(RENDERER_SAYING.format("x\n"), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "a file where the plans tree belongs")
+    tree = _git(repo, "rev-parse", "HEAD^{tree}")
+    with pytest.raises(m.Failed):
+        m.Render(repo, tree)
+
+
+def test_a_fenced_conflict_marker_does_not_refuse_the_render(tmp_path: Path) -> None:
+    """Row L1-11. Planted fault: a conflict marker quoted in a fenced example refused every merge."""
+    m = _pr_sync()
+    repo = _repo(tmp_path / "repo")
+    (repo / "plans" / "x").mkdir(parents=True)
+    (repo / "plans" / "x" / "plan.md").write_text(
+        "---\ntitle: Plan\nbead: x-1\n---\n\n# Plan\n\n```text\n<<<<<<< ours\n=======\n>>>>>>> theirs\n```\n",
+        encoding="utf-8",
+    )
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "plans_registry.py").write_text(RENDERER_SAYING.format("index\n"), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "a plan that quotes conflict markers")
+    with m.Render(repo, _git(repo, "rev-parse", "HEAD^{tree}")) as render:
+        assert render.run() == b"index\n"
+
+
+def test_the_index_is_rendered_by_mains_scripts_not_the_checkout(tmp_path: Path) -> None:
+    """Row L1-10. Planted fault: the operator's older checkout rendered the index the gate then rejects."""
+    m = _pr_sync()
+    repo = _repo(tmp_path / "repo")
+    (repo / "plans" / "x").mkdir(parents=True)
+    (repo / "plans" / "x" / "spec.md").write_text("---\ntitle: Spec\nbead: x-1\n---\n\n# Spec\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    registry = repo / "scripts" / "plans_registry.py"
+    registry.write_text(RENDERER_SAYING.format("old renderer\n"), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "the older renderer")
+    old = _git(repo, "rev-parse", "HEAD")
+    registry.write_text(RENDERER_SAYING.format("main renderer\n"), encoding="utf-8")
+    _git(repo, "commit", "--quiet", "-am", "main's renderer")
+    main_tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "--quiet", "--detach", old)
+    prepared = m.prepare_merge(repo, "feat/x", main_tip, main_tip, two_parent=False)
+    assert _git(repo, "show", f"{prepared.oid}:plans/INDEX.md") == "main renderer"
+
+
+def test_a_fetched_branch_that_differs_is_not_called_ahead(tmp_path: Path) -> None:
+    """Rows L1-12, L1-14. Planted fault: a differing fetched branch was reported as ahead, with no ancestry measured."""
+    world = World(tmp_path)
+    world.branch("feat/x")
+    world.write_plans("x/spec.md", _artefact("X", "x-1"))
+    world.commit_index([("alpha/spec.md", "alpha-1"), ("x/spec.md", "x-1")], "a change")
+    world.push("feat/x")
+    other = world.origin_ref("refs/heads/main")
+    done = world.run_sync(pulls=[Pull(7, "feat/x", other)])
+    assert "differs from the pull-request head" in done.stdout, done.stdout
+    assert "already ahead" not in done.stdout

@@ -452,15 +452,17 @@ def merge_tree(root: Path, head: str, main_tip: str) -> tuple[str, list[str]]:
 class Render:
     """The committed renderer run against one tree's plans inputs, in private.
 
-    The mirror holds the merged tree's `plans/` as real files and the invoking
-    commit's `scripts/` as the code — the scratch-mirror pattern of
+    The mirror holds the merged tree's `plans/` as real files and `code`'s
+    `scripts/` as the code - the fetched `origin/main` in both commands, so the
+    index is rendered by the renderer the pushed branch's gate runs, never by an
+    older checkout (review row L1-10), and never by candidate pull-request code — the scratch-mirror pattern of
     `stage2.trusted_registry`, with the data narrowed to the one directory the
     renderer reads. Writes stay inside the scratch holder; the renderer runs
     with a private HOME and TMPDIR and a preset-but-absent tracker render, so
     no candidate program, hook or tracker write can occur.
     """
 
-    def __init__(self, root: Path, tree: str) -> None:
+    def __init__(self, root: Path, tree: str, code: str = "HEAD") -> None:
         self._holder = Path(tempfile.mkdtemp(prefix="pr-sync-render-"))
         try:
             self.mirror = self._holder / "mirror"
@@ -469,7 +471,7 @@ class Render:
             if plans.returncode != 0:
                 raise Failed(f"the merged plans tree could not be materialised: {tail(plans.stderr)}")
             self._extract(plans.stdout, self.mirror / "plans", "plans")
-            scripts = git(root, "archive", "--format=tar", "HEAD", "scripts")
+            scripts = git(root, "archive", "--format=tar", code, "scripts")
             if scripts.returncode != 0:
                 raise Failed(f"the committed scripts could not be materialised: {tail(scripts.stderr)}")
             self._extract(scripts.stdout, self.mirror / "scripts", "scripts")
@@ -491,11 +493,15 @@ class Render:
                         raise Failed(f"the tree entry {member.name} would escape the scratch mirror")
                     parts = relative.parts[1:] if relative.parts[:1] == (top,) else relative.parts
                     destination = target.joinpath(*parts)
-                    destination.parent.mkdir(parents=True, exist_ok=True)
                     extracted = tar.extractfile(member)
                     if extracted is None:
                         raise Failed(f"the tree entry {member.name} could not be read")
-                    destination.write_bytes(extracted.read())
+                    try:
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_bytes(extracted.read())
+                    except OSError as error:
+                        # A file where the tree needs a directory, or the reverse (review row L1-7).
+                        raise Failed(f"the tree entry {member.name} cannot be materialised ({error})") from error
         except tarfile.TarError as error:
             raise Failed(f"the tree archive could not be read ({error})") from error
 
@@ -521,8 +527,15 @@ class Render:
                 raise Failed(f"{rel}: no readable frontmatter") from None
             if not isinstance(meta, dict):
                 raise Failed(f"{rel}: no readable frontmatter")
+            fence: str | None = None
             for line in text.splitlines():
-                if line.startswith("<<<<<<< ") or line.startswith(">>>>>>> "):
+                stripped = line.lstrip()
+                marker = stripped[:3] if stripped[:3] in ("```", "~~~") else None
+                if marker is not None:
+                    # A marker quoted in a fenced example is text, not a conflict (review row L1-11).
+                    fence = None if fence == marker else (fence or marker)
+                    continue
+                if fence is None and (line.startswith("<<<<<<< ") or line.startswith(">>>>>>> ")):
                     raise Failed(f"{rel}: unresolved conflict markers")
 
     def run(self) -> bytes:
@@ -627,7 +640,7 @@ def prepare_merge(root: Path, branch: str, head: str, main_tip: str, *, two_pare
                 root, merged, [head, main_tip], f"Merge origin/main into {branch}\n\nNo plans tree to regenerate."
             )
             return Prepared(oid, f"merged origin/main ({main_tip})")
-        with Render(root, merged) as render:
+        with Render(root, merged, main_tip) as render:
             index_bytes = render.run()
         tree = tree_with_regenerated_index(root, merged, index_bytes)
         oid = build_commit(
@@ -640,7 +653,7 @@ def prepare_merge(root: Path, branch: str, head: str, main_tip: str, *, two_pare
         )
         return Prepared(oid, f"merged origin/main ({main_tip}), regenerated {INDEX_PATH}")
     tree = git_out(root, "rev-parse", f"{head}^{{tree}}").strip()
-    with Render(root, tree) as render:
+    with Render(root, tree, main_tip) as render:
         index_bytes = render.run()
     regenerated = tree_with_regenerated_index(root, tree, index_bytes)
     oid = build_commit(
@@ -777,7 +790,7 @@ def classify_skip(pull: Pull, held: list[str]) -> str | None:
         return "outside scope: fork pull request"
     if pull.base != "main":
         return f"outside scope: base '{pull.base}' is not main"
-    if "decision" in pull.labels:
+    if any(label.casefold() == "decision" for label in pull.labels):
         return "protected: decision pull request (label: decision)"
     if pull.title.startswith("decide("):
         return "protected: decision pull request (title starts with decide()"
@@ -908,8 +921,8 @@ def sync_main(root: Path, gh: str, today: dt.date) -> int:
                     (
                         pull,
                         "moved",
-                        "the fetched branch is already ahead of the "
-                        f"pull-request head ({pull.head[:12]} -> {branch_ref[:12]})",
+                        f"the fetched branch ({branch_ref[:12]}) differs from the pull-request head "
+                        f"({pull.head[:12]}); nothing is pushed",
                     )
                 )
                 continue
