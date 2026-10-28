@@ -259,3 +259,30 @@ measurement the explorer could not see.
   22.8 s, `test_stage2_research_catalog.py` 11.7 s, `test_bead_render.py`
   10.0 s. `tests/test_stage2.py` (1230 tests) has none in the top 50. The
   raw list is not in the repository; the numbers are in the bead's notes.
+
+## Orchestrator profile — 2026-10-28
+
+One profile of the slowest swarm test, measured 2026-10-28 at `bb1585c7`
+(`python3 -m cProfile -m pytest -p no:xdist tests/test_stage2_swarm.py -k
+test_research_carries_practice_architecture_and_adjacent_spec_comparisons`;
+the profiler roughly doubles wall time: 69.9 s here against 32.9 s in the
+baseline):
+
+- `yaml.safe_load`: 509 calls, 46.8 s cumulative (0.092 s each), of which
+  `stage2_availability.read_declaration` 376 calls, 37.3 s — the 578-line
+  declaration parsed again before every slot (`Run.gate`, 156 calls) and in
+  `research_terms_problem` (312 calls, 24.8 s, overlapping).
+- `leakcheck.check`: 156 calls, 20.1 s, of which `leakcheck._git` 468
+  subprocess calls, 15.8 s.
+- The store's sealing (`_seal`, 327 calls) costs 0.05 s in total; it is not
+  a cause.
+- PyYAML 6.0.2 in the venv is built with libyaml
+  (`yaml.__with_libyaml__ == True`), but `read_declaration` uses the
+  pure-Python `safe_load`.
+
+So the cost sits in production code the tests drive (`scripts/`), not in
+the test fixtures: the per-slot re-read of the declaration dominates, the
+per-slot leak check comes second. A test-only change can shrink the
+declaration the fixture copies; a production change could parse with the
+C loader or reuse a parse while the file bytes are unchanged. Which of the
+two is in scope is a maintainer question (the bead says test-only).
