@@ -63,7 +63,8 @@ this draft.
    qualification, without importing files; do not follow dynamic/transitive
    dependencies. Deduplicate/sort; whole-file selection subsumes its ids.
    A selection/read/parse failure is a diagnostic, never an empty green set.
-   Run `.venv/bin/python3 -m pytest -q` with the explicit targets only.
+   Run `.venv/bin/python3 -m pytest -q -n auto` with the explicit targets
+   only (revised 2026-10-28, see "Plan revision" below).
 5. In `scripts/stage2.py`, use `runner_env`, the original `tool_state`,
    `launch` and `TOOL_SECONDS` for each cheap command. Stop at the first red,
    launch error or timeout before derived preparation and `make verify`.
@@ -169,6 +170,20 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 ## Runner route — 2026-10-28
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: three attempts rejected; six pre-existing tests left red; Sonnet came closest in attempt 3; 1.6 h of the 5.5 h appetite left.
+
+## Plan revision — 2026-10-28
+
+`[DETAIL]`, decided by the orchestrating session. Step 4 ran the selected
+tests serially. Measured on 2026-10-28: implement attempt 1 of the Sonnet
+route (18:34–18:41 UTC) was refused because the runner's own cheap pytest
+check over the selected targets, which included the whole of
+`tests/test_stage2.py` (1230 tests), "did not finish: .venv/bin/python3 was
+stopped by the runner's tool limit after 5 minutes". The cheap check now
+runs with `-n auto`, the same parallelism the `pytest` gate uses
+(`decisions/gates.yaml`), and keeps `TOOL_SECONDS` unchanged. The runner
+judges an attempt with the worktree's own `scripts/stage2.py`
+(`REPO_ROOT` from the file path), so the change's cheap checks already ran
+on itself; that is how the gap showed.
 
 ## Time used
 
