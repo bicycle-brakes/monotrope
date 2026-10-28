@@ -473,3 +473,16 @@ def test_workflow_notice_records_supplied_commands() -> None:
         ".claude/hooks/session-stop/check-tests-green.sh",
     ):
         assert piece in absent
+
+
+@COMMAND_SKIP
+def test_workflow_start_name_rule_matches_the_entry_script() -> None:
+    """Review row L3-1: the command's name pre-check is the entry script's own rule.
+
+    A looser pattern lets `abc-` or `a--b` past the command's usage check only
+    for the script to refuse it with a different message.
+    """
+    text = COMMAND.read_text(encoding="utf-8")
+    assert f"`{new_change.NAME_PATTERN.pattern}`" in text, (
+        "the command's name rule differs from scripts/new_change.py NAME_PATTERN"
+    )

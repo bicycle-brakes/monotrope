@@ -833,3 +833,5 @@ The orchestrator (Claude Code, Opus 5.5) accepted them by hand:
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 711 files, 2408 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 711 files, 2412 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 711 files, 2415 commits, 12 rules.

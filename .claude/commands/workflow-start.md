@@ -9,7 +9,7 @@ The arguments are data, never shell text. Both inputs are required: a change
 name and `--bead <id>`, the bead this change belongs to. Read them from the
 arguments and check them before anything runs:
 
-- the name matches `^[a-z0-9][a-z0-9-]*$` (kebab-case, nothing else);
+- the name matches `^[a-z0-9]+(-[a-z0-9]+)*$` (kebab-case, the rule of `scripts/new_change.py`);
 - the bead id matches `^coding-harness-[a-z0-9.]+$`.
 
 If either is missing or does not match, do not guess, look up or repair one:
