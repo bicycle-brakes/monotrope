@@ -380,3 +380,18 @@ Stage-2 call, 2026-10-28: repair · attempt 3 · route stage-1 · endpoint claud
 > - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-pytest-failed/stage2/attempts/red-first-pytest-failed/attempt-3-20261027T222154909629Z-97e3bfaf.md
 > ```
+
+## Red-then-green measurement of the new tests — 2026-10-28
+
+Measured by the orchestrator (Claude Code, Opus 5.5) for loop row L1-4, because
+`findings.md` is runner-owned and a repair attempt may not write it.
+
+- Baseline `0872d0cc` (merge base with `origin/main`) with this branch's
+  `tests/test_stage2.py` copied in, command
+  `python -m pytest -q -p no:cacheprovider tests/test_stage2.py -k "<test>"`:
+  `test_red_first_accepts_pytest_failed_call_outcomes`,
+  `test_fixed_code_proof_keeps_pytest_failed_red` and
+  `test_repair_accepts_a_pytest_failed_baseline_proof` each **failed** with an
+  `AssertionError` (1 failed each; the first one's message: "failed with
+  Failed, not an AssertionError").
+- Branch head `b7048d9c`, same command over the three tests: **3 passed**.
