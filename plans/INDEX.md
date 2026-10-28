@@ -231,6 +231,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-pytest-failed/decisions.md`](changes/red-first-pytest-failed/decisions.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/findings.md`](changes/red-first-pytest-failed/findings.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
@@ -352,4 +357,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-stages-new-files/plan.md`](changes/verify-stages-new-files/plan.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/research.md`](changes/verify-stages-new-files/research.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/spec.md`](changes/verify-stages-new-files/spec.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/workflow-promises/decisions.md`](changes/workflow-promises/decisions.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
+| [`changes/workflow-promises/findings.md`](changes/workflow-promises/findings.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
+| [`changes/workflow-promises/plan.md`](changes/workflow-promises/plan.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
+| [`changes/workflow-promises/research.md`](changes/workflow-promises/research.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
+| [`changes/workflow-promises/spec.md`](changes/workflow-promises/spec.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
