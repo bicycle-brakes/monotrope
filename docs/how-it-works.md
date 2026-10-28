@@ -121,9 +121,10 @@ flowchart LR
 refreshed catalog comes from Pi’s intermediary `pi.dev`; membership does not
 measure actual free billing. Paid models require a retention reading with a
 declared expiry date and terms excluding training
-([ADR 0022](adr/0022-paid-model-terms-expire.md)); ineligible members are skipped and named. The loop
-stops when clean, when the paid ladder is exhausted, or after two consecutive
-rounds accepting only findings caused by the preceding repairs.
+([ADR 0022](adr/0022-paid-model-terms-expire.md)); ineligible members are
+skipped and named. The loop stops when clean, when the paid ladder is
+exhausted, or after two consecutive rounds accepting only findings caused by
+the preceding repairs.
 
 ### Runner details
 
@@ -158,8 +159,9 @@ three repository seats, and three about outside practice, each read by three
 online seats; selected free models add public topics, best effort. One fresh
 Opus 5.5 context reconciles the reports into `research.md`. Every call goes
 through the runner and its leak check; a run that misses a required part is
-marked incomplete and exits with an error. The `research-handoff` and `interview-minimums` gates then check that
-the spec and the interview carry what the research found.
+marked incomplete and exits with an error. The `research-handoff` and
+`interview-minimums` gates then check that the spec and the interview carry
+what the research found.
 
 ```mermaid
 flowchart LR

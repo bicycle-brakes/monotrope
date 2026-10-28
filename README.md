@@ -332,7 +332,7 @@ mechanics and the test count, with what it does not prove, are in
 
 ## What works today
 
-Checked on 2026-10-22 against `main` at `72935a6`.
+Checked on 2026-10-28 against `main` at `a6ddd9d1`.
 
 ### Enforced by tooling
 
@@ -343,6 +343,15 @@ Checked on 2026-10-22 against `main` at `72935a6`.
   implementing, repairing and reviewing by other models all go through it.
 - The review loop runs until a round is clean or a named stop (ADR 0021), with
   the availability probe and its receipt before a fresh run.
+- The research swarm explores `feature` and `architectural` changes
+  (ADR 0020), and gates check that the interview and the spec carry what it
+  found.
+- A paid model whose terms reading has passed its declared date gets no calls
+  (ADR 0022).
+- A repair counts only when its test fails on the code before the repair —
+  by an assertion or pytest's own failed outcome, never by a crash.
+- `main` takes a pull request only when it is up to date with `main` and the
+  `verify` check is green (repository ruleset).
 
 ### Written rules agents follow, not enforced by a tool
 
@@ -351,6 +360,9 @@ Checked on 2026-10-22 against `main` at `72935a6`.
 - The communication form: a gate checks that the context is there, not how it
   is worded.
 - One writer per tracker, until the write guard exists.
+- The rules that keep pull requests mergeable, the daily decision block and
+  the night-run rules: the daily sync is done by hand or by an agent until
+  its script exists.
 
 ### Not built yet
 
@@ -358,8 +370,11 @@ Checked on 2026-10-22 against `main` at `72935a6`.
   on a red tree: described in the doctrine, not built. The `/workflow-start`
   command, the `make change` and `make index` targets and the gate catalogue
   (`docs/governance/gate-catalog.md`) exist since bead coding-harness-i0l.
-- The research swarm for larger changes (a draft proposal), a sandbox around
-  paid reviewers, and keeping the work of a failed model call (partly built).
+- A sandbox around paid reviewers, and keeping the work of a failed model
+  call (partly built).
+- The daily pull-request sync as a script, and regenerating `plans/INDEX.md`
+  on a merge conflict (in work, beads coding-harness-eq6y and
+  coding-harness-hfsz).
 - Orchestration of many agents in parallel: evaluated, not built.
 
 ## See a completed change
@@ -391,7 +406,8 @@ page is still being built. Until then, [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 is the reference.
 
 To start a change, create its bead (the tracker item) first, with the class in
-its description, then `python3 scripts/new_change.py <name> --bead <id>`, and
+its description, then `make change NAME=<name> BEAD=<id>` (in Claude Code:
+`/workflow-start <name> --bead <id>`), and
 read [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
 
 ## Go deeper
