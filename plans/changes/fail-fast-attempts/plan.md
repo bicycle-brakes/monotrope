@@ -198,6 +198,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: selection amended
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: one cheap-check test left red (a missing ledger test is not named in the diagnostic); about 1.2 h of the 5.5 h appetite left.
 
+## Runner route — 2026-10-28
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: restart after a memory stop at about 19:55 UTC (maintainer's word, 2026-10-28); one cheap-check test left red; 4.48 h of the 5.5 h appetite used.
+
 ## Time used
 
 2026-10-28 14:11:49–16:24:46 UTC, 7977 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -209,3 +213,4 @@ Appetite stop at 14164 s of 4 h (2026-10-28 18:2x UTC, three implement attempts 
 2026-10-28 18:43:53–18:52:11 UTC, 498 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-28 19:37:05–19:41:38 UTC, 273 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-28 19:42:20–19:55:10 UTC, 770 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-28 20:51:05–21:04:30 UTC, 804 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

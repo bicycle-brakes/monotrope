@@ -508,3 +508,5 @@ Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint cl
 > ````
 
 Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one cheap-check test left red (a missing ledger test is not named in the diagnostic); about 1.2 h of the 5.5 h appetite left · leak check clean over 718 files, 2496 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason restart after a memory stop at about 19:55 UTC (maintainer's word, 2026-10-28); one cheap-check test left red; 4.48 h of the 5.5 h appetite used · leak check clean over 718 files, 2503 commits, 12 rules.
