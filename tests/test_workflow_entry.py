@@ -486,3 +486,20 @@ def test_workflow_start_name_rule_matches_the_entry_script() -> None:
     assert f"`{new_change.NAME_PATTERN.pattern}`" in text, (
         "the command's name rule differs from scripts/new_change.py NAME_PATTERN"
     )
+
+
+def test_only_the_workflow_entry_test_reads_the_kit_probe_switch() -> None:
+    """Review row L6-2: `HARNESS_KIT_PROBE` exempts one test, not the probe's whole suite.
+
+    The probe sets the switch for every test process of its throwaway copy; a
+    second reader could vanish from the probe and raise its green quote without
+    anything travelling. Only the probe (which sets it) and this file may name it.
+    """
+    allowed = {Path("scripts/kit/probe.py"), Path("tests/test_workflow_entry.py")}
+    readers = {
+        path.relative_to(REPO_ROOT)
+        for folder in ("scripts", "tests")
+        for path in (REPO_ROOT / folder).rglob("*.py")
+        if "HARNESS_KIT_PROBE" in path.read_text(encoding="utf-8", errors="replace")
+    }
+    assert readers <= allowed, f"other files read the kit-probe switch: {sorted(readers - allowed)}"

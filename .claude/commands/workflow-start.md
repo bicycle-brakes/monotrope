@@ -12,8 +12,9 @@ arguments and check them before anything runs:
 - the name matches `^[a-z0-9]+(-[a-z0-9]+)*$` (kebab-case, the rule of `scripts/new_change.py`);
 - the bead id matches `^coding-harness-[a-z0-9.]+$`.
 
-If either is missing or does not match, do not guess, look up or repair one:
-answer with the usage line below and stop.
+If either is missing or does not match, or the arguments hold any other
+token, do not guess, look up, repair or drop one: answer with the usage line
+below and stop.
 
 ```text
 usage: /workflow-start <name> --bead <id>

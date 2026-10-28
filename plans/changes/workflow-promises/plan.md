@@ -200,3 +200,5 @@ Appetite stop, 2026-10-28 07:06 UTC: the runner spans above sum to 13971 s
 Review-loop round 6 left five rows (one MAJOR) undecided.
 Answer: park — the orchestrator parks the change on its branch until the
 maintainer names a new appetite or cuts the done-criterion.
+Answer: continue — the maintainer named a new appetite of 5 hours in total
+(decision interview, 2026-10-28).
