@@ -183,8 +183,8 @@ def _fixture_tree(tmp_path: Path, name: str = "tree") -> Path:
     """
     tree = tmp_path / name
     (tree / "scripts").mkdir(parents=True)
-    for name in ENTRY_SCRIPTS:
-        shutil.copy(REPO_ROOT / "scripts" / name, tree / "scripts" / name)
+    for script in ENTRY_SCRIPTS:
+        shutil.copy(REPO_ROOT / "scripts" / script, tree / "scripts" / script)
     shutil.copy(MAKEFILE, tree / "Makefile")
     (tree / "plans" / "changes").mkdir(parents=True)
     (tree / "plans" / "specs").mkdir()
