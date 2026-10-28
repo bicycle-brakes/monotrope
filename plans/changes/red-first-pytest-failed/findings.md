@@ -475,3 +475,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > | F3-6 | MINOR | MAINT | maintainer trip | scripts/stage2.py (`_red_record_fault`, nonqualifying-call diagnostic) | When an application class merely named `Failed` is raised, the refusal reads "failed with Failed, not an AssertionError or pytest's Failed", which appears to deny what it just named; the intended distinction ("not pytest's own Failed") lives only in a code comment and the spec, so the diagnostic should say so to be readable without the surrounding contract.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model hy3 · leak check clean over 708 files, 2433 commits, 12 rules.
+
+Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 717 files, 2441 commits, 12 rules.

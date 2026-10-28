@@ -58,12 +58,14 @@ predecessor alone is not misled (review loop rows L1-5, L3-1, L3-4, L3-8).
 
 - **Red first:** the attempted repair's named test fails on the baseline's
   code, proven by the runner's own probe run, not by terminal output.
-- **Qualifying failure:** an uncaught `AssertionError` or an exception of
-  pytest's own failed-outcome class (`pytest.fail.Exception`, subclasses
-  included) raised in a test body's call phase — a `pytest.raises` block
-  that did not raise, a `pytest.warns` or `pytest.deprecated_call` block
-  whose warning never came (DID-NOT-WARN, also pytest's `Failed`), or an
-  explicit `pytest.fail` in the body. It is
+- **Qualifying failure:** a failure the test itself states, as opposed to
+  a crash (`decisions.md`, Q-1 and Q-2): an uncaught `AssertionError` or
+  an exception of pytest's own failed-outcome class
+  (`pytest.fail.Exception`, subclasses included) raised in a test body's
+  call phase, whichever pytest helper raised it. Examples, not a closed
+  list: a `pytest.raises` block that did not raise (DID-NOT-RAISE), a
+  `pytest.warns` or `pytest.deprecated_call` block whose warning never came
+  (DID-NOT-WARN), an explicit `pytest.fail` in the body. It is
   identified by exception type in the runner-owned probe, never by the
   recorded type name: an application class merely named `Failed` does not
   qualify.
@@ -124,7 +126,7 @@ predecessor alone is not misled (review loop rows L1-5, L3-1, L3-4, L3-8).
   names stays refused — widening it is a separate decision, not this one.
 - Distinguishing DID-NOT-RAISE, DID-NOT-WARN and an explicit body
   `pytest.fail`: the probe records the exception type only, and Q-1 accepts
-  pytest's own `Failed` in every form.
+  pytest's own `Failed` in every form (Q-2).
 - The guard-test policy — which repair rows owe baseline proof
   (bead `coding-harness-0ho`) — and the test-strength strand about tests
   that already pass on baseline (bead `coding-harness-y17`); both are

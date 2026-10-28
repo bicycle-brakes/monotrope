@@ -10975,7 +10975,7 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
     prompt = prompt_of(world.calls("codex")[1])
     assert (
         "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; "
-        "red first needs exit 1 with an assertion failure or pytest's Failed"
+        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
     ) in prompt
 
 
@@ -11291,7 +11291,7 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
         source = f"import pytest\n\n\ndef test_breaks():\n{body}"
         outcome = red_first_planted(world, "test_breaks.py", source, "tests/test_breaks.py::test_breaks")
         assert outcome is not None, outcome
-        assert f"failed with {exception}, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, (
+        assert f"failed with {exception}: neither an AssertionError nor pytest's own failed outcome" in outcome, (
             exception,
             outcome,
         )
@@ -11302,7 +11302,10 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     )
     outcome = red_first_planted(world, "test_breaks.py", application_failed, "tests/test_breaks.py::test_breaks")
     assert outcome is not None, outcome
-    assert "failed with Failed, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, outcome
+    assert (
+        "failed with an exception named Failed that is not pytest's own: neither an AssertionError nor pytest's own failed outcome"
+        in outcome
+    ), outcome
     # A mixed run is refused through its nonqualifying case, in either case order.
     mixed = (
         "import pytest\n\n\n"
@@ -11315,7 +11318,7 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     for bad in (1, 2):
         outcome = red_first_planted(world, "test_mixed.py", mixed.format(bad), "tests/test_mixed.py::test_mixed")
         assert outcome is not None, outcome
-        assert "failed with RuntimeError, not an AssertionError or pytest's own pytest.fail.Exception" in outcome, (
+        assert "failed with RuntimeError: neither an AssertionError nor pytest's own failed outcome" in outcome, (
             bad,
             outcome,
         )

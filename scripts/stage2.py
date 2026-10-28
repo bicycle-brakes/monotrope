@@ -5336,15 +5336,18 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
             # By the probe's exception-type flags, never by the recorded name: an application class
             # merely named `Failed` refuses, and so does a missing helper's error.
             if not (call["assertion"] or call["pytest_failed"]):
+                raised = call["exception"] or "an exception"
+                if raised == "Failed":
+                    raised = "an exception named Failed that is not pytest's own"
                 return (
-                    f"the call of `{_one_line(nodeid)}` failed with {call['exception'] or 'an exception'}, "
-                    "not an AssertionError or pytest's own pytest.fail.Exception"
+                    f"the call of `{_one_line(nodeid)}` failed with {raised}: neither an AssertionError nor "
+                    "pytest's own failed outcome (pytest.fail.Exception)"
                 )
             red = True
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
     if not passing and not red:
-        return "no selected call failed by an assertion or pytest's own pytest.fail.Exception; the run is green for the requested test"
+        return "no selected call failed by an assertion or pytest's own failed outcome; the run is green for the requested test"
     return None
 
 
@@ -5408,8 +5411,9 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     the temporary checkout and records, in a private JSON report outside the copied tests, which cases
     pytest selected and how every setup, call and teardown phase ended. The proof holds only when the
     report is this invocation's, the session finished as exit 1, at least one selected call of the
-    requested test failed by an ordinary assertion or pytest's own failed outcome (a DID-NOT-RAISE
-    `pytest.raises` or an explicit body `pytest.fail`, bead coding-harness-a7m), every setup and
+    requested test failed by an expectation the test itself states - an ordinary assertion or pytest's
+    own failed outcome in any form, for example DID-NOT-RAISE, DID-NOT-WARN or a body `pytest.fail`
+    (bead coding-harness-a7m, Q-1 and Q-2) -, every setup and
     teardown passed and no skip, xfail, XPASS, collection error or nonqualifying failure stands among
     them - so a missing dependency failing its fixture refuses instead of certifying the repair (bead
     coding-harness-omp). Never is a
@@ -5519,7 +5523,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 if done.returncode != 1:
                     outcome = (
                         f"{test}: pytest ended {done.returncode} on the baseline's code; "
-                        "red first needs exit 1 with an assertion failure or pytest's Failed"
+                        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
                     )
                 else:
                     fault = _red_record_fault(_red_report_bytes(report), token, selector)

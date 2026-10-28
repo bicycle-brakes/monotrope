@@ -55,3 +55,34 @@ as red too (the probe records the exception type only, so it cannot tell the
 two `Failed` forms apart). This amends criterion 4 and the term "Assertion
 failure" of `plans/changes/red-first-install/spec.md`. The guard-test design
 (bead coding-harness-0ho) follows as a separate change. — 2026-10-27
+
+## Q-2 · Q-1 as a principle: is DID-NOT-WARN red
+
+context: |
+  Topic: the runner's red-first check, which proves a repair's test fails on
+  the baseline code before the repair counts as fixed.
+  Intention: review-loop row L4-1 (MAJOR) read Q-1's two examples in
+  parentheses as a closed list and called a `pytest.warns` block whose
+  warning never came (DID-NOT-WARN) wider than the answer.
+  Today: the probe accepts every exception of pytest's own failed-outcome
+  class by type, DID-NOT-WARN included; it did so since Q-1 was built.
+  Repository change: this record and the spec term state the principle
+  first and the forms as examples; no code changes.
+  Architecture change: none.
+  Question: should Q-1 be stated as a principle — red is a failure the test
+  itself states (an assertion or pytest's Failed, for example DID NOT RAISE,
+  DID NOT WARN, pytest.fail), never a crash?
+asked: 2026-10-28, the directing conversation
+answer: option 1 — yes, as a principle
+answered_by: maintainer
+status: answered
+
+In the context of the red-first check, whose answer Q-1 named two forms of
+pytest's own failed outcome as examples, facing a closed list of forms (which
+needs the runner to tell forms apart by message text, fragile across pytest
+versions) or the principle behind the answer, we decided that red is any
+failure the test itself states — an uncaught AssertionError or pytest's own
+failed outcome in any form — while a crash such as a missing helper stays
+not red, to achieve a rule that holds for every pytest helper by exception
+type, accepting that a new pytest helper raising Failed counts without a
+further decision. This clarifies Q-1; it does not change it. — 2026-10-28
