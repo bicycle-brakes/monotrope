@@ -74,11 +74,12 @@ of record.
    hand merges); the spec names the server-side gap as a limit. Reason:
    GitHub offers no hook for it; the registry gate still catches a stale
    index there.
-3. **`make index` is added.** The check's remedy line ("Fix: make index")
-   and `docs/WORKFLOW.md` name a target that does not exist (research.md,
-   "The named remedy does not exist in this tree"). The target runs
-   `scripts/plans_registry.py --index`, which is not a gate command, so the
-   Makefile header's rule against restating gate commands holds.
+3. **`make index` is not added here.** The check's remedy line ("Fix: make
+   index") named a target that did not exist when the research ran
+   (research.md, "The named remedy does not exist in this tree"); PR #267
+   (merge `a6ddd9d1`, 2026-10-28) added it before this change's
+   implementation. This change only keeps it pinned by a test. (Amended
+   2026-10-28 after the merge; the earlier text planned to add it.)
 4. **The sync never pushes into work in progress.** Besides decision pull
    requests and runner-held branches, it skips a branch that a local
    worktree has checked out with uncommitted or unpushed commits, and

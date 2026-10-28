@@ -33,11 +33,12 @@ Starts unless you say stop.
    clock and renderer failures; add the ledger's tests before production code.
 2. Create `scripts/pr_sync.py`: one CLI with `merge-main` and `sync`, sharing
    merge preparation, generation and refusal handling as described below.
-3. Change `Makefile`: add phony `index` with recipe
-   `python3 scripts/plans_registry.py --index`; preserve gate delegation.
+3. `Makefile`: no change. `make index` exists since PR #267 (merge
+   `a6ddd9d1`, 2026-10-28) and runs `python3 scripts/plans_registry.py
+   --index`; criterion 4's test pins that it still does.
 4. Change `docs/WORKFLOW.md`: name both commands, their exclusions and
-   day/night on-request invocation; remove only `make index` from its list
-   of missing bootstrap targets and retain `make change` there.
+   day/night on-request invocation; the bootstrap note already lists
+   `make change` and `make index` as supplied (PR #267), so leave it.
 5. Change `prompts/06-review.md`: tell the orchestrator to run `merge-main`
    before starting the read-only reviewer; do not let the reviewer merge.
 6. Change `templates/agents-mergeable-prs.md`: name the shared local merge

@@ -36,8 +36,10 @@ Research: `research.md`. Authority: `decisions.md#Q-1` and its five details.
 - Daily branch updates are prose without an implementation, leaving agents
   to resolve the same generated-file conflict repeatedly (`research.md`,
   "The merge practice, as recorded").
-- The registry's repair instruction names `make index`, but that target
-  does not exist (`research.md`, "The named remedy does not exist").
+- The registry's repair instruction names `make index`; the target did not
+  exist when the research ran (`research.md`, "The named remedy does not
+  exist") and was added by PR #267 (merge `a6ddd9d1`, 2026-10-28) before
+  this change's implementation. Criterion 4 keeps it pinned.
 
 ## Terms
 
@@ -134,7 +136,7 @@ the existing protection policy and renderer rather than weakening them.
 ## Definition of Done
 
 - `make verify` green, including the criterion ledger and merge regressions.
-- Move together: `scripts/pr_sync.py`, `tests/test_pr_sync.py`, `Makefile`,
+- Move together: `scripts/pr_sync.py`, `tests/test_pr_sync.py`,
   `docs/WORKFLOW.md`, `prompts/06-review.md`,
   `templates/agents-mergeable-prs.md`, this change's workflow artefacts and
   the regenerated `plans/INDEX.md`; no implementation file is deleted.
