@@ -51,8 +51,9 @@ baseline lacks) stays not red. This spec amends the term "Assertion failure"
 and criteria 1 and 4 of `plans/changes/red-first-install/spec.md`. That spec
 keeps its original text as the record of the preceding contract; it only
 gains one amendment note pointing here, and the predecessor's
-`decisions.md` detail 1 gains a one-line pointer to Q-1, so a reader of the
-predecessor alone is not misled (review loop rows L1-5, L3-1, L3-4, L3-8).
+`decisions.md` detail 1 gains a short pointer to Q-1 and Q-2 that states
+their rule in one sentence, so a reader of the predecessor alone is not
+misled (review loop rows L1-5, L3-1, L3-4, L3-8, L7-1).
 
 ## Terms
 

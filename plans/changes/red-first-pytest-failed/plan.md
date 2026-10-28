@@ -103,8 +103,8 @@ phase-3 prompt's form and report the missing validator, never green.
 No deletions. `decisions.md` changes only by a maintainer's answer: Q-2
 (2026-10-28) states Q-1 as a principle (review loop rows L4-1, L5-1). Do not touch other change folders. The one exception is the
 predecessor `plans/changes/red-first-install/`: its spec keeps its text and
-gains one amendment note, and its `decisions.md` detail 1 gains a one-line
-pointer to Q-1 (review loop rows L1-5, L3-1, L3-4). Leave `prompts/04-implement.md` and `docs/WORKFLOW.md` unchanged:
+gains one amendment note, and its `decisions.md` detail 1 gains a short
+pointer to Q-1 and Q-2 (review loop rows L1-5, L3-1, L3-4, L7-1). Leave `prompts/04-implement.md` and `docs/WORKFLOW.md` unchanged:
 "fails on the baseline's code" already covers the accepted forms. Do not
 change `docs/adr/`, `decisions/`, `tools/pi/`, routing, retry policy,
 credentials, timeouts, scratch-checkout construction, cleanup or ref
