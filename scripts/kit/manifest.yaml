@@ -219,6 +219,9 @@ rules:
   - prefix: tests/test_worktree_state.py
     rolle: mechanismus
     reason: "die Gegenproben des Waechters — je Regel eine Rotation, in Wegwerf-Repos (RB-G7)"
+  - prefix: tests/test_gate_catalog.py
+    rolle: mechanismus
+    reason: "the drift guard of docs/governance/gate-catalog.md travels with the catalog it guards"
   - prefix: tests/test_workflow_entry.py
     rolle: mechanismus
     reason: "der Einstieg misst: Scaffold, geschlossener Vorgang, Waechter-Pflicht samt Gegenprobe (Bead cke)"

@@ -102,8 +102,7 @@ ein Name stand gegen einen Text, den die Person nie gelesen hatte.
 man von Hand auf `accepted` stellt.
 
 *Kein Agent schließt ein Human Gate.* Er darf einen Antrag stellen, nie eine
-Abnahme erzeugen. Das Verdikt wird aus den Findings gerechnet (Gate-Katalog
-GK-8), und ein Mensch unterschreibt es.
+Abnahme erzeugen. Das Verdikt wird aus den Findings gerechnet, und ein Mensch unterschreibt es.
 
 ### Was zwischen HG-2 und dem Schluss der Liefereinheit steht
 

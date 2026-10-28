@@ -147,7 +147,12 @@ its command and commit; do not relax a gate or claim the package is done.
 
 ## Boundaries and route
 
-No other production files are added, changed or deleted. In particular, no
+Besides the files named above, the review-loop repairs touched two
+governance pages: `docs/governance/regelwerk.md` §8 and
+`docs/governance/quality-gates.md` now describe the new gate catalog
+where they used to describe an older one, and drop a dead reference
+(rows L1-2 and L5-3). No other production files are added, changed or
+deleted. In particular, no
 stop hook, validator, agent, gate definition, CI workflow, user
 configuration, README, ADR or tracker policy is changed. The kit files
 change in two lines each, added by the review-loop repair (rows L1-3 and
