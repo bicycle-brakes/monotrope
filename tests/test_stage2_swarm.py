@@ -33,6 +33,7 @@ import stage2_availability  # noqa: E402
 import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -408,22 +409,20 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
     # A consumed synthetic selection needs admitted synthetic terms too: the
     # real declaration may skip a fixture member, and its dates must not age
-    # these dispatcher tests into refusals. Expiry boundaries have their own tests.
+    # these dispatcher tests into refusals. The seats run on shared builder
+    # records, so they inherit no live expiry, training or skip marker; only a
+    # live `anfragen_5h` is kept, the one cost metadata the dispatcher reads.
+    # Expiry boundaries have their own tests.
     declaration = root / "model-endpoints.yaml"
     data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
     for seat in [*REPOSITORY_SEATS, *ONLINE_SEATS]:
         if seat["endpoint"] == "opencode-go":
-            record = go["modelle_terms"][seat["model"]]
-            record.pop("uebersprungen", None)
-            record.pop("grund", None)
-            record.update(
-                gelesen="2026-10-25",
-                valid_until="2099-01-01",
-                quelle="synthetic dispatcher terms",
-                aufbewahrung="0 days",
-                training="Not used",
-            )
+            live = go["modelle_terms"][seat["model"]]
+            synthetic = {"gelesen": "2026-10-25", "quelle": "synthetic dispatcher terms"}
+            if live.get("anfragen_5h") is not None:
+                synthetic["anfragen_5h"] = live["anfragen_5h"]
+            go["modelle_terms"][seat["model"]] = admissible_terms(**synthetic)
     declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
 
     home = tmp_path / "home"

@@ -45,6 +45,7 @@ import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
+from terms_fixtures import admissible_terms  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -461,18 +462,11 @@ def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | No
     data = yaml.safe_load(target.read_text(encoding="utf-8"))
     entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
     entry["modelle"] = list(ladder)
-    # A far-future quoted expiry: no fixture ages into a skip, and a test that
-    # wants a boundary sets its own date and pins the terms clock.
+    # The shared builder's far-future quoted expiry: no fixture ages into a
+    # skip, and a test that wants a boundary sets its own date and pins the
+    # terms clock (tests/terms_fixtures.py).
     entry["modelle_terms"] = {
-        model: {
-            "gelesen": "2026-10-07",
-            "valid_until": "2099-01-01",
-            "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
-            "aufbewahrung": "0 days",
-            "training": "Not used",
-            "anfragen_5h": 10000 - 100 * position,
-        }
-        for position, model in enumerate(ladder)
+        model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(ladder)
     }
     entry["flash_swarm"] = list(flash or ladder[:2])
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -491,18 +485,8 @@ def pin_the_ladder(target: Path) -> None:
     # Availability-enabled fresh runs have their own integration suite.
     entry.pop("availability_preflight", None)
     entry["modelle"] = list(TEST_LADDER)
-    # A far-future quoted expiry: no fixture ages into a skip, and a test that
-    # wants a boundary sets its own date and pins the terms clock.
     entry["modelle_terms"] = {
-        model: {
-            "gelesen": "2026-10-07",
-            "valid_until": "2099-01-01",
-            "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
-            "aufbewahrung": "0 days",
-            "training": "Not used",
-            "anfragen_5h": 10000 - 100 * position,
-        }
-        for position, model in enumerate(TEST_LADDER)
+        model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(TEST_LADDER)
     }
     entry["flash_swarm"] = list(TEST_FLASH)
     entry["free_stage"] = {
@@ -14221,23 +14205,34 @@ def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
 
 
 @pytest.mark.parametrize(
-    ("record", "admitted"),
+    ("changes", "admitted", "reason"),
     [
-        ({"gelesen": "2026-10-07", "quelle": "src", "valid_until": "2099-01-01"}, True),
-        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "", "valid_until": "2099-01-01"}, True),
-        ({"gelesen": "soon", "quelle": "src"}, False),
-        ({"gelesen": True, "quelle": "src"}, False),
-        ({"gelesen": "2026-13-45", "quelle": "src"}, False),
-        ({"quelle": "src", "uebersprungen": ""}, False),
-        ({"gelesen": "", "quelle": "src", "uebersprungen": None}, False),
-        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "2026-10-08", "grund": "trains"}, False),
+        ({"gelesen": "2026-10-07", "quelle": "src"}, True, ""),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": ""}, True, ""),
+        ({"gelesen": "soon"}, False, "gelesen is not an ISO date"),
+        ({"gelesen": True}, False, "gelesen is not an ISO date"),
+        ({"gelesen": "2026-13-45"}, False, "gelesen is not an ISO date"),
+        ({"gelesen": None, "uebersprungen": ""}, False, "no dated reading of its data terms"),
+        ({"gelesen": "", "uebersprungen": None}, False, "no dated reading of its data terms"),
+        ({"uebersprungen": "2026-10-08", "grund": "trains"}, False, "was skipped on 2026-10-08"),
     ],
 )
-def test_terms_problem_requires_an_iso_reading_date(record: dict, admitted: bool) -> None:
-    """L1-1: `gelesen` must be an ISO date; an empty skip marker is "absent" only beside a valid one - fail closed."""
-    record = {"training": "Not used", "aufbewahrung": "0 days", **record}
+def test_terms_problem_requires_an_iso_reading_date(changes: dict, admitted: bool, reason: str) -> None:
+    """L1-1: `gelesen` must be an ISO date; an empty skip marker is "absent" only beside a valid one - fail closed.
+
+    Every case starts from the shared builder and removes (`None`) or replaces
+    only the field under test, so another missing field cannot mask the refusal
+    this case is about. A removal leaves the field absent; the builder plants
+    no skip marker, so removing `uebersprungen` only guarantees its absence.
+    """
+    removals = [field for field, value in changes.items() if value is None]
+    record = admissible_terms(**{field: value for field, value in changes.items() if value is not None})
+    for field in removals:
+        record.pop(field, None)
     problem = stage2.terms_problem({"modelle_terms": {"m": record}}, "m")
     assert (problem is None) is admitted, problem
+    if reason:
+        assert reason in problem, problem
 
 
 @pytest.mark.parametrize("deleted", [False, True])
@@ -14455,11 +14450,16 @@ def test_released_reviewer_words_cannot_supply_a_snapshot(world: World) -> None:
 
 @pytest.mark.parametrize("retention", [None, "", "   ", True, 30])
 def test_paid_terms_require_a_retention_reading(retention: object) -> None:
-    # The far-future expiry keeps the retention rule itself the refusal reason.
-    record = {"gelesen": "2026-10-17", "quelle": "src", "training": "Not used", "valid_until": "2099-01-01"}
-    if retention is not None:
+    # Start from the shared builder and remove (`None`) or replace only the
+    # retention field: the far-future expiry keeps the retention rule itself
+    # the refusal reason, and the named reason proves no other field masks it.
+    record = admissible_terms()
+    if retention is None:
+        del record["aufbewahrung"]
+    else:
         record["aufbewahrung"] = retention
-    assert stage2.terms_problem({"modelle_terms": {"m": record}}, "m") is not None
+    problem = stage2.terms_problem({"modelle_terms": {"m": record}}, "m")
+    assert problem is not None and "retention" in problem, problem
 
 
 def test_first_paid_rung_names_missing_cost_when_flash_is_skipped(
@@ -14495,13 +14495,7 @@ def test_paid_terms_doctrine_records_the_retention_decision() -> None:
     assert "unreadable or retaining/training" not in spec
     assert "retain/train or cannot be read" not in adr
     # Q-11 admits retention; the separate wire-API skip must not undo that rule.
-    record = {
-        "gelesen": "2026-10-17",
-        "quelle": "src",
-        "aufbewahrung": "30 days",
-        "training": "Not used",
-        "valid_until": "2099-01-01",
-    }
+    record = admissible_terms(aufbewahrung="30 days")
     assert stage2.terms_problem({"modelle_terms": {"reader": record}}, "reader") is None
 
 
