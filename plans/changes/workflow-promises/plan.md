@@ -77,8 +77,10 @@ Starts unless you say stop.
 6. Create `.claude/commands/workflow-start.md`, a thin Markdown command
    using `$ARGUMENTS` as input: require name and `--bead`, invoke the
    existing entry script with arguments treated as data and safely
-   quoted, report its output and stop on failure. No frontmatter belongs
-   there (`provenance.yaml`, `.claude/commands/`). Test the command's
+   quoted, report its output and stop on failure. No provenance
+   frontmatter belongs there (`provenance.yaml`, `.claude/commands/`); the
+   file keeps only Claude Code's own command keys `description` and
+   `argument-hint`. Test the command's
    delegation and usage contract and run its documented invocation against
    the scaffold fixture; live Claude Code execution is a phase-6 manual
    check, not claimed by the fixture test.
