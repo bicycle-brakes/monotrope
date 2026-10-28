@@ -1,7 +1,7 @@
 ---
 title: "Research — index-merge-regenerates"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
 updated: 2026-10-28
@@ -9,21 +9,18 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-njtm
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-28"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 class: bounded
 ---
 
 # index merge regenerates — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md). The
+section below is the runner's exploration, appended as GLM 5.3 Flash answered
+it; its first sentence is the model's own words, kept unchanged.
 
 Stage-2 call, 2026-10-28: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 714 files, 2463 commits, 12 rules.
 

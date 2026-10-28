@@ -1,7 +1,7 @@
 ---
 title: "Plan — index-merge-regenerates"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
 updated: 2026-10-28
@@ -43,7 +43,10 @@ Starts unless you say stop.
    before starting the read-only reviewer; do not let the reviewer merge.
 6. Change `templates/agents-mergeable-prs.md`: name the shared local merge
    and sync commands and the server-side limitation in the portable rule.
-7. Update `plans/changes/index-merge-regenerates/plan.md`: replace pending
+7. `scripts/ci_gates.py`: list `pr_sync.py` among the scripts without a gate
+   caller, with its reason (an entry point, not a gate), so the gate ratchet
+   holds (added during implementation; review row L1-5).
+8. Update `plans/changes/index-merge-regenerates/plan.md`: replace pending
    ledger entries as tests land; the runner maintains this folder's
    `findings.md`, metadata and measured time, and regenerates `plans/INDEX.md`.
    No design, ADR, other new file or deletion is planned.
@@ -100,7 +103,9 @@ Starts unless you say stop.
   candidate ancestry must contain that head. Never use an unconditional
   force or write main. A rejected push is an error, never success.
 - Report one outcome per PR (updated, unchanged, conflict, protected,
-  outside scope, error), with identity and relevant paths/reason. Print an
+  outside scope, error, moved; a closed pull request is outside scope, and a
+  head that moved during the run is `moved`, counted with the errors for the
+  exit status; review row L1-16), with identity and relevant paths/reason. Print an
   independent overdue list, including skipped PRs, using UTC weekdays after
   creation through today, strictly greater than five. No holidays or auto
   closure. Exit 0 for a measured pass, 1 for conflicts/errors, 2 for invalid
@@ -130,6 +135,12 @@ python3 scripts/check_research_handoff.py --change index-merge-regenerates
 python3 scripts/check_criterion_ledger.py
 make verify
 ```
+
+**Measured, 2026-10-28.** Full `make verify` at `404d9a64` (after the
+orchestrator's lint fix of the last implement attempt), run `nice -n 10`
+with `-n 4`: green; pytest 4099 passed, 17 skipped in 620.40 s. The red run
+recorded in `findings.md` belongs to the rejected attempts before that fix
+(review row L1-13).
 
 ## Criterion ledger
 

@@ -2,7 +2,7 @@
 title: "Findings — index-merge-regenerates"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-28
 created: 2026-10-28
 last_reviewed: 2026-10-28

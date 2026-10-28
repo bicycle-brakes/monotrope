@@ -671,8 +671,8 @@ for another repository is `templates/agents-mergeable-prs.md`.
 
 - **Synced on request, by the helper.** Each working day the day session or
   the night orchestrator calls `python3 scripts/pr_sync.py sync --root .`
-  explicitly — no scheduler runs it (bead coding-harness-eq6y; on-request
-  decision of 2026-10-28). An eligible branch gets the fetched `origin/main`
+  explicitly — no scheduler runs it (bead coding-harness-eq6y; on request,
+  detail 5 of the change's `decisions.md`, 2026-10-28). An eligible branch gets the fetched `origin/main`
   merged in and `plans/INDEX.md` regenerated from the complete merged tree,
   then that is pushed under an exact head lease, so a racing writer's commit
   is left intact and reported. A conflict outside the index is reported with

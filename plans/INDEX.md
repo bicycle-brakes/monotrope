@@ -171,11 +171,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
-| [`changes/index-merge-regenerates/decisions.md`](changes/index-merge-regenerates/decisions.md) | draft | none | 2026-10-28 | coding-harness-njtm |
-| [`changes/index-merge-regenerates/findings.md`](changes/index-merge-regenerates/findings.md) | draft | none | 2026-10-28 | coding-harness-njtm |
-| [`changes/index-merge-regenerates/plan.md`](changes/index-merge-regenerates/plan.md) | draft | none | 2026-10-28 | coding-harness-njtm |
-| [`changes/index-merge-regenerates/research.md`](changes/index-merge-regenerates/research.md) | draft | none | 2026-10-28 | coding-harness-njtm |
-| [`changes/index-merge-regenerates/spec.md`](changes/index-merge-regenerates/spec.md) | draft | none | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/decisions.md`](changes/index-merge-regenerates/decisions.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/findings.md`](changes/index-merge-regenerates/findings.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/plan.md`](changes/index-merge-regenerates/plan.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/research.md`](changes/index-merge-regenerates/research.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/spec.md`](changes/index-merge-regenerates/spec.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
 | [`changes/interview-context/decisions.md`](changes/interview-context/decisions.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/design.md`](changes/interview-context/design.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/findings.md`](changes/interview-context/findings.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |

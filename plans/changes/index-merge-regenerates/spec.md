@@ -1,7 +1,7 @@
 ---
 title: "Spec — index-merge-regenerates"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
 updated: 2026-10-28
@@ -121,6 +121,9 @@ Research: `research.md`. Authority: `decisions.md#Q-1` and its five details.
   request into main. The day/night orchestrator calls the sync explicitly.
 - No changes to runner execution, review sessions, endpoint admission,
   tracker state, or gate definitions; no new approval or auto-merge policy.
+  The one review-side edit is the orchestrator's instruction in
+  `prompts/06-review.md` to run `merge-main` before the read-only reviewer
+  starts; the review session itself is unchanged.
 - No installed night-run skill outside this repository is edited. No
   holiday calendar, size slicing, hot-file scheduling or stale-PR closure.
 - No design phase or ADR: this remains the recorded bounded package and
@@ -138,10 +141,15 @@ the existing protection policy and renderer rather than weakening them.
 - `make verify` green, including the criterion ledger and merge regressions.
 - Move together: `scripts/pr_sync.py`, `tests/test_pr_sync.py`,
   `docs/WORKFLOW.md`, `prompts/06-review.md`,
-  `templates/agents-mergeable-prs.md`, this change's workflow artefacts and
+  `templates/agents-mergeable-prs.md`, `scripts/ci_gates.py` (the no-caller
+  entry for `pr_sync.py`, an entry point and not a gate), this change's workflow artefacts and
   the regenerated `plans/INDEX.md`; no implementation file is deleted.
 - The pull-request file list demonstrates the protected areas and non-goals.
-- One pull request names all three package beads; the final commit carries
+- One pull request names all three package beads. It is larger than the
+  ~800-line slicing rule because the maintainer chose one package in one pull
+  request (`decisions.md#Q-1`, 2026-10-27); the slicing rule yields to that
+  answer here (review row L1-9).
+- The pull request names all three package beads; the final commit carries
   `Closes-Bead:` trailers for coding-harness-hfsz (index regeneration),
   coding-harness-njtm (this package) and coding-harness-eq6y (daily sync),
   with tracker closure left to the orchestrator.
