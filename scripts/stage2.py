@@ -3773,7 +3773,7 @@ FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix wi
 # replaces full verification, it only earns the right to run it.
 RUFF_CHECK = ("check", "--force-exclude", "--no-cache")
 RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
-PYTEST = (".venv/bin/python3", "-m", "pytest", "-q")
+PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
 CHEAP_LABEL = "Runner cheap checks before `make verify`"
 
 # An attempt's edits to its own findings.md are put back before any post-run check reads model-written
