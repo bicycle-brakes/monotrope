@@ -28,7 +28,7 @@ cannot run them: the runner runs them right after your attempt and before
 the ledger's test ids and, on a retry, the tests the attempt before failed. The
 first red check ends the attempt with exactly that output (bead
 coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is
-put back before the checks and never counts as a repair.
+put back before the checks. That edit is not part of your work, and on its own it never fails the attempt.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**
