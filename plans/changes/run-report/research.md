@@ -24,3 +24,5 @@ file is empty until it has run.
 > with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
 > `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
 > `review_required: true`).
+
+Stage-2 call, 2026-10-28: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 727 files, 2499 commits, 12 rules.
