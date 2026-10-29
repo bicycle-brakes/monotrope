@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-njtm
@@ -162,7 +162,7 @@ None open. The following reversible choices are `[DETAIL]` decisions made
 here, with their reasons visible:
 
 - Use an explicit merge helper, rather than a per-file merge driver, so
-  regeneration sees all merged inputs and needs no local Git installation.
+  regeneration sees all merged inputs and needs no per-clone Git configuration.
 - Count UTC weekdays as defined above for deterministic age reporting.
 - Use a four-hour phase-4 appetite, repairs included, as a stop boundary;
   neither the interview nor research states an earlier appetite.

@@ -793,7 +793,7 @@ def classify_skip(pull: Pull, held: list[str]) -> str | None:
         return f"outside scope: base '{pull.base}' is not main"
     if any(label.casefold() == "decision" for label in pull.labels):
         return "protected: decision pull request (label: decision)"
-    if pull.title.startswith("decide("):
+    if pull.title.casefold().startswith("decide("):
         return "protected: decision pull request (title starts with decide()"
     hits = sorted({path for path in pull.files if path_is_held(path, held)})
     if hits:

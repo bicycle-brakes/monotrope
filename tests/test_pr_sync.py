@@ -986,6 +986,24 @@ def test_a_decision_label_is_protected_in_any_case() -> None:
     assert (m.classify_skip(pull, []) or "").startswith("protected: decision")
 
 
+@pytest.mark.parametrize("prefix", ["decide(", "Decide(", "DECIDE("])
+def test_a_decision_title_is_protected_in_any_case(prefix: str) -> None:
+    """Row L4-1: title protection must match the case-insensitive label rule."""
+    m = _pr_sync()
+    pull = m.Pull(
+        number=1,
+        url="https://github.invalid/o/r/pull/1",
+        title=f"{prefix}merge): protect decision work",
+        created=dt.datetime(2026, 10, 20, tzinfo=dt.UTC),
+        base="main",
+        branch="feat/a",
+        head="0" * 40,
+        cross_repository=False,
+        labels=[],
+    )
+    assert (m.classify_skip(pull, []) or "").startswith("protected: decision")
+
+
 def test_a_plans_file_in_the_tree_is_a_reported_failure(tmp_path: Path) -> None:
     """Row L1-7. Planted fault: a regular file named `plans` crashed the run with IsADirectoryError."""
     m = _pr_sync()
