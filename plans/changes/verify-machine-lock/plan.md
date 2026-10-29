@@ -116,6 +116,7 @@ fallback was recorded. Basis: `spec.md` and the unchanged `decisions.md`.
 - 5: tests/test_stage2.py::test_local_checks_preserve_nested_admission — either post-run path or selected pytest path loses the marker/state root.
 - 6: tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission — a dead participant blocks or a protected child overlaps its successor.
 - 7: tests/test_verify_lock.py::test_platform_memory_readers_use_the_declared_percentage — the wrong field/formula or malformed percentage is accepted.
+- 7: tests/test_verify_lock.py::test_the_macos_reader_parses_the_real_memory_pressure_line — the real macOS line `System-wide memory free percentage: 56%` reads as unmeasurable.
 - 8: tests/test_verify_lock.py::test_low_memory_wait_holds_exclusion_and_rechecks — work starts low, exclusion is dropped or 30-second rechecks/logs stop.
 - 9: tests/test_verify_lock.py::test_sustained_low_memory_refuses_at_the_bound — low readings outlast 3600 seconds or refusal omits percentages.
 - 9: tests/test_verify_lock.py::test_memory_recovery_before_deadline_starts_work — sufficient memory still refuses or never starts work.
@@ -160,3 +161,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash rejecte
 2026-10-29 08:48:20–10:17:53 UTC, 5373 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-29 10:18:00–11:21:06 UTC, 3786 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-29 13:39:11–13:53:28 UTC, 857 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+
+Orchestrator bootstrap edit, 2026-10-29 ~14:00 UTC: the macOS memory reader's pattern accepts `System-wide` as `memory_pressure` prints it (the attempt of 13:39 logged every real reading as unmeasurable); ledger entry and test added, red first. Left for the next attempt: `tests/test_stage2.py::test_local_checks_preserve_nested_admission` — a local check that inherits a valid held marker must pass the ancestor's marker on unchanged instead of taking a new admission of its own.

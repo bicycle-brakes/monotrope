@@ -819,3 +819,13 @@ def test_unusable_or_aliased_state_refuses_before_work(tmp_path: Path, monkeypat
     assert done.returncode == 2, f"the supervisor did not refuse: {done.stderr}"
     assert "refusing" in done.stderr, f"the refusal carries no diagnostic: {done.stderr}"
     assert not never.exists(), "the refused command ran anyway"
+
+
+def test_the_macos_reader_parses_the_real_memory_pressure_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault (orchestrator bootstrap edit, 2026-10-29): the reader expected `System wide`,
+    while macOS `memory_pressure` prints `System-wide memory free percentage: 56%`, so every real
+    reading was logged as unmeasurable."""
+    monkeypatch.setattr(
+        verify_lock, "_memory_probe_output", lambda _command: "Pageouts: 1\n\nSystem-wide memory free percentage: 56%\n"
+    )
+    assert verify_lock.read_available_memory("darwin") == 56.0

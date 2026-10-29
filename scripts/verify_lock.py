@@ -94,7 +94,7 @@ QUEUE_DIR = "verify.queue"
 REGISTRY_NAME = "verify.registry.lock"
 MEMINFO_PATH = Path("/proc/meminfo")
 RECORD_NAME = re.compile(r"(\d{20})-(\d+)\.json")
-MEMORY_FREE = re.compile(r"System wide memory free percentage:\s*(\d+(?:\.\d+)?)\s*%")
+MEMORY_FREE = re.compile(r"System[- ]wide memory free percentage:\s*(\d+(?:\.\d+)?)\s*%")
 MEMINFO_VALUE = re.compile(r"\s*(\d+)\s*kB")
 
 
