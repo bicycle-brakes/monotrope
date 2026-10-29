@@ -158,3 +158,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-29 00:36:20–00:48:46 UTC, 746 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-29 00:48:52–01:00:59 UTC, 727 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · the orchestrator's red-first check of the eight retained repairs (L1-6 rejected) · measured with `date -u`
+2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · row L2-1 repaired by the orchestrator · measured with `date -u`

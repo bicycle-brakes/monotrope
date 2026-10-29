@@ -231,7 +231,6 @@ def read_time(plan: Path) -> tuple[TimeReading, str]:
 # Appetite: the opening plan card only
 # ---------------------------------------------------------------------------
 
-APPETITE_LINE = re.compile(r"^Appetite:[ \t]*(?P<value>.*)$")
 APPETITE_VALUE = re.compile(
     r"^\s*(?:(?P<hours>\d+(?:\.\d+)?)\s*(?:hours?|h)\b)?"
     r"\s*(?:(?P<minutes>\d+(?:\.\d+)?)\s*(?:min(?:utes?)?)\b)?"
