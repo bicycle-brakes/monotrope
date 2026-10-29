@@ -16,7 +16,7 @@ tags: [night-run, plan, lanes, stage-2]
 # Night-run plan — 2026-10-29/30
 
 **This is the plan for tonight. It does not report a run.** The maintainer
-asked for it on 2026-10-29 at about 22:00 UTC ("erstelle einen Nachtplan und
+asked for it on 2026-10-29 at about 21:55 UTC ("erstelle einen Nachtplan und
 ziehe diesen durch"). It follows the
 [plan of 2026-10-28](2026-10-28-night-run-plan.md) and keeps its rules. One
 orchestrating Claude Code session works three lanes until 07:00 UTC, then
@@ -25,7 +25,7 @@ permission. Task state stays in Beads.
 
 ## State at the start
 
-Measured 2026-10-29 at about 22:05 UTC against `main` `635e9bd1`. The day's
+Measured 2026-10-29 at about 21:56 UTC against `main` `635e9bd1`. The day's
 orchestrating session stopped at 20:05 UTC at the Claude five-hour limit,
 with three lane sub-agents. This session takes over as the only tracker
 writer; no other session runs in this repository.
