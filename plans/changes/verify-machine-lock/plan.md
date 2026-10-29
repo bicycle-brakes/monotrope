@@ -170,4 +170,4 @@ Orchestrator bootstrap edit, 2026-10-29 ~14:00 UTC: the macOS memory reader's pa
 2026-10-29 13:54:45–14:36:10 UTC, 2485 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · claude call failed at exit 1 (Claude limit), no code change · measured with `date -u`
 Appetite stop, 2026-10-29 16:55 UTC: about 3.9 of 4 h used; the change is parked with one test left red (`tests/test_stage2.py::test_local_checks_preserve_nested_admission`). The maintainer decides.
 2026-10-29 17:05:21–17:18:53 UTC, 812 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
-2026-10-29 19:10–19:25 UTC — review loop round 1 · rows L1-1/L1-12, L1-3, L1-11, L1-14 repaired by the orchestrator, each test red first; L1-5 text; nine rows rejected · measured with `date -u`
+2026-10-29 19:10:01–19:12:04 UTC, 123 s — review loop round 1 · rows L1-1/L1-12, L1-3, L1-11, L1-14 repaired by the orchestrator, each test red first; L1-5 text; nine rows rejected · measured with `date -u`
