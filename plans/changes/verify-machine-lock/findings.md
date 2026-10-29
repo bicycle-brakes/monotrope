@@ -512,3 +512,5 @@ Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint cl
 > ````
 
 Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one test left red (test_local_checks_preserve_nested_admission: a local check must pass an inherited valid marker on unchanged); macOS memory reader fixed by the orchestrator (240b1f89); maintainer 2026-10-29: +1 h appetite on Sonnet; about 3.2 of 4 h used · leak check clean over 738 files, 2630 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM attempts failed, Sonnet continues from the saved state; one test left red: tests/test_stage2.py::test_local_checks_preserve_nested_admission - a local check must pass a valid inherited lock marker through unchanged instead of setting its own PID; maintainer 2026-10-29: +30 min, total 4.5 h · leak check clean over 738 files, 2635 commits, 12 rules.

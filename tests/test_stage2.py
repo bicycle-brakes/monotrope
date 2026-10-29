@@ -2071,7 +2071,7 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         # the supervisor publishes its own pid as the holder and hands that to its child
         holder_pid = holder.pid
         monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
-        world.script(make=[{"stdout": "green"}])
+        world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
         make_env = world.calls("make")[0]["env"]
         assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
@@ -2079,6 +2079,7 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
         # and the draft post-run path preserves it too
         ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+        world.plan.write_text(PLAN_CARD, encoding="utf-8")
         problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
         assert problems == [], problems
         draft_env = world.calls("make")[1]["env"]

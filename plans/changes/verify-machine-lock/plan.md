@@ -156,6 +156,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash rejected twice (2 tests left red); the Sonnet attempt 3 stopped at the Claude five-hour limit; maintainer 2026-10-29: +1 h appetite, continue on Sonnet from the saved attempt 3 (49209675); about 2.7 of 4 h used.
 
+## Runner route — 2026-10-29
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM attempts failed, Sonnet continues from the saved state; one test left red: tests/test_stage2.py::test_local_checks_preserve_nested_admission - a local check must pass a valid inherited lock marker through unchanged instead of setting its own PID; maintainer 2026-10-29: +30 min, total 4.5 h.
+
 ## Time used
 
 2026-10-29 08:48:20–10:17:53 UTC, 5373 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -165,3 +169,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash rejecte
 Orchestrator bootstrap edit, 2026-10-29 ~14:00 UTC: the macOS memory reader's pattern accepts `System-wide` as `memory_pressure` prints it (the attempt of 13:39 logged every real reading as unmeasurable); ledger entry and test added, red first. Left for the next attempt: `tests/test_stage2.py::test_local_checks_preserve_nested_admission` — a local check that inherits a valid held marker must pass the ancestor's marker on unchanged instead of taking a new admission of its own.
 2026-10-29 13:54:45–14:36:10 UTC, 2485 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · claude call failed at exit 1 (Claude limit), no code change · measured with `date -u`
 Appetite stop, 2026-10-29 16:55 UTC: about 3.9 of 4 h used; the change is parked with one test left red (`tests/test_stage2.py::test_local_checks_preserve_nested_admission`). The maintainer decides.
+2026-10-29 17:05:21–17:18:53 UTC, 812 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
