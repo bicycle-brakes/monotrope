@@ -24,9 +24,10 @@ What it cannot read, it says so:
 It runs no network, tracker, model, Git mutation or state-writing command and
 prints only summary fields - never prompt, answer or raw diagnostic text
 (criterion 12). `scripts/stage2.py` and `scripts/stage2_runs.py` stay the
-writers of the formats: this script reads them through the runner's own
-`time_log`, `card_problem`, `CARD_LABELS` and `CALL_LINE`/`CALL_PREFIXES`,
-without duplicating their section and audit-line recognition.
+writers of the formats: this script uses `stage2.time_log`,
+`stage2.CARD_LABELS` and `stage2_runs.CALL_LINE`/`CALL_PREFIXES`, without
+duplicating their section and audit-line recognition. Only the runner's own
+fixed time format counts; every orchestrator time record stays unread.
 """
 
 from __future__ import annotations
@@ -138,22 +139,6 @@ RUNNER_ENTRY = re.compile(
     r"(?P<verb>[^·]+?) · attempt (?P<attempt>\d+) · route (?P<route>[^·]+?)"
     r" · model (?P<model>[^·]+?) · (?P<result>accepted|rejected) · measured by the runner"
 )
-# Orchestrator notes have an explicit measurement method, optionally labelled
-# with the review round. No arbitrary punctuation/prose tail is evidence of a
-# measurement. Extend this positive grammar when another measured form is used.
-MEASUREMENT_NOTE = r"(?: — (?:review loop round \d+ · )?measured with `date -u`)?"
-# A dated orchestrator record with an explicit measured seconds field.
-DATED_SECONDS = re.compile(
-    r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}(?::\d{2})?)"
-    r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?)(?: UTC)?, "
-    r"(?P<seconds>\d+) s" + MEASUREMENT_NOTE + r"[ \t]*"
-)
-# A dated orchestrator record that is only an exact closed UTC range: same-day
-# clock endpoints, or endpoints that carry their own date.
-DATED_RANGE = re.compile(
-    r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}(?::\d{2})?)"
-    r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?) UTC" + MEASUREMENT_NOTE + r"[ \t]*"
-)
 FURNITURE = re.compile(r"^(?:#{1,6} |```|~~~)")
 
 
@@ -183,17 +168,8 @@ class TimeReading:
     attempts: list[TimeRecord] = field(default_factory=list)
 
 
-def _clock(text: str, day: str) -> datetime | None:
-    for shape in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            return datetime.strptime(f"{day} {text}", shape)
-        except ValueError:
-            continue
-    return None
-
-
 def parse_time_line(content: str) -> TimeRecord | None:
-    """One readable duration record, or None; an explicit duration outranks the endpoints."""
+    """One runner duration record, or None; only its explicit seconds count."""
     body = content[2:].strip() if content.startswith("- ") else content
     matched = RUNNER_ENTRY.fullmatch(body)
     if matched:
@@ -205,18 +181,6 @@ def parse_time_line(content: str) -> TimeRecord | None:
             model=matched.group("model").strip(),
             result=matched.group("result"),
         )
-    if " s — " in body and ("· attempt " in body or "measured by the runner" in body):
-        return None  # runner-shaped but broken: unread, never re-derived from its endpoints
-    matched = DATED_SECONDS.fullmatch(body)
-    if matched:
-        return TimeRecord(seconds=int(matched.group("seconds")))
-    matched = DATED_RANGE.fullmatch(body)
-    if matched:
-        start = _clock(matched.group("start"), matched.group("date"))
-        end = _clock(matched.group("end"), matched.group("end_date") or matched.group("date"))
-        if start is None or end is None or end <= start:
-            return None  # malformed, ambiguous or a non-positive range: unread, never guessed
-        return TimeRecord(seconds=int((end - start).total_seconds()))
     return None
 
 

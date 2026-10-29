@@ -241,7 +241,7 @@ def test_attempts_and_unfinished_calls_keep_recorded_metadata(tmp_path: Path, ca
 
 
 def test_measured_durations_sum_without_audit_or_live_double_counting(tmp_path: Path, capsys) -> None:
-    """Fault: accepted, rejected or exact orchestrator seconds are omitted or counted twice,
+    """Fault: accepted or rejected runner seconds are omitted or counted twice, or orchestrator time is counted,
     a call line or a live elapsed time enters the sum, or a following section contributes
     (spec criterion 4)."""
     root = tmp_path
@@ -272,11 +272,12 @@ def test_measured_durations_sum_without_audit_or_live_double_counting(tmp_path: 
     code, out = run_main(root, capsys, run=run, proc_dir=proc)
     assert code == 0
     sums_block = blocks(out)["sums"]
-    assert "  time recorded: 1800 s" in sums_block  # 600 + 900 + 300, each record once
+    assert "  time recorded: 1500 s" in sums_block  # only the two runner records count
+    assert "  unread lines: 1 — the time subtotal is incomplete" in sums_block
     assert not any("2400" in line for line in out.splitlines())  # the following section adds nothing
     ranges_block = blocks(out)["ranges"]
-    assert "  time recorded: 1200 s" in ranges_block  # both ranges read from their endpoints
-    assert "  unread lines: 1 — the time subtotal is incomplete" in ranges_block
+    assert "  time recorded: 0 s" in ranges_block  # endpoints never supply a duration
+    assert "  unread lines: 3 — the time subtotal is incomplete" in ranges_block
     live = blocks(out)["live"]
     assert any("pid 501" in line and "verify" in line for line in live)  # shown live, never summed
 
@@ -611,7 +612,7 @@ def test_exact_range_with_unmeasured_prose_stays_unread(tmp_path: Path) -> None:
         reading, _ = run_report.read_time(folder / "plan.md")
         assert reading.unread == 1
         assert reading.seconds == 0
-    assert run_report.parse_time_line("2026-10-28 10:00–10:30 UTC") is not None
+    assert run_report.parse_time_line("2026-10-28 10:00–10:30 UTC") is None
 
 
 def test_time_records_require_whitelisted_measurement_forms(tmp_path: Path) -> None:
@@ -633,15 +634,17 @@ def test_time_records_require_whitelisted_measurement_forms(tmp_path: Path) -> N
             " — measured with `date -u`, guessed",
         )
     ]
-    valid = [
-        (span, 600),
-        (span + ", 7 s", 7),  # explicit seconds outrank endpoint subtraction
-        (span + " — measured with `date -u`", 600),
-        (span + ", 7 s — measured with `date -u`", 7),
-        (span + ", 7 s — review loop round 1 · measured with `date -u`", 7),
-        ("2026-10-28 23:55–2026-10-29 00:05 UTC — measured with `date -u`", 600),
-        (runner_line(seconds=300), 300),
-    ]
+    invalid.extend(
+        [
+            span,
+            span + ", 7 s",
+            span + " — measured with `date -u`",
+            span + ", 7 s — measured with `date -u`",
+            span + ", 7 s — review loop round 1 · measured with `date -u`",
+            "2026-10-28 23:55–2026-10-29 00:05 UTC — measured with `date -u`",
+        ]
+    )
+    valid = [(runner_line(seconds=300), 300)]
     for line in invalid:
         assert run_report.parse_time_line(line) is None, line
     for line, seconds in valid:
@@ -758,12 +761,14 @@ def test_readable_appetite_survives_unrelated_card_defect(tmp_path: Path) -> Non
         assert "at or over half the appetite" in out
 
 
-def test_annotated_orchestrator_seconds_are_recorded(tmp_path: Path) -> None:
+def test_annotated_orchestrator_seconds_stay_unread(tmp_path: Path) -> None:
     body = "\n".join(
         [
             "2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · measured with `date -u`",
             "2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · measured with `date -u`",
-            # Explicit seconds remain authoritative even when endpoints disagree.
+            "2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · the orchestrator's red-first check of the eight retained repairs [L1-6 rejected] · measured with `date -u`",
+            "2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · row L2-1 repaired by the orchestrator · measured with `date -u`",
+            # Even explicit seconds with a measurement note are not runner records.
             "2026-10-29 02:00:00–02:01:00 UTC, 7 s — measured with `date -u`",
             runner_line(seconds=600),
             runner_line(seconds=300).replace("accepted", "acceped"),
@@ -772,8 +777,8 @@ def test_annotated_orchestrator_seconds_are_recorded(tmp_path: Path) -> None:
     folder = make_change(tmp_path, "alpha", plan=plan_text(time_body=body), findings="")
     reading, reason = run_report.read_time(folder / "plan.md")
     assert reason == "" and reading.section_read
-    assert reading.seconds == 729
-    assert reading.unread == 1  # the malformed runner entry still cannot become time
+    assert reading.seconds == 600
+    assert reading.unread == 6  # five orchestrator lines and the malformed runner entry
     assert len(reading.attempts) == 1
 
 
@@ -875,3 +880,28 @@ def test_verification_options_before_target_or_script_are_visible() -> None:
     assert [(row.pid, row.label, row.change) for row in rows] == [
         (pid, "verify", "not read") for pid in ("123", "124", "125")
     ]
+
+
+def test_orchestrator_minutes_and_measurement_notes_stay_unread(tmp_path: Path) -> None:
+    """Minutes/seconds and parenthesised notes remain unread, like all orchestrator forms."""
+    span = "2026-10-29 09:00:00–09:07:09 UTC"
+    records = [
+        span + ", 7 min 9 s (measured with `date -u`).",
+        span + ", 7 min 9 s — measured with `date -u`",
+        span + ", 429 s (measured with `date -u`).",
+        span + ", 429 s — measured with `date -u`",
+    ]
+    folder = make_change(
+        tmp_path,
+        "alpha",
+        plan=plan_text(time_body="\n".join([runner_line(seconds=600), *records])),
+        findings="",
+    )
+    reading, reason = run_report.read_time(folder / "plan.md")
+    assert reason == "" and reading.section_read
+    assert reading.seconds == 600
+    assert reading.unread == len(records)
+    assert len(reading.attempts) == 1
+    out = "\n".join(run_report.change_block(folder, "alpha"))
+    assert "time recorded: 600 s" in out
+    assert "unread lines: 4 — the time subtotal is incomplete" in out
