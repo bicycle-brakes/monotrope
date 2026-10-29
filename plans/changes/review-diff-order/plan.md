@@ -117,4 +117,4 @@ read tools and loop state/stop/release rules retain their current behavior.
 ## Time used
 2026-10-29 17:36–19:07:41 UTC — implement · attempts 1 (flash, 1 test red) and 2 (flash-repair, refused: it changed `prompts/04b-review-loop.md`, a path a stage-2 run does not commit, though plan step names it) · measured with `date -u`
 Appetite stop, 2026-10-29 19:10 UTC: about 1.5 h of the 1 h appetite used; parked. The plan's prompt step contradicts the runner's commit rule; the maintainer decides.
-Revised 2026-10-29 about 22:25 UTC (maintainer's decision of about 19:25 UTC): the prompt edit moves from the model to the orchestrator; 45 more minutes, read as counted from the stop at about 1.5 h.
+Revised 2026-10-29 about 21:59 UTC (maintainer's decision of about 19:25 UTC): the prompt edit moves from the model to the orchestrator; 45 more minutes, read as counted from the stop at about 1.5 h.
