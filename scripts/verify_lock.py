@@ -627,6 +627,16 @@ def _install_signal_handlers() -> dict[int, object]:
     return previous
 
 
+def _hold_signals_during_cleanup(previous: dict[int, object]) -> None:
+    """A further SIGINT or SIGTERM while the child is stopped is ignored, never raised past the release.
+
+    The first signal already ends the run and sets its exit code (review row L3-3).
+    """
+    for signum in previous:
+        with contextlib.suppress(ValueError, OSError):
+            signal.signal(signum, signal.SIG_IGN)
+
+
 def _restore_signal_handlers(previous: dict[int, object]) -> None:
     for signum, handler in previous.items():
         with contextlib.suppress(ValueError, OSError):
@@ -685,11 +695,14 @@ def supervise(command: list[str]) -> int:
     except SupervisorInterrupted as stop:
         code = 128 + stop.signum
     finally:
-        if child is not None and child.poll() is None:
-            _stop_child(child)
-        if admission is not None:
-            admission.release()
-        _restore_signal_handlers(previous)
+        _hold_signals_during_cleanup(previous)
+        try:
+            if child is not None and child.poll() is None:
+                _stop_child(child)
+            if admission is not None:
+                admission.release()
+        finally:
+            _restore_signal_handlers(previous)
     return code
 
 

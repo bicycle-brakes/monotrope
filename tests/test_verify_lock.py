@@ -223,7 +223,10 @@ def test_live_waiters_enter_in_registration_order(tmp_path: Path) -> None:
             matched = verify_lock.RECORD_NAME.fullmatch(record)
             assert matched is not None, record
             sequence[by_pid[int(matched.group(2))]] = int(matched.group(1))
-        expected = [name for _, name in sorted([(sequence["first"], "first"), (sequence["second"], "second")])]
+        # The test registered "first" before it spawned "second": that is the real order, and the
+        # queue's own numbering must agree with it, never stand in for it (review row L3-2).
+        assert sequence["first"] < sequence["second"], f"the queue numbered against registration order: {sequence}"
+        expected = ["first", "second"]
     for entry in (first, second):
         assert entry.wait(timeout=60) == 0
     assert log.read_text(encoding="utf-8").split() == expected, (
@@ -882,3 +885,29 @@ def test_zero_available_memory_on_linux_is_a_reading(tmp_path: Path, monkeypatch
     meminfo.write_text("MemTotal:        4000000 kB\nMemAvailable:          0 kB\n", encoding="utf-8")
     monkeypatch.setattr(verify_lock, "MEMINFO_PATH", meminfo)
     assert verify_lock.read_available_memory("linux") == 0.0
+
+
+def test_a_second_signal_during_cleanup_still_releases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L3-3. Planted fault: a second SIGTERM while the child is being stopped raised out of the
+    cleanup, so the holder record stayed published for a dead process and the handlers stayed swapped."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
+    holder_file = state / "coding-harness" / verify_lock.HOLDER_NAME
+    original_stop = verify_lock._stop_child
+
+    def first_signal(_child: object) -> int:
+        assert holder_file.is_file(), "the admission was not published before the first signal"
+        raise verify_lock.SupervisorInterrupted(signal.SIGINT)
+
+    def stop_with_second_signal(child: subprocess.Popen[bytes]) -> None:
+        original_stop(child)
+        os.kill(os.getpid(), signal.SIGTERM)  # the second signal arrives during cleanup
+
+    monkeypatch.setattr(verify_lock, "_watch_child", first_signal)
+    monkeypatch.setattr(verify_lock, "_stop_child", stop_with_second_signal)
+    before = signal.getsignal(signal.SIGTERM)
+    assert verify_lock.supervise(["sleep", "30"]) == 128 + signal.SIGINT
+    assert not holder_file.exists(), "the holder record outlived the cleanup"
+    assert signal.getsignal(signal.SIGTERM) is before, "the supervisor left its signal handler installed"

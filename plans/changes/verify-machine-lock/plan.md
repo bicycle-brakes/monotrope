@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-29
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-p6mu
@@ -172,3 +172,4 @@ Appetite stop, 2026-10-29 16:55 UTC: about 3.9 of 4 h used; the change is parked
 2026-10-29 17:05:21–17:18:53 UTC, 812 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-10-29 19:10:01–19:12:04 UTC, 123 s — review loop round 1 · rows L1-1/L1-12, L1-3, L1-11, L1-14 repaired by the orchestrator, each test red first; L1-5 text; nine rows rejected · measured with `date -u`
 2026-10-29 22:31:00–22:38:50 UTC — review loop round 2 · hy3, four rows, all rejected by the orchestrator (two false, two accepted limits); before it, the six round-1 rows repaired at db53c3e4 were marked `fixed` in the loop record · measured with `date -u` (start read from the runner's log, to the minute)
+2026-10-29 23:00:00–2026-10-30 23:02:41 UTC — review loop round 3 · mimo-v2.6-pro, three rows: L3-2 and L3-3 repaired by the orchestrator, each test red first (L3-2 by a planted reversed numbering); L3-1 rejected as the second finding of the release/inherited-descriptor mechanism · measured with `date -u` (start read from the runner's log, to the minute)
