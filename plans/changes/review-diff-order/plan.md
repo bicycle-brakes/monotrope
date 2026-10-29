@@ -112,3 +112,5 @@ predecessor measurement, free admission/order/bounds, raw `change_diff`,
 read tools and loop state/stop/release rules retain their current behavior.
 
 ## Time used
+2026-10-29 17:36–19:07:41 UTC — implement · attempts 1 (flash, 1 test red) and 2 (flash-repair, refused: it changed `prompts/04b-review-loop.md`, a path a stage-2 run does not commit, though plan step names it) · measured with `date -u`
+Appetite stop, 2026-10-29 19:10 UTC: about 1.5 h of the 1 h appetite used; parked. The plan's prompt step contradicts the runner's commit rule; the maintainer decides.
