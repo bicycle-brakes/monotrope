@@ -45,6 +45,7 @@ import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
+import verify_lock  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
 
@@ -594,6 +595,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "PATH": f"{bin_dir}:{git_dir}",
         "HOME": str(home),
         "XDG_STATE_HOME": str(tmp_path / "state"),
+        # The world's checks queue against their own state root under a floor of
+        # zero: no test waits on the machine that happens to run the suite, and
+        # an ambient marker of an outer run is not an ancestor here.
+        verify_lock.FLOOR_ENV: "0",
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -606,6 +611,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "ANTHROPIC_BASE_URL": "http://caller.invalid",
     }.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
 
     git(root, "init", "--quiet", "--initial-branch=main")
     git(root, "add", "-A")
@@ -1981,6 +1987,105 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert KEY not in problems[0] and "[credential]" in problems[0]
     assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
     assert world.calls("make") == []
+
+
+def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
+    """A genuine admission holder on the world's state root: a supervised probe child.
+
+    The world fixture pins the shared state root and a floor of zero, so the
+    holder queues exactly where the runner's own checks queue — never on this
+    machine's real lock.
+    """
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "scripts.verify_lock",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, pathlib, time; "
+            "pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); "
+            f"time.sleep({seconds})",
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "HOLDER_READY": str(ready)},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _holder_acquired(ready: Path, seconds: float = 10.0) -> int:
+    """Wait until the holder owns its admission and answer the holder pid it published."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if ready.exists():
+            return int(ready.read_text(encoding="utf-8"))
+        time.sleep(0.05)
+    raise AssertionError("the holder never acquired its admission")
+
+
+def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
+    # step limit — a short passing check times out after queueing — or the limit dropped, so
+    # a hung executing check escapes its group cleanup.
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    ready = world.state / "holder-ready"
+    holder = _real_holder(ready)
+    try:
+        _holder_acquired(ready)
+        problems: list[str] = []
+
+        def attempt() -> None:
+            problems.extend(stage2.verify_attempt(world.root, world.plan))
+
+        world.script(make=[{"stdout": "green", "sleep": 1.5}])
+        queued = threading.Thread(target=attempt)
+        queued.start()
+        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+        holder.terminate()
+        holder.wait(timeout=30)
+        queued.join(timeout=90)
+        assert problems == [], f"the admission wait consumed the step limit: {problems}"
+        assert len(world.calls("make")) == 1
+    finally:
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait(timeout=10)
+
+    # and the limit still binds the executing check: a hung make ends inside it
+    world.script(make=[{"stdout": "too late", "sleep": 30}])
+    problems = stage2.verify_attempt(world.root, world.plan)
+    assert len(problems) == 1 and "did not finish" in problems[0], problems
+
+
+def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
+    # the selected pytest path loses the inherited marker or the shared state root, so the local
+    # check queues for its own admission instead of reusing its ancestor's.
+    ready = world.state / "holder-ready-nested"
+    holder = _real_holder(ready)
+    try:
+        holder_pid = _holder_acquired(ready)
+        monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+        world.script(make=[{"stdout": "green"}])
+        assert stage2.verify_attempt(world.root, world.plan) == []
+        make_env = world.calls("make")[0]["env"]
+        assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+        assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+        assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+        # and the draft post-run path preserves it too
+        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+        problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+        assert problems == [], problems
+        draft_env = world.calls("make")[1]["env"]
+        assert draft_env[verify_lock.LOCK_ENV] == str(holder_pid), "the draft path lost its inherited marker"
+        assert draft_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
+    finally:
+        if holder.poll() is None:
+            holder.terminate()
+            holder.wait(timeout=10)
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -5344,13 +5449,13 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     seen: list[tuple[str, float | None]] = []
     original = stage2.launch
 
-    def record(command, root, env, secret=None, timeout=None, limit=None):
+    def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         # The stem, not the file name: the mutation ratchet in test_ci.py reads a
         # gate script's file name as mutation evidence, and this test seeds no
         # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
         name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
         seen.append((name, timeout))
-        return original(command, root, env, secret, timeout=timeout, limit=limit)
+        return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", record)
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
@@ -5364,10 +5469,10 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
     original = stage2.launch
 
-    def hang(command, root, env, secret=None, timeout=None, limit=None):
+    def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         if command == ["make", "verify"]:
             raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
-        return original(command, root, env, secret, timeout=timeout, limit=limit)
+        return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", hang)
     problems = stage2.verify_attempt(world.root, world.plan)
@@ -11520,7 +11625,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
     baseline = git(world.root, "rev-parse", "HEAD")
     original_launch = stage2.launch
 
-    def stopping(command, root, env, secret=None, timeout=None, limit=None):
+    def stopping(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         """The pytest process dies at the limit after writing the phases it reached."""
         if "-m" in command and "pytest" in command:
             record = {
@@ -11553,7 +11658,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
             }
             Path(env["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
             raise stage2.StepTimedOut(f"{command[0]} was stopped by {limit}")
-        return original_launch(command, root, env, secret, timeout=timeout, limit=limit)
+        return original_launch(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", stopping)
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)

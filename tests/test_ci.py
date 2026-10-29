@@ -15,14 +15,18 @@ Two failure shapes are meant to snag here, both measured:
 from __future__ import annotations
 
 import ast
+import contextlib
 import copy
+import fcntl
 import functools
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -34,6 +38,7 @@ RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
+import verify_lock  # noqa: E402
 from ci_gates import gates, misst_in  # noqa: E402
 from mutation_evidence import evidence, pruefling  # noqa: E402
 
@@ -1041,6 +1046,7 @@ def _runner_tree(base: Path, gate_command: str) -> Path:
     (tree / "decisions").mkdir()
     shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
     shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
+    shutil.copy(REPO_ROOT / "scripts" / "verify_lock.py", tree / "scripts" / "verify_lock.py")
     gate_file = {
         "schema_version": 2,
         "tools": {"python": ["3.11", "3.12"]},
@@ -1072,12 +1078,29 @@ def _interpreter_wrapper(path: Path, label: str, log: Path, *, with_pyyaml: bool
     path.chmod(0o755)
 
 
-def _run_runner(tree: Path, home: Path, path_dirs: list[Path], *args: str) -> subprocess.CompletedProcess:
+def _runner_env(tree: Path, home: Path, path_dirs: list[Path], extra: dict[str, str] | None = None) -> dict[str, str]:
     # `PYTHON` is left out on purpose, and so is everything else the outer run set.
-    env = {"HOME": str(home), "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"])}
+    # Each fake runner queues against its own state root under a floor of zero,
+    # so no copied runner ever reaches the machine lock of the run that started
+    # this suite — it would queue behind its own ancestor and hang.
+    env = {
+        "HOME": str(home),
+        "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"]),
+        "XDG_STATE_HOME": str(tree.parent / "state"),
+        verify_lock.FLOOR_ENV: "0",
+    }
+    env.update(extra or {})
+    return env
+
+
+def _run_runner(tree: Path, home: Path, path_dirs: list[Path], *args: str) -> subprocess.CompletedProcess:
     bash = shutil.which("bash") or "/bin/bash"
     return subprocess.run(
-        [bash, str(tree / "scripts" / "verify_all.sh"), *args], cwd=tree, env=env, capture_output=True, text=True
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args],
+        cwd=tree,
+        env=_runner_env(tree, home, path_dirs),
+        capture_output=True,
+        text=True,
     )
 
 
@@ -1116,7 +1139,7 @@ def test_the_runner_exports_a_relative_python_as_an_absolute_path(tmp_path: Path
     tree = _runner_tree(tmp_path, f'printf %s "$PYTHON" > {out}')
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
     cwd, relative = (tree, ".venv/bin/python3") if caller == "tree" else (tmp_path, "tree/.venv/bin/python3")
-    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": relative}
+    env = _runner_env(tree, tmp_path, [], {"PYTHON": relative})
     bash = shutil.which("bash") or "/bin/bash"
     done = subprocess.run(
         [bash, str(tree / "scripts" / "verify_all.sh")], cwd=cwd, env=env, capture_output=True, text=True
@@ -1137,7 +1160,7 @@ def test_a_python_path_with_a_space_still_starts_the_gate(tmp_path: Path) -> Non
     out = tmp_path / "gate-ran"
     tree = _runner_tree(base, f"python3 -c \"open('{out}', 'w').write('ran')\"")
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
-    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "PYTHON": ".venv/bin/python3"}
+    env = _runner_env(tree, tmp_path, [], {"PYTHON": ".venv/bin/python3"})
     bash = shutil.which("bash") or "/bin/bash"
     done = subprocess.run(
         [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
@@ -1155,7 +1178,7 @@ def test_an_absolute_or_bare_python_reaches_the_gate_unchanged(tmp_path: Path, k
     elsewhere = tmp_path / "elsewhere" / "bin"
     _interpreter_wrapper(elsewhere / "python3", "elsewhere", log)
     given = str(elsewhere / "python3") if kind == "absolute" else "python3"
-    env = {"HOME": str(tmp_path), "PATH": f"{elsewhere}:/usr/bin:/bin", "PYTHON": given}
+    env = _runner_env(tree, tmp_path, [elsewhere], {"PYTHON": given})
     bash = shutil.which("bash") or "/bin/bash"
     done = subprocess.run(
         [bash, str(tree / "scripts" / "verify_all.sh")], cwd=tree, env=env, capture_output=True, text=True
@@ -1181,7 +1204,7 @@ def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> Non
     log.unlink()
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    env = {"HOME": str(tmp_path / "home"), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
+    env = _runner_env(tree, tmp_path / "home", [tmp_path / "bin"])
     bash = shutil.which("bash") or "/bin/bash"
     again = subprocess.run(
         [bash, str(tree / "scripts" / "verify_all.sh")], cwd=elsewhere, env=env, capture_output=True, text=True
@@ -1217,6 +1240,99 @@ def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Pat
     done = _run_runner(tree, tmp_path / "home", [])
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "[probe] gruen" in done.stdout, done.stdout
+
+
+@contextlib.contextmanager
+def _held_holder(state: Path, *, pid: int | None = None) -> Iterator[None]:
+    """Hold the copied tree's machine lock the way a published admission does.
+
+    A local duplicate of tests/test_verify_lock.py's helper: this file travels
+    without it, and these few lines are the whole arrangement.
+    """
+    root = state / "coding-harness"
+    root.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(root / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NONBLOCK, 0o600)
+    holder = root / verify_lock.HOLDER_NAME
+    holder.write_text(
+        json.dumps(
+            {
+                "pid": os.getpid() if pid is None else pid,
+                "command": ["fake", "holder"],
+                "start": "2026-10-29T00:00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            holder.unlink()
+        with contextlib.suppress(OSError):
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
+def test_guarded_runner_preserves_gate_verdicts_and_ci_selection(tmp_path: Path) -> None:
+    """Criterion 13: admission changes no verdict and no selection, and CI buys no bypass.
+
+    Fault this pins: a wrapper that turns a failed check green, a `--ci` run
+    that skips the machine queue, or a nested run that queues behind its own
+    ancestor instead of reusing its admission.
+    """
+    log = tmp_path / "log"
+    green = _runner_tree(tmp_path / "green", "true")
+    _interpreter_wrapper(green / ".venv" / "bin" / "python3", "venv", log)
+    done = _run_runner(green, tmp_path / "home", [])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
+
+    red = _runner_tree(tmp_path / "red", "exit 3")
+    _interpreter_wrapper(red / ".venv" / "bin" / "python3", "venv", log)
+    done = _run_runner(red, tmp_path / "home", [])
+    assert done.returncode == 1, f"a red gate came out {done.returncode}: {done.stdout}\n{done.stderr}"
+    assert "RED (block)" in done.stdout, done.stdout
+
+    # `--ci` selects the CI placement, but buys no bypass: while a holder owns
+    # the admission, the run waits and starts no gate of its own.
+    gate_ran = tmp_path / "ci-gate-ran"
+    ci_tree = _runner_tree(tmp_path / "ci", f"touch {gate_ran}")
+    _interpreter_wrapper(ci_tree / ".venv" / "bin" / "python3", "venv", log)
+    with _held_holder(ci_tree.parent / "state"):
+        bash = shutil.which("bash") or "/bin/bash"
+        queued = subprocess.Popen(
+            [bash, str(ci_tree / "scripts" / "verify_all.sh"), "--ci"],
+            cwd=ci_tree,
+            env=_runner_env(ci_tree, tmp_path / "home", []),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1.5)
+        assert queued.poll() is None, "a --ci run bypassed a held admission"
+        assert not gate_ran.exists(), "a --ci run started its gates while another admission held the lock"
+    assert queued.wait(timeout=60) == 0, "the queued run did not proceed after the holder released"
+    assert gate_ran.exists(), "the queued run never ran its gates"
+
+    # a valid inherited marker runs inside the holder's admission, without queueing behind it
+    nested_gate_ran = tmp_path / "nested-gate-ran"
+    nested_tree = _runner_tree(tmp_path / "nested", f"touch {nested_gate_ran}")
+    _interpreter_wrapper(nested_tree / ".venv" / "bin" / "python3", "venv", log)
+    with _held_holder(nested_tree.parent / "state", pid=os.getpid()):
+        bash = shutil.which("bash") or "/bin/bash"
+        nested = subprocess.run(
+            [bash, str(nested_tree / "scripts" / "verify_all.sh")],
+            cwd=nested_tree,
+            env=_runner_env(nested_tree, tmp_path / "home", [], {verify_lock.LOCK_ENV: str(os.getpid())}),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    assert nested.returncode == 0, (
+        f"a validly nested run could not finish inside its ancestor's admission:\n{nested.stdout}\n{nested.stderr}"
+    )
+    assert nested_gate_ran.exists()
 
 
 def test_no_second_verification_workflow() -> None:

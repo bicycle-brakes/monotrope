@@ -184,6 +184,12 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
+    "verify_lock.py": (
+        "Helper of the runner, never a gate of its own: the machine-wide verification admission "
+        "(flock queue, free-memory check) that verify_all.sh execs as `-m scripts.verify_lock` and "
+        "scripts.stage2 holds around its timed local checks; tests/test_verify_lock.py runs it "
+        "against isolated state roots (bead coding-harness-p6mu)"
+    ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
         "answer with it; tests/test_harness_decide_adr.py runs it"
