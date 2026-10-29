@@ -364,6 +364,64 @@ def test_the_schema_rejects_a_non_boolean_needs_history() -> None:
     assert any("frontmatter-current" in f and "needs_history" in f for f in fehler), fehler
 
 
+DOCS_SUBSET = {
+    "plans-registry",
+    "docs-links",
+    "frontmatter-current",
+    "dangling-beads",
+    "decision-continuity",
+    "adr-answers",
+    "interview-minimums",
+    "question-context",
+    "criterion-ledger",
+    "research-handoff",
+    "markdownlint",
+}
+
+
+def test_the_docs_subset_holds_the_document_gates_and_no_code_gate() -> None:
+    """77qj: `--job docs` selects exactly the declared document gates, each still in verify."""
+    done = subprocess.run(
+        [sys.executable, "scripts/ci_gates.py", "--commands", "--job", "docs", "--tsv"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    chosen = {line.split("\t", 1)[0] for line in done.stdout.splitlines() if line.strip()}
+    assert chosen == DOCS_SUBSET, chosen
+    assert not chosen & {"pytest", "ruff-check", "ruff-format", "leerprobe", "ruleset"}
+    verify = {g["id"] for g in gates() if g["job"] == "verify"}
+    assert DOCS_SUBSET <= verify, "a subset adds a selection; it never moves a gate out of verify"
+
+
+def test_the_docs_subset_derives_no_ci_job() -> None:
+    """77qj: the generated workflow is the same with and without the subset markers."""
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert "docs" not in yaml.safe_load(ci_gates.generate_ci())["jobs"]
+    assert any(g.get("subsets") for g in doc["gates"])
+
+
+@pytest.mark.parametrize(
+    ("gate_id", "value", "words"),
+    [
+        ("question-context", ["nightly"], "subsets must be"),
+        ("question-context", [], "subsets must be"),
+        ("question-context", "docs", "subsets must be"),
+        ("question-context", ["docs", "docs"], "twice"),
+        ("plans-registry-strict", ["docs"], "verify gates only"),
+    ],
+)
+def test_the_schema_rejects_a_malformed_subset(gate_id: str, value: object, words: str) -> None:
+    """77qj: an unknown, empty, scalar or doubled subset, or one on a drift gate, is a schema error."""
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert ci_gates.validate_schema(doc) == [], "the control: the real gate file passes"
+    ziel = next(g for g in doc["gates"] if g["id"] == gate_id)
+    ziel["subsets"] = value
+    fehler = ci_gates.validate_schema(doc)
+    assert any(gate_id in f and words in f for f in fehler), fehler
+
+
 def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
     """bl2: a red gate does not silently switch off the later gates.
 
