@@ -73,6 +73,17 @@ instances that receive the gate later). Three options were seen:
 - **Migrate the instance's live plans** before pinning: add a ledger to each.
   That is work in the instance, and the gate stays strict.
 
+**How close option one already is (read 2026-10-29 at `db701a06`):**
+`scripts/adoption.py` is the one reader of a repository's adoption days
+(`adopted_on(root, gate)`). It raises `NotRecorded` instead of guessing, and
+its docstring already names bead coding-harness-wpv. Two gates use it today,
+`interview-minimums` (2026-10-08) and `question-context` (2026-10-15).
+`criterion-ledger` is not among them: its day is the constant `CUTOFF`. The
+change would add `criterion-ledger: 2026-10-11` to `decisions/adoption.yaml`,
+read it through `adopted_on`, and widen the exemption from archived plans to
+plans created before the day. Adding or moving a day there is a decision pull
+request (the file's own header).
+
 The first two together close both effects. Which one, and whether an instance
 may keep a later day, is the maintainer's decision. It is not taken here.
 
