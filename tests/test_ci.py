@@ -392,7 +392,7 @@ def test_the_docs_subset_holds_the_document_gates_and_no_code_gate() -> None:
     assert chosen == DOCS_SUBSET, chosen
     assert not chosen & {"pytest", "ruff-check", "ruff-format", "leerprobe", "ruleset"}
     verify = {g["id"] for g in gates() if g["job"] == "verify"}
-    assert DOCS_SUBSET <= verify, "a subset adds a selection; it never moves a gate out of verify"
+    assert verify >= DOCS_SUBSET, "a subset adds a selection; it never moves a gate out of verify"
 
 
 def test_the_docs_subset_derives_no_ci_job() -> None:
