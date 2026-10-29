@@ -331,3 +331,14 @@ now guard "reads exactly like before".
 
 Phase 6 verdict: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d, 2026-10-29
 Reviewer session: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 737 files, 2600 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-29
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | Phase 6 re-check | plans/changes/swarm-test-speed/plan.md:86–87 | The criterion ledger still names `test_reader_preserves_safe_loader_tab_contract` and `test_reader_selects_safe_loader_with_fallback`, which the latest repair replaced. Running `scripts/check_criterion_ledger.py` reports both missing functions and exits 1, blocking `make verify`. Update these entries to the current regression test names. [Definition of Done: make verify green and regression evidence recorded] | Codex | fixed — not a test — the orchestrator's F6-3 hand repair renamed the two tests without updating plan.md's ledger; both entries now name `test_reader_preserves_safe_loader_contract` and `test_reader_parses_with_the_pure_safe_loader`, and `scripts/check_criterion_ledger.py` exits 0 (2026-10-29) | no — text only |
+
+Phase 6 verdict: codex 01a18793-8a75-7ee1-9830-3c80118868f2, 2026-10-29
+Reviewer session: codex 01a18793-8a75-7ee1-9830-3c80118868f2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

@@ -83,8 +83,8 @@ are reversible implementation details chosen to retain freshness and portability
 ## Criterion ledger
 
 - 1: tests/test_stage2_declaration.py::test_reader_matches_safe_load_contract — values, types or refusal differ from the old reader.
-- 1: tests/test_stage2_declaration.py::test_reader_preserves_safe_loader_tab_contract — C loading accepts a tab separator the baseline refuses, or valid tabs in scalar content or comments are rejected.
-- 1: tests/test_stage2_declaration.py::test_reader_selects_safe_loader_with_fallback — unsafe loading or missing C support breaks a valid read.
+- 1: tests/test_stage2_declaration.py::test_reader_preserves_safe_loader_contract — the reader accepts a tab separator or refuses an escaped surrogate pair differently from the old pure-SafeLoader reader, or rejects valid tabs in scalar content or comments.
+- 1: tests/test_stage2_declaration.py::test_reader_parses_with_the_pure_safe_loader — the reader parses with another loader than the pure SafeLoader, or loads an unsafe tag.
 - 2: tests/test_stage2_declaration.py::test_unchanged_contents_reuse_a_bounded_parse_cache — repeated reads parse again or distinct inputs grow the cache beyond its bound.
 - 3: tests/test_stage2_declaration.py::test_changed_contents_are_read_without_metadata_shortcuts — edits, replacement or a different root return stale data.
 - 4: tests/test_stage2_declaration.py::test_read_failure_never_returns_a_cached_declaration — a bad/missing/unreadable current file returns an earlier mapping or recovery fails.
