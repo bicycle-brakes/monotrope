@@ -29,7 +29,9 @@ Three text pull requests are ready (#272, #273, #274). Two changes are
 parked at their appetite (swarm-test-speed, run-report). The runner change
 fail-fast-attempts is code-complete through eight review rounds and waits on
 its last loop stage: OpenCode Go hit its usage limit (`GoUsageLimitError`,
-429) at about 02:05 UTC and was still limited at 02:52 UTC. The night's main
+429) at about 02:05 UTC and was still limited at 02:52, 03:53 and 05:24 UTC.
+A five-hour window would have reopened by then, so the limit may be a daily or
+monthly one (not read: the Go account page). The night's main
 finding is the review loop's 2000-line diff bound: on every change tonight,
 it cut away the change's tests (PR #274).
 
@@ -113,17 +115,18 @@ One decision at a time; each has a recommendation.
 
 ## Open work and blockers
 
-Task status is in Beads. The lane state at about 03:00 UTC:
+Task status is in Beads. The lane state at 05:30 UTC:
 
-- **Lane A, fail-fast-attempts** (coding-harness-5tyh), head `21b297c5`.
+- **Lane A, fail-fast-attempts** (coding-harness-5tyh), head `680d4ab8`.
   - Eight review rounds are written and every row is decided. The
     orchestrator repaired code rows by hand with tests that were red first,
     because the runner has no appetite stop yet and the appetite was tight.
   - Full `make verify` was green at `023823ec`. Every commit since then
     touches only records or text.
-  - Blocked on the last loop stage (glm-5.3) by the Go usage limit. A retry
-    is scheduled for about 03:55 UTC. Then phase 6 and the pull request
-    follow.
+  - Blocked on the last loop stage (glm-5.3) by the Go usage limit; four
+    attempts failed between 02:05 and 05:24 UTC, each recorded in
+    `findings.md`. When Go answers: that stage, then phase 6 and the pull
+    request.
 - **Lane A next, verify-machine-lock** (coding-harness-p6mu, P0).
   - Spec and plan are drafted (`e66a9975`, appetite 3 hours).
   - Implement waits: the plan changes `scripts/stage2.py`, which the night
@@ -153,15 +156,15 @@ Task status is in Beads. The lane state at about 03:00 UTC:
 
   | Worktree | Branch | Head |
   | --- | --- | --- |
-  | `fail-fast-attempts` | `fix/fail-fast-attempts` | `21b297c5` |
+  | `fail-fast-attempts` | `fix/fail-fast-attempts` | `680d4ab8` |
   | `index-merge-regenerates` | `fix/index-merge-regenerates` | `60cd44f2` |
   | `run-report` | `feat/run-report` | `358472d8` |
   | `swarm-test-speed` | `perf/swarm-test-speed` | `703869a3` |
   | `verify-machine-lock` | `fix/verify-machine-lock` | `e66a9975` |
   | `pi-neutral-paths` | `fix/pi-neutral-paths` | `c7e41301` |
   | `test-strategy` | `docs/test-strategy` | `43bf5624` |
-  | `ledger-instance-trial` | `docs/ledger-instance-trial` | — |
-  | `review-diff-cut` | `docs/review-diff-cut` | — |
+  | `ledger-instance-trial` | `docs/ledger-instance-trial` | `03ebb5a5` |
+  | `review-diff-cut` | `docs/review-diff-cut` | `eb305e5d` |
   | `handover-1029` | this file | — |
 
 - Loop records stand outside the repository under
@@ -179,8 +182,7 @@ Task status is in Beads. The lane state at about 03:00 UTC:
   - swarm-test-speed at `cf71a96c`: 4086 passed.
 
   Each ran on its own with `nice -n 10` and `-n 4`.
-- CI is green on #271, #272, #273 and #274, measured 2026-10-29 at about
-  03:00 UTC.
+- CI is green on #271, #272, #273 and #274, measured 2026-10-29 at 05:25 UTC.
 - Lessons for the next run:
   - **The draft verb runs `make verify`.** It bears a verify, so two drafts
     and a kit probe once overlapped; memory held at 33 % free.
