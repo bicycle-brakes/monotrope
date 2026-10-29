@@ -456,3 +456,5 @@ Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.3-f
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 733 files, 2595 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2609 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model hy3 · leak check clean over 733 files, 2614 commits, 12 rules.
