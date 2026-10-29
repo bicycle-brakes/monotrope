@@ -47,7 +47,7 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_the_plan_prompt_names_every_runner_held_path — a held entry is omitted; a planted new entry absent from the prompt must fail the coverage check.
+- 1: tests/test_stage2.py::test_the_plan_prompt_names_every_runner_held_path — a held entry is omitted; a planted new entry absent from the prompt must fail the coverage check.
 - 2: not a test — phase-6 review compares the prompt's rule with committed-map, exactly-human-decided semantics; omission, an edited-map source or a mixed-class rule refutes it.
 - 3: not a test — phase-6 review checks the prompt requires an orchestrator bootstrap edit after the accepted attempt; missing ownership or timing, or attempt ownership, refutes it.
 
@@ -65,3 +65,4 @@ recorded. This draft writes only the artifacts; the orchestrating session
 shows the card unchanged before carrying out the manual implementation.
 
 ## Time used
+2026-10-29 22:56:49–22:58:17 UTC — implement · orchestrator bootstrap edit by hand (prompts/ is runner-held): test red first (all fifteen RUNNER_HELD entries missing), prompt item added, test green · measured with `date -u`

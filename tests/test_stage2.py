@@ -745,6 +745,21 @@ def test_an_attempt_that_writes_a_runner_held_path_is_refused_and_restored(world
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
 
 
+def _held_entries_missing_from(prompt: str, entries: tuple[str, ...]) -> list[str]:
+    """The held entries the prompt does not name as a complete backticked path."""
+    return [entry for entry in entries if f"`{entry}`" not in prompt]
+
+
+def test_the_plan_prompt_names_every_runner_held_path() -> None:
+    """Fault: a path is added to RUNNER_HELD without the plan prompt naming it, so a plan assigns
+    a held edit to an attempt the runner then refuses (plan-held-paths, criterion 1)."""
+    prompt = (REPO_ROOT / "prompts" / "03-plan.md").read_text(encoding="utf-8")
+    assert stage2.RUNNER_HELD, "the runner holds no path; the test would prove nothing"
+    assert _held_entries_missing_from(prompt, stage2.RUNNER_HELD) == []
+    planted = (*stage2.RUNNER_HELD, "planted-held-path/")
+    assert _held_entries_missing_from(prompt, planted) == ["planted-held-path/"], "the check misses a new entry"
+
+
 def _attempt_writing(world: World, plants: dict[str, str]) -> int:
     """One green `implement` attempt that also writes `plants`; the exit code of the verb."""
     baseline_plan = {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}
