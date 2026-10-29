@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-28
 created: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-dca4
@@ -252,8 +252,8 @@ Stage-2 call, 2026-10-28: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_availability.py:596 | Selecting `CSafeLoader` changes the reader’s acceptance contract. Reproduced with PyYAML 6.0.2: `endpunkte: []\t# ordinary inline comment\n` returns `{'endpunkte': []}` with the new reader, while the baseline and fallback `SafeLoader` return `model-endpoints.yaml cannot be read`. The same declaration therefore succeeds or fails depending on libyaml availability; preserve the baseline refusal behavior. [Criterion 1] | Codex | open | — |
-| F6-2 | MAJOR | SPEC | Phase 6 | plans/changes/swarm-test-speed/plan.md:130 | The recorded before/after measurements ran alongside another session’s `make verify`; the evidence explicitly states that the machine was not isolated. Alternating runs under concurrent load does not establish the required isolated comparison. Record three successful unprofiled runs per revision under matched isolated conditions before treating the speed criterion as met. [Criterion 7] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_availability.py:596 | Selecting `CSafeLoader` changes the reader’s acceptance contract. Reproduced with PyYAML 6.0.2: `endpunkte: []\t# ordinary inline comment\n` returns `{'endpunkte': []}` with the new reader, while the baseline and fallback `SafeLoader` return `model-endpoints.yaml cannot be read`. The same declaration therefore succeeds or fails depending on libyaml availability; preserve the baseline refusal behavior. [Criterion 1] | Codex | taken — criterion 1: a declaration the pure `SafeLoader` refuses (a tab before an inline comment) is refused with libyaml's `CSafeLoader` as without it; the C loader stays (maintainer, 2026-10-29) | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | plans/changes/swarm-test-speed/plan.md:130 | The recorded before/after measurements ran alongside another session’s `make verify`; the evidence explicitly states that the machine was not isolated. Alternating runs under concurrent load does not establish the required isolated comparison. Record three successful unprofiled runs per revision under matched isolated conditions before treating the speed criterion as met. [Criterion 7] | Codex | fixed — not a test — three alternating runs per revision inside one hold of the machine's verify lock, 2026-10-29 07:42–07:43 UTC, median 14.91 s before (`5c4ddcbd`) and 9.51 s after (`703869a3`); plan.md, Isolated re-measurement — 2026-10-29 | no — text and measurement only |
 
 Phase 6 verdict: codex 01a18477-e23b-72d1-8402-5dbe905cbdaa, 2026-10-28
 Reviewer session: codex 01a18477-e23b-72d1-8402-5dbe905cbdaa — a fresh session reviewed: no phase-2a session was recorded

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-dca4
@@ -175,6 +175,34 @@ pressure (1861 s, 12 `TimeoutExpired`) is void and not counted. No full-suite
 baseline before the change was taken under the same conditions, so this is a
 reading, not a before/after comparison; the matched comparison above stays the
 evidence for the speed criterion.
+
+## Isolated re-measurement — 2026-10-29
+
+Phase-6 row F6-2 (the 2026-10-28 runs shared the machine with another
+lane's `make verify`). Repeated by the orchestrator on 2026-10-29,
+07:42:13–07:43:34 UTC, macOS, 8 cores, Python 3.12.15 with this worktree's
+pinned `.venv` for both sides, the verbatim single-test command of
+"Verification and boundaries", `nice -n 10`. All six runs ran inside one
+hold of the machine's verify lock (`lockf` on
+`~/.local/state/coding-harness/verify.lock`), so no `make verify`, runner
+implement, repair or draft of any lane ran meanwhile; remote model calls of
+other lanes did, and the one-minute load average stayed between 2.77 and
+3.54 throughout. Before and after alternated, before first, each in its own
+detached checkout: "before" is `5c4ddcbd` (no production change), "after" is
+`703869a3` (the accepted implementation plus round-1 repairs, unchanged
+reader since `cf71a96c`). pytest's reported time, all six runs `1 passed`:
+
+| Run | Before (`5c4ddcbd`) | After (`703869a3`) |
+|---|---|---|
+| 1 | 18.44 s | 12.73 s |
+| 2 | 14.91 s | 9.05 s |
+| 3 | 14.66 s | 9.51 s |
+| Median | **14.91 s** | **9.51 s** |
+
+Wall times (`/usr/bin/time -p`, real): 18.64 / 15.11 / 14.84 s before,
+12.95 / 9.25 / 9.70 s after. The median falls by about 36 % (5.40 s). This
+set replaces the shared-machine set of 2026-10-28 as the evidence for
+criterion 7; the earlier set stays above because review rows refer to it.
 
 ## Runner route — 2026-10-28
 
