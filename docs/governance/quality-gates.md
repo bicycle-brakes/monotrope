@@ -5,7 +5,7 @@ subcategory: quality-gates
 status: current
 created: 2026-04-17
 last_reviewed: 2026-08-14
-updated: 2026-10-08
+updated: 2026-10-28
 owner: Data Architect
 provenance: human-decided
 review:
@@ -55,9 +55,11 @@ Wer wissen will, wie eine Unterschrift technisch festgehalten wird: §6.
 Sie nennt **keine Schwellen** — welche Abweichung eine Reconciliation noch
 passieren lässt, steht im Contract der Entity, mit Begründung je Schwelle. Sie
 beschreibt **keine Prozessschritte** — wie man ein Review fährt, steht in
-[Review und Abnahme](../how-to/review-und-abnahme.md). Und sie ersetzt den
-[Gate-Katalog](gate-catalog.md) nicht: der beschreibt zwölf *Familien* von
-Prüfungen und ihre Betriebsregeln, diese Seite die *Tore* eines Liefergegenstands.
+[Review und Abnahme](../how-to/review-und-abnahme.md).
+
+The [gate catalog](gate-catalog.md) lists the declared machine gates and
+their execution and enforcement metadata, with the existing rule for enabling
+a gate. This page describes the delivery gates and what a signature means.
 
 ## 4 · Die Gates
 
@@ -100,8 +102,8 @@ ein Name stand gegen einen Text, den die Person nie gelesen hatte.
 man von Hand auf `accepted` stellt.
 
 *Kein Agent schließt ein Human Gate.* Er darf einen Antrag stellen, nie eine
-Abnahme erzeugen. Das Verdikt wird aus den Findings gerechnet (Gate-Katalog
-GK-8), und ein Mensch unterschreibt es.
+Abnahme erzeugen. Das Verdikt wird aus den Findings gerechnet, und ein Mensch
+unterschreibt es.
 
 ### Was zwischen HG-2 und dem Schluss der Liefereinheit steht
 
@@ -167,7 +169,7 @@ die diese Seite benennt statt sie zu verschweigen.
 
 ## 7 · Verwandtes
 
-- [Gate-Katalog](gate-catalog.md) — die zwölf Prüf-Familien und ihre sieben Betriebsregeln
+- [Gate catalog](gate-catalog.md) — the declared machine gates and the existing gate-enabling rule
 - [Review und Abnahme](../how-to/review-und-abnahme.md) — wie man ein Review fährt
 - [Änderungsklassen](change-classification.md) — welche Gates eine Änderung braucht
 - [Eskalationsmodell](eskalationsmodell.md) — was passiert, wenn ein Gate hält

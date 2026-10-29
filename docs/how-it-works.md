@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-23
+updated: 2026-10-28
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -91,7 +91,7 @@ tracks no credentials.
 
 ## Review and research swarms
 
-The review loop uses swarms. The research swarm remains a proposal.
+The review loop (phase 4b) and the research of larger changes (phase 1) use swarms.
 
 ### Review swarm
 
@@ -119,10 +119,12 @@ flowchart LR
 
 [ADR 0021](adr/0021-review-swarms-until-clean.md) defines the loop. The
 refreshed catalog comes from Pi’s intermediary `pi.dev`; membership does not
-measure actual free billing. Paid models require a dated retention reading and
-terms excluding training; ineligible members are skipped and named. The loop
-stops when clean, when the paid ladder is exhausted, or after two consecutive
-rounds accepting only findings caused by the preceding repairs.
+measure actual free billing. Paid models require a retention reading with a
+declared expiry date and terms excluding training
+([ADR 0022](adr/0022-paid-model-terms-expire.md)); ineligible members are
+skipped and named. The loop stops when clean, when the paid ladder is
+exhausted, or after two consecutive rounds accepting only findings caused by
+the preceding repairs.
 
 ### Runner details
 
@@ -142,26 +144,32 @@ These are operator details; you can skip them on a first read.
   rung; a failed single rung is retired with
   `release-loop --stage-failed <model> --reason <text>`.
 - Free models are admitted for the diff-only review under retention and
-  training terms that have not been read. A paid model needs a dated terms
-  reading.
+  training terms that have not been read. A paid model needs a terms reading
+  whose declared `valid_until` date has not passed; the runner warns before
+  it does.
 
 ### Research swarm
 
-Phase 1 would run three independent researchers: one on the existing system,
-one on outside practice, one on how the change fits the rest. Then one round
-of critique, and a fresh judge settles the result, which becomes
-`research.md`. All calls go through the runner, behind the leak check. The
-proposal is a draft
-([`docs/research/2026-10-08-explore-swarm-proposal.md`](research/2026-10-08-explore-swarm-proposal.md));
-its implementation is not built.
+A `feature` or `architectural` change explores through the research swarm
+([ADR 0020](adr/0020-phase-1-research-swarm.md)); a `bounded` change or a
+`spike` keeps the single explorer. Three repository seats first map the
+sources independently, and one Opus 5.5 context merges the maps. Then eleven
+topics run on the same brief: eight about the repository, each read by the
+three repository seats, and three about outside practice, each read by three
+online seats; selected free models add public topics, best effort. One fresh
+Opus 5.5 context reconciles the reports into `research.md`. Every call goes
+through the runner and its leak check; a run that misses a required part is
+marked incomplete and exits with an error. The `research-handoff` and
+`interview-minimums` gates then check that the spec and the interview carry
+what the research found.
 
 ```mermaid
 flowchart LR
-    Q[Question for phase 1] --> R1[Researcher: existing system]
-    Q --> R2[Researcher: outside practice]
-    Q --> R3[Researcher: integration]
-    R1 & R2 & R3 --> CR[One critique round]
-    CR --> J[Fresh judge]
+    Q[Question for phase 1] --> F[Three finders map the sources]
+    F --> M[One merged map]
+    M --> T1[Eight repository topics, three seats each]
+    M --> T2[Three outside-practice topics, three online seats each]
+    T1 & T2 --> J[Fresh judge]
     J --> OUT[research.md]
 ```
 
@@ -249,26 +257,25 @@ flowchart LR
 
 ## How testing works, and what it does not prove
 
-`make verify` runs `scripts/verify_all.sh`, which holds no commands of its own:
-it reads the gate list in `decisions/gates.yaml`, the same list the CI workflow
-is generated from. The pytest suite is one of those gates and runs in parallel
-(`pytest -n auto`). The others check lint, the kit's classified tree, documents
-and process rules.
+The strategy is the kit's and travels with it: six layers from a proof per
+criterion to the empty-repository probe ([how the workflow tests](testing.md)).
+What is particular to this repository:
 
-Each checkout builds its own `.venv` with `make venv` from
-`requirements-ci.txt`, where every package is pinned with its hash, and
-installs the pinned Pi with `bash tools/pi/install.sh`; the Pi tests and the
-review swarms need it. Results depend on the lock, not on what happens to be
-installed on a machine, so a local green means what a CI green means.
-
-A repair of code counts only when its test fails on the code before the
-repair; the runner checks that itself. A test that would have passed anyway
-proves nothing, and models readily write such tests.
-
-On 2026-10-20 at `5c7db34`, `tests/` held 2306 tests in 40 files: about 29,800
-lines of test code against about 13,900 lines in `scripts/`. That measures how
-much is checked, not how well; mutation testing on one or two scripts is
-planned (bead coding-harness-bvy).
+- **Runner tests use stand-ins.** `tests/test_stage2.py` and its neighbours
+  run `scripts/stage2.py` in-process against a temporary repository, with
+  stand-in programs for `codex`, `claude`, `make` and Pi that record and
+  contact nothing. The pinned Pi is also tested as the real program, with a
+  loopback model stand-in ([ADR 0019](adr/0019-repository-pinned-pi-and-contract-tests.md)).
+- **The environment is locked.** Each checkout runs `make venv` and
+  `bash tools/pi/install.sh` once. The Pi tests and the review swarms need
+  the pinned Pi.
+- **The size, on 2026-10-28 at `db701a06`:** 4102 tests in 59 test files,
+  about 51,600 lines of Python under `tests/` against about 26,500 under
+  `scripts/`. That measures how much is checked, not how well; mutation
+  testing on one or two scripts is planned (bead coding-harness-bvy).
+- **Runs take time.** A full `make verify` took about 11 minutes on
+  2026-10-28 (pytest 515–638 s, run at lower priority with `-n 4`). The three
+  lanes therefore share one verification slot ([three lanes](orchestration.md)).
 
 ## Follow one completed change
 

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-omp
@@ -24,6 +24,13 @@ The baseline check establishes red first only through an assertion failure in
 the named test, never through a missing runtime dependency (bead
 `coding-harness-omp` — missing Pi installation misread as red-first evidence).
 Research: `research.md`. Settled choices: `decisions.md`.
+
+Amendment — 2026-10-27: this spec is kept as written; its classification is
+the historical contract. Where the term **Assertion failure** and criteria 1
+and 4 below speak of an assertion failure, the successor
+[red-first-pytest-failed](../red-first-pytest-failed/spec.md) governs: its
+**Qualifying failure** also counts pytest's own `pytest.fail.Exception` in
+the call phase as red. Setup and teardown failures remain refused.
 
 ## Problem
 
