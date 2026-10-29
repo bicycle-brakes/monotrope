@@ -310,7 +310,24 @@ Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-3 | MAJOR | SPEC | Phase 6 re-check | scripts/stage2_availability.py:629 | The C loader still changes the baseline acceptance contract. New evidence with PyYAML 6.0.2: the ASCII declaration `note: "\uD83D\uDE00"` returns a mapping through the baseline and fallback `SafeLoader`, but `read_declaration` returns `model-endpoints.yaml cannot be read` with `CSafeLoader`. The tab-specific repair does not cover this difference; preserve the baseline result regardless of libyaml availability. [Criterion 1] | Codex | open | — |
+| F6-3 | MAJOR | SPEC | Phase 6 re-check | scripts/stage2_availability.py:629 | The C loader still changes the baseline acceptance contract. New evidence with PyYAML 6.0.2: the ASCII declaration `note: "\uD83D\uDE00"` returns a mapping through the baseline and fallback `SafeLoader`, but `read_declaration` returns `model-endpoints.yaml cannot be read` with `CSafeLoader`. The tab-specific repair does not cover this difference; preserve the baseline result regardless of libyaml availability. [Criterion 1] | Codex | fixed — tests/test_stage2_declaration.py::test_reader_preserves_safe_loader_contract | no — the C loader is removed; the test file was green before and after for every other test |
+
+F6-3, hand repair by the orchestrator, 2026-10-29. F6-3 is the second case of
+the mechanism F6-1 repaired (libyaml's C loader accepts or refuses other
+documents than the pure `SafeLoader`); by the rule "the second finding of one
+mechanism ends case-by-case repair" (`docs/WORKFLOW.md`, "When the same
+mechanism returns") it went to the maintainer, who chose option A on
+2026-10-29: drop the C loader, keep the content-keyed cache. The reader now
+always parses with `yaml.SafeLoader`, the cache key is the text alone, and the
+F6-1 tab pre-check is gone with the C path. A red-first proof is moot for a
+removal: the repair takes code out, it adds no behaviour a new test could
+miss on the baseline. Measured anyway: against the code of `d58005fe` (C
+loader plus tab pre-check), `tests/test_stage2_declaration.py` from the repair
+ends 2 failed, 31 passed - the escaped-surrogate case of
+`test_reader_preserves_safe_loader_contract` and
+`test_reader_parses_with_the_pure_safe_loader` - and 33 passed with the
+repair (2026-10-29, `-p no:xdist`). The tab cases and the new surrogate case
+now guard "reads exactly like before".
 
 Phase 6 verdict: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d, 2026-10-29
 Reviewer session: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

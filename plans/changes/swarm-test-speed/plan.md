@@ -205,6 +205,19 @@ Wall times (`/usr/bin/time -p`, real): 18.64 / 15.11 / 14.84 s before,
 set replaces the shared-machine set of 2026-10-28 as the evidence for
 criterion 7; the earlier set stays above because review rows refer to it.
 
+## C loader against pure loader — 2026-10-29
+
+Measured by the orchestrating session (lane coordinator), not by this lane,
+and recorded here with that provenance: at `d58005fe`, the single test
+`tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons`
+with `-p no:xdist`, three alternating runs each, about 09:33 UTC on
+2026-10-29, one-minute load about 2.3. With libyaml's C loader: 9.09 / 9.02 /
+9.01 s (median 9.02 s). With the pure `SafeLoader`: 8.99 / 9.05 / 9.11 s
+(median 9.05 s). 134 `yaml.load` calls either way. The whole speedup comes
+from the content-keyed cache; the C loader adds nothing measurable. On this
+basis the maintainer chose option A for phase-6 row F6-3 (2026-10-29): drop
+the C loader, keep the cache.
+
 ## Runner route — 2026-10-28
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.

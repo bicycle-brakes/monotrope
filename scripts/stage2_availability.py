@@ -582,18 +582,16 @@ def probe_claude(runner, root: Path, change: str, model: str, audit: list[str]) 
 
 
 # The shared declaration reader's parse cache: process-local and bounded, keyed
-# by the decoded contents and the loader - never by path, size or modification
-# time. Only a successful mapping parse enters it; a failed read, decode or
-# parse is never cached, so the next call reads the file again (bead
-# coding-harness-dca4).
+# by the decoded contents alone - never by path, size or modification time.
+# Only a successful mapping parse enters it; a failed read, decode or parse is
+# never cached, so the next call reads the file again (bead
+# coding-harness-dca4). The parse is always PyYAML's pure `SafeLoader`, as
+# before the cache: libyaml's C loader accepts and refuses other documents
+# (a tab before a comment, an escaped surrogate pair), and it saved nothing
+# measurable once the cache was in place (phase-6 rows F6-1 and F6-3).
 _DECLARATION_CACHE_SIZE = 8
-_DECLARATION_CACHE: OrderedDict[tuple[str, type], dict] = OrderedDict()
+_DECLARATION_CACHE: OrderedDict[str, dict] = OrderedDict()
 _DECLARATION_CACHE_LOCK = threading.Lock()
-
-
-def _safe_yaml_loader() -> type:
-    """The fastest safe YAML loader: libyaml's C safe loader when built in, the pure one otherwise."""
-    return getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 
 def read_declaration(root: Path) -> dict | str:
@@ -601,7 +599,7 @@ def read_declaration(root: Path) -> dict | str:
 
     Every call reads the file's current bytes and decodes them, so an edit at an
     unchanged size and modification time is still seen. A successful mapping
-    parse is reused for identical contents and loader; every caller, including
+    parse is reused for identical contents; every caller, including
     the first, receives its own deep copy, so one caller's edits never reach
     another read or thread.
     """
@@ -609,8 +607,7 @@ def read_declaration(root: Path) -> dict | str:
         text = (root / "model-endpoints.yaml").read_bytes().decode("utf-8")
     except (OSError, UnicodeDecodeError):
         return "model-endpoints.yaml cannot be read"
-    loader = _safe_yaml_loader()
-    key = (text, loader)
+    key = text
     with _DECLARATION_CACHE_LOCK:
         cached = _DECLARATION_CACHE.get(key)
         if cached is not None:
@@ -618,15 +615,7 @@ def read_declaration(root: Path) -> dict | str:
     if cached is not None:
         return copy.deepcopy(cached)
     try:
-        # libyaml accepts tabs as token separators that the baseline Python
-        # scanner refuses. Check tab-bearing documents with that safe reader
-        # before C loading; tabs inside quoted/block scalars or comments may
-        # be valid, so rejecting every tab would change the contract too.
-        # This check runs only on cache misses and leaves ordinary tab-free
-        # declarations on the fast C path.
-        if "\t" in text and loader is not yaml.SafeLoader:
-            yaml.load(text, Loader=yaml.SafeLoader)
-        data = yaml.load(text, Loader=loader) or {}
+        data = yaml.load(text, Loader=yaml.SafeLoader) or {}
     except yaml.YAMLError:
         return "model-endpoints.yaml cannot be read"
     if not isinstance(data, dict):

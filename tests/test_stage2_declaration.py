@@ -150,7 +150,7 @@ def write(root: Path, text: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Criterion 1: the reader keeps the baseline contract under either safe loader
+# Criterion 1: the reader keeps the baseline contract of the pure safe loader
 # ---------------------------------------------------------------------------
 
 
@@ -177,7 +177,6 @@ def test_reader_matches_safe_load_contract(root: Path, label: str, text: str) ->
         assert got == REFUSAL
 
 
-@pytest.mark.parametrize("loader", [yaml.SafeLoader] + ([yaml.CSafeLoader] if hasattr(yaml, "CSafeLoader") else []))
 @pytest.mark.parametrize(
     "text",
     [
@@ -189,16 +188,15 @@ def test_reader_matches_safe_load_contract(root: Path, label: str, text: str) ->
         "note: 'a\tb'\n",
         "note: |\n  a\tb\n",
         "# comment containing\ta tab\nendpunkte: []\n",
+        'note: "\\uD83D\\uDE00"\n',
     ],
 )
-def test_reader_preserves_safe_loader_tab_contract(
-    root: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    loader: type,
-    text: str,
-) -> None:
-    """F6-1: C loading must refuse forbidden tabs while preserving tabs in scalar content."""
-    monkeypatch.setattr(availability, "_safe_yaml_loader", lambda: loader)
+def test_reader_preserves_safe_loader_contract(root: Path, text: str) -> None:
+    """F6-1 and F6-3: the reader accepts and refuses exactly what the old pure-SafeLoader reader did.
+
+    Planted faults: libyaml's C loader accepts the tab separators and refuses the escaped surrogate
+    pair, so a reader that parses with it turns several of these cases red.
+    """
     write(root, text)
     expected = baseline_reader(root)
     # Repeat to exercise both an uncached read and any successful cached read.
@@ -206,8 +204,8 @@ def test_reader_preserves_safe_loader_tab_contract(
         assert_same_value(availability.read_declaration(root), expected)
 
 
-def test_reader_selects_safe_loader_with_fallback(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 1: a safe loader parses, the unsafe tag is refused, and a missing C loader loses no read."""
+def test_reader_parses_with_the_pure_safe_loader(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1: the pure safe loader parses whether or not libyaml is built in, and an unsafe tag is refused."""
     # Distinct contents: this test counts its own parses in the shared process-local cache.
     text = NESTED + "loader-test: unique\n"
     path = write(root, text)
@@ -215,28 +213,11 @@ def test_reader_selects_safe_loader_with_fallback(root: Path, monkeypatch: pytes
     data = availability.read_declaration(root)
     assert isinstance(data, dict) and data["loader-test"] == "unique"
     assert len(calls) == 1
-    if getattr(yaml, "__with_libyaml__", False):
-        assert calls[0][1] is yaml.CSafeLoader, "the C safe loader was not chosen although it is available"
-    else:
-        assert calls[0][1] is yaml.SafeLoader
+    assert calls[0][1] is yaml.SafeLoader, "the reader did not parse with the pure SafeLoader"
 
     # An unsafe tag is refused, not executed - planted fault: a full loader would return a mapping.
-    # The refused document's own parse attempt is counted too; clear it, the fallback counts from zero.
     path.write_text('!!python/object/apply:os.system ["echo no"]\n', encoding="utf-8")
     assert availability.read_declaration(root) == REFUSAL
-    calls.clear()
-
-    if hasattr(yaml, "CSafeLoader"):
-        # Without the C loader the pure-Python safe loader serves the same read: a different
-        # loader is a different cache key, so this parse happens again under SafeLoader.
-        monkeypatch.delattr(yaml, "CSafeLoader")
-        path.write_text(text, encoding="utf-8")
-        data = availability.read_declaration(root)
-        assert len(calls) == 1, "the fallback loader reused the C loader's cache entry"
-        assert calls[0][1] is yaml.SafeLoader
-        assert_same_value(data, baseline_reader(root))
-        path.write_text('!!python/object/apply:os.system ["echo no"]\n', encoding="utf-8")
-        assert availability.read_declaration(root) == REFUSAL, "the fallback loader accepted an unsafe tag"
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +420,7 @@ def test_returned_declarations_are_isolated_across_threads(root: Path, monkeypat
                 write(other, f"concurrent-eviction: {number}\n")
                 assert availability.read_declaration(other) == {"concurrent-eviction": number}
             assert len(availability._DECLARATION_CACHE) == bound
-            assert (cold_text, availability._safe_yaml_loader()) not in availability._DECLARATION_CACHE
+            assert cold_text not in availability._DECLARATION_CACHE
         finally:
             release.set()
         # Future.result propagates every worker exception to pytest; an empty
