@@ -243,3 +243,5 @@ Stage-2 call, 2026-10-29: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 733 files, 2550 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 733 files, 2552 commits, 12 rules.

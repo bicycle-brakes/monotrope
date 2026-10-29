@@ -159,3 +159,18 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-29 00:48:52–01:00:59 UTC, 727 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · the orchestrator's red-first check of the eight retained repairs (L1-6 rejected) · measured with `date -u`
 2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · row L2-1 repaired by the orchestrator · measured with `date -u`
+
+## Appetite stop — 2026-10-29
+
+At 01:51 UTC, after review round 3 took three rows (L3-1, L3-2, L3-3, each a
+code repair with a red-first test). The measured spans under Time used sum to
+6444 s, 1.79 h of the 2-hour appetite. The first repair run's two failed Codex
+calls left no measured entry, so the real use is higher. Three repairs and a
+full `make verify` do not fit in the rest.
+
+Answer (orchestrator, night rule of 2026-10-28/29, which allows cut, park or
+drop but never continue): **park**. Proposed for the maintainer: a new
+appetite of 45 minutes for the three taken rows. Then the loop runs to its
+end, followed by phase 6. The report already works for its main purpose:
+attempts, time against appetite and the half-way warning, measured on this
+change on 2026-10-28.
