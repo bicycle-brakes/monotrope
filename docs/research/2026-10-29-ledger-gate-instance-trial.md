@@ -4,6 +4,7 @@ category: research
 created: 2026-10-29
 updated: 2026-10-29
 last_reviewed: 2026-10-29
+owner: framework-architect
 status: draft
 implementation_status: none
 provenance: ai-drafted-reviewed
