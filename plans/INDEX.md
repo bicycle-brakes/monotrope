@@ -154,7 +154,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/free-member-rate-limit/plan.md`](changes/free-member-rate-limit/plan.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/research.md`](changes/free-member-rate-limit/research.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/spec.md`](changes/free-member-rate-limit/spec.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/design.md`](changes/guard-test/design.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/findings.md`](changes/guard-test/findings.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/plan.md`](changes/guard-test/plan.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/research.md`](changes/guard-test/research.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/spec.md`](changes/guard-test/spec.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |

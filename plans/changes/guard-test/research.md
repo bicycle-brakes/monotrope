@@ -304,3 +304,38 @@ Checked at `a2a58e82404634dd9fddbd54e99208ef45fcaf18`, before implementation:
 Draft validation on 2026-10-16: the interview check and criterion ledger
 exit 0, required frontmatter parses with nonempty fields, and
 `git diff --check` exits 0. These validate the draft, not implementation.
+
+## Current draft gap checks — 2026-10-29
+
+Read at `9987eaca` in the dedicated `guard-test-redraft` worktree:
+
+- `fixed_test_proof` already uses the attempt's tree, a private absolute
+  probe path, invocation-bound records, tool checks and tree/ref snapshots.
+  Its environment is built through `runner_env(foreign_env(...))`; a guard
+  mode can reuse this execution boundary with an explicitly supplied switch
+  and the existing red classifier, leaving the default clean mode intact.
+- The current phase-6 `review` rejects a no-row answer unless it is exactly
+  `No finding.`. Merely adding evidence prose to the prompt would therefore
+  fail on a clean verdict, despite `answer_parts` retaining non-row text.
+  Both the phase-specific answer instruction and verdict validation need
+  the narrow evidence-line allowance; evidence alone must not become a verdict.
+- `RUNNER_HELD` and `_held_prefixes` prohibit implementation attempts from
+  committing prompts, templates, generated CI, the gate definitions and
+  accepted ADR files. The plan assigns those coordinated changes outside
+  the model attempt, with the gate definition remaining maintainer-owned;
+  it does not propose weakening checkpoint protection.
+- The highest existing ADR is 0022. The feature draft proposes a single new
+  numbered addendum, 0023, under the current draft-output rule; it leaves
+  accepted ADR 0017 untouched and records no formal feature ADR answer.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are still
+  absent. Invoking the latter exits 2 (missing file), not green. The full
+  registry check was not run because its live tracker renderer can resolve
+  outside this task's read boundary; live PR and other-session state were
+  not read. No tracker state or git state was changed.
+
+Draft-only checks on 2026-10-29: the change-specific interview check exits 0;
+the criterion ledger exits 0; research handoff reports the legacy/no-v2
+exemption and exits 0. The four new documents have valid YAML headers,
+the feature proposal and plan card parse, all twelve criteria have refuting
+cases and basis lines, and the plan's time section is empty. Full
+`make verify`, registry/index regeneration and the commit belong to the runner.
