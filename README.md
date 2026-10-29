@@ -62,6 +62,25 @@ separates the three levels: enforced, written rule, not built.
 Two mechanisms need more room than a table cell — the review swarms and work
 in parallel. Both follow the process overview below.
 
+### What sets it apart
+
+- **Resumable by anyone.** The state is in versioned files, so another
+  session, harness or model can finish a change.
+- **Proof that cannot quietly vanish.** Every criterion names its test, a
+  gate holds that test, and a repair counts only when its test failed first.
+- **Gates that test themselves.** One list drives the local run and CI, and
+  every gate has a run that turns it red.
+- **Several vendors review, none repairs its own finding.** The swarm runs
+  cheapest first until a round is clean, behind a data allowlist and a leak
+  check that stops without a fallback.
+- **The human keeps the decisions.** An answer records who decided. It takes
+  effect on merge. Every question arrives with its context.
+- **It hands itself over.** The kit runs green in an empty repository, and
+  the workflow develops itself with its own rules.
+- **Three lanes, one writer.** One session keeps three changes moving and is
+  the only one writing the tracker
+  ([three lanes](docs/orchestration.md)).
+
 ## How a change runs
 
 A change runs through seven core phases, plus the optional steps the table
@@ -326,8 +345,9 @@ summaries. The full set, with the gate count and the focus rules, is in
 
 `make verify` runs the same gate list as CI: tests, lint, the kit's classified
 tree, documents and process rules. The environment is locked, and a repair
-counts only when its test fails on the code before the repair. The exact
-mechanics and the test count, with what it does not prove, are in
+counts only when its test fails on the code before the repair. The strategy,
+in six layers and with what it does not prove, is in
+[how the workflow tests](docs/testing.md); this repository's numbers are in
 [how it works](docs/how-it-works.md#how-testing-works-and-what-it-does-not-prove).
 
 ## What works today
@@ -414,6 +434,10 @@ read [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
 
 - [How the workflow works](docs/how-it-works.md): the phases, which model does
   which job, the change and data classes, and the swarms.
+- [How the workflow tests](docs/testing.md): the test strategy, part of the
+  kit.
+- [Three lanes](docs/orchestration.md): how one session runs three changes
+  at once, and what is still kept by hand.
 - [The doctrine](docs/WORKFLOW.md): every rule, gate and route in full.
 - [Architecture decisions](docs/adr/): why it is built this way.
 - [The research swarm](docs/adr/0020-phase-1-research-swarm.md): how phase 1
