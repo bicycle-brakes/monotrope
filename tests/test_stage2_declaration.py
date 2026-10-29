@@ -177,6 +177,35 @@ def test_reader_matches_safe_load_contract(root: Path, label: str, text: str) ->
         assert got == REFUSAL
 
 
+@pytest.mark.parametrize("loader", [yaml.SafeLoader] + ([yaml.CSafeLoader] if hasattr(yaml, "CSafeLoader") else []))
+@pytest.mark.parametrize(
+    "text",
+    [
+        "endpunkte: []\t# ordinary inline comment\n",
+        "endpunkte: [] \t# spaced inline comment\n",
+        "endpunkte:\t[]\n",
+        "endpunkte: []\n\t# comment on its own line\n",
+        'note: "a\tb"\n',
+        "note: 'a\tb'\n",
+        "note: |\n  a\tb\n",
+        "# comment containing\ta tab\nendpunkte: []\n",
+    ],
+)
+def test_reader_preserves_safe_loader_tab_contract(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    loader: type,
+    text: str,
+) -> None:
+    """F6-1: C loading must refuse forbidden tabs while preserving tabs in scalar content."""
+    monkeypatch.setattr(availability, "_safe_yaml_loader", lambda: loader)
+    write(root, text)
+    expected = baseline_reader(root)
+    # Repeat to exercise both an uncached read and any successful cached read.
+    for _ in range(2):
+        assert_same_value(availability.read_declaration(root), expected)
+
+
 def test_reader_selects_safe_loader_with_fallback(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 1: a safe loader parses, the unsafe tag is refused, and a missing C loader loses no read."""
     # Distinct contents: this test counts its own parses in the shared process-local cache.

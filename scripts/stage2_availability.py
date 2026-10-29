@@ -618,6 +618,14 @@ def read_declaration(root: Path) -> dict | str:
     if cached is not None:
         return copy.deepcopy(cached)
     try:
+        # libyaml accepts tabs as token separators that the baseline Python
+        # scanner refuses. Check tab-bearing documents with that safe reader
+        # before C loading; tabs inside quoted/block scalars or comments may
+        # be valid, so rejecting every tab would change the contract too.
+        # This check runs only on cache misses and leaves ordinary tab-free
+        # declarations on the fast C path.
+        if "\t" in text and loader is not yaml.SafeLoader:
+            yaml.load(text, Loader=yaml.SafeLoader)
         data = yaml.load(text, Loader=loader) or {}
     except yaml.YAMLError:
         return "model-endpoints.yaml cannot be read"

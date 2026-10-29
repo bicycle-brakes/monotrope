@@ -83,6 +83,7 @@ are reversible implementation details chosen to retain freshness and portability
 ## Criterion ledger
 
 - 1: tests/test_stage2_declaration.py::test_reader_matches_safe_load_contract — values, types or refusal differ from the old reader.
+- 1: tests/test_stage2_declaration.py::test_reader_preserves_safe_loader_tab_contract — C loading accepts a tab separator the baseline refuses, or valid tabs in scalar content or comments are rejected.
 - 1: tests/test_stage2_declaration.py::test_reader_selects_safe_loader_with_fallback — unsafe loading or missing C support breaks a valid read.
 - 2: tests/test_stage2_declaration.py::test_unchanged_contents_reuse_a_bounded_parse_cache — repeated reads parse again or distinct inputs grow the cache beyond its bound.
 - 3: tests/test_stage2_declaration.py::test_changed_contents_are_read_without_metadata_shortcuts — edits, replacement or a different root return stale data.
@@ -215,6 +216,7 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-28 18:07:44–18:19:38 UTC, 713 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 18:19:45–18:37:47 UTC, 1083 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-28 18:38:00–18:53:02 UTC, 902 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-29 08:10:21–08:22:09 UTC, 708 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite stop — 2026-10-28
 
