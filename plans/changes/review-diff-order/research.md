@@ -87,3 +87,24 @@ The open item above — which option — was answered by the maintainer on
 one change that leaves `findings.md` and `plans/INDEX.md` out of the
 review-loop diff and puts code and tests first. Splitting the diff across
 reviewers is not part of it.
+
+## Draft follow-up — 2026-10-29
+
+Repository gaps checked at `2363f0e117e0ce48b5cd9551463250ab23d13beb`:
+
+- `scripts/stage2_availability.py::binding` hashes `runner.change_diff(root)`
+  to bind the preparation receipt to the worktree's full diff. Therefore the
+  paid review needs its own projection; filtering the shared raw diff would
+  also hide findings/index edits from receipt invalidation. This caller was
+  absent from the exploration above.
+- ADR 0021, including its availability and restart amendments, constrains
+  free input, admission, snapshots and loop stops; it prescribes no paid
+  file ordering or exclusion set. The bounded classification recorded in
+  `decisions.md` stands; no ADR draft is required.
+- `templates/spec.md` exists; there is no `templates/plan.md` in this tree.
+  The plan follows `prompts/03-plan.md` and the frontmatter/card shape of
+  `plans/changes/attempt-diagnostics/plan.md`.
+- `scripts/validate_change_artefacts.py` is absent at this commit. The
+  available local checks are the interview, criterion-ledger and
+  research-handoff gates; the runner owns full verification and index
+  regeneration. This is not evidence that the absent validator passed.
