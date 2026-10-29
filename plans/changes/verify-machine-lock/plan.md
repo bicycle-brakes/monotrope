@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-p6mu
@@ -147,4 +147,11 @@ Do not touch `Makefile`, `decisions/gates.yaml`, generated CI, ADRs, interview
 answers, foreign-call environment policy, model routing, pytest parallelism
 or unrelated changes. `scripts/ci_gates.py` stays the sole gate-list reader.
 
+## Runner route — 2026-10-29
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-29 08:48:20–10:17:53 UTC, 5373 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-29 10:18:00–11:21:06 UTC, 3786 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner

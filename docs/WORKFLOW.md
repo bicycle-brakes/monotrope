@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-29
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -456,6 +456,32 @@ symptom.
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
+
+**One admission per user and machine** (bead coding-harness-p6mu). Before its
+gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+— shared across repositories and worktrees, so the three-lane trial's
+concurrent full checks cannot happen again. Waiters are admitted in
+registration order; while waiting, an entry logs its wait immediately and
+every five minutes, naming the holder's process id, command and start time.
+A nested protected entry — a check descended from a live admission — carries
+`HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
+instead of deadlocking on it; a stale or unrelated marker uses ordinary
+admission. After the lock, admission reads the system's free memory (macOS
+`memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
+`MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
+the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
+finite percentage in `[0, 100]`, equality admitting. Readings below the floor
+for 60 minutes from the first low one refuse the entry, naming the floor and
+the last reading; a reading that cannot be taken is logged and the entry
+proceeds. Unusable state — a substituted or unwritable lock, holder or queue
+file — refuses the entry before any protected work instead of running
+unlocked. Ownership ends only when the protected work and its children stop,
+including on failure, cancellation and signals, so a dead entry never blocks
+the next one. The queue and memory waits consume no runner step limit and no
+pytest proof's execution timeout; the configured limits still bind the
+executing check. Hosted CI is untouched: its gate steps never enter the
+runner's shell path, and nothing disables admission because CI is set.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has

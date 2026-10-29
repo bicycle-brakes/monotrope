@@ -175,6 +175,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -870,6 +871,11 @@ def defer_launch_signals():
             signal.raise_signal(signum)
 
 
+def _lock_fds(owned: int | None) -> tuple[int, ...]:
+    """The descriptors a local check's children inherit to keep the admission's ownership alive."""
+    return () if owned is None else (owned,)
+
+
 def launch(
     command: list[str],
     root: Path,
@@ -878,6 +884,7 @@ def launch(
     timeout: float | None = None,
     limit: str | None = None,
     deadline: float | None = None,
+    pass_fds: tuple[int, ...] = (),
 ) -> subprocess.CompletedProcess:
     """Start a foreign program: empty standard input, the worktree as its directory.
 
@@ -886,6 +893,8 @@ def launch(
     after the run stopped (O188-4 of the #188 review). The group is registered while it runs, so an
     interrupted runner kills it too (`kill_live`), and the drain after a kill is bounded by
     `KILL_DRAIN_SECONDS`: a descendant that left the group is abandoned, not waited for.
+    `pass_fds` hands descriptors — a verification admission's lock — to the child, so ownership
+    outlives this process for exactly as long as the child and its own children run.
     """
     try:
         if timeout is None and deadline is None:
@@ -898,6 +907,7 @@ def launch(
                 text=True,
                 errors="replace",
                 check=False,
+                pass_fds=pass_fds,
             )
         process = None
         try:
@@ -920,6 +930,7 @@ def launch(
                         text=True,
                         errors="replace",
                         start_new_session=True,
+                        pass_fds=pass_fds,
                     )
                     _LIVE_GROUPS.add(process.pid)
             # Cancellation may have arrived while Popen was starting in a worker.
@@ -4928,7 +4939,10 @@ def format_step(
             done = launch(
                 [RUFF, *command, *targets],
                 root,
-                env,
+                # Ruff is a local child of the verification: it gets the same verify environment
+                # the timed check gets, shared state root and floor included (bead
+                # coding-harness-p6mu); never the raw runner env.
+                verify_lock.inherit_env(env),
                 key,
                 timeout=TOOL_SECONDS,
                 limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
@@ -4997,32 +5011,48 @@ def verify_attempt(
             return [f"refusing an aliased plan before clearing its ledger: {relative.as_posix()}"]
         if plan.exists() and plan.stat().st_nlink > 1:
             return [f"refusing a hard-linked plan before clearing its ledger: {relative.as_posix()}"]
-        # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
-        # Clear against those final bytes, before stamping the plan and verifying (F-1).
-        line = format_step(root, env, key, tools)
-        if formatted is not None and line is not None:
-            formatted.append(line)
-        check_criterion_ledger.clear_written(root, plan)
     except (OSError, RuntimeError, ValueError) as error:
         return [
             f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
         ]
-    preparation = prepare_derived(root, env, key)
-    if preparation:
-        return preparation
+    intended: list[bytes] = []
+    problems: list[str] = []
     try:
-        intended = intend_new_files(root, env)
-    except (Refused, OSError) as error:
-        return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
-    problems = []
-    try:
-        done = launch(
-            ["make", "verify"],
-            root,
-            env,
-            timeout=VERIFY_SECONDS,
-            limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-        )
+        # One machine-wide admission before the timed check: queue and memory waits consume no
+        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
+        # Preparation runs under the same admission, so ruff and the check inherit the one verify
+        # environment — the format step's ruff is a local child like the `make` below, and the
+        # ownership marker matches for both.
+        with verify_lock.hold_admission(["make", "verify"]) as owned:
+            try:
+                # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
+                # Clear against those final bytes, before stamping the plan and verifying (F-1).
+                line = format_step(root, env, key, tools)
+                if formatted is not None and line is not None:
+                    formatted.append(line)
+                check_criterion_ledger.clear_written(root, plan)
+            except (OSError, RuntimeError, ValueError) as error:
+                return [
+                    f"the criterion ledger of {plan.name} could not be updated: "
+                    f"{getattr(error, 'strerror', None) or error}"
+                ]
+            preparation = prepare_derived(root, env, key)
+            if preparation:
+                return preparation
+            try:
+                intended = intend_new_files(root, env)
+            except (Refused, OSError) as error:
+                return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+            done = launch(
+                ["make", "verify"],
+                root,
+                verify_lock.inherit_env(env),
+                timeout=VERIFY_SECONDS,
+                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+                pass_fds=_lock_fds(owned),
+            )
+    except verify_lock.VerifyLockError as error:
+        problems.append(scrub(f"`make verify` was not started: {error}", key))
     except StepTimedOut as error:
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
@@ -5374,19 +5404,29 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
             report = Path(tmp) / "outcome.json"
             probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
             refs_before, tree_before = _ref_targets(root), worktree_tree(root)
-            done = launch(
-                [red_first_python(root), "-c", bootstrap, str(probe), test],
-                root,
-                runner_env(
-                    foreign_env(
-                        {"STAGE2_RED_REPORT": str(report), "STAGE2_RED_TOKEN": token, "STAGE2_RED_SELECTOR": test}
-                    ),
+            # One machine-wide admission around the timed proof; queue and memory waits consume
+            # none of the proof's time limit (bead coding-harness-p6mu).
+            with verify_lock.hold_admission(["pytest", test]) as owned:
+                done = launch(
+                    [red_first_python(root), "-c", bootstrap, str(probe), test],
                     root,
-                ),
-                key,
-                timeout=RED_FIRST_MINUTES * 60,
-                limit="the fixed-code proof time limit",
-            )
+                    verify_lock.inherit_env(
+                        runner_env(
+                            foreign_env(
+                                {
+                                    "STAGE2_RED_REPORT": str(report),
+                                    "STAGE2_RED_TOKEN": token,
+                                    "STAGE2_RED_SELECTOR": test,
+                                }
+                            ),
+                            root,
+                        )
+                    ),
+                    key,
+                    timeout=RED_FIRST_MINUTES * 60,
+                    limit="the fixed-code proof time limit",
+                    pass_fds=_lock_fds(owned),
+                )
             fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
             if done.returncode != 0:
                 fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
@@ -5394,7 +5434,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
                 fault = "refs changed while the fixed-code proof ran"
             elif worktree_tree(root) != tree_before:
                 fault = "the worktree changed while the fixed-code proof ran"
-    except (CallFailed, Refused, OSError) as error:
+    except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
     return scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
 
@@ -5470,15 +5510,19 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
             try:
-                started = launch(
-                    [red_first_python(root), "-c", "import pytest"],
-                    tree,
-                    runner_env(foreign_env({}), root, tree),
-                    key,
-                    timeout=RED_FIRST_MINUTES * 60,
-                    limit="the red-first time limit",
-                )
-            except CallFailed as error:
+                # The machine admission covers the pytest import probe too: it is protected work
+                # (bead coding-harness-p6mu), and its waits consume none of the probe's limit.
+                with verify_lock.hold_admission(["pytest", "import probe"]) as owned:
+                    started = launch(
+                        [red_first_python(root), "-c", "import pytest"],
+                        tree,
+                        verify_lock.inherit_env(runner_env(foreign_env({}), root, tree)),
+                        key,
+                        timeout=RED_FIRST_MINUTES * 60,
+                        limit="the red-first time limit",
+                        pass_fds=_lock_fds(owned),
+                    )
+            except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
                 if started.returncode != 0:
@@ -5488,35 +5532,41 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     )
         if outcome is None:
             try:
-                done = launch(
-                    [
-                        red_first_python(root),
-                        "-m",
-                        "pytest",
-                        "-q",
-                        "-p",
-                        "no:cacheprovider",
-                        "-p",
-                        RED_PROBE_NAME,
-                        selector,
-                    ],
-                    tree,
-                    runner_env(
-                        foreign_env(
-                            {
-                                "STAGE2_RED_REPORT": str(report),
-                                "STAGE2_RED_TOKEN": token,
-                                "STAGE2_RED_SELECTOR": selector,
-                            }
-                        ),
-                        root,
+                # The machine admission wraps the red-first pytest run itself; its queue and
+                # memory waits consume none of the red-first time limit (bead coding-harness-p6mu).
+                with verify_lock.hold_admission(["pytest", selector]) as owned:
+                    done = launch(
+                        [
+                            red_first_python(root),
+                            "-m",
+                            "pytest",
+                            "-q",
+                            "-p",
+                            "no:cacheprovider",
+                            "-p",
+                            RED_PROBE_NAME,
+                            selector,
+                        ],
                         tree,
-                    ),
-                    key,
-                    timeout=RED_FIRST_MINUTES * 60,
-                    limit="the red-first time limit",
-                )
-            except CallFailed as error:
+                        verify_lock.inherit_env(
+                            runner_env(
+                                foreign_env(
+                                    {
+                                        "STAGE2_RED_REPORT": str(report),
+                                        "STAGE2_RED_TOKEN": token,
+                                        "STAGE2_RED_SELECTOR": selector,
+                                    }
+                                ),
+                                root,
+                                tree,
+                            )
+                        ),
+                        key,
+                        timeout=RED_FIRST_MINUTES * 60,
+                        limit="the red-first time limit",
+                        pass_fds=_lock_fds(owned),
+                    )
+            except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
                 if done.returncode != 1:
@@ -7007,14 +7057,18 @@ def verify_draft(
     if preparation:
         return preparation, owed
     try:
-        done = launch(
-            ["make", "verify"],
-            root,
-            env,
-            timeout=VERIFY_SECONDS,
-            limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-        )
-    except CallFailed as error:
+        # One machine-wide admission before the timed check: queue and memory waits consume no
+        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
+        with verify_lock.hold_admission(["make", "verify"]) as owned:
+            done = launch(
+                ["make", "verify"],
+                root,
+                verify_lock.inherit_env(env),
+                timeout=VERIFY_SECONDS,
+                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+                pass_fds=_lock_fds(owned),
+            )
+    except (CallFailed, verify_lock.VerifyLockError) as error:
         # A make that cannot start is as failed a post-run check as a red one: its diagnostics
         # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
         return [f"`make verify` could not run: {error}"], owed
