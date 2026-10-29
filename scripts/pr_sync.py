@@ -31,8 +31,9 @@ bases other than `main` (outside scope); decision pull requests (the
 `decision` label or a `decide(` title), branches changing a runner-held or
 human-decided path, and branches checked out locally with uncommitted or
 unpushed work (protected). A conflict outside the index is reported with its
-paths and stops that branch. Protection policy and renderer are read from the
-invoking committed tree, never from candidate pull-request code. Pushes carry
+paths and stops that branch. Protection policy combines the invoking commit
+and fetched main; the renderer comes from fetched main, never from candidate
+pull-request code. Pushes carry
 an exact expected-head lease, so a racing writer's commit is left intact and
 reported as a moved branch. Pull requests older than five working days are
 listed for the maintainer, whatever their protection.
@@ -61,6 +62,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 import yaml
+from plans_registry import REQUIRED
 
 INDEX_PATH = "plans/INDEX.md"
 GIT_SECONDS = 120
@@ -68,8 +70,12 @@ RENDER_SECONDS = 300
 GH_SECONDS = 120
 WORKING_DAYS_OVERDUE = 5
 
-LIST_FIELDS = "number,url,title,createdAt,baseRefName,headRefName,headRefOid,isCrossRepository,labels,files"
-VIEW_FIELDS = "state,number,url,title,createdAt,baseRefName,headRefName,headRefOid,isCrossRepository,labels,files"
+LIST_FIELDS = (
+    "number,url,title,createdAt,baseRefName,headRefName,headRefOid,isCrossRepository,labels,files,changedFiles"
+)
+VIEW_FIELDS = (
+    "state,number,url,title,createdAt,baseRefName,headRefName,headRefOid,isCrossRepository,labels,files,changedFiles"
+)
 
 _TREE_OID = re.compile(r"[0-9a-f]{40}")
 # One conflicted-file-info entry: `<mode> <oid> <stage>` and the path. Their
@@ -192,9 +198,9 @@ def ensure_clean(root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def committed_runner_held(root: Path) -> tuple[str, ...]:
-    """`RUNNER_HELD` as the invoking commit declares it (read, never executed)."""
-    source = git_out(root, "show", "HEAD:scripts/stage2.py")
+def committed_runner_held(root: Path, code: str = "HEAD") -> tuple[str, ...]:
+    """`RUNNER_HELD` as the selected trusted commit declares it (read, never executed)."""
+    source = git_out(root, "show", f"{code}:scripts/stage2.py")
     try:
         module = ast.parse(source)
     except SyntaxError as error:
@@ -214,10 +220,10 @@ def committed_runner_held(root: Path) -> tuple[str, ...]:
     raise Failed("committed scripts/stage2.py declares no RUNNER_HELD")
 
 
-def committed_decided_prefixes(root: Path) -> list[str]:
+def committed_decided_prefixes(root: Path, code: str = "HEAD") -> list[str]:
     """Prefixes the committed provenance map reserves to human decisions."""
     try:
-        data = yaml.safe_load(git_out(root, "show", "HEAD:provenance.yaml"))
+        data = yaml.safe_load(git_out(root, "show", f"{code}:provenance.yaml"))
     except yaml.YAMLError as error:
         raise Failed(f"the committed provenance.yaml cannot be read ({error})") from error
     if not isinstance(data, dict):
@@ -237,9 +243,9 @@ def committed_decided_prefixes(root: Path) -> list[str]:
     return decided
 
 
-def held_prefixes(root: Path) -> list[str]:
+def held_prefixes(root: Path, code: str = "HEAD") -> list[str]:
     """Case-folded protection prefixes, exactly the runner's own two sources."""
-    held = [*committed_decided_prefixes(root), *committed_runner_held(root)]
+    held = [*committed_decided_prefixes(root, code), *committed_runner_held(root, code)]
     return [prefix.casefold() for prefix in held]
 
 
@@ -304,6 +310,11 @@ def parse_pull(item: object) -> Pull:
     files_raw = item.get("files")
     if not isinstance(files_raw, list):
         raise MetadataError("files is absent or not a list")
+    changed_count = item.get("changedFiles")
+    if not isinstance(changed_count, int) or isinstance(changed_count, bool) or changed_count < 0:
+        raise MetadataError("changedFiles is absent or not a non-negative integer")
+    if len(files_raw) != changed_count:
+        raise MetadataError("files list is incomplete or inconsistent with changedFiles")
     files: list[str] = []
     for entry in files_raw:
         if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
@@ -527,6 +538,10 @@ class Render:
                 raise Failed(f"{rel}: no readable frontmatter") from None
             if not isinstance(meta, dict):
                 raise Failed(f"{rel}: no readable frontmatter")
+            for field_name in REQUIRED:
+                value = meta.get(field_name)
+                if value is None or value == "" or (isinstance(value, str) and not value.strip()):
+                    raise Failed(f"{rel}: required field '{field_name}' is missing or empty")
             fence: str | None = None
             for line in text.splitlines():
                 stripped = line.lstrip()
@@ -787,6 +802,19 @@ def is_ancestor(root: Path, older: str, newer: str) -> bool:
 
 def classify_skip(pull: Pull, held: list[str]) -> str | None:
     """Why the pull request must not be updated; None when it is eligible."""
+    if pull.branch == "main":
+        return "outside scope: head branch is main"
+    try:
+        checked = subprocess.run(
+            ["git", "check-ref-format", "--branch", pull.branch],
+            capture_output=True,
+            timeout=GIT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise Failed(f"head branch validity cannot be determined: {error}") from error
+    if checked.returncode != 0 or checked.stdout.decode("utf-8", "replace").strip() != pull.branch:
+        return f"outside scope: invalid head branch {pull.branch!r}"
     if pull.cross_repository:
         return "outside scope: fork pull request"
     if pull.base != "main":
@@ -899,7 +927,7 @@ def sync_main(root: Path, gh: str, today: dt.date) -> int:
         ensure_repo(root)
         fetch_origin(root)
         main_tip = pin_main(root)
-        held = held_prefixes(root)
+        held = sorted(set(held_prefixes(root) + held_prefixes(root, main_tip)))
         pulls = discover(gh, root)
     except Refused as error:
         print(f"refused: {error}")

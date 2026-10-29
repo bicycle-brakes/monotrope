@@ -462,3 +462,23 @@ Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2628 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 733 files, 2632 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2640 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/pr_sync.py` +34 -12
+> - `tests/test_pr_sync.py` +86 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/pr_sync.py`, `tests/test_pr_sync.py`.
+> - L5-1: tests/test_pr_sync.py::test_required_frontmatter_preserves_target: fixed-code proof: pytest ended 1 on the fixed code; the session ended 1, not as a passing run
+> - L5-2: tests/test_pr_sync.py::test_sync_refuses_unsafe_head_branch: fixed-code proof: pytest ended 1 on the fixed code; the session ended 1, not as a passing run
+> - L5-3: tests/test_pr_sync.py::test_sync_refuses_incomplete_changed_files: fixed-code proof: pytest ended 1 on the fixed code; the session ended 1, not as a passing run
+> - L5-4: tests/test_pr_sync.py::test_sync_protects_policy_added_on_main: fixed-code proof: pytest ended 1 on the fixed code; the session ended 1, not as a passing run
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/index-merge-regenerates/stage2/attempts/index-merge-regenerates/attempt-1-20261029T173519171557Z-1f0ee122.md
+> ```
+
+Stage-2 call, 2026-10-29: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 733 files, 2642 commits, 12 rules.

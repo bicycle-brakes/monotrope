@@ -31,6 +31,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PR_SYNC = REPO_ROOT / "scripts" / "pr_sync.py"
 
+
+@pytest.fixture(autouse=True)
+def isolated_git_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Offline repositories must not inherit personal signing or hook settings."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+
+
 # The protection policy a fixture commits: its own `scripts/stage2.py` declares
 # the held prefixes exactly the way the runner's module does, because the helper
 # reads that tuple from the invoking committed tree.
@@ -90,7 +98,7 @@ def _render(rows: list[tuple[str, str]]) -> str:
 
 
 def _artefact(title: str, bead: str) -> str:
-    return f"---\ntitle: {title}\nstatus: draft\nimplementation_status: none\nbead: {bead}\n---\n\n# {title}\n"
+    return f"---\ntitle: {title}\nstatus: draft\nimplementation_status: none\ndate: 2026-10-28\nlast_reviewed: 2026-10-28\nbead: {bead}\n---\n\n# {title}\n"
 
 
 @dataclass
@@ -106,6 +114,7 @@ class Pull:
     cross_repository: bool = False
     labels: list[dict] = field(default_factory=list)
     files: list[dict] = field(default_factory=list)
+    changed_files: int | None = None
 
     def as_json(self) -> dict:
         return {
@@ -120,6 +129,7 @@ class Pull:
             "isCrossRepository": self.cross_repository,
             "labels": self.labels,
             "files": self.files,
+            "changedFiles": len(self.files) if self.changed_files is None else self.changed_files,
         }
 
 
@@ -1024,7 +1034,7 @@ def test_a_fenced_conflict_marker_does_not_refuse_the_render(tmp_path: Path) -> 
     repo = _repo(tmp_path / "repo")
     (repo / "plans" / "x").mkdir(parents=True)
     (repo / "plans" / "x" / "plan.md").write_text(
-        "---\ntitle: Plan\nbead: x-1\n---\n\n# Plan\n\n```text\n<<<<<<< ours\n=======\n>>>>>>> theirs\n```\n",
+        _artefact("Plan", "x-1") + "\n```text\n<<<<<<< ours\n=======\n>>>>>>> theirs\n```\n",
         encoding="utf-8",
     )
     (repo / "scripts").mkdir()
@@ -1040,7 +1050,7 @@ def test_the_index_is_rendered_by_mains_scripts_not_the_checkout(tmp_path: Path)
     m = _pr_sync()
     repo = _repo(tmp_path / "repo")
     (repo / "plans" / "x").mkdir(parents=True)
-    (repo / "plans" / "x" / "spec.md").write_text("---\ntitle: Spec\nbead: x-1\n---\n\n# Spec\n", encoding="utf-8")
+    (repo / "plans" / "x" / "spec.md").write_text(_artefact("Spec", "x-1"), encoding="utf-8")
     (repo / "scripts").mkdir()
     registry = repo / "scripts" / "plans_registry.py"
     registry.write_text(RENDERER_SAYING.format("old renderer\n"), encoding="utf-8")
@@ -1073,7 +1083,7 @@ def test_currency_is_judged_by_mains_renderer_not_the_checkout(tmp_path: Path) -
     m = _pr_sync()
     repo = _repo(tmp_path / "repo")
     (repo / "plans" / "x").mkdir(parents=True)
-    (repo / "plans" / "x" / "spec.md").write_text("---\ntitle: Spec\nbead: x-1\n---\n\n# Spec\n", encoding="utf-8")
+    (repo / "plans" / "x" / "spec.md").write_text(_artefact("Spec", "x-1"), encoding="utf-8")
     (repo / "scripts").mkdir()
     registry = repo / "scripts" / "plans_registry.py"
     registry.write_text(RENDERER_SAYING.format("old renderer\n"), encoding="utf-8")
@@ -1087,3 +1097,95 @@ def test_currency_is_judged_by_mains_renderer_not_the_checkout(tmp_path: Path) -
     main_tip = _git(repo, "rev-parse", "HEAD")
     _git(repo, "checkout", "--quiet", "--detach", old)
     assert m.is_current(repo, main_tip, main_tip) is True
+
+
+@pytest.mark.parametrize("command", ["merge-main", "sync"])
+@pytest.mark.parametrize("field", ["status", "implementation_status", "date", "last_reviewed", "bead"])
+@pytest.mark.parametrize("value", [None, "", "null", "''", "'   '"])
+def test_required_frontmatter_preserves_target(tmp_path: Path, command: str, field: str, value: str | None) -> None:
+    """Row L5-1: missing or empty required metadata must never publish a placeholder."""
+    world = World(tmp_path)
+    world.branch("feat/invalid")
+    text = _artefact("Invalid", "invalid-1")
+    lines = text.splitlines(keepends=True)
+    text = "".join(
+        ("" if value is None else f"{field}: {value}\n") if line.startswith(f"{field}:") else line for line in lines
+    )
+    world.write_plans("invalid/spec.md", text)
+    head = world.commit_raw("invalid required frontmatter")
+    world.push("feat/invalid")
+    world.advance_main([("alpha/spec.md", "alpha-1")])
+    world.checkout("feat/invalid")
+    before = world.all_origin_heads()
+    done = (
+        world.run_merge_main()
+        if command == "merge-main"
+        else world.run_sync(pulls=[Pull(31, "feat/invalid", head, files=[{"path": "plans/invalid/spec.md"}])])
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "invalid/spec.md" in done.stdout and field in done.stdout
+    assert _git(world.work, "rev-parse", "HEAD") == head
+    assert world.all_origin_heads() == before
+
+
+@pytest.mark.parametrize("branch", ["main", "bad..ref", "-bad", "bad ref", "refs/heads/bad.lock"])
+def test_sync_refuses_unsafe_head_branch(tmp_path: Path, branch: str) -> None:
+    """Row L5-2: injected metadata must not permit a main push or invalid ref."""
+    world = World(tmp_path)
+    head = world.origin_ref("refs/heads/main")
+    # Stale index makes the original helper try to publish even to main itself.
+    world.write_plans("INDEX.md", "stale\n")
+    head = world.commit_raw("stale index")
+    world.push("main")
+    before = world.all_origin_heads()
+    done = world.run_sync(pulls=[Pull(32, branch, head)])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "outside scope" in done.stdout and branch in done.stdout
+    assert world.all_origin_heads() == before
+
+
+def test_sync_refuses_incomplete_changed_files(tmp_path: Path) -> None:
+    """Row L5-3: a capped file list cannot establish that work is unprotected."""
+    world = World(tmp_path)
+    head = _branch_behind(world, "feat/truncated")
+    before = world.all_origin_heads()
+    done = world.run_sync(
+        pulls=[
+            Pull(
+                33,
+                "feat/truncated",
+                head,
+                files=[{"path": "plans/gamma/plan.md"}],
+                changed_files=2,
+            )
+        ]
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "changedFiles" in done.stdout
+    assert world.all_origin_heads() == before
+
+
+@pytest.mark.parametrize("policy", ["runner", "provenance"])
+def test_sync_protects_policy_added_on_main(tmp_path: Path, policy: str) -> None:
+    """Row L5-4: policy from fetched main supplements the invoking commit's policy."""
+    world = World(tmp_path)
+    world.branch("feat/newly-held")
+    world.write_root("newly-held/work.txt", "in progress\n")
+    head = world.commit_raw("work covered by a newer policy")
+    world.push("feat/newly-held")
+    world.checkout("main")
+    if policy == "runner":
+        # One literal declaration, like the real policy.
+        world.write_root("scripts/stage2.py", FAKE_STAGE2.replace('"prompts/",', '"prompts/", "newly-held/",'))
+    else:
+        world.write_root(
+            "provenance.yaml", FAKE_PROVENANCE + '  - prefix: "newly-held/"\n    allowed: [human-decided]\n'
+        )
+    world.commit_raw("main adds protection")
+    world.push("main")
+    world.checkout("feat/newly-held")
+    before = world.all_origin_heads()
+    done = world.run_sync(pulls=[Pull(34, "feat/newly-held", head, files=[{"path": "newly-held/work.txt"}])])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "protected" in done.stdout and "newly-held/work.txt" in done.stdout
+    assert world.all_origin_heads() == before
