@@ -218,6 +218,30 @@ from the content-keyed cache; the C loader adds nothing measurable. On this
 basis the maintainer chose option A for phase-6 row F6-3 (2026-10-29): drop
 the C loader, keep the cache.
 
+## Re-measurement of the cache-only head — 2026-10-29
+
+After the maintainer's option A for F6-3 (C loader dropped). Same command,
+interpreter and method as "Isolated re-measurement — 2026-10-29", inside one
+hold of the machine's verify lock, 12:36:59–12:38:18 UTC, one-minute load
+2.34–3.11. Before `5c4ddcbd`, after `f9c0ec70` (the reader of `adbeda78`;
+later commits change only this folder's documents), all six runs `1 passed`:
+
+| Run | Before (`5c4ddcbd`) | After (`f9c0ec70`) |
+|---|---|---|
+| 1 | 18.11 s | 12.23 s |
+| 2 | 14.55 s | 9.01 s |
+| 3 | 14.52 s | 9.01 s |
+| Median | **14.55 s** | **9.01 s** |
+
+Wall times: 18.32 / 14.80 / 14.70 s before, 12.49 / 9.19 / 9.20 s after.
+The median falls by about 38 % (5.54 s), the cache alone.
+
+Full `make verify` under the lock, started 12:12 UTC at `f9c0ec70`, ended
+12:23:41 UTC: `VERIFY GREEN`, wall time 698 s (`-n 4` through
+`PYTEST_XDIST_AUTO_NUM_WORKERS`). The criterion-ledger repair of F6-4
+(`71a29dd2`, plan.md only) was written while it ran; the ledger gate passed
+in that run.
+
 ## Runner route — 2026-10-28
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
