@@ -86,3 +86,50 @@ I have the full picture. Here is the research, ready to append to `plans/changes
 ---
 
 One process note for the runner: the file's frontmatter block still says `provenance: human-written` — per the skeleton's own instruction (`plans/changes/pi-neutral-paths/research.md:21-25`), filling it with this model's output sets `ai-drafted-reviewed` with `produced_by:` and `review:`.
+
+## Addendum 2026-10-29 — the extension lever, read by the orchestrating session
+
+Added by a Claude Code (Opus 5.5) session after the maintainer widened the
+scope; it closes the exploration's "pivotal open question" (whether a Pi
+extension can rewrite the sections) by reading the pinned Pi 1.2.0 install.
+Not measured on a live call.
+
+- **An extension can rewrite the prompt before every run.** The extension API
+  declares a `before_agent_start` event whose `systemPromptOptions` are
+  "Mutable prompt sections. Later handlers observe mutations made by earlier
+  handlers", and whose result may carry `systemPrompt`, which will "Replace the
+  complete system prompt for this turn"
+  (`tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts:720-743, 1125-1129`).
+  The options include `cwd` and `customPrompt`
+  (`dist/core/system-prompt.d.ts:5-50`).
+- **What the two fields do to the leaking sections.** `<cwd>` renders
+  `options.cwd` unconditionally; `<docs>` renders only when `customPrompt` is
+  empty (`dist/core/system-prompt.js:78-110`). A handler that sets `cwd` to a
+  neutral literal and `customPrompt` to the default preamble would drop both
+  paths and leave the tools, rules and addendum in place. Whether Pi's tools
+  read their root from these options or from the session's own working
+  directory was not read; the latter is what the repository seats' path lock
+  relies on (`scripts/stage2_repository_pathlock.mjs:135`).
+- **Two further hooks exist** if the system prompt is not the only carrier:
+  `context_with_system` (the full transcript including system messages,
+  "sent as returned") and `before_provider_request` (can replace the provider
+  payload) (`types.d.ts:679-697`). The second sees exactly what leaves the
+  machine and is the natural place for a capture check.
+- **Explicit extensions load under `--no-extensions`.** The repository seats
+  already start Pi with `--no-extensions` and `-e <path lock>`
+  (`scripts/stage2_research_run.py:747-757`), and the session does the same
+  (`scripts/stage2_session.py:383-391`). The review loop
+  (`scripts/stage2.py:2548-2567`) and the availability probe
+  (`scripts/stage2_availability.py:499-514`) load no extension today.
+- **Which launches send a model call through Pi** (the maintainer's scope,
+  read at `6bbe4fbf`): the research swarm's seats
+  (`stage2_research_run.py:701`), the review loop's free, Flash and ladder
+  members (`stage2.py:2548`), the availability probes
+  (`stage2_availability.py:499`) and the interactive session
+  (`stage2_session.py:384`). `pi update --models`, `--list-models` and
+  `--version` (`stage2.py:2119, 2167, 2469`) call no model. GLM 5.3 Flash's
+  explore and implement run through Claude Code, not Pi
+  (`stage2.py:1360`, producer `claude-code` for `glm-coding-plan`).
+- **Tool results were not read.** Whether `ls`, `find` or `grep` results of a
+  repository seat carry absolute paths is not measured; a payload-level
+  capture would show it.
