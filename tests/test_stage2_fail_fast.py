@@ -611,6 +611,7 @@ def test_an_error_inside_the_cheap_checks_is_named_as_theirs(world: World, monke
     assert "could not be updated" not in world.text()
 
 
+@pytest.mark.usefixtures("world")
 def test_long_standard_error_keeps_the_failed_ids_of_a_cheap_run() -> None:
     """Rows L4-3, L5-1, L8-1. Planted fault: one tail over stdout and stderr concatenated let a long
     standard error push pytest's `FAILED` summary out of the cheap evidence and the retry selection."""
