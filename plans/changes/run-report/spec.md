@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-o2yc
@@ -67,15 +67,19 @@ time against appetite, and current process and memory figures (bead
    accepted verdict, missing fields are invented, or a repeated attempt number
    in a later invocation overwrites an earlier attempt.
 
-4. When a time section contains measured runner or dated orchestrator
-   durations, its total counts each readable duration record once regardless
-   of verdict, without adding call lines or live elapsed times to the sum.
-   *Refuted by:* a fixture with 600 accepted, 900 rejected and 300 orchestrator
-   seconds totals anything other than 1800 seconds, or a following section
-   contributes time.
+4. When a time section contains durations in the runner's own fixed format
+   (`<start>–<end> UTC, <N> s — <verb> · attempt <n> · route … · measured by
+   the runner`), its total counts each such record once regardless of
+   verdict, without adding call lines or live elapsed times to the sum. Only
+   that format counts (maintainer, 2026-10-29: a structural cut after loop
+   rows L1-1, L3-1, L4-1, L5-1 and L6-1 about orchestrator prose records).
+   *Refuted by:* a fixture with 600 accepted and 900 rejected runner seconds
+   totals anything other than 1500 seconds, an orchestrator record in any
+   other shape is counted, or a following section contributes time.
 
-5. If a time record cannot be read as a measured duration, the report states
-   `unread lines: N` and marks any readable subtotal as incomplete.
+5. If a time record is not in the runner's own format — an orchestrator
+   record included, whatever it says about how it was measured — the report
+   states `unread lines: N` and marks any readable subtotal as incomplete.
    *Refuted by:* prose supplies a guessed duration, an unread record silently
    vanishes, or an unreadable or missing section is presented as a measured zero.
 
@@ -119,7 +123,8 @@ time against appetite, and current process and memory figures (bead
     diagnostic text or changing repository, tracker or runner state.
     *Refuted by:* a sentinel in diagnostic prose or an unrelated process
     argument reaches output, an input changes, a model or network call runs,
-    or reporting is added as a verification gate.
+    reporting is added as a verification gate, or the module's own
+    description names an input path the code does not take.
 
 ## Non-goals
 

@@ -52,7 +52,7 @@ No existing file is deleted. Keep `spec.md` as the yardstick and
   Validate `--change` as a single active-folder name. Unknown or invalid
   selections print a bounded diagnostic and the live block, with exit zero;
   normal argparse help/usage behavior need not masquerade as a report.
-- Import `stage2.time_log`, `stage2.card_problem`, `stage2.CARD_LABELS`
+- Import `stage2.time_log`, `stage2.CARD_LABELS`
   and `stage2_runs.CALL_LINE`/`CALL_PREFIXES`. Imports and readers must have
   no dispatch side effects. Do not duplicate their section or audit-line
   recognition expressions, modify the imported modules or call their CLIs.
@@ -62,11 +62,10 @@ No existing file is deleted. Keep `spec.md` as the yardstick and
   Convert to seconds before comparing, with the inclusive 50 percent boundary.
 - Parse canonical runner durations using their explicit seconds as authority,
   not wall-clock endpoint subtraction; tests build these with `time_entry`.
-  Also accept dated orchestrator records with an explicit measured seconds
-  field or an exact closed UTC range (same-day clock endpoints or ISO UTC
-  endpoints with dates). Reject approximate, unmeasured, negative, ambiguous
-  or malformed records instead of extracting arbitrary prose numbers.
-  Prefer an explicit duration over endpoints within the same record.
+  Only the runner's own fixed format counts (maintainer, 2026-10-29, a
+  structural cut after five loop rows on orchestrator prose records):
+  every other line, dated orchestrator records included, is unread and
+  never yields a number.
 - Count each nonblank unrecognised content line in the time section as
   `unread lines: N`, excluding Markdown heading/fence furniture. Keep readable
   sums visibly incomplete when any content is unread; a missing section or
@@ -114,7 +113,7 @@ No existing file is deleted. Keep `spec.md` as the yardstick and
 - 1: tests/test_run_report.py::test_default_lists_active_changes_then_live — an archive appears or a plan-less active folder disappears
 - 2: tests/test_run_report.py::test_selection_is_confined_and_never_falls_back — traversal, shell syntax or a missing name selects other inputs
 - 3: tests/test_run_report.py::test_attempts_and_unfinished_calls_keep_recorded_metadata — repeated attempt numbers overwrite history or clean calls acquire an accepted verdict
-- 4: tests/test_run_report.py::test_measured_durations_sum_without_audit_or_live_double_counting — accepted, rejected or exact orchestrator seconds are omitted or counted twice
+- 4: tests/test_run_report.py::test_measured_durations_sum_without_audit_or_live_double_counting — accepted or rejected runner seconds are omitted or counted twice, or an orchestrator record is counted
 - 5: tests/test_run_report.py::test_unread_time_is_visible_and_totals_are_partial — malformed or approximate records supply a guessed duration or a false complete total
 - 6: tests/test_run_report.py::test_card_appetite_warns_at_half_including_rejected_time — the boundary, unit conversion or card authority is wrong
 - 7: tests/test_run_report.py::test_unread_appetite_never_becomes_zero — absent, conflicting or non-positive card values yield a ratio
