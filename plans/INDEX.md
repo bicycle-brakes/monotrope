@@ -200,6 +200,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/malformed-answer-retry/plan.md`](changes/malformed-answer-retry/plan.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
 | [`changes/malformed-answer-retry/research.md`](changes/malformed-answer-retry/research.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
 | [`changes/malformed-answer-retry/spec.md`](changes/malformed-answer-retry/spec.md) | draft | partial | 2026-10-26 | coding-harness-70rw |
+| [`changes/model-terms-current/research.md`](changes/model-terms-current/research.md) | draft | none | 2026-10-30 | coding-harness-3g53 |
 | [`changes/mutation-evidence-module/decisions.md`](changes/mutation-evidence-module/decisions.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/findings.md`](changes/mutation-evidence-module/findings.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
