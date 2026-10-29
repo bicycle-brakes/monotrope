@@ -613,7 +613,11 @@ def inherit_env(env: dict[str, str]) -> dict[str, str]:
 
 
 def _install_signal_handlers() -> dict[int, object]:
-    """Turn SIGINT and SIGTERM into an interrupt that cleans the child up before release."""
+    """Turn SIGINT, SIGTERM, SIGHUP and SIGQUIT into an interrupt that cleans the child up before release.
+
+    SIGHUP and SIGQUIT are trapped too, so a closed terminal or a quit key never skips the cleanup
+    by the default action (review row L4-3).
+    """
     previous: dict[int, object] = {}
     if threading.current_thread() is not threading.main_thread():
         return previous
@@ -621,14 +625,14 @@ def _install_signal_handlers() -> dict[int, object]:
     def interrupted(signum: int, _frame: object) -> None:
         raise SupervisorInterrupted(signum)
 
-    for signum in (signal.SIGINT, signal.SIGTERM):
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
         with contextlib.suppress(ValueError, OSError):
             previous[signum] = signal.signal(signum, interrupted)
     return previous
 
 
 def _hold_signals_during_cleanup(previous: dict[int, object]) -> None:
-    """A further SIGINT or SIGTERM while the child is stopped is ignored, never raised past the release.
+    """A further trapped signal while the child is stopped is ignored, never raised past the release.
 
     The first signal already ends the run and sets its exit code (review row L3-3).
     """

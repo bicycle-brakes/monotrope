@@ -911,3 +911,20 @@ def test_a_second_signal_during_cleanup_still_releases(tmp_path: Path, monkeypat
     assert verify_lock.supervise(["sleep", "30"]) == 128 + signal.SIGINT
     assert not holder_file.exists(), "the holder record outlived the cleanup"
     assert signal.getsignal(signal.SIGTERM) is before, "the supervisor left its signal handler installed"
+
+
+@pytest.mark.parametrize("signum", [signal.SIGHUP, signal.SIGQUIT])
+def test_hangup_and_quit_clean_up_like_terminate(tmp_path: Path, signum: int) -> None:
+    """Row L4-3. Planted fault: only SIGINT and SIGTERM were trapped, so SIGHUP or SIGQUIT killed the
+    supervisor by the default action and left its protected child running with the lock."""
+    state = tmp_path / "state"
+    started = tmp_path / "started.json"
+    out = tmp_path / "child.json"
+    entry = _supervised(state, RECORD_BODY, {"PROBE_SLEEP": "5", "PROBE_STARTED": str(started), "PROBE_OUT": str(out)})
+    assert _wait_until(started.is_file), "the entry never started its protected child"
+    child = int(started.read_text(encoding="utf-8"))
+    os.kill(entry.pid, signum)
+    assert entry.wait(timeout=30) == 128 + signum, "the supervisor did not report its signal"
+    assert not out.is_file(), "the protected child outlived its cleanup"
+    with pytest.raises(ProcessLookupError):
+        os.kill(child, 0)
