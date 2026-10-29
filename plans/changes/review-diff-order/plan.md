@@ -20,7 +20,7 @@ tags: [plan, review-loop, stage-2]
 ```text
 For you:     Paid review rounds see code and tests before prose; findings and the generated plans index no longer consume their diff budget.
 Done when:   the criterion ledger holds exclusions, ordering, retained changes and unchanged cut/free/receipt behavior, and `make verify` is green.
-Appetite:    1 h of phase 4, repairs included; a stop, not an estimate.
+Appetite:    1 h of phase 4, repairs included, plus 45 min granted on 2026-10-29 after the stop at about 1.5 h; a stop, not an estimate.
 Not now:     splitting large diffs, larger bounds, compaction, model routing or changed review access.
 Pre-mortem:  suppose it failed: most likely because paid filtering also changes the raw diff used to invalidate availability receipts.
 Starts unless you say stop.
@@ -64,8 +64,11 @@ no Stage-1 fallback was recorded. No design phase or ADR draft is due.
 4. `docs/WORKFLOW.md`: clarify §4's paid input excludes the named paths,
    places implementation inputs before prose and applies the existing bound
    afterwards; replace the misleading paid/free "same bounded diff" wording.
-   `prompts/04b-review-loop.md`: align its Input paragraph with that contract,
-   preserving paid read tools and the free stage's distinct confinement.
+   The matching edit of `prompts/04b-review-loop.md` (its Input paragraph,
+   preserving paid read tools and the free stage's distinct confinement) is
+   not the model's: a stage-2 run does not commit `prompts/`. The
+   orchestrator makes it after the accepted attempt, as a bootstrap edit
+   (revised 2026-10-29, maintainer's decision).
 5. `plans/changes/review-diff-order/plan.md`: replace completed
    `not yet written` ledger entries and record measured phase-4 time below.
    `plans/changes/review-diff-order/findings.md`: retain runner audit and
@@ -114,3 +117,4 @@ read tools and loop state/stop/release rules retain their current behavior.
 ## Time used
 2026-10-29 17:36–19:07:41 UTC — implement · attempts 1 (flash, 1 test red) and 2 (flash-repair, refused: it changed `prompts/04b-review-loop.md`, a path a stage-2 run does not commit, though plan step names it) · measured with `date -u`
 Appetite stop, 2026-10-29 19:10 UTC: about 1.5 h of the 1 h appetite used; parked. The plan's prompt step contradicts the runner's commit rule; the maintainer decides.
+Revised 2026-10-29 about 22:25 UTC (maintainer's decision of about 19:25 UTC): the prompt edit moves from the model to the orchestrator; 45 more minutes, read as counted from the stop at about 1.5 h.
