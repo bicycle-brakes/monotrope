@@ -130,7 +130,7 @@ RUNNER_ENTRY = re.compile(
 DATED_SECONDS = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}(?::\d{2})?)"
     r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?)(?: UTC)?, "
-    r"(?P<seconds>\d+) s(?:[ \t]*$|[,;)].*)"
+    r"(?P<seconds>\d+) s(?:[ \t]*$|[,;)].*| — .*)"
 )
 # A dated orchestrator record that is only an exact closed UTC range: same-day
 # clock endpoints, or endpoints that carry their own date.
@@ -189,7 +189,7 @@ def parse_time_line(content: str) -> TimeRecord | None:
             model=matched.group("model").strip(),
             result=matched.group("result"),
         )
-    if " s — " in body:
+    if " s — " in body and ("· attempt " in body or "measured by the runner" in body):
         return None  # runner-shaped but broken: unread, never re-derived from its endpoints
     if re.search(r"\b(?:about|approx(?:imate(?:ly)?)?\.?|unmeasured|not measured)\b", body, re.IGNORECASE):
         return None  # exact-looking endpoints do not turn an explicitly guessed record into evidence
@@ -211,7 +211,13 @@ def read_time(plan: Path) -> tuple[TimeReading, str]:
     try:
         section = stage2.time_log(plan)
     except stage2.Refused as error:
-        return TimeReading(section_read=False), str(error)
+        # Preserve the runner's known reason without exposing its absolute path
+        # or forwarding arbitrary exception text into the report.
+        reason = "cannot be read."
+        missing_heading = "has no `## Time used` heading."
+        if str(error) == f"{plan} {missing_heading}":
+            reason = missing_heading
+        return TimeReading(section_read=False), f"{plan.name} {reason}"
     reading = TimeReading(section_read=True)
     for raw in section.splitlines():
         content = raw.strip()
@@ -361,7 +367,6 @@ def _stage2_row(tokens: list[str], pid: str, elapsed: str, changes: frozenset[st
     change = NOT_READ
     arguments = iter(tokens[script + 2 :])
     value_options = {
-        "--stage2-off",
         "--model",
         "--class",
         "--availability-reported",
@@ -372,6 +377,15 @@ def _stage2_row(tokens: list[str], pid: str, elapsed: str, changes: frozenset[st
         "--root",
     }
     for token in arguments:
+        if token == "--stage2-off":
+            # Its reason is optional. A known change or another option must
+            # remain available to the positional/option reader below.
+            following = next(arguments, None)
+            if following is None:
+                break
+            if following not in changes and not following.startswith("-"):
+                continue  # the explicit reason
+            token = following
         if token in value_options:
             next(arguments, None)
             continue

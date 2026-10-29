@@ -709,3 +709,49 @@ def test_readable_appetite_survives_unrelated_card_defect(tmp_path: Path) -> Non
         out = "\n".join(run_report.change_block(folder, "alpha"))
         assert "appetite: 7200 s" in out
         assert "at or over half the appetite" in out
+
+
+def test_annotated_orchestrator_seconds_are_recorded(tmp_path: Path) -> None:
+    body = "\n".join(
+        [
+            "2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · measured with `date -u`",
+            "2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · measured with `date -u`",
+            # Explicit seconds remain authoritative even when endpoints disagree.
+            "2026-10-29 02:00:00–02:01:00 UTC, 7 s — orchestrator check",
+            runner_line(seconds=600),
+            runner_line(seconds=300).replace("accepted", "acceped"),
+        ]
+    )
+    folder = make_change(tmp_path, "alpha", plan=plan_text(time_body=body), findings="")
+    reading, reason = run_report.read_time(folder / "plan.md")
+    assert reason == "" and reading.section_read
+    assert reading.seconds == 729
+    assert reading.unread == 1  # the malformed runner entry still cannot become time
+    assert len(reading.attempts) == 1
+
+
+def test_stage2_off_without_reason_preserves_change() -> None:
+    for arguments in (
+        "--stage2-off alpha",
+        "--stage2-off --class bounded alpha",
+        "--stage2-off reason alpha",
+        "--stage2-off=reason alpha",
+        "alpha --stage2-off",
+    ):
+        rows = run_report.parse_processes(
+            ps_output(f"123 00:10 python3 scripts/stage2.py implement {arguments}"),
+            frozenset({"alpha"}),
+        )
+        assert len(rows) == 1 and rows[0].change == "alpha", arguments
+
+
+def test_unread_plan_reason_never_exposes_absolute_path(tmp_path: Path) -> None:
+    folder = make_change(tmp_path / "PRIVATE-PATH", "alpha", findings="")
+    for content in (None, b"\xff", b"# No time section\n"):
+        if content is not None:
+            (folder / "plan.md").write_bytes(content)
+        out = "\n".join(run_report.change_block(folder, "alpha"))
+        expected = "cannot be read." if content in (None, b"\xff") else "has no `## Time used` heading."
+        assert f"time: not read (plan.md {expected})" in out
+        assert str(tmp_path) not in out
+        assert "PRIVATE-PATH" not in out
