@@ -60,9 +60,10 @@ Required:
   `.agents/`, `.pi/`, `.mcp.json`, `CLAUDE.md`, `prompts/`, `templates/`,
   `.github/`, `.beads/`, `AGENTS.md`, `README.md`, and every prefix whose
   `allowed` classes in the committed `provenance.yaml` are exactly
-  `human-decided`. A step that edits one of them substantively is assigned in
-  the plan to the orchestrator, as a bootstrap edit after the accepted
-  attempt; the attempt is never told to make it.
+  `human-decided`. Every step that edits one of them, however small the edit,
+  is assigned in the plan to the orchestrator, as a bootstrap edit after the
+  accepted attempt; the attempt is never told to make it. Only the runner's
+  own derived leftovers (the rendered index, a date stamp) are not refused.
 - **No longer than the change.** A plan with more lines than the diff it
   describes is a finding, not diligence. What fits in one sentence stays one
   sentence.

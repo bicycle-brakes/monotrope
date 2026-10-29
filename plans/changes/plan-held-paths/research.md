@@ -4,31 +4,33 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-h5tj
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, route flash, 2026-10-29"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # plan held paths — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
 
 Stage-2 call, 2026-10-29: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 739 files, 2662 commits, 12 rules.
 
 ## Runner exploration — 2026-10-29
 
-The phase-1 exploration is complete. Below is the research prose, ready to append to `plans/changes/plan-held-paths/research.md`.
+> Orchestrator note, 2026-10-29 (review-loop rows L1-3, L1-4, L1-6, L1-8): the
+> skeleton's provenance note and the explorer's delivery line are removed and
+> the provenance is declared as model output. The explorer could not read the
+> bead; the intent it lists as open is settled in [decisions.md](decisions.md):
+> mechanism (1), the runner-held paths. The prose below is the explorer's,
+> unchanged; the files it names beyond `prompts/03-plan.md` and
+> `tests/test_stage2.py` are outside this change ([spec.md](spec.md),
+> non-goals).
 
 ---
 
