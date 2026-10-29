@@ -11,6 +11,9 @@ bead: coding-harness-3g53
 owner: Data Architect
 provenance: human-written
 tags: [research]
+neighbours:
+  - plans/changes/terms-expiry/spec.md
+  - plans/changes/research-swarm/spec.md
 ---
 
 # model terms current — Research
