@@ -524,7 +524,9 @@ def macos_memory(run: RunCommand) -> MemorySnapshot:
             memsize = int(raw)
     except SourceError:
         pass
-    if page_size and occupied is not None and memsize:
+    if page_size and occupied is not None and memsize and occupied * page_size > memsize:
+        compressed = _not_read("vm_stat/sysctl", "compressor pages exceed hw.memsize")
+    elif page_size and occupied is not None and memsize:
         share = occupied * page_size / memsize * 100
         compressed = (
             f"{share:.1f}% of physical memory (pages occupied by compressor, {page_size}-byte pages of hw.memsize)"

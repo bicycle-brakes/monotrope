@@ -478,7 +478,7 @@ Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-6 | MINOR | SPEC | Phase 6 | scripts/run_report.py:527–530 | With injected macOS readings of 300 occupied compressor pages, 16384 bytes per page and 1638400 physical bytes, the report prints `300.0% of physical memory` as valid compressed memory. Reject compressor usage exceeding physical memory as `not read`, while preserving independent readings. [Acceptance criteria 9 and 11] | Codex | open | — |
+| R6-6 | MINOR | SPEC | Phase 6 | scripts/run_report.py:527–530 | With injected macOS readings of 300 occupied compressor pages, 16384 bytes per page and 1638400 physical bytes, the report prints `300.0% of physical memory` as valid compressed memory. Reject compressor usage exceeding physical memory as `not read`, while preserving independent readings. [Acceptance criteria 9 and 11] | Codex | fixed — tests/test_run_report.py::test_macos_memory_rejects_compressor_usage_above_physical_memory | — |
 
 Phase 6 verdict: codex 01a189bb-a242-7810-8622-8e2fb32525c5, 2026-10-29
 Reviewer session: codex 01a189bb-a242-7810-8622-8e2fb32525c5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

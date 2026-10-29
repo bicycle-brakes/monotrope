@@ -605,6 +605,29 @@ def test_linux_memory_rejects_components_above_physical_total(tmp_path: Path) ->
             assert snapshot.compressed.startswith(f"{compressed / 10:.1f}% of MemTotal")
 
 
+def test_macos_memory_rejects_compressor_usage_above_physical_memory() -> None:
+    """Fault: compressor pages larger than hw.memsize print as a valid share above 100 %,
+    or the independent free percentage is lost with them (phase-6 row R6-6)."""
+    for occupied, valid in ((300, False), (100, True), (101, False)):
+        run = fake_run(
+            {
+                ("memory_pressure",): "System-wide memory free percentage: 68%\n",
+                ("vm_stat",): (
+                    "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+                    f"Pages occupied by compressor: {occupied}.\n"
+                ),
+                ("sysctl", "-n", "hw.memsize"): "1638400\n",
+            }
+        )
+        snapshot = run_report.macos_memory(run)
+        assert snapshot.available.startswith("68% of physical memory")
+        assert snapshot.available_percent == 68.0
+        if valid:
+            assert snapshot.compressed.startswith("100.0% of physical memory")
+        else:
+            assert snapshot.compressed.startswith("not read") and "hw.memsize" in snapshot.compressed
+
+
 def test_report_is_read_only_local_and_does_not_echo_prose(tmp_path: Path, capsys) -> None:
     """Fault: a sentinel in findings prose, a process argument or a memory diagnostic reaches
     the output, an input file changes, or a forbidden command runs (spec criterion 12)."""
