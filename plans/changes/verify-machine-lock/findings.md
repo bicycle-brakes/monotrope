@@ -514,3 +514,39 @@ Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint cl
 Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one test left red (test_local_checks_preserve_nested_admission: a local check must pass an inherited valid marker on unchanged); macOS memory reader fixed by the orchestrator (240b1f89); maintainer 2026-10-29: +1 h appetite on Sonnet; about 3.2 of 4 h used · leak check clean over 738 files, 2630 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM attempts failed, Sonnet continues from the saved state; one test left red: tests/test_stage2.py::test_local_checks_preserve_nested_admission - a local check must pass a valid inherited lock marker through unchanged instead of setting its own PID; maintainer 2026-10-29: +30 min, total 4.5 h · leak check clean over 738 files, 2635 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 738 files, 2638 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 738 files, 2639 commits, 12 rules.
