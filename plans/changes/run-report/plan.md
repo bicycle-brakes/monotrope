@@ -20,7 +20,7 @@ tags: [plan, run-report]
 ```text
 For you:     One local command shows recorded attempts, time against appetite, and live process and memory figures.
 Done when:   Boundary and failure fixtures hold all twelve criteria, the report leaves its inputs unchanged, and make verify is green.
-Appetite:    2 hours of phase 4, repairs included; a stop, not an estimate.
+Appetite:    3 hours 45 minutes of phase 4, repairs included; a stop, not an estimate.
 Not now:     Dashboards, automatic start guards, verification locks, runner changes or invented missing measurements.
 Pre-mortem:  suppose it failed: most likely because unreadable time records silently become a reassuring zero.
 Starts unless you say stop.
@@ -191,3 +191,8 @@ first member, `hy3`; no round was written and no stage was consumed. Not
 retried. The loop therefore did not reach a clean round on this stand; the
 change goes to phase 6 with that gap named, and the next round runs when the
 Go limit has reset.
+
+Appetite raised on the card (loop row L6-3, 2026-10-29): the maintainer
+granted 45 minutes (morning), 30 minutes (about 10:40 UTC) and 30 minutes
+(about 13:50 UTC, for the strict time-record grammar of L5-1) on top of the
+original 2 hours; the card now states the total, 3 hours 45 minutes.
