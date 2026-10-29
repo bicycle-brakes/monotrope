@@ -303,3 +303,14 @@ Kept from the loop record:
 Stage-2 call, 2026-10-28: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 732 files, 2515 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 737 files, 2584 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 737 files, 2587 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-29
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MAJOR | SPEC | Phase 6 re-check | scripts/stage2_availability.py:629 | The C loader still changes the baseline acceptance contract. New evidence with PyYAML 6.0.2: the ASCII declaration `note: "\uD83D\uDE00"` returns a mapping through the baseline and fallback `SafeLoader`, but `read_declaration` returns `model-endpoints.yaml cannot be read` with `CSafeLoader`. The tab-specific repair does not cover this difference; preserve the baseline result regardless of libyaml availability. [Criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d, 2026-10-29
+Reviewer session: codex 01a186c0-f5a8-7483-9561-d30c0d58a79d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
