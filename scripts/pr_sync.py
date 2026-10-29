@@ -590,21 +590,22 @@ def committed_index(root: Path, tree: str) -> bytes | None:
     return done.stdout if done.returncode == 0 else None
 
 
-def render_tree(root: Path, tree: str) -> bytes | None:
-    """The committed renderer's output for a tree; None when it has no plans/."""
+def render_tree(root: Path, tree: str, code: str) -> bytes | None:
+    """`code`'s renderer output for a tree; None when it has no plans/."""
     if tree_entry(root, tree, "plans") is None:
         return None
-    with Render(root, tree) as render:
+    with Render(root, tree, code) as render:
         return render.run()
 
 
-def is_current(root: Path, head: str) -> bool:
-    """Whether the committed index equals a fresh render of the same tree."""
+def is_current(root: Path, head: str, code: str) -> bool:
+    """Whether the committed index equals a fresh render of the same tree by `code`'s renderer -
+    the fetched `origin/main`, the same renderer the merge uses (review row L2-1)."""
     tree = git_out(root, "rev-parse", f"{head}^{{tree}}").strip()
     committed = committed_index(root, tree)
     if tree_entry(root, tree, "plans") is None:
         return committed is None
-    return committed == render_tree(root, tree)
+    return committed == render_tree(root, tree, code)
 
 
 def build_commit(root: Path, tree: str, parents: list[str], message: str) -> str:
@@ -860,7 +861,7 @@ def merge_main(root: Path) -> int:
 
     try:
         if is_ancestor(root, main_tip, head):
-            if is_current(root, head):
+            if is_current(root, head, main_tip):
                 print(f"unchanged: {branch} — main is already merged and the index is current")
                 return 0
             prepared = prepare_merge(root, branch, head, main_tip, two_parent=False)
@@ -931,7 +932,7 @@ def sync_main(root: Path, gh: str, today: dt.date) -> int:
                 outcomes.append((pull, *split_kind(problem)))
                 continue
             if is_ancestor(root, main_tip, pull.head):
-                if is_current(root, pull.head):
+                if is_current(root, pull.head, main_tip):
                     outcomes.append((pull, "unchanged", "main is already merged and the index is current"))
                     continue
                 built = prepare_merge(root, pull.branch, pull.head, main_tip, two_parent=False)

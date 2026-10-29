@@ -1000,3 +1000,24 @@ def test_a_fetched_branch_that_differs_is_not_called_ahead(tmp_path: Path) -> No
     done = world.run_sync(pulls=[Pull(7, "feat/x", other)])
     assert "differs from the pull-request head" in done.stdout, done.stdout
     assert "already ahead" not in done.stdout
+
+
+def test_currency_is_judged_by_mains_renderer_not_the_checkout(tmp_path: Path) -> None:
+    """Row L2-1. Planted fault: an index rendered by main's renderer was judged stale by an older checkout's."""
+    m = _pr_sync()
+    repo = _repo(tmp_path / "repo")
+    (repo / "plans" / "x").mkdir(parents=True)
+    (repo / "plans" / "x" / "spec.md").write_text("---\ntitle: Spec\nbead: x-1\n---\n\n# Spec\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    registry = repo / "scripts" / "plans_registry.py"
+    registry.write_text(RENDERER_SAYING.format("old renderer\n"), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "the older renderer")
+    old = _git(repo, "rev-parse", "HEAD")
+    registry.write_text(RENDERER_SAYING.format("main renderer\n"), encoding="utf-8")
+    (repo / "plans" / "INDEX.md").write_text("main renderer\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "main's renderer and the index it renders")
+    main_tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "--quiet", "--detach", old)
+    assert m.is_current(repo, main_tip, main_tip) is True
