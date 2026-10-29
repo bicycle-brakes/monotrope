@@ -82,7 +82,7 @@ redraft spec and plan on current main with the answers Q-1 to Q-5 of
   `check_repair_answer` are as described below, plus the doubled-claim and
   climb-out rules. The guard form `fixed — guard test — tests/<path>::<function>`
   (Q-1, Q-2) slots into `fixed_status` beside the `not a test` branch, and
-  the row check beside `answered `not a test`, but the row is a code row`.
+  the row check beside the one that refuses a `not a test` answer for a code row.
 - **Taken-row grammar.** `RECORD_INTRO` and `repair_targets` still read
   `taken — <test or criterion>`, `taken — not a test — <reason>` and
   `rejected — <reason>`; `taken — guard test — <reason>` (Q-2) is new to
