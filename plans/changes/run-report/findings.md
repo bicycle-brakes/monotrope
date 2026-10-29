@@ -241,3 +241,5 @@ Stage-2 call, 2026-10-29: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-6: tests/test_run_report.py::test_shebang_runner_is_matched_without_matching_wrapper: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/run-report/stage2/attempts/run-report/attempt-3-20261029T002307262083Z-f1844ea4.md
 > ```
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 733 files, 2550 commits, 12 rules.
