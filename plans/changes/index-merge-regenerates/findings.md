@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-28
 created: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-njtm
@@ -432,3 +432,5 @@ Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.5
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 733 files, 2519 commits, 12 rules.
 
 Stage-2 call, 2026-10-28: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 733 files, 2520 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 733 files, 2548 commits, 12 rules.
