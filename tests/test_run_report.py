@@ -614,6 +614,53 @@ def test_exact_range_with_unmeasured_prose_stays_unread(tmp_path: Path) -> None:
     assert run_report.parse_time_line("2026-10-28 10:00–10:30 UTC") is not None
 
 
+def test_time_records_require_whitelisted_measurement_forms(tmp_path: Path) -> None:
+    """Annotations must not turn guesses into time or a half-appetite warning."""
+    span = "2026-10-28 09:00–09:10 UTC"
+    invalid = [
+        span + suffix
+        for suffix in (
+            ", 600 s (approx)",
+            ", 600 s, guessed",
+            ", 600 s; estimated",
+            ", 600 s — review loop round 1",
+            ", 600 s — approximately measured with `date -u`",
+            ", 600 s — measured with `date -u` (approx)",
+            ", guessed",
+            "; estimated",
+            " (approx)",
+            " — unmeasured",
+            " — measured with `date -u`, guessed",
+        )
+    ]
+    valid = [
+        (span, 600),
+        (span + ", 7 s", 7),  # explicit seconds outrank endpoint subtraction
+        (span + " — measured with `date -u`", 600),
+        (span + ", 7 s — measured with `date -u`", 7),
+        (span + ", 7 s — review loop round 1 · measured with `date -u`", 7),
+        ("2026-10-28 23:55–2026-10-29 00:05 UTC — measured with `date -u`", 600),
+        (runner_line(seconds=300), 300),
+    ]
+    for line in invalid:
+        assert run_report.parse_time_line(line) is None, line
+    for line, seconds in valid:
+        record = run_report.parse_time_line(line)
+        assert record is not None and record.seconds == seconds, line
+    folder = make_change(
+        tmp_path,
+        "alpha",
+        plan=plan_text(appetite="1 hour", time_body="\n".join([runner_line(seconds=600), *invalid])),
+        findings="",
+    )
+    reading, reason = run_report.read_time(folder / "plan.md")
+    assert reason == "" and reading.seconds == 600 and reading.unread == len(invalid)
+    out = "\n".join(run_report.change_block(folder, "alpha"))
+    assert f"unread lines: {len(invalid)}" in out
+    assert "incomplete" in out
+    assert "at or over half the appetite" not in out
+
+
 def test_session_calls_keep_explicit_fields_and_dispatch_state() -> None:
     for state in ("accepted", "failed (PRIVATE_DETAIL)", "pending"):
         rows = run_report.call_rows(
@@ -717,7 +764,7 @@ def test_annotated_orchestrator_seconds_are_recorded(tmp_path: Path) -> None:
             "2026-10-29 01:01:00–01:02:44 UTC, 104 s — review loop round 1 · measured with `date -u`",
             "2026-10-29 01:44:14–01:44:32 UTC, 18 s — review loop round 2 · measured with `date -u`",
             # Explicit seconds remain authoritative even when endpoints disagree.
-            "2026-10-29 02:00:00–02:01:00 UTC, 7 s — orchestrator check",
+            "2026-10-29 02:00:00–02:01:00 UTC, 7 s — measured with `date -u`",
             runner_line(seconds=600),
             runner_line(seconds=300).replace("accepted", "acceped"),
         ]

@@ -138,17 +138,21 @@ RUNNER_ENTRY = re.compile(
     r"(?P<verb>[^·]+?) · attempt (?P<attempt>\d+) · route (?P<route>[^·]+?)"
     r" · model (?P<model>[^·]+?) · (?P<result>accepted|rejected) · measured by the runner"
 )
+# Orchestrator notes have an explicit measurement method, optionally labelled
+# with the review round. No arbitrary punctuation/prose tail is evidence of a
+# measurement. Extend this positive grammar when another measured form is used.
+MEASUREMENT_NOTE = r"(?: — (?:review loop round \d+ · )?measured with `date -u`)?"
 # A dated orchestrator record with an explicit measured seconds field.
 DATED_SECONDS = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}(?::\d{2})?)"
     r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?)(?: UTC)?, "
-    r"(?P<seconds>\d+) s(?:[ \t]*$|[,;)].*| — .*)"
+    r"(?P<seconds>\d+) s" + MEASUREMENT_NOTE + r"[ \t]*"
 )
 # A dated orchestrator record that is only an exact closed UTC range: same-day
 # clock endpoints, or endpoints that carry their own date.
 DATED_RANGE = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}(?::\d{2})?)"
-    r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?) UTC(?:[ \t]*$|[,;)].*)"
+    r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}(?::\d{2})?) UTC" + MEASUREMENT_NOTE + r"[ \t]*"
 )
 FURNITURE = re.compile(r"^(?:#{1,6} |```|~~~)")
 
@@ -203,8 +207,6 @@ def parse_time_line(content: str) -> TimeRecord | None:
         )
     if " s — " in body and ("· attempt " in body or "measured by the runner" in body):
         return None  # runner-shaped but broken: unread, never re-derived from its endpoints
-    if re.search(r"\b(?:about|approx(?:imate(?:ly)?)?\.?|unmeasured|not measured)\b", body, re.IGNORECASE):
-        return None  # exact-looking endpoints do not turn an explicitly guessed record into evidence
     matched = DATED_SECONDS.fullmatch(body)
     if matched:
         return TimeRecord(seconds=int(matched.group("seconds")))
