@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-29
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -827,8 +827,13 @@ file the top-level test functions that are new or differ from HEAD (a new file
 whole), the accepted plan's criterion-ledger test references in both forms as
 function ids, and, on a retry, the test ids pytest reported as failed in the
 previous attempt of the same run whose file and test still stand; deduplicated and
-sorted, and no importer of a changed `scripts/` module is selected
-(`decisions.md` Q-3 of the change). A command with no target is skipped; a red,
+sorted (a file selected whole covers its own ids, which are then not repeated as
+explicit targets), and no importer of a changed `scripts/` module is selected
+(`decisions.md` Q-3 of the change). The cheap checks run on the attempt's own
+bytes, before the runner stamps documents and renders derived files: a selected
+test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
+line) sees it unprepared, and such a test belongs to `make verify`, not to the
+cheap run (review row L9-1). A command with no target is skipped; a red,
 unstartable or over-bound command fails the attempt before `make verify`
 starts, and its identified command, exit and protected output stand in that
 attempt's diagnostics and the next attempt's prompt. Cheap green replaces

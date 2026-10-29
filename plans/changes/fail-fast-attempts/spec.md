@@ -52,8 +52,10 @@ Research: `research.md`. Decisions: `decisions.md`.
   whose parsed code differs from HEAD (comments and layout alone do not count) (a new file whole); the accepted plan's
   criterion-ledger test references in either test form, as function ids;
   and, on a retry, the test ids pytest reported as failed in the previous
-  attempt of the same run; without duplicates. Importers of changed
-  `scripts/` modules are not selected.
+  attempt of the same run; without duplicates. A new file selected whole
+  covers its own ids: a ledger reference or a previous failure inside it is
+  not repeated as an explicit target, so the run set stays the same (review
+  row L9-2). Importers of changed `scripts/` modules are not selected.
 - **Findings snapshot:** the runner's findings immediately before the model
   call, including this attempt's audit and all preceding evidence.
 
