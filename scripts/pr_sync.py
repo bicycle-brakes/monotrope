@@ -879,7 +879,11 @@ def merge_main(root: Path) -> int:
         # Recheck immediately before the fast-forward; never reset user work.
         if current_branch(root) != branch or git_out(root, "rev-parse", "HEAD").strip() != head:
             raise Failed("the checkout changed during the run; nothing was applied")
-        ensure_clean(root)
+        try:
+            ensure_clean(root)
+        except Refused as error:
+            print(f"refused: {error}")
+            return 2
         applied = git(root, "-c", "core.hooksPath=/dev/null", "merge", "--quiet", "--ff-only", prepared.oid)
         if applied.returncode != 0:
             raise Failed(f"the fast-forward to the prepared commit failed: {tail(applied.stderr)}")

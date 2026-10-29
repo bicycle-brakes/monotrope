@@ -906,6 +906,54 @@ def _pr_sync():
     return importlib.import_module("pr_sync")
 
 
+@pytest.mark.parametrize("race", ["untracked", "tracked", "staged", "branch", "head", "detached"])
+def test_local_merge_recheck_classifies_refusal_and_races(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, race: str
+) -> None:
+    """Row L3-1: late dirt is a refusal; a changed branch or head remains an error."""
+    m = _pr_sync()
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    world = World(tmp_path)
+    _branch_behind(world, "feat/recheck")
+    world.checkout("feat/recheck")
+    prepare = m.prepare_merge
+    observed = {}
+
+    def prepare_then_race(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        if race in {"tracked", "staged"}:
+            world.write_plans("alpha/spec.md", "user work\n")
+            if race == "staged":
+                _git(world.work, "add", "plans/alpha/spec.md")
+        elif race == "untracked":
+            world.write_root("user-work.txt", "user work\n")
+        elif race == "branch":
+            world.branch("feat/other")
+        elif race == "head":
+            _git(world.work, "commit", "--quiet", "--allow-empty", "-m", "racing commit")
+        else:
+            _git(world.work, "checkout", "--quiet", "--detach")
+        observed["head"] = _git(world.work, "rev-parse", "HEAD")
+        observed["refs"] = _git(world.work, "show-ref")
+        observed["status"] = _git(world.work, "status", "--porcelain=v1")
+        observed["diff"] = _git(world.work, "diff", "HEAD")
+        return prepared
+
+    monkeypatch.setattr(m, "prepare_merge", prepare_then_race)
+    dirty = race in {"untracked", "tracked", "staged"}
+    assert m.merge_main(world.work) == (2 if dirty else 1)
+    output = capsys.readouterr().out
+    assert output.startswith("refused:" if dirty else "error:"), output
+    assert "applied:" not in output
+    assert _git(world.work, "rev-parse", "HEAD") == observed["head"]
+    assert _git(world.work, "show-ref") == observed["refs"]
+    assert _git(world.work, "status", "--porcelain=v1") == observed["status"]
+    assert _git(world.work, "diff", "HEAD") == observed["diff"]
+    if race == "untracked":
+        assert (world.work / "user-work.txt").read_text() == "user work\n"
+
+
 def _repo(path: Path) -> Path:
     path.mkdir(parents=True)
     _git(path, "init", "--quiet", "--initial-branch=main")
