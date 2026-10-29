@@ -751,10 +751,33 @@ def test_unread_plan_reason_never_exposes_absolute_path(tmp_path: Path) -> None:
         if content is not None:
             (folder / "plan.md").write_bytes(content)
         out = "\n".join(run_report.change_block(folder, "alpha"))
-        expected = "cannot be read." if content in (None, b"\xff") else "has no `## Time used` heading."
-        assert f"time: not read (plan.md {expected})" in out
+        if content in (None, b"\xff"):
+            assert "plan: not read (plan.md " in out
+            assert "time: not read" not in out
+        else:
+            assert "time: not read (plan.md has no `## Time used` heading.)" in out
         assert str(tmp_path) not in out
         assert "PRIVATE-PATH" not in out
+
+
+def test_missing_plan_is_reported_once_without_rereading(tmp_path: Path, monkeypatch) -> None:
+    folder = make_change(tmp_path, "alpha", findings=findings_text(call_line()))
+    original = Path.read_text
+    plan_reads = []
+
+    def tracked_read(path, *args, **kwargs):
+        if path == folder / "plan.md":
+            plan_reads.append(path)
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", tracked_read)
+    out = "\n".join(run_report.change_block(folder, "alpha"))
+    assert out.count("plan.md") == 1
+    assert "plan: not read (plan.md is missing)" in out
+    assert "time: not read" not in out
+    assert "time recorded:" not in out
+    assert "call:" in out  # independent findings remain readable
+    assert len(plan_reads) == 1
 
 
 def test_unreadable_change_metadata_preserves_other_changes_and_live(tmp_path: Path, capsys, monkeypatch) -> None:

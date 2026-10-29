@@ -605,7 +605,9 @@ def change_block(folder: Path, name: str) -> list[str]:
     plan_text, plan_reason = read_text(plan)
     if plan_text is None:
         out.append(f"  plan: not read ({plan_reason})")
-    reading, time_reason = read_time(plan)
+        reading, time_reason = TimeReading(section_read=False), ""
+    else:
+        reading, time_reason = read_time(plan)
     if reading.section_read:
         for record in reading.attempts:
             out.append(
@@ -615,7 +617,7 @@ def change_block(folder: Path, name: str) -> list[str]:
         out.append(f"  time recorded: {reading.seconds} s")
         if reading.unread:
             out.append(f"  unread lines: {reading.unread} — the time subtotal is incomplete")
-    else:
+    elif plan_text is not None:
         out.append(f"  time: not read ({time_reason})")
     findings_text, findings_reason = read_text(folder / "findings.md")
     if findings_text is None:
