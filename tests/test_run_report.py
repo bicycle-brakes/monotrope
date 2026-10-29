@@ -755,3 +755,53 @@ def test_unread_plan_reason_never_exposes_absolute_path(tmp_path: Path) -> None:
         assert f"time: not read (plan.md {expected})" in out
         assert str(tmp_path) not in out
         assert "PRIVATE-PATH" not in out
+
+
+def test_unreadable_change_metadata_preserves_other_changes_and_live(tmp_path: Path, capsys, monkeypatch) -> None:
+    unreadable = make_change(tmp_path, "run-report", plan=plan_text())
+    make_change(tmp_path, "alpha", plan=plan_text(time_body=runner_line(seconds=600)))
+    proc = proc_fixture(tmp_path)
+    run = fake_run({PS_ARGV: ps_output("123 00:10 make verify")})
+    original = Path.stat
+
+    def denied(path, *args, **kwargs):
+        if path == unreadable:
+            raise PermissionError("PRIVATE_DETAIL")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", denied)
+    code, out = run_main(tmp_path, capsys, run=run, proc_dir=proc)
+    assert code == 0
+    assert "plans/changes/run-report: not read" in out
+    assert "change: alpha" in out and "time recorded: 600 s" in out
+    assert "live figures:" in out and "pid 123 · verify" in out
+    assert "available: 61.0%" in out
+    assert run.calls == [list(PS_ARGV)]
+    assert "PRIVATE_DETAIL" not in out and "internal error" not in out
+
+
+def test_echo_naming_python_runner_is_not_a_runner() -> None:
+    rows = run_report.parse_processes(
+        ps_output(
+            "123 00:10 echo python3 scripts/stage2.py implement run-report",
+            "124 00:10 /usr/bin/python3 -u scripts/stage2.py implement run-report",
+        ),
+        frozenset({"run-report"}),
+    )
+    assert [(row.pid, row.label, row.change) for row in rows] == [("124", "implement", "run-report")]
+
+
+def test_verification_options_before_target_or_script_are_visible() -> None:
+    rows = run_report.parse_processes(
+        ps_output(
+            "123 00:10 make -j2 verify",
+            "124 00:10 make --no-print-directory verify",
+            "125 00:10 bash -e scripts/verify_all.sh",
+            "126 00:10 bash -c echo scripts/verify_all.sh",
+            "127 00:10 make -f verify unrelated",
+        ),
+        frozenset(),
+    )
+    assert [(row.pid, row.label, row.change) for row in rows] == [
+        (pid, "verify", "not read") for pid in ("123", "124", "125")
+    ]

@@ -38,6 +38,7 @@ sys.dont_write_bytecode = True  # the report writes nothing - bytecode included 
 import argparse  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
+import stat  # noqa: E402
 import subprocess  # noqa: E402
 from collections.abc import Callable  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
@@ -87,7 +88,7 @@ def run_command(argv: list[str], timeout: float = COMMAND_TIMEOUT) -> str:
 # ---------------------------------------------------------------------------
 
 
-def active_changes(root: Path) -> list[str]:
+def active_changes(root: Path, unread: list[str] | None = None) -> list[str]:
     """The sorted names of the immediate real directories under plans/changes, archive excluded.
 
     Symlinks are never followed, so a link cannot pull a foreign folder into
@@ -97,8 +98,19 @@ def active_changes(root: Path) -> list[str]:
         entries = sorted((root / CHANGES_DIR).iterdir())
     except OSError:
         raise SourceError("not read (plans/changes: change list cannot be read)") from None
-    real = [entry for entry in entries if entry.name != ARCHIVE and entry.is_dir() and not entry.is_symlink()]
-    return sorted(entry.name for entry in real)
+    names = []
+    for entry in entries:
+        if entry.name == ARCHIVE:
+            continue
+        try:
+            mode = entry.stat(follow_symlinks=False).st_mode
+        except OSError:
+            if unread is not None:
+                unread.append(f"plans/changes/{_bounded(entry.name)}: not read (metadata cannot be read)")
+            continue
+        if stat.S_ISDIR(mode):
+            names.append(entry.name)
+    return names
 
 
 def read_text(path: Path) -> tuple[str | None, str]:
@@ -358,11 +370,11 @@ def _stage2_row(tokens: list[str], pid: str, elapsed: str, changes: frozenset[st
     script = next((i for i, token in enumerate(tokens) if _is_stage2_script(token)), None)
     if script is None or script + 1 >= len(tokens) or tokens[script + 1] not in KNOWN_VERBS:
         return None
-    back = script - 1
-    while back >= 0 and tokens[back].startswith("-"):
-        back -= 1
-    if back >= 0 and not Path(tokens[back]).name.startswith("python"):
-        return None  # an argument of another program, not an invocation
+    if script != 0:
+        if not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(tokens[0]).name):
+            return None  # the executable owns the invocation, not a preceding argument
+        if any(not token.startswith("-") or token in {"-c", "-m", "--"} for token in tokens[1:script]):
+            return None
     verb = tokens[script + 1]
     change = NOT_READ
     arguments = iter(tokens[script + 2 :])
@@ -400,13 +412,52 @@ def _stage2_row(tokens: list[str], pid: str, elapsed: str, changes: frozenset[st
 def _verify_row(tokens: list[str], pid: str, elapsed: str) -> ProcessRow | None:
     head = Path(tokens[0]).name
     if head == "make":
-        if len(tokens) > 1 and tokens[1] == "verify":
-            return ProcessRow(pid=pid, elapsed=elapsed, label="verify", change=NOT_READ)
+        arguments = iter(tokens[1:])
+        options = True
+        for token in arguments:
+            if options and token == "--":
+                options = False
+                continue
+            if options and token in {
+                "-C",
+                "-f",
+                "-I",
+                "-o",
+                "-W",
+                "--directory",
+                "--file",
+                "--makefile",
+                "--include-dir",
+                "--old-file",
+                "--assume-old",
+                "--what-if",
+                "--new-file",
+                "--assume-new",
+                "--eval",
+            }:
+                next(arguments, None)
+                continue
+            if options and token.startswith("-"):
+                continue
+            if token == "verify":
+                return ProcessRow(pid=pid, elapsed=elapsed, label="verify", change=NOT_READ)
         return None
     if head in SHELLS:
         # The shell is a wrapper unless it directly runs the verify script itself.
-        if len(tokens) > 1 and _is_verify_script(tokens[1]):
-            return ProcessRow(pid=pid, elapsed=elapsed, label="verify", change=NOT_READ)
+        arguments = iter(tokens[1:])
+        for token in arguments:
+            if token == "--":
+                token = next(arguments, "")
+            elif token in {"-o", "+o", "-O", "+O"}:
+                next(arguments, None)
+                continue
+            elif token.startswith(("-", "+")):
+                if token.startswith("-") and not token.startswith("--") and ("c" in token or "s" in token):
+                    return None  # command text or stdin, not a script invocation
+                continue
+            if _is_verify_script(token):
+                return ProcessRow(pid=pid, elapsed=elapsed, label="verify", change=NOT_READ)
+            break
         return None
     if _is_verify_script(tokens[0]):
         return ProcessRow(pid=pid, elapsed=elapsed, label="verify", change=NOT_READ)
@@ -632,11 +683,13 @@ def report_text(
     """The whole report as text; sources fail independently and the exit stays zero."""
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [f"run report — {stamp} (UTC snapshot · local, read-only · not a gate)"]
+    unread: list[str] = []
     try:
-        names = active_changes(root)
+        names = active_changes(root, unread)
     except SourceError as error:
         names = []
         lines.append(f"change list: {error}")
+    lines.extend(unread)
     known = frozenset(names)
     if selection is None:
         chosen = names
