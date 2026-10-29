@@ -380,7 +380,7 @@ def test_process_filter_emits_only_permitted_fields(tmp_path: Path, capsys) -> N
     make_change(root, "run-report", plan=plan_text(), findings="")
     listing = ps_output(
         "    1 00:01:02 python3 scripts/stage2.py implement run-report",
-        "    2 00:02:03 python3 scripts/stage2.py implement --stage2-off run-report",
+        "    2 00:02:03 python3 scripts/stage2.py implement --stage2-off reason run-report",
         "    3 00:30:00 make verify",
         "    4 1-02:03:04 bash scripts/verify_all.sh",
         "    9 00:00:10 python3 scripts/stage2.py draft run-report",
@@ -602,3 +602,110 @@ def test_make_report_passes_change_as_data_and_is_not_a_gate(tmp_path: Path, cap
     code, out = run_main(root, capsys, proc_dir=proc)  # no --change: the environment selects
     assert code == 0
     assert "change: beta" in out and "change: alpha" not in out
+
+
+def test_exact_range_with_unmeasured_prose_stays_unread(tmp_path: Path) -> None:
+    """An exact range must not override prose declaring the record unmeasured."""
+    for prose in ("about 30 min", "approximately 30 min", "not measured by the orchestrator"):
+        folder = make_change(tmp_path, "alpha", plan=plan_text(time_body=f"2026-10-28 10:00–10:30 UTC, {prose}"))
+        reading, _ = run_report.read_time(folder / "plan.md")
+        assert reading.unread == 1
+        assert reading.seconds == 0
+    assert run_report.parse_time_line("2026-10-28 10:00–10:30 UTC") is not None
+
+
+def test_session_calls_keep_explicit_fields_and_dispatch_state() -> None:
+    for state in ("accepted", "failed (PRIVATE_DETAIL)", "pending"):
+        rows = run_report.call_rows(
+            findings_text(
+                f"Stage-2 session, 2026-10-28: attempt abc123 · model glm-5.3-flash · "
+                f"endpoint glm-coding-plan · leak check clean over 7 files · dispatch {state}."
+            )
+        )
+        assert len(rows) == 1
+        row = rows[0]
+        assert "attempt abc123" in row and "model glm-5.3-flash" in row
+        assert "endpoint glm-coding-plan" in row and "route not read" in row
+        assert f"dispatch {state.split()[0]}" in row
+        assert "verdict not recorded" not in row and "PRIVATE_DETAIL" not in row
+
+
+def test_change_listing_failure_keeps_live_block(tmp_path: Path, capsys, monkeypatch) -> None:
+    proc = proc_fixture(tmp_path)
+    code, out = run_main(tmp_path, capsys, proc_dir=proc)
+    assert code == 0
+    assert "change list: not read (plans/changes:" in out and "live figures:" in out
+    changes = tmp_path / "plans" / "changes"
+    changes.mkdir(parents=True)
+    original = Path.iterdir
+
+    def denied(path):
+        if path == changes:
+            raise PermissionError("PRIVATE_DETAIL")
+        return original(path)
+
+    monkeypatch.setattr(Path, "iterdir", denied)
+    code, out = run_main(tmp_path, capsys, proc_dir=proc)
+    assert code == 0 and "change list: not read (plans/changes:" in out
+    assert "live figures:" in out and "PRIVATE_DETAIL" not in out
+
+
+def test_runner_options_with_values_do_not_hide_change() -> None:
+    for command in (
+        "python3 scripts/stage2.py implement --stage2-off reason alpha",
+        "python3 scripts/stage2.py session --model glm-5.3-flash alpha",
+        "python3 scripts/stage2.py session --model=glm-5.3-flash alpha",
+    ):
+        rows = run_report.parse_processes(ps_output(f"123 00:10 {command}"), frozenset({"alpha"}))
+        assert len(rows) == 1 and rows[0].change == "alpha"
+
+
+def test_shebang_runner_is_matched_without_matching_wrapper() -> None:
+    rows = run_report.parse_processes(
+        ps_output(
+            "123 00:10 ./scripts/stage2.py implement alpha",
+            "124 00:10 echo ./scripts/stage2.py implement alpha",
+            "125 00:10 sh -c ./scripts/stage2.py implement alpha",
+        ),
+        frozenset({"alpha"}),
+    )
+    assert [(row.pid, row.change) for row in rows] == [("123", "alpha")]
+
+
+def test_unread_meminfo_names_each_missing_reading(tmp_path: Path) -> None:
+    snapshot = run_report.linux_memory(tmp_path)
+    assert "not read" in snapshot.available and "MemAvailable/MemTotal" in snapshot.available
+    assert "not read" in snapshot.compressed and "Zswap/MemTotal" in snapshot.compressed
+
+
+def test_plan_failure_preserves_independent_findings_calls(tmp_path: Path) -> None:
+    folder = make_change(tmp_path, "alpha", findings=findings_text(call_line()))
+    for unreadable in (False, True):
+        if unreadable:
+            (folder / "plan.md").write_bytes(b"\xff")
+        out = "\n".join(run_report.change_block(folder, "alpha"))
+        assert "plan: not read" in out
+        assert "call: draft · attempt 1 · route codex" in out
+        assert "time recorded: 0" not in out
+
+
+def test_time_failure_preserves_runner_reason(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.md"
+    reading, reason = run_report.read_time(plan)
+    assert not reading.section_read and "cannot be read" in reason
+    plan.write_text("# No time section\n", encoding="utf-8")
+    reading, reason = run_report.read_time(plan)
+    assert not reading.section_read and "has no `## Time used` heading" in reason
+
+
+def test_readable_appetite_survives_unrelated_card_defect(tmp_path: Path) -> None:
+    text = plan_text(appetite="2 hours", time_body=runner_line(seconds=3600))
+    for defective in (
+        text.replace("Pre-mortem:  demo.\n", ""),
+        text.replace("Not now:     demo.\nPre-mortem:  demo.", "Pre-mortem:  demo.\nNot now:     demo."),
+    ):
+        assert stage2.card_problem(defective) is not None
+        folder = make_change(tmp_path, "alpha", plan=defective)
+        out = "\n".join(run_report.change_block(folder, "alpha"))
+        assert "appetite: 7200 s" in out
+        assert "at or over half the appetite" in out

@@ -146,7 +146,14 @@ Research records Stage-2 explore on route `flash`, endpoint
 `glm-coding-plan`, model `glm-5.3-flash`, on 2026-10-28. No Stage-1 fallback
 is recorded. The stopped low-memory attempt is evidence, not a fallback.
 
+## Runner route — 2026-10-29
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-28 22:41:23–23:33:17 UTC, 3114 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-28 23:33:23–23:49:18 UTC, 955 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-10-29 00:23:13–00:36:13 UTC, 780 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-29 00:36:20–00:48:46 UTC, 746 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-29 00:48:52–01:00:59 UTC, 727 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

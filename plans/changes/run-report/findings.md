@@ -200,3 +200,44 @@ Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-29: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 733 files, 2540 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2541 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/run_report.py` +35 -23
+> - `tests/test_run_report.py` +103 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/run_report.py`, `tests/test_run_report.py`.
+> - L1-6: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/run-report/stage2/attempts/run-report/attempt-1-20261029T002307262083Z-f1844ea4.md
+> ```
+
+Stage-2 call, 2026-10-29: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 733 files, 2543 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-6: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/run-report/stage2/attempts/run-report/attempt-2-20261029T002307262083Z-f1844ea4.md
+> ```
+
+Stage-2 call, 2026-10-29: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 733 files, 2543 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-6: tests/test_run_report.py::test_shebang_runner_is_matched_without_matching_wrapper: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/run-report/stage2/attempts/run-report/attempt-3-20261029T002307262083Z-f1844ea4.md
+> ```

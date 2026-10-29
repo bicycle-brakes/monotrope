@@ -96,7 +96,7 @@ def active_changes(root: Path) -> list[str]:
     try:
         entries = sorted((root / CHANGES_DIR).iterdir())
     except OSError:
-        return []
+        raise SourceError("not read (plans/changes: change list cannot be read)") from None
     real = [entry for entry in entries if entry.name != ARCHIVE and entry.is_dir() and not entry.is_symlink()]
     return sorted(entry.name for entry in real)
 
@@ -191,6 +191,8 @@ def parse_time_line(content: str) -> TimeRecord | None:
         )
     if " s — " in body:
         return None  # runner-shaped but broken: unread, never re-derived from its endpoints
+    if re.search(r"\b(?:about|approx(?:imate(?:ly)?)?\.?|unmeasured|not measured)\b", body, re.IGNORECASE):
+        return None  # exact-looking endpoints do not turn an explicitly guessed record into evidence
     matched = DATED_SECONDS.fullmatch(body)
     if matched:
         return TimeRecord(seconds=int(matched.group("seconds")))
@@ -208,10 +210,8 @@ def read_time(plan: Path) -> tuple[TimeReading, str]:
     """The plan's time section, read through the runner's own `time_log`."""
     try:
         section = stage2.time_log(plan)
-    except stage2.Refused:
-        return TimeReading(section_read=False), "the plan has no readable time section"
-    except OSError:
-        return TimeReading(section_read=False), "the plan cannot be read"
+    except stage2.Refused as error:
+        return TimeReading(section_read=False), str(error)
     reading = TimeReading(section_read=True)
     for raw in section.splitlines():
         content = raw.strip()
@@ -264,8 +264,8 @@ def appetite_seconds(value: str | None) -> int | None:
 def card_appetite_value(plan_text: str) -> str | None:
     """The opening card's Appetite value, or None (report-local lift of the one line).
 
-    `stage2.card_problem` has said the card opens the plan; this only lifts its
-    Appetite line, recognised through the runner's own `CARD_LABELS`.
+    Lift only the Appetite line, recognised through the runner's own
+    `CARD_LABELS`; defects in other labels do not invalidate this reading.
     """
     body = re.sub(r"\A---\n.*?\n---\n", "", plan_text, count=1, flags=re.S)
     head = re.split(r"^## ", body, maxsplit=1, flags=re.M)[0]
@@ -301,25 +301,23 @@ def call_rows(findings_text: str) -> list[str]:
         matched = stage2_runs.CALL_LINE.match(line)
         kind = matched.group(1) if matched else ""
         rest = matched.group("rest") if matched else ""
-        if kind == "session":
-            fields = dict.fromkeys(CALL_FIELDS, NOT_READ)
-            rows.append(
-                f"  call: session · attempt {fields['attempt']} · route {fields['route']}"
-                f" · endpoint {fields['endpoint']} · model {fields['model']} · verdict not recorded"
-            )
-            continue
         cells = rest.split(" · ")
-        verb = cells[0].strip() if len(cells) > 1 else ""
+        verb = "session" if kind == "session" else cells[0].strip() if len(cells) > 1 else ""
         if not verb or len(verb) > FIELD_CAP:
             verb = "unparsed"
         fields = dict.fromkeys(CALL_FIELDS, NOT_READ)
-        for cell in cells[1:]:
+        verdict = "verdict not recorded"
+        for cell in cells if kind == "session" else cells[1:]:
             key, _, value = cell.partition(" ")
             if key in CALL_FIELDS and 0 < len(value) <= FIELD_CAP:
                 fields[key] = value.strip()
+            if kind == "session":
+                dispatch = re.fullmatch(r"dispatch (accepted|pending|failed)(?: \(.*\))?\.", cell)
+                if dispatch:
+                    verdict = f"dispatch {dispatch.group(1)}"
         rows.append(
             f"  call: {verb} · attempt {fields['attempt']} · route {fields['route']}"
-            f" · endpoint {fields['endpoint']} · model {fields['model']} · verdict not recorded"
+            f" · endpoint {fields['endpoint']} · model {fields['model']} · {verdict}"
         )
     return rows
 
@@ -362,7 +360,22 @@ def _stage2_row(tokens: list[str], pid: str, elapsed: str, changes: frozenset[st
         return None  # an argument of another program, not an invocation
     verb = tokens[script + 1]
     change = NOT_READ
-    for token in tokens[script + 2 :]:
+    arguments = iter(tokens[script + 2 :])
+    value_options = {
+        "--stage2-off",
+        "--model",
+        "--class",
+        "--availability-reported",
+        "--seats",
+        "--handover",
+        "--stage-failed",
+        "--reason",
+        "--root",
+    }
+    for token in arguments:
+        if token in value_options:
+            next(arguments, None)
+            continue
         if token.startswith("-"):
             continue  # options may stand between the verb and the change
         if token in changes:
@@ -487,8 +500,11 @@ def linux_memory(proc_dir: Path) -> MemorySnapshot:
     try:
         text = (proc_dir / "meminfo").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        reason = _not_read("meminfo", "unreadable")
-        return MemorySnapshot(available=reason, available_percent=None, compressed=reason)
+        return MemorySnapshot(
+            available=_not_read("meminfo", "MemAvailable/MemTotal unreadable"),
+            available_percent=None,
+            compressed=_not_read("meminfo", "Zswap/MemTotal unreadable"),
+        )
     fields = {name: int(value) for name, value in MEMINFO.findall(text)}
     total = fields.get("MemTotal") or 0
     free = fields.get("MemAvailable")
@@ -525,7 +541,6 @@ def change_block(folder: Path, name: str) -> list[str]:
     plan_text, plan_reason = read_text(plan)
     if plan_text is None:
         out.append(f"  plan: not read ({plan_reason})")
-        return out
     reading, time_reason = read_time(plan)
     if reading.section_read:
         for record in reading.attempts:
@@ -547,7 +562,7 @@ def change_block(folder: Path, name: str) -> list[str]:
         if rows:
             out.append("  (the call lines are evidence of a call, not measured attempts)")
     appetite = None
-    if stage2.card_problem(plan_text) is None:
+    if plan_text is not None:
         appetite = appetite_seconds(card_appetite_value(plan_text))
     if appetite is None:
         out.append("  appetite not read (the opening card gives no readable positive budget)")
@@ -604,7 +619,11 @@ def report_text(
     """The whole report as text; sources fail independently and the exit stays zero."""
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [f"run report — {stamp} (UTC snapshot · local, read-only · not a gate)"]
-    names = active_changes(root)
+    try:
+        names = active_changes(root)
+    except SourceError as error:
+        names = []
+        lines.append(f"change list: {error}")
     known = frozenset(names)
     if selection is None:
         chosen = names
