@@ -4987,11 +4987,21 @@ def _cheap_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
 
     As `verify_evidence`: the complete concatenated streams are checked before any reduction, and
     a refusal of that protection propagates - a red attempt whose output cannot be made publishable
-    stops the run instead of passing silently (spec, criterion 6).
+    stops the run instead of passing silently (spec, criterion 6). The streams are then tailed apart,
+    as `verify_evidence` tails standard error: a long standard error (a worker crash, plugin
+    warnings) must not push pytest's `FAILED` summary on standard output out of the evidence and of
+    the next attempt's selection (review rows L4-3, L5-1, L8-1).
     """
     raw_stdout = done.stdout or ""
-    output, _boundary = _protect_diagnostics(raw_stdout + (done.stderr or ""), key, len(raw_stdout))
-    return scrub("\n".join(output.splitlines()[-TAIL_LINES:]), key)
+    output, boundary = _protect_diagnostics(raw_stdout + (done.stderr or ""), key, len(raw_stdout))
+    stdout, stderr = output[:boundary], output[boundary:]
+    evidence = "\n".join(stdout.splitlines()[-TAIL_LINES:])
+    errors = stderr.splitlines()
+    if errors:
+        cut = len(errors) - STDERR_LINES
+        kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
+        evidence += ("\n\n" if evidence else "") + "Standard error, last lines:\n" + "\n".join(kept)
+    return scrub(evidence, key)
 
 
 def _cheap_ruff(root: Path, env: dict[str, str], key: str | None, targets: list[str]) -> str | None:

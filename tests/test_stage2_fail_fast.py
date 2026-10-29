@@ -10,6 +10,7 @@ starts a real model, a real ruff or a real pytest.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -607,3 +608,20 @@ def test_an_error_inside_the_cheap_checks_is_named_as_theirs(world: World, monke
     assert world.run("implement") == 1
     assert "the cheap checks could not run" in world.text()
     assert "could not be updated" not in world.text()
+
+
+def test_long_standard_error_keeps_the_failed_ids_of_a_cheap_run() -> None:
+    """Rows L4-3, L5-1, L8-1. Planted fault: one tail over stdout and stderr concatenated let a long
+    standard error push pytest's `FAILED` summary out of the cheap evidence and the retry selection."""
+    summary = [f"tests/test_x.py::test_{n} PASSED" for n in range(200)] + [
+        "FAILED tests/test_x.py::test_a - assert 1 == 2",
+        "FAILED tests/test_x.py::test_b[p - q] - boom",
+        "= 2 failed, 198 passed =",
+    ]
+    noise = [f"worker gw{n % 4} warning line {n}" for n in range(stage2.TAIL_LINES * 2)]
+    done = subprocess.CompletedProcess(["pytest"], 1, "\n".join(summary) + "\n", "\n".join(noise) + "\n")
+    evidence = stage2._cheap_evidence(done, None)
+    assert stage2.failed_test_ids([evidence]) == ["tests/test_x.py::test_a", "tests/test_x.py::test_b[p - q]"]
+    assert noise[-1] in evidence, "the last line of standard error is still shown"
+    assert noise[0] not in evidence, "standard error stays bounded"
+    assert len(evidence.splitlines()) <= stage2.TAIL_LINES + stage2.STDERR_LINES + 3

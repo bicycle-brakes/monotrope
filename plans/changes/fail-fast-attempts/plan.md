@@ -220,3 +220,5 @@ Appetite stop at 14164 s of 4 h (2026-10-28 18:2x UTC, three implement attempts 
 2026-10-28 23:05:10–23:06:57 UTC, 107 s — review loop round 5 · rows L5-2, L5-3 repaired by the orchestrator, each test red first · measured with `date -u`
 2026-10-29 00:23:31–00:24:33 UTC, 62 s — review loop round 6 · rows L6-1 (test red first), L6-3, L6-4 repaired by the orchestrator · measured with `date -u`
 2026-10-29 01:26:37–01:27:32 UTC, 55 s — review loop round 7 · row L7-2 repaired by the orchestrator, test red first · measured with `date -u`
+Maintainer decision 2026-10-29: the structural remedy for the mechanism of review rows L4-3, L5-1 and L8-1 (failed-test ids and cheap evidence read from one bounded tail of stdout and stderr concatenated) joins this change; appetite +30 min, 6.0 hours in total.
+2026-10-29 07:28:55–07:31:00 UTC, 125 s — structural remedy for rows L4-3, L5-1, L8-1: `_cheap_evidence` tails stdout and stderr apart, as `verify_evidence` does; repaired by the orchestrator, test red first · measured with `date -u`
