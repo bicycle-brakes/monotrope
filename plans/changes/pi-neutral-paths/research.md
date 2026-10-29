@@ -9,20 +9,18 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-29"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+class: bounded
 ---
 
 # pi neutral paths — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md). The
+section below is the runner's exploration, appended as GLM 5.3 Flash answered
+it; its first sentence and its closing process note are the model's own words.
 
 Stage-2 call, 2026-10-29: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 728 files, 2557 commits, 12 rules.
 
