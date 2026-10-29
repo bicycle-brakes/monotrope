@@ -471,3 +471,14 @@ Kept from the loop record:
 Stage-2 call, 2026-10-29: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2651 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2654 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2668 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-29
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-6 | MINOR | SPEC | Phase 6 | scripts/run_report.py:527–530 | With injected macOS readings of 300 occupied compressor pages, 16384 bytes per page and 1638400 physical bytes, the report prints `300.0% of physical memory` as valid compressed memory. Reject compressor usage exceeding physical memory as `not read`, while preserving independent readings. [Acceptance criteria 9 and 11] | Codex | open | — |
+
+Phase 6 verdict: codex 01a189bb-a242-7810-8622-8e2fb32525c5, 2026-10-29
+Reviewer session: codex 01a189bb-a242-7810-8622-8e2fb32525c5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
