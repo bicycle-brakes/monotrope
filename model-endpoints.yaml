@@ -192,10 +192,10 @@ endpunkte:
       - qwen3.8-max
     modelle_terms:
       deepseek-v4.1-flash:
-        gelesen: "2026-10-25"
+        gelesen: "2026-10-29"
         valid_until: "2026-10-31"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31)"
+        quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31; re-read 2026-10-29, no renewal published)"
         training: "Not used"
         anfragen_5h: 34670
         anfragen_gelesen: "2026-10-17"
@@ -272,10 +272,10 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       deepseek-v4-pro:
-        gelesen: "2026-10-25"
+        gelesen: "2026-10-29"
         valid_until: "2026-10-31"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31)"
+        quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31; re-read 2026-10-29, no renewal published)"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
@@ -486,6 +486,20 @@ endpunkte:
       implementation diff only: no tools and no other content, and no paid
       model, Zen id or interactive session on that acceptance (ADR 0021,
       decision 3).
+      Privacy table re-read 2026-10-29 (https://opencode.ai/v2/docs/console/go/,
+      where https://opencode.ai/docs/go now redirects): both DeepSeek rows
+      still read training "Not used" and retention "0 days*", and the
+      footnote still reads "ZDR agreement is renewed monthly. The current
+      agreement is valid through October 31, 2026." No renewal is published,
+      so both readings keep that end date (ADR 0022, point 4) and expire on
+      2026-11-01 unless a later re-read names a new one. New on the page:
+      workspace privacy settings allow the regions Europe and United States
+      by default, and the DeepSeek models need the region Global enabled;
+      the page names no country for Global. DeepSeek's own privacy policy
+      (last updated 2026-02-10, read 2026-10-29) states that it processes and
+      stores personal data in the People's Republic of China and mentions no
+      zero-retention agreement; the agreement is evidenced by the Go page
+      alone.
 
 # ---------------------------------------------------------------------------
 # Der Recherche-Schwarm (ADR 0020, vorgeschlagen bis zum Merge) — wer in welcher Rolle laeuft
