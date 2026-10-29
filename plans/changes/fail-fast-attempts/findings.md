@@ -562,3 +562,5 @@ Notice: the data terms of deepseek-v4.1-flash expire on 2026-10-31 (2 days left)
 Notice: the data terms of deepseek-v4-pro expire on 2026-10-31 (2 days left).
 
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 718 files, 2540 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 718 files, 2546 commits, 12 rules.
