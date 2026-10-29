@@ -5100,13 +5100,16 @@ def _test_functions(source: str, filename: str) -> dict[str, str]:
 
 def _top_level_names(source: str, filename: str) -> set[str]:
     """A test file's standing names: top-level functions and classes, and `Class::method` for each
-    method of a top-level class; parsed, never imported."""
+    method of a top-level class; parsed, never imported. A class with a base also stands as
+    `Class::*`: its inherited tests are not visible to the parse (review row F6-3)."""
     tree = ast.parse(source, filename=filename)
     names: set[str] = set()
     for node in tree.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             names.add(node.name)
         if isinstance(node, ast.ClassDef):
+            if node.bases:
+                names.add(f"{node.name}::*")
             names.update(
                 f"{node.name}::{item.name}"
                 for item in node.body
@@ -5119,7 +5122,9 @@ def _id_stands(rest: str, names: set[str]) -> bool:
     """Whether a node id's part after the file names a standing test: `test_x[...]` or
     `Class::method[...]` (review row L5-2); a deeper id is judged by its first two parts."""
     parts = rest.split("[", 1)[0].split("::")
-    return "::".join(parts[:2]) in names if len(parts) > 1 else parts[0] in names
+    if len(parts) > 1:
+        return "::".join(parts[:2]) in names or f"{parts[0]}::*" in names
+    return parts[0] in names
 
 
 def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
@@ -5172,7 +5177,9 @@ def selected_tests(
             if posix not in standing:
                 standing[posix] = _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
             if not rest or _id_stands(rest, standing[posix]):
-                targets.add(ident)
+                # The function, not its parameter: a retry may rename a parameter, and pytest
+                # refuses the whole run on an id it no longer collects (review row F6-2).
+                targets.add(ident.split("[", 1)[0])
         # A whole file covers its ids, but only those whose function stands in it: a ledger test
         # the new file lacks stays a target, so pytest names it missing (review row L3-1).
         whole = {target for target in targets if "::" not in target}

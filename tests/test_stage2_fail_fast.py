@@ -457,7 +457,8 @@ def test_a_retry_drops_a_failed_test_the_attempt_removed(world: World) -> None:
     previous = ["tests/test_r.py::test_old", "tests/test_r.py::test_keep", "tests/test_r.py::test_keep[1]"]
     targets, fault = stage2.selected_tests(world.root, env, plan, previous)
     assert fault is None
-    assert targets == ["tests/test_r.py::test_keep", "tests/test_r.py::test_keep[1]", "tests/test_r.py::test_new"]
+    # A failed parameter id is selected by its function (review row F6-2).
+    assert targets == ["tests/test_r.py::test_keep", "tests/test_r.py::test_new"]
 
 
 def test_a_timed_out_cheap_pytest_names_its_selected_tests(world: World, monkeypatch) -> None:
@@ -625,3 +626,39 @@ def test_long_standard_error_keeps_the_failed_ids_of_a_cheap_run() -> None:
     assert noise[-1] in evidence, "the last line of standard error is still shown"
     assert noise[0] not in evidence, "standard error stays bounded"
     assert len(evidence.splitlines()) <= stage2.TAIL_LINES + stage2.STDERR_LINES + 3
+
+
+def test_a_retry_selects_a_failed_parametrized_test_by_its_function(world: World) -> None:
+    """Row F6-2. Planted fault: a failed `test_case[old]` was kept after the retry renamed its
+    parameter, and pytest refused the whole cheap run with `not found`."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_p.py").write_text(
+        "import pytest\n\n\n@pytest.mark.parametrize('v', ['old'])\ndef test_case(v):\n    assert v\n"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a parametrized test")
+    (tests / "test_p.py").write_text(
+        "import pytest\n\n\n@pytest.mark.parametrize('v', ['new'])\ndef test_case(v):\n    assert v\n"
+    )
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    previous = ["tests/test_p.py::test_case[old]"]
+    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous)
+    assert fault is None
+    assert targets == ["tests/test_p.py::test_case"]
+
+
+def test_a_retry_keeps_a_failed_inherited_test_of_a_derived_class(world: World) -> None:
+    """Row F6-3. Planted fault: `TestDerived::test_case`, inherited from a base class, was dropped
+    from the retry because only directly declared methods counted as standing."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    source = "class TestBase:\n    def test_case(self):\n        assert 1\n\n\nclass TestDerived(TestBase):\n    pass\n"
+    (tests / "test_i.py").write_text(source)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an inherited test")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    previous = ["tests/test_i.py::TestDerived::test_case"]
+    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous)
+    assert fault is None
+    assert targets == ["tests/test_i.py::TestDerived::test_case"]
