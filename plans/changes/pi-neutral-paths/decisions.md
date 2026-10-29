@@ -65,15 +65,28 @@ context: |
   and wait.
   Architecture change: (a) adds one extension file beside the path lock;
   (b) changes where Pi is installed and run.
-asked: not yet asked
-status: open
+asked: 2026-10-29, through the orchestrating session of the day run
+answer: "option (a): a small Pi extension, loaded with -e at every Pi start with model contact, sets cwd to a neutral value and suppresses <docs> through before_agent_start"
+answered_by: maintainer
+status: answered
 
-Recommendation: (a). It uses Pi's declared extension API, leaves the working
-directory and the path lock as they are, and adds one file. Its risk: an
-extension that rewrites the prompt is code inside the trust boundary, and a
-Pi upgrade can change the hook; a capture check on the outgoing payload
-(criterion owed by the spec) catches both. This is a `[DECISION]` for the
-maintainer; the spec waits for it.
+The maintainer answered on 2026-10-29 at about 12:10 UTC; the orchestrating
+session of the day run relayed the answer, and this record copies it from
+that relay. The recommendation put to the maintainer was (a): it uses Pi's
+declared extension API, leaves the working directory and the path lock as
+they are, and adds one file. Its risk: an extension that rewrites the prompt
+is code inside the trust boundary, and a Pi upgrade can change the hook; a
+capture check on the outgoing payload (criterion owed by the spec) catches
+both.
+
+In the context of Pi's own system prompt, facing a pinned Pi with no flag to
+drop its `<cwd>` and `<docs>` sections, we decided that one small extension,
+loaded with `-e` by every Pi start with model contact, sets the prompt's
+working directory to a neutral value and suppresses the documentation
+section through `before_agent_start`, to achieve that no local path leaves
+the machine in Pi's prompt, accepting that the extension is code in the
+trust boundary and must be re-checked on every Pi upgrade.
+— 2026-10-29
 
 ## Decided by the agent
 
