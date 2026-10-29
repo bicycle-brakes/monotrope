@@ -205,7 +205,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/pi-neutral-paths/decisions.md`](changes/pi-neutral-paths/decisions.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/findings.md`](changes/pi-neutral-paths/findings.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/plan.md`](changes/pi-neutral-paths/plan.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
 | [`changes/pi-neutral-paths/research.md`](changes/pi-neutral-paths/research.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/spec.md`](changes/pi-neutral-paths/spec.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
 | [`changes/pi-pin/decisions.md`](changes/pi-pin/decisions.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/design.md`](changes/pi-pin/design.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/findings.md`](changes/pi-pin/findings.md) | draft | none | 2026-10-15 | coding-harness-agx |
