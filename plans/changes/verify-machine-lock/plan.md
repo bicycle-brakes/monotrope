@@ -156,6 +156,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash rejected twice (2 tests left red); the Sonnet attempt 3 stopped at the Claude five-hour limit; maintainer 2026-10-29: +1 h appetite, continue on Sonnet from the saved attempt 3 (49209675); about 2.7 of 4 h used.
 
+## Runner route — 2026-10-29
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: one test left red (test_local_checks_preserve_nested_admission: a local check must pass an inherited valid marker on unchanged); macOS memory reader fixed by the orchestrator (240b1f89); maintainer 2026-10-29: +1 h appetite on Sonnet; about 3.2 of 4 h used.
+
 ## Time used
 
 2026-10-29 08:48:20–10:17:53 UTC, 5373 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner

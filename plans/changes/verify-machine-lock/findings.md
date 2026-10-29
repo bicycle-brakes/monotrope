@@ -510,3 +510,5 @@ Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one test left red (test_local_checks_preserve_nested_admission: a local check must pass an inherited valid marker on unchanged); macOS memory reader fixed by the orchestrator (240b1f89); maintainer 2026-10-29: +1 h appetite on Sonnet; about 3.2 of 4 h used · leak check clean over 738 files, 2630 commits, 12 rules.
