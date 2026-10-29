@@ -566,3 +566,11 @@ Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model hy4-previ
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 718 files, 2546 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 718 files, 2552 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 718 files, 2558 commits, 12 rules.
+
+Loop attempt: 2026-10-29 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of deepseek-v4.1-flash expire on 2026-10-31 (2 days left).
+
+Notice: the data terms of deepseek-v4-pro expire on 2026-10-31 (2 days left).
