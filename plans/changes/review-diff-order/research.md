@@ -9,7 +9,10 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-ut8q
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-29"}
+review: {status: pending, approved_by: null, approved_at: null}
+class: bounded
 tags: [research]
 ---
 
@@ -70,3 +73,17 @@ Research complete. Below is the prose for `plans/changes/review-diff-order/resea
 ---
 
 For you (the orchestrator/maintainer), the one open item before phase 1a: the three options in `docs/research/2026-10-29-review-diff-cut.md` are recorded as the maintainer's choice (they touch ADR 0021); the 2026-10-29 handover's recommendation (exclude the loop's own records + code/tests first, as one bounded change) is written down but not yet answered.
+
+## Objective and the decision recorded after exploration
+
+The work item (coding-harness-ut8q): a phase-4b reviewer receives at most
+2000 lines of the change diff, and a round over a cut diff never ends the
+loop cleanly. The measurement of 2026-10-29
+(`docs/research/2026-10-29-review-diff-cut.md`) showed that the cut drops the
+tests, because the change's own workflow files come first in Git's path order.
+
+The open item above — which option — was answered by the maintainer on
+2026-10-29 (recorded in the work item's notes and in `decisions.md`, Q-1):
+one change that leaves `findings.md` and `plans/INDEX.md` out of the
+review-loop diff and puts code and tests first. Splitting the diff across
+reviewers is not part of it.
