@@ -484,3 +484,20 @@ Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-29: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 733 files, 2642 commits, 12 rules.
 
 Stage-2 call, 2026-10-29: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 733 files, 2645 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2650 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/pr_sync.py` +1 -1
+> - `tests/test_pr_sync.py` +46 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L6-4: tests/test_pr_sync.py::test_local_merge_refuses_unsafe_checkout: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/index-merge-regenerates/stage2/attempts/index-merge-regenerates/attempt-1-20261029T192044406614Z-bffebc7a.md
+> ```
+
+Stage-2 call, 2026-10-29: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 733 files, 2652 commits, 12 rules.

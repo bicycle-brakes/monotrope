@@ -822,7 +822,7 @@ def classify_skip(pull: Pull, held: list[str]) -> str | None:
     if any(label.casefold() == "decision" for label in pull.labels):
         return "protected: decision pull request (label: decision)"
     if pull.title.casefold().startswith("decide("):
-        return "protected: decision pull request (title starts with decide()"
+        return "protected: decision pull request (title starts with `decide(`)"
     hits = sorted({path for path in pull.files if path_is_held(path, held)})
     if hits:
         return "protected: runner-held or human-decided paths: " + ", ".join(hits)
@@ -908,6 +908,7 @@ def merge_main(root: Path) -> int:
         if current_branch(root) != branch or git_out(root, "rev-parse", "HEAD").strip() != head:
             raise Failed("the checkout changed during the run; nothing was applied")
         try:
+            refuse_in_progress(root)
             ensure_clean(root)
         except Refused as error:
             print(f"refused: {error}")

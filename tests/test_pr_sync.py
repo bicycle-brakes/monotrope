@@ -916,6 +916,80 @@ def _pr_sync():
     return importlib.import_module("pr_sync")
 
 
+@pytest.mark.parametrize(
+    "state,timing",
+    [(state, "initial") for state in ("detached", "main", "MERGE_HEAD", "rebase-merge", "rebase-apply")]
+    + [(state, "before-apply") for state in ("MERGE_HEAD", "rebase-merge", "rebase-apply")],
+)
+def test_local_merge_refuses_unsafe_checkout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    state: str,
+    timing: str,
+) -> None:
+    """Row L6-4: unsafe checkouts are refused initially and before application.
+
+    Operation markers are planted in an otherwise clean checkout so that the
+    dirty-checkout guard cannot mask a missing merge/rebase guard. A marker
+    appearing during preparation must also prevent publishing the result.
+    """
+    m = _pr_sync()
+    world = World(tmp_path)
+    _branch_behind(world, "feat/refusal")
+    world.checkout("feat/refusal")
+    marker = None
+
+    def plant_state() -> None:
+        nonlocal marker
+        if state == "detached":
+            _git(world.work, "checkout", "--quiet", "--detach")
+        elif state == "main":
+            world.checkout("main")
+        else:
+            marker = Path(_git(world.work, "rev-parse", "--git-path", state))
+            if not marker.is_absolute():
+                marker = world.work / marker
+            if state == "MERGE_HEAD":
+                marker.write_text(_git(world.work, "rev-parse", "origin/main") + "\n", encoding="utf-8")
+            else:
+                marker.mkdir()
+
+    if timing == "initial":
+        plant_state()
+    else:
+        prepare = m.prepare_merge
+
+        def prepare_then_start_operation(*args, **kwargs):
+            prepared = prepare(*args, **kwargs)
+            plant_state()
+            return prepared
+
+        monkeypatch.setattr(m, "prepare_merge", prepare_then_start_operation)
+
+    before_head = _git(world.work, "rev-parse", "HEAD")
+    before_refs = _git(world.work, "show-ref", "--heads")
+    before_branch = _git(world.work, "symbolic-ref", "--quiet", "HEAD", check=False)
+    before_index = (world.work / "plans" / "INDEX.md").read_bytes()
+    assert _git(world.work, "status", "--porcelain=v1") == ""
+
+    result = m.merge_main(world.work)
+    output = capsys.readouterr().out
+
+    assert result == 2, output
+    reason = {"detached": "detached HEAD", "main": "main branch itself"}.get(state, f"({state})")
+    assert output.startswith("refused:") and reason in output, output
+    assert _git(world.work, "rev-parse", "HEAD") == before_head
+    assert _git(world.work, "show-ref", "--heads") == before_refs
+    assert _git(world.work, "symbolic-ref", "--quiet", "HEAD", check=False) == before_branch
+    assert _git(world.work, "status", "--porcelain=v1") == ""
+    assert (world.work / "plans" / "INDEX.md").read_bytes() == before_index
+    if marker is not None:
+        assert marker.exists(), "the helper removed the user's operation state"
+        if state == "MERGE_HEAD":
+            assert marker.read_text(encoding="utf-8") == _git(world.work, "rev-parse", "origin/main") + "\n"
+
+
 @pytest.mark.parametrize("race", ["untracked", "tracked", "staged", "branch", "head", "detached"])
 def test_local_merge_recheck_classifies_refusal_and_races(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, race: str
