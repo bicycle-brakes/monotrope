@@ -2067,7 +2067,9 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     ready = world.state / "holder-ready-nested"
     holder = _real_holder(ready)
     try:
-        holder_pid = _holder_acquired(ready)
+        _holder_acquired(ready)
+        # the supervisor publishes its own pid as the holder and hands that to its child
+        holder_pid = holder.pid
         monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
         world.script(make=[{"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []

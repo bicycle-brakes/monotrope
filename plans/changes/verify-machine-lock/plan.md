@@ -108,23 +108,23 @@ fallback was recorded. Basis: `spec.md` and the unchanged `decisions.md`.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_lock.py::test_independent_entries_share_one_machine_lock — protected intervals overlap across trees/entry kinds.
-- 2: not yet written tests/test_verify_lock.py::test_live_waiters_enter_in_registration_order — later live registration overtakes the first.
-- 3: not yet written tests/test_verify_lock.py::test_queue_wait_logs_live_holder_and_progress — initial/update logs or holder PID, command and time are absent.
-- 4: not yet written tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — waiting consumes execution time or a running hang escapes group cleanup.
-- 5: not yet written tests/test_verify_lock.py::test_only_live_ancestor_ownership_allows_nested_admission — genuine descendants block or false markers bypass.
-- 5: not yet written tests/test_stage2.py::test_local_checks_preserve_nested_admission — either post-run path or selected pytest path loses the marker/state root.
-- 6: not yet written tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission — a dead participant blocks or a protected child overlaps its successor.
-- 7: not yet written tests/test_verify_lock.py::test_platform_memory_readers_use_the_declared_percentage — the wrong field/formula or malformed percentage is accepted.
-- 8: not yet written tests/test_verify_lock.py::test_low_memory_wait_holds_exclusion_and_rechecks — work starts low, exclusion is dropped or 30-second rechecks/logs stop.
-- 9: not yet written tests/test_verify_lock.py::test_sustained_low_memory_refuses_at_the_bound — low readings outlast 3600 seconds or refusal omits percentages.
-- 9: not yet written tests/test_verify_lock.py::test_memory_recovery_before_deadline_starts_work — sufficient memory still refuses or never starts work.
-- 10: not yet written tests/test_verify_lock.py::test_unknown_memory_is_logged_and_does_not_block — a missing/failed/hung/malformed probe blocks or silently passes.
-- 11: not yet written tests/test_verify_lock.py::test_default_memory_floor_includes_equality — below 25 starts or exactly 25 waits.
-- 12: not yet written tests/test_verify_lock.py::test_memory_floor_override_is_validated_and_used — valid percentages are ignored or invalid values run work.
-- 13: not yet written tests/test_ci.py::test_guarded_runner_preserves_gate_verdicts_and_ci_selection — wrapper changes verdict/placement or CI bypasses admission.
+- 1: tests/test_verify_lock.py::test_independent_entries_share_one_machine_lock — protected intervals overlap across trees/entry kinds.
+- 2: tests/test_verify_lock.py::test_live_waiters_enter_in_registration_order — later live registration overtakes the first.
+- 3: tests/test_verify_lock.py::test_queue_wait_logs_live_holder_and_progress — initial/update logs or holder PID, command and time are absent.
+- 4: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — waiting consumes execution time or a running hang escapes group cleanup.
+- 5: tests/test_verify_lock.py::test_only_live_ancestor_ownership_allows_nested_admission — genuine descendants block or false markers bypass.
+- 5: tests/test_stage2.py::test_local_checks_preserve_nested_admission — either post-run path or selected pytest path loses the marker/state root.
+- 6: tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission — a dead participant blocks or a protected child overlaps its successor.
+- 7: tests/test_verify_lock.py::test_platform_memory_readers_use_the_declared_percentage — the wrong field/formula or malformed percentage is accepted.
+- 8: tests/test_verify_lock.py::test_low_memory_wait_holds_exclusion_and_rechecks — work starts low, exclusion is dropped or 30-second rechecks/logs stop.
+- 9: tests/test_verify_lock.py::test_sustained_low_memory_refuses_at_the_bound — low readings outlast 3600 seconds or refusal omits percentages.
+- 9: tests/test_verify_lock.py::test_memory_recovery_before_deadline_starts_work — sufficient memory still refuses or never starts work.
+- 10: tests/test_verify_lock.py::test_unknown_memory_is_logged_and_does_not_block — a missing/failed/hung/malformed probe blocks or silently passes.
+- 11: tests/test_verify_lock.py::test_default_memory_floor_includes_equality — below 25 starts or exactly 25 waits.
+- 12: tests/test_verify_lock.py::test_memory_floor_override_is_validated_and_used — valid percentages are ignored or invalid values run work.
+- 13: tests/test_ci.py::test_guarded_runner_preserves_gate_verdicts_and_ci_selection — wrapper changes verdict/placement or CI bypasses admission.
 - 13: tests/test_ci.py::test_runner_holds_no_command_list_of_its_own — shell adds a direct gate-script command.
-- 14: not yet written tests/test_verify_lock.py::test_unusable_or_aliased_state_refuses_before_work — broken state runs unlocked or a symlink target is modified.
+- 14: tests/test_verify_lock.py::test_unusable_or_aliased_state_refuses_before_work — broken state runs unlocked or a symlink target is modified.
 
 ## Verification and boundaries
 
@@ -151,7 +151,12 @@ or unrelated changes. `scripts/ci_gates.py` stays the sole gate-list reader.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-29
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash rejected twice (2 tests left red); the Sonnet attempt 3 stopped at the Claude five-hour limit; maintainer 2026-10-29: +1 h appetite, continue on Sonnet from the saved attempt 3 (49209675); about 2.7 of 4 h used.
+
 ## Time used
 
 2026-10-29 08:48:20–10:17:53 UTC, 5373 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-29 10:18:00–11:21:06 UTC, 3786 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-29 13:39:11–13:53:28 UTC, 857 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

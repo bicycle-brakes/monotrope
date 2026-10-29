@@ -392,3 +392,121 @@ Stage-2 call, 2026-10-29: implement · attempt 2 · route flash-repair · endpoi
 > ````
 
 Stage-2 call, 2026-10-29: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 738 files, 2595 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash rejected twice (2 tests left red); the Sonnet attempt 3 stopped at the Claude five-hour limit; maintainer 2026-10-29: +1 h appetite, continue on Sonnet from the saved attempt 3 (49209675); about 2.7 of 4 h used · leak check clean over 738 files, 2623 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +3 -1
+> - `tests/test_verify_lock.py` +15 -9
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 58 lines of this gate left out …]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 99%]
+> ..............                                                           [100%]
+> =================================== FAILURES ===================================
+> _________________ test_local_checks_preserve_nested_admission __________________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-machine-lock/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-5370/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-5370/popen-gw3/test_local_checks_preserve_nes0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bf0ec90>
+>
+>     def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
+>         # the selected pytest path loses the inherited marker or the shared state root, so the local
+>         # check queues for its own admission instead of reusing its ancestor's.
+>         ready = world.state / "holder-ready-nested"
+>         holder = _real_holder(ready)
+>         try:
+>             _holder_acquired(ready)
+>             # the supervisor publishes its own pid as the holder and hands that to its child
+>             holder_pid = holder.pid
+>             monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+>             world.script(make=[{"stdout": "green"}])
+>             assert stage2.verify_attempt(world.root, world.plan) == []
+>             make_env = world.calls("make")[0]["env"]
+>             assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+>             assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+>             assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+>             # and the draft post-run path preserves it too
+>             ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+>             problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+> >           assert problems == [], problems
+> E           AssertionError: ['`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)']
+> E           assert ['`plan.md` d...Pre-mortem:)'] == []
+> E             
+> E             Left contains one more item: '`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)'
+> E             Use -v to get more diff
+>
+> tests/test_stage2.py:2083: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] inheriting admission from pid 52644; no queue and no memory wait
+> [verify-lock] inheriting admission from pid 52644; no queue and no memory wait
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=39233) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-machine-lock/tests/test_stage2.py:16641: DeprecationWarning: This process (pid=39242) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_local_checks_preserve_nested_admission - As...
+> 1 failed, 4100 passed, 17 skipped, 5 warnings in 614.43s (0:10:14)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 21899 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````

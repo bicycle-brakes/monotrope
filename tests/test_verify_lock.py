@@ -252,9 +252,15 @@ def test_queue_wait_logs_live_holder_and_progress(
     monkeypatch.setattr(verify_lock, "QUEUE_POLL_SECONDS", 0.01)
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
 
+    seen: list[str] = []
+
+    def drain() -> list[str]:
+        """Everything logged so far: capsys hands each line over once, so keep what it gave."""
+        seen.extend(capsys.readouterr().err.splitlines())
+        return seen
+
     def waiting_lines() -> list[str]:
-        err = capsys.readouterr().err
-        return [line for line in err.splitlines() if "waiting for admission" in line]
+        return [line for line in drain() if "waiting for admission" in line]
 
     with fake_holder(state):
         admitted = threading.Event()
@@ -271,7 +277,7 @@ def test_queue_wait_logs_live_holder_and_progress(
             assert expected in first, f"the holder identity is missing from the wait log: {first}"
     assert admitted.wait(10.0), "the waiter was never admitted"
     thread.join(10.0)
-    assert re.search(r"\[verify-lock\] admitted", capsys.readouterr().err), "the admission was not logged"
+    assert re.search(r"\[verify-lock\] admitted", "\n".join(drain())), "the admission was not logged"
 
     with fake_holder(state, publish=False):
         anonymous = threading.Event()
@@ -282,9 +288,9 @@ def test_queue_wait_logs_live_holder_and_progress(
 
         thread_two = threading.Thread(target=second_waiter)
         thread_two.start()
-        assert _wait_until(
-            lambda: any("no active holder is published" in line for line in capsys.readouterr().err.splitlines())
-        ), "a wait without a published holder was not reported as such"
+        assert _wait_until(lambda: any("no active holder is published" in line for line in drain())), (
+            "a wait without a published holder was not reported as such"
+        )
     assert anonymous.wait(10.0), "the second waiter was never admitted"
     thread_two.join(10.0)
 
@@ -359,7 +365,7 @@ def test_only_live_ancestor_ownership_allows_nested_admission(tmp_path: Path, mo
     monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
     ticks = iter(range(0, 4000, int(verify_lock.MEMORY_POLL_SECONDS)))
     monkeypatch.setattr(verify_lock, "_now", lambda: next(ticks))
-    monkeypatch.setattr(verify_lock, "_sleep", lambda seconds: None)
+    monkeypatch.setattr(verify_lock, "_sleep", lambda _seconds: None)
     with (
         fake_holder(state, pid=os.getpid(), hold=False),
         pytest.raises(verify_lock.MemoryFloorRefused),
@@ -665,7 +671,7 @@ def test_default_memory_floor_includes_equality(tmp_path: Path, monkeypatch: pyt
     monkeypatch.setattr(verify_lock, "_sleep", waits.append)
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: 25.0)
     ran = False
-    with verify_lock.hold_admission(["exact", "floor"]) as owned:
+    with verify_lock.hold_admission(["exact", "floor"]):
         ran = True
     assert ran and waits == [], "an exact-floor reading waited"
 
@@ -693,7 +699,7 @@ def test_memory_floor_override_is_validated_and_used(tmp_path: Path, monkeypatch
     state = tmp_path / "state"
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
-    monkeypatch.setattr(verify_lock, "_sleep", lambda seconds: None)
+    monkeypatch.setattr(verify_lock, "_sleep", lambda _seconds: None)
     ticks = iter(range(0, 10**9, int(verify_lock.MEMORY_POLL_SECONDS)))
     monkeypatch.setattr(verify_lock, "_now", lambda: next(ticks))
 
