@@ -175,3 +175,16 @@ appetite of 45 minutes for the three taken rows. Then the loop runs to its
 end, followed by phase 6. The report already works for its main purpose:
 attempts, time against appetite and the half-way warning, measured on this
 change on 2026-10-28.
+
+## Resumed — 2026-10-29
+
+The maintainer granted a new appetite of 45 minutes for the three taken rows
+(2026-10-29). The repair took them in one Codex attempt (`f3a49d2e`, 793 s,
+red-first tests for each row, `make verify` green inside the runner).
+
+Review round 4, 07:42:39–07:42:49 UTC: refused by OpenCode Go with
+`GoUsageLimitError` (HTTP 429, "Go usage limit exceeded") on the round's
+first member, `hy3`; no round was written and no stage was consumed. Not
+retried. The loop therefore did not reach a clean round on this stand; the
+change goes to phase 6 with that gap named, and the next round runs when the
+Go limit has reset.
