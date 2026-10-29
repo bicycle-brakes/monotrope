@@ -5329,7 +5329,11 @@ def verify_attempt(
             formatted.append(line)
         # The attempt's own cheap checks, before anything derived: a planted fault stops here
         # (bead coding-harness-5tyh). Cheap green continues into the clearing below.
-        cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
+        try:
+            cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
+        except (OSError, RuntimeError, ValueError) as error:
+            # Named as the cheap checks' own failure, never as the ledger's (review row L7-2).
+            return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
         if cheap:
             return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
         check_criterion_ledger.clear_written(root, plan)

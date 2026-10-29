@@ -591,3 +591,19 @@ def test_a_git_failure_is_a_selection_fault_not_a_new_file(world: World, monkeyp
     targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n")
     assert targets is None
     assert fault is not None and "git show" in fault
+
+
+def test_an_error_inside_the_cheap_checks_is_named_as_theirs(world: World, monkeypatch) -> None:
+    """Row L7-2. Planted fault: an error escaping the cheap checks was reported as a ledger update failure."""
+
+    def exploding(*_args, **_kwargs):
+        raise RecursionError("maximum recursion depth exceeded while parsing")
+
+    monkeypatch.setattr(stage2, "cheap_checks", exploding)
+    world.script(
+        claude=[one_test_step(), {"stdout": "second"}, {"stdout": "third"}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert "the cheap checks could not run" in world.text()
+    assert "could not be updated" not in world.text()
