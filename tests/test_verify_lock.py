@@ -829,3 +829,56 @@ def test_the_macos_reader_parses_the_real_memory_pressure_line(monkeypatch: pyte
         verify_lock, "_memory_probe_output", lambda _command: "Pageouts: 1\n\nSystem-wide memory free percentage: 56%\n"
     )
     assert verify_lock.read_available_memory("darwin") == 56.0
+
+
+def test_a_marker_whose_holder_changed_during_the_probe_is_not_nested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rows L1-1, L1-12. Planted fault: the published holder was read once before the lock probe, so a
+    release and a stranger's fresh admission between the two reads let a stale marker pass as nested."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv(verify_lock.LOCK_ENV, "4242")
+    readings = iter([{"pid": 4242}, {"pid": 5151}])
+    monkeypatch.setattr(verify_lock, "read_holder", lambda _root=None: next(readings, {"pid": 5151}))
+    with fake_holder(state, pid=5151):
+        assert verify_lock.nested_holder_pid() is None
+
+
+def test_a_relative_state_home_is_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L1-3. Planted fault: a relative `XDG_STATE_HOME` resolved against each entry's working
+    directory, so entries started elsewhere lost the shared admission; the XDG rule ignores it."""
+    monkeypatch.setenv("XDG_STATE_HOME", "relative/state")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert verify_lock.state_base() == tmp_path / ".local" / "state"
+
+
+def test_release_keeps_the_lock_held_by_an_inherited_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row L1-11. Planted fault: release unlocked the shared lock description, so a protected
+    descendant still holding the inherited descriptor lost the lock and a successor could start."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
+    inherited = None
+    with verify_lock.hold_admission(["holder"]) as descriptor:
+        assert descriptor is not None
+        inherited = os.dup(descriptor)  # what a protected child inherits
+    probe = os.open(state / "coding-harness" / verify_lock.LOCK_NAME, os.O_RDONLY)
+    try:
+        with pytest.raises(OSError):
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(probe)
+        os.close(inherited)
+
+
+def test_zero_available_memory_on_linux_is_a_reading(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L1-14. Planted fault: `MemAvailable: 0` was treated as unmeasurable, so work started at
+    zero available memory instead of waiting below the floor."""
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:        4000000 kB\nMemAvailable:          0 kB\n", encoding="utf-8")
+    monkeypatch.setattr(verify_lock, "MEMINFO_PATH", meminfo)
+    assert verify_lock.read_available_memory("linux") == 0.0

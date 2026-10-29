@@ -156,7 +156,9 @@ def state_base() -> Path:
     and both sides resolve the same root.
     """
     base = os.environ.get("XDG_STATE_HOME")
-    return Path(base) if base else Path.home() / ".local" / "state"
+    # A relative value is ignored, as the XDG base-directory rule says: it would resolve against each
+    # entry's own working directory and split the shared admission (review row L1-3).
+    return Path(base) if base and Path(base).is_absolute() else Path.home() / ".local" / "state"
 
 
 def state_root() -> Path:
@@ -271,7 +273,11 @@ def nested_holder_pid() -> int | None:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            return pid
+            # Read the holder again after the probe: a release unpublishes before it unlocks and a
+            # new admission publishes after it locks, so an unchanged holder here means the lock
+            # seen held is still the marker's (review rows L1-1, L1-12).
+            again = read_holder()
+            return pid if again is not None and again.get("pid") == pid else None
         fcntl.flock(fd, fcntl.LOCK_UN)
         return None
     finally:
@@ -323,7 +329,7 @@ def read_available_memory(platform: str | None = None) -> float | None:
             if value is not None:
                 fields[key.strip()] = int(value.group(1))
         available, total = fields.get("MemAvailable"), fields.get("MemTotal")
-        if not available or not total:
+        if available is None or not total:
             return None
         return available / total * 100.0
     return None
@@ -395,8 +401,8 @@ class _Admission:
                 _ACTIVE = None
         with contextlib.suppress(OSError):
             (self.state.root / HOLDER_NAME).unlink()
-        with contextlib.suppress(OSError):
-            fcntl.flock(self.state.lock_fd, fcntl.LOCK_UN)
+        # Close, never unlock: the lock belongs to the open description, and a protected descendant
+        # that inherited it and outlived the group kill keeps it until it exits (review row L1-11).
         os.close(self.state.lock_fd)
         if self.record_name is not None:
             with _registry_lock(self.state), contextlib.suppress(OSError):
