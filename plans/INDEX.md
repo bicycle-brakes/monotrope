@@ -213,9 +213,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/pi-pin/spec.md`](changes/pi-pin/spec.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/plan-held-paths/decisions.md`](changes/plan-held-paths/decisions.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
 | [`changes/plan-held-paths/findings.md`](changes/plan-held-paths/findings.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
-| [`changes/plan-held-paths/plan.md`](changes/plan-held-paths/plan.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/plan.md`](changes/plan-held-paths/plan.md) | draft | partial | 2026-10-29 | coding-harness-h5tj |
 | [`changes/plan-held-paths/research.md`](changes/plan-held-paths/research.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
-| [`changes/plan-held-paths/spec.md`](changes/plan-held-paths/spec.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/spec.md`](changes/plan-held-paths/spec.md) | draft | partial | 2026-10-29 | coding-harness-h5tj |
 | [`changes/provenance-location/decisions.md`](changes/provenance-location/decisions.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/findings.md`](changes/provenance-location/findings.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
