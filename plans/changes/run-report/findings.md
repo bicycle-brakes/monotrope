@@ -424,8 +424,8 @@ Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-4 | MAJOR | MAINT | Phase 6 | scripts/run_report.py:51 | A missing or malformed `tools/pi/package.json` aborts the report during import: `stage2._pi_pin()` raises `SystemExit` before error handling starts. Reproduced with an injected missing manifest; no change or live block is printed, and the CLI exits nonzero. Preserve independent report sources when this runner configuration cannot be read. [Acceptance criterion 11] | Codex | taken — criterion 11: an unreadable or malformed `tools/pi/package.json` (the runner's import-time Pi pin) leaves the report running and names that source `not read` |  |
-| R6-5 | MINOR | SPEC | Phase 6 | scripts/run_report.py:541–550 | With `MemTotal: 1000 kB`, `MemAvailable: 2000 kB` and `Zswap: 3000 kB`, the Linux reader reports 200% available and 300% compressed memory. Reproduced with injected meminfo; neither invalid component says `not read`. Reject values exceeding their physical-memory denominator while preserving independent readings. [Acceptance criteria 9 and 11] | Codex | taken — criteria 9 and 11: a meminfo reading above `MemTotal` is `not read`, never a percentage over 100 |  |
+| R6-4 | MAJOR | MAINT | Phase 6 | scripts/run_report.py:51 | A missing or malformed `tools/pi/package.json` aborts the report during import: `stage2._pi_pin()` raises `SystemExit` before error handling starts. Reproduced with an injected missing manifest; no change or live block is printed, and the CLI exits nonzero. Preserve independent report sources when this runner configuration cannot be read. [Acceptance criterion 11] | Codex | fixed — tests/test_run_report.py::test_unread_pi_manifest_preserves_independent_report_sources |  |
+| R6-5 | MINOR | SPEC | Phase 6 | scripts/run_report.py:541–550 | With `MemTotal: 1000 kB`, `MemAvailable: 2000 kB` and `Zswap: 3000 kB`, the Linux reader reports 200% available and 300% compressed memory. Reproduced with injected meminfo; neither invalid component says `not read`. Reject values exceeding their physical-memory denominator while preserving independent readings. [Acceptance criteria 9 and 11] | Codex | fixed — tests/test_run_report.py::test_linux_memory_rejects_components_above_physical_total |  |
 
 Phase 6 verdict: codex 01a1891b-cda0-7e70-8fd9-f861dbfdd7aa, 2026-10-29
 Reviewer session: codex 01a1891b-cda0-7e70-8fd9-f861dbfdd7aa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -469,3 +469,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-29: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2651 commits, 12 rules.
+
+Stage-2 call, 2026-10-29: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 733 files, 2654 commits, 12 rules.

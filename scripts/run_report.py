@@ -48,8 +48,18 @@ from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import stage2  # noqa: E402
-import stage2_runs  # noqa: E402
+try:
+    import stage2  # noqa: E402
+except SystemExit:
+    # The runner refuses import when its Pi manifest cannot supply a pin.
+    # Reporting must still read independent sources, without replacing the
+    # unavailable shared parsers or echoing the runner's exception text.
+    stage2 = None
+
+if stage2 is not None:
+    import stage2_runs  # noqa: E402
+else:
+    stage2_runs = None
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHANGES_DIR = "plans/changes"
@@ -186,6 +196,8 @@ def parse_time_line(content: str) -> TimeRecord | None:
 
 def read_time(plan: Path) -> tuple[TimeReading, str]:
     """The plan's time section, read through the runner's own `time_log`."""
+    if stage2 is None:
+        return TimeReading(section_read=False), "runner time reader unavailable"
     try:
         section = stage2.time_log(plan)
     except stage2.Refused as error:
@@ -250,6 +262,8 @@ def card_appetite_value(plan_text: str) -> str | None:
     Lift only the Appetite line, recognised through the runner's own
     `CARD_LABELS`; defects in other labels do not invalidate this reading.
     """
+    if stage2 is None:
+        return None
     body = re.sub(r"\A---\n.*?\n---\n", "", plan_text, count=1, flags=re.S)
     head = re.split(r"^## ", body, maxsplit=1, flags=re.M)[0]
     lines = head.splitlines()
@@ -277,6 +291,8 @@ def call_rows(findings_text: str) -> list[str]:
     inferred (a clean leak check is not a completion), absent fields say
     `not read`, and rows are never joined on their attempt number.
     """
+    if stage2_runs is None:
+        return ["  calls: not read (runner call reader unavailable)"]
     rows = []
     for line in findings_text.splitlines():
         if not line.startswith(stage2_runs.CALL_PREFIXES):
@@ -310,7 +326,7 @@ def call_rows(findings_text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish"})
-KNOWN_VERBS = frozenset([*stage2.VERBS, "session", "prepare-explore"])
+KNOWN_VERBS = frozenset([*stage2.VERBS, "session", "prepare-explore"]) if stage2 is not None else frozenset()
 ETIME = re.compile(r"(?:\d+-)?\d{1,3}:\d{2}(?::\d{2})?")
 
 
@@ -538,18 +554,18 @@ def linux_memory(proc_dir: Path) -> MemorySnapshot:
     fields = {name: int(value) for name, value in MEMINFO.findall(text)}
     total = fields.get("MemTotal") or 0
     free = fields.get("MemAvailable")
-    if free is not None and total > 0:
+    if free is not None and total > 0 and free <= total:
         share = free / total * 100
         available = f"{share:.1f}% of physical memory (MemAvailable of MemTotal)"
         percent: float | None = share
     else:
-        available = _not_read("meminfo", "MemAvailable missing or MemTotal not positive")
+        available = _not_read("meminfo", "MemAvailable missing/out of range or MemTotal not positive")
         percent = None
     zswap = fields.get("Zswap")
-    if zswap is not None and total > 0:
+    if zswap is not None and total > 0 and zswap <= total:
         compressed = f"{zswap / total * 100:.1f}% of MemTotal (zswap, resident Zswap kB)"
     else:
-        compressed = _not_read("meminfo", "Zswap missing or MemTotal not positive")
+        compressed = _not_read("meminfo", "Zswap missing/out of range or MemTotal not positive")
     return MemorySnapshot(available=available, available_percent=percent, compressed=compressed)
 
 
@@ -591,7 +607,7 @@ def change_block(folder: Path, name: str) -> list[str]:
     else:
         rows = call_rows(findings_text)
         out.extend(rows)
-        if rows:
+        if rows and stage2_runs is not None:
             out.append("  (the call lines are evidence of a call, not measured attempts)")
     appetite = None
     if plan_text is not None:
@@ -618,6 +634,8 @@ def change_block(folder: Path, name: str) -> list[str]:
 def live_block(run: RunCommand, proc_dir: Path | None, changes: frozenset[str]) -> list[str]:
     """The live figures: one process table read and the platform's memory sources."""
     out = ["live figures:"]
+    if stage2 is None:
+        out.append("  runner processes: not read (runner verb definitions unavailable)")
     try:
         rows = parse_processes(run(["ps", "-axo", "pid,etime,command"]), changes)
     except SourceError as error:
@@ -651,6 +669,8 @@ def report_text(
     """The whole report as text; sources fail independently and the exit stays zero."""
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [f"run report — {stamp} (UTC snapshot · local, read-only · not a gate)"]
+    if stage2 is None:
+        lines.append("tools/pi/package.json: not read (runner configuration unavailable)")
     unread: list[str] = []
     try:
         names = active_changes(root, unread)

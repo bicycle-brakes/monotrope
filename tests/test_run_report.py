@@ -10,6 +10,7 @@ that turns it red; the fault is the ledger's em-dash text of its criterion.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -533,6 +534,75 @@ def test_source_failures_are_independent_bounded_and_exit_zero(tmp_path: Path, c
     assert "change: broken" in out
     assert any("plan: not read" in line for line in blocks(out)["broken"])
     assert "  time recorded: 600 s" in blocks(out)["alpha"]  # the other change is untouched
+
+
+def test_unread_pi_manifest_preserves_independent_report_sources(tmp_path: Path, capsys, monkeypatch) -> None:
+    """A rejected import-time Pi pin must not abort the CLI or leak its diagnostic."""
+    make_change(tmp_path, "alpha", plan=plan_text(time_body=runner_line()), findings="")
+    proc = proc_fixture(tmp_path)
+    original_read = Path.read_text
+    manifest = REPO_ROOT / "tools" / "pi" / "package.json"
+    for broken in (None, "SENTINEL-MANIFEST", "{}", '{"dependencies": []}', "\udcff"):
+
+        def read(path, *args, broken=broken, **kwargs):
+            if path == manifest:
+                if broken is None:
+                    raise FileNotFoundError(path)
+                if broken == "\udcff":
+                    raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+                return broken
+            return original_read(path, *args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, "read_text", read)
+            # Force the real stage2 import and its _pi_pin, even though this
+            # test file already imported the healthy module for its fixtures.
+            patch.delitem(sys.modules, "stage2", raising=False)
+            patch.delitem(sys.modules, "stage2_runs", raising=False)
+            spec = importlib.util.spec_from_file_location(
+                "run_report_manifest_probe", REPO_ROOT / "scripts/run_report.py"
+            )
+            module = importlib.util.module_from_spec(spec)
+            patch.setitem(sys.modules, spec.name, module)
+            try:
+                spec.loader.exec_module(module)
+            except SystemExit as error:
+                assert error.code == 0, "Pi manifest failure aborted report import"
+            else:
+                code = module.main(
+                    ["--root", str(tmp_path)],
+                    run=fake_run({PS_ARGV: ps_output("7 00:07 make verify")}),
+                    proc_dir=proc,
+                )
+                assert code == 0
+            out = capsys.readouterr().out
+            assert "tools/pi/package.json: not read" in out
+            assert "change: alpha" in out and "live figures:" in out
+            assert "pid 7" in out and "available: 61.0%" in out
+            assert "time: not read" in out and "calls: not read" in out
+            assert "SENTINEL-MANIFEST" not in out and "Traceback" not in out
+
+
+def test_linux_memory_rejects_components_above_physical_total(tmp_path: Path) -> None:
+    """An invalid component stays unread while the independent valid one survives."""
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    for available, compressed in ((2000, 3000), (2000, 250), (250, 3000), (1000, 1000), (0, 0)):
+        (proc / "meminfo").write_text(
+            f"MemTotal: 1000 kB\nMemAvailable: {available} kB\nZswap: {compressed} kB\n",
+            encoding="utf-8",
+        )
+        snapshot = run_report.linux_memory(proc)
+        if available > 1000:
+            assert snapshot.available.startswith("not read")
+            assert "MemAvailable" in snapshot.available and snapshot.available_percent is None
+        else:
+            assert snapshot.available.startswith(f"{available / 10:.1f}% of physical memory")
+            assert snapshot.available_percent == available / 10
+        if compressed > 1000:
+            assert snapshot.compressed.startswith("not read") and "Zswap" in snapshot.compressed
+        else:
+            assert snapshot.compressed.startswith(f"{compressed / 10:.1f}% of MemTotal")
 
 
 def test_report_is_read_only_local_and_does_not_echo_prose(tmp_path: Path, capsys) -> None:
