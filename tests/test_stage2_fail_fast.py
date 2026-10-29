@@ -569,3 +569,25 @@ def test_a_genuine_scan_record_survives_the_restore_of_an_edit(world: World, mon
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     assert "forged" not in committed
     assert record in committed, "the runner's own scan record was restored away with the attempt's edit"
+
+
+def test_a_git_failure_is_a_selection_fault_not_a_new_file(world: World, monkeypatch) -> None:
+    """Row L6-1. Planted fault: a failing `git show` made a changed test file count as new, selected whole."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_r.py").write_text("def test_keep():\n    assert 1\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a test file")
+    (tests / "test_r.py").write_text("def test_keep():\n    assert 2\n")
+    original = stage2._git_bytes
+
+    def failing_show(root, *args, **kwargs):
+        if args and args[0] == "show":
+            raise stage2.Refused("git show did not finish within 1 minutes")
+        return original(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_bytes", failing_show)
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n")
+    assert targets is None
+    assert fault is not None and "git show" in fault

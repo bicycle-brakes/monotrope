@@ -159,11 +159,11 @@ Research: `research.md`. Decisions: `decisions.md`.
 ## Open decisions
 
 None open. The maintainer-approved package stands in `decisions.md`, with
-two answers of 2026-10-28: four hours of phase 4 (Q-1) and the runner, not
+two answers of 2026-10-28: four hours of phase 4 (Q-1), raised to 5.5 hours in total the same day (Q-1, note) and the runner, not
 the model, runs the must-run checks (Q-2). No ADR answer is added here.
 
 The drafting details there choose deterministic selection, runner delegation
 for file-only models, existing safe formatting before cheap checks, visible
-restore notices and a four-hour phase-4 stop because each is reversible and
+restore notices and a phase-4 stop (four hours, raised to 5.5) because each is reversible and
 keeps the approved scope. Diagnostics keep existing protection and bounds;
 “actual output” does not exempt a secret or an overlong stream from them.

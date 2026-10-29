@@ -5056,8 +5056,8 @@ def failed_test_ids(problems: list[str]) -> list[str]:
     return list(found)
 
 
-def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
-    """The accepted plan's criterion-ledger test references: `tests/x.py::test_y` ids and whole files.
+def _ledger_test_refs(plan: bytes) -> list[str]:
+    """The accepted plan's criterion-ledger test references, as `tests/x.py::test_y` ids.
 
     Both test forms count - a written entry and one still marked `not yet written`; a `not a test`
     row names no test, and lines inside a fence are examples, never references. The bytes are the
@@ -5067,7 +5067,6 @@ def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
     lines = check_criterion_ledger._lines(plan.decode("utf-8"))
     fenced = check_criterion_ledger._fenced(lines)
     refs: list[str] = []
-    whole: set[str] = set()
     for section in check_criterion_ledger.ledger_sections(lines):
         for number, line in section:
             if fenced[number - 1]:
@@ -5076,8 +5075,7 @@ def _ledger_test_refs(plan: bytes) -> tuple[list[str], set[str]]:
             if entry is None or entry.kind == "not a test" or not entry.path:
                 continue
             refs.append(f"{entry.path}::{entry.function}")
-            whole.add(entry.path)
-    return sorted(dict.fromkeys(refs)), whole
+    return sorted(dict.fromkeys(refs))
 
 
 def _test_functions(source: str, filename: str) -> dict[str, str]:
@@ -5120,10 +5118,11 @@ def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
     A file absent at HEAD is selected whole. Helpers, fixtures and classes are not compared: a
     failure reached only through a changed helper waits for `make verify` (decisions.md, Q-3).
     """
-    try:
-        before = _git_bytes(root, "show", f"HEAD:{posix}", env=env).decode("utf-8")
-    except Refused:
+    # Absent at HEAD is measured, never inferred from a failing `git show`: a git failure is a
+    # selection fault, not a reason to run a changed file whole (review row L6-1).
+    if not _git_bytes(root, "ls-tree", "HEAD", "--", posix, env=env).strip():
         return [posix]
+    before = _git_bytes(root, "show", f"HEAD:{posix}", env=env).decode("utf-8")
     old = _test_functions(before, posix)
     new = _test_functions((root / posix).read_text(encoding="utf-8"), posix)
     return [f"{posix}::{name}" for name, dump in new.items() if old.get(name) != dump]
@@ -5152,8 +5151,7 @@ def selected_tests(
         for posix in sorted(relative.as_posix() for relative in changed):
             if _is_test_module(posix) and (root / posix).is_file():
                 targets.update(_changed_test_ids(root, env, posix))
-        refs, _whole = _ledger_test_refs(plan)
-        targets.update(refs)
+        targets.update(_ledger_test_refs(plan))
         standing: dict[str, set[str]] = {}
         for ident in previous:
             posix, _, rest = ident.partition("::")
@@ -5176,7 +5174,7 @@ def selected_tests(
             or (posix := t.split("::", 1)[0]) not in whole
             or not _id_stands(t.split("::", 1)[1], names[posix])
         )
-    except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
+    except (Refused, OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error)
     return kept, None
 
@@ -5243,17 +5241,15 @@ def cheap_checks(
     return []
 
 
-def must_run_refs(plan: bytes | None) -> str:
+def must_run_refs(plan: bytes) -> str:
     """The accepted plan's ledger test references as the prompts' must-run list, or why there is none.
 
     A reference still marked `not yet written` is listed as it stands - the instruction says to
     write it, never that it exists (spec, criterion 7). A ledger that cannot be read names the
     section to follow instead of a list, so the prompt build never fails on it.
     """
-    if plan is None:
-        return "none - follow the plan's `## Criterion ledger` section itself"
     try:
-        refs, _whole = _ledger_test_refs(plan)
+        refs = _ledger_test_refs(plan)
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
         return "the plan's criterion ledger could not be read for test names; follow its `## Criterion ledger` section itself"
     if not refs:
