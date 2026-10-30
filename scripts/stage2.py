@@ -843,8 +843,18 @@ def kill_live() -> int:
     return len(groups)
 
 
+# The trapped signals besides SIGINT: each stops the run like SIGTERM, so a closed terminal
+# (SIGHUP) or Ctrl-\ (SIGQUIT) cleans the running groups before the admission is released.
+TERMINATING_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
+
+
 class Terminated(Exception):
-    """The runner received SIGTERM: the running programs are killed and the run stops (exit 143)."""
+    """The runner received SIGTERM, SIGHUP or SIGQUIT: the running programs are killed and the
+    run stops (exit 128 plus the signal number, 143 for SIGTERM)."""
+
+    def __init__(self, signum: int = signal.SIGTERM) -> None:
+        super().__init__(signal.Signals(signum).name)
+        self.signum = signum
 
 
 @contextlib.contextmanager
@@ -861,7 +871,7 @@ def defer_launch_signals():
     pending = []
     previous = {}
     try:
-        for signum in (signal.SIGINT, signal.SIGTERM):
+        for signum in (signal.SIGINT, *TERMINATING_SIGNALS):
             previous[signum] = signal.signal(signum, lambda received, _frame: pending.append(received))
         yield
     finally:
@@ -8009,11 +8019,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     _LAUNCH_STOPPED.clear()
-    # SIGTERM stops the run like Ctrl-C: the running programs' groups are killed before the exit
-    # (DL-B-5). The handler is the runner's only while main runs, and only from the main thread.
-    previous = None
+    # SIGTERM, SIGHUP and SIGQUIT stop the run like Ctrl-C: the running programs' groups are
+    # killed before the exit (DL-B-5, F6-8). The handlers are the runner's only while main runs,
+    # and only from the main thread.
+    previous = {}
     if threading.current_thread() is threading.main_thread():
-        previous = signal.signal(signal.SIGTERM, _terminate)
+        for signum in TERMINATING_SIGNALS:
+            previous[signum] = signal.signal(signum, _terminate)
     try:
         return _run(args)
     except (KeyboardInterrupt, Terminated) as error:
@@ -8022,14 +8034,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{what}: the run stopped; {killed} running program group(s) killed.", file=sys.stderr)
         if isinstance(error, KeyboardInterrupt):
             raise  # Ctrl-C keeps its own exit; only the programs it could not reach are killed first.
-        return 143
+        return 128 + error.signum
     finally:
-        if previous is not None:
-            signal.signal(signal.SIGTERM, previous)
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
-def _terminate(_signum: int, _frame: object) -> None:
-    raise Terminated("SIGTERM")
+def _terminate(signum: int, _frame: object) -> None:
+    raise Terminated(signum)
 
 
 def _run(args: argparse.Namespace) -> int:

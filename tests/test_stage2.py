@@ -16063,6 +16063,31 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
     assert signal_.getsignal(signal_.SIGTERM) is before, "the runner's handler leaked past main"
 
 
+@pytest.mark.parametrize("name", ["SIGHUP", "SIGQUIT"])
+def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
+    name: str, world: World, monkeypatch, tmp_path: Path
+) -> None:
+    """Phase-6 row F6-8: SIGHUP and SIGQUIT clean the running groups before the runner exits,
+    as the spec's Boundary promises; the exit is 128 plus the signal number."""
+    import signal as signal_
+
+    signum = getattr(signal_, name)
+    before = signal_.getsignal(signum)
+
+    def hang_up() -> None:
+        os.kill(os.getpid(), signum)
+        time.sleep(5)
+
+    verb, started = _interrupting_verb(tmp_path, hang_up)
+    monkeypatch.setattr(stage2, "explore", verb)
+    assert world.run("explore") == 128 + signum
+    end = time.monotonic() + 5
+    while _child_alive(started["pid"]) and time.monotonic() < end:
+        time.sleep(0.05)
+    assert not _child_alive(started["pid"]), f"the launched program outlived the runner after {name}"
+    assert signal_.getsignal(signum) is before, "the runner's handler leaked past main"
+
+
 def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
     """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
     monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
