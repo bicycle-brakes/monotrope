@@ -1136,6 +1136,24 @@ def test_preflight_refuses_a_second_catalog_redirect(tmp_path, sources):
     assert failure.value.exit_code == 1
 
 
+def test_preflight_records_a_300_with_location_as_an_unfollowed_http_error(tmp_path, sources):
+    # Review row L2-2. Planted fault: a 300 Multiple Choices with a Location is followed, or classified
+    # as a redirect refusal instead of the ordinary answer it is outside the admitted status set.
+    with foreign_server() as (foreign_requests, foreign_url):
+
+        def choices(path: str) -> tuple[int, str]:
+            return 300, f"{foreign_url}{path}"
+
+        sources.pi_redirect = choices
+        bridge = collect(tmp_path, sources)
+
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "http-error" and evidence["status"] == 300
+    assert "redirected_to" not in evidence and "redirect_status" not in evidence
+    assert len(pi_requests(sources)) == 1, "a second catalog GET happened"
+    assert not foreign_requests, "the 300's Location was followed"
+
+
 def test_preflight_redirect_record_preserves_request_and_final_evidence(tmp_path, sources):
     # Criterion 4. Planted fault: the requested url is overwritten, a hop field is missing, the
     # digest describes the redirect body, or selection drops the hop evidence.

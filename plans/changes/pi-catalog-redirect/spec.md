@@ -97,7 +97,11 @@ no answer or ADR decision is added here.
 version; reject credentials and fragments because the version addition must be
 the sole change. This admits harmless query reordering without widening targets.
 
-[DETAIL] A second redirect is blocked by fetch's `redirect: "error"`; its
-Location is not exposed by that response mode. Report the admitted request URL
-on that refusal, without promising the hidden second Location. Other network
-failures keep their existing failure classification.
+[DETAIL] Both requests run with `redirect: "manual"`, and a second redirect is
+recognised by its status (301, 302, 303, 307 or 308), never followed, and
+refused as `redirect-refused` naming the admitted request URL, not the second
+Location (review rows L1-1, L1-7, L2-1; this supersedes the wording of
+`redirect: "error"` in `decisions.md`, which records the answer as it was
+given). Any other status, a 300 with a Location included, is an ordinary
+answer: it is not followed and is recorded as `http-error` (review row L2-2).
+Other network failures keep their existing failure classification.
