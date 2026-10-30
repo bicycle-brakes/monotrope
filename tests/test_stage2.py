@@ -18414,3 +18414,25 @@ def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: P
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.kill(grandchild, signal.SIGKILL)
+
+
+def test_a_runner_check_publishes_its_child_session_for_nested_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Row F6-6 of the machine lock. Planted fault: a runner launch handed its child the lock
+    # descriptor but never published the child's session, so after a killed runner the child's own
+    # nested checks found no relation to the admission and queued behind their own lock.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    probe = (
+        "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
+        "h = verify_lock.read_holder(); print(json.dumps([h.get('session') if h else None, os.getsid(0)]))"
+    )
+    with verify_lock.hold_admission(["make", "verify"]) as owned:
+        assert owned is not None
+        env = verify_lock.inherit_env(dict(os.environ))
+        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=(owned,))
+    assert done.returncode == 0, done.stderr
+    published, session = json.loads(done.stdout)
+    assert published == session, "the runner did not publish its child's session with the ownership"

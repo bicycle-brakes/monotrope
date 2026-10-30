@@ -427,6 +427,19 @@ _ACTIVE_LOCK = threading.Lock()
 _ACTIVE: _Admission | None = None
 
 
+def publish_child_session(session: int) -> None:
+    """Name a protected child's session in this process's published ownership.
+
+    A runner that hands its admission's descriptor to a child calls this, so the child's own
+    nested checks still prove their relation after a killed runner (review row F6-6). Without an
+    owned admission in this process it does nothing.
+    """
+    with _ACTIVE_LOCK:
+        active = _ACTIVE
+    if active is not None:
+        active.publish_session(session)
+
+
 def _active_pid() -> int | None:
     """The pid this process publishes while it owns an admission, for the children's marker."""
     with _ACTIVE_LOCK:
