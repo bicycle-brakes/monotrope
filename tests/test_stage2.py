@@ -2076,15 +2076,19 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         holder_pid = os.getpid()
         record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
         record.write_text(
-            json.dumps({"pid": holder_pid, "command": ["ancestor"], "start": "2026-10-30T00:00:00"}),
+            json.dumps(
+                {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+            ),
             encoding="utf-8",
         )
         monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+        monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
         assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
         make_env = world.calls("make")[0]["env"]
         assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+        assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
         assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
         assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
         # and the draft post-run path preserves it too
@@ -18416,23 +18420,25 @@ def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: P
             os.kill(grandchild, signal.SIGKILL)
 
 
-def test_a_runner_check_publishes_its_child_session_for_nested_admission(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Row F6-6 of the machine lock. Planted fault: a runner launch handed its child the lock
-    # descriptor but never published the child's session, so after a killed runner the child's own
-    # nested checks found no relation to the admission and queued behind their own lock.
+    # descriptor but no proof of relation that survives a killed runner, so the child's own nested
+    # checks queued behind their own lock; the admission token in the child's environment is it.
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
     probe = (
         "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
-        "h = verify_lock.read_holder(); print(json.dumps([h.get('session') if h else None, os.getsid(0)]))"
+        "h = verify_lock.read_holder(); "
+        "print(json.dumps([h.get('token') if h else None, os.environ.get(verify_lock.TOKEN_ENV), "
+        "verify_lock.nested_holder_pid()]))"
     )
     with verify_lock.hold_admission(["make", "verify"]) as owned:
         assert owned is not None
         env = verify_lock.inherit_env(dict(os.environ))
         done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=(owned,))
     assert done.returncode == 0, done.stderr
-    published, session = json.loads(done.stdout)
-    assert published == session, "the runner did not publish its child's session with the ownership"
+    published, inherited, nested = json.loads(done.stdout)
+    assert published and published == inherited, "the runner's child did not inherit the admission token"
+    assert nested == os.getpid(), "the runner's child did not nest in its admission"

@@ -933,9 +933,6 @@ def launch(
                         pass_fds=pass_fds,
                     )
                     _LIVE_GROUPS.add(process.pid)
-            if pass_fds:
-                # The child inherits the admission; its session outlives a killed runner (F6-6).
-                verify_lock.publish_child_session(process.pid)
             # Cancellation may have arrived while Popen was starting in a worker.
             if _LAUNCH_STOPPED.is_set():
                 raise NotStarted("the runner was interrupted during launch")

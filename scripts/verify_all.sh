@@ -88,7 +88,7 @@ fi
 # One machine-wide admission for this user (queue, free-memory check) before
 # any protected work: concurrent full checks across repositories and worktrees
 # exhausted the machine (bead coding-harness-p6mu). A valid inherited marker
-# (`HARNESS_VERIFY_LOCK_HELD`) means this run is nested in an admission an
+# (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
 # ancestor already holds — re-enter the unchanged gate loop directly; the
 # module is invoked as `-m scripts.verify_lock`, and the supervisor below
 # execs this script again with the original arguments.

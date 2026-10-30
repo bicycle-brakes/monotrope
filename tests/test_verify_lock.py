@@ -110,8 +110,13 @@ def _context_entry(state: Path, out: Path, sleep: str = "0.3") -> subprocess.Pop
     )
 
 
+TEST_TOKEN = "test-admission-token"
+
+
 @contextlib.contextmanager
-def fake_holder(state: Path, *, pid: int | None = None, publish: bool = True, hold: bool = True) -> Iterator[None]:
+def fake_holder(
+    state: Path, *, pid: int | None = None, publish: bool = True, hold: bool = True, token: str = TEST_TOKEN
+) -> Iterator[None]:
     """Hold the machine lock the way a published admission does.
 
     With `publish` the holder record names a pid (the test's own unless given),
@@ -127,6 +132,7 @@ def fake_holder(state: Path, *, pid: int | None = None, publish: bool = True, ho
             json.dumps(
                 {
                     "pid": os.getpid() if pid is None else pid,
+                    "token": token,
                     "command": ["fake", "holder"],
                     "start": "2026-10-29T00:00:00",
                 }
@@ -321,6 +327,7 @@ def test_only_live_ancestor_ownership_allows_nested_admission(tmp_path: Path, mo
 
     # valid, in-process: no queue, no memory wait, no descriptor of its own
     monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, TEST_TOKEN)
     monkeypatch.setattr(verify_lock, "read_available_memory", counting_reader)
     with fake_holder(state, pid=os.getpid()), verify_lock.hold_admission(["nested", "body"]) as owned:
         assert owned is None, "a nested entry must inherit, not own"
@@ -336,7 +343,12 @@ def test_only_live_ancestor_ownership_allows_nested_admission(tmp_path: Path, mo
         entry = _supervised(
             state,
             RECORD_BODY,
-            {"PROBE_OUT": str(out), "PROBE_SLEEP": "0.2", verify_lock.LOCK_ENV: str(os.getpid())},
+            {
+                "PROBE_OUT": str(out),
+                "PROBE_SLEEP": "0.2",
+                verify_lock.LOCK_ENV: str(os.getpid()),
+                verify_lock.TOKEN_ENV: TEST_TOKEN,
+            },
         )
         assert entry.wait(timeout=60) == 0
         assert out.is_file(), "a validly nested entry could not run inside its ancestor's admission"
@@ -842,8 +854,9 @@ def test_a_marker_whose_holder_changed_during_the_probe_is_not_nested(
     state = tmp_path / "state"
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.setenv(verify_lock.LOCK_ENV, "4242")
-    readings = iter([{"pid": 4242}, {"pid": 5151}])
-    monkeypatch.setattr(verify_lock, "read_holder", lambda _root=None: next(readings, {"pid": 5151}))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, TEST_TOKEN)
+    readings = iter([{"pid": 4242, "token": TEST_TOKEN}, {"pid": 5151, "token": "other"}])
+    monkeypatch.setattr(verify_lock, "read_holder", lambda _root=None: next(readings, {"pid": 5151, "token": "other"}))
     with fake_holder(state, pid=5151):
         assert verify_lock.nested_holder_pid() is None
 
@@ -1088,12 +1101,12 @@ def test_a_fifo_in_place_of_the_holder_record_is_unusable_not_a_hang(tmp_path: P
     assert done.stdout.strip() == "None", done.stderr
 
 
-def test_a_descendant_in_its_own_session_nests_through_an_ancestor_in_the_published_one(
+def test_a_descendant_in_its_own_session_nests_after_the_holder_died(
     tmp_path: Path,
 ) -> None:
     """Row F6-6 (re-check). Planted fault: after the holder died, a nested runner started its check in
-    a new session, so the check matched neither the dead holder nor the published session and
-    queued behind its own admission; an ancestor in the published session is the relation."""
+    a new session, so the check found no relation to the admission and queued behind its own lock;
+    the inherited token is the relation, whatever the session."""
     state = tmp_path / "state"
     root = state / "coding-harness"
     root.mkdir(parents=True)
@@ -1103,7 +1116,7 @@ def test_a_descendant_in_its_own_session_nests_through_an_ancestor_in_the_publis
     fcntl.flock(descriptor, fcntl.LOCK_EX)
     (root / verify_lock.HOLDER_NAME).write_text(
         json.dumps(
-            {"pid": gone.pid, "command": ["dead", "holder"], "start": "2026-10-30T00:00:00", "session": os.getsid(0)}
+            {"pid": gone.pid, "token": TEST_TOKEN, "command": ["dead", "holder"], "start": "2026-10-30T00:00:00"}
         ),
         encoding="utf-8",
     )
@@ -1111,7 +1124,7 @@ def test_a_descendant_in_its_own_session_nests_through_an_ancestor_in_the_publis
         done = subprocess.run(
             [sys.executable, "-c", NESTED_PROBE],
             cwd=REPO_ROOT,
-            env=_env(state, {verify_lock.LOCK_ENV: str(gone.pid)}),
+            env=_env(state, {verify_lock.LOCK_ENV: str(gone.pid), verify_lock.TOKEN_ENV: TEST_TOKEN}),
             capture_output=True,
             text=True,
             timeout=60,

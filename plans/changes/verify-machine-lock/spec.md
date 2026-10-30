@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-p6mu
@@ -53,8 +53,12 @@ Research: `research.md`. Decisions: `decisions.md`.
 - **Shared state:** `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`, shared
   by cooperating entries of the same user on this machine. The exclusive
   lock is `verify.lock`; neither repository nor worktree identifies it.
-- **Nested work:** protected work descended from a live lock holder, carrying
-  `HARNESS_VERIFY_LOCK_HELD=<holder-pid>`, belonging to that admission.
+- **Nested work:** protected work descended from a lock holder, carrying
+  `HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and `HARNESS_VERIFY_LOCK_TOKEN=<token>`,
+  the random token that admission published with its ownership. The token is
+  the proof of belonging: the environment reaches every descendant, also across
+  new sessions, nested runners and a dead holder, and no unrelated process
+  knows it (maintainer, 2026-10-30).
 
 ## Acceptance criteria
 
@@ -126,6 +130,25 @@ Research: `research.md`. Decisions: `decisions.md`.
     with a diagnostic before protected work starts.
     *Refuted by:* falling through unlocked after a state-directory, lock or
     queue error, or following a substituted state file to overwrite another file.
+
+## Boundary
+
+Decided by the maintainer on 2026-10-30 after repeated phase-6 rows on one
+mechanism (protected descendants outliving the admission). The admission
+protects the machine's load, not data: an overlap of two checks costs time,
+never correctness.
+
+- Covered: normal exit, failure, cancellation and trapped signals (SIGINT,
+  SIGTERM, SIGHUP, SIGQUIT) end the protected command's process group before
+  release; a grandchild left in that group after the command exits is ended
+  before release, by the supervisor and by the runner's timed launches.
+- Accepted limit: when an intermediate process is killed hard (SIGKILL) while
+  its own descendants run in another process group or session, those
+  descendants can outlive the admission and briefly overlap a successor. Their
+  time is bounded by the runner's step limits. A review row that describes
+  only this case is an accepted limit, not a finding.
+- A process container that would close the limit (cgroups, job objects) is out
+  of scope until the run report measures such overlaps in practice.
 
 ## Non-goals
 

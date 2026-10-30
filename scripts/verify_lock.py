@@ -20,17 +20,24 @@ order — `flock` alone supplies no FIFO, so only the first live record may try
 the work lock.
 
 **Nested work.** A protected entry descended from a live admission carries
-`HARNESS_VERIFY_LOCK_HELD=<holder-pid>`. The marker is honoured only when the
-published ownership names its process, the work lock is genuinely held, and
-this process is related to that admission: the holder is a live ancestor, or
-this process runs in the session the supervisor started for its protected
-child (published with the ownership). Metadata or an open descriptor on the
-lock file never suffices; an absent, malformed, stale
-or unrelated marker uses ordinary admission. The holder process itself need
-not live: a killed supervisor leaves the lock held by the descriptor its
-protected child inherited, and that child's own nested calls still nest
-through the session instead of deadlocking on their ancestor. Only the owner
-removes the published ownership, and only while it still names the owner.
+`HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and `HARNESS_VERIFY_LOCK_TOKEN=<token>`,
+a random token each admission publishes with its ownership. The marker is
+honoured only when the published ownership names its pid and its token and
+the work lock is genuinely held. The environment reaches every descendant —
+across new sessions, nested runners and a dead holder — and no unrelated
+process knows the token, so no process relation has to be proven (review rows
+F6-2, F6-6). An absent, malformed, stale or unrelated marker uses ordinary
+admission. The holder process itself need not live: a killed supervisor leaves
+the lock held by the descriptor its protected child inherited, and that
+child's own nested calls still nest. Only the owner removes the published
+ownership, and only while it still names the owner.
+
+**Boundary.** The admission protects the machine's load, not data. Normal
+exit, failure, cancellation and trapped signals end the protected work before
+release. A protected descendant can briefly outlive the admission only when an
+intermediate process is killed hard (SIGKILL) while its own descendants run in
+another process group; that overlap is an accepted limit, bounded by the
+runner's step limits (spec, "Boundary").
 
 **Memory.** After the lock, admission reads the system's free memory — macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
@@ -71,10 +78,12 @@ import contextlib
 import dataclasses
 import datetime
 import fcntl
+import hmac
 import json
 import math
 import os
 import re
+import secrets
 import signal
 import stat
 import subprocess
@@ -85,6 +94,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 LOCK_ENV = "HARNESS_VERIFY_LOCK_HELD"
+TOKEN_ENV = "HARNESS_VERIFY_LOCK_TOKEN"
 FLOOR_ENV = "HARNESS_VERIFY_MEMORY_FLOOR"
 DEFAULT_MEMORY_FLOOR = 25.0
 MEMORY_POLL_SECONDS = 30.0
@@ -93,7 +103,6 @@ MEMORY_DEADLINE_SECONDS = 3600.0
 PROBE_SECONDS = 5.0
 QUEUE_POLL_SECONDS = 0.25
 CHILD_WATCH_SECONDS = 0.25
-ANCESTRY_DEPTH = 64
 SIGNAL_GRACE_SECONDS = 5.0
 LOCK_NAME = "verify.lock"
 HOLDER_NAME = "verify.holder.json"
@@ -269,13 +278,11 @@ def nested_holder_pid() -> int | None:
     if not raw.isdigit() or int(raw) <= 0:
         return None
     pid = int(raw)
+    token = os.environ.get(TOKEN_ENV, "")
     holder = read_holder()
-    if holder is None or holder.get("pid") != pid:
+    if holder is None or not _names(holder, pid, token):
         return None
     lock = state_root() / LOCK_NAME
-    # Metadata names a holder; only a relation proves this process descends from it (review row F6-2).
-    if not _related_to_holder(pid, holder):
-        return None
     try:
         fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
@@ -288,64 +295,26 @@ def nested_holder_pid() -> int | None:
             # new admission publishes after it locks, so an unchanged holder here means the lock
             # seen held is still the marker's (review rows L1-1, L1-12).
             again = read_holder()
-            return pid if again is not None and again.get("pid") == pid else None
+            return pid if again is not None and _names(again, pid, token) else None
         fcntl.flock(fd, fcntl.LOCK_UN)
         return None
     finally:
         os.close(fd)
 
 
-def _parent_of(pid: int) -> int | None:
-    """The parent pid of a live process, or None when it cannot be read."""
-    if pid == os.getpid():
-        return os.getppid()
-    try:
-        done = subprocess.run(
-            ["ps", "-o", "ppid=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            timeout=PROBE_SECONDS,
-            check=False,
-            stdin=subprocess.DEVNULL,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return None
-    value = done.stdout.strip()
-    return int(value) if done.returncode == 0 and value.isdigit() else None
+def _names(holder: dict, pid: int, token: str) -> bool:
+    """True when the published ownership names this pid and this admission's token.
 
-
-def _ancestry() -> Iterator[int]:
-    """This process and its live ancestors, nearest first, bounded."""
-    current: int | None = os.getpid()
-    for _ in range(ANCESTRY_DEPTH):
-        if current is None or current <= 1:
-            return
-        yield current
-        current = _parent_of(current)
-
-
-def _related_to_holder(pid: int, holder: dict) -> bool:
-    """A marker is honoured only for a real descendant of its admission.
-
-    Two relations prove it, checked along this process and its live
-    ancestors: one of them is the holder, or one of them runs in the session
-    published with the ownership — the session the supervisor or the runner
-    started for its protected child. That session survives a killed holder,
-    no unrelated process can join it, and a nested runner that starts its own
-    check in a new session still descends from it (review row F6-6). An open
-    descriptor on the lock file proves nothing: any process can open it
-    (review row F6-2, re-check).
+    The token is the relation: it travels only in the environment of the
+    admission's own descendants (review rows F6-2, F6-6).
     """
-    session = holder.get("session")
-    published = session if isinstance(session, int) and session > 1 else None
-    for ancestor in _ancestry():
-        if ancestor == pid:
-            return True
-        if published is not None:
-            with contextlib.suppress(OSError):
-                if os.getsid(ancestor) == published:
-                    return True
-    return False
+    published = holder.get("token")
+    return (
+        holder.get("pid") == pid
+        and isinstance(published, str)
+        and bool(token)
+        and hmac.compare_digest(published, token)
+    )
 
 
 def _memory_probe_output(command: list[str]) -> str | None:
@@ -430,23 +399,16 @@ _ACTIVE_LOCK = threading.Lock()
 _ACTIVE: _Admission | None = None
 
 
-def publish_child_session(session: int) -> None:
-    """Name a protected child's session in this process's published ownership.
-
-    A runner that hands its admission's descriptor to a child calls this, so the child's own
-    nested checks still prove their relation after a killed runner (review row F6-6). Without an
-    owned admission in this process it does nothing.
-    """
-    with _ACTIVE_LOCK:
-        active = _ACTIVE
-    if active is not None:
-        active.publish_session(session)
-
-
 def _active_pid() -> int | None:
     """The pid this process publishes while it owns an admission, for the children's marker."""
     with _ACTIVE_LOCK:
         return os.getpid() if _ACTIVE is not None else None
+
+
+def _active_token() -> str | None:
+    """The token this process publishes while it owns an admission, for the children's marker."""
+    with _ACTIVE_LOCK:
+        return _ACTIVE.token if _ACTIVE is not None else None
 
 
 class _Admission:
@@ -458,6 +420,7 @@ class _Admission:
         self.entered = 0.0
         self.record_name: str | None = None
         self.record_fd: int | None = None
+        self.token = secrets.token_hex(16)
         self._published = False
         self._released = False
 
@@ -585,15 +548,9 @@ class _Admission:
         self.record_name = None
         self.record_fd = None
 
-    def publish_session(self, session: int) -> None:
-        """Republish ownership naming the session of the supervised child, for its descendants."""
-        self._publish(session)
-
-    def _publish(self, session: int | None = None) -> None:
-        """Publish pid, command and start time (and the child's session) while owning admission."""
-        record: dict[str, object] = {"pid": os.getpid(), "command": self.command, "start": _stamp()}
-        if session is not None:
-            record["session"] = session
+    def _publish(self) -> None:
+        """Publish pid, token, command and start time while owning admission."""
+        record = {"pid": os.getpid(), "token": self.token, "command": self.command, "start": _stamp()}
         payload = json.dumps(record).encode("utf-8")
         path = self.state.root / HOLDER_NAME
         # A fresh file renamed over the record replaces the directory entry itself, so a hard link
@@ -706,11 +663,14 @@ def inherit_env(env: dict[str, str]) -> dict[str, str]:
     env["XDG_STATE_HOME"] = str(state_base())
     if FLOOR_ENV in os.environ:
         env[FLOOR_ENV] = os.environ[FLOOR_ENV]
-    marker = nested_holder_pid() or _active_pid()
-    if marker is not None:
+    nested = nested_holder_pid()
+    marker, token = (nested, os.environ.get(TOKEN_ENV)) if nested is not None else (_active_pid(), _active_token())
+    if marker is not None and token:
         env[LOCK_ENV] = str(marker)
+        env[TOKEN_ENV] = token
     else:
         env.pop(LOCK_ENV, None)
+        env.pop(TOKEN_ENV, None)
     return env
 
 
@@ -749,11 +709,14 @@ def _restore_signal_handlers(previous: dict[int, object]) -> None:
             signal.signal(signum, handler)  # type: ignore[arg-type]
 
 
-def _spawn_child(command: list[str], pass_fds: tuple[int, ...], override_marker: int | None) -> subprocess.Popen[bytes]:
+def _spawn_child(
+    command: list[str], pass_fds: tuple[int, ...], admission: _Admission | None
+) -> subprocess.Popen[bytes]:
     """The protected command in its own session, stdout and stderr reaching the operator."""
     env = dict(os.environ)
-    if override_marker is not None:
-        env[LOCK_ENV] = str(override_marker)
+    if admission is not None:
+        env[LOCK_ENV] = str(os.getpid())
+        env[TOKEN_ENV] = admission.token
     return subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
 
 
@@ -823,8 +786,7 @@ def supervise(command: list[str]) -> int:
         else:
             admission = _Admission(_prepare_state(), command)
             admission.enter()
-            child = _spawn_child(command, (admission.state.lock_fd,), os.getpid())
-            admission.publish_session(child.pid)
+            child = _spawn_child(command, (admission.state.lock_fd,), admission)
         code = _watch_child(child)
     except VerifyLockError as refused:
         print(f"[verify-lock] admission refused: {refused}", file=sys.stderr, flush=True)
