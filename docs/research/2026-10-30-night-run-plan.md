@@ -143,7 +143,38 @@ mechanism, park that pull request.
    proposal in its bead (close, fold into one, or rebase in lane A). No
    edit tonight.
 
-Fallback when a lane runs dry: lane D's item 3.
+## Queue after the lane items
+
+The maintainer asked at about 22:25 UTC for more beads ("Reihe mehr Beads
+ein"). Each lane works its queue in order once its items above are done.
+
+How far a queued bead goes:
+
+- A `bounded` bead without an accepted plan card goes through explore,
+  interview where it needs one, and draft. Its plan card waits for the
+  maintainer: it is shown at 07:00 UTC or in the 15:00 Europe/Berlin block,
+  and implementation starts after the maintainer's word.
+- A `feature` bead runs `prepare-explore` only. Its report waits for the
+  maintainer.
+- A bead whose explore reaches an ADR change or an open `[DECISION]` stops
+  there and is parked.
+
+| Lane | Queue, in order (bead, class) |
+| --- | --- |
+| A | the repair verb's targeted check (coding-harness-gxwg, bounded) · a free model that passes the probe but answers 429 blocks the loop (coding-harness-pj98, bounded) · a clean free round ends the loop too early (coding-harness-1gzo, bounded) · a member without readable content after format feedback is replaced for that round (coding-harness-mfth, bounded) · the Sonnet fallback continues from Flash's edits (coding-harness-6ie, bounded) · the runner writes the fixed-line skeleton per taken row (coding-harness-k93f, bounded) |
+| B | fewer full verifies: draft checks only the gates its documents touch (coding-harness-77qj, bounded; if it needs `scripts/stage2.py`, it moves behind lane A) · time records as data (coding-harness-v6vk, bounded) · the criterion-ledger gate tried against a differently laid-out instance (coding-harness-s9m, spike) |
+| C | fast pre-check and full failure messages before verify (coding-harness-csm, feature) · a live view of a running Pi round (coding-harness-uco, feature) |
+| D | the test-strategy docs (coding-harness-vxwp, bounded) · every change has a bead that declares its class (coding-harness-680l, bounded) · translate the remaining German, one area per pull request (coding-harness-yim, bounded) |
+| E | pin the merge queue's method and group sizes (coding-harness-tsdr, bounded; only after the maintainer merges the merge-queue decision) · auto-merge a self-mergeable pull request on green CI (coding-harness-p3xq, bounded) · small changes skip the review loop (coding-harness-fctf, feature) |
+
+Not queued, because each needs a maintainer decision first:
+
+- the ADR 0021 amendments (coding-harness-pwdi, -hchx);
+- isolating each writing attempt (coding-harness-s9r, architectural);
+- the per-project model choice for Go (coding-harness-k0ub).
+
+Fallback when a lane runs dry: the next unblocked bead from `tools/bd ready`
+that touches none of the other lanes' hot files.
 
 ## The day part, 07:00–14:00 UTC
 
