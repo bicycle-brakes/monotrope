@@ -182,3 +182,29 @@ Ledger of the night (UTC, measured with `date -u`):
 - CI green on #277, #279, #282, #283, #284 and #285 (2026-10-30 03:02 UTC).
 - Not run: verify at the ut8q head `d9fd13bd` outside the runner's own
   post-run check; a review loop for ut8q.
+
+## Addendum — 2026-10-30, maintainer interview (~06:00–06:25 UTC)
+
+The maintainer answered every open question (recorded in the beads named):
+
+- Merges: the session merges the ready pull requests. #279 merged
+  (`20af7d00`), #277 merged (`ba131c32`). #285, #282, #280 and #281 follow
+  one at a time: each branch is brought up to date with main, CI runs again,
+  and the merge goes against the new head.
+- One verify per machine (bead coding-harness-p6mu): two more hours for the
+  structural remedies A and B, then phase 6 again. This runs first in lane A.
+- Index merge rule (bead coding-harness-njtm): 45 more minutes for P6-1 and
+  P6-2. Lane C.
+- Neutral Pi paths (bead coding-harness-xul8): plan card accepted unchanged.
+  Lane A, after p6mu.
+- Review-diff order (bead coding-harness-ut8q): 1.5 more hours. Lane A,
+  after xul8.
+- pytest worker cap (bead coding-harness-l7sc): starts after p6mu merges.
+- Model data terms (bead coding-harness-3g53): retry by day. If the
+  catalog refresh fails again, open a runner bead.
+- Decision PR #280 (docs gate subset): accepted, option 1.
+- Decision PR #281 (guard test, ADR 0023): accepted, option 1, so phase 4
+  starts. The ADR answer is the maintainer's to state and is still owed.
+- DeepSeek zero-retention agreement: renewed through 2026-11-30, as the
+  maintainer stated. A decision PR moves `valid_until` in
+  `model-endpoints.yaml`.
