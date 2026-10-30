@@ -49,7 +49,7 @@ phase-3 prompt's form and report the validator as unavailable.
    and fragment, and query multiset equality after removing exactly one new
    `pi-version` equal to the already validated manifest pin. Reject missing or
    malformed Locations and all other target changes before I/O. On acceptance
-   issue exactly one GET through `originalFetch`, with `redirect: "error"`,
+   issue exactly one GET through `originalFetch`, with `redirect: "manual"`,
    `credentials: "omit"`, the original headers and the same controller signal.
    Do not route the internal hop through `globalThis.fetch` or increment the
    Pi-call counter for it. Correct the comment's one-actual-GET wording.
