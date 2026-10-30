@@ -703,3 +703,14 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a18d9e-7a0b-75c0-9395-bbf29fb23e94, 2026-10-30
 Reviewer session: codex 01a18d9e-7a0b-75c0-9395-bbf29fb23e94 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2765 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-9 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:783–804 | A trapped signal arriving after `Popen` creates the protected process but before `_spawn_child()` returns leaves `child` unset. Cleanup skips that process group, allowing protected work to survive cancellation. A read-only probe at `d66e4d40`, injecting SIGTERM immediately after process creation, returned 143 with the child still alive. Signal delivery must be deferred until the child is registered for cleanup. [Acceptance criterion 6; Boundary] | Codex | open | — |
+
+Phase 6 verdict: codex 01a18df8-1be5-7b93-b88d-8a8a798004f0, 2026-10-30
+Reviewer session: codex 01a18df8-1be5-7b93-b88d-8a8a798004f0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
