@@ -23,11 +23,13 @@ tags: [adr]
   4, 5, 10, 11 and 14), and the routing decisions the maintainer stated on
   2026-10-06 in a Claude Code session (bead coding-harness-bib: no Fable,
   explore and implement on GLM 5.3 Flash, a bounded change's reviews to Codex,
-  the leak check kept) · the acceptance is the merge commit and is written
+  the leak check kept), and the amendment the maintainer stated on 2026-10-30
+  (decision 6; `plans/changes/kimi-admission/decisions.md`, bead
+  coding-harness-bomd) · the acceptance is the merge commit and is written
   nowhere else, so the header's `review` stays empty (ADR 0008) · Decider:
   maintainer · prepared by a Claude Code session
-* Date: 2026-09-30, widened on 2026-10-06 before the merge · takes effect on
-  merge
+* Date: 2026-09-30, widened on 2026-10-06 before the merge, amended on
+  2026-10-30 (decision 6) · takes effect on merge
 
 ## Context
 
@@ -100,15 +102,7 @@ this ADR no longer keeps phases 1 and 4 with Anthropic.
 3. **Kimi is dropped, and so is Fable.** Kimi leaves the declared endpoints and
    stands under `ausgeschlossen` with the date of 2026-09-30. Fable 5.1 leaves
    the routing (2026-10-06); Opus 5.5 takes its places, the fallback of
-   decision 1 included. *Amended on 2026-10-30 by the maintainer:* which
-   OpenCode Go models run is set by `model-endpoints.yaml` through their dated
-   data-terms readings, not by this ADR. Admitting, marking, removing or
-   excluding a Go model is a change of that declaration (a decision pull
-   request on a `human-decided` file), never an amendment of this ADR, because
-   the Go catalog changes too often to be architecture. The Kimi exclusion of
-   2026-09-30 is lifted on that ground; Go models serve the review loop only,
-   and the roles above stay as they are
-   (`plans/changes/kimi-admission/decisions.md`, bead coding-harness-bomd).
+   decision 1 included. *The Kimi part is lifted on 2026-10-30 by decision 6.*
 4. **The reads of the foreign models are not confined.** They can read the
    whole disk, the customer instance's checkout included. The prompts ask them
    to read nothing outside the worktree and the repository's git directory — a
@@ -124,6 +118,18 @@ this ADR no longer keeps phases 1 and 4 with Anthropic.
    set for it. Until that is built, `docs/WORKFLOW.md` §3 runs the two phases:
    Haiku 4.5 explores and Sonnet 5.5 implements. This is an open item of the
    change, not a claim that it works.
+6. **Endpoints are architecture; the models on them are declaration
+   (amended on 2026-10-30).** Which endpoints framework content may reach
+   stays this ADR's matter (decision 2) and its amendments'. Which models run
+   on a declared endpoint is set by `model-endpoints.yaml` alone, each through
+   a dated data-terms reading that the runner checks before every call.
+   Admitting, marking, removing or excluding a model there is a decision pull
+   request on that `human-decided` file, never an amendment of this ADR: the
+   OpenCode Go catalog changes too often to be architecture. A newly admitted
+   model takes a place in the review loop's ladder only; any other role
+   (explore, implement, repair, a research seat) needs its own decision. The
+   Kimi exclusion of decision 3 is lifted on this ground; Kimi models are
+   admitted like any other.
 
 ## Options considered
 
@@ -177,6 +183,10 @@ this ADR no longer keeps phases 1 and 4 with Anthropic.
   operation, has further entry conditions — the Omnigent topology, lakeswitch-ai's
   adoption — that nobody was asked about. The runner is not wired into
   Omnigent; the reviewers run as separate command-line processes.
+* **A model change costs no ADR** (decision 6). A model that appears,
+  disappears or changes its terms on a declared endpoint is a decision pull
+  request on `model-endpoints.yaml`, held by its reading's expiry; only a new
+  endpoint, or a new role for a model, comes back to an ADR.
 * **Beyond D-13.** The same pull request carries changes that follow from other
   answers of the maintainer and need no ADR of their own: Sonnet 5.5 for
   implementation until Flash can be started (the interim, in every change), the
