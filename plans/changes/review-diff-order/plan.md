@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-30
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-ut8q
@@ -125,3 +125,4 @@ Revised 2026-10-29 about 21:59 UTC (maintainer's decision of about 19:25 UTC): t
 2026-10-30 01:31:23–02:09:35 UTC, 2293 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 02:09:41–02:48:50 UTC, 2349 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 02:48:56–03:01:06 UTC, 730 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-10-30 23:40 UTC — the orchestrator's bootstrap edit of `prompts/04b-review-loop.md` (Input paragraph), as plan step 4 says; the maintainer's +1.5 h slot of 2026-10-30 ~06:20 UTC starts here · measured with `date -u`

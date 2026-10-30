@@ -22,7 +22,12 @@ the loop for the maintainer — no model is substituted for a spent ladder's
 last rung, and no model reviews twice in the completed run. Availability
 probes are additional audited calls, not reviews.
 **Input:** a paid round reads the change's diff against its merge base with
-`origin/main`, uncommitted changes included, and this text. A free round is
+`origin/main`, uncommitted changes included, and this text, with its read-only
+tools. The diff leaves out the loop's own records (every `findings.md` and the
+generated `plans/INDEX.md`), puts every implementation input before every
+prose file, and keeps each retained file's complete diff exactly once; the line
+bound is applied afterwards, so a cut takes prose first, never code or tests
+before it. A free round is
 confined to the implementation diff alone — source and test code in bounded
 hunks, no tools, no repository access, and nothing else in its prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6
