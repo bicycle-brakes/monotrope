@@ -53,7 +53,15 @@ says so; the time between two sessions does not. A stop ends the span; work that
 resumes starts a new one, even in the same chat. A session appends `<date>
 <start>–<end>, <span>[, break counted]` under `## Time used` in `plan.md` when a
 span ends — a chat does not survive `/clear`. When a reading shows the time used
-has reached the appetite, stop once, in the labels above and in this order:
+has reached the appetite, stop once, in the labels above and in this order.
+By day the first stop is a checkpoint, not a question (maintainer, 2026-10-30:
+the limits must not be so hard that the maintainer is asked all the time): the
+session extends the appetite by itself once, up to twice the card's appetite,
+says so in its next status message, and writes the extension under
+`## Time used`. It asks with the block below only when twice the appetite is
+reached, when a `[DECISION]` stands open, or when a second finding of one
+mechanism needs a structural choice (`docs/WORKFLOW.md` §4). At night the
+block's proposal is decided by the night rules, as before:
 
 ```text
 expected:   the appetite and the done-criterion of the card
