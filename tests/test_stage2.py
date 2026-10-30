@@ -1262,14 +1262,18 @@ def test_openai_codex_is_declared_as_decided() -> None:
     assert "moved to `opencode-go`" in remark
 
 
-def test_kimi_is_excluded_not_declared() -> None:
+def test_the_kimi_exclusion_is_lifted_and_its_models_carry_terms() -> None:
+    # The maintainer lifted the Kimi exclusion of 2026-09-30 on 2026-10-30 (ADR 0007, decision 3,
+    # amended; bead coding-harness-bomd). Planted fault: a stale exclusion entry would refuse the
+    # admitted Kimi models, or a Kimi model would be declared without its terms reading.
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
-    for endpoint in data["endpunkte"]:
-        text = json.dumps(endpoint).lower()
-        assert "moonshot" not in text and "kimi-for-coding" not in text and not re.search(r"\bk3\b", text)
-    kimi = [entry for entry in data["ausgeschlossen"] if "Kimi" in entry["was"]]
-    assert len(kimi) == 1
-    assert "2026-09-30" in kimi[0]["grund"] and "maintainer" in kimi[0]["grund"]
+    assert not [entry for entry in data.get("ausgeschlossen") or [] if "Kimi" in str(entry.get("was"))]
+    go = next(e for e in data["endpunkte"] if isinstance(e, dict) and e.get("name") == "opencode-go")
+    kimi = [m for m in go["modelle"] if str(m).startswith("kimi-")]
+    assert kimi, "no Kimi model is declared after the exclusion was lifted"
+    for model in kimi:
+        terms = go["modelle_terms"][model]
+        assert terms["training"] == "Not used" and terms["gelesen"] == "2026-10-30", model
 
 
 def test_the_glm_remark_names_its_work_verbs_and_no_review_phase() -> None:
@@ -16272,10 +16276,11 @@ def test_a_header_named_by_its_columns_is_furniture() -> None:
     assert rest == ""
 
 
-def test_the_real_declaration_excludes_kimi_and_no_declared_model() -> None:
-    """Criterion 11 (DL-B-12): ADR 0007 decision 3 binds on the real declaration, and excludes nothing declared."""
-    for model in ("kimi-k3-free", "k3-free", "kimi-for-coding", "moonshot/k3", "moonshotai/kimi-k3"):
-        assert stage2.excluded_problem(REPO_ROOT, model) is not None, model
+def test_the_real_declaration_excludes_no_declared_model() -> None:
+    """Criterion 11 (DL-B-12): the real declaration's exclusions exclude nothing declared.
+
+    The Kimi exclusion this test also pinned was lifted on 2026-10-30 (ADR 0007, decision 3, amended).
+    """
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
     declared = {str(m) for e in data["endpunkte"] if isinstance(e, dict) for m in e.get("modelle") or []}
     assert declared
