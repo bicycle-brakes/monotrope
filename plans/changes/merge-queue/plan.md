@@ -126,8 +126,8 @@ RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs
 
 ## Criterion ledger
 
-- 1: tests/test_repo_settings.py::test_todays_ruleset_holds — the legacy strict configuration is rejected
-- 1: tests/test_repo_settings.py::test_merge_queue_supplies_freshness — a valid queue with strict false is rejected
+- 1: tests/test_repo_settings.py::test_todays_ruleset_holds — the legacy strict configuration is accepted (no findings)
+- 1: tests/test_repo_settings.py::test_merge_queue_supplies_freshness — a valid queue with strict false is accepted (no findings)
 - 2: tests/test_repo_settings.py::test_the_ruleset_check_goes_red_when_branches_need_not_be_up_to_date — neither alternative holds but measurement passes
 - 3: tests/test_repo_settings.py::test_queue_supplier_is_measured_without_bypass — a separate queue supplier has bypasses or unreadable details and measurement passes
 - 4: tests/test_repo_settings.py::test_queue_preserves_the_other_ruleset_requirements — a queue masks a removed rule, unpinned check or failed measurement
