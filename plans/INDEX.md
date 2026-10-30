@@ -292,6 +292,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-verdict-validated/plan.md`](changes/review-verdict-validated/plan.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/research.md`](changes/review-verdict-validated/research.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/spec.md`](changes/review-verdict-validated/spec.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/run-report/decisions.md`](changes/run-report/decisions.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
+| [`changes/run-report/findings.md`](changes/run-report/findings.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
+| [`changes/run-report/plan.md`](changes/run-report/plan.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
+| [`changes/run-report/research.md`](changes/run-report/research.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
+| [`changes/run-report/spec.md`](changes/run-report/spec.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
 | [`changes/runner-time-line/decisions.md`](changes/runner-time-line/decisions.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/findings.md`](changes/runner-time-line/findings.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/plan.md`](changes/runner-time-line/plan.md) | draft | none | 2026-10-20 | coding-harness-9wp |
