@@ -19,6 +19,17 @@ runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1
 and commits this prompt assigns to you, and the interactive session reads its own
 clock and logs its own spans, as the appetite rule below says.
 
+**Run the cheap checks before you hand back.** These are ruff (`ruff check` and
+`ruff format --check` on the changed Python files) and the tests the plan's
+`## Criterion ledger` names. With a command tool, run them and hand back only
+when they are green. On a file-only route (any model that can edit files but
+cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
+`make verify`. It runs ruff, then pytest over the changed or new test functions,
+the ledger's test ids and, on a retry, the tests the attempt before failed. The
+first red check ends the attempt with exactly that output (bead
+coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is
+put back before the checks. That edit is not part of your work, and on its own it never fails the attempt.
+
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**
 and report in four lines:
@@ -42,7 +53,15 @@ says so; the time between two sessions does not. A stop ends the span; work that
 resumes starts a new one, even in the same chat. A session appends `<date>
 <start>–<end>, <span>[, break counted]` under `## Time used` in `plan.md` when a
 span ends — a chat does not survive `/clear`. When a reading shows the time used
-has reached the appetite, stop once, in the labels above and in this order:
+has reached the appetite, stop once, in the labels above and in this order.
+By day the first stop is a checkpoint, not a question (maintainer, 2026-10-30:
+the limits must not be so hard that the maintainer is asked all the time): the
+session extends the appetite by itself once, up to twice the card's appetite,
+says so in its next status message, and writes the extension under
+`## Time used`. It asks with the block below only when twice the appetite is
+reached, when a `[DECISION]` stands open, or when a second finding of one
+mechanism needs a structural choice (`docs/WORKFLOW.md` §4). At night the
+block's proposal is decided by the night rules, as before:
 
 ```text
 expected:   the appetite and the done-criterion of the card

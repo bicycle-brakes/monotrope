@@ -36,6 +36,12 @@
 #               gets it. A gate that asks when a file last changed cannot
 #               answer from the one commit a hosted checkout holds, and says
 #               so with exit 3 instead of guessing (bead coding-harness-qd7).
+#   subsets     optional list, verify gates only: the named local subsets
+#               this gate also belongs to. `docs` is the document gates the
+#               draft verb runs after writing spec, design and plan
+#               (`verify_all.sh --job docs`) instead of the whole verify job;
+#               it adds no CI job and drops no gate from `verify` (bead
+#               coding-harness-77qj).
 #   reason      why this gate exists, in one sentence.
 
 schema_version: 2
@@ -91,6 +97,7 @@ gates:
     enforcement: block
     floor: true
     placement: both
+    subsets: [docs]
     needs_tracker: true
     reason: The two lifecycle rules need a runner; `make staleness` is the same command. The bead coupling reads the tracker render (bead 1jg.3).
 
@@ -101,6 +108,7 @@ gates:
     enforcement: report
     floor: false
     placement: both
+    subsets: [docs]
     reason: Scharf geschaltet wird er, sobald bt8 die 35 gemessenen Korpus-Befunde (governance/WORKFLOW-Links, Frontmatter-Luecken) abgearbeitet hat — bis dahin meldet er und blockiert nicht.
 
   - id: frontmatter-current
@@ -110,6 +118,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     needs_history: true
     reason: A header older than its document's last change misleads every reader, and the maintainer asked that a stale one cannot be merged (bead coding-harness-qd7).
 
@@ -130,6 +139,7 @@ gates:
     enforcement: block
     floor: true
     placement: both
+    subsets: [docs]
     needs_tracker: true
     reason: A citation of an unknown bead silently severs the provenance chain. The same tracker render as bead-export, via BEAD_RENDER in CI (bead 1jg.3).
 
@@ -140,6 +150,7 @@ gates:
     enforcement: block
     floor: true
     placement: both
+    subsets: [docs]
     reason: Decisions vanish by silent rewrite (gap P1) — this gate turns vanishing into a finding (maintainer decision 5, 2026-09-19).
 
   - id: adr-answers
@@ -149,6 +160,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     reason: A feature merged with the ADR question unanswered is the failure the LakeSwitch pilot measured three times; the gate holds existence and format, the maintainer's merge confirms the answer.
 
   - id: interview-minimums
@@ -158,6 +170,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     reason: A feature that merged without its maintainer's answers is the guess phase 1a exists to prevent (maintainer, 2026-10-08); the gate counts distinct answered records per class, sees ADR paths in every diff state, and holds the stock exempt before its cut-off.
 
   - id: question-context
@@ -167,6 +180,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     reason: The interview showed each question's context and the record dropped it (maintainer, 2026-10-14, bead coding-harness-zs7); the gate holds every answered record from its own recording day on to one non-blank `context` value — presence only, older answers stay exempt (ADR 0018).
 
   - id: criterion-ledger
@@ -176,6 +190,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     reason: Deleting 29 of 30 criterion tests left make verify green (bead coding-harness-909), so every test a plan's criterion ledger names must still exist, while the change is live and after it is archived (ADR 0013).
 
   - id: research-handoff
@@ -185,6 +200,7 @@ gates:
     enforcement: block
     floor: false
     placement: both
+    subsets: [docs]
     reason: A research decision that never reached the maintainer is the loss the swarm exists to prevent (bead coding-harness-icw), so every complete research-swarm/v2 run's obligations need linked maintainer answers, the spec's neighbours header must follow the runs' confirmed paths, and every criterion basis must name supported claims or answered records; a change without v2 evidence is a reported exemption.
 
   - id: gate-schema
@@ -235,6 +251,7 @@ gates:
     enforcement: report
     floor: false
     placement: both
+    subsets: [docs]
     reason: Prose hygiene is reported, not blocked — the linter's taste is not a merge criterion.
 
   - id: lychee
