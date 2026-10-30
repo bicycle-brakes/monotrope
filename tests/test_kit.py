@@ -307,7 +307,7 @@ def test_the_role_check_goes_red_when_a_rule_is_removed(monkeypatch: pytest.Monk
     assert all(p.startswith("Makefile") for p in offen), offen[:5]
     v = probe.pruefe(faelle=GRUENE_FAELLE)
     assert _blockt(v), "unclassified files do not block"
-    assert "unter keine Regel" in _blockgruende(v), _blockgruende(v)
+    assert "fall under no rule" in _blockgruende(v), _blockgruende(v)
 
 
 def test_the_reason_check_goes_red_on_an_invented_reason(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -332,7 +332,7 @@ def test_an_entry_whose_case_disappeared_goes_red(monkeypatch: pytest.MonkeyPatc
     # A case set that does NOT contain exactly this entry.
     v = probe.pruefe(faelle=GRUENE_FAELLE)
     assert _blockt(v), f"{ein_eintrag} has no case any more and still does not block"
-    assert "keinen Fall mehr" in _blockgruende(v), _blockgruende(v)
+    assert "no case any more" in _blockgruende(v), _blockgruende(v)
 
 
 def test_the_cap_goes_red_when_the_list_grows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -343,7 +343,7 @@ def test_the_cap_goes_red_when_the_list_grows(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(probe, "REIST_NICHT", gewachsen)
     v = probe.pruefe(faelle=GRUENE_FAELLE)
     assert _blockt(v), "the list has grown beyond the cap without the cap taking effect"
-    assert "Deckel" in _blockgruende(v), _blockgruende(v)
+    assert "the cap stands" in _blockgruende(v), _blockgruende(v)
 
 
 def test_the_probe_detects_tampering_with_the_workflow_role(monkeypatch: pytest.MonkeyPatch) -> None:
