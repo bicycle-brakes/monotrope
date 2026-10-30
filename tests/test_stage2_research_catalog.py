@@ -163,8 +163,27 @@ def sources():
     thread.join(timeout=2)
 
 
+def refuse_redirect_with_hold(sources: Sources) -> None:
+    """A redirect answers at once and skips the held wait and the overlap barrier, so the two never combine.
+
+    Without this, such a case would fail only at the outer subprocess timeout (review row L7-1).
+    """
+    redirected = {
+        name
+        for name, rule in (
+            ("pi", sources.pi_redirect),
+            ("pi-hop", sources.hop_redirect),
+            ("metadata", sources.metadata_redirect),
+        )
+        if rule is not None
+    }
+    assert not redirected & sources.held, f"a redirected request cannot be held: {sorted(redirected & sources.held)}"
+    assert not (redirected and sources.overlap is not None), "a redirect answers before the overlap barrier"
+
+
 def collect(tmp_path: Path, sources: Sources, **options) -> dict:
     """The actual pinned runtime; executable/auth-read traps surround it."""
+    refuse_redirect_with_hold(sources)
     script = r"""
 import fs from 'node:fs';
 import child from 'node:child_process';
@@ -1297,3 +1316,19 @@ def test_the_bridge_takes_the_admitted_version_from_the_pin_not_a_literal() -> N
     for literal in (f'"{PIN}"', f"'{PIN}'", f"`{PIN}`", f"pi-version={PIN}"):
         assert literal not in source, f"the bridge hard-codes the pinned Pi version as {literal}"
     assert "manifest.dependencies" in source, "the bridge no longer reads the version from the pin"
+
+
+@pytest.mark.parametrize("held", ["pi", "pi-hop", "metadata"])
+def test_a_redirected_request_cannot_also_be_held(sources, held):
+    # Review row L7-1: the redirect branch answers before the held wait, so the harness refuses the combination.
+    sources.pi_redirect = sources.hop_redirect = sources.metadata_redirect = (302, "/elsewhere")
+    sources.held = {held}
+    with pytest.raises(AssertionError, match="cannot be held"):
+        refuse_redirect_with_hold(sources)
+
+
+def test_a_redirect_cannot_meet_the_overlap_barrier(sources):
+    sources.metadata_redirect = (302, "/elsewhere")
+    sources.overlap = threading.Barrier(2)
+    with pytest.raises(AssertionError, match="overlap barrier"):
+        refuse_redirect_with_hold(sources)

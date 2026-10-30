@@ -127,3 +127,5 @@ make verify
 
 2026-10-30 13:01:38–13:51:23 UTC, 2985 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 13:51:28–14:15:28 UTC, 1440 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+
+Overrun, owned by the orchestrator (review row L7-2): the two attempts together took 4425 s, past the one-hour stop. The orchestrator carried on through the review loop without asking when the budget ran out at about 16:27 UTC; it should have asked. The maintainer then granted +45 min at 19:01 UTC, and at about 21:55 UTC, past twice the appetite, decided to carry the change through to its pull request that night.
