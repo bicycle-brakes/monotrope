@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
@@ -69,13 +69,15 @@ the cap only covers invocations through `verify_all.sh`.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_runner_derives_worker_default_from_machine_size — a captured gate value differs from independently stated CPU/memory fixtures on either platform
-- 2: not yet written tests/test_ci.py::test_runner_preserves_explicit_worker_value — a non-empty caller value is overwritten or rejected
-- 3: not yet written tests/test_ci.py::test_runner_defaults_empty_worker_value — empty and unset produce different defaults
-- 4: not yet written tests/test_ci.py::test_runner_worker_detection_degrades_without_failure — partial readings produce the wrong bound or unusable probes fail a passing gate
-- 5: not yet written tests/test_ci.py::test_runner_worker_default_preserves_gate_verdicts — inherited values, blocking/advisory status or later-gate execution differ
+- 1: tests/test_ci.py::test_runner_derives_worker_default_from_machine_size — a captured gate value differs from independently stated CPU/memory fixtures on either platform
+- 2: tests/test_ci.py::test_runner_preserves_explicit_worker_value — a non-empty caller value is overwritten or rejected
+- 3: tests/test_ci.py::test_runner_defaults_empty_worker_value — empty and unset produce different defaults
+- 4: tests/test_ci.py::test_runner_worker_detection_degrades_without_failure — partial readings produce the wrong bound or unusable probes fail a passing gate
+- 5: tests/test_ci.py::test_runner_worker_default_preserves_gate_verdicts — inherited values, blocking/advisory status or later-gate execution differ
 - 6: tests/test_ci.py::test_the_makefile_runs_what_the_one_list_runs — the canonical command and make test recipe diverge
 - 6: not a test — phase-6 review compares the implementation diff with the protected paths and confirms no worker setting outside the local runner; any such edit refutes the boundary
 - 7: not a test — review the paired full-run records against commit, commands, actual worker counts, outcomes and lock/isolation evidence; missing or mismatched evidence refutes the criterion
 
 ## Time used
+
+2026-10-30 22:29:51–22:58:33 UTC, 1722 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
