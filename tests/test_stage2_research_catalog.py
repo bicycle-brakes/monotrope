@@ -1061,6 +1061,7 @@ def test_preflight_accepts_one_pinned_version_redirect(tmp_path, sources, status
         "extra-parameter",
         "credentials",
         "fragment",
+        "empty-fragment",
         "missing-location",
         "unparsable-location",
     ],
@@ -1100,6 +1101,9 @@ def test_preflight_refuses_unapproved_catalog_redirect(tmp_path, sources, fault)
                 location = f"{sources.url.replace('http://', 'http://catalog-user@')}{admitted}"
             elif fault == "fragment":
                 location = f"{admitted}#catalog"
+            elif fault == "empty-fragment":
+                # Phase-6 row F6-1: a bare `#` leaves `URL.hash` empty, so the raw Location is checked.
+                location = f"{admitted}#"
             elif fault == "missing-location":
                 location = None
             else:

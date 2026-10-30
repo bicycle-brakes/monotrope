@@ -74,7 +74,8 @@ export async function collectCatalog({
     const samePairs = (left, right) => canonical(left) === canonical(right);
     if (
       target.origin !== requested.origin || target.pathname !== requested.pathname ||
-      target.username !== "" || target.password !== "" || target.hash !== "" ||
+      // `URL.hash` is empty for a bare `#`, so the raw Location is checked too (phase-6 row F6-1).
+      target.username !== "" || target.password !== "" || target.hash !== "" || location.includes("#") ||
       original.some(([name]) => name === "pi-version") ||
       versions.length !== 1 || versions[0][1] !== version ||
       !samePairs(changed.filter(([name]) => name !== "pi-version"), original)

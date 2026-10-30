@@ -175,7 +175,7 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MINOR | SPEC | Phase 6 | scripts/stage2_research_catalog.mjs:77 | An otherwise admitted Location ending in `&pi-version=1.2.0#` passes validation because `URL.hash` returns an empty string for an empty fragment. Reproduced with the pinned runtime and mocked transport: the bridge issues the hop and returns exit code 0. The fragment prohibition must also reject a bare `#` before contacting the target; the existing test covers only `#catalog`. [Acceptance criterion 2] | Codex | open | — |
+| F6-1 | MINOR | SPEC | Phase 6 | scripts/stage2_research_catalog.mjs:77 | An otherwise admitted Location ending in `&pi-version=1.2.0#` passes validation because `URL.hash` returns an empty string for an empty fragment. Reproduced with the pinned runtime and mocked transport: the bridge issues the hop and returns exit code 0. The fragment prohibition must also reject a bare `#` before contacting the target; the existing test covers only `#catalog`. [Acceptance criterion 2] | Codex | fixed — tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[empty-fragment] | no |
 
 Phase 6 verdict: codex 01a18efa-619e-7222-b310-837a2e982394, 2026-10-30
 Reviewer session: codex 01a18efa-619e-7222-b310-837a2e982394 — a fresh session reviewed: no phase-2a session was recorded
