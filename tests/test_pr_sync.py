@@ -230,6 +230,10 @@ args = sys.argv[1:]
 if mode == "fail-list" and "list" in args:
     sys.exit(3)
 if "list" in args:
+    if "--paginate" in args:
+        # Real `gh pr list` has no --paginate flag (review row P6-1).
+        print("unknown flag: --paginate", file=sys.stderr)
+        sys.exit(1)
     if mode == "empty-list":
         sys.exit(0)
     if mode == "bad-list":
@@ -1263,3 +1267,46 @@ def test_sync_protects_policy_added_on_main(tmp_path: Path, policy: str) -> None
     assert done.returncode == 0, done.stdout + done.stderr
     assert "protected" in done.stdout and "newly-held/work.txt" in done.stdout
     assert world.all_origin_heads() == before
+
+
+def test_discovery_reads_one_bounded_list_and_refuses_a_full_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row P6-1. Planted fault: `gh pr list --paginate` is an unknown flag, so every real sync failed in discovery."""
+    m = _pr_sync()
+    standin = tmp_path / "gh-strict.py"
+    standin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        "known = {'--state', '--json', '--limit'}\n"
+        "flags = [a for a in args if a.startswith('--')]\n"
+        "if any(f not in known for f in flags):\n"
+        "    print('unknown flag', file=sys.stderr); sys.exit(1)\n"
+        "limit = int(args[args.index('--limit') + 1])\n"
+        "print(json.dumps([{} for _ in range(min(limit, 3))]))\n",
+        encoding="utf-8",
+    )
+    standin.chmod(0o755)
+    monkeypatch.setattr(m, "LIST_LIMIT", 3)
+    with pytest.raises(m.Failed, match="truncated"):
+        m.discover(str(standin), tmp_path)
+    monkeypatch.setattr(m, "LIST_LIMIT", 4)
+    with pytest.raises(m.Failed, match="malformed metadata"):
+        m.discover(str(standin), tmp_path)
+
+
+def test_an_export_ignored_plan_file_is_refused_not_dropped(tmp_path: Path) -> None:
+    """Row P6-2. Planted fault: `export-ignore` silently dropped a committed plan from the rendering mirror."""
+    m = _pr_sync()
+    repo = _repo(tmp_path / "repo")
+    for name in ("x", "y"):
+        (repo / "plans" / name).mkdir(parents=True)
+        (repo / "plans" / name / "spec.md").write_text(_artefact("Spec", f"{name}-1"), encoding="utf-8")
+    (repo / ".gitattributes").write_text("plans/y/** export-ignore\n", encoding="utf-8")
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "plans_registry.py").write_text(RENDERER_SAYING.format("index\n"), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--quiet", "-m", "a plan marked export-ignore")
+    with pytest.raises(m.Failed, match="plans/y/spec.md"):
+        m.Render(repo, _git(repo, "rev-parse", "HEAD^{tree}"))

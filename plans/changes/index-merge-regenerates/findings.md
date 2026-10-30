@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-28
 created: 2026-10-28
 last_reviewed: 2026-10-28
-updated: 2026-10-29
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-njtm
@@ -512,8 +512,8 @@ Stage-2 call, 2026-10-29: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:344 | Every real sync fails during discovery because `gh pr list` rejects `--paginate` with `unknown flag: --paginate`. Consequently, eligible branches are never updated and overdue pull requests are never listed. The offline stand-in accepts arbitrary arguments, masking this failure. [Acceptance criteria 5, 10] | Codex | open | — |
-| P6-2 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:481 | If `.gitattributes` marks a committed plan file `export-ignore`, `git archive` silently excludes it from the rendering mirror. Validation sees only the remaining files, and both commands can publish an index missing an artefact that remains in the committed merged tree. Archive omission was reproduced with an injected export attribute. [Acceptance criteria 1, 5, 13] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:344 | Every real sync fails during discovery because `gh pr list` rejects `--paginate` with `unknown flag: --paginate`. Consequently, eligible branches are never updated and overdue pull requests are never listed. The offline stand-in accepts arbitrary arguments, masking this failure. [Acceptance criteria 5, 10] | Codex | fixed — tests/test_pr_sync.py::test_discovery_reads_one_bounded_list_and_refuses_a_full_one | no — red before the fix, green after (orchestrator hand repair 2026-10-30) |
+| P6-2 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:481 | If `.gitattributes` marks a committed plan file `export-ignore`, `git archive` silently excludes it from the rendering mirror. Validation sees only the remaining files, and both commands can publish an index missing an artefact that remains in the committed merged tree. Archive omission was reproduced with an injected export attribute. [Acceptance criteria 1, 5, 13] | Codex | fixed — tests/test_pr_sync.py::test_an_export_ignored_plan_file_is_refused_not_dropped | no — red before the fix, green after (orchestrator hand repair 2026-10-30) |
 
 Phase 6 verdict: codex 01a189ac-3f5d-7621-8f58-185ea6dbdb04, 2026-10-29
 Reviewer session: codex 01a189ac-3f5d-7621-8f58-185ea6dbdb04 — a fresh session reviewed: no phase-2a session was recorded

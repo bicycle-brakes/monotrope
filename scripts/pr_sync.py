@@ -69,6 +69,8 @@ GIT_SECONDS = 120
 RENDER_SECONDS = 300
 GH_SECONDS = 120
 WORKING_DAYS_OVERDUE = 5
+# `gh pr list` has no --paginate; one bounded read, and a full one is refused (review row P6-1).
+LIST_LIMIT = 1000
 
 LIST_FIELDS = (
     "number,url,title,createdAt,baseRefName,headRefName,headRefOid,isCrossRepository,labels,files,changedFiles"
@@ -340,8 +342,8 @@ def parse_pull(item: object) -> Pull:
 
 
 def discover(gh: str, root: Path) -> list[Pull]:
-    """Every open pull request, paginated reads included; failure is an error."""
-    done = run_gh(gh, root, "pr", "list", "--state", "open", "--json", LIST_FIELDS, "--paginate")
+    """Every open pull request in one bounded read; failure or a full read is an error."""
+    done = run_gh(gh, root, "pr", "list", "--state", "open", "--json", LIST_FIELDS, "--limit", str(LIST_LIMIT))
     if done.returncode != 0:
         raise Failed(f"pull-request discovery failed: {tail(done.stderr)}")
     text = done.stdout.decode("utf-8", "replace")
@@ -360,10 +362,12 @@ def discover(gh: str, root: Path) -> list[Pull]:
             pages.append(page)
     except json.JSONDecodeError as error:
         raise Failed(f"pull-request discovery returned output that is not JSON ({error})") from error
+    if not all(isinstance(page, list) for page in pages):
+        raise Failed("pull-request discovery returned output that is not a JSON list")
+    if sum(len(page) for page in pages) >= LIST_LIMIT:
+        raise Failed(f"pull-request discovery reached its limit of {LIST_LIMIT}; the list may be truncated")
     pulls: dict[int, Pull] = {}
     for page in pages:
-        if not isinstance(page, list):
-            raise Failed("pull-request discovery returned output that is not a JSON list")
         for item in page:
             try:
                 pull = parse_pull(item)
@@ -482,10 +486,12 @@ class Render:
             if plans.returncode != 0:
                 raise Failed(f"the merged plans tree could not be materialised: {tail(plans.stderr)}")
             self._extract(plans.stdout, self.mirror / "plans", "plans")
+            self._complete(root, tree, "plans")
             scripts = git(root, "archive", "--format=tar", code, "scripts")
             if scripts.returncode != 0:
                 raise Failed(f"the committed scripts could not be materialised: {tail(scripts.stderr)}")
             self._extract(scripts.stdout, self.mirror / "scripts", "scripts")
+            self._complete(root, code, "scripts")
             self._validate()
         except BaseException:
             self.close()
@@ -515,6 +521,24 @@ class Render:
                         raise Failed(f"the tree entry {member.name} cannot be materialised ({error})") from error
         except tarfile.TarError as error:
             raise Failed(f"the tree archive could not be read ({error})") from error
+
+    def _complete(self, root: Path, tree: str, top: str) -> None:
+        """Every regular file the tree commits under `top` reached the mirror.
+
+        `git archive` honours `export-ignore`, so a committed file can be left
+        out silently (review row P6-2); a missing one refuses the render.
+        """
+        listed = git(root, "ls-tree", "-r", "-z", "--full-tree", tree, "--", top)
+        if listed.returncode != 0:
+            raise Failed(f"the {top} tree could not be listed: {tail(listed.stderr)}")
+        for entry in listed.stdout.decode("utf-8", "replace").split("\0"):
+            if not entry:
+                continue
+            meta, _, name = entry.partition("\t")
+            if meta.split(" ")[0] not in ("100644", "100755"):
+                continue
+            if not self.mirror.joinpath(*PurePosixPath(name).parts).is_file():
+                raise Failed(f"{name}: committed but left out of the archive (export-ignore?); refusing to render")
 
     def _validate(self) -> None:
         """Every artefact the renderer consumes has readable frontmatter and no
