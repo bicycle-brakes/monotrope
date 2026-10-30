@@ -118,3 +118,19 @@ Any variant lands on one or more of these surfaces; which ones is the decision's
   is a decision pull request.
 - **`make close-merged`** is out of scope here.
 
+## Draft gap check — 2026-10-30, base `bdfbe53f`
+
+- `scripts/ci_gates.py` splits the matrix event condition (`generate_ci`)
+  from the summary condition (`_summary_job`); both exclude `merge_group`.
+  `tests/test_ci.py::test_the_schedule_runs_only_the_drift_job` asserts the
+  exact old conditions, so adding only the trigger cannot meet the goal.
+- `docs/governance/quality-gates.md`, the current MG-2 explanation, explicitly
+  requires branch updates and cites merge step 7; it needs the same queue
+  alternative as the rulebook. The rulebook's §4 requires a version increase
+  and four impact lines for every edit; its current version is 5.0.0.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent
+  from this tree. The plan uses the supplied phase-3 form; existing interview,
+  criterion-ledger and research-handoff checks can measure their own contracts.
+- The draft reads no external session registry, tracker store or live PR
+  state: those are outside this attempt's worktree-only reading boundary.
+
