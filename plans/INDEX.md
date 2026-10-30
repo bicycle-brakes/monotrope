@@ -159,6 +159,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/free-member-rate-limit/plan.md`](changes/free-member-rate-limit/plan.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/research.md`](changes/free-member-rate-limit/research.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/spec.md`](changes/free-member-rate-limit/spec.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/design.md`](changes/guard-test/design.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/findings.md`](changes/guard-test/findings.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/plan.md`](changes/guard-test/plan.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/research.md`](changes/guard-test/research.md) | draft | none | 2026-10-29 | coding-harness-0ho |
+| [`changes/guard-test/spec.md`](changes/guard-test/spec.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |
@@ -176,6 +182,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/index-merge-regenerates/decisions.md`](changes/index-merge-regenerates/decisions.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/findings.md`](changes/index-merge-regenerates/findings.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/plan.md`](changes/index-merge-regenerates/plan.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/research.md`](changes/index-merge-regenerates/research.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
+| [`changes/index-merge-regenerates/spec.md`](changes/index-merge-regenerates/spec.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
 | [`changes/interview-context/decisions.md`](changes/interview-context/decisions.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/design.md`](changes/interview-context/design.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/findings.md`](changes/interview-context/findings.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
@@ -216,6 +227,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/pi-pin/plan.md`](changes/pi-pin/plan.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/research.md`](changes/pi-pin/research.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/spec.md`](changes/pi-pin/spec.md) | draft | none | 2026-10-15 | coding-harness-agx |
+| [`changes/plan-held-paths/decisions.md`](changes/plan-held-paths/decisions.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/findings.md`](changes/plan-held-paths/findings.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/plan.md`](changes/plan-held-paths/plan.md) | draft | partial | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/research.md`](changes/plan-held-paths/research.md) | draft | none | 2026-10-29 | coding-harness-h5tj |
+| [`changes/plan-held-paths/spec.md`](changes/plan-held-paths/spec.md) | draft | partial | 2026-10-29 | coding-harness-h5tj |
 | [`changes/provenance-location/decisions.md`](changes/provenance-location/decisions.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/findings.md`](changes/provenance-location/findings.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |

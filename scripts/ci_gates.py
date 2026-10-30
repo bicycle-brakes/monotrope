@@ -41,6 +41,9 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 # sondern ein Schemafehler.
 ENFORCEMENT: tuple[str, ...] = ("advisory", "report", "block")
 JOBS: tuple[str, ...] = ("verify", "drift")
+# Local subsets of the verify job (bead coding-harness-77qj): a gate names the ones it
+# also belongs to under `subsets:`; `--job docs` selects them. No CI job derives from one.
+SUBSETS: tuple[str, ...] = ("docs",)
 
 # The generated workflow's names (bead coding-harness-ei0). The verify gates run
 # in the matrix job, one leg per declared interpreter; a summary job named
@@ -102,6 +105,11 @@ OHNE_AUFRUFER: dict[str, str] = {
     "mutation_evidence.py": (
         "Library — the gate ratchet's analyzer (RB-G4); tests/test_ci.py imports it, and the "
         "pytest gate runs it there (bead coding-harness-diic)"
+    ),
+    "pr_sync.py": (
+        "Entry point, not a gate - the supported local merge (merge-main) and the on-request sync "
+        "(sync) that the day session and the night orchestrator call explicitly; "
+        "tests/test_pr_sync.py runs both offline"
     ),
     "research_capture.py": (
         "Entry point, not a gate - the maintainer-attended F-1 offline capture of the research swarm's free-context "
@@ -337,6 +345,14 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             # Seit bead 1jg.3 liest auch der drift-Job den Tracker (plans-registry-strict):
             # ohne committete Kopie braucht jeder Job mit einem Tracker-Leser die Hydratation.
             fehler.append(f"{gid}: needs_tracker gilt nur fuer Kommando-Gates (bead 4t8)")
+        if "subsets" in g:
+            mengen = g.get("subsets")
+            if not isinstance(mengen, list) or not mengen or any(m not in SUBSETS for m in mengen):
+                fehler.append(f"{gid}: subsets must be a non-empty list drawn from {SUBSETS}, is {mengen!r}")
+            elif len(set(mengen)) != len(mengen):
+                fehler.append(f"{gid}: subsets names one subset twice")
+            if g.get("job") != "verify":
+                fehler.append(f"{gid}: subsets belong to verify gates only (a subset is a part of the verify job)")
         if not g.get("reason"):
             fehler.append(f"{gid}: ohne reason — ein Gate ohne Warum wird nicht gepflegt")
         if g.get("action") and not isinstance(g.get("with"), dict | None):
@@ -354,6 +370,13 @@ def misst_in(gate: dict[str, Any], umfeld: str) -> bool:
     if umfeld == "ci":
         return gate["placement"] != "writer"
     raise ValueError(f"unbekanntes Umfeld {umfeld!r}")
+
+
+def in_job(gate: dict[str, Any], job: str) -> bool:
+    """Whether a gate runs under `--job job`: its own job, or a subset of verify it names."""
+    if job in SUBSETS:
+        return gate["job"] == "verify" and job in gate["subsets"]
+    return gate["job"] == job
 
 
 def gates() -> list[dict[str, Any]]:
@@ -380,6 +403,7 @@ def gates() -> list[dict[str, Any]]:
                 "placement": g["placement"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
+                "subsets": list(g.get("subsets") or []),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
                 "via_local_equivalent": ersatz is not None,
@@ -456,7 +480,7 @@ def report(job: str) -> dict[str, Any]:
         "base": _git("merge-base", "origin/main", "HEAD"),
         "config_sha256": hashlib.sha256(konfig).hexdigest(),
         "gates_total": len(alle),
-        "gates_job": sum(1 for g in alle if g["job"] == job),
+        "gates_job": sum(1 for g in alle if in_job(g, job)),
     }
 
 
@@ -711,7 +735,7 @@ def main() -> int:
         action="store_true",
         help="zu --commands: id<TAB>enforcement<TAB>kommando — fuer den Runner",
     )
-    ap.add_argument("--job", choices=JOBS, default="verify")
+    ap.add_argument("--job", choices=JOBS + SUBSETS, default="verify")
     ap.add_argument(
         "--skip-equivalents",
         action="store_true",
@@ -773,7 +797,7 @@ def main() -> int:
 
     if args.commands:
         for g in alle:
-            if g["job"] != args.job or not g["local_runnable"]:
+            if not in_job(g, args.job) or not g["local_runnable"]:
                 continue
             if args.placement and not misst_in(g, args.placement):
                 continue
