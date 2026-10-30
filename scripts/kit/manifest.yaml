@@ -62,6 +62,9 @@ rules:
   - prefix: docs/WORKFLOW.md
     rolle: mechanismus
     reason: "die sieben Phasen, ihre Artefakte, das Modell je Phase und die Sitzungsuebergabe. Nennt keine Domaene ausser im Verbot, eine zu nennen"
+  - prefix: docs/testing.md
+    rolle: mechanismus
+    reason: "the test strategy of the workflow in six layers; links only files that travel, names no count of this repository (bead coding-harness-vxwp)"
 
   # --- der Mechanismus -------------------------------------------------------
   - prefix: scripts/_verdict.py

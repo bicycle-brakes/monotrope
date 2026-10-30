@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-29
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -462,6 +462,30 @@ Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
 none, because the registry keeps counting it as protection.
 
+### The run report (`make report`)
+
+`make report` prints one local, read-only snapshot: per active `plans/changes/`
+folder (or only `make report CHANGE=<name>`), the measured attempt rows of the
+plan's `## Time used` section with the recorded time against the opening plan
+card's `Appetite:` line, the calls `findings.md` records as call evidence, and
+one live block with runner and verification processes (`scripts/stage2.py`
+invocations, `make verify`, `scripts/verify_all.sh`) and memory figures
+(macOS `memory_pressure`, `vm_stat`, `hw.memsize`; Linux `MemAvailable`,
+`MemTotal`, `Zswap`). The direct form is `python3 scripts/run_report.py
+[--change NAME]`; the default root is the checkout the script lives in.
+
+It is a snapshot to read before a verify-bearing step, **not a gate** — it
+never enters `make verify`. It warns, and only warns: when the recorded time
+has reached half the card's appetite (rejected attempts count; the boundary is
+inclusive), and when available memory is below 25 percent. It starts, stops
+and locks nothing. What it cannot read, it names: an unreadable time record is
+counted (`unread lines: N`) and marks the subtotal incomplete instead of
+guessing a duration; a missing section or unreadable plan is `time not read`,
+never zero; an unreadable card is `appetite not read`, never a fabricated
+ratio; a failing source (`ps`, a memory command, `meminfo`) is `not read`
+while the rest of the report stands. It writes nothing and runs no model,
+tracker or network call.
+
 ### Model routing
 
 | Phase | Model | Why |
@@ -830,9 +854,45 @@ that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
 Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
 `check --fix` with safe fixes only, then `format` — on the change's Python
-files under `scripts/` and `tests/`; what that changed stands first in a failed
-attempt's diagnostics and in the checkpoint commit's message, and a ruff that
-cannot run or leaves findings leaves the verdict to `make verify`.
+files under `scripts/` and `tests/`; what that changed stands in a failed
+attempt's diagnostics (after the findings-restore note, when there is one) and in
+the checkpoint commit's message. This format step itself never decides the
+verdict: a ruff that cannot run or leaves findings fails the attempt in the cheap
+checks below.
+After that format step and still before `make verify`, the runner runs an
+implement or repair attempt's cheap checks and stops at the first red one
+(bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
+`.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
+`.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
+over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
+file the top-level test functions that are new or differ from HEAD (a new file
+whole), the accepted plan's criterion-ledger test references in both forms as
+function ids, and, on a retry, the test ids pytest reported as failed in the
+previous attempt of the same run whose file and test still stand, each by its function without a
+parameter part (a test inherited by a class with a base counts as standing); deduplicated and
+sorted (a file selected whole covers its own ids, which are then not repeated as
+explicit targets), and no importer of a changed `scripts/` module is selected
+(`decisions.md` Q-3 of the change). The cheap checks run on the attempt's own
+bytes, before the runner stamps documents and renders derived files: a selected
+test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
+line) sees it unprepared, and such a test belongs to `make verify`, not to the
+cheap run (review row L9-1). A command with no target is skipped; a red,
+unstartable or over-bound command fails the attempt before `make verify`
+starts, and its identified command, exit and protected output stand in that
+attempt's diagnostics and the next attempt's prompt. Cheap green replaces
+nothing: full `make verify` and the existing answer checks still decide every
+attempt. An implement or repair attempt's edit of the change's `findings.md`
+is not a failure: the runner restores its own pre-call snapshot before any
+check reads model-written state — through the recovery preflight, never
+through a linked parent — and records the restoration in the attempt's
+bookkeeping with its real verdict: a note beside the failure for a rejected
+attempt, a quoted notice under the audit line of one that passes. The
+implement and repair prompts carry the accepted plan's ledger test references
+as must-runs before handback, taken from the plan's snapshot so a retry
+rereads nothing its predecessor may have edited: a command-capable Codex runs
+ruff and the named tests itself before handing back, while the file-only Flash
+and Sonnet routes delegate the same checks to the runner, with no extra tool
+of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
 is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
@@ -1419,7 +1479,16 @@ reword its reason so it names no fix instead of marking it fixed.
 **Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
-only when pytest exits 1 or 2 there. When every post-run check passes —
+only when pytest exits 1 or 2 there. The repair prompt names the accepted
+plan's ledger tests as must-runs before handback, and commands Codex to run
+ruff and them itself; a file-only fallback delegates the same cheap checks to
+the runner, which stops at the first red one before `make verify`. An
+attempt's edit of the change's `findings.md` is restored from the runner's
+pre-call snapshot before any check reads model-written state: the fixed lines
+are validated against the restored file, and the restoration stands in the
+attempt's bookkeeping with its real verdict — a note beside the failure when
+the attempt is rejected, a quoted notice under its audit line when it passes.
+When every post-run check passes —
 `make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
