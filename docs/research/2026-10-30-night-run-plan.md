@@ -167,7 +167,7 @@ How far a queued bead goes:
 | B | fewer full verifies: draft checks only the gates its documents touch (coding-harness-77qj, bounded; if it needs `scripts/stage2.py`, it moves behind lane A) · time records as data (coding-harness-v6vk, bounded) |
 | C | fast pre-check and full failure messages before verify (coding-harness-csm, feature) · a live view of a running Pi round (coding-harness-uco, feature) |
 | D | the test-strategy docs (coding-harness-vxwp, bounded) · every change has a bead that declares its class (coding-harness-680l, bounded) · translate the remaining German, one area per pull request (coding-harness-yim, bounded) |
-| E | pin the merge queue's method and group sizes (coding-harness-tsdr, bounded; only after the maintainer merges the merge-queue decision) · auto-merge a self-mergeable pull request on green CI (coding-harness-p3xq, bounded) · small changes skip the review loop (coding-harness-fctf, feature) |
+| E | pin the merge queue's method and group sizes (coding-harness-tsdr, bounded; only after the maintainer merges the merge-queue decision) · beads close themselves: a reconciler closes every bead named in a `Closes-Bead` trailer on `main`, at session start and in every own merge step (coding-harness-l1if, bounded; maintainer, 2026-10-30 ~22:50 UTC) · auto-merge a self-mergeable pull request on green CI (coding-harness-p3xq, bounded) · small changes skip the review loop (coding-harness-fctf, feature) |
 
 Not queued, because each needs a maintainer decision first:
 
