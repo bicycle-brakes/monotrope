@@ -48,7 +48,7 @@ make verify
 ## Criterion ledger
 
 - 1: tests/test_stage2.py::test_the_plan_prompt_names_every_runner_held_path — a held entry is omitted; a planted new entry absent from the prompt must fail the coverage check.
-- 2: not a test — phase-6 review compares the prompt's rule with committed-map, exactly-human-decided semantics; omission, an edited-map source or a mixed-class rule refutes it.
+- 2: tests/test_stage2.py::test_the_plan_prompt_names_every_runner_held_path — the rule sentence is weakened or lost; also phase-6 review compares the prompt's rule with committed-map, exactly-human-decided semantics; omission, an edited-map source or a mixed-class rule refutes it.
 - 3: not a test — phase-6 review checks the prompt requires an orchestrator bootstrap edit after the accepted attempt; missing ownership or timing, or attempt ownership, refutes it.
 
 ## Not touched
@@ -68,3 +68,4 @@ shows the card unchanged before carrying out the manual implementation.
 2026-10-29 22:56:49–22:58:17 UTC — implement · orchestrator bootstrap edit by hand (prompts/ is runner-held): test red first (all fifteen RUNNER_HELD entries missing), prompt item added, test green · measured with `date -u`
 2026-10-29 23:28:00–23:36:54 UTC — review loop round 1 · Flash swarm, nine rows, all repaired by the orchestrator: L1-1, L1-2, L1-9 in the prompt item and its test (red first on the word substantively), L1-3 to L1-8 in the change's own headers and research text · measured with `date -u` (start read from the prepare-loop line, to the minute)
 2026-10-30 00:07:00–00:10:54 UTC — review loop round 2 · glm-5.3-flash, three rows: L2-1 and L2-2 repaired by the orchestrator, test red first; L2-3 rejected as false · measured with `date -u` (start read from the verify line, to the minute)
+2026-10-30 00:35:00–00:38:32 UTC — review loop round 3 · hy3, three rows: L3-3 repaired by the orchestrator (red against a planted weakening); L3-1 rejected as false, L3-2 as an accepted limit · measured with `date -u` (start read from the verify line, to the minute)

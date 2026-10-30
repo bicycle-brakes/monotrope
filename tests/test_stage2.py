@@ -774,6 +774,10 @@ def test_the_plan_prompt_names_every_runner_held_path() -> None:
     assert "derived leftovers" not in item, "the item names a carve-out wider than the runner's"
     assert _held_drift(item, stage2.RUNNER_HELD) == ([], [])
     assert "never commits" in item and "orchestrator" in item, "the item no longer routes held edits away"
+    rule = " ".join(item.split())
+    assert "`allowed` classes in the committed `provenance.yaml` are exactly `human-decided`" in rule, (
+        "the item lost the committed-map, exactly-human-decided rule (criterion 2, review row L3-3)"
+    )
     assert "substantive" not in item, "the item lets an attempt make a small held edit the runner refuses"
     assert _held_drift(item, (*stage2.RUNNER_HELD, "planted-held-path/")) == (["planted-held-path/"], [])
     assert _held_drift(item, stage2.RUNNER_HELD[1:]) == ([], [stage2.RUNNER_HELD[0]])
