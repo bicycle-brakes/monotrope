@@ -181,21 +181,30 @@ endpunkte:
       - minimax-m3
       - mimo-v2.6-pro
       - deepseek-v4-pro
-      - glm-5.2
+      - glm-5.2  # not reachable since 2026-10-30 (prepare-loop: 403, access disabled); kept, marked, on the maintainer's word (plans/changes/kimi-admission Q-3)
       - glm-5.3
       - hy3
       - hy4-preview
-      - mimo-v2.5
-      - mimo-v2.5-pro
+      - mimo-v2.5  # not reachable since 2026-10-30 (prepare-loop: 410, deprecated); kept, marked, on the maintainer's word (plans/changes/kimi-admission Q-3)
+      - mimo-v2.5-pro  # not reachable since 2026-10-30 (prepare-loop: 410, deprecated); kept, marked, on the maintainer's word (plans/changes/kimi-admission Q-3)
       - mimo-v2.6-flash
       - qwen3.7-plus
       - qwen3.8-max
+      - kimi-k3
+      - kimi-k2.7-code
+      - grok-4.7
+      - gpt-5.6-luna
+      - gemini-4-argon
+      - kimi-k3.1-pro
+      - minimax-m3.1-flash
+      - step-5-preview
+      - beam-free
     modelle_terms:
       deepseek-v4.1-flash:
         gelesen: "2026-10-29"
-        valid_until: "2026-10-31"
+        valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31; re-read 2026-10-29, no renewal published)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
         training: "Not used"
         anfragen_5h: 34670
         anfragen_gelesen: "2026-10-17"
@@ -273,13 +282,14 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       deepseek-v4-pro:
         gelesen: "2026-10-29"
-        valid_until: "2026-10-31"
+        valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-10-31; re-read 2026-10-29, no renewal published)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      # Not reachable since 2026-10-30: prepare-loop got 403, access disabled; kept, marked (kimi-admission Q-3).
       glm-5.2:
         gelesen: "2026-10-22"
         valid_until: "2026-11-21"
@@ -316,6 +326,7 @@ endpunkte:
         anfragen_5h: 1350
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      # Not reachable since 2026-10-30: prepare-loop got 410, deprecated; kept, marked (kimi-admission Q-3).
       mimo-v2.5:
         gelesen: "2026-10-22"
         valid_until: "2026-11-21"
@@ -325,6 +336,7 @@ endpunkte:
         anfragen_5h: 30100
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      # Not reachable since 2026-10-30: prepare-loop got 410, deprecated; kept, marked (kimi-admission Q-3).
       mimo-v2.5-pro:
         gelesen: "2026-10-22"
         valid_until: "2026-11-21"
@@ -365,6 +377,89 @@ endpunkte:
         anfragen_5h: 160
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      kimi-k3:
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 110
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      kimi-k2.7-code:
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 1350
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      grok-4.7:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Responses endpoint)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 169
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      gpt-5.6-luna:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Responses endpoint)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 2050
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      gemini-4-argon:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      kimi-k3.1-pro:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 147
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      minimax-m3.1-flash:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      step-5-preview:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30); the catalog lists step-5-preview-free"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      beam-free:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
     # Legacy membership for declarations without availability_preflight.
     # Fresh runs of this declaration select the cheapest reachable members.
     availability_preflight:
@@ -593,12 +688,6 @@ ausgeschlossen:
       Zeilen verlassen die Umgebung des Kunden nicht. Das ist keine Frage des
       Anbieters, sondern der Architektur: die Maschine baut die Pipeline, sie
       liest die Daten nicht.
-  - was: "Kimi (Moonshot AI; models k3 and kimi-for-coding)"
-    klasse: framework
-    # The ids and id prefixes the runner matches (`excluded_problem`): without them the
-    # decision bound nothing, and a Kimi free id in the live catalog would have reviewed
-    # diffs (DL-B-12 of the loop's deep review, 2026-10-25).
-    modelle: [kimi, k3, moonshot]
-    grund: >-
-      Dropped by the maintainer on 2026-09-30 — stage 2 reviews with Codex and
-      GLM (ADR 0007).
+  # Kimi (Moonshot AI) stood here from 2026-09-30 (ADR 0007, decision 3). The
+  # maintainer lifted the exclusion on 2026-10-30 (bead coding-harness-bomd);
+  # Kimi models are admitted through their terms readings under `opencode-go`.

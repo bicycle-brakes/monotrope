@@ -198,6 +198,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-fenced-examples/plan.md`](changes/interview-fenced-examples/plan.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/research.md`](changes/interview-fenced-examples/research.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/spec.md`](changes/interview-fenced-examples/spec.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/kimi-admission/decisions.md`](changes/kimi-admission/decisions.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
+| [`changes/kimi-admission/research.md`](changes/kimi-admission/research.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
+| [`changes/kimi-admission/spec.md`](changes/kimi-admission/spec.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
 | [`changes/ledger-instance-layout/research.md`](changes/ledger-instance-layout/research.md) | draft | none | 2026-10-12 | coding-harness-s9m |
 | [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
@@ -383,6 +386,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-absolute-python/plan.md`](changes/verify-absolute-python/plan.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/research.md`](changes/verify-absolute-python/research.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/spec.md`](changes/verify-absolute-python/spec.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-machine-lock/decisions.md`](changes/verify-machine-lock/decisions.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
+| [`changes/verify-machine-lock/findings.md`](changes/verify-machine-lock/findings.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
+| [`changes/verify-machine-lock/plan.md`](changes/verify-machine-lock/plan.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
+| [`changes/verify-machine-lock/research.md`](changes/verify-machine-lock/research.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
+| [`changes/verify-machine-lock/spec.md`](changes/verify-machine-lock/spec.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
 | [`changes/verify-stages-new-files/decisions.md`](changes/verify-stages-new-files/decisions.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/findings.md`](changes/verify-stages-new-files/findings.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/plan.md`](changes/verify-stages-new-files/plan.md) | draft | partial | 2026-10-25 | coding-harness-fdz |

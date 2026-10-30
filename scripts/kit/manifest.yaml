@@ -85,6 +85,9 @@ rules:
   - prefix: scripts/verify_all.sh
     rolle: mechanismus
     reason: "der lokale Lauf: haelt keine Kommandos, fragt ci_gates.py (bead bo0)"
+  - prefix: scripts/verify_lock.py
+    rolle: mechanismus
+    reason: "die rechnerweite Zulassung des Laufs (Warteschlange, freier Speicher), die verify_all.sh ausfuehrt; ohne sie ist der exportierte Lauf nicht betretbar (bead coding-harness-p6mu)"
   - prefix: scripts/check_docs.py
     rolle: mechanismus
     reason: "Frontmatter-, Link- und Anchor-Pruefung fuer die Dokumentation (bead bo0)"
@@ -213,6 +216,9 @@ rules:
   - prefix: tests/test_ci.py
     rolle: mechanismus
     reason: "die Ableitung reist; die Scriptmenge dieses Repos ist Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_verify_lock.py
+    rolle: mechanismus
+    reason: "die Zulassung reist mit dem Lauf, den sie umstellt; ihre Faelle bauen eigene State-Roots und beruehren den echten Rechner-Schloss nicht (bead coding-harness-p6mu)"
   - prefix: tests/test_feedback_channel.py
     rolle: mechanismus
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"

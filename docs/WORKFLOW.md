@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-29
+updated: 2026-10-30
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -85,7 +85,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -457,6 +457,32 @@ CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
+**One admission per user and machine** (bead coding-harness-p6mu). Before its
+gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+— shared across repositories and worktrees, so the three-lane trial's
+concurrent full checks cannot happen again. Waiters are admitted in
+registration order; while waiting, an entry logs its wait immediately and
+every five minutes, naming the holder's process id, command and start time.
+A nested protected entry — a check descended from a live admission — carries
+`HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
+instead of deadlocking on it; a stale or unrelated marker uses ordinary
+admission. After the lock, admission reads the system's free memory (macOS
+`memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
+`MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
+the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
+finite percentage in `[0, 100]`, equality admitting. Readings below the floor
+for 60 minutes from the first low one refuse the entry, naming the floor and
+the last reading; a reading that cannot be taken is logged and the entry
+proceeds. Unusable state — a substituted or unwritable lock, holder or queue
+file — refuses the entry before any protected work instead of running
+unlocked. Ownership ends only when the protected work and its children stop,
+including on failure, cancellation and signals, so a dead entry never blocks
+the next one. The queue and memory waits consume no runner step limit and no
+pytest proof's execution timeout; the configured limits still bind the
+executing check. Hosted CI is untouched: its gate steps never enter the
+runner's shell path, and nothing disables admission because CI is set.
+
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
@@ -733,6 +759,14 @@ for another repository is `templates/agents-mergeable-prs.md`.
   itself, an in-progress merge or rebase and a dirty checkout, and it never
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
+- **Merging a series, one at a time.** With "branches must be up to date"
+  on `main`, every merge puts the other open pull requests behind. Each
+  next one is brought up to date, its new checks are awaited until every
+  check has completed (a pending check has no conclusion yet; an empty or
+  pending rollup is not green), and it merges against its new head with
+  `--match-head-commit`. Merging eight pull requests on 2026-10-30 cost one
+  CI run each this way; a merge queue (bead coding-harness-eh42, decided
+  2026-10-28) replaces the rule.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
@@ -1530,6 +1564,51 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
+  An appetite that runs out is not such a stop: by day the session extends
+  it by itself once, up to twice the card's appetite, and says so in its
+  next status message; it asks at twice the appetite, at an open
+  `[DECISION]` or at a structural choice like this one (maintainer,
+  2026-10-30; `prompts/04-implement.md`, "The appetite is a stop").
+- **When no choke point closes it, the spec names the boundary.** On
+  2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
+  mechanism in nine phase-6 rows: a protected descendant outliving the
+  admission, each time on a new process path. The maintainer chose a simpler
+  proof of belonging (an admission token in the environment instead of
+  process ancestry) and a `Boundary` section in the change's spec that names
+  the remaining case, a hard-killed intermediate process, as an accepted
+  limit. Phase 6 judges against the spec, so a row that describes only the
+  named limit is rejected as that limit, not repaired again.
+
+### Hand repairs by the orchestrator
+
+When the orchestrator repairs a row itself instead of through `repair`
+(a held path, a one-line fix, a re-check row), three follow-ups are owed,
+each learned on the night of 2026-10-29/30:
+
+- **The loop record learns the repair.** The orchestrator sets the row's
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
+  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  backup of `loop.md`. Otherwise the next round refuses with "taken rows are
+  not repaired yet".
+- **A header or status edit regenerates the index.** After a hand edit of a
+  change file's frontmatter, `scripts/plans_registry.py --index` runs before
+  the commit; a stale `plans/INDEX.md` turns `make verify` red.
+- **After local midnight the stamps follow the local date.**
+  `scripts/check_frontmatter_current.py --stamp` runs before a commit after
+  local midnight: the `updated:` field takes the local date, which differs
+  from UTC in the hours after midnight in Europe/Berlin.
+- **A targeted check, not a full verify, before the next round**
+  (maintainer, 2026-10-30; bead coding-harness-24ag). A full `make verify`
+  takes 12 to 13 minutes under the machine's one verify lock (measured
+  2026-10-30), and a hand repair touches a few files. After a hand repair the
+  orchestrator runs, outside the lock: the test files the repair touched, the
+  test files `scripts/touch_map.py` links to the touched code, `ruff` on the
+  touched files, and the gates the touched kinds of file feed (for example
+  `plans_registry.py --check`, `check_frontmatter_current.py`,
+  `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
+  round starts. One full `make verify` under the lock runs on the final head
+  before phase 6 and before the pull request leaves draft; CI stays the full
+  gate. A runner repair keeps the runner's own `make verify`.
 
 ### Night runs
 
