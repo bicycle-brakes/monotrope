@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-29
+updated: 2026-10-30
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -733,6 +733,14 @@ for another repository is `templates/agents-mergeable-prs.md`.
   itself, an in-progress merge or rebase and a dirty checkout, and it never
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
+- **Merging a series, one at a time.** With "branches must be up to date"
+  on `main`, every merge puts the other open pull requests behind. Each
+  next one is brought up to date, its new checks are awaited until every
+  check has completed (a pending check has no conclusion yet; an empty or
+  pending rollup is not green), and it merges against its new head with
+  `--match-head-commit`. Merging eight pull requests on 2026-10-30 cost one
+  CI run each this way; a merge queue (bead coding-harness-eh42, decided
+  2026-10-28) replaces the rule.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
@@ -1530,6 +1538,34 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
+- **When no choke point closes it, the spec names the boundary.** On
+  2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
+  mechanism in nine phase-6 rows: a protected descendant outliving the
+  admission, each time on a new process path. The maintainer chose a simpler
+  proof of belonging (an admission token in the environment instead of
+  process ancestry) and a `Boundary` section in the change's spec that names
+  the remaining case, a hard-killed intermediate process, as an accepted
+  limit. Phase 6 judges against the spec, so a row that describes only the
+  named limit is rejected as that limit, not repaired again.
+
+### Hand repairs by the orchestrator
+
+When the orchestrator repairs a row itself instead of through `repair`
+(a held path, a one-line fix, a re-check row), three follow-ups are owed,
+each learned on the night of 2026-10-29/30:
+
+- **The loop record learns the repair.** The orchestrator sets the row's
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
+  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  backup of `loop.md`. Otherwise the next round refuses with "taken rows are
+  not repaired yet".
+- **A header or status edit regenerates the index.** After a hand edit of a
+  change file's frontmatter, `scripts/plans_registry.py --index` runs before
+  the commit; a stale `plans/INDEX.md` turns `make verify` red.
+- **After local midnight the stamps follow the local date.**
+  `scripts/check_frontmatter_current.py --stamp` runs before a commit after
+  local midnight: the `updated:` field takes the local date, which differs
+  from UTC in the hours after midnight in Europe/Berlin.
 
 ### Night runs
 
