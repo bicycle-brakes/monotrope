@@ -107,6 +107,17 @@ by an active merge queue or by required checks with the strict up-to-date flag.
    requests, a different merge method is configured, or required `verify`
    does not run successfully on an actual merge-group candidate.
 
+## Boundary
+
+- Accepted limit, queue parameters (maintainer, 2026-10-30, "Erst messen,
+  dann pinnen"): the local ruleset check accepts any active merge queue as
+  the freshness alternative and does not pin its merge method or group
+  sizes. Criterion 9's merge commits and groups of one are read back live
+  once after activation (plan step 6). Pinning them in the local check waits
+  for the field names GitHub reports on the live rule, in follow-up bead
+  coding-harness-tsdr; the fixtures' parameter names are not measured. A
+  review row that describes only this case is this limit, not a finding.
+
 ## Non-goals
 
 - A repository-local queue, scheduler or new merge service.
