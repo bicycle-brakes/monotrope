@@ -853,6 +853,21 @@ def classify_skip(pull: Pull, held: list[str]) -> str | None:
     return None
 
 
+def branch_held_paths(root: Path, main_tip: str, head: str, held: list[str]) -> list[str]:
+    """The held paths the branch touches since its merge base, read from git itself.
+
+    `gh` names a rename by its destination alone, so a file moved out of a
+    held path looked unprotected (review row P6-3). Without rename detection
+    git lists a move as the deletion of its source and the addition of its
+    destination, so both paths are judged.
+    """
+    done = git(root, "diff", "--no-renames", "--name-only", "-z", f"{main_tip}...{head}")
+    if done.returncode != 0:
+        raise Failed(f"the branch's changed paths cannot be read: {tail(done.stderr)}")
+    paths = [name for name in done.stdout.decode("utf-8", "replace").split("\0") if name]
+    return sorted({path for path in paths if path_is_held(path, held)})
+
+
 def working_days_after(created: dt.date, today: dt.date) -> int:
     """UTC weekdays strictly after the creation date through today."""
     days = 0
@@ -983,6 +998,10 @@ def sync_main(root: Path, gh: str, today: dt.date) -> int:
                         f"({pull.head[:12]}); nothing is pushed",
                     )
                 )
+                continue
+            touched = branch_held_paths(root, main_tip, pull.head, held)
+            if touched:
+                outcomes.append((pull, "protected", "runner-held or human-decided paths: " + ", ".join(touched)))
                 continue
             problem = checkout_problem(root, pull.branch, branch_ref)
             if problem is not None:

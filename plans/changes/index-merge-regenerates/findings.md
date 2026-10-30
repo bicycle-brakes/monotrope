@@ -760,7 +760,7 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-3 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:320–329 | Renaming `docs/adr/0001-recorded.md` to `docs/research/0001-recorded.md` bypasses protection: `gh` reports the destination path without the `previous_path` field this parser expects. The file-count check passes, and classification returns no protection reason, as reproduced with the committed policy. An otherwise eligible branch behind main is consequently merged and pushed despite changing a human-decided path. Both rename endpoints must be checked. [Acceptance criterion 7] | Codex | open | — |
+| P6-3 | MAJOR | SPEC | Phase 6 | scripts/pr_sync.py:320–329 | Renaming `docs/adr/0001-recorded.md` to `docs/research/0001-recorded.md` bypasses protection: `gh` reports the destination path without the `previous_path` field this parser expects. The file-count check passes, and classification returns no protection reason, as reproduced with the committed policy. An otherwise eligible branch behind main is consequently merged and pushed despite changing a human-decided path. Both rename endpoints must be checked. [Acceptance criterion 7] | Codex | fixed — tests/test_pr_sync.py::test_a_rename_out_of_a_protected_path_is_protected | no — red before the fix, green after (orchestrator hand repair 2026-10-30) |
 
 Phase 6 verdict: codex 01a18bf3-caf7-7431-94e9-4e54733bdee3, 2026-10-30
 Reviewer session: codex 01a18bf3-caf7-7431-94e9-4e54733bdee3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

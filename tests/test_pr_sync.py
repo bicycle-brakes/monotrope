@@ -530,7 +530,8 @@ def test_sync_skips_protected_work(tmp_path: Path) -> None:
     world.advance_main([("alpha/spec.md", "alpha-1"), ("delta/spec.md", "delta")])
 
     def pushed_branch(name: str) -> str:
-        world.branch(name)
+        # From main, so no branch carries another's protected change: git itself is read too (P6-3).
+        world.branch(name, "main")
         world.write_plans(f"{name.split('/')[-1]}/spec.md", _artefact(name, f"bead-{name}"))
         head = world.commit_raw(name)
         world.push(name)
@@ -539,7 +540,7 @@ def test_sync_skips_protected_work(tmp_path: Path) -> None:
     decision_head = pushed_branch("feat/decision")
     title_head = pushed_branch("feat/decidable")
     held_head = pushed_branch("feat/held")
-    world.branch("feat/held2")
+    world.branch("feat/held2", "main")
     world.write_root("docs/adr/0001-recorded.md", "# an ADR\n")
     decided_head = world.commit_raw("changes a human-decided path")
     world.push("feat/held2")
@@ -1310,3 +1311,24 @@ def test_an_export_ignored_plan_file_is_refused_not_dropped(tmp_path: Path) -> N
     _git(repo, "commit", "--quiet", "-m", "a plan marked export-ignore")
     with pytest.raises(m.Failed, match="plans/y/spec.md"):
         m.Render(repo, _git(repo, "rev-parse", "HEAD^{tree}"))
+
+
+def test_a_rename_out_of_a_protected_path_is_protected(tmp_path: Path) -> None:
+    """Row P6-3. Planted fault: gh reports a rename by its destination alone, so a branch moving an
+    ADR out of the human-decided `docs/adr/` looked unprotected and was updated."""
+    world = World(tmp_path)
+    world.write_root("docs/adr/0001-recorded.md", "# an ADR\n")
+    world.commit_raw("main records an ADR")
+    world.push("main")
+    world.advance_main([("alpha/spec.md", "alpha-1"), ("delta/spec.md", "delta")])
+    world.branch("feat/rename", "HEAD~1")
+    (world.work / "docs" / "research").mkdir(parents=True, exist_ok=True)
+    _git(world.work, "mv", "docs/adr/0001-recorded.md", "docs/research/0001-recorded.md")
+    head = world.commit_raw("moves the ADR out of the decided path")
+    world.push("feat/rename")
+    world.checkout("main")
+    pulls = [Pull(21, "feat/rename", head, files=[{"path": "docs/research/0001-recorded.md"}])]
+    before = world.all_origin_heads()
+    done = world.run_sync(pulls=pulls)
+    assert "docs/adr/0001-recorded.md" in done.stdout, done.stdout + done.stderr
+    assert world.all_origin_heads() == before, "a branch renaming a protected file was updated"
