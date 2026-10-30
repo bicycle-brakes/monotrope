@@ -670,3 +670,14 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a18c84-d2db-70f2-981c-49cfc301696d, 2026-10-30
 Reviewer session: codex 01a18c84-d2db-70f2-981c-49cfc301696d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2732 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:677–680; scripts/stage2.py:932–938 | After the original holder dies, a surviving nested runner can still deadlock its next `make verify`. Nested admission yields `None`, so `launch()` starts a new session without publishing its relation to the admission. The child rejects its inherited marker and queues behind the lock its ancestor retains. New read-only evidence at `08498ef6`: an isolated lock/session probe accepted the marker in the surviving session and rejected it after `start_new_session=True`. The repair covers launches owning an admission, but leaves this nested path unprotected. [Acceptance criteria 5, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a18cc6-f145-7243-96ee-c615aea86b57, 2026-10-30
+Reviewer session: codex 01a18cc6-f145-7243-96ee-c615aea86b57 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
