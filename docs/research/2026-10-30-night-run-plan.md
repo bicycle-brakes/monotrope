@@ -1,5 +1,5 @@
 ---
-title: "Night-run plan — 2026-10-30/31"
+title: "Night-run plan — 2026-10-30/31, extended to 14:00 UTC"
 category: research
 created: 2026-10-30
 updated: 2026-10-30
@@ -17,10 +17,12 @@ tags: [night-run, plan, lanes, stage-2]
 
 **This is the plan for tonight. It does not report a run.** The maintainer
 asked for it on 2026-10-30 at about 22:05 UTC ("Bitte mache einen Nachtplan
-für alle fünf Lanes"). It follows the
+für alle fünf Lanes") and extended it at about 22:20 UTC to 15:00
+Europe/Berlin the next day ("Mach den Plan bis morgen 15 Uhr"), which is
+14:00 UTC on 2026-10-31. It follows the
 [plan of 2026-10-29](2026-10-29-night-run-plan.md) and keeps its rules except
 where this page says otherwise. One orchestrating Claude Code session works
-five lanes until 07:00 UTC, then hands over. The plan grants no new model,
+five lanes until 14:00 UTC on 2026-10-31, then hands over. The plan grants no new model,
 architecture or deployment permission. Task state stays in Beads.
 
 ## State at the start
@@ -51,7 +53,7 @@ The rules of the 2026-10-29 plan hold:
 
 - the appetite is a stop;
 - a feature change runs explore only;
-- no merges;
+- no merges until 07:00 UTC (the night);
 - a leak-check BLOCK or a security BLOCKER stops the run;
 - no lane sub-agents.
 
@@ -143,9 +145,28 @@ mechanism, park that pull request.
 
 Fallback when a lane runs dry: lane D's item 3.
 
-## Morning
+## The day part, 07:00–14:00 UTC
 
-By 07:00 UTC, a handover from its own worktree lists:
+From 07:00 UTC the day rules apply to the same five lanes:
+
+1. The first merge is PR #292 (the appetite rule), then the plan and handover
+   pull requests stay the maintainer's.
+2. A non-decision pull request with green CI merges through a Haiku merge
+   agent, with `--match-head-commit` and the full head SHA, one at a time,
+   never `--admin`. A decision pull request (the merge queue) waits for the
+   maintainer's word.
+3. The appetite rule holds by day: the session extends once, up to twice, and
+   asks only at twice the appetite, at an open `[DECISION]`, or at a
+   structural choice after a second finding of one mechanism.
+4. Questions are collected for the 15:00 Europe/Berlin block, apart from a
+   stop that blocks every lane.
+5. Each lane takes its next item from `tools/bd ready` once its plan items
+   are done; the queue stays visible in the beads.
+
+## Handover
+
+At 07:00 UTC, a short status goes to the maintainer in the conversation.
+By 14:00 UTC, a handover from its own worktree lists:
 
 - the ready pull requests, each with its full head SHA;
 - the parked items, each with a proposal;
