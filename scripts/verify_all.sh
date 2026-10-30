@@ -9,6 +9,7 @@
 # Usage:
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
+#   bash scripts/verify_all.sh --job docs    # only the document gates (the draft verb, bead coding-harness-77qj)
 #   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not
 
@@ -63,13 +64,17 @@ case "$PYTHON" in
         esac ;;
 esac
 
+# The arguments the caller handed us, kept before the parse loop consumes them:
+# the admission supervisor below re-runs this script with them unchanged.
+ORIGINAL_ARGS=("$@")
+
 JOB="verify"
 CI_MODE=0
 LIST=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --job)
-            [ $# -ge 2 ] || { echo "--job needs a value (verify|drift)" >&2; exit 2; }
+            [ $# -ge 2 ] || { echo "--job needs a value (verify|drift|docs)" >&2; exit 2; }
             JOB="$2"; shift 2 ;;
         --ci) CI_MODE=1; shift ;;
         --list) LIST=1; shift ;;
@@ -79,6 +84,19 @@ done
 
 if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
+fi
+
+# One machine-wide admission for this user (queue, free-memory check) before
+# any protected work: concurrent full checks across repositories and worktrees
+# exhausted the machine (bead coding-harness-p6mu). A valid inherited marker
+# (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
+# ancestor already holds — re-enter the unchanged gate loop directly; the
+# module is invoked as `-m scripts.verify_lock`, and the supervisor below
+# execs this script again with the original arguments.
+if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
+    :
+else
+    exec "$PYTHON" -m scripts.verify_lock -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi
 
 # The report binds the verdict to a state of the world: which commit ran,

@@ -21,7 +21,7 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
@@ -185,11 +185,11 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   step) and resumes or restarts there. One change at a time, with few agents
   and a visible queue.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
-  days, three per hot file, sliced over ~800 lines; questions in one 15:00 block (`docs/WORKFLOW.md`).
+  days, three per hot file, sliced over ~800 lines, merged one at a time against the new head once every check completed; questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without asking; style rows
-  are accepted limits named in the PR. A second finding of one mechanism ends case repair (`docs/WORKFLOW.md` §4).
+  are accepted limits named in the PR. A second finding of one mechanism ends case repair; a mechanism no choke point closes gets a `Boundary` in its spec; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
 
 ## Sibling repositories
 

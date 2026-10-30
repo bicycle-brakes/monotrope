@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-30
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -85,7 +85,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -457,10 +457,60 @@ CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
+**One admission per user and machine** (bead coding-harness-p6mu). Before its
+gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+— shared across repositories and worktrees, so the three-lane trial's
+concurrent full checks cannot happen again. Waiters are admitted in
+registration order; while waiting, an entry logs its wait immediately and
+every five minutes, naming the holder's process id, command and start time.
+A nested protected entry — a check descended from a live admission — carries
+`HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
+instead of deadlocking on it; a stale or unrelated marker uses ordinary
+admission. After the lock, admission reads the system's free memory (macOS
+`memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
+`MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
+the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
+finite percentage in `[0, 100]`, equality admitting. Readings below the floor
+for 60 minutes from the first low one refuse the entry, naming the floor and
+the last reading; a reading that cannot be taken is logged and the entry
+proceeds. Unusable state — a substituted or unwritable lock, holder or queue
+file — refuses the entry before any protected work instead of running
+unlocked. Ownership ends only when the protected work and its children stop,
+including on failure, cancellation and signals, so a dead entry never blocks
+the next one. The queue and memory waits consume no runner step limit and no
+pytest proof's execution timeout; the configured limits still bind the
+executing check. Hosted CI is untouched: its gate steps never enter the
+runner's shell path, and nothing disables admission because CI is set.
+
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
 none, because the registry keeps counting it as protection.
+
+### The run report (`make report`)
+
+`make report` prints one local, read-only snapshot: per active `plans/changes/`
+folder (or only `make report CHANGE=<name>`), the measured attempt rows of the
+plan's `## Time used` section with the recorded time against the opening plan
+card's `Appetite:` line, the calls `findings.md` records as call evidence, and
+one live block with runner and verification processes (`scripts/stage2.py`
+invocations, `make verify`, `scripts/verify_all.sh`) and memory figures
+(macOS `memory_pressure`, `vm_stat`, `hw.memsize`; Linux `MemAvailable`,
+`MemTotal`, `Zswap`). The direct form is `python3 scripts/run_report.py
+[--change NAME]`; the default root is the checkout the script lives in.
+
+It is a snapshot to read before a verify-bearing step, **not a gate** — it
+never enters `make verify`. It warns, and only warns: when the recorded time
+has reached half the card's appetite (rejected attempts count; the boundary is
+inclusive), and when available memory is below 25 percent. It starts, stops
+and locks nothing. What it cannot read, it names: an unreadable time record is
+counted (`unread lines: N`) and marks the subtotal incomplete instead of
+guessing a duration; a missing section or unreadable plan is `time not read`,
+never zero; an unreadable card is `appetite not read`, never a fabricated
+ratio; a failing source (`ps`, a memory command, `meminfo`) is `not read`
+while the rest of the report stands. It writes nothing and runs no model,
+tracker or network call.
 
 ### Model routing
 
@@ -669,13 +719,22 @@ files, three were stacked, and a generated index conflicted on every merge
 request small enough to merge (maintainer, 2026-10-27); the portable form
 for another repository is `templates/agents-mergeable-prs.md`.
 
-- **Synced daily, automatically.** Every working day each open pull request
-  is test-merged against `main` (`git merge-tree --write-tree origin/main
-  origin/<branch>`): one that merges cleanly gets `main` merged and pushed,
-  one that conflicts is reported to the maintainer with its files, and the
-  conflict is resolved while it is small (bead coding-harness-eq6y).
+- **Synced on request, by the helper.** Each working day the day session or
+  the night orchestrator calls `python3 scripts/pr_sync.py sync --root .`
+  explicitly — no scheduler runs it (bead coding-harness-eq6y; on request,
+  detail 5 of the change's `decisions.md`, 2026-10-28). An eligible branch gets the fetched `origin/main`
+  merged in and `plans/INDEX.md` regenerated from the complete merged tree,
+  then that is pushed under an exact head lease, so a racing writer's commit
+  is left intact and reported. A conflict outside the index is reported with
+  its paths and the branch stays put. Reported and never touched: fork pull
+  requests, bases other than `main`, decision pull requests (the `decision`
+  label or a `decide(` title), branches changing a runner-held or
+  human-decided path, and branches a local worktree holds with uncommitted
+  or unpushed work. A failed check is an error, never permission to push.
 - **Asked about after five working days.** A pull request open longer than
-  five working days is put to the maintainer: finish, shrink or close.
+  five working days is put to the maintainer: finish, shrink or close. The
+  sync lists them, identity and age, at the end of every report — protected
+  ones included.
 - **Small enough to review.** A pull request that would change more than
   about 800 lines (code, tests and prose, generated files not counted) is
   cut into slices, one pull request per slice, each with its own phase 6.
@@ -686,12 +745,28 @@ for another repository is `templates/agents-mergeable-prs.md`.
   per foreign-model lane. The oldest is finished before a new one opens
   (bead coding-harness-6y0t).
 - **Reviewed on a current base.** Phase 6 reviews the branch after it has
-  merged `main`; a verdict holds only for the commit it saw.
+  merged `main` with the supported merge below; a verdict holds only for the
+  commit it saw.
 - **Not stacked without a reason.** A pull request built on another names
   the reason in its body; the base merges before the next opens.
 - **Generated files are regenerated.** `plans/INDEX.md` is rebuilt
   (`scripts/plans_registry.py --index`) on a conflict, never merged by hand
-  (bead coding-harness-hfsz).
+  (bead coding-harness-hfsz). The supported local merge is
+  `python3 scripts/pr_sync.py merge-main --root .` (2026-10-28): it merges
+  the fetched `origin/main` into the current branch and regenerates the
+  index from the complete merged tree — the same engine the sync uses — for
+  hand merges and phase-6 preparation. It refuses a detached HEAD, `main`
+  itself, an in-progress merge or rebase and a dirty checkout, and it never
+  pushes. GitHub's server-side Update branch and merge buttons cannot run
+  the helper; the unchanged `plans-registry` gate stays their backstop.
+- **Merging a series, one at a time.** With "branches must be up to date"
+  on `main`, every merge puts the other open pull requests behind. Each
+  next one is brought up to date, its new checks are awaited until every
+  check has completed (a pending check has no conclusion yet; an empty or
+  pending rollup is not green), and it merges against its new head with
+  `--match-head-commit`. Merging eight pull requests on 2026-10-30 cost one
+  CI run each this way; a merge queue (bead coding-harness-eh42, decided
+  2026-10-28) replaces the rule.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
@@ -813,9 +888,45 @@ that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
 Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
 `check --fix` with safe fixes only, then `format` — on the change's Python
-files under `scripts/` and `tests/`; what that changed stands first in a failed
-attempt's diagnostics and in the checkpoint commit's message, and a ruff that
-cannot run or leaves findings leaves the verdict to `make verify`.
+files under `scripts/` and `tests/`; what that changed stands in a failed
+attempt's diagnostics (after the findings-restore note, when there is one) and in
+the checkpoint commit's message. This format step itself never decides the
+verdict: a ruff that cannot run or leaves findings fails the attempt in the cheap
+checks below.
+After that format step and still before `make verify`, the runner runs an
+implement or repair attempt's cheap checks and stops at the first red one
+(bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
+`.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
+`.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
+over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
+file the top-level test functions that are new or differ from HEAD (a new file
+whole), the accepted plan's criterion-ledger test references in both forms as
+function ids, and, on a retry, the test ids pytest reported as failed in the
+previous attempt of the same run whose file and test still stand, each by its function without a
+parameter part (a test inherited by a class with a base counts as standing); deduplicated and
+sorted (a file selected whole covers its own ids, which are then not repeated as
+explicit targets), and no importer of a changed `scripts/` module is selected
+(`decisions.md` Q-3 of the change). The cheap checks run on the attempt's own
+bytes, before the runner stamps documents and renders derived files: a selected
+test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
+line) sees it unprepared, and such a test belongs to `make verify`, not to the
+cheap run (review row L9-1). A command with no target is skipped; a red,
+unstartable or over-bound command fails the attempt before `make verify`
+starts, and its identified command, exit and protected output stand in that
+attempt's diagnostics and the next attempt's prompt. Cheap green replaces
+nothing: full `make verify` and the existing answer checks still decide every
+attempt. An implement or repair attempt's edit of the change's `findings.md`
+is not a failure: the runner restores its own pre-call snapshot before any
+check reads model-written state — through the recovery preflight, never
+through a linked parent — and records the restoration in the attempt's
+bookkeeping with its real verdict: a note beside the failure for a rejected
+attempt, a quoted notice under the audit line of one that passes. The
+implement and repair prompts carry the accepted plan's ledger test references
+as must-runs before handback, taken from the plan's snapshot so a retry
+rereads nothing its predecessor may have edited: a command-capable Codex runs
+ruff and the named tests itself before handing back, while the file-only Flash
+and Sonnet routes delegate the same checks to the runner, with no extra tool
+of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
 is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
@@ -1402,7 +1513,16 @@ reword its reason so it names no fix instead of marking it fixed.
 **Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
-only when pytest exits 1 or 2 there. When every post-run check passes —
+only when pytest exits 1 or 2 there. The repair prompt names the accepted
+plan's ledger tests as must-runs before handback, and commands Codex to run
+ruff and them itself; a file-only fallback delegates the same cheap checks to
+the runner, which stops at the first red one before `make verify`. An
+attempt's edit of the change's `findings.md` is restored from the runner's
+pre-call snapshot before any check reads model-written state: the fixed lines
+are validated against the restored file, and the restoration stands in the
+attempt's bookkeeping with its real verdict — a note beside the failure when
+the attempt is rejected, a quoted notice under its audit line when it passes.
+When every post-run check passes —
 `make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
@@ -1444,6 +1564,51 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
+  An appetite that runs out is not such a stop: by day the session extends
+  it by itself once, up to twice the card's appetite, and says so in its
+  next status message; it asks at twice the appetite, at an open
+  `[DECISION]` or at a structural choice like this one (maintainer,
+  2026-10-30; `prompts/04-implement.md`, "The appetite is a stop").
+- **When no choke point closes it, the spec names the boundary.** On
+  2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
+  mechanism in nine phase-6 rows: a protected descendant outliving the
+  admission, each time on a new process path. The maintainer chose a simpler
+  proof of belonging (an admission token in the environment instead of
+  process ancestry) and a `Boundary` section in the change's spec that names
+  the remaining case, a hard-killed intermediate process, as an accepted
+  limit. Phase 6 judges against the spec, so a row that describes only the
+  named limit is rejected as that limit, not repaired again.
+
+### Hand repairs by the orchestrator
+
+When the orchestrator repairs a row itself instead of through `repair`
+(a held path, a one-line fix, a re-check row), three follow-ups are owed,
+each learned on the night of 2026-10-29/30:
+
+- **The loop record learns the repair.** The orchestrator sets the row's
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
+  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  backup of `loop.md`. Otherwise the next round refuses with "taken rows are
+  not repaired yet".
+- **A header or status edit regenerates the index.** After a hand edit of a
+  change file's frontmatter, `scripts/plans_registry.py --index` runs before
+  the commit; a stale `plans/INDEX.md` turns `make verify` red.
+- **After local midnight the stamps follow the local date.**
+  `scripts/check_frontmatter_current.py --stamp` runs before a commit after
+  local midnight: the `updated:` field takes the local date, which differs
+  from UTC in the hours after midnight in Europe/Berlin.
+- **A targeted check, not a full verify, before the next round**
+  (maintainer, 2026-10-30; bead coding-harness-24ag). A full `make verify`
+  takes 12 to 13 minutes under the machine's one verify lock (measured
+  2026-10-30), and a hand repair touches a few files. After a hand repair the
+  orchestrator runs, outside the lock: the test files the repair touched, the
+  test files `scripts/touch_map.py` links to the touched code, `ruff` on the
+  touched files, and the gates the touched kinds of file feed (for example
+  `plans_registry.py --check`, `check_frontmatter_current.py`,
+  `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
+  round starts. One full `make verify` under the lock runs on the final head
+  before phase 6 and before the pull request leaves draft; CI stays the full
+  gate. A runner repair keeps the runner's own `make verify`.
 
 ### Night runs
 
