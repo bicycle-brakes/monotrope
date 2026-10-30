@@ -16,7 +16,12 @@ tags: [spec, merge-queue, github-actions, decision-pr]
 class: bounded
 appetite: 2
 adr_files: []
-neighbours: []
+neighbours:
+  - plans/changes/archive/2026-10-08-rb-g7-merge-freshness/spec.md
+  - plans/changes/index-merge-regenerates/spec.md
+  - plans/changes/harness-decide-adr/spec.md
+  - plans/changes/ci-minutes/spec.md
+  - plans/changes/hermes-runner/spec.md
 ---
 
 # Spec — merge-queue

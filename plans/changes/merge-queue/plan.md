@@ -104,8 +104,11 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-10-30; no Stage-1 fallback.
 No source files are deleted. No edits to `scripts/pr_sync.py`,
 `tests/test_pr_sync.py`, `scripts/merge_guard.py`, `.claude/settings.json`,
 `templates/agents-mergeable-prs.md`, `scripts/kit/manifest.yaml`,
-`decisions/gates.yaml`, `AGENTS.md`, existing ADRs, endpoint settings or
-tracker data; no sibling-repository writes or CI-economy changes.
+`decisions/gates.yaml`, existing ADRs, endpoint settings or tracker data;
+no sibling-repository writes or CI-economy changes. `AGENTS.md` changes in
+one place only, by the orchestrator: its one-line summary of "Pull requests
+stay mergeable" names the queue (review row L1-7, 2026-10-30); nothing else
+in it is touched.
 
 ## Verification
 

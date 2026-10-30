@@ -1032,7 +1032,7 @@ def _merge_group_findings(doc: dict) -> list[str]:
                 continue
             for key in ("ref", "repository"):
                 if key in (step.get("with") or {}):
-                    label = f"job `{job_name}`, step `{step.get('name') or step.get('id') or step.get('uses') or '?'}"
+                    label = f"job `{job_name}`, step `{step.get('name') or step.get('id') or step.get('uses') or '?'}`"
                     findings.append(f"{label}: the checkout sets `{key}`, so it is not the group's candidate")
     return findings
 
