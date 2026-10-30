@@ -18,12 +18,15 @@ the maintainer, the agents and every token act under one account today, and
 GitHub lets no author approve their own pull request (ADR 0008). A ruleset that
 asks for more than the six still holds.
 
-**What RB-G7 adds.** (6) Branches up to date before merging: an active
-`required_status_checks` rule with at least one check sets
-`strict_required_status_checks_policy` to `true`. The CI checks the merge ref
-(`tests/test_ci.py`), and this makes it the merge that happens. GitHub applies
-the most restrictive version of aggregated rules, so any ruleset may supply
-it, and (5) then covers that ruleset. Decided 2026-10-08.
+**What RB-G7 adds.** (6) Freshness before merging, in one of two forms: an
+active `required_status_checks` rule with at least one check sets
+`strict_required_status_checks_policy` to `true`, or an active `merge_queue`
+rule lets GitHub check each group's merge candidate against current `main`
+without a branch update first (bead coding-harness-eh42). The CI checks the
+merge ref (`tests/test_ci.py`), and this makes it the merge that happens.
+GitHub applies the most restrictive version of aggregated rules, so any
+ruleset may supply it, and (5) then covers that ruleset. Decided 2026-10-08;
+the queue joined as the second alternative on 2026-10-30.
 
 **Why only the writer machine measures.** GitHub shows the bypass list of a
 ruleset only to whoever may edit that ruleset ("Get a repository ruleset", REST
@@ -78,6 +81,11 @@ REQUIRED_CHECK = "verify"
 # merges, so the merge ref the CI checked is the merge that happens.
 UP_TO_DATE = "branches up to date before merging"
 UP_TO_DATE_OPTION = "Require branches to be up to date before merging"
+
+# The rule type of the merge queue, RB-G7's second freshness alternative
+# (2026-10-30): the merge result is tested on a candidate that already holds
+# current `main`, so the branch need not be updated first.
+MERGE_QUEUE = "merge_queue"
 
 # The GitHub App id of GitHub Actions. A required check without it accepts a
 # commit status of that name from anyone with a token — every agent here —
@@ -220,10 +228,20 @@ def _up_to_date_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return found
 
 
+def _merge_queue_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The active `merge_queue` rules: the second freshness alternative (2026-10-30).
+
+    Any active rule counts, whatever parameters it carries — GitHub offers the
+    queue only where it checks a candidate. Its ruleset is measured like every
+    other supplier's (`_suppliers`).
+    """
+    return [r for r in rules if r.get("type") == MERGE_QUEUE]
+
+
 def _suppliers(rules: list[dict[str, Any]]) -> list[Any]:
     """The `ruleset_id` of every rule that supplies one of the six requirements, once each."""
     ids: list[Any] = []
-    for matching in [*_supplying_rules(rules).values(), _up_to_date_rules(rules)]:
+    for matching in [*_supplying_rules(rules).values(), _up_to_date_rules(rules), _merge_queue_rules(rules)]:
         for rule in matching:
             if rule.get("ruleset_id") not in ids:
                 ids.append(rule.get("ruleset_id"))
@@ -260,8 +278,11 @@ def ruleset_findings(rules: list[dict[str, Any]], rulesets: dict[Any, Any]) -> l
             )
         else:
             findings.append(f"{RULE_TYPES[rule_type]} is not asked for")
-    if not _up_to_date_rules(rules):
-        findings.append(f'{UP_TO_DATE} is not asked for — tick "{UP_TO_DATE_OPTION}" in the ruleset (RB-G7)')
+    if not _up_to_date_rules(rules) and not _merge_queue_rules(rules):
+        findings.append(
+            f'{UP_TO_DATE} is not asked for — tick "{UP_TO_DATE_OPTION}" or activate the merge queue '
+            "in the ruleset (RB-G7)"
+        )
 
     for ruleset_id in _suppliers(rules):
         detail = rulesets.get(ruleset_id)
@@ -608,6 +629,201 @@ def test_the_ruleset_check_goes_red_when_the_up_to_date_ruleset_can_be_bypassed(
     bypass = [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]
     rulesets = {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": bypass}}
     assert ruleset_findings(rules, rulesets) == ["ruleset 7 lets RepositoryRole 5 bypass it"]
+
+
+# --------------------------------------------------------------------------
+# The queue, the second freshness alternative (2026-10-30)
+# --------------------------------------------------------------------------
+
+
+QUEUE_RULESET_ID = 7
+
+
+def _queue_rule(ruleset_id: int = QUEUE_RULESET_ID) -> dict[str, Any]:
+    """An active `merge_queue` rule as the branch-rules endpoint reports it."""
+    return {
+        "type": MERGE_QUEUE,
+        "parameters": {
+            "merge_method": "MERGE",
+            "grouping_strategy": "ALLGREEN",
+            "min_pull_requests": 1,
+            "max_pull_requests": 1,
+        },
+        "ruleset_id": ruleset_id,
+    }
+
+
+def _queue_ruleset(bypass_actors: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The queue's ruleset detail: an empty bypass list, or the actors given."""
+    ruleset: dict[str, Any] = {"id": QUEUE_RULESET_ID, "bypass_actors": []}
+    if bypass_actors is not None:
+        ruleset["bypass_actors"] = bypass_actors
+    return ruleset
+
+
+def _rules_with_a_queue() -> list[dict[str, Any]]:
+    """Today's rules with the strict flag off, so the queue alone carries freshness."""
+    rules = _todays_rules()
+    _set_flag(rules, False)
+    rules.append(_queue_rule())
+    return rules
+
+
+def _answers(rules: list[dict[str, Any]], details: dict[int, dict[str, Any] | None]) -> dict[str, tuple[int, str]]:
+    """Endpoint answers for `measure`: the repository, the branch rules, one detail per ruleset.
+
+    A detail of `None` is a ruleset the API will not show: `gh` exits 1.
+    """
+    answers = {REPO_PATH: (0, json.dumps({"default_branch": "main", "full_name": HERE}))}
+    answers[f"{REPO_PATH}/rules/branches/main"] = (0, json.dumps(rules))
+    for ruleset_id, detail in details.items():
+        path = f"{REPO_PATH}/rulesets/{ruleset_id}"
+        answers[path] = (0, json.dumps(detail)) if detail is not None else (1, f"gh: Not Found (HTTP 404) for {path}")
+    return answers
+
+
+_QUEUE_BYPASS = [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]
+
+
+@pytest.mark.parametrize(
+    ("value", "remove"),
+    [
+        pytest.param(False, False, id="strict-false"),
+        pytest.param(None, True, id="strict-flag-removed"),
+    ],
+)
+def test_merge_queue_supplies_freshness(value: Any, remove: bool) -> None:
+    """A valid queue replaces the strict flag: with it active, the six hold (2026-10-30).
+
+    Fault planted: an implementation that still demands the up-to-date flag
+    rejects exactly these rules, and the activated repository reads red.
+    """
+    rules = _todays_rules()
+    _set_flag(rules, value, remove=remove)
+    rules.append(_queue_rule())
+    rulesets: dict[int, dict[str, Any]] = {RULESET_ID: _todays_ruleset(), QUEUE_RULESET_ID: _queue_ruleset()}
+    assert ruleset_findings(rules, rulesets) == []
+    assert _measure(_stub_api(_answers(rules, rulesets))) == []
+
+
+@pytest.mark.parametrize(
+    ("detail", "finding"),
+    [
+        pytest.param(
+            _queue_ruleset(_QUEUE_BYPASS),
+            f"ruleset {QUEUE_RULESET_ID} lets RepositoryRole 5 bypass it",
+            id="bypass-actor",
+        ),
+        pytest.param(
+            {"id": QUEUE_RULESET_ID},
+            f"not measured: ruleset {QUEUE_RULESET_ID} shows no bypass list",
+            id="no-key",
+        ),
+        pytest.param(
+            {"id": QUEUE_RULESET_ID, "bypass_actors": None},
+            f"not measured: ruleset {QUEUE_RULESET_ID} shows no bypass list",
+            id="null",
+        ),
+        pytest.param(
+            {"id": QUEUE_RULESET_ID, "bypass_actors": "none"},
+            f"not measured: ruleset {QUEUE_RULESET_ID} shows no bypass list",
+            id="not-a-list",
+        ),
+        pytest.param(None, f"not measured: ruleset {QUEUE_RULESET_ID} could not be read", id="unreadable-detail"),
+    ],
+)
+def test_queue_supplier_is_measured_without_bypass(detail: dict[str, Any] | None, finding: str) -> None:
+    """The queue's ruleset sits under the same fail-closed bypass measurement as every supplier's.
+
+    Fault planted: a measurement that skips queue suppliers passes a separate
+    queue ruleset with bypass actors, a hidden list, or no readable detail.
+    """
+    rules = _rules_with_a_queue()
+    rulesets: dict[int, dict[str, Any] | None] = {RULESET_ID: _todays_ruleset(), QUEUE_RULESET_ID: detail}
+    findings = ruleset_findings(rules, rulesets)
+    assert len(findings) == 1, findings
+    assert findings[0].startswith(finding)
+    measured = _measure(_stub_api(_answers(rules, rulesets)))
+    assert len(measured) == 1, measured
+    if detail is None:
+        assert measured[0].startswith(f"not measured: {REPO_PATH}/rulesets/{QUEUE_RULESET_ID}")
+    else:
+        assert measured[0] == findings[0]
+
+
+@pytest.mark.parametrize(
+    ("without", "detail", "finding"),
+    [
+        pytest.param(
+            "pull_request",
+            _queue_ruleset(),
+            f"{RULE_TYPES['pull_request']} is not asked for",
+            id="no-pull-request",
+        ),
+        pytest.param(
+            "required_status_checks",
+            _queue_ruleset(),
+            f"required check {REQUIRED_CHECK} is not asked for",
+            id="no-required-check",
+        ),
+        pytest.param(
+            "non_fast_forward",
+            _queue_ruleset(),
+            f"{RULE_TYPES['non_fast_forward']} is not asked for",
+            id="no-force-push",
+        ),
+        pytest.param(
+            "deletion",
+            _queue_ruleset(),
+            f"{RULE_TYPES['deletion']} is not asked for",
+            id="no-deletion",
+        ),
+        pytest.param(
+            "unpinned",
+            _queue_ruleset(),
+            "required check verify is not pinned to GitHub Actions",
+            id="unpinned-verify",
+        ),
+        pytest.param(
+            None,
+            _queue_ruleset(_QUEUE_BYPASS),
+            f"ruleset {QUEUE_RULESET_ID} lets RepositoryRole 5 bypass it",
+            id="supplier-bypass",
+        ),
+        pytest.param(
+            None,
+            None,
+            f"not measured: ruleset {QUEUE_RULESET_ID} could not be read",
+            id="failed-measurement",
+        ),
+    ],
+)
+def test_queue_preserves_the_other_ruleset_requirements(
+    without: str | None, detail: dict[str, Any] | None, finding: str
+) -> None:
+    """With the queue carrying freshness, every other floor requirement is still measured.
+
+    Fault planted: a check that reads the queue as "protected" and stops there
+    passes a ruleset that lost a rule, an unpinned `verify`, or a supplier it
+    cannot measure.
+    """
+    rules = _rules_with_a_queue()
+    if without == "unpinned":
+        for rule in rules:
+            if rule["type"] == "required_status_checks":
+                rule["parameters"]["required_status_checks"] = [{"context": "verify"}]
+    elif without is not None:
+        rules = _without(rules, without)
+    rulesets: dict[int, dict[str, Any] | None] = {RULESET_ID: _todays_ruleset(), QUEUE_RULESET_ID: detail}
+    findings = ruleset_findings(rules, rulesets)
+    assert len(findings) == 1, findings
+    assert findings[0].startswith(finding)
+    measured = _measure(_stub_api(_answers(rules, rulesets)))
+    assert len(measured) == 1, measured
+    if detail is None:
+        assert measured[0].startswith(f"not measured: {REPO_PATH}/rulesets/{QUEUE_RULESET_ID}")
+    else:
+        assert measured[0] == findings[0]
 
 
 def test_the_ruleset_check_goes_red_on_an_empty_rule_list() -> None:

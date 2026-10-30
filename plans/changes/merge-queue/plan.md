@@ -124,15 +124,23 @@ RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs
 ## Criterion ledger
 
 - 1: tests/test_repo_settings.py::test_todays_ruleset_holds — the legacy strict configuration is rejected
-- 1: not yet written tests/test_repo_settings.py::test_merge_queue_supplies_freshness — a valid queue with strict false is rejected
+- 1: tests/test_repo_settings.py::test_merge_queue_supplies_freshness — a valid queue with strict false is rejected
 - 2: tests/test_repo_settings.py::test_the_ruleset_check_goes_red_when_branches_need_not_be_up_to_date — neither alternative holds but measurement passes
-- 3: not yet written tests/test_repo_settings.py::test_queue_supplier_is_measured_without_bypass — a separate queue supplier has bypasses or unreadable details and measurement passes
-- 4: not yet written tests/test_repo_settings.py::test_queue_preserves_the_other_ruleset_requirements — a queue masks a removed rule, unpinned check or failed measurement
-- 5: not yet written tests/test_ci.py::test_merge_groups_run_the_gates_on_their_candidate — trigger, event condition or candidate checkout is broken
-- 6: not yet written tests/test_ci.py::test_merge_groups_require_a_successful_summary — the summary excludes merge_group or accepts a non-success gate result
+- 3: tests/test_repo_settings.py::test_queue_supplier_is_measured_without_bypass — a separate queue supplier has bypasses or unreadable details and measurement passes
+- 4: tests/test_repo_settings.py::test_queue_preserves_the_other_ruleset_requirements — a queue masks a removed rule, unpinned check or failed measurement
+- 5: tests/test_ci.py::test_merge_groups_run_the_gates_on_their_candidate — trigger, event condition or candidate checkout is broken
+- 6: tests/test_ci.py::test_merge_groups_require_a_successful_summary — the summary excludes merge_group or accepts a non-success gate result
 - 6: tests/test_ci.py::test_the_summary_check_passes_only_when_every_leg_passed — a failed, skipped or cancelled gate result reports success
 - 7: not a test — phase-6 review compares the five current procedure/governance texts with criterion 7; mandatory queue branch updates, missing head protection or expanded merge authority refute it
 - 8: not a test — orchestrator records activation time after the maintainer's merge timestamp; an earlier settings mutation refutes it
 - 9: not a test — post-merge API readback and a hosted merge_group run identify singleton groups, merge method and successful verify on the candidate SHA; wrong settings or no such run refute it
 
+## Runner route — 2026-10-30
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-30 17:59:50–18:20:22 UTC, 1232 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 18:20:27–18:31:00 UTC, 632 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 18:31:09–18:45:05 UTC, 836 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
