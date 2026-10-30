@@ -10,11 +10,15 @@ stay mergeable" (maintainer, 2026-10-27).
 A pull request that stays open while `main` moves ends in a conflict nobody
 wants to resolve. These rules keep each one small enough to merge:
 
-- **Synced daily, automatically.** Every working day each open pull request
-  is test-merged against `main`
-  (`git merge-tree --write-tree origin/main origin/<branch>`): one that
-  merges cleanly gets `main` merged and pushed, one that conflicts is
-  reported with its files and resolved while the conflict is small.
+- **Synced on request, by the helper.** Every working day the day session or
+  the night orchestrator calls the sync helper explicitly (in this kit
+  `python3 scripts/pr_sync.py sync --root .`): an open pull request that
+  test-merges cleanly against `main` gets `main` merged and pushed with its
+  generated index rebuilt, one that conflicts is reported with its files
+  and resolved while the conflict is small. A hand merge uses the same
+  engine (`python3 scripts/pr_sync.py merge-main --root .`). GitHub's
+  server-side Update branch and merge buttons cannot run the local helper;
+  the unchanged generated-file gate stays their backstop.
 - **Small enough to review.** A pull request that would change more than
   about `<lines, default 800>` lines (generated files not counted) is cut
   into slices, one pull request per slice, each with its own review.
@@ -34,6 +38,8 @@ wants to resolve. These rules keep each one small enough to merge:
 - **Not stacked without a reason.** A pull request built on another names
   the reason in its body; the base merges before the next opens.
 - **Generated files are regenerated.** A generated file is rebuilt by its
-  generator on a conflict, never merged by hand.
+  generator on a conflict, never merged by hand — `plans/INDEX.md` by
+  `make index` or the helper above, which renders it from the complete
+  merged tree.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file.
