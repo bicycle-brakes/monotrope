@@ -77,8 +77,9 @@ LIVE_ENV = "RULESET_ASSERT"
 # runs every verify gate.
 REQUIRED_CHECK = "verify"
 
-# RB-G7's requirement: the branch must be up to date with its target before it
-# merges, so the merge ref the CI checked is the merge that happens.
+# RB-G7's strict alternative: the branch must be up to date with its target before
+# it merges, so the merge ref the CI checked is the merge that happens; the other
+# alternative is an active merge queue (`MERGE_QUEUE`, 6.0.0).
 UP_TO_DATE = "branches up to date before merging"
 UP_TO_DATE_OPTION = "Require branches to be up to date before merging"
 

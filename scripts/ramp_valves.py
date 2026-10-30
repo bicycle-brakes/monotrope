@@ -196,7 +196,8 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "2026-11-30",
     ),
     # "merge-freshness" (RB-G7) closed on 2026-10-08: tests/test_ci.py asserts the
-    # merge ref, the gate `ruleset` the up-to-date requirement; rule set 5.0.0.
+    # merge ref and the merge group's run, the gate `ruleset` the freshness
+    # requirement — a merge queue or the up-to-date flag; rule set 6.0.0.
     "signature-transcription": (
         "RB-M2: a signature is transcribed from the pull request, never set",
         "tests/test_validators.py::test_a_signature_is_transcribed_not_typed",

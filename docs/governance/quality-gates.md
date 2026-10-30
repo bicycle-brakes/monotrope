@@ -69,10 +69,10 @@ a gate. This page describes the delivery gates and what a signature means.
 |---|---|---|---|---|
 | **MG-0** | Contract-Schema | bei jedem Contract-Write | Pydantic-Validierung der Contract-YAML | `scripts/validate_contract.py` |
 | **MG-1** | Pre-Commit | vor dem Commit | Lint, YAML-Syntax, Secrets-Guard, Frontmatter | Claude-Code-Hooks |
-| **MG-2** | PR-Verifikation | beim Pull Request | die eine Gate-Liste, gegen den Merge-Ref | `.github/workflows/ci.yml` |
+| **MG-2** | PR-Verifikation | beim Pull Request and for each merge group | die eine Gate-Liste, gegen den Merge-Ref or the merge group's ref | `.github/workflows/ci.yml` |
 | **MG-3** | Merge | vor dem Merge | Required Checks, Code-Owner-Review | GitHub-Ruleset |
 
-MG-2 prüft **`refs/pull/N/merge`**, nicht den Branch-Kopf. Lokal grün und in der
+MG-2 prüft **`refs/pull/N/merge`** (and, in the merge queue, the group's ref), nicht den Branch-Kopf. Lokal grün und in der
 CI rot ist deshalb kein Widerspruch, sondern der Normalfall: die CI baut, was
 nach dem Merge entsteht. That the tested candidate is the merged one is
 secured by the ruleset, in one of two ways (RB-G7, 6.0.0): with a merge queue

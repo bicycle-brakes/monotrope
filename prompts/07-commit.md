@@ -103,7 +103,10 @@ restatement is its one-line summary.
    the merge fail, and the agent restates again. This is rule RB-M1's idea
    ("what changes after the signature is unsigned again") applied to the
    merge.
-7. With the merge queue active (rule RB-G7), the command of step 5 puts
+7. Which alternative holds is read, not remembered: `gh api
+   repos/{owner}/{repo}/rules/branches/main --jq '[.[].type]'` lists
+   `merge_queue` when the queue is active. With the merge queue active
+   (rule RB-G7), the command of step 5 puts
    the pull request into the queue at that exact head; no branch update
    comes first, even when the branch is behind. Queued is not merged: the
    agent reports "queued" and, only once `gh pr view <n> --json

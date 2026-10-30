@@ -122,6 +122,10 @@ by an active merge queue or by required checks with the strict up-to-date flag.
   (house rule 1, bead coding-harness-yim); the sentences this change adds
   are English by that rule, so RB-G7's cell and the MG-2 paragraph mix both
   languages. A style row about only that mix is this limit, not a finding.
+- Accepted limit, runner output (rows L1-4, L5-3): the exploration text in
+  `research.md` is the runner's answer, committed unchanged by rule, with its
+  own phrasing and suggested header; the orchestrator's addendum carries the
+  measured state. A row about only that wording is this limit.
 
 ## Non-goals
 

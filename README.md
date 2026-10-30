@@ -370,8 +370,9 @@ Checked on 2026-10-28 against `main` at `a6ddd9d1`.
   (ADR 0022).
 - A repair counts only when its test fails on the code before the repair —
   by an assertion or pytest's own failed outcome, never by a crash.
-- `main` takes a pull request only when it is up to date with `main` and the
-  `verify` check is green (repository ruleset).
+- `main` takes a pull request only when the `verify` check is green on the
+  merge candidate: through the merge queue, or, without it, once the branch is
+  up to date with `main` (repository ruleset, rule RB-G7).
 
 ### Written rules agents follow, not enforced by a tool
 
