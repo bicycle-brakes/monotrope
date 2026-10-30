@@ -24,6 +24,12 @@ last 2a block), with
 revised after the 2a review, not the one written first. Read it again, and
 check first that each of the 2a rows arrived in it as `findings.md` says.
 
+**Base.** The orchestrator brings the branch current before the reviewer
+starts: `python3 scripts/pr_sync.py merge-main --root .` merges the fetched
+`origin/main` and regenerates `plans/INDEX.md` from the merged tree
+(docs/WORKFLOW.md, "Pull requests stay mergeable"). The review runs
+read-only: the reviewer merges nothing and pushes nothing.
+
 **Verdict first.** Write your verdict — the table and, under it, the line
 `Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop
 row. The loop rows are the findings of the loop's rounds — it runs until a

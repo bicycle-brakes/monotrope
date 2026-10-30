@@ -1,0 +1,12 @@
+schema_version: 1
+change: guard-test
+question: adr
+answer: 'yes'
+reason: It changes what counts as proof in the repair verb and adds a phase-6 duty,
+  which is an architecture decision.
+shown:
+  proposed: 'yes'
+  proposal_reason: An explicitly authorised guard proof qualifies ADR 0017's baseline-only
+    repair evidence contract.
+answered_by: framework-architect
+answered_at: 2026-10-29
