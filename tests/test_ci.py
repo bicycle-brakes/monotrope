@@ -840,8 +840,9 @@ def test_only_pull_request_runs_cancel_superseded_runs() -> None:
 
 
 def test_the_schedule_runs_only_the_drift_job() -> None:
-    """The matrix job and the summary job admit `push` and `pull_request`, never `schedule` or a manual start."""
-    events = "github.event_name == 'push' || github.event_name == 'pull_request'"
+    """The matrix job and the summary job admit `push`, `pull_request` and `merge_group`, never `schedule` or a
+    manual start."""
+    events = "github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'"
     # Exact conditions, not substrings: an appended `|| true` keeps every event name in place and
     # still runs the matrix on schedule and manual start (phase 6, F-1)
     expected = {ci_gates.MATRIX_JOB: events, ci_gates.SUMMARY_JOB: f"always() && ({events})"}

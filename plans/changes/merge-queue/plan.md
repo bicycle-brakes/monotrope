@@ -41,7 +41,14 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-10-30; no Stage-1 fallback.
    their no-queue fixtures must still fail. Add the ledger's new fixtures
    through `measure` as well as `ruleset_findings`, including failed detail
    reads, hidden bypass lists, and a queue in a separate ruleset.
-2. **Implementation attempt — `scripts/ci_gates.py`:** add `merge_group`
+2. **Done by the orchestrator before the second implement run (2026-10-30):** the
+   `merge_group` trigger (`checks_requested`) in `generate_ci`, its admission in the
+   matrix and summary conditions, the regenerated held file `.github/workflows/ci.yml`
+   and the event expectation of `test_the_schedule_runs_only_the_drift_job`. Reason: the
+   first implement run's three attempts failed because an attempt that regenerates the
+   held `ci.yml` is refused, and one that does not leaves the ci-drift gate red. The
+   attempt must not touch `.github/workflows/ci.yml`; the rest of this step stays its own.
+   **Implementation attempt — `scripts/ci_gates.py`:** add `merge_group`
    (checks requested) to `generate_ci` and admit it in both the gate matrix
    and `_summary_job`; keep `always()`, the exact-success summary and default
    checkout. Preserve PR/push triggers, schedule/dispatch separation and
