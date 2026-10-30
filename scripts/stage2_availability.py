@@ -22,6 +22,7 @@ The receipt is external state, never an artifact a model can edit.
 from __future__ import annotations
 
 import contextlib
+import copy
 import datetime as dt
 import fcntl
 import functools
@@ -32,6 +33,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
+from collections import OrderedDict
 from pathlib import Path
 from uuid import uuid4
 
@@ -578,13 +581,50 @@ def probe_claude(runner, root: Path, change: str, model: str, audit: list[str]) 
 # ---------------------------------------------------------------------------
 
 
+# The shared declaration reader's parse cache: process-local and bounded, keyed
+# by the decoded contents alone - never by path, size or modification time.
+# Only a successful mapping parse enters it; a failed read, decode or parse is
+# never cached, so the next call reads the file again (bead
+# coding-harness-dca4). The parse is always PyYAML's pure `SafeLoader`, as
+# before the cache: libyaml's C loader accepts and refuses other documents
+# (a tab before a comment, an escaped surrogate pair), and it saved nothing
+# measurable once the cache was in place (phase-6 rows F6-1 and F6-3).
+_DECLARATION_CACHE_SIZE = 8
+_DECLARATION_CACHE: OrderedDict[str, dict] = OrderedDict()
+_DECLARATION_CACHE_LOCK = threading.Lock()
+
+
 def read_declaration(root: Path) -> dict | str:
-    """The parsed `model-endpoints.yaml`, or the problem text when it cannot be read."""
+    """The parsed `model-endpoints.yaml`, or the problem text when it cannot be read.
+
+    Every call reads the file's current bytes and decodes them, so an edit at an
+    unchanged size and modification time is still seen. A successful mapping
+    parse is reused for identical contents; every caller, including
+    the first, receives its own deep copy, so one caller's edits never reach
+    another read or thread.
+    """
     try:
-        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        text = (root / "model-endpoints.yaml").read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
         return "model-endpoints.yaml cannot be read"
-    return data if isinstance(data, dict) else "model-endpoints.yaml cannot be read"
+    key = text
+    with _DECLARATION_CACHE_LOCK:
+        cached = _DECLARATION_CACHE.get(key)
+        if cached is not None:
+            _DECLARATION_CACHE.move_to_end(key)
+    if cached is not None:
+        return copy.deepcopy(cached)
+    try:
+        data = yaml.load(text, Loader=yaml.SafeLoader) or {}
+    except yaml.YAMLError:
+        return "model-endpoints.yaml cannot be read"
+    if not isinstance(data, dict):
+        return "model-endpoints.yaml cannot be read"
+    with _DECLARATION_CACHE_LOCK:
+        _DECLARATION_CACHE[key] = data
+        while len(_DECLARATION_CACHE) > _DECLARATION_CACHE_SIZE:
+            _DECLARATION_CACHE.popitem(last=False)
+    return copy.deepcopy(data)
 
 
 def _endpoint(data: dict, name: str) -> dict | None:
