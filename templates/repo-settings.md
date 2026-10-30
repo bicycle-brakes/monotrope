@@ -14,7 +14,19 @@ Create one active ruleset that targets the default branch with these rules:
 - **Require a pull request** before merging; required approvals may stay at
   zero for a single-maintainer repository.
 - **Require status checks to pass**, naming the CI job that runs the gates
-  (here `verify`), with **"require branches to be up to date"** switched on.
+  (here `verify`).
+- **Freshness, one of two alternatives** (rule RB-G7):
+  - **A merge queue** (recommended where many pull requests merge in a row):
+    merge method "merge commit", build and merge groups of one. The CI
+    workflow must run its gates and the required check on the
+    `merge_group` event (`types: [checks_requested]`) and check out the
+    default ref, so the group's merge candidate is what is tested. Each
+    group yields one merge commit. Switch it on only after that workflow is
+    on the default branch, then read the active rules back
+    (`gh api repos/<owner>/<repo>/rules/branches/<branch>`).
+  - **Or "require branches to be up to date"** on the status-check rule:
+    every merge puts the other pull requests behind, and each is updated and
+    re-checked before its own merge.
 - **Block force pushes** and **restrict deletions**.
 
 Check it with `gh api repos/<owner>/<repo>/rulesets` and the ruleset's id.

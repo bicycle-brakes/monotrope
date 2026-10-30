@@ -103,10 +103,17 @@ restatement is its one-line summary.
    the merge fail, and the agent restates again. This is rule RB-M1's idea
    ("what changes after the signature is unsigned again") applied to the
    merge.
-7. If GitHub refuses the merge because the branch is behind its base — the
-   ruleset requires branches to be up to date before merging (rule RB-G7)
-   — the agent runs `gh pr update-branch <n>`, waits until CI is green on
-   the new head and starts again at step 2: a new head needs a new
+7. With the merge queue active (rule RB-G7), the command of step 5 puts
+   the pull request into the queue at that exact head; no branch update
+   comes first, even when the branch is behind. Queued is not merged: the
+   agent reports "queued" and, only once `gh pr view <n> --json
+   state,mergeCommit` shows `MERGED`, "merged" with the merge commit. A
+   group that fails leaves the pull request open and unmerged; the agent
+   says so and starts again at step 2 when the maintainer asks again.
+8. Only under the alternative without a queue — the ruleset requires
+   branches to be up to date before merging — does GitHub refuse a behind
+   branch: then the agent runs `gh pr update-branch <n>`, waits until CI is
+   green on the new head and starts again at step 2: a new head needs a new
    restatement. If the update reports a conflict, the agent stops and says
    so.
 
