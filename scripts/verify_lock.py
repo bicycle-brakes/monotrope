@@ -703,6 +703,29 @@ def _hold_signals_during_cleanup(previous: dict[int, object]) -> None:
             signal.signal(signum, signal.SIG_IGN)
 
 
+@contextlib.contextmanager
+def _deferred_signals(trapped: dict[int, object]):
+    """Hold a trapped signal back while the child is started, and raise it once the child is registered.
+
+    A signal between `Popen` creating the process and the assignment that hands it to the cleanup
+    would otherwise leave the protected group unknown to it (phase-6 row F6-9). This is the
+    supervisor's form of the runner's `defer_launch_signals`.
+    """
+    pending: list[int] = []
+    installed: dict[int, object] = {}
+    for signum in trapped:
+        with contextlib.suppress(ValueError, OSError):
+            installed[signum] = signal.signal(signum, lambda received, _frame: pending.append(received))
+    try:
+        yield
+    finally:
+        for signum, handler in installed.items():
+            with contextlib.suppress(ValueError, OSError):
+                signal.signal(signum, handler)  # type: ignore[arg-type]
+    if pending:
+        raise SupervisorInterrupted(pending[0])
+
+
 def _restore_signal_handlers(previous: dict[int, object]) -> None:
     for signum, handler in previous.items():
         with contextlib.suppress(ValueError, OSError):
@@ -782,11 +805,13 @@ def supervise(command: list[str]) -> int:
         inherited = nested_holder_pid()
         if inherited is not None:
             _log(f"inheriting admission from pid {inherited}; no queue and no memory wait")
-            child = _spawn_child(command, (), None)
+            with _deferred_signals(previous):
+                child = _spawn_child(command, (), None)
         else:
             admission = _Admission(_prepare_state(), command)
             admission.enter()
-            child = _spawn_child(command, (admission.state.lock_fd,), admission)
+            with _deferred_signals(previous):
+                child = _spawn_child(command, (admission.state.lock_fd,), admission)
         code = _watch_child(child)
     except VerifyLockError as refused:
         print(f"[verify-lock] admission refused: {refused}", file=sys.stderr, flush=True)

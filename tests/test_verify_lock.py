@@ -926,6 +926,32 @@ def test_a_second_signal_during_cleanup_still_releases(tmp_path: Path, monkeypat
     assert signal.getsignal(signal.SIGTERM) is before, "the supervisor left its signal handler installed"
 
 
+def test_a_signal_while_the_child_starts_still_ends_the_child(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase-6 row F6-9. Planted fault: a SIGTERM delivered right after Popen created the protected
+    process, before it was handed to the cleanup, left the child running past the release."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
+    holder_file = state / "coding-harness" / verify_lock.HOLDER_NAME
+    started: list[subprocess.Popen[bytes]] = []
+    original_popen = subprocess.Popen
+
+    def popen_then_signal(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+        child = original_popen(*args, **kwargs)  # type: ignore[call-overload]
+        started.append(child)
+        os.kill(os.getpid(), signal.SIGTERM)  # arrives before _spawn_child returns
+        return child
+
+    monkeypatch.setattr(verify_lock.subprocess, "Popen", popen_then_signal)
+    before = signal.getsignal(signal.SIGTERM)
+    assert verify_lock.supervise(["sleep", "30"]) == 128 + signal.SIGTERM
+    assert started, "the protected child was never started"
+    assert started[0].poll() is not None, "the child outlived a signal that arrived while it started"
+    assert not holder_file.exists(), "the holder record outlived the cleanup"
+    assert signal.getsignal(signal.SIGTERM) is before, "the supervisor left its signal handler installed"
+
+
 @pytest.mark.parametrize("signum", [signal.SIGHUP, signal.SIGQUIT])
 def test_hangup_and_quit_clean_up_like_terminate(tmp_path: Path, signum: int) -> None:
     """Row L4-3. Planted fault: only SIGINT and SIGTERM were trapped, so SIGHUP or SIGQUIT killed the
