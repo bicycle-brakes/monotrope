@@ -117,6 +117,11 @@ by an active merge queue or by required checks with the strict up-to-date flag.
   for the field names GitHub reports on the live rule, in follow-up bead
   coding-harness-tsdr; the fixtures' parameter names are not measured. A
   review row that describes only this case is this limit, not a finding.
+- Accepted limit, language (2026-10-30, rows L2-3, L3-1, L3-2): the
+  governance documents are German until their own translation pull request
+  (house rule 1, bead coding-harness-yim); the sentences this change adds
+  are English by that rule, so RB-G7's cell and the MG-2 paragraph mix both
+  languages. A style row about only that mix is this limit, not a finding.
 
 ## Non-goals
 

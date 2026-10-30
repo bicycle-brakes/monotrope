@@ -201,8 +201,10 @@ behind branch before its merge changed the heads against which merges were
 armed and cost one CI run per merge (eight sequential merges on 2026-10-30).
 A merge queue tests each group on GitHub's merge candidate against the
 current `main` and merges exactly that. Decided by the maintainer on
-2026-10-28 (change `merge-queue`, bead `coding-harness-eh42`); the rule takes
-effect with the merge of its decision pull request.
+2026-10-28 (change `merge-queue`, bead `coding-harness-eh42`). The rule text
+takes effect with the merge of its decision pull request; the queue itself is
+switched on afterwards, by a separate step on GitHub, and until then the
+up-to-date alternative carries RB-G7.
 
 MAJOR, because §4 says so: the rule's meaning changes — freshness may now come
 from either of two alternatives, and CI must also run on merge groups.
