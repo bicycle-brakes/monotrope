@@ -1293,5 +1293,7 @@ def test_the_bridge_takes_the_admitted_version_from_the_pin_not_a_literal() -> N
     # every redirect case builds pi-version from the pin, so a literal would pass them all; the
     # bridge source must not carry the pinned version as a literal.
     source = (ROOT / "scripts/stage2_research_catalog.mjs").read_text(encoding="utf-8")
-    assert PIN not in source, "the bridge hard-codes the pinned Pi version"
+    # Quoted or as a query value only: a comment naming the user agent is not a literal (row L4-2).
+    for literal in (f'"{PIN}"', f"'{PIN}'", f"`{PIN}`", f"pi-version={PIN}"):
+        assert literal not in source, f"the bridge hard-codes the pinned Pi version as {literal}"
     assert "manifest.dependencies" in source, "the bridge no longer reads the version from the pin"

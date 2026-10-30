@@ -68,6 +68,12 @@ phase-3 prompt's form and report the validator as unavailable.
    Count requests at both servers, not only selected results. Test second
    redirects, followed HTTP/network failures, retained audit fields/digest
    through `select()`, direct compatibility and metadata redirect refusal.
+   *Not reachable through the harness (review row L4-1, 2026-10-30):* Pi's
+   pinned client sends the catalog request with one query pair and no
+   `pi-version`, so an admitted target preserving *duplicated* original
+   pairs and a refused *preexisting* version cannot be driven end to end;
+   the multiset comparison and the `original.some(... "pi-version")` refusal
+   cover them in the code, and the tests hold every case Pi can send.
    For the deadline case hold only the versioned request, after the initial
    redirect; adapt the event marker so it fires once that hop has arrived,
    without wall-clock sleeps or resetting the bridge's single timer.
