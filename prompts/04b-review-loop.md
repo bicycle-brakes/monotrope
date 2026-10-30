@@ -90,7 +90,11 @@ explicitly, do not delete them.
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's
    evidence: `yes` when its repair turned a test red that was green before it,
    `no` when it did not; the next round starts only when `make verify` is
-   green.
+   green. After a repair the orchestrator made by hand, a targeted check
+   stands in for it: the touched and linked test files, `ruff` and the
+   gates the touched files feed; one full `make verify` runs on the final
+   head before phase 6 (`docs/WORKFLOW.md`, "Hand repairs by the
+   orchestrator").
 4. After the phase-6 verdict, the rows enter `findings.md` with
    `release-loop`. The release carries the run's snapshot: its stops, its
    consumed stages and its round count survive a release and an edited
