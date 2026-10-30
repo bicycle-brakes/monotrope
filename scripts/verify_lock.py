@@ -314,34 +314,37 @@ def _parent_of(pid: int) -> int | None:
     return int(value) if done.returncode == 0 and value.isdigit() else None
 
 
-def _descends_from(pid: int) -> bool:
-    """True when `pid` is this process or one of its live ancestors."""
+def _ancestry() -> Iterator[int]:
+    """This process and its live ancestors, nearest first, bounded."""
     current: int | None = os.getpid()
     for _ in range(ANCESTRY_DEPTH):
         if current is None or current <= 1:
-            return False
-        if current == pid:
-            return True
+            return
+        yield current
         current = _parent_of(current)
-    return False
 
 
 def _related_to_holder(pid: int, holder: dict) -> bool:
     """A marker is honoured only for a real descendant of its admission.
 
-    Two relations prove it: the holder is a live ancestor, or this process
-    runs in the session the supervisor started for its protected child (which
-    survives a killed supervisor, and no unrelated process can join). An open
+    Two relations prove it, checked along this process and its live
+    ancestors: one of them is the holder, or one of them runs in the session
+    published with the ownership — the session the supervisor or the runner
+    started for its protected child. That session survives a killed holder,
+    no unrelated process can join it, and a nested runner that starts its own
+    check in a new session still descends from it (review row F6-6). An open
     descriptor on the lock file proves nothing: any process can open it
     (review row F6-2, re-check).
     """
-    if _descends_from(pid):
-        return True
     session = holder.get("session")
-    if isinstance(session, int) and session > 1:
-        with contextlib.suppress(OSError):
-            if os.getsid(0) == session:
-                return True
+    published = session if isinstance(session, int) and session > 1 else None
+    for ancestor in _ancestry():
+        if ancestor == pid:
+            return True
+        if published is not None:
+            with contextlib.suppress(OSError):
+                if os.getsid(ancestor) == published:
+                    return True
     return False
 
 

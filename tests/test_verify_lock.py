@@ -1086,3 +1086,38 @@ def test_a_fifo_in_place_of_the_holder_record_is_unusable_not_a_hang(tmp_path: P
         check=False,
     )
     assert done.stdout.strip() == "None", done.stderr
+
+
+def test_a_descendant_in_its_own_session_nests_through_an_ancestor_in_the_published_one(
+    tmp_path: Path,
+) -> None:
+    """Row F6-6 (re-check). Planted fault: after the holder died, a nested runner started its check in
+    a new session, so the check matched neither the dead holder nor the published session and
+    queued behind its own admission; an ancestor in the published session is the relation."""
+    state = tmp_path / "state"
+    root = state / "coding-harness"
+    root.mkdir(parents=True)
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait(timeout=10)
+    descriptor = os.open(root / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    (root / verify_lock.HOLDER_NAME).write_text(
+        json.dumps(
+            {"pid": gone.pid, "command": ["dead", "holder"], "start": "2026-10-30T00:00:00", "session": os.getsid(0)}
+        ),
+        encoding="utf-8",
+    )
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", NESTED_PROBE],
+            cwd=REPO_ROOT,
+            env=_env(state, {verify_lock.LOCK_ENV: str(gone.pid)}),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+            start_new_session=True,
+        )
+        assert done.stdout.strip() == str(gone.pid), "a descendant of the published session queued again"
+    finally:
+        os.close(descriptor)
