@@ -1013,11 +1013,21 @@ def _merge_group_findings(doc: dict) -> list[str]:
     if not isinstance(trigger, dict) or "merge_group" not in trigger:
         findings.append("no `merge_group` trigger")
     else:
-        types = [str(t) for t in (trigger["merge_group"] or {}).get("types") or []]
-        if trigger["merge_group"] is not None and "checks_requested" not in types:
-            findings.append(
-                "`merge_group` narrows `types` without `checks_requested`: the queue's request never starts a run"
-            )
+        # A bare `merge_group:` (None) or an empty mapping admits every activity type (rows L4-1, L4-2).
+        group = trigger["merge_group"]
+        if group is not None and not isinstance(group, dict):
+            findings.append(f"`merge_group` is not a mapping ({type(group).__name__}): its filters cannot be read")
+        elif isinstance(group, dict):
+            for key in ("branches", "branches-ignore"):
+                if key in group:
+                    findings.append(f"`merge_group` sets `{key}`: a group on another branch never starts a run")
+            if "types" in group:
+                types = [str(t) for t in group.get("types") or []]
+                if "checks_requested" not in types:
+                    findings.append(
+                        "`merge_group` narrows `types` without `checks_requested`: "
+                        "the queue's request never starts a run"
+                    )
 
     jobs = doc.get("jobs") or {}
     matrix_job = jobs.get(ci_gates.MATRIX_JOB)
@@ -1045,8 +1055,25 @@ def _plant_merge_group_types_without_checks_requested(doc: dict) -> None:
     _trigger_of(doc)["merge_group"] = {"types": ["destroyed"]}
 
 
+def _plant_merge_group_branch_filter(doc: dict) -> None:
+    _trigger_of(doc)["merge_group"] = {"types": ["checks_requested"], "branches": ["release"]}
+
+
+def _plant_merge_group_not_a_mapping(doc: dict) -> None:
+    _trigger_of(doc)["merge_group"] = ["checks_requested"]
+
+
 def _plant_matrix_job_off_merge_group(doc: dict) -> None:
     doc["jobs"][ci_gates.MATRIX_JOB]["if"] = "github.event_name == 'push' || github.event_name == 'pull_request'"
+
+
+@pytest.mark.parametrize("value", [None, {}], ids=["bare-trigger", "empty-mapping"])
+def test_a_bare_or_empty_merge_group_trigger_admits_every_type(value: object) -> None:
+    """Row L4-2: `merge_group:` with no value or an empty mapping admits every activity type,
+    so it is not reported as a narrowing."""
+    doc = _ci_doc(ci_gates.generate_ci())
+    _trigger_of(doc)["merge_group"] = value
+    assert _merge_group_findings(doc) == []
 
 
 @pytest.mark.parametrize(
@@ -1054,6 +1081,8 @@ def _plant_matrix_job_off_merge_group(doc: dict) -> None:
     [
         pytest.param(_plant_no_merge_group, id="no-merge-group-trigger"),
         pytest.param(_plant_merge_group_types_without_checks_requested, id="types-without-checks-requested"),
+        pytest.param(_plant_merge_group_branch_filter, id="branch-filter-on-merge-group"),
+        pytest.param(_plant_merge_group_not_a_mapping, id="merge-group-not-a-mapping"),
         pytest.param(_plant_matrix_job_off_merge_group, id="matrix-job-off-merge-group"),
         pytest.param(_plant_head_sha, id="pull-request-head-on-the-candidate-checkout"),
         pytest.param(_plant_repository, id="another-repository"),
