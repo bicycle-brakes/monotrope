@@ -618,6 +618,11 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "code change")
     w = World(root, bin_dir, tmp_path / "state")
+    # The cheap checks (bead coding-harness-5tyh) run the worktree's own tools between the
+    # format step and `make verify`: the stand-ins below answer them from each test's scenario,
+    # and a test that needs the tools absent or broken replants or unlinks over these.
+    venv_ruff(w)
+    venv_pytest(w)
     w.script()
     return w
 
@@ -2543,7 +2548,7 @@ def test_a_key_fragment_in_a_changed_file_is_removed_and_refused(world: World) -
 
 def test_a_key_the_gate_writes_under_venv_is_removed_and_refused(world: World) -> None:
     (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
-    (world.root / ".venv").mkdir()
+    (world.root / ".venv").mkdir(exist_ok=True)
     old = world.root / ".venv" / "old.txt"
     old.write_text(f"mine = {KEY}\n", encoding="utf-8")
     git(world.root, "add", "-A")
@@ -4593,11 +4598,58 @@ def venv_ruff(world: World, executable: bool = True) -> None:
     stand_in.chmod(0o755)
     ruff = world.root / ".venv" / "bin" / "ruff"
     ruff.parent.mkdir(parents=True, exist_ok=True)
+    # Replanting is the point of some tests (the fixture installs first): a standing leaf of an
+    # earlier install goes, whatever it was, before this one takes its place.
+    if ruff.exists() or ruff.is_symlink():
+        ruff.unlink()
     if executable:
         ruff.symlink_to(stand_in)
     else:
         ruff.write_text("# a ruff stand-in that cannot be run\n", encoding="utf-8")
         ruff.chmod(0o644)
+    (world.root / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
+
+
+def venv_pytest(world: World, executable: bool = True) -> None:
+    """A `.venv/bin/python3` for the runner's cheap pytest, answered from the scenario.
+
+    The stand-in behind it records one step per call like every other stand-in, named by what
+    the runner launches (`python3`). A dispatcher sits in between so the red-first proof stays
+    real: a call with `STAGE2_RED_REPORT` set execs the test session's own interpreter instead
+    of the stand-in, so a planted red run still runs real pytest over a real worktree.
+    With `executable=False` the path holds a plain file of mode 0644: the system refuses to run it.
+    """
+    stand_in = world.bin / "python3.stand-in"
+    stand_in.write_text(
+        STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
+    )
+    stand_in.chmod(0o755)
+    python = world.root / ".venv" / "bin" / "python3"
+    python.parent.mkdir(parents=True, exist_ok=True)
+    # As `venv_ruff`: a standing leaf of an earlier install goes before this one takes its place.
+    if python.exists() or python.is_symlink():
+        python.unlink()
+    if executable:
+        dispatcher = (
+            f"#!{sys.executable}\n"
+            "# stage2-stand-in dispatcher: the runner's cheap pytest answers from the scenario; a\n"
+            "# red-first call (STAGE2_RED_REPORT set) execs the real interpreter instead.\n"
+            "import os\n"
+            "import sys\n"
+            "\n"
+            'if os.environ.get("STAGE2_RED_REPORT"):\n'
+            "    os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\n"
+            f"source = open({str(stand_in)!r}, encoding='utf-8').read()\n"
+            "exec(\n"
+            f"    compile(source, {str(stand_in)!r}, 'exec'),\n"
+            f"    {{'__name__': '__main__', '__file__': {str(stand_in)!r}}},\n"
+            ")\n"
+        )
+        python.write_text(dispatcher, encoding="utf-8")
+        python.chmod(0o755)
+    else:
+        python.write_text("# a python stand-in that cannot be run\n", encoding="utf-8")
+        python.chmod(0o644)
     (world.root / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
 
 
@@ -4612,10 +4664,12 @@ def formatted_attempt(**more: object) -> dict:
 
 
 def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(world: World) -> None:
-    # Criteria 1 and 2. Planted fault: the commands in another order, another argument list, or ruff
-    # given `scripts/ tests/` whole instead of the targets. The modified, already tracked
-    # `scripts/old.py` must stand among them: dropping modified tracked files from the targets would
-    # pass while only newly created files carry the step.
+    # Criteria 1-3, format step and cheap checks together. Planted fault: the commands in another
+    # order, another argument list, or ruff given `scripts/ tests/` whole instead of the targets.
+    # The modified, already tracked `scripts/old.py` must stand among them: dropping modified
+    # tracked files from the targets would pass while only newly created files carry the step.
+    # After the format step the read-only cheap checks repeat the same targets, and the changed
+    # test file is pytest's sole explicit target (bead coding-harness-5tyh).
     venv_ruff(world)
     (world.root / "scripts/old.py").write_text("x = 1\n", encoding="utf-8")
     (world.root / "scripts/gone.py").write_text("y = 2\n", encoding="utf-8")
@@ -4634,30 +4688,35 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
                 delete=["scripts/gone.py"],
             )
         ],
-        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}, {}, {}],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert [call["name"] for call in world.calls()] == ["claude", "ruff", "ruff", "make"]
-    assert [call["argv"] for call in world.calls("ruff")] == [
-        [
-            "check",
-            "--fix",
-            "--no-unsafe-fixes",
-            "--force-exclude",
-            "--no-cache",
-            "scripts/a.py",
-            "scripts/old.py",
-            "tests/test_b.py",
-        ],
-        ["format", "--force-exclude", "--no-cache", "scripts/a.py", "scripts/old.py", "tests/test_b.py"],
+    assert [call["name"] for call in world.calls()] == [
+        "claude",
+        "ruff",
+        "ruff",
+        "ruff",
+        "ruff",
+        "python3",
+        "make",
     ]
+    targets = ["scripts/a.py", "scripts/old.py", "tests/test_b.py"]
+    assert [call["argv"] for call in world.calls("ruff")] == [
+        ["check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache", *targets],
+        ["format", "--force-exclude", "--no-cache", *targets],
+        ["check", "--force-exclude", "--no-cache", *targets],
+        ["format", "--check", "--force-exclude", "--no-cache", *targets],
+    ]
+    assert world.calls("python3")[0]["argv"] == ["-m", "pytest", "-q", "-n", "auto", "tests/test_b.py"]
     for call in world.calls("ruff"):
         assert call["cwd"] == str(world.root)
 
 
 def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) -> None:
-    # Criterion 2. Planted fault: the targets filtered by suffix and directory alone.
+    # Criterion 2, and the cheap checks' targets with it. Planted fault: the targets filtered by
+    # suffix and directory alone. The four ruff calls split into the writing format step and the
+    # read-only cheap checks, and neither may see the link or the hard link.
     venv_ruff(world)
     (world.root / "scripts/real.py").write_text("real = 1\n", encoding="utf-8")
     outside = world.root.parent / "outside.py"
@@ -4666,12 +4725,17 @@ def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) ->
     (world.root / "tests").mkdir()
     (world.root / "tests/hard_twin.py").write_text("twin = 1\n", encoding="utf-8")
     os.link(world.root / "tests/hard_twin.py", world.root / "tests/hard.py")
-    world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    world.script(ruff=[{}, {}, {}, {}], make=[{"stdout": "green\n"}])
     formatted: list[str] = []
     stage2.verify_attempt(world.root, world.plan, formatted=formatted)
-    assert [call["argv"] for call in world.calls("ruff")] == [
+    calls = world.calls("ruff")
+    assert [call["argv"] for call in calls[:2]] == [
         ["check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache", "scripts/real.py"],
         ["format", "--force-exclude", "--no-cache", "scripts/real.py"],
+    ]
+    assert [call["argv"] for call in calls[2:]] == [
+        ["check", "--force-exclude", "--no-cache", "scripts/real.py"],
+        ["format", "--check", "--force-exclude", "--no-cache", "scripts/real.py"],
     ]
     assert formatted == ["ruff changed no file."]
     assert outside.read_text(encoding="utf-8") == "out = 1\n"
@@ -4688,14 +4752,16 @@ def test_without_a_target_file_no_ruff_starts(world: World) -> None:
 
 
 def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: World) -> None:
-    # Criterion 4. Planted fault: ruff started by its bare name, so the program on `PATH` answers.
+    # Criterion 4, for the cheap checks too. Planted fault: ruff started by its bare name, so the
+    # program on `PATH` answers. Four calls run, all the worktree's own: the format step's two,
+    # then the cheap checks'.
     venv_ruff(world)
     decoy = world.bin / "ruff"
     decoy.write_text('#!/bin/sh\ntouch "$(dirname "$0")/decoy-called"\nexit 97\n', encoding="utf-8")
     decoy.chmod(0o755)
-    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}, {}, {}], make=[{"stdout": "green\n"}])
     assert world.run("implement") == 0
-    assert len(world.calls("ruff")) == 2
+    assert len(world.calls("ruff")) == 4
     assert not (world.bin / "decoy-called").exists()
 
 
@@ -4772,7 +4838,18 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "scripts/b.py": "b=1\n"}},
             formatted_attempt(),
         ],
-        ruff=[{}, {"plant": {"scripts/b.py": "b = 1\n"}}, {}, {"plant": {"scripts/a.py": "a = 1\n"}}],
+        # Four ruff calls per attempt: the format step's check and format, then the cheap checks.
+        # Each plant stands on a format call, the only place its bytes survive to a snapshot.
+        ruff=[
+            {},
+            {"plant": {"scripts/b.py": "b = 1\n"}},
+            {},
+            {},
+            {},
+            {"plant": {"scripts/a.py": "a = 1\n"}},
+            {},
+            {},
+        ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
@@ -4800,43 +4877,63 @@ def test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line(world: 
 
 @pytest.mark.parametrize("case", ["no-ruff", "not-executable", "findings-left", "format-error"])
 def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: str) -> None:
-    # Criterion 10. Planted fault: a non-zero ruff exit turned into a problem of the attempt.
-    if case == "not-executable":
-        venv_ruff(world, executable=False)
-    elif case != "no-ruff":  # no-ruff: no helper, no `.venv/bin/ruff` in the worktree
-        venv_ruff(world)
-    check: dict = {}
-    fmt: dict = {}
+    # Criterion 10 of the cheap checks. Planted fault: a red read-only ruff check let the attempt
+    # reach `make verify`, or spent a whole verification on a fault the cheap check already knew.
+    # Every case now stops the attempt before `make verify` starts; the run spends its three
+    # attempts on the same red, nothing is checkpointed, and the next prompt carries the reason
+    # (bead coding-harness-5tyh).
+    venv_ruff(world, executable=case != "not-executable")
+    if case == "no-ruff":
+        (world.root / ".venv" / "bin" / "ruff").unlink()
+    red_check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused", "exit": 1}
+    red_format = {"stdout": "error: cannot reformat scripts/a.py", "exit": 2}
     if case == "findings-left":
-        check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused", "exit": 1}
+        steps = [{}, {}, red_check, {}]
     elif case == "format-error":
-        fmt = {"stdout": "error: cannot reformat scripts/a.py", "exit": 2}
+        steps = [{}, {}, {}, red_format]
+    else:
+        steps = [{}, {}]
     baseline = git(world.root, "rev-parse", "HEAD")
-    world.script(claude=[formatted_attempt()], ruff=[check, fmt], make=[{"stdout": "green\n"}])
-    assert world.run("implement") == 0
-    assert len(world.calls("claude")) == 1 and len(world.calls("make")) == 1
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
-    message = git(world.root, "log", "-1", "--format=%B")
-    if case == "findings-left":
-        assert "ruff check left findings without a safe fix" in message
-    if case == "format-error":
-        assert "ruff format exited 2" in message
+    world.script(
+        claude=[formatted_attempt(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        ruff=steps * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert len(world.calls("claude")) == 3 and world.calls("make") == []
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    text = world.text()
+    assert "Runner cheap checks before `make verify`" in text
+    expected = {
+        "no-ruff": "no ruff at `.venv/bin/ruff`",
+        "not-executable": "could not be run",
+        "findings-left": "`.venv/bin/ruff check` exited 1",
+        "format-error": "`.venv/bin/ruff format --check` exited 2",
+    }[case]
+    assert expected in text
+    later = world.calls("claude")[1]["prompt_file"]
+    assert expected in later, "the next attempt was not told why its predecessor stopped"
 
 
 @pytest.mark.parametrize("case", ["no-ruff", "not-executable"])
 def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str) -> None:
-    # Criterion 11. Planted fault: the ruff launch's `CallFailed` propagates like make's.
-    if case == "not-executable":
-        venv_ruff(world, executable=False)
+    # Criterion 11, kept for the format step's own note; the cheap check ends the attempt for the
+    # same reason. Planted fault: the ruff launch's `CallFailed` propagates like make's. Now the
+    # format step records `not run —`, the cheap check rejects the attempt before `make verify`,
+    # and nothing is checkpointed (bead coding-harness-5tyh).
+    venv_ruff(world, executable=case != "not-executable")
+    if case == "no-ruff":
+        (world.root / ".venv" / "bin" / "ruff").unlink()
     baseline = git(world.root, "rev-parse", "HEAD")
     world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
-    assert world.run("implement") == 0
-    assert world.calls("ruff") == []
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
-    message = git(world.root, "log", "-1", "--format=%B")
-    line = next(line for line in message.splitlines() if line.startswith("- Attempt 1 (flash):"))
-    assert line.startswith("- Attempt 1 (flash): not run —")
+    assert world.run("implement") == 1
+    assert world.calls("ruff") == [], "a ruff that cannot start was launched"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    text = world.text()
+    line = next(line for line in text.splitlines() if "not run —" in line)
     assert "no ruff at" in line or "could not be started" in line
+    assert "Runner cheap checks before `make verify`" in text
+    assert "no ruff at" in text or "could not be run" in text
 
 
 def test_a_check_exit_one_covers_findings_and_a_file_that_does_not_parse(world: World) -> None:
@@ -5229,7 +5326,10 @@ def test_a_refused_tool_stays_refused_for_the_next_attempt(world: World) -> None
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "ignore .venv")
     ruff = world.root / ".venv" / "bin" / "ruff"
-    ruff.parent.mkdir(parents=True)
+    ruff.parent.mkdir(parents=True, exist_ok=True)
+    if ruff.is_symlink():
+        # The fixture installed the stand-in link; this test wants a plain file in its place.
+        ruff.unlink()
     ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
     world.script(
@@ -5289,7 +5389,10 @@ def test_a_git_archive_timeout_is_a_diagnostic_and_leaves_no_mirror(
 def test_an_attempt_that_overwrites_ruff_fails_before_verify(world: World) -> None:
     """R-21, acceptance criterion: the attempt fails, and the path it wrote is named."""
     ruff = world.root / ".venv" / "bin" / "ruff"
-    ruff.parent.mkdir(parents=True)
+    ruff.parent.mkdir(parents=True, exist_ok=True)
+    if ruff.is_symlink():
+        # The fixture installed the stand-in link; this test wants a plain file in its place.
+        ruff.unlink()
     ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     before = stage2.tool_state(world.root)
     ruff.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
@@ -5334,7 +5437,10 @@ def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World
 def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """O188-1, R-20 at the call sites: renderer and ruff get the tool limit, `make verify` the step limit."""
     ruff = world.root / ".venv" / "bin" / "ruff"
-    ruff.parent.mkdir(parents=True)
+    ruff.parent.mkdir(parents=True, exist_ok=True)
+    if ruff.is_symlink():
+        # The fixture installed the stand-in link; this test wants a plain file in its place.
+        ruff.unlink()
     ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     ruff.chmod(0o755)
     (world.root / "scripts" / "extra.py").write_text("value = 1\n", encoding="utf-8")
@@ -5433,7 +5539,7 @@ def test_an_attempt_that_plants_a_venv_package_fails_before_any_step(world: Worl
 
 def test_red_first_refuses_a_changed_venv(world: World) -> None:
     """O188-2: the red-first interpreter comes from `.venv/`, so a changed tree is not run."""
-    (world.root / ".venv" / "bin").mkdir(parents=True)
+    (world.root / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
     python = world.root / ".venv" / "bin" / "python3"
     python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     before = stage2.tool_state(world.root)
@@ -5617,8 +5723,11 @@ def test_cache_cleanup_keeps_other_venv_mutations_refused(world: World, mutation
     package.mkdir(parents=True)
     source = package / "__init__.py"
     source.write_text("ok = 1\n", encoding="utf-8")
-    (world.root / ".venv" / "bin").mkdir()
+    (world.root / ".venv" / "bin").mkdir(exist_ok=True)
     ruff = world.root / ".venv" / "bin" / "ruff"
+    if ruff.is_symlink():
+        # The fixture installed the stand-in link; this test wants a plain file in its place.
+        ruff.unlink()
     ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     stray = package.parent / "stray.pyc"
     stray.write_bytes(b"baseline bytecode\n")
@@ -5674,7 +5783,9 @@ def test_venv_cache_cleanup_never_follows_symlinks(world: World, tmp_path: Path,
         local.parent.mkdir(parents=True)
         local.write_bytes(b"baseline bytes\n")
         ruff = world.root / ".venv" / "bin" / "ruff"
-        ruff.parent.mkdir()
+        ruff.parent.mkdir(exist_ok=True)
+        if ruff.is_symlink():
+            ruff.unlink()
         ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         before = stage2.tool_state(world.root)
         local.write_bytes(b"attempt bytes\n")
@@ -5736,6 +5847,11 @@ def test_preexisting_venv_root_link_keeps_modified_tools_refused(
     cache.parent.mkdir(parents=True)
     cache.write_bytes(b"baseline cache\n")
     venv = world.root / ".venv"
+    if venv.is_symlink():
+        venv.unlink()
+    elif venv.exists():
+        # The fixture's installed tools stand in the way: this test links the root itself.
+        shutil.rmtree(venv)
     venv.symlink_to(target, target_is_directory=True)
     before = stage2.tool_state(world.root)
     original = before.copy()
@@ -5836,7 +5952,10 @@ def test_venv_cache_cleanup_failure_stops_runner_tools(
         second.write_bytes(b"baseline two\n")
     ruff = world.root / ".venv" / "bin" / "ruff"
     if failure == "refused-beside-cache":
-        ruff.parent.mkdir()
+        ruff.parent.mkdir(exist_ok=True)
+        if ruff.is_symlink():
+            # The fixture installed the stand-in link; this test wants a plain file in its place.
+            ruff.unlink()
         ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     before = stage2.tool_state(world.root)
     if failure == "refused-beside-cache":
@@ -5920,7 +6039,7 @@ def test_a_make_planted_on_a_repository_path_entry_does_not_run(
     """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
     marker = tmp_path / "planted-make-ran"
     planted = world.root / ".venv" / "bin"
-    planted.mkdir(parents=True)
+    planted.mkdir(parents=True, exist_ok=True)
     (planted / "make").write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n", encoding="utf-8")
     (planted / "make").chmod(0o755)
     monkeypatch.setenv("PATH", f"{planted}{os.pathsep}{os.environ['PATH']}")
@@ -8965,11 +9084,14 @@ def test_a_repair_retry_cannot_remove_earlier_attempt_evidence(
     monkeypatch.setattr(stage2, "run_codex", codex)
     monkeypatch.setattr(stage2, "run_work_model", claude)
     monkeypatch.setattr(stage2, "checkpoint", checkpoint)
-    assert world.run("repair") == (0 if attempt == 2 else 1)
-    assert checkpoints == ([3] if attempt == 2 else [])
-    assert len(repair_calls(world)) == 3
+    # Findings.md is runner-owned: the retry's deletion is restored before the checks read the
+    # file, so the deletion alone spends no attempt - the verdict stays `make`'s, the earlier
+    # evidence stands, and the accepted attempt carries the quoted restore notice.
+    assert world.run("repair") == 0
+    assert checkpoints == [attempt]
+    assert len(repair_calls(world)) == attempt
     assert world.text().startswith(protected[0]), "the retry lost an earlier attempt's evidence"
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("1" if attempt == 2 else "0")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
 @pytest.mark.parametrize(
@@ -9014,8 +9136,10 @@ def test_a_repair_cannot_change_a_finding_outside_its_batch(
 
     monkeypatch.setattr(stage2, "run_codex", codex)
     monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    # The row edit is a findings edit: restored before the checks, so the attempt is judged by
+    # `make` alone and accepted at attempt 1, with the unrelated row back as it was.
     assert world.run("repair") == 0
-    assert checkpoints == [2], "an attempt that changed an unrelated finding reached the checkpoint"
+    assert checkpoints == [1], "an attempt that changed an unrelated finding reached the checkpoint altered"
     assert render_row(row) in world.text()
     assert render_row(altered) not in world.text()
     prompt = prompt_of(world.calls("codex")[0])
@@ -10980,17 +11104,16 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
 
 
 def test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt(world: World) -> None:
-    """Phase 6, F-1. Planted fault: an interpreter whose pytest never starts, exit 1, read as red first."""
+    """Phase 6, F-1. Planted fault: an interpreter whose pytest never starts, exit 1, read as red first.
+
+    The stand-in plays both python3 callers of an attempt: the runner's cheap pytest over the
+    selected tests first (green), then the red-first probe, whose exit 1 must fail the attempt
+    before any named test is trusted - and before anything is checkpointed.
+    """
     repair_world(world)
-    (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
-    git(world.root, "add", "-A")
-    git(world.root, "commit", "--quiet", "-m", "ignore the venv")
-    python = world.root / ".venv" / "bin" / "python3"
-    python.parent.mkdir(parents=True)
-    python.write_text("#!/bin/sh\necho 'No module named pytest' >&2\nexit 1\n", encoding="utf-8")
-    python.chmod(0o755)
+    probe = {"exit": 1, "stderr": "No module named pytest"}
     head = git(world.root, "rev-parse", "HEAD")
-    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3)
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3, python3=[{}, probe] * 3)
     assert world.run("repair") == 1
     prompt = prompt_of(world.calls("codex")[1])
     assert "L1-1: tests/test_fix.py::test_fix: the red-first interpreter cannot start pytest (exit 1)" in prompt
@@ -12002,7 +12125,13 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
 
 
 def test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_commit(world: World) -> None:
-    """Phase 6, F-3. Planted fault: an overwritten rejected row passed the check into the checkpoint."""
+    """Phase 6, F-3, under runner-owned findings: the overwritten row is put back, not punished.
+
+    Planted fault: an overwritten rejected row passed the check into the checkpoint. The runner
+    now restores findings.md before the checks read it, so the otherwise valid repair stands
+    accepted, the row stands as it stood, and the vandal's text reaches no commit (spec,
+    criteria 8 and 9; bead coding-harness-5tyh).
+    """
     repair_world(world, ("L1-1", "rejected — out of scope", ""))
     world.write_findings(
         VERDICT,
@@ -12035,14 +12164,12 @@ def test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_co
                     "tests/test_fix.py": FIX_TEST,
                     "plans/changes/demo/findings.md": vandal,
                 },
-            ),
-            repair_step(stdout="F-1: fixed — tests/test_fix.py::test_fix"),
+            )
         ],
-        make=[{"stdout": "green\n"}] * 2,
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
-    prompt = prompt_of(world.calls("codex")[1])
-    assert "F-2: the phase-6 row no longer stands in findings.md as it stood before the repair" in prompt
+    assert len(repair_calls(world)) == 1, "the attempt was spent on its findings edit"
     _, phase6 = stage2.findings_rows(world.text())
     rows = {row[0]: row for row in phase6}
     assert rows["F-2"][5] == "phase rejection" and rows["F-2"][7] == "rejected — covered elsewhere"
@@ -12168,7 +12295,12 @@ def test_a_credential_refusal_puts_the_original_statuses_back(world: World, monk
 
 
 def test_an_added_copy_of_a_rejected_row_fails_the_attempt(world: World) -> None:
-    """Phase 6, F-9. Planted fault: row preservation by membership let an identical extra copy through."""
+    """Phase 6, F-9, under runner-owned findings: the extra copy is undone with the whole edit.
+
+    Planted fault: row preservation by membership let an identical extra copy through. The
+    restored snapshot holds each row once, the otherwise valid repair stands accepted, and the
+    committed findings.md never holds the copy (spec, criteria 8 and 9; bead coding-harness-5tyh).
+    """
     repair_world(world)
     both_lines = "L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix"
     rows_ = [
@@ -12193,20 +12325,25 @@ def test_an_added_copy_of_a_rejected_row_fails_the_attempt(world: World) -> None
                     "tests/test_fix.py": FIX_TEST,
                     "plans/changes/demo/findings.md": vandal,
                 },
-            ),
-            repair_step(stdout=both_lines),
+            )
         ],
-        make=[{"stdout": "green\n"}] * 2,
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
-    prompt = prompt_of(world.calls("codex")[1])
-    assert "F-2: findings.md holds a phase-6 row that stood nowhere before the repair" in prompt, prompt
+    assert len(repair_calls(world)) == 1, "the attempt was spent on its findings edit"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     assert committed.count("phase rejection") == 1
+    assert "The attempt edited findings.md" in committed
 
 
 def test_a_removed_audit_line_fails_the_attempt(world: World) -> None:
-    """Phase 6, F-11. Planted fault: a model that dropped this call's audit line was accepted and checkpointed."""
+    """Phase 6, F-11, under runner-owned findings: the audit line is put back, the attempt stands.
+
+    Planted fault: a model that dropped this call's audit line was rejected after a full
+    verification. The runner restores its snapshot first, so the audit line stands under the
+    restore notice and one checkpoint commits the one call (spec, criteria 8 and 9;
+    bead coding-harness-5tyh).
+    """
     repair_world(world)
     both_lines = "L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix"
     rows_ = [phase6_cells("F-1", "taken — crit 21", "phase finding")]
@@ -12222,16 +12359,15 @@ def test_a_removed_audit_line_fails_the_attempt(world: World) -> None:
                     "tests/test_fix.py": FIX_TEST,
                     "plans/changes/demo/findings.md": vandal,
                 },
-            ),
-            repair_step(stdout=both_lines),
+            )
         ],
-        make=[{"stdout": "green\n"}] * 2,
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
-    prompt = prompt_of(world.calls("codex")[1])
-    assert "findings.md no longer holds the audit line of this call" in prompt, prompt
+    assert len(repair_calls(world)) == 1, "the attempt was spent on its findings edit"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
-    assert committed.count("Stage-2 call,") == 2, committed
+    assert committed.count("Stage-2 call,") == 1, committed
+    assert "The attempt edited findings.md" in committed
 
 
 def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -16214,16 +16350,18 @@ FORGED_FINDINGS = {
 def test_implement_restore_does_not_write_through_a_findings_symlink(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """L5-3: rejected implement output must not redirect restoration or diagnostics."""
+    """L5-3, now with runner-owned findings: the leaf alias is detached, the target never written.
+
+    The attempt's findings edit is restored before the checks (spec, criterion 8): a symlinked
+    findings.md must not carry that restoration to its outside target, and the otherwise valid
+    attempt is not spent on the edit (bead coding-harness-5tyh).
+    """
     target = tmp_path / "findings-target.md"
     original = b"untouched target\n"
     target.write_bytes(original)
     world.script(
-        claude=[
-            {"stdout": "implemented", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "implemented without touching findings"},
-        ],
-        make=[{"stdout": "green\n"}] * 2,
+        claude=[{"stdout": "implemented", "plant": {"src/app.py": "value = 2\n"}}],
+        make=[{"stdout": "green\n"}],
     )
     real = stage2.run_work_model
 
@@ -16235,20 +16373,25 @@ def test_implement_restore_does_not_write_through_a_findings_symlink(
         return answer
 
     monkeypatch.setattr(stage2, "run_work_model", plant_link)
-    result = world.run("implement")
+    assert world.run("implement") == 0
     assert target.read_bytes() == original, "restoration or diagnostics wrote through the symlink"
-    assert result == 0
     assert not world.findings.is_symlink()
-    assert len(world.calls("claude")) == 2
-    diagnostic = "Attempt 1 (flash) failed its post-run checks."
-    assert diagnostic in world.text()
+    assert len(world.calls("claude")) == 1, "the attempt was spent on its findings edit"
+    notice = "The attempt edited findings.md; the runner restored it before the post-run checks"
+    assert notice in world.text()
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
-    assert diagnostic in committed
+    assert notice in committed
 
 
 @pytest.mark.parametrize("forged", sorted(FORGED_FINDINGS))
 def test_implement_cannot_write_findings(world: World, forged: str) -> None:
-    """Criterion 2. Planted fault: implement passes no findings snapshot or body check, and commits the forgery."""
+    """Criterion 2, under runner-owned findings: the edit is undone, the attempt is not spent.
+
+    Planted fault: implement passes no findings snapshot, so the forgery stands. The runner
+    restores its snapshot before the checks, so the forged body reaches neither a check nor the
+    checkpoint, and the committed findings.md holds the pre-call body, the audit line and the
+    restore notice (spec, criteria 8 and 9; bead coding-harness-5tyh).
+    """
     text = FORGED_FINDINGS[forged]
     world.script(
         claude=[
@@ -16256,22 +16399,22 @@ def test_implement_cannot_write_findings(world: World, forged: str) -> None:
                 "stdout": "implemented",
                 "plant": {"src/app.py": "value = 2\n"},
                 "append": {"plans/changes/demo/findings.md": text},
-            },
-            {"stdout": "implemented without touching findings"},
+            }
         ],
-        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert len(world.calls("claude")) == 2, "the attempt that wrote findings.md was accepted"
+    assert len(world.calls("claude")) == 1, "the attempt was rejected for its findings edit"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     forged_line = text.strip().splitlines()[0]
     for body in (committed, world.text()):
         assert forged_line not in body.splitlines(), "the forged line stands in findings.md"
-    assert "findings.md changed outside runner bookkeeping" in committed
+    assert "The attempt edited findings.md" in committed
 
 
 @pytest.mark.parametrize("forgery", ["release", "round", "metadata"])
 def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forgery: str) -> None:
+    """The forged frontmatter goes back with the whole snapshot; the attempt is not spent on it."""
     before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n"
     injected = {
         "release": f"{stage2.RELEASE_HEADING} 2026-10-25\nRounds run: 1\nLoop state: {{}}\n",
@@ -16290,16 +16433,16 @@ def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forg
                         "title: Findings\n", "title: Findings\n" + injected
                     ),
                 },
-            },
-            {"stdout": "implemented without touching findings"},
+            }
         ],
-        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert len(world.calls("claude")) == 2
+    assert len(world.calls("claude")) == 1, "the attempt was rejected for its frontmatter forgery"
     assert injected.strip() not in world.text()
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     assert injected.strip() not in committed
+    assert "The attempt edited findings.md" in committed
     assert stage2.findings_body_problem(before, before.replace("2026-09-30", "2026-10-26")) is None
 
 
@@ -17689,11 +17832,14 @@ def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
 
 
 def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
-    # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that exists.
+    # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that
+    # exists. Row 2 is a `not a test` row: a row still naming an unwritten test would be one of
+    # the cheap pytest run's targets (spec, criterion 3), and the attempt would end before the
+    # clearing this regression proves.
     world.plan.write_text(
         "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
         "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n"
-        "- 2: not yet written tests/test_later.py::test_later — nobody writes it\n\n## Time used\n",
+        "- 2: not a test — nobody writes a test for this row\n\n## Time used\n",
         encoding="utf-8",
     )
     git(world.root, "add", "-A")
@@ -17711,7 +17857,7 @@ def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: W
     assert world.run("implement") == 0
     committed = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
     assert "- 1: tests/test_new.py::test_new — the attempt writes it" in committed
-    assert "- 2: not yet written tests/test_later.py::test_later" in committed
+    assert "- 2: not a test — nobody writes a test for this row" in committed
 
 
 def test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify(
