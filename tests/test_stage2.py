@@ -2068,9 +2068,18 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     holder = _real_holder(ready)
     try:
         _holder_acquired(ready)
-        # the supervisor publishes its own pid as the holder and hands that to its child
-        holder_pid = holder.pid
+        # The marker is honoured only for a descendant of the published holder (review row F6-2),
+        # and this test process is not the sibling supervisor's descendant: the record is
+        # republished naming this process, the way an ancestor's supervisor names itself, while
+        # the sibling keeps the work lock genuinely held.
+        holder_pid = os.getpid()
+        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+        record.write_text(
+            json.dumps({"pid": holder_pid, "command": ["ancestor"], "start": "2026-10-30T00:00:00"}),
+            encoding="utf-8",
+        )
         monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+        assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
         make_env = world.calls("make")[0]["env"]

@@ -21,11 +21,16 @@ the work lock.
 
 **Nested work.** A protected entry descended from a live admission carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>`. The marker is honoured only when the
-published ownership names its process and the work lock is genuinely held; an
-absent, malformed, stale or unrelated marker uses ordinary admission. The
-holder process itself need not live: a killed supervisor leaves the lock held
-by the descriptor its protected child inherited, and that child's own nested
-calls must still nest instead of deadlocking on their ancestor.
+published ownership names its process, the work lock is genuinely held, and
+this process is related to that admission: the holder is a live ancestor, or
+this process runs in the session the supervisor started for its protected
+child (published with the ownership), or it holds the inherited lock
+descriptor itself. Metadata alone never suffices; an absent, malformed, stale
+or unrelated marker uses ordinary admission. The holder process itself need
+not live: a killed supervisor leaves the lock held by the descriptor its
+protected child inherited, and that child's own nested calls still nest
+through the session instead of deadlocking on their ancestor. Only the owner
+removes the published ownership, and only while it still names the owner.
 
 **Memory.** After the lock, admission reads the system's free memory — macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
@@ -52,7 +57,8 @@ which inherits the lock descriptor, so ownership outlives a killed supervisor
 for exactly as long as the protected child and its own children run — and
 releases only after the child's process group is gone, including failure,
 cancellation and signals; signal cleanup kills the child before the lock is
-released. `scripts.verify_all.sh` execs this supervisor, and
+released, and a grandchild left in the group after the command exits is ended
+before release. `scripts.verify_all.sh` execs this supervisor, and
 `scripts.stage2` holds the same admission around its timed local checks; the
 queue and memory waits consume neither `VERIFY_SECONDS` nor a pytest proof's
 execution timeout — the configured limits still apply to actual execution.
@@ -87,6 +93,7 @@ MEMORY_DEADLINE_SECONDS = 3600.0
 PROBE_SECONDS = 5.0
 QUEUE_POLL_SECONDS = 0.25
 CHILD_WATCH_SECONDS = 0.25
+ANCESTRY_DEPTH = 64
 SIGNAL_GRACE_SECONDS = 5.0
 LOCK_NAME = "verify.lock"
 HOLDER_NAME = "verify.holder.json"
@@ -265,6 +272,9 @@ def nested_holder_pid() -> int | None:
     if holder is None or holder.get("pid") != pid:
         return None
     lock = state_root() / LOCK_NAME
+    # Metadata names a holder; only a relation proves this process descends from it (review row F6-2).
+    if not _related_to_holder(pid, holder, lock):
+        return None
     try:
         fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
@@ -282,6 +292,74 @@ def nested_holder_pid() -> int | None:
         return None
     finally:
         os.close(fd)
+
+
+def _parent_of(pid: int) -> int | None:
+    """The parent pid of a live process, or None when it cannot be read."""
+    if pid == os.getpid():
+        return os.getppid()
+    try:
+        done = subprocess.run(
+            ["ps", "-o", "ppid=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=PROBE_SECONDS,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    value = done.stdout.strip()
+    return int(value) if done.returncode == 0 and value.isdigit() else None
+
+
+def _descends_from(pid: int) -> bool:
+    """True when `pid` is this process or one of its live ancestors."""
+    current: int | None = os.getpid()
+    for _ in range(ANCESTRY_DEPTH):
+        if current is None or current <= 1:
+            return False
+        if current == pid:
+            return True
+        current = _parent_of(current)
+    return False
+
+
+def _holds_descriptor_on(lock: Path) -> bool:
+    """True when this process holds an open descriptor on the lock file — the inherited one."""
+    try:
+        target = lock.lstat()
+        names = os.listdir("/dev/fd")
+    except OSError:
+        return False
+    for name in names:
+        if not name.isdigit():
+            continue
+        try:
+            found = os.fstat(int(name))
+        except OSError:
+            continue
+        if (found.st_dev, found.st_ino) == (target.st_dev, target.st_ino):
+            return True
+    return False
+
+
+def _related_to_holder(pid: int, holder: dict, lock: Path) -> bool:
+    """A marker is honoured only for a real descendant of its admission.
+
+    Three relations prove it: the holder is a live ancestor; this process
+    runs in the session the supervisor started for its protected child (which
+    survives a killed supervisor, and no unrelated process can join); or this
+    process holds the inherited lock descriptor itself.
+    """
+    if _descends_from(pid):
+        return True
+    session = holder.get("session")
+    if isinstance(session, int) and session > 1:
+        with contextlib.suppress(OSError):
+            if os.getsid(0) == session:
+                return True
+    return _holds_descriptor_on(lock)
 
 
 def _memory_probe_output(command: list[str]) -> str | None:
@@ -381,6 +459,7 @@ class _Admission:
         self.entered = 0.0
         self.record_name: str | None = None
         self.record_fd: int | None = None
+        self._published = False
         self._released = False
 
     def enter(self) -> None:
@@ -402,8 +481,13 @@ class _Admission:
             global _ACTIVE
             if _ACTIVE is self:
                 _ACTIVE = None
-        with contextlib.suppress(OSError):
-            (self.state.root / HOLDER_NAME).unlink()
+        # Only the owner removes the record, and only while it still names this process: a
+        # cancelled waiter never published one and must not delete the active holder's (review row F6-1).
+        if self._published:
+            holder = read_holder(self.state.root)
+            if holder is not None and holder.get("pid") == os.getpid():
+                with contextlib.suppress(OSError):
+                    (self.state.root / HOLDER_NAME).unlink()
         # Close, never unlock: the lock belongs to the open description, and a protected descendant
         # that inherited it and outlived the group kill keeps it until it exits (review row L1-11).
         os.close(self.state.lock_fd)
@@ -502,9 +586,16 @@ class _Admission:
         self.record_name = None
         self.record_fd = None
 
-    def _publish(self) -> None:
-        """Publish pid, command and start time while owning admission."""
-        payload = json.dumps({"pid": os.getpid(), "command": self.command, "start": _stamp()}).encode("utf-8")
+    def publish_session(self, session: int) -> None:
+        """Republish ownership naming the session of the supervised child, for its descendants."""
+        self._publish(session)
+
+    def _publish(self, session: int | None = None) -> None:
+        """Publish pid, command and start time (and the child's session) while owning admission."""
+        record: dict[str, object] = {"pid": os.getpid(), "command": self.command, "start": _stamp()}
+        if session is not None:
+            record["session"] = session
+        payload = json.dumps(record).encode("utf-8")
         path = self.state.root / HOLDER_NAME
         # A fresh file renamed over the record replaces the directory entry itself, so a hard link
         # planted in its place is unlinked, never written through (review row F6-3).
@@ -516,6 +607,7 @@ class _Admission:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(payload)
             fresh.replace(path)
+            self._published = True
         except OSError as error:
             with contextlib.suppress(OSError):
                 fresh.unlink()
@@ -686,6 +778,35 @@ def _stop_child(child: subprocess.Popen[bytes]) -> None:
         child.wait(timeout=SIGNAL_GRACE_SECONDS)
 
 
+def _group_alive(group: int) -> bool:
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _end_lingering_group(group: int) -> None:
+    """End what is left of the protected command's process group after the command itself exited.
+
+    Admission covers every protected descendant: a grandchild that outlives the command is ended,
+    gently first, before the lock is released (review row F6-5).
+    """
+    if not _group_alive(group):
+        return
+    _log(f"the protected command exited; ending its remaining process group {group} before release")
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        with contextlib.suppress(OSError):
+            os.killpg(group, signum)
+        deadline = time.monotonic() + SIGNAL_GRACE_SECONDS
+        while time.monotonic() < deadline:
+            if not _group_alive(group):
+                return
+            time.sleep(CHILD_WATCH_SECONDS)
+
+
 def supervise(command: list[str]) -> int:
     """Queue, check memory and run one protected command; return its exit code."""
     if not command:
@@ -703,6 +824,7 @@ def supervise(command: list[str]) -> int:
             admission = _Admission(_prepare_state(), command)
             admission.enter()
             child = _spawn_child(command, (admission.state.lock_fd,), os.getpid())
+            admission.publish_session(child.pid)
         code = _watch_child(child)
     except VerifyLockError as refused:
         print(f"[verify-lock] admission refused: {refused}", file=sys.stderr, flush=True)
@@ -714,6 +836,8 @@ def supervise(command: list[str]) -> int:
         try:
             if child is not None and child.poll() is None:
                 _stop_child(child)
+            if child is not None:
+                _end_lingering_group(child.pid)
             if admission is not None:
                 admission.release()
         finally:

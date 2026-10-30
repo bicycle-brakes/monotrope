@@ -955,3 +955,80 @@ def test_publishing_never_writes_through_a_hard_linked_holder(tmp_path: Path, mo
     with verify_lock.hold_admission(["holder"]):
         assert verify_lock.read_holder(root) is not None, "the holder was not published"
     assert victim.read_text(encoding="utf-8") == "keep me\n", "publishing wrote through the planted hard link"
+
+
+def test_releasing_an_unentered_admission_keeps_the_active_holder_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row F6-1. Planted fault: a cancelled waiter's release unlinked the active holder's record,
+    so the holder's own nested checks no longer validated and queued behind their ancestor."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    with fake_holder(state, pid=os.getpid()):
+        waiter = verify_lock._Admission(verify_lock._prepare_state(), ["cancelled", "waiter"])
+        waiter.release()
+        holder = verify_lock.read_holder(state / "coding-harness")
+        assert holder is not None and holder.get("pid") == os.getpid(), "a non-owner removed the holder record"
+
+
+NESTED_PROBE = """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_lock
+print(verify_lock.nested_holder_pid())
+"""
+
+
+def test_an_unrelated_process_naming_the_published_pid_is_not_nested(tmp_path: Path) -> None:
+    """Row F6-2. Planted fault: a marker was validated by metadata and a busy lock alone, so an
+    unrelated process naming the published holder pid bypassed admission while that holder ran."""
+    state = tmp_path / "state"
+    sibling = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        with fake_holder(state, pid=sibling.pid):
+            done = subprocess.run(
+                [sys.executable, "-c", NESTED_PROBE],
+                cwd=REPO_ROOT,
+                env=_env(state, {verify_lock.LOCK_ENV: str(sibling.pid)}),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+        assert done.stdout.strip() == "None", "an unrelated process inherited a sibling's admission"
+    finally:
+        sibling.kill()
+        sibling.wait(timeout=10)
+
+
+GRANDCHILD_BODY = """
+import os, subprocess, sys
+from pathlib import Path
+grandchild = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+Path(os.environ["PROBE_OUT"]).write_text(str(grandchild.pid))
+"""
+
+
+def test_admission_ends_only_after_a_lingering_grandchild_is_gone(tmp_path: Path) -> None:
+    """Row F6-5. Planted fault: the protected command exited while a grandchild it started kept
+    running, and the supervisor released admission without ending the remaining process group."""
+    state = tmp_path / "state"
+    out = tmp_path / "grandchild.pid"
+    entry = _supervised(state, GRANDCHILD_BODY, {"PROBE_OUT": str(out)})
+    assert entry.wait(timeout=60) == 0
+    grandchild = int(out.read_text())
+
+    def gone() -> bool:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return True
+        return False
+
+    try:
+        assert gone() or _wait_until(gone, 2.0), "admission was released while a protected grandchild still ran"
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(grandchild, signal.SIGKILL)
