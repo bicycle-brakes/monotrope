@@ -646,3 +646,15 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a18a63-5202-70c3-9d5b-1b8eb695d362, 2026-10-30
 Reviewer session: codex 01a18a63-5202-70c3-9d5b-1b8eb695d362 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2719 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-2 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:328–362 | An unrelated process naming the holder PID bypasses admission if it merely opens `verify.lock`: descriptor validation compares file identity without proving inherited ownership. New read-only evidence at `3e2a58ef`: validation returned `None` before opening an unrelated, unlocked descriptor and accepted the sibling holder PID afterward. Independent protected work can therefore overlap. [Acceptance criteria 1, 5] | Codex | open | — |
+| F6-5 | MAJOR | SPEC | phase-6 re-check | scripts/stage2.py:951–971; scripts/verify_lock.py:676–697 | Runner checks still release admission while protected grandchildren run. A pytest process can spawn a grandchild with default descriptor closing and redirected output, then exit successfully; `launch()` returns and the admission context releases without cleaning that group. New read-only evidence at `3e2a58ef` using these functions showed exit 0, a live grandchild and an available lock. The supervisor-only cleanup does not cover this runner path. [Acceptance criteria 1, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a18c55-2d21-7ab2-8c6b-436e4f7468f6, 2026-10-30
+Reviewer session: codex 01a18c55-2d21-7ab2-8c6b-436e4f7468f6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
