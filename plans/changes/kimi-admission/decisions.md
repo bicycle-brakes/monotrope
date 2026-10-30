@@ -17,7 +17,7 @@ tags: [decisions]
 
 # kimi-admission — Decisions
 
-Class: bounded, with an ADR edit (five counted interview records owed).
+Class: bounded, with an ADR edit (five counted interview records owed; Q-6 is a sixth).
 The answers were given in German in the conversation; each `answer` quotes
 it and adds the English sense.
 
@@ -100,3 +100,23 @@ answered_by: maintainer
 status: answered
 
 In the context of ADR 0007's role split, facing the Kimi models newly admitted, we decided that they serve the review loop only, to achieve that no role of explore, implement or repair changes, accepting that a Kimi fallback for implement would need its own change. — 2026-10-30
+
+## Q-6 · Whether the choice of Go models stays an ADR matter
+
+context: |
+  Topic: where the choice of OpenCode Go models is decided.
+  Intention: the maintainer stated that the Go models change constantly and
+  that this cannot always be an architecture change; today's five questions
+  were owed only because ADR 0007 named Kimi.
+  Today: model-endpoints.yaml declares the Go models (human-decided, a
+  decision pull request); a model named in an ADR also owes a five-question
+  interview for each change.
+  Repository change: a last amendment of ADR 0007 moves the choice into the
+  declaration.
+  Architecture change: once; never again for a model change.
+asked: 2026-10-30, conversation 2026-10-30 (interview)
+answer: "Ja, in die Deklaration" — the declaration decides which Go models run; a model change is a decision pull request on model-endpoints.yaml, no ADR amendment
+answered_by: maintainer
+status: answered
+
+In the context of ADR 0007, facing an OpenCode Go catalog that changes too often to be architecture, we decided that model-endpoints.yaml alone sets which Go models run, through dated readings in a decision pull request, to achieve that a model change owes no ADR interview, accepting that the ADR no longer names the Go models. — 2026-10-30

@@ -40,6 +40,9 @@ lifted (bead coding-harness-bomd; decisions.md Q-1 to Q-5).
    date and status code of its failed probe (Q-3).
 5. The seven models that could not be admitted stand as dated comments with
    their reason in `model-endpoints.yaml` (Q-4).
+6. ADR 0007 no longer decides which Go models run: admitting, marking,
+   removing or excluding one is a decision pull request on
+   `model-endpoints.yaml`, never an ADR amendment (Q-6).
 
 ## Tests
 
