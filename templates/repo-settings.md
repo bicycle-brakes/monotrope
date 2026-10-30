@@ -19,8 +19,8 @@ Create one active ruleset that targets the default branch with these rules:
   - **A merge queue** (recommended where many pull requests merge in a row):
     merge method "merge commit", build and merge groups of one. The CI
     workflow must run its gates and the required check on the
-    `merge_group` event (`types: [checks_requested]`) and check out the
-    default ref, so the group's merge candidate is what is tested. Each
+    `merge_group` event (`types: [checks_requested]`) and leave the checkout at its
+    event default (no `ref:`), so the group's merge candidate is what is tested. Each
     group yields one merge commit. Switch it on only after that workflow is
     on the default branch, then read the active rules back
     (`gh api repos/<owner>/<repo>/rules/branches/<branch>`).

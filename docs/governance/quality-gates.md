@@ -80,7 +80,7 @@ active, the queue builds each merge group on the current `main`, MG-2 runs on
 that group's ref (`merge_group` event), and only a green group is merged; with
 the up-to-date requirement instead, GitHub refuses the merge of a behind
 branch until it is updated and CI is green again, which nobody does
-automatically (`prompts/07-commit.md`, "The merge", step 7).
+automatically (`prompts/07-commit.md`, "The merge", step 8).
 
 ### Human Gates
 

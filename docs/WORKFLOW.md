@@ -744,7 +744,8 @@ for another repository is `templates/agents-mergeable-prs.md`.
   up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
-  pending rollup is not green), and it merges against its new head.
+  pending rollup is not green), and it merges against its new head with
+  `--match-head-commit`.
   Merging eight pull requests on 2026-10-30 cost one CI run each that way.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
