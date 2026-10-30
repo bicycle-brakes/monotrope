@@ -1032,3 +1032,35 @@ def test_admission_ends_only_after_a_lingering_grandchild_is_gone(tmp_path: Path
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.kill(grandchild, signal.SIGKILL)
+
+
+OPENED_LOCK_PROBE = """
+import os, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_lock
+handle = os.open(verify_lock.state_root() / verify_lock.LOCK_NAME, os.O_RDONLY)
+print(verify_lock.nested_holder_pid())
+"""
+
+
+def test_merely_opening_the_lock_file_is_no_relation(tmp_path: Path) -> None:
+    """Row F6-2 (re-check). Planted fault: an open descriptor on `verify.lock` counted as the
+    inherited one, so any process that opened the file and named the holder pid bypassed admission."""
+    state = tmp_path / "state"
+    sibling = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        with fake_holder(state, pid=sibling.pid):
+            done = subprocess.run(
+                [sys.executable, "-c", OPENED_LOCK_PROBE],
+                cwd=REPO_ROOT,
+                env=_env(state, {verify_lock.LOCK_ENV: str(sibling.pid)}),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+        assert done.stdout.strip() == "None", "opening the lock file passed as inherited ownership"
+    finally:
+        sibling.kill()
+        sibling.wait(timeout=10)

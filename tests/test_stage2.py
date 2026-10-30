@@ -25,6 +25,7 @@ import multiprocessing
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -18383,3 +18384,33 @@ def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str 
         with pytest.raises(stage2.Refused, match="overlay validation failed"):
             stage2.check_overlay(agent, home, selected)
     assert (agent / "models-store.json").read_text() == evidence
+
+
+def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: Path) -> None:
+    # Row F6-5 (re-check) of the machine lock. Planted fault: a runner check returned while a
+    # grandchild with closed descriptors and redirected output kept running, and the admission
+    # context released around it; only the supervisor ended a lingering group.
+    out = tmp_path / "grandchild.pid"
+    body = (
+        "import subprocess, sys, pathlib; "
+        "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        f"pathlib.Path({str(out)!r}).write_text(str(g.pid))"
+    )
+    done = stage2.launch([sys.executable, "-c", body], tmp_path, dict(os.environ), timeout=60)
+    assert done.returncode == 0, done.stderr
+    grandchild = int(out.read_text())
+    try:
+        deadline = time.monotonic() + 2.0
+        alive = True
+        while alive and time.monotonic() < deadline:
+            try:
+                os.kill(grandchild, 0)
+            except ProcessLookupError:
+                alive = False
+            else:
+                time.sleep(0.1)
+        assert not alive, "the launch returned while its grandchild still ran"
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(grandchild, signal.SIGKILL)

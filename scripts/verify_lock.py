@@ -24,8 +24,8 @@ the work lock.
 published ownership names its process, the work lock is genuinely held, and
 this process is related to that admission: the holder is a live ancestor, or
 this process runs in the session the supervisor started for its protected
-child (published with the ownership), or it holds the inherited lock
-descriptor itself. Metadata alone never suffices; an absent, malformed, stale
+child (published with the ownership). Metadata or an open descriptor on the
+lock file never suffices; an absent, malformed, stale
 or unrelated marker uses ordinary admission. The holder process itself need
 not live: a killed supervisor leaves the lock held by the descriptor its
 protected child inherited, and that child's own nested calls still nest
@@ -273,7 +273,7 @@ def nested_holder_pid() -> int | None:
         return None
     lock = state_root() / LOCK_NAME
     # Metadata names a holder; only a relation proves this process descends from it (review row F6-2).
-    if not _related_to_holder(pid, holder, lock):
+    if not _related_to_holder(pid, holder):
         return None
     try:
         fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
@@ -325,32 +325,14 @@ def _descends_from(pid: int) -> bool:
     return False
 
 
-def _holds_descriptor_on(lock: Path) -> bool:
-    """True when this process holds an open descriptor on the lock file — the inherited one."""
-    try:
-        target = lock.lstat()
-        names = os.listdir("/dev/fd")
-    except OSError:
-        return False
-    for name in names:
-        if not name.isdigit():
-            continue
-        try:
-            found = os.fstat(int(name))
-        except OSError:
-            continue
-        if (found.st_dev, found.st_ino) == (target.st_dev, target.st_ino):
-            return True
-    return False
-
-
-def _related_to_holder(pid: int, holder: dict, lock: Path) -> bool:
+def _related_to_holder(pid: int, holder: dict) -> bool:
     """A marker is honoured only for a real descendant of its admission.
 
-    Three relations prove it: the holder is a live ancestor; this process
+    Two relations prove it: the holder is a live ancestor, or this process
     runs in the session the supervisor started for its protected child (which
-    survives a killed supervisor, and no unrelated process can join); or this
-    process holds the inherited lock descriptor itself.
+    survives a killed supervisor, and no unrelated process can join). An open
+    descriptor on the lock file proves nothing: any process can open it
+    (review row F6-2, re-check).
     """
     if _descends_from(pid):
         return True
@@ -359,7 +341,7 @@ def _related_to_holder(pid: int, holder: dict, lock: Path) -> bool:
         with contextlib.suppress(OSError):
             if os.getsid(0) == session:
                 return True
-    return _holds_descriptor_on(lock)
+    return False
 
 
 def _memory_probe_output(command: list[str]) -> str | None:
@@ -788,15 +770,16 @@ def _group_alive(group: int) -> bool:
     return True
 
 
-def _end_lingering_group(group: int) -> None:
+def end_lingering_group(group: int) -> None:
     """End what is left of the protected command's process group after the command itself exited.
 
     Admission covers every protected descendant: a grandchild that outlives the command is ended,
-    gently first, before the lock is released (review row F6-5).
+    gently first, before the lock is released (review row F6-5). The runner's timed launches call
+    this too, so a check held through `hold_admission` never returns over a live group.
     """
     if not _group_alive(group):
         return
-    _log(f"the protected command exited; ending its remaining process group {group} before release")
+    _log(f"the command exited; ending its remaining process group {group}")
     for signum in (signal.SIGTERM, signal.SIGKILL):
         with contextlib.suppress(OSError):
             os.killpg(group, signum)
@@ -837,7 +820,7 @@ def supervise(command: list[str]) -> int:
             if child is not None and child.poll() is None:
                 _stop_child(child)
             if child is not None:
-                _end_lingering_group(child.pid)
+                end_lingering_group(child.pid)
             if admission is not None:
                 admission.release()
         finally:

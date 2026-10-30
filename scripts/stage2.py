@@ -937,6 +937,9 @@ def launch(
             if _LAUNCH_STOPPED.is_set():
                 raise NotStarted("the runner was interrupted during launch")
             stdout, stderr = process.communicate(timeout=timeout)
+            # A grandchild that kept running after the command exited would outlive an admission
+            # released around this call; the group is ended before returning (review row F6-5).
+            verify_lock.end_lingering_group(process.pid)
         except BaseException:
             if process is None:
                 raise
