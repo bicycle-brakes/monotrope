@@ -190,6 +190,15 @@ endpunkte:
       - mimo-v2.6-flash
       - qwen3.7-plus
       - qwen3.8-max
+      - kimi-k3
+      - kimi-k2.7-code
+      - grok-4.7
+      - gpt-5.6-luna
+      - gemini-4-argon
+      - kimi-k3.1-pro
+      - minimax-m3.1-flash
+      - step-5-preview
+      - beam-free
     modelle_terms:
       deepseek-v4.1-flash:
         gelesen: "2026-10-29"
@@ -365,6 +374,89 @@ endpunkte:
         anfragen_5h: 160
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      kimi-k3:
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 110
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      kimi-k2.7-code:
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 1350
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      grok-4.7:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Responses endpoint)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 169
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      gpt-5.6-luna:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Responses endpoint)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 2050
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      gemini-4-argon:
+        uebersprungen: "2026-10-30"
+        grund: "wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      kimi-k3.1-pro:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 147
+        anfragen_gelesen: "2026-10-30"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      minimax-m3.1-flash:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      step-5-preview:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30); the catalog lists step-5-preview-free"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      beam-free:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
+        training: "Not used"
     # Legacy membership for declarations without availability_preflight.
     # Fresh runs of this declaration select the cheapest reachable members.
     availability_preflight:
