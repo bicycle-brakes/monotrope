@@ -1538,11 +1538,13 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
-  An appetite that runs out is not such a stop: by day the session extends
-  it by itself once, up to twice the card's appetite, and says so in its
-  next status message; it asks at twice the appetite, at an open
-  `[DECISION]` or at a structural choice like this one (maintainer,
-  2026-10-30; `prompts/04-implement.md`, "The appetite is a stop").
+  An appetite that runs out is not such a stop: by day and at night the
+  session extends it by itself once, up to twice the card's appetite, and
+  says so in its next status message or the night's ledger. By day it asks
+  at twice the appetite, at an open `[DECISION]` or at a structural choice
+  like this one; at night those cases go to the night rules (cut, park or
+  drop) (maintainer, 2026-10-30; `prompts/04-implement.md`, "The appetite
+  is a stop").
 - **When no choke point closes it, the spec names the boundary.** On
   2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
   mechanism in nine phase-6 rows: a protected descendant outliving the
