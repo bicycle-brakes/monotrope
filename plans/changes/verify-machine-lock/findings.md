@@ -658,3 +658,15 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a18c55-2d21-7ab2-8c6b-436e4f7468f6, 2026-10-30
 Reviewer session: codex 01a18c55-2d21-7ab2-8c6b-436e4f7468f6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2725 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:328–344; scripts/stage2.py:930–933 | If the runner is killed while its protected child survives, nested checks can deadlock behind their own admission. Runner launches inherit the lock descriptor but never publish their child’s session; after reparenting, ancestry validation fails despite the inherited lock remaining held. A read-only fork probe at `6413dfed` with runner-shaped metadata confirmed a busy inherited lock and rejected nesting. The surviving check must retain usable ownership so waiters can eventually proceed. [Acceptance criteria 5, 6] | Codex | open | — |
+| F6-7 | MAJOR | SPEC | phase-6 | scripts/verify_lock.py:225–229 | Replacing `verify.holder.json` with a FIFO without a writer hangs `read_holder()`: its blocking open occurs before the regular-file check. Waiters stop logging, and a finishing holder blocks in `release()` before closing its lock, preventing subsequent admissions. Unsafe holder state must refuse without blocking. [Acceptance criteria 3, 6, 14] | Codex | open | — |
+
+Phase 6 verdict: codex 01a18c84-d2db-70f2-981c-49cfc301696d, 2026-10-30
+Reviewer session: codex 01a18c84-d2db-70f2-981c-49cfc301696d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
