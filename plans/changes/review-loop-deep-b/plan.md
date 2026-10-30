@@ -74,7 +74,7 @@ Starts unless you say stop.
 - 8: tests/test_stage2.py::test_render_table_escapes_a_pipe_in_a_cell — a pipe in a cell moves the columns.
 - 9: tests/test_stage2.py::test_a_replacement_the_deadline_stopped_is_not_consumed — a rung that never ran is consumed.
 - 10: tests/test_stage2.py::test_a_header_named_by_its_columns_is_furniture — a header with another first cell becomes a finding row.
-- 11: tests/test_stage2.py::test_the_real_declaration_excludes_kimi_and_no_declared_model — a Kimi id is admitted, or a declared model excluded.
+- 11: tests/test_stage2.py::test_the_real_declaration_excludes_no_declared_model — a declared model is excluded (the Kimi exclusion was lifted on 2026-10-30, bead coding-harness-bomd).
 - 12: tests/test_stage2.py::test_a_deadline_stop_names_the_round_limit — the stop names 45 minutes for a call that had seconds.
 - 13: tests/test_stage2.py::test_activation_copies_only_the_allowed_definition_fields — samplingParams, headers or compat reach models.json.
 - 13: tests/test_stage2.py::test_catalog_headers_are_activated_as_literal_data — a catalog header reaches models.json, or the evidence changes.
