@@ -1242,6 +1242,9 @@ def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Pat
     assert "[probe] gruen" in done.stdout, done.stdout
 
 
+HOLDER_TOKEN = "ci-test-admission-token"
+
+
 @contextlib.contextmanager
 def _held_holder(state: Path, *, pid: int | None = None) -> Iterator[None]:
     """Hold the copied tree's machine lock the way a published admission does.
@@ -1257,6 +1260,7 @@ def _held_holder(state: Path, *, pid: int | None = None) -> Iterator[None]:
         json.dumps(
             {
                 "pid": os.getpid() if pid is None else pid,
+                "token": HOLDER_TOKEN,
                 "command": ["fake", "holder"],
                 "start": "2026-10-29T00:00:00",
             }
@@ -1324,7 +1328,12 @@ def test_guarded_runner_preserves_gate_verdicts_and_ci_selection(tmp_path: Path)
         nested = subprocess.run(
             [bash, str(nested_tree / "scripts" / "verify_all.sh")],
             cwd=nested_tree,
-            env=_runner_env(nested_tree, tmp_path / "home", [], {verify_lock.LOCK_ENV: str(os.getpid())}),
+            env=_runner_env(
+                nested_tree,
+                tmp_path / "home",
+                [],
+                {verify_lock.LOCK_ENV: str(os.getpid()), verify_lock.TOKEN_ENV: HOLDER_TOKEN},
+            ),
             capture_output=True,
             text=True,
             timeout=60,
