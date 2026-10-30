@@ -25,6 +25,7 @@ import multiprocessing
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -45,6 +46,7 @@ import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
+import verify_lock  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
 
@@ -594,6 +596,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "PATH": f"{bin_dir}:{git_dir}",
         "HOME": str(home),
         "XDG_STATE_HOME": str(tmp_path / "state"),
+        # The world's checks queue against their own state root under a floor of
+        # zero: no test waits on the machine that happens to run the suite, and
+        # an ambient marker of an outer run is not an ancestor here.
+        verify_lock.FLOOR_ENV: "0",
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -606,6 +612,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "ANTHROPIC_BASE_URL": "http://caller.invalid",
     }.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
 
     git(root, "init", "--quiet", "--initial-branch=main")
     git(root, "add", "-A")
@@ -2026,6 +2033,121 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert KEY not in problems[0] and "[credential]" in problems[0]
     assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
     assert world.calls("make") == []
+
+
+def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
+    """A genuine admission holder on the world's state root: a supervised probe child.
+
+    The world fixture pins the shared state root and a floor of zero, so the
+    holder queues exactly where the runner's own checks queue — never on this
+    machine's real lock.
+    """
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "scripts.verify_lock",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, pathlib, time; "
+            "pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); "
+            f"time.sleep({seconds})",
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "HOLDER_READY": str(ready)},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _holder_acquired(ready: Path, seconds: float = 10.0) -> int:
+    """Wait until the holder owns its admission and answer the holder pid it published."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if ready.exists():
+            return int(ready.read_text(encoding="utf-8"))
+        time.sleep(0.05)
+    raise AssertionError("the holder never acquired its admission")
+
+
+def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
+    # step limit — a short passing check times out after queueing — or the limit dropped, so
+    # a hung executing check escapes its group cleanup.
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    ready = world.state / "holder-ready"
+    holder = _real_holder(ready)
+    try:
+        _holder_acquired(ready)
+        problems: list[str] = []
+
+        def attempt() -> None:
+            problems.extend(stage2.verify_attempt(world.root, world.plan))
+
+        world.script(make=[{"stdout": "green", "sleep": 1.5}])
+        queued = threading.Thread(target=attempt)
+        queued.start()
+        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+        holder.terminate()
+        holder.wait(timeout=30)
+        queued.join(timeout=90)
+        assert problems == [], f"the admission wait consumed the step limit: {problems}"
+        assert len(world.calls("make")) == 1
+    finally:
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait(timeout=10)
+
+    # and the limit still binds the executing check: a hung make ends inside it
+    world.script(make=[{"stdout": "too late", "sleep": 30}])
+    problems = stage2.verify_attempt(world.root, world.plan)
+    assert len(problems) == 1 and "did not finish" in problems[0], problems
+
+
+def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
+    # the selected pytest path loses the inherited marker or the shared state root, so the local
+    # check queues for its own admission instead of reusing its ancestor's.
+    ready = world.state / "holder-ready-nested"
+    holder = _real_holder(ready)
+    try:
+        _holder_acquired(ready)
+        # The marker is honoured only for a descendant of the published holder (review row F6-2),
+        # and this test process is not the sibling supervisor's descendant: the record is
+        # republished naming this process, the way an ancestor's supervisor names itself, while
+        # the sibling keeps the work lock genuinely held.
+        holder_pid = os.getpid()
+        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+        record.write_text(
+            json.dumps(
+                {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+        monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+        assert verify_lock.nested_holder_pid() == holder_pid
+        world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
+        assert stage2.verify_attempt(world.root, world.plan) == []
+        make_env = world.calls("make")[0]["env"]
+        assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+        assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
+        assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+        assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+        # and the draft post-run path preserves it too
+        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+        world.plan.write_text(PLAN_CARD, encoding="utf-8")
+        problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+        assert problems == [], problems
+        draft_env = world.calls("make")[1]["env"]
+        assert draft_env[verify_lock.LOCK_ENV] == str(holder_pid), "the draft path lost its inherited marker"
+        assert draft_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
+    finally:
+        if holder.poll() is None:
+            holder.terminate()
+            holder.wait(timeout=10)
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -5490,13 +5612,13 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     seen: list[tuple[str, float | None]] = []
     original = stage2.launch
 
-    def record(command, root, env, secret=None, timeout=None, limit=None):
+    def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         # The stem, not the file name: the mutation ratchet in test_ci.py reads a
         # gate script's file name as mutation evidence, and this test seeds no
         # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
         name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
         seen.append((name, timeout))
-        return original(command, root, env, secret, timeout=timeout, limit=limit)
+        return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", record)
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
@@ -5510,10 +5632,10 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
     original = stage2.launch
 
-    def hang(command, root, env, secret=None, timeout=None, limit=None):
+    def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         if command == ["make", "verify"]:
             raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
-        return original(command, root, env, secret, timeout=timeout, limit=limit)
+        return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", hang)
     problems = stage2.verify_attempt(world.root, world.plan)
@@ -11683,7 +11805,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
     baseline = git(world.root, "rev-parse", "HEAD")
     original_launch = stage2.launch
 
-    def stopping(command, root, env, secret=None, timeout=None, limit=None):
+    def stopping(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         """The pytest process dies at the limit after writing the phases it reached."""
         if "-m" in command and "pytest" in command:
             record = {
@@ -11716,7 +11838,7 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
             }
             Path(env["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
             raise stage2.StepTimedOut(f"{command[0]} was stopped by {limit}")
-        return original_launch(command, root, env, secret, timeout=timeout, limit=limit)
+        return original_launch(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", stopping)
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
@@ -16117,6 +16239,31 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
     assert signal_.getsignal(signal_.SIGTERM) is before, "the runner's handler leaked past main"
 
 
+@pytest.mark.parametrize("name", ["SIGHUP", "SIGQUIT"])
+def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
+    name: str, world: World, monkeypatch, tmp_path: Path
+) -> None:
+    """Phase-6 row F6-8: SIGHUP and SIGQUIT clean the running groups before the runner exits,
+    as the spec's Boundary promises; the exit is 128 plus the signal number."""
+    import signal as signal_
+
+    signum = getattr(signal_, name)
+    before = signal_.getsignal(signum)
+
+    def hang_up() -> None:
+        os.kill(os.getpid(), signum)
+        time.sleep(5)
+
+    verb, started = _interrupting_verb(tmp_path, hang_up)
+    monkeypatch.setattr(stage2, "explore", verb)
+    assert world.run("explore") == 128 + signum
+    end = time.monotonic() + 5
+    while _child_alive(started["pid"]) and time.monotonic() < end:
+        time.sleep(0.05)
+    assert not _child_alive(started["pid"]), f"the launched program outlived the runner after {name}"
+    assert signal_.getsignal(signum) is before, "the runner's handler leaked past main"
+
+
 def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
     """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
     monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
@@ -18453,3 +18600,57 @@ def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str 
         with pytest.raises(stage2.Refused, match="overlay validation failed"):
             stage2.check_overlay(agent, home, selected)
     assert (agent / "models-store.json").read_text() == evidence
+
+
+def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: Path) -> None:
+    # Row F6-5 (re-check) of the machine lock. Planted fault: a runner check returned while a
+    # grandchild with closed descriptors and redirected output kept running, and the admission
+    # context released around it; only the supervisor ended a lingering group.
+    out = tmp_path / "grandchild.pid"
+    body = (
+        "import subprocess, sys, pathlib; "
+        "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        f"pathlib.Path({str(out)!r}).write_text(str(g.pid))"
+    )
+    done = stage2.launch([sys.executable, "-c", body], tmp_path, dict(os.environ), timeout=60)
+    assert done.returncode == 0, done.stderr
+    grandchild = int(out.read_text())
+    try:
+        deadline = time.monotonic() + 2.0
+        alive = True
+        while alive and time.monotonic() < deadline:
+            try:
+                os.kill(grandchild, 0)
+            except ProcessLookupError:
+                alive = False
+            else:
+                time.sleep(0.1)
+        assert not alive, "the launch returned while its grandchild still ran"
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(grandchild, signal.SIGKILL)
+
+
+def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Row F6-6 of the machine lock. Planted fault: a runner launch handed its child the lock
+    # descriptor but no proof of relation that survives a killed runner, so the child's own nested
+    # checks queued behind their own lock; the admission token in the child's environment is it.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
+    probe = (
+        "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
+        "h = verify_lock.read_holder(); "
+        "print(json.dumps([h.get('token') if h else None, os.environ.get(verify_lock.TOKEN_ENV), "
+        "verify_lock.nested_holder_pid()]))"
+    )
+    with verify_lock.hold_admission(["make", "verify"]) as owned:
+        assert owned is not None
+        env = verify_lock.inherit_env(dict(os.environ))
+        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=(owned,))
+    assert done.returncode == 0, done.stderr
+    published, inherited, nested = json.loads(done.stdout)
+    assert published and published == inherited, "the runner's child did not inherit the admission token"
+    assert nested == os.getpid(), "the runner's child did not nest in its admission"
