@@ -3740,6 +3740,77 @@ def change_diff(root: Path) -> str:
     return "".join(parts)
 
 
+# The paid review diff's prose classification (spec Terms): documentation trees and prose suffixes
+# name prose, every other path is an implementation input. An exact set, no source-language guess.
+PROSE_TOP_DIRS = frozenset({"docs", "plans", "prompts"})
+PROSE_SUFFIXES = frozenset({".md", ".rst", ".txt", ".adoc"})
+
+
+def _is_prose(relative: str) -> bool:
+    """Whether a repository-relative path is prose: a documentation tree or a prose suffix."""
+    path = Path(relative)
+    return path.parts[0] in PROSE_TOP_DIRS or path.suffix in PROSE_SUFFIXES
+
+
+def paid_review_diff(root: Path) -> str:
+    """The diff a paid review round embeds: implementation inputs first, then prose.
+
+    Files with the basename `findings.md` and the generated `plans/INDEX.md` stay out
+    (criterion 1): the loop writes them itself, and their growth consumed the paid
+    prompt's bound before code and tests (bead coding-harness-ut8q). What remains is
+    ordered by the spec's Terms (criterion 2): every implementation input before every
+    prose file, each group in one lexical repository-relative path order, tracking
+    state no sort key. Every retained file keeps its complete diff against the merge
+    base exactly once (criterion 3); `bounded_review_diff` applies the prompt's bound
+    afterwards (criterion 4). The raw `change_diff` stays untouched: availability
+    receipts hash it (criterion 7), as the free stage's own admission and bounds
+    stay theirs (criterion 6).
+    """
+    base = _merge_base(root)
+    flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
+    changed = [
+        name
+        for name in _git_output(root, "diff", "--name-only", "--no-renames", "-z", base, preserve_newlines=True).split(
+            "\0"
+        )
+        if name
+    ]
+    untracked = [
+        name
+        for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", preserve_newlines=True).split(
+            "\0"
+        )
+        if name
+    ]
+    untracked_set = set(untracked)
+    names: list[str] = []
+    seen: set[str] = set()
+    for rel in [*changed, *untracked]:
+        if rel in seen:
+            continue
+        seen.add(rel)
+        if Path(rel).name == "findings.md" or rel == "plans/INDEX.md":
+            continue
+        names.append(rel)
+    # The tuple puts implementation inputs (False) before prose (True), each group in path order.
+    names.sort(key=lambda rel: (_is_prose(rel), rel))
+    parts: list[str] = []
+    for rel in names:
+        if rel in untracked_set:
+            piece = _git_output(
+                root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1), preserve_newlines=True
+            )
+        else:
+            piece = _git_output(
+                root, "diff", *flags, "--no-renames", base, "--", f":(literal){rel}", preserve_newlines=True
+            )
+        if not piece.strip():
+            continue
+        # Git's pieces end with their own newline; plain concatenation keeps the line count git's.
+        parts.append(piece)
+    return "".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # GLM Flash work phases
 # ---------------------------------------------------------------------------
@@ -7484,7 +7555,7 @@ def _review_round(
         # The free diff's own bounds cut before the prompt's bound does; both cuts belong to the round.
         cut_note = "; ".join(note for note in (free_cut, cut_note) if note) or None
     else:
-        diff, cut_note = bounded_review_diff(change_diff(root))
+        diff, cut_note = bounded_review_diff(paid_review_diff(root))
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}

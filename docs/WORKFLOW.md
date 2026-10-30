@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-28
+updated: 2026-10-30
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1270,9 +1270,17 @@ coding-harness-pj98); the Flash round then has its own deadline, so that call
 can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
-declaration — with the paid rounds' read-only tools and the same bounded diff.
-One deadline of `REVIEWER_MINUTES` covers the round's members and every
-replacement (R-8).
+declaration — with the paid rounds' read-only tools. A paid round's diff is a
+projection of its own: the loop's own records — every `findings.md` and the
+generated `plans/INDEX.md` — stay out of it, every implementation input
+precedes every prose file, each group in one lexical repository-relative path
+order regardless of tracking state, every retained file keeps its complete
+diff against the merge base exactly once, and the `REVIEW_DIFF_MAX_LINES` bound
+is applied afterwards — a cut consumes prose first, never code or tests before
+them (bead `coding-harness-ut8q`). The free round keeps its bounded hunks of
+source and test code, and the raw diff the availability receipt hashes stays
+the full change. One deadline of `REVIEWER_MINUTES` covers the round's members
+and every replacement (R-8).
 
 **The read boundary is a request today, not a mechanism (R-5, accepted in
 writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;

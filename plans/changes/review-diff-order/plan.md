@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-ut8q
@@ -77,17 +77,17 @@ no Stage-1 fallback was recorded. No design phase or ADR draft is due.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_paid_review_diff_excludes_only_named_records — an excluded tracked/untracked file appears, or a lookalike is dropped.
-- 2: not yet written tests/test_stage2.py::test_paid_review_diff_orders_tracked_and_untracked_together — tracked prose precedes untracked implementation or group/path order varies.
-- 3: not yet written tests/test_stage2.py::test_paid_review_diff_preserves_retained_file_diffs — any state, rename side, literal path or original line ending is lost or duplicated.
-- 4: not yet written tests/test_stage2.py::test_paid_round_bounds_the_filtered_ordered_diff — sorting/filtering happens after the cut, or a paid member receives the raw diff.
-- 4: not yet written tests/test_stage2.py::test_paid_review_diff_at_the_bound_is_not_cut — the at-limit input falsely records a cut.
+- 1: tests/test_stage2.py::test_paid_review_diff_excludes_only_named_records — an excluded tracked/untracked file appears, or a lookalike is dropped.
+- 2: tests/test_stage2.py::test_paid_review_diff_orders_tracked_and_untracked_together — tracked prose precedes untracked implementation or group/path order varies.
+- 3: tests/test_stage2.py::test_paid_review_diff_preserves_retained_file_diffs — any state, rename side, literal path or original line ending is lost or duplicated.
+- 4: tests/test_stage2.py::test_paid_round_bounds_the_filtered_ordered_diff — sorting/filtering happens after the cut, or a paid member receives the raw diff.
+- 4: tests/test_stage2.py::test_paid_review_diff_at_the_bound_is_not_cut — the at-limit input falsely records a cut.
 - 5: tests/test_stage2.py::test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so — an over-limit paid round hides its cut or ends cleanly.
 - 5: tests/test_stage2.py::test_a_cut_round_stays_cut_after_the_release — release forgets the cut and blocks the next round as clean.
-- 6: not yet written tests/test_stage2.py::test_paid_diff_projection_leaves_free_inputs_unchanged — invoking paid projection alters free review/probe input or its order.
+- 6: tests/test_stage2.py::test_paid_diff_projection_leaves_free_inputs_unchanged — invoking paid projection alters free review/probe input or its order.
 - 6: tests/test_stage2.py::test_free_diff_reports_its_own_cut — either free bound loses its cut note.
 - 6: tests/test_stage2.py::test_a_free_round_over_a_cut_file_is_never_clean — a free cut no longer blocks clean stop.
-- 7: not yet written tests/test_stage2.py::test_paid_exclusions_leave_availability_binding_sensitive — findings-only or index-only edits no longer change the receipt binding.
+- 7: tests/test_stage2.py::test_paid_exclusions_leave_availability_binding_sensitive — findings-only or index-only edits no longer change the receipt binding.
 
 ## Verification
 
@@ -114,7 +114,14 @@ the runner's next gate, not a result claimed by this draft.
 predecessor measurement, free admission/order/bounds, raw `change_diff`,
 read tools and loop state/stop/release rules retain their current behavior.
 
+## Runner route — 2026-10-30
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 2026-10-29 17:36–19:07:41 UTC — implement · attempts 1 (flash, 1 test red) and 2 (flash-repair, refused: it changed `prompts/04b-review-loop.md`, a path a stage-2 run does not commit, though plan step names it) · measured with `date -u`
 Appetite stop, 2026-10-29 19:10 UTC: about 1.5 h of the 1 h appetite used; parked. The plan's prompt step contradicts the runner's commit rule; the maintainer decides.
 Revised 2026-10-29 about 21:59 UTC (maintainer's decision of about 19:25 UTC): the prompt edit moves from the model to the orchestrator; 45 more minutes, read as counted from the stop at about 1.5 h.
+2026-10-30 01:31:23–02:09:35 UTC, 2293 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 02:09:41–02:48:50 UTC, 2349 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 02:48:56–03:01:06 UTC, 730 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

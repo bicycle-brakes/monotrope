@@ -1111,6 +1111,241 @@ def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
         monkey.undo()
 
 
+# ---------------------------------------------------------------------------
+# The paid review diff (plans/changes/review-diff-order)
+# ---------------------------------------------------------------------------
+
+
+def raw_git(cwd: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
+    """Git's output as the bytes arrived, without newline translation: the paid diff's own standard."""
+    done = subprocess.run([GIT, *args], cwd=cwd, capture_output=True, check=False)
+    assert done.returncode in allow, (done.returncode, done.stderr.decode("utf-8", "replace"))
+    return os.fsdecode(done.stdout)
+
+
+def git_piece(root: Path, base: str, rel: str, *, untracked: bool) -> str:
+    """One file's complete diff against the base, built by git itself: the oracle for a retained file."""
+    flags = ("--no-color", "--no-ext-diff", "--no-textconv")
+    if untracked:
+        return raw_git(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
+    return raw_git(root, "diff", *flags, "--no-renames", base, "--", f":(literal){rel}")
+
+
+def paid_prompts(world: World, round_number: int) -> list[str]:
+    """The prompts of one round's reviewer calls, as the stand-in recorded them."""
+    found = []
+    for call in world.reviews("pi"):
+        value = str(call.get("prompt_file") or "")
+        try:
+            text = Path(value).read_text(encoding="utf-8") if Path(value).is_file() else value
+        except OSError:
+            text = value
+        if f"This is round {round_number}" in text:
+            found.append(text)
+    return found
+
+
+def test_paid_review_diff_excludes_only_named_records(world: World) -> None:
+    """Criterion 1. Planted fault: a findings file or the index contributes a diff, or a lookalike is dropped."""
+    root = world.root
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "notes.md").write_text("TRACKED-PROSE-BODY\n", encoding="utf-8")
+    (root / "docs" / "findings.md").write_text("TRACKED-FINDINGS-BODY\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "--quiet", "-m", "prose and a tracked findings file")
+    world.findings.write_text("UNTRACKED-FINDINGS-BODY\n" * 40, encoding="utf-8")
+    (root / "plans" / "INDEX.md").write_text("GENERATED-INDEX-BODY\n" * 40, encoding="utf-8")
+    # Lookalikes keep their place: the exclusion is the exact basename and the exact index path only.
+    (root / "src" / "myfindings.md").write_text("MYFINDINGS-LOOKALIKE-BODY\n", encoding="utf-8")
+    # (Not a lowercase index.md: on a case-insensitive filesystem that is the index itself.)
+    (root / "plans" / "INDEX-old.md").write_text("SIBLING-INDEX-BODY\n", encoding="utf-8")
+    (root / "plans" / "changes" / "demo" / "INDEX.md").write_text("NESTED-INDEX-BODY\n", encoding="utf-8")
+    diff = stage2.paid_review_diff(root)
+    base = stage2._merge_base(root)
+    expected = "".join(
+        [
+            git_piece(root, base, "scripts/helper.py", untracked=False),
+            git_piece(root, base, "docs/notes.md", untracked=False),
+            git_piece(root, base, "plans/INDEX-old.md", untracked=True),
+            git_piece(root, base, "plans/changes/demo/INDEX.md", untracked=True),
+            git_piece(root, base, "src/myfindings.md", untracked=True),
+        ]
+    )
+    assert diff == expected, "the paid diff is not just the retained files' own diffs, prose last"
+    assert "FINDINGS-BODY" not in diff and "GENERATED-INDEX-BODY" not in diff, "an excluded record contributed a diff"
+
+
+def test_paid_review_diff_orders_tracked_and_untracked_together(world: World) -> None:
+    """Criterion 2. Planted fault: git's path order or tracking state decides, tracked prose leads a test."""
+    root = world.root
+    research = root / "plans" / "changes" / "demo" / "research.md"
+    research.write_text(
+        research.read_text(encoding="utf-8").replace("seed fact", "TRACKED-PROSE-BODY"), encoding="utf-8"
+    )
+    (root / "scripts" / "helper.py").write_text("TRACKED-SOURCE-BODY = 3\n", encoding="utf-8")
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "test_late.py").write_text("UNTRACKED-TEST-BODY = 1\n", encoding="utf-8")
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "late.md").write_text("UNTRACKED-PROSE-BODY\n", encoding="utf-8")
+    diff = stage2.paid_review_diff(root)
+    base = stage2._merge_base(root)
+    expected = "".join(
+        [
+            git_piece(root, base, "scripts/helper.py", untracked=False),
+            git_piece(root, base, "tests/test_late.py", untracked=True),
+            git_piece(root, base, "docs/late.md", untracked=True),
+            git_piece(root, base, "plans/changes/demo/research.md", untracked=False),
+        ]
+    )
+    assert diff == expected, "implementation inputs do not all precede prose, in one path order, tracking state aside"
+    assert diff.index("UNTRACKED-TEST-BODY") < diff.index("TRACKED-PROSE-BODY"), "tracked prose led a test"
+    assert stage2.paid_review_diff(root) == diff, "a second build of unchanged inputs ordered the paths differently"
+
+
+def test_paid_review_diff_preserves_retained_file_diffs(world: World) -> None:
+    """Criterion 3. Planted fault: reordering drops, duplicates, renames away or rewrites a retained file's diff."""
+    root = world.root
+    base = stage2._merge_base(root)
+    # Every state at once, on paths the merge base holds: only they can show a deletion or a rename
+    # side against it. app.py is staged and edited again on top; _verdict.py is deleted from the
+    # worktree; research.md is renamed across the prose boundary to a spaced name; helper.py
+    # arrives committed with the fixture.
+    (root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    git(root, "add", "src/app.py")
+    (root / "src" / "app.py").write_text("value = 3\n", encoding="utf-8")
+    (root / "scripts" / "_verdict.py").unlink()
+    git(root, "mv", "plans/changes/demo/research.md", "src/moved research.py")
+    # Odd names and line ends: pathspec metacharacters, spaces, a newline, CRLF.
+    odd = {
+        "src/space name.py": "SPACE = 1\n",
+        "src/star*.py": "STAR = 1\n",
+        "src/bracket[1].py": "BRACKET = 1\n",
+        "src/question?.py": "QUESTION = 1\n",
+        "src/we\nird.py": "NEWLINE = 1\n",
+    }
+    for name, body in odd.items():
+        (root / name).write_text(body, encoding="utf-8")
+    (root / "src" / "crlf.py").write_bytes(b"CRLF_A = 1\r\nCRLF_B = 2\r\n")
+    retained = [
+        ("scripts/_verdict.py", False),
+        ("scripts/helper.py", False),
+        ("src/app.py", False),
+        ("src/bracket[1].py", True),
+        ("src/crlf.py", True),
+        ("src/moved research.py", False),
+        ("src/question?.py", True),
+        ("src/space name.py", True),
+        ("src/star*.py", True),
+        ("src/we\nird.py", True),
+        ("plans/changes/demo/research.md", False),
+    ]
+    diff = stage2.paid_review_diff(root)
+    assert diff == "".join(git_piece(root, base, rel, untracked=untracked) for rel, untracked in retained), (
+        "a retained file's diff was dropped, duplicated, reordered or rewritten"
+    )
+    assert diff.count(git_piece(root, base, "plans/changes/demo/research.md", untracked=False)) == 1, (
+        "the rename's deletion side was lost"
+    )
+    assert diff.count(git_piece(root, base, "src/moved research.py", untracked=False)) == 1, (
+        "the rename's addition side was lost"
+    )
+    assert diff.count(git_piece(root, base, "scripts/_verdict.py", untracked=False)) == 1, (
+        "the deleted file's diff was lost"
+    )
+    assert "-value = 1\n" in diff and "+value = 3\n" in diff, "the staged and edited file lost one of its sides"
+    assert "+CRLF_B = 2\r\n" in diff, "the carriage returns were rewritten"
+
+
+def test_paid_round_bounds_the_filtered_ordered_diff(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4. Planted fault: excluded records or leading prose spent the bound before code and tests."""
+    root = world.root
+    base = stage2._merge_base(root)
+    (root / "src" / "app.py").write_text("APP-BUDGET-BODY = 2\n", encoding="utf-8")
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "test_paid_budget.py").write_text("PAID-TEST-BODY = 1\n", encoding="utf-8")
+    research = root / "plans" / "changes" / "demo" / "research.md"
+    research.write_text(
+        research.read_text(encoding="utf-8").replace("seed fact", "TRACKED-PROSE-BODY"), encoding="utf-8"
+    )
+    world.findings.write_text("UNTRACKED-FINDINGS-BODY\n" * 40, encoding="utf-8")
+    (root / "plans" / "INDEX.md").write_text("GENERATED-INDEX-BODY\n" * 40, encoding="utf-8")
+    # The bound fits exactly the implementation inputs: prose starts behind it, the records stay out entirely.
+    limit = "".join(
+        [
+            git_piece(root, base, "scripts/helper.py", untracked=False),
+            git_piece(root, base, "src/app.py", untracked=False),
+            git_piece(root, base, "tests/test_paid_budget.py", untracked=True),
+        ]
+    ).count("\n")
+    monkeypatch.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free",)))
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": "No finding."},
+            {"model": "mimo-v2.6-flash", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    prompts = paid_prompts(world, 2)
+    assert prompts, "the run reached no paid round"
+    for text in prompts:
+        assert f"## (the change diff was cut at {limit} of" in text, "the paid prompt carried no cut marker"
+        assert "APP-BUDGET-BODY = 2" in text and "PAID-TEST-BODY" in text, "code or tests lost the budget"
+        assert text.index("APP-BUDGET-BODY = 2") < text.index("PAID-TEST-BODY"), "the prompt lost the order"
+        for spent in ("UNTRACKED-FINDINGS-BODY", "GENERATED-INDEX-BODY", "TRACKED-PROSE-BODY"):
+            assert spent not in text, f"the bound was spent on {spent}"
+    assert stage2.cut_rounds(world.record().read_text(encoding="utf-8")) == [2], "the round hid its cut"
+
+
+def test_paid_review_diff_at_the_bound_is_not_cut(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4. Planted fault: an at-limit input was reported cut."""
+    full = stage2.paid_review_diff(world.root)
+    limit = len(full.rstrip("\n").split("\n"))
+    monkeypatch.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(pi=[{"model": "mimo-v2.6-pro", "stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    prompts = paid_prompts(world, 2)
+    assert prompts, "the run reached no paid round"
+    assert all(f"was cut at {limit}" not in text for text in prompts), "an at-limit diff was reported cut"
+    assert stage2.CUT_LINE not in world.record().read_text(encoding="utf-8"), "an at-limit round was recorded as cut"
+
+
+def test_paid_diff_projection_leaves_free_inputs_unchanged(world: World) -> None:
+    """Criterion 6. Planted fault: the paid projection's filtering or order leaked into the free diff or its probe."""
+    root = world.root
+    (root / "scripts" / "helper.py").write_text("TRACKED-FREE-SOURCE = 3\n", encoding="utf-8")
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "test_free_mixed.py").write_text("FREE-UNTRACKED-TEST = 1\n", encoding="utf-8")
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "guide.md").write_text("FREE-PROSE-BODY\n", encoding="utf-8")
+    free, free_cut = stage2.free_diff(root)
+    probe = stage2.free_probe_prompt(root)
+    paid = stage2.paid_review_diff(root)
+    after, after_cut = stage2.free_diff(root)
+    assert (after, after_cut) == (free, free_cut), "invoking the paid projection changed the free diff"
+    assert stage2.free_probe_prompt(root) == probe, "invoking the paid projection changed the free probe input"
+    assert free.index("TRACKED-FREE-SOURCE") < free.index("FREE-UNTRACKED-TEST"), "the free diff lost its own order"
+    assert "FREE-PROSE-BODY" not in free, "prose entered the free diff"
+    assert "TRACKED-FREE-SOURCE" in probe, "the free probe input no longer matches the free diff"
+    assert "FREE-PROSE-BODY" in paid, "the paid projection took no prose: it did not run at all"
+
+
+def test_paid_exclusions_leave_availability_binding_sensitive(world: World) -> None:
+    """Criterion 7. Planted fault: the exclusions quieted the raw diff the availability receipt is hashed from."""
+    import stage2_availability
+
+    root = world.root
+    binding = stage2_availability.binding(root, stage2)
+    world.findings.write_text("# Findings — demo\n\nFINDINGS-ONLY-BODY\n", encoding="utf-8")
+    after_findings = stage2_availability.binding(root, stage2)
+    assert after_findings != binding, "a findings-only edit left the availability binding unchanged"
+    assert "FINDINGS-ONLY-BODY" in stage2.change_diff(root), "the raw diff the receipt hashes lost the findings edit"
+    (root / "plans" / "INDEX.md").write_text("INDEX-ONLY-BODY\n", encoding="utf-8")
+    assert stage2_availability.binding(root, stage2) != after_findings, "an index-only edit left the binding unchanged"
+    assert "INDEX-ONLY-BODY" in stage2.change_diff(root), "the raw diff the receipt hashes lost the index edit"
+
+
 def test_the_review_diff_is_split_on_newlines_only() -> None:
     """O191-4: the count is git's count, and a carriage return survives the cut."""
     text = "".join(f"line {n}\r\n" for n in range(stage2.REVIEW_DIFF_MAX_LINES + 3))
