@@ -102,8 +102,9 @@ this ADR no longer keeps phases 1 and 4 with Anthropic.
    the routing (2026-10-06); Opus 5.5 takes its places, the fallback of
    decision 1 included. *Amended on 2026-10-30 by the maintainer:* the Kimi
    exclusion is lifted; Kimi models on OpenCode Go are admitted like any other
-   Go model, through their data-terms reading in `model-endpoints.yaml` (bead
-   coding-harness-bomd).
+   Go model, through their data-terms reading in `model-endpoints.yaml`, and
+   serve the review loop only; the roles above stay as they are
+   (`plans/changes/kimi-admission/decisions.md`, bead coding-harness-bomd).
 4. **The reads of the foreign models are not confined.** They can read the
    whole disk, the customer instance's checkout included. The prompts ask them
    to read nothing outside the worktree and the repository's git directory — a
