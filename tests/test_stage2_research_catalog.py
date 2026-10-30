@@ -1062,7 +1062,7 @@ def test_preflight_refuses_unapproved_catalog_redirect(tmp_path, sources, fault)
             elif fault == "extra-parameter":
                 location = f"{admitted}&extra=1"
             elif fault == "credentials":
-                location = f"{sources.url.replace('http://', 'http://user:pass@')}{admitted}"
+                location = f"{sources.url.replace('http://', 'http://catalog-user@')}{admitted}"
             elif fault == "fragment":
                 location = f"{admitted}#catalog"
             elif fault == "missing-location":
