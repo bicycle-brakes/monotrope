@@ -85,7 +85,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -1566,6 +1566,18 @@ each learned on the night of 2026-10-29/30:
   `scripts/check_frontmatter_current.py --stamp` runs before a commit after
   local midnight: the `updated:` field takes the local date, which differs
   from UTC in the hours after midnight in Europe/Berlin.
+- **A targeted check, not a full verify, before the next round**
+  (maintainer, 2026-10-30; bead coding-harness-24ag). A full `make verify`
+  takes 12 to 13 minutes under the machine's one verify lock (measured
+  2026-10-30), and a hand repair touches a few files. After a hand repair the
+  orchestrator runs, outside the lock: the test files the repair touched, the
+  test files `scripts/touch_map.py` links to the touched code, `ruff` on the
+  touched files, and the gates the touched kinds of file feed (for example
+  `plans_registry.py --check`, `check_frontmatter_current.py`,
+  `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
+  round starts. One full `make verify` under the lock runs on the final head
+  before phase 6 and before the pull request leaves draft; CI stays the full
+  gate. A runner repair keeps the runner's own `make verify`.
 
 ### Night runs
 
