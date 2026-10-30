@@ -84,11 +84,13 @@ export async function collectCatalog({
     return target;
   };
   // Pi's pinned management client normally retries and applies a four-second
-  // attempt timeout. This isolated adapter permits one actual catalog GET and
-  // uses the shared deadline instead; a second attempt is aborted before I/O.
-  // The one measured redirect — same origin and path, adding exactly the pinned
-  // version — is followed as this adapter's own second I/O inside that one call;
-  // every other redirect is refused before its target is contacted.
+  // attempt timeout. This isolated adapter admits one catalog call from Pi and
+  // uses the shared deadline instead; a second call is aborted before I/O.
+  // Inside that one call it makes at most two real GETs through the saved
+  // `originalFetch`: the request, and the one measured redirect — same origin
+  // and path, adding exactly the pinned version. The hop must not go through
+  // `globalThis.fetch`, whose counter would refuse it (review row L3-1); every
+  // other redirect is refused before its target is contacted.
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
     if (url.origin !== new URL(catalogBaseUrl).origin ||
