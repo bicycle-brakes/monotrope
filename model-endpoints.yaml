@@ -195,7 +195,7 @@ endpunkte:
         gelesen: "2026-10-29"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; renewed through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
         training: "Not used"
         anfragen_5h: 34670
         anfragen_gelesen: "2026-10-17"
@@ -275,7 +275,7 @@ endpunkte:
         gelesen: "2026-10-29"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; renewed through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
