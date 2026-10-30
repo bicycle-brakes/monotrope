@@ -693,13 +693,22 @@ files, three were stacked, and a generated index conflicted on every merge
 request small enough to merge (maintainer, 2026-10-27); the portable form
 for another repository is `templates/agents-mergeable-prs.md`.
 
-- **Synced daily, automatically.** Every working day each open pull request
-  is test-merged against `main` (`git merge-tree --write-tree origin/main
-  origin/<branch>`): one that merges cleanly gets `main` merged and pushed,
-  one that conflicts is reported to the maintainer with its files, and the
-  conflict is resolved while it is small (bead coding-harness-eq6y).
+- **Synced on request, by the helper.** Each working day the day session or
+  the night orchestrator calls `python3 scripts/pr_sync.py sync --root .`
+  explicitly — no scheduler runs it (bead coding-harness-eq6y; on request,
+  detail 5 of the change's `decisions.md`, 2026-10-28). An eligible branch gets the fetched `origin/main`
+  merged in and `plans/INDEX.md` regenerated from the complete merged tree,
+  then that is pushed under an exact head lease, so a racing writer's commit
+  is left intact and reported. A conflict outside the index is reported with
+  its paths and the branch stays put. Reported and never touched: fork pull
+  requests, bases other than `main`, decision pull requests (the `decision`
+  label or a `decide(` title), branches changing a runner-held or
+  human-decided path, and branches a local worktree holds with uncommitted
+  or unpushed work. A failed check is an error, never permission to push.
 - **Asked about after five working days.** A pull request open longer than
-  five working days is put to the maintainer: finish, shrink or close.
+  five working days is put to the maintainer: finish, shrink or close. The
+  sync lists them, identity and age, at the end of every report — protected
+  ones included.
 - **Small enough to review.** A pull request that would change more than
   about 800 lines (code, tests and prose, generated files not counted) is
   cut into slices, one pull request per slice, each with its own phase 6.
@@ -710,12 +719,20 @@ for another repository is `templates/agents-mergeable-prs.md`.
   per foreign-model lane. The oldest is finished before a new one opens
   (bead coding-harness-6y0t).
 - **Reviewed on a current base.** Phase 6 reviews the branch after it has
-  merged `main`; a verdict holds only for the commit it saw.
+  merged `main` with the supported merge below; a verdict holds only for the
+  commit it saw.
 - **Not stacked without a reason.** A pull request built on another names
   the reason in its body; the base merges before the next opens.
 - **Generated files are regenerated.** `plans/INDEX.md` is rebuilt
   (`scripts/plans_registry.py --index`) on a conflict, never merged by hand
-  (bead coding-harness-hfsz).
+  (bead coding-harness-hfsz). The supported local merge is
+  `python3 scripts/pr_sync.py merge-main --root .` (2026-10-28): it merges
+  the fetched `origin/main` into the current branch and regenerates the
+  index from the complete merged tree — the same engine the sync uses — for
+  hand merges and phase-6 preparation. It refuses a detached HEAD, `main`
+  itself, an in-progress merge or rebase and a dirty checkout, and it never
+  pushes. GitHub's server-side Update branch and merge buttons cannot run
+  the helper; the unchanged `plans-registry` gate stays their backstop.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
