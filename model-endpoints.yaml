@@ -685,12 +685,6 @@ ausgeschlossen:
       Zeilen verlassen die Umgebung des Kunden nicht. Das ist keine Frage des
       Anbieters, sondern der Architektur: die Maschine baut die Pipeline, sie
       liest die Daten nicht.
-  - was: "Kimi (Moonshot AI; models k3 and kimi-for-coding)"
-    klasse: framework
-    # The ids and id prefixes the runner matches (`excluded_problem`): without them the
-    # decision bound nothing, and a Kimi free id in the live catalog would have reviewed
-    # diffs (DL-B-12 of the loop's deep review, 2026-10-25).
-    modelle: [kimi, k3, moonshot]
-    grund: >-
-      Dropped by the maintainer on 2026-09-30 — stage 2 reviews with Codex and
-      GLM (ADR 0007).
+  # Kimi (Moonshot AI) stood here from 2026-09-30 (ADR 0007, decision 3). The
+  # maintainer lifted the exclusion on 2026-10-30 (bead coding-harness-bomd);
+  # Kimi models are admitted through their terms readings under `opencode-go`.

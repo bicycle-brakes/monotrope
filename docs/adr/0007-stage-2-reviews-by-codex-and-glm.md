@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-10-07
+updated: 2026-10-30
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-30"}
@@ -100,7 +100,10 @@ this ADR no longer keeps phases 1 and 4 with Anthropic.
 3. **Kimi is dropped, and so is Fable.** Kimi leaves the declared endpoints and
    stands under `ausgeschlossen` with the date of 2026-09-30. Fable 5.1 leaves
    the routing (2026-10-06); Opus 5.5 takes its places, the fallback of
-   decision 1 included.
+   decision 1 included. *Amended on 2026-10-30 by the maintainer:* the Kimi
+   exclusion is lifted; Kimi models on OpenCode Go are admitted like any other
+   Go model, through their data-terms reading in `model-endpoints.yaml` (bead
+   coding-harness-bomd).
 4. **The reads of the foreign models are not confined.** They can read the
    whole disk, the customer instance's checkout included. The prompts ask them
    to read nothing outside the worktree and the repository's git directory — a
