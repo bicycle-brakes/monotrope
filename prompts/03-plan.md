@@ -54,6 +54,17 @@ Required:
 - **Per acceptance criterion the test** that holds it, and the fault that test
   would have to meet to go red — as entries of the criterion ledger below.
 - **What you do not touch**, where the obvious reading would include it.
+- **Held paths go to the orchestrator.** A stage-2 implement or repair
+  attempt never commits a held path: `provenance.yaml`,
+  `decisions/gates.yaml`, `model-endpoints.yaml`, `.claude/`, `.codex/`,
+  `.agents/`, `.pi/`, `.mcp.json`, `CLAUDE.md`, `prompts/`, `templates/`,
+  `.github/`, `.beads/`, `AGENTS.md`, `README.md`, and every prefix whose
+  `allowed` classes in the committed `provenance.yaml` are exactly
+  `human-decided`; the runner matches them as prefixes in any letter case, so
+  `claude.md` or `README.md.bak` is held too. Every step that edits one of
+  them, however small the edit, is assigned in the plan to the orchestrator,
+  as a bootstrap edit after the accepted attempt; the attempt is never told
+  to make it.
 - **No longer than the change.** A plan with more lines than the diff it
   describes is a finding, not diligence. What fits in one sentence stays one
   sentence.
