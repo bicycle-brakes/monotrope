@@ -515,7 +515,7 @@ class _Admission:
             descriptor = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(payload)
-            os.replace(fresh, path)
+            fresh.replace(path)
         except OSError as error:
             with contextlib.suppress(OSError):
                 fresh.unlink()
