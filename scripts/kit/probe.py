@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Die Leerprobe: faehrt den Ablauf in einem Wegwerf-Repo und misst, was traegt.
+"""The kit probe (Leerprobe): runs the workflow in a throwaway repository and measures what carries.
 
-**Wozu.** Die Behauptung "dieser Ablauf laesst sich uebergeben" ist wertlos,
-solange sie ein Satz in einer Prosadatei ist. Dieses Kommando macht sie zu einem
-Lauf: es kopiert in ein leeres Verzeichnis, was `manifest.yaml` als
-`mechanismus` fuehrt, legt fuer jede `geruest`-Regel einen leeren Rumpf an,
-faehrt `pytest` und vergleicht die roten Faelle gegen `REIST_NICHT`.
+**What for.** The claim "this workflow can be handed over" is worthless as
+long as it is a sentence in a prose file. This command turns it into a run: it
+copies into an empty directory what `manifest.yaml` lists as `mechanismus`,
+creates an empty body for every `geruest` rule, runs `pytest` and compares the
+red cases against `REIST_NICHT`.
 
-**Was es nicht tut.** Es schreibt nicht in den Arbeitsbaum, installiert nichts
-und repariert keinen roten Fall. Ein Fall, der hier rot ist, ist meistens
-zu Recht rot — eine Sperrklinke, die Scriptnamen DIESES Repos verlangt, muss
-anderswo rot sein, sonst waere sie eine Sperrklinke ueber einer leeren Menge.
+**What it does not do.** It writes nothing into the working tree, installs
+nothing and repairs no red case. A case that is red here is mostly red for a
+good reason: a ratchet that asks for THIS repository's script names must be
+red elsewhere, or it would be a ratchet over an empty set.
 
-    python3 scripts/kit/probe.py            # fahren und vergleichen
-    python3 scripts/kit/probe.py --list     # nur sagen, was kopiert wuerde
-    python3 scripts/kit/probe.py --messen   # die roten Namen ausgeben, zum Nachtragen
+    python3 scripts/kit/probe.py            # run and compare
+    python3 scripts/kit/probe.py --list     # only say what would be copied
+    python3 scripts/kit/probe.py --messen   # print the red names, to add them
 """
 
 from __future__ import annotations
@@ -39,56 +39,54 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from _verdict import Verdict  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Was nicht mitreist — und warum
+# What does not travel, and why
 # ---------------------------------------------------------------------------
 #
-# Die Namen sind GEMESSEN (ein Lauf von `--messen`), die Gruende sind GESETZT.
-# Ein Name ist eine Messung und gehoert der Maschine; ein Grund ist ein Urteil
-# und gehoert einem Menschen.
+# The names are MEASURED (a run of `--messen`), the reasons are SET.
+# A name is a measurement and belongs to the machine; a reason is a judgement
+# and belongs to a person.
 #
-# **Beide Richtungen blocken.** Ein roter Fall ohne Eintrag ist ein
-# unerklaerter Fehler in einer Uebergabe. Ein Eintrag fuer einen gruenen Fall
-# ist schlimmer: ein abgelaufener Grund liest sich wie eine lebende
-# Entscheidung. Diese Sitzung hat genau das fuenfmal gefunden.
+# **Both directions block.** A red case without an entry is an unexplained
+# failure in a handover. An entry for a green case is worse: an expired reason
+# reads like a living decision. The session that wrote this found exactly
+# that five times.
 GRUENDE = (
-    "bestand-dieses-repos",  # prueft eine Inventur, die es dort nicht gibt
-    "braucht-die-vollstaendige-suite",  # prueft Dateien, die der Kit nicht traegt
-    "braucht-ein-gate-das-hier-lebt",  # verlangt einen Erzwinger ausserhalb des Kits
-    # "geruest-ist-absichtlich-leer" gestrichen am 2026-09-23 (bead coding-harness-1jg.3,
-    # Schritt zwei): die committete Kopie fiel, die gleichnamige Kit-Rolle loeste sich
-    # auf (AK-6, ein Mitglied), und die Rumpf-Dateien traegt der Kit nicht mehr —
-    # die Faelle messen jetzt "braucht-die-vollstaendige-suite".
-    # "gilt-erst-mit-bestand" gestrichen am 2026-09-19 (2ee-Triage): kein Fall
-    # traegt ihn aktuell. Er kommt zurueck, wenn der Projekt-Kanal mit dem
-    # lakeswitch-Beitritt beginnt (O-2/M2) — dann mit Fall, nicht ohne.
+    "bestand-dieses-repos",  # checks an inventory that does not exist there
+    "braucht-die-vollstaendige-suite",  # checks files the kit does not carry
+    "braucht-ein-gate-das-hier-lebt",  # asks for an enforcer outside the kit
+    # "geruest-ist-absichtlich-leer" removed on 2026-09-23 (bead coding-harness-1jg.3,
+    # step two): the committed copy went, the kit role of the same name dissolved
+    # (AK-6, one member), and the kit no longer carries the body files; the cases
+    # now measure "braucht-die-vollstaendige-suite".
+    # "gilt-erst-mit-bestand" removed on 2026-09-19 (2ee triage): no case carries
+    # it today. It returns when the project channel starts with lakeswitch joining
+    # (O-2/M2), then with a case, not without one.
 )
 
-# Der fuenfte Grund kam am 2026-09-08 dazu, aus demselben Anlass wie der vierte:
-# das Vokabular hatte fuer eine wirkliche Ursache keinen Begriff. Vier Faelle im
-# Uebergabe-Kanal standen auf "bestand-dieses-repos" ("prueft eine Inventur, die
-# es dort nicht gibt"). Sie pruefen aber keine Inventur — sie sind vollstaendig
-# portabel und brauchen nur, dass es ueberhaupt eine Uebergabe gibt. Ein
-# frisches Repo hat keine, und das ist richtig so: die Pruefung SOLL dort nicht
-# gruen sein, sie hat nur noch nichts zu pruefen.
+# The fifth reason came on 2026-09-08, for the same cause as the fourth: the
+# vocabulary had no term for a real cause. Four cases in the handover channel
+# stood on "bestand-dieses-repos" ("checks an inventory that does not exist
+# there"). They check no inventory, though: they are fully portable and only
+# need a handover to exist at all. A fresh repository has none, and rightly so:
+# the check SHOULD not be green there, it just has nothing to check yet.
 #
-# Der Unterschied zu "bestand-dieses-repos" ist der Zeitpunkt: dort wird eine
-# Zahl dieses Repos behauptet und bleibt dort falsch; hier wird eine Menge
-# vorausgesetzt, die im Ziel mit dem ersten eigenen Artefakt entsteht.
+# The difference from "bestand-dieses-repos" is the timing: there a number of
+# this repository is claimed and stays wrong there; here a set is presupposed
+# that appears in the target with its first own artefact.
 
-# Der vierte Grund kam am 2026-09-08 dazu, nachdem das Gegenlesen zeigte, dass
-# zwei Eintraege sachlich falsch begruendet waren: sie standen auf
-# "braucht-die-vollstaendige-suite" ("prueft Dateien, die der Kit nicht
-# traegt"), obwohl der Kit `model-endpoints.yaml` sehr wohl traegt — als
-# `geruest`, also als leeren Rumpf. Rot wurden sie, weil der Rumpf leer ist,
-# nicht weil die Datei fehlt. Das geschlossene Vokabular hatte fuer die
-# tatsaechliche Ursache keinen Begriff, also musste ein falscher gewaehlt
-# werden. Ein Vokabular ohne den richtigen Begriff erzwingt eine falsche
-# Aussage — und der Waechter unten prueft nur Mitgliedschaft, nie Richtigkeit.
+# The fourth reason came on 2026-09-08, after a cross-reading showed that two
+# entries had a factually wrong reason: they stood on
+# "braucht-die-vollstaendige-suite" ("checks files the kit does not carry"),
+# although the kit does carry `model-endpoints.yaml`, as `geruest`, an empty
+# body. They went red because the body is empty, not because the file is
+# missing. The closed vocabulary had no term for the actual cause, so a wrong
+# one had to be chosen. A vocabulary without the right term forces a false
+# statement, and the guard below checks membership only, never correctness.
 
-# Gemessen am 2026-09-08 mit `--messen`; die Zuordnung folgt der Fehlermeldung
-# je Fall: ein benannter Erzwinger, den es hier nicht gibt -> das dritte;
-# eine fehlende Datei oder eine unerfuellte Vorbedingung -> das zweite;
-# eine Behauptung ueber die Inventur dieses Repos -> das erste.
+# Measured on 2026-09-08 with `--messen`; the mapping follows each case's
+# failure message: a named enforcer that does not exist here -> the third;
+# a missing file or an unmet precondition -> the second;
+# a claim about this repository's inventory -> the first.
 REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
@@ -134,31 +132,31 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
 }
 
-# Obergrenze. Sie darf nur SINKEN. Wer einen Eintrag hinzufuegt, hebt sie
-# sichtbar an — im Diff, mit Begruendung im Commit. Eine Portabilitaet, die man
-# verlieren kann, ohne dass es auffaellt, ist keine.
+# The cap. It may only FALL. Whoever adds an entry raises it visibly, in the
+# diff, with a reason in the commit. A portability that can be lost without
+# anyone noticing is none.
 #
-# 53 -> 59 am 2026-09-08: RB-A6 prueft jetzt auch die sechs Modell-Nennungen in
-# `prompts/`. Die Pruefung selbst reist mit (`prompts/` ist `mechanismus`); rot
-# wird sie im Zielrepo nur, weil `model-endpoints.yaml` dort ein leerer Rumpf
-# ist. Sechs Faelle mehr in der Liste sind der Preis dafuer, dass sechs bis
-# dahin ungeprueft genannte Modelle jetzt gegen die Erklaerung aufloesen.
+# 53 -> 59 on 2026-09-08: RB-A6 now also checks the six model names in
+# `prompts/`. The check itself travels (`prompts/` is `mechanismus`); it goes
+# red in the target only because `model-endpoints.yaml` is an empty body there.
+# Six more cases in the list are the price for six models, named unchecked
+# until then, now resolving against the declaration.
 #
-# 59 -> 60 am 2026-09-10: `prompts/01a-interview.md` kam dazu — die Phase, in der
-# ein Mensch ausgefragt wird, bevor die Spec geschrieben ist. Ein Prompt mehr ist
-# eine Modell-Nennung mehr, und die faellt im Zielrepo aus demselben Grund rot
-# wie die sechs davor: `model-endpoints.yaml` ist dort ein leerer Rumpf. Der
-# Eintrag traegt denselben Grund und ist kein neuer Ausnahmetyp.
+# 59 -> 60 on 2026-09-10: `prompts/01a-interview.md` came along, the phase in
+# which a person is interviewed before the spec is written. One more prompt is
+# one more model name, red in the target for the same reason as the six before
+# it: `model-endpoints.yaml` is an empty body there. The entry carries the same
+# reason and is no new kind of exception.
 #
-# 60 -> 61 am 2026-09-10: `prompts/02a-spec-review.md` kam dazu — der Gegenleser,
-# der die Spec liest, bevor gebaut wird. Gleiche Klasse, gleicher Grund.
+# 60 -> 61 on 2026-09-10: `prompts/02a-spec-review.md` came along, the
+# cross-reader who reads the spec before building. Same class, same reason.
 #
-# 61 -> 62 am 2026-09-14: `tests.test_ci::test_the_glob_itself_finds_a_real_orphan_shell_script`
-# kam dazu — die Gegenprobe zum erweiterten Aufrufer-Zwang (Befund 11, Runde 2)
-# legt ein echtes .sh-Script an und liest dafuer denselben lokalen Runner wie
-# die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
-# nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
-# `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
+# 61 -> 62 on 2026-09-14: `tests.test_ci::test_the_glob_itself_finds_a_real_orphan_shell_script`
+# came along. The counter-check for the widened caller rule (finding 11, round
+# 2) creates a real .sh script and reads the same local runner as the two
+# caller and test ratchet tests just above it, which the kit does not carry (no
+# entry in `manifest.yaml`; it falls under the `scripts/` catch-all `bestand`).
+# Same class, same reason.
 # 31 -> 32 on 2026-09-29: `tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller`
 # came along. `ci_gates.OHNE_AUFRUFER` now names `omnigent_policy.py`, a script with no CI caller
 # by nature (the installer runs on the maintainer's machine). The script is `bestand` (the
@@ -202,7 +200,7 @@ DECKEL = 42  # raised on 2026-10-16 (39 -> 42); earlier: raised on 2026-10-15 (3
 
 
 # ---------------------------------------------------------------------------
-# Das Manifest lesen
+# Reading the manifest
 # ---------------------------------------------------------------------------
 
 
@@ -216,26 +214,26 @@ def regeln() -> list[dict]:
 
 
 def geruest_ordner() -> list[str]:
-    """Ordner, die im Zielrepo LEER existieren muessen, damit der Ablauf greift.
+    """Directories that must exist EMPTY in the target for the workflow to take hold.
 
-    Getrennt von den `geruest`-Regeln, weil eine Praefix-Regel `plans/changes/`
-    jede Datei DARUNTER mit erfassen wuerde — und das sind die Artefakte dieses
-    Repos, also Bestand. Der Ordner reist, sein Inhalt nicht.
+    Kept apart from the `geruest` rules, because a prefix rule `plans/changes/`
+    would also cover every file BELOW it, and those are this repository's
+    artefacts, so inventory (`bestand`). The directory travels, its content does not.
     """
     return _manifest().get("geruest_ordner", [])
 
 
 def _deckt(praefix: str, pfad: str) -> bool:
-    """Segmentweise, nicht als Zeichenketten-Praefix.
+    """By path segment, not as a string prefix.
 
-    `startswith` haelt `docs/WORKFLOW.md.orig` fuer die Datei `docs/WORKFLOW.md`
-    und `model-endpoints.yaml.bak` fuer `model-endpoints.yaml` — die Sicherung,
-    die ein Mergetool liegen laesst, erbt damit die Rolle des Originals und
-    reist als `mechanismus` mit oder wird als `geruest` angelegt. Dieselbe
-    Korrektur steht mit derselben Begruendung in `tests/test_ci.py:_deckt`.
+    `startswith` takes `docs/WORKFLOW.md.orig` for the file `docs/WORKFLOW.md`
+    and `model-endpoints.yaml.bak` for `model-endpoints.yaml`: the backup a merge
+    tool leaves behind would inherit the original's role and travel as
+    `mechanismus` or be created as `geruest`. The same correction, for the same
+    reason, is in `tests/test_ci.py:_deckt`.
 
-    Ein Ordner-Praefix endet auf "/" und deckt alles darunter; ein Datei-Praefix
-    deckt genau sich selbst.
+    A directory prefix ends in "/" and covers everything below it; a file prefix
+    covers exactly itself.
     """
     if praefix.endswith("/"):
         return pfad.startswith(praefix)
@@ -243,11 +241,11 @@ def _deckt(praefix: str, pfad: str) -> bool:
 
 
 def rolle(pfad: str, regelmenge: list[dict] | None = None) -> tuple[str, str] | None:
-    """Rolle und Regel-Praefix fuer einen Pfad — laengster passender Praefix gewinnt.
+    """Role and rule prefix for a path; the longest matching prefix wins.
 
-    Gibt `None` zurueck, wenn keine Regel passt. Das ist BLOCK, nicht
-    "gehoert nicht dazu": ein Standard, der im Zweifel entscheidet, entscheidet
-    genau ueber die Dateien, an die niemand gedacht hat.
+    Returns `None` when no rule matches. That is BLOCK, not "does not belong":
+    a default that decides when in doubt decides exactly about the files nobody
+    thought of.
     """
     treffer = [r for r in (regelmenge or regeln()) if _deckt(r["prefix"], pfad)]
     if not treffer:
@@ -258,22 +256,21 @@ def rolle(pfad: str, regelmenge: list[dict] | None = None) -> tuple[str, str] | 
 
 @functools.lru_cache(maxsize=1)
 def _ls_files() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    # `-z` ist kein Detail: ohne ihn quotet git jeden Namen mit Sonderzeichen
-    # ("docs/archive/… \342\200\224 …"), und der gequotete Name faellt unter
-    # keine Praefix-Regel. Eine Datei waere unklassifiziert geblieben, weil ihr
-    # Name ein Gedankenstrich enthaelt.
-    # `--others --exclude-standard` ist kein Detail: ohne sie sieht die Probe
-    # eine neu angelegte, noch nicht vorgemerkte Datei NICHT. Am 2026-09-08 lief
-    # das Gate lokal gruen ueber einen Stand, den es nach dem Commit nicht mehr
-    # gab — die CI war rot, und zwar zu Recht. Eine Pruefung, die den
-    # Arbeitsbaum anders sieht als den Commit, prueft den falschen Baum. Das ist
-    # dieselbe Fehlerklasse, gegen die dieses Modul gebaut ist: gruen, weil das
-    # Kaputte nicht in der geprueften Menge liegt.
-    # ABER: `--others` sieht auch, was der Commit gerade NICHT enthalten wird —
-    # eine Notizdatei, ein Scratch-Skript. Die als BLOCK zu werten, macht das
-    # Gate an einem Tag rot, an dem niemand etwas falsch gemacht hat, und
-    # `scripts/_verdict.py` sagt, was mit solchen Gates passiert: sie werden
-    # abgeschaltet. Deshalb zwei Mengen statt einer.
+    # `-z` is no detail: without it git quotes every name with special characters
+    # ("docs/archive/… \342\200\224 …"), and the quoted name falls under no
+    # prefix rule. A file would have stayed unclassified because its name holds
+    # a dash.
+    # `--others --exclude-standard` is no detail: without them the probe does
+    # NOT see a newly created, not yet staged file. On 2026-09-08 the gate ran
+    # green locally over a state that no longer existed after the commit; CI
+    # was red, and rightly so. A check that sees the working tree differently
+    # from the commit checks the wrong tree. That is the very class of fault
+    # this module is built against: green because the broken part is not in
+    # the checked set.
+    # BUT: `--others` also sees what the commit will NOT contain, a note file or
+    # a scratch script. Counting those as BLOCK turns the gate red on a day
+    # nobody did anything wrong, and `scripts/_verdict.py` says what happens to
+    # such gates: they get switched off. Hence two sets instead of one.
     def _lauf(*args: str) -> tuple[str, ...]:
         aus = subprocess.run(
             ["git", "ls-files", "-z", *args],
@@ -290,17 +287,17 @@ def _ls_files() -> tuple[tuple[str, ...], tuple[str, ...]]:
 
 
 def getrackte_dateien() -> list[str]:
-    """Was der Commit enthalten wird: der Index. Unklassifiziert = BLOCK."""
+    """What the commit will contain: the index. Unclassified = BLOCK."""
     return list(_ls_files()[0])
 
 
 def unversionierte_dateien() -> list[str]:
-    """Was daneben liegt. Unklassifiziert = DRIFT, benannt, aber nicht blockend."""
+    """What lies beside it. Unclassified = DRIFT, named but not blocking."""
     return list(_ls_files()[1])
 
 
 def nach_rolle() -> dict[str, list[str]]:
-    """Jede getrackte Datei ihrer Rolle zugeordnet; `None` sammelt die Unklassifizierten."""
+    """Every tracked file mapped to its role; `(offen)` collects the unclassified ones."""
     rm = regeln()
     aus: dict[str, list[str]] = {"mechanismus": [], "bestand": [], "(offen)": []}
     for pfad in getrackte_dateien():
@@ -310,12 +307,12 @@ def nach_rolle() -> dict[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# Die Probe
+# The probe
 # ---------------------------------------------------------------------------
 
 
 def _baue(ziel: Path) -> None:
-    """Kopiert den Mechanismus und legt die Geruest-Ordner an."""
+    """Copies the mechanism and creates the scaffold (`geruest`) directories."""
     verteilt = nach_rolle()
     for pfad in verteilt["mechanismus"]:
         quelle = REPO_ROOT / pfad
@@ -337,12 +334,12 @@ def _baue(ziel: Path) -> None:
 
 
 def _faelle(ziel: Path) -> dict[str, bool]:
-    """Jeder gesammelte Testfall auf gruen/rot. Sammelfehler zaehlen als rot."""
+    """Every collected test case as green or red. Collection errors count as red."""
     bericht = ziel / "junit.xml"
-    # Das fremde Repo darf den Tracker DIESES Repos nicht sehen: die CI setzt
-    # BEAD_RENDER fuer ihre eigenen Gates, und ererbt liesse es einen Test im
-    # Wegwerf-Repo gegen unseren Stand gruen werden — die Quote stiege, ohne
-    # dass etwas reist (bead 1jg.3).
+    # The foreign repository must not see THIS repository's tracker: CI sets
+    # BEAD_RENDER for its own gates, and inherited it would let a test in the
+    # throwaway repository go green against our state; the share would rise
+    # without anything travelling (bead 1jg.3).
     umgebung = {k: v for k, v in os.environ.items() if k != "BEAD_RENDER"}
     # Only the isolated probe may skip repository commands that do not travel.
     umgebung["HARNESS_KIT_PROBE"] = "1"
@@ -376,7 +373,7 @@ def fahre() -> dict[str, bool]:
 
 
 # ---------------------------------------------------------------------------
-# Das Urteil
+# The verdict
 # ---------------------------------------------------------------------------
 
 
@@ -386,37 +383,35 @@ def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
 
     if verteilt["(offen)"]:
         v.block(
-            f"{len(verteilt['(offen)'])} getrackte Datei(en) fallen unter keine Regel",
+            f"{len(verteilt['(offen)'])} tracked file(s) fall under no rule",
             "\n".join(sorted(verteilt["(offen)"])[:20]),
         )
 
     offen_daneben = [p for p in unversionierte_dateien() if rolle(p) is None]
     if offen_daneben:
         v.drift(
-            f"{len(offen_daneben)} unversionierte Datei(en) fallen unter keine Regel",
-            "Sie gehen nicht in den Commit, also blockt das hier nicht. Wer eine davon "
-            "vormerkt, sieht sie beim naechsten Lauf als BLOCK:\n" + "\n".join(sorted(offen_daneben)[:20]),
+            f"{len(offen_daneben)} untracked file(s) fall under no rule",
+            "They do not go into the commit, so this does not block. Whoever stages one "
+            "sees it as BLOCK on the next run:\n" + "\n".join(sorted(offen_daneben)[:20]),
         )
 
     if not verteilt["mechanismus"]:
-        v.block("keine einzige Datei traegt die Rolle 'mechanismus' — die Probe misst nichts (RB-G7)")
+        v.block("not a single file carries the role 'mechanismus'; the probe measures nothing (RB-G7)")
         return v
 
     for name, grund in sorted(REIST_NICHT.items()):
         if grund not in GRUENDE:
-            v.block(
-                f"{name}: Grund {grund!r} liegt ausserhalb der geschlossenen Menge", "erlaubt: " + " · ".join(GRUENDE)
-            )
+            v.block(f"{name}: reason {grund!r} lies outside the closed set", "allowed: " + " · ".join(GRUENDE))
 
     if len(REIST_NICHT) > DECKEL:
         v.block(
-            f"REIST_NICHT hat {len(REIST_NICHT)} Eintraege, der Deckel steht auf {DECKEL}",
-            "Die Liste darf nur schrumpfen. Wer sie waechst, hebt den Deckel sichtbar an.",
+            f"REIST_NICHT has {len(REIST_NICHT)} entries, the cap stands at {DECKEL}",
+            "The list may only shrink. Whoever grows it raises the cap visibly.",
         )
 
     faelle = fahre() if faelle is None else faelle
     if not faelle:
-        v.block("die Probe hat keinen einzigen Testfall gesammelt — dann misst sie nichts (RB-G7)")
+        v.block("the probe collected not a single test case; then it measures nothing (RB-G7)")
         return v
 
     rot = sorted(n for n, ok in faelle.items() if not ok)
@@ -425,53 +420,52 @@ def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
     unerklaert = [n for n in rot if n not in REIST_NICHT]
     if unerklaert:
         v.block(
-            f"{len(unerklaert)} rote(r) Fall/Faelle ohne deklarierten Grund",
+            f"{len(unerklaert)} red case(s) without a declared reason",
             "\n".join(unerklaert[:25])
             + ("\n  …" if len(unerklaert) > 25 else "")
-            + "\n\nNachtragen mit: python3 scripts/kit/probe.py --messen",
+            + "\n\nAdd them with: python3 scripts/kit/probe.py --messen",
         )
 
-    # Die dritte Richtung, gefunden beim Gegenlesen am 2026-09-08: ein Eintrag,
-    # dessen Fall gar nicht mehr GESAMMELT wird. Er ist weder rot noch gruen,
-    # faellt also durch beide Pruefungen oben. So verliert man Portabilitaet,
-    # ohne dass es auffaellt: wer die Kit-Rolle einer Testdatei von
-    # `mechanismus` auf `bestand` zieht, nimmt ihre Faelle aus der Menge — die
-    # Quote STEIGT dabei sogar, weil rote Faelle aus dem Nenner fallen.
+    # The third direction, found in a cross-reading on 2026-09-08: an entry whose
+    # case is no longer COLLECTED at all. It is neither red nor green, so it
+    # slips through both checks above. That is how portability is lost without
+    # anyone noticing: whoever moves a test file's kit role from `mechanismus`
+    # to `bestand` takes its cases out of the set, and the share even RISES,
+    # because red cases drop out of the denominator.
     #
-    # Ein umbenannter oder geloeschter Test loest das ebenfalls aus. Das ist
-    # Absicht und kein Fehlalarm: ein Grund, dessen Fall es nicht mehr gibt,
-    # ist genau so tot wie einer, dessen Fall gruen wurde.
+    # A renamed or deleted test triggers it too. That is intended, not a false
+    # alarm: a reason whose case no longer exists is as dead as one whose case
+    # went green.
     verwaist = [n for n in REIST_NICHT if n not in faelle]
     if verwaist:
         v.block(
-            f"{len(verwaist)} Eintrag/Eintraege in REIST_NICHT haben keinen Fall mehr",
+            f"{len(verwaist)} entry/entries in REIST_NICHT have no case any more",
             "\n".join(sorted(verwaist)[:25])
             + ("\n  …" if len(verwaist) > 25 else "")
-            + "\n\nEntweder wurde der Test umbenannt — dann den Eintrag nachziehen — oder "
-            "seine Datei reist nicht mehr mit. Der zweite Fall ist der gefaehrliche: "
-            "die Portabilitaet sinkt, und die gemeldete Quote steigt.",
+            + "\n\nEither the test was renamed (then follow with the entry) or "
+            "its file no longer travels. The second is the dangerous one: "
+            "portability falls while the reported share rises.",
         )
 
     abgelaufen = [n for n in gruen if n in REIST_NICHT]
     if abgelaufen:
         v.block(
-            f"{len(abgelaufen)} Eintrag/Eintraege in REIST_NICHT sind gruen geworden",
-            "\n".join(abgelaufen[:25])
-            + "\n\nEin abgelaufener Grund liest sich wie eine lebende Entscheidung. Streichen.",
+            f"{len(abgelaufen)} entry/entries in REIST_NICHT went green",
+            "\n".join(abgelaufen[:25]) + "\n\nAn expired reason reads like a living decision. Remove it.",
         )
 
     v.info(
-        f"{len(gruen)} von {len(faelle)} Faellen tragen in ein fremdes Repo ({100 * len(gruen) // len(faelle)} %)",
-        f"mechanismus {len(verteilt['mechanismus'])} · bestand {len(verteilt['bestand'])} Datei(en)",
+        f"{len(gruen)} of {len(faelle)} cases carry into a foreign repository ({100 * len(gruen) // len(faelle)} %)",
+        f"mechanismus {len(verteilt['mechanismus'])} · bestand {len(verteilt['bestand'])} file(s)",
     )
     return v
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--list", action="store_true", help="nur ausgeben, was kopiert wuerde")
-    p.add_argument("--messen", action="store_true", help="die roten Namen als Python-Dict ausgeben")
-    p.add_argument("--strict", action="store_true", help="DRIFT blockt ebenfalls")
+    p.add_argument("--list", action="store_true", help="only print what would be copied")
+    p.add_argument("--messen", action="store_true", help="print the red names as a Python dict (measure)")
+    p.add_argument("--strict", action="store_true", help="DRIFT blocks too")
     args = p.parse_args()
 
     if args.list:
@@ -486,7 +480,7 @@ def main() -> int:
     if args.messen:
         faelle = fahre()
         rot = sorted(n for n, ok in faelle.items() if not ok)
-        print(f"# {len(rot)} rot von {len(faelle)} — Gruende von Hand setzen")
+        print(f"# {len(rot)} red of {len(faelle)}; set the reasons by hand")
         print("REIST_NICHT: dict[str, str] = {")
         for n in rot:
             print(f'    {json.dumps(n)}: "bestand-dieses-repos",')
