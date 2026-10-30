@@ -21,7 +21,7 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
