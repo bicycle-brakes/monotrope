@@ -8,21 +8,18 @@ updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-eh42
-owner: Data Architect
-provenance: human-written
+owner: framework-architect
+class: bounded
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-30"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # merge queue — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md), by the
+runner's GLM Flash route; the orchestrator's measured addendum closes its gaps.
 
 Stage-2 call, 2026-10-30: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 773 files, 2742 commits, 12 rules.
 
@@ -92,3 +89,32 @@ Any variant lands on one or more of these surfaces; which ones is the decision's
 - **CI:** `scripts/ci_gates.py` (`generate_ci`) and `.github/workflows/ci.yml` — only if queued merges must run checks (`merge_group`); interacts with the standing decisions of `plans/changes/ci-minutes/`.
 - **Sync engine:** `scripts/pr_sync.py`, `tests/test_pr_sync.py` — only if the sync's eligibility/skip policy must treat queued branches differently; the neighbouring change `plans/changes/index-merge-regenerates/` is mid-flight on the same engine.
 - **If it is a decision pull request:** no file beyond the texts above — the decision mechanics (`decide(` title, `decision` label, `.github/PULL_REQUEST_TEMPLATE/decision.md` block, house rule 8 merge-by-the-maintainer) already exist and ask for nothing new.
+
+## Orchestrator addendum — measured 2026-10-30 (closes the gaps above)
+
+- **The bead's words** (bead coding-harness-eh42, read with `tools/bd show`):
+  class bounded; "repository setting plus tests/test_repo_settings.py and
+  templates/repo-settings.md; decision PR, the maintainer merges". Measured
+  2026-10-27/28: every merge on main put the other open pull requests BEHIND;
+  `update-branch` gave them a new head, so auto-merge armed with
+  `--match-head-commit` no longer fired (PRs #250, #262, #264, #265). The
+  maintainer approved the switch to a GitHub merge queue on 2026-10-28.
+- **Which queue.** GitHub's hosted merge queue: the ruleset rule type
+  `merge_queue` plus the `merge_group` event for the required check.
+- **Live settings, 2026-10-30 ~14:15 UTC.** The repository is owned by an
+  organization on the Team plan and is public (`gh api`), so the hosted
+  merge queue is available. Ruleset `main` (id 24528176, active):
+  `deletion`, `non_fast_forward`, `pull_request`, and
+  `required_status_checks` with `verify` (integration 15368) and
+  `strict_required_status_checks_policy: true`. Repository:
+  `allow_auto_merge: true`, merge commits and squash allowed.
+- **Measured cost today.** Merging eight pull requests one at a time on
+  2026-10-30 (#279, #277, #285, #282, #280, #283, #281, #287) needed an
+  update and a fresh CI run before almost every merge.
+- **RB-G7 is the rule that changes.** `docs/governance/regelwerk.md`
+  (`human-decided`) states that the ruleset requires a branch to be up to date
+  before merging, enforced by `tests/test_repo_settings.py`. A merge queue
+  tests the merge result itself, which is what RB-G7 protects, so the change
+  is a decision pull request.
+- **`make close-merged`** is out of scope here.
+
