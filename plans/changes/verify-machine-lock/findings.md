@@ -633,3 +633,16 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-30: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2687 commits, 12 rules.
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2694 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:396–406 | Cancelling a queued waiter still deletes the active holder’s metadata. Its next nested check cannot validate ownership and queues behind its own ancestor, deadlocking. A read-only probe at dfb1058f confirmed that releasing an unentered admission unlinks the holder record. [Acceptance criteria 3, 5, 6] | Codex | open — parked for the maintainer, as in the first phase-6 block | — |
+| F6-2 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:254–290 | An unrelated process carrying the published holder PID still bypasses admission: validation checks metadata and lock contention without checking ancestry or inherited ownership. A read-only probe at dfb1058f accepted even a nonexistent PID when metadata matched a busy lock. Independent work can therefore overlap the holder. [Acceptance criteria 1, 5] | Codex | open — parked for the maintainer, as in the first phase-6 block | — |
+| F6-5 | MAJOR | SPEC | phase-6 | scripts/verify_lock.py:706–718 | When the protected command exits after spawning a grandchild with Python’s default descriptor closing, the supervisor skips group cleanup and releases admission while that grandchild continues working. A read-only subprocess probe at dfb1058f confirmed exit 0 with the grandchild alive and the lock available. Ownership must cover the remaining protected children. [Acceptance criteria 1, 6] | Codex | open — parked for the maintainer: the fifth row on how admission ownership ends while descendants live (L1-11, L3-1, L4-2, F6-1); case repair ended, a structural remedy is proposed in the handover | — |
+
+Phase 6 verdict: codex 01a18a63-5202-70c3-9d5b-1b8eb695d362, 2026-10-30
+Reviewer session: codex 01a18a63-5202-70c3-9d5b-1b8eb695d362 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
