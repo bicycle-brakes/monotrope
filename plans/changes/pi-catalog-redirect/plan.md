@@ -1,7 +1,7 @@
 ---
 title: "Plan — pi-catalog-redirect"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-30
 last_reviewed: 2026-10-30
 updated: 2026-10-30
@@ -102,17 +102,20 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect — an admitted status or equivalent relative/absolute target fails fresh selection
-- 2: not yet written tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect — a forbidden target receives a GET or refusal evidence is absent
-- 3: not yet written tests/test_stage2_research_catalog.py::test_preflight_refuses_a_second_catalog_redirect — a third GET occurs or redirect-refused/target evidence is lost
-- 4: not yet written tests/test_stage2_research_catalog.py::test_preflight_redirect_record_preserves_request_and_final_evidence — original URL, hop fields or final-body digest is wrong in bridge or selection
-- 4: not yet written tests/test_stage2_research_catalog.py::test_preflight_redirect_failure_keeps_hop_evidence — a followed HTTP/network failure loses hop fields or is classified as success
+- 1: tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect — an admitted status or equivalent relative/absolute target fails fresh selection
+- 2: tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect — a forbidden target receives a GET or refusal evidence is absent
+- 3: tests/test_stage2_research_catalog.py::test_preflight_refuses_a_second_catalog_redirect — a third GET occurs or redirect-refused/target evidence is lost
+- 4: tests/test_stage2_research_catalog.py::test_preflight_redirect_record_preserves_request_and_final_evidence — original URL, hop fields or final-body digest is wrong in bridge or selection
+- 4: tests/test_stage2_research_catalog.py::test_preflight_redirect_failure_keeps_hop_evidence — a followed HTTP/network failure loses hop fields or is classified as success
 - 5: tests/test_stage2_research_catalog.py::test_preflight_unsuccessful_pi_response_is_not_measured_empty_or_retried — a direct failure causes another catalog GET
-- 5: not yet written tests/test_stage2_research_catalog.py::test_preflight_redirect_failure_does_not_retry — Pi sends another request or replaces the initial refusal record
-- 6: not yet written tests/test_stage2_research_catalog.py::test_preflight_redirect_hop_uses_shared_deadline — a held versioned GET resets the deadline or yields a usable snapshot
-- 7: not yet written tests/test_stage2_research_catalog.py::test_preflight_metadata_redirect_stays_refused — the metadata target is contacted or fixed/free selection violates the existing asymmetry
+- 5: tests/test_stage2_research_catalog.py::test_preflight_redirect_failure_does_not_retry — Pi sends another request or replaces the initial refusal record
+- 6: tests/test_stage2_research_catalog.py::test_preflight_redirect_hop_uses_shared_deadline — a held versioned GET resets the deadline or yields a usable snapshot
+- 7: tests/test_stage2_research_catalog.py::test_preflight_metadata_redirect_stays_refused — the metadata target is contacted or fixed/free selection violates the existing asymmetry
 - 7: tests/test_stage2_research_catalog.py::test_preflight_metadata_http_failure_keeps_fixed_slots — a metadata HTTP error drops fixed seats or admits free seats
 - 8: tests/test_stage2_research_catalog.py::test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date — direct fresh selection, credential/subprocess traps or request counts regress
-- 8: not yet written tests/test_stage2_research_catalog.py::test_preflight_direct_catalog_has_no_redirect_fields — a direct 200 claims a redirect
+- 8: tests/test_stage2_research_catalog.py::test_preflight_direct_catalog_has_no_redirect_fields — a direct 200 claims a redirect
 
 ## Time used
+
+2026-10-30 13:01:38–13:51:23 UTC, 2985 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 13:51:28–14:15:28 UTC, 1440 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
