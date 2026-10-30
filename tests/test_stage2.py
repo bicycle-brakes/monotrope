@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -5354,6 +5355,44 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     assert world.run("review-loop") == 0
     second = world.reviews("pi")[2]["env"]
     assert second["PI_CODING_AGENT_DIR"] != env["PI_CODING_AGENT_DIR"] and second["HOME"] != env["HOME"]
+
+
+def test_all_review_members_load_neutral_paths(world: World) -> None:
+    """Criterion 1 of pi-neutral-paths: every free, Flash and ladder member loads the neutral-path extension."""
+
+    world.write_findings(VERDICT)
+    world.script(pi=[{"model": model, "stdout": rows(1)} for model in TEST_FREE])
+    assert world.run("review-loop") == 0, "the free stage failed"
+    decide_record(world, status=FIXED)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0, "the paid stages failed"
+    calls = world.reviews("pi")
+    assert len(calls) == 5, f"expected two free members, two Flash members and the rung, saw {len(calls)}"
+    copies = []
+    for call in calls:
+        argv = call["argv"]
+        pairs = [argv[index + 1] for index, flag in enumerate(argv) if flag == "-e"]
+        assert len(pairs) == 1, f"a member loads {len(pairs)} explicit extensions: {pairs}"
+        copy = Path(pairs[0])
+        assert copy.name == "neutral-paths.mjs", "the loaded copy is not the neutral-path extension"
+        assert not copy.is_relative_to(world.root), "the copy is not the launch's own scratch file"
+        assert copy not in copies, "two members shared one copy"
+        copies.append(copy)
+    # the copy a launch loads is the tested source, read while the launch's scratch still exists
+    captured = {}
+
+    def capture(command, *_args, **_kwargs):
+        captured["text"] = Path(command[command.index("-e") + 1]).read_text(encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "captured", "")
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(stage2, "launch", capture)
+    try:
+        stage2.run_reviewer(types.SimpleNamespace(change="demo", root=world.root), TEST_LADDER[0], "capture", "key")
+    finally:
+        monkey.undo()
+    source = REPO_ROOT / "scripts" / "stage2_pi_neutral_paths.mjs"
+    assert captured["text"] == source.read_text(encoding="utf-8"), "the loaded copy drifted from the source"
 
 
 @pytest.mark.parametrize("verb", ["review-loop", "probe"])

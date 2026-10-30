@@ -244,6 +244,9 @@ def _pi_pin() -> str:
 
 PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
+# The neutral-path extension every model-calling Pi launch loads (bead coding-harness-xul8):
+# copied to each launch's scratch or private directory, loaded there with `-e`.
+NEUTRAL_SOURCE = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
 # A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15);
 # raised from 30 by the maintainer on 2026-10-24.
 REVIEWER_MINUTES = 45
@@ -2571,12 +2574,19 @@ def run_reviewer(
             check_overlay(agent, home, model)
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
+        # The neutral-path extension (bead coding-harness-xul8): the scratch and worktree locations
+        # and the pinned install stay out of the request. A missing or unreadable source fails the
+        # call here, before any dispatch.
+        neutral = scratch / "neutral-paths.mjs"
+        neutral.write_text(NEUTRAL_SOURCE.read_text(encoding="utf-8"), encoding="utf-8")
         command = [
             str(PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
             "--no-extensions",
+            "-e",
+            str(neutral),
             "--no-mcp",
             "--no-skills",
             "--no-context-files",

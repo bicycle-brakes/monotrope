@@ -3,12 +3,12 @@
 
 **What this is.** The mechanics of one interactive Pi or Codex session in a new
 macOS Terminal window: the model resolved against the declaration, the handover
-read as the first prompt, the runner-supplied Pi policy extension copied in and
-confirmed loaded, and the dispatch to Terminal with an audit line in
-`findings.md`. An `opencode-go/<model>` id names the endpoint, not the program:
-it starts Pi (maintainer's answer Q-5); the OpenCode CLI is never called.
-`scripts/stage2.py` is the only way a foreign model starts; this file runs only
-through it and is never a second entry point.
+read as the first prompt, the runner-supplied Pi policy and neutral-path
+extensions copied in and confirmed loaded, and the dispatch to Terminal with an
+audit line in `findings.md`. An `opencode-go/<model>` id names the endpoint, not
+the program: it starts Pi (maintainer's answer Q-5); the OpenCode CLI is never
+called. `scripts/stage2.py` is the only way a foreign model starts; this file
+runs only through it and is never a second entry point.
 
 **Why the runner module travels as a parameter.** Under `python3
 scripts/stage2.py` the file runs as `__main__`, and an `import stage2` here
@@ -23,7 +23,7 @@ than macOS, an invocation outside the change's dedicated worktree
 as the working one), a model the declaration does not clear for a session
 transport, a handover that is missing, empty, unreadable, oversized, NUL-bound
 or resolving outside the worktree, a missing CLI or `osascript`, a Pi that is not
-the pinned version, a policy extension that did not load, and a leak check that cannot measure or is not
+the pinned version, an extension that did not load, and a leak check that cannot measure or is not
 clean - scanned once after the handover is read and a second time immediately
 before the window opens.
 
@@ -33,7 +33,9 @@ A dispatch that Terminal refuses exits 1 and says so in the audit. The private
 directory under the gitignored `.stage2-sessions/` holds no prompt and no
 credential; a failed attempt removes it, an accepted one keeps it for the
 session to load. The policy extension bounds Pi's file tools and asks before a
-few shell commands; it is a configuration, not confinement at the operating-system
+few shell commands; the neutral-path extension keeps local machine locations out
+of the session's requests (bead coding-harness-xul8). The extensions are a
+configuration, not confinement at the operating-system
 level, and a Pi session signs in with the maintainer's own Pi agent directory, which
 the runner neither reads nor writes.
 """
@@ -259,15 +261,19 @@ def executables(transport: str, runner) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# The runner-supplied Pi policy, copied in and confirmed loaded
+# The runner-supplied Pi extensions, copied in and confirmed loaded
 # ---------------------------------------------------------------------------
 
-# The one extension a Pi session loads: plain ESM with no imports beyond node's own, so a copy runs anywhere.
-# Its handlers are tested without Pi in tests/test_stage2_session_policy.py.
+# The two extensions a Pi session loads: plain ESM with no imports beyond node's own, so a copy runs anywhere.
+# The policy's handlers are tested without Pi in tests/test_stage2_session_policy.py; the neutral paths'
+# ride with every model-calling launch (bead coding-harness-xul8).
 POLICY_SOURCE = Path(__file__).resolve().parent / "stage2_session_policy.mjs"
 POLICY_FILE = "stage2-session-policy.mjs"
-# The flag that extension registers; `pi --help` lists it when the file is loaded.
+NEUTRAL_SOURCE = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
+NEUTRAL_FILE = "neutral-paths.mjs"
+# The flags those extensions register; `pi --help` lists them when the files are loaded.
 POLICY_FLAG = "--stage2-session-policy"
+NEUTRAL_FLAG = "--stage2-neutral-paths"
 
 
 def install_policy(private: Path, runner) -> Path:
@@ -284,18 +290,34 @@ def install_policy(private: Path, runner) -> Path:
     return copy
 
 
-def confirm_loaded(root: Path, cli: str, extension: Path, runner) -> None:
-    """Refuse unless Pi, started with only this extension, lists the extension's flag.
+def install_neutral(private: Path, runner) -> Path:
+    """Copy the neutral-path extension next to the policy copy, for the same reason."""
+    copy = private / NEUTRAL_FILE
+    try:
+        shutil.copyfile(NEUTRAL_SOURCE, copy)
+    except OSError as error:
+        raise runner.Refused(
+            f"the neutral-path extension {NEUTRAL_SOURCE.name} could not be copied: {error}"
+        ) from error
+    return copy
 
-    This confirms that the extension *loaded*, not how it behaves; its handlers are tested without Pi
+
+def confirm_loaded(root: Path, cli: str, extensions: list[Path], runner) -> None:
+    """Refuse unless Pi, started with only these extensions, lists every extension's flag.
+
+    This confirms that an extension *loaded*, not how it behaves; the handlers are tested without Pi
     (maintainer's answer Q-1). No model is called and no output is printed. A scratch `HOME` and agent
-    directory keep this call from reading anything of the maintainer's; only the flag line is looked for.
+    directory keep this call from reading anything of the maintainer's; only the flag lines are looked for.
     """
+    argv = [cli, "--no-extensions"]
+    for extension in extensions:
+        argv += ["-e", str(extension)]
+    argv += ["--offline", "--no-approve", "--help"]
     with tempfile.TemporaryDirectory(prefix="stage2-session-") as scratch:
         env = runner.foreign_env({"HOME": scratch, "PI_CODING_AGENT_DIR": scratch})
         try:
             done = subprocess.run(
-                [cli, "--no-extensions", "-e", str(extension), "--offline", "--no-approve", "--help"],
+                argv,
                 cwd=root,
                 env=env,
                 stdin=subprocess.DEVNULL,
@@ -307,16 +329,17 @@ def confirm_loaded(root: Path, cli: str, extension: Path, runner) -> None:
             )
         except subprocess.TimeoutExpired as error:
             raise runner.Refused(
-                f"pi --help did not answer within {CLI_TIMEOUT:g}s; the policy extension is not confirmed loaded."
+                f"pi --help did not answer within {CLI_TIMEOUT:g}s; an extension is not confirmed loaded."
             ) from error
         except OSError as error:
             raise runner.Refused(f"pi --help could not be started: {error}") from error
     if done.returncode != 0:
-        raise runner.Refused(f"pi --help exited {done.returncode}; the policy extension is not confirmed loaded.")
-    if not re.search(rf"(?<![\w-]){re.escape(POLICY_FLAG)}(?![\w-])", done.stdout):
-        raise runner.Refused(
-            "pi did not list the policy extension's flag; the extension did not load, and no session starts."
-        )
+        raise runner.Refused(f"pi --help exited {done.returncode}; an extension is not confirmed loaded.")
+    for flag, source in ((POLICY_FLAG, POLICY_SOURCE), (NEUTRAL_FLAG, NEUTRAL_SOURCE)):
+        if not re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", done.stdout):
+            raise runner.Refused(
+                f"pi did not list {flag} of {source.name}; an extension did not load, and no session starts."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -347,14 +370,22 @@ def prepare(root: Path, transport: str, cli: str, runner) -> Path:
         raise runner.Refused(f"the launch script {script} could not be written: {error}") from error
     if transport == "pi":
         try:
-            confirm_loaded(root, cli, install_policy(private, runner), runner)
+            confirm_loaded(root, cli, [install_policy(private, runner), install_neutral(private, runner)], runner)
         except BaseException:  # any failure, an unwritable temp directory or Ctrl-C included
             shutil.rmtree(private, ignore_errors=True)
             raise
     return private
 
 
-def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, extension: Path | None = None) -> list[str]:
+def cli_argv(
+    transport: str,
+    root: Path,
+    cli: str,
+    model: str,
+    prompt: str,
+    extension: Path | None = None,
+    neutral: Path | None = None,
+) -> list[str]:
     """The one interactive form per transport: no headless verb, no fallback, no extra writable directory.
 
     The prompt can begin with `---` (a handover's frontmatter) or with a word that is a subcommand. Codex
@@ -378,7 +409,8 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
         ]
     # Discovery is off like in the reviewer call (spec criterion 11): no MCP servers (an MCP file tool would
     # bypass the policy's worktree bounds), skills, prompt templates or themes. Context files stay on, so the
-    # session reads the repository's AGENTS.md (maintainer, 2026-10-09).
+    # session reads the repository's AGENTS.md (maintainer, 2026-10-09); the neutral-path extension keeps the
+    # location identifiers that ride along out of the requests (bead coding-harness-xul8).
     return [
         cli,
         "--no-extensions",
@@ -388,6 +420,8 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
         "--no-themes",
         "-e",
         str(extension),
+        "-e",
+        str(neutral),
         "--offline",
         "--no-approve",
         "--model",
@@ -523,7 +557,7 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
         command = terminal_command(
             root,
             runner.foreign_env({}),
-            cli_argv(transport, root, cli, selection, prompt, private / POLICY_FILE),
+            cli_argv(transport, root, cli, selection, prompt, private / POLICY_FILE, private / NEUTRAL_FILE),
         )
         if len(command.encode("utf-8")) > COMMAND_LIMIT:
             raise runner.Refused(

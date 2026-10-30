@@ -590,6 +590,27 @@ def test_probes_send_only_the_fixed_text_without_tools(fx: Fixture, monkeypatch:
     assert len(audit) == 6 and all("leak check clean" in line for line in audit)
 
 
+def test_research_probes_load_neutral_paths(fx: Fixture) -> None:
+    """Criterion 1 of pi-neutral-paths: every research probe loads the extension and keeps its fixed input."""
+    assert fx.prepare() == 0
+    probes = [call for call in fx.w.calls() if call["name"] == "pi"]
+    assert probes, "no research probe ran"
+    copies = []
+    for call in probes:
+        argv = call["argv"]
+        pairs = [Path(argv[index + 1]) for index, flag in enumerate(argv) if flag == "-e"]
+        assert len(pairs) == 1, f"a probe loads {len(pairs)} explicit extensions"
+        (copy,) = pairs
+        assert copy.name == "neutral-paths.mjs", "the probe's extension is not the neutral-path one"
+        assert not copy.is_relative_to(fx.w.root), "the copy is not the probe's own scratch file"
+        assert "--no-tools" in argv and "--tools" not in argv, "a probe grew tools"
+        assert "--no-extensions" in argv, "discovery is no longer disabled"
+        assert call["cwd"] != str(fx.w.root), "a probe started in the worktree"
+        assert "Availability probe only." in call["prompt_file"], "the fixed probe text changed"
+        copies.append(copy)
+    assert len(set(copies)) == len(probes), "two probes shared one copy"
+
+
 def test_claude_code_candidate_is_probed_through_official_claude(fx: Fixture) -> None:
     assert fx.prepare() == 0
     claude = [call for call in fx.w.calls() if call["name"] == "claude"]

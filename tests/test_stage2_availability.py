@@ -161,6 +161,26 @@ def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch
     assert world.text().count("prepare-loop · endpoint") == len(calls)
 
 
+def test_review_probes_load_neutral_paths(world: World) -> None:
+    """Criterion 1 of pi-neutral-paths: every review probe loads the extension and stays tool-free and scratch-based."""
+    enable(world)
+    assert world.run("prepare-loop") == 0
+    calls = world.reviews()
+    assert len(calls) == len(TEST_FREE) + len(TEST_LADDER), "preparation probed the wrong number of models"
+    copies = []
+    for call in calls:
+        argv = call["argv"]
+        pairs = [Path(argv[index + 1]) for index, flag in enumerate(argv) if flag == "-e"]
+        assert len(pairs) == 1, f"a probe loads {len(pairs)} explicit extensions"
+        (copy,) = pairs
+        assert copy.name == "neutral-paths.mjs", "the probe's extension is not the neutral-path one"
+        assert not copy.is_relative_to(world.root), "the copy is not the probe's own scratch file"
+        assert "--no-tools" in argv and "--tools" not in argv, "a probe grew tools"
+        assert call["cwd"] != str(world.root), "a probe started in the worktree"
+        copies.append(copy)
+    assert len(set(copies)) == len(calls), "two probes shared one copy"
+
+
 @pytest.mark.parametrize("fault", ["code", "configuration", "expired", "other-worktree", "corrupt"])
 def test_prepared_selection_is_bound_to_inputs_and_freshness(world: World, monkeypatch, fault: str) -> None:
     """Criterion 17: stale, malformed or transplanted preparation launches no review."""

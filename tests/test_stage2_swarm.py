@@ -925,6 +925,30 @@ def test_online_requests_exclude_private_inputs_and_ambient_paths(sworld: SwarmW
         assert "CANARY-RULE-TEXT" in call["prompt"], "repository seats embed the identical rules file"
 
 
+def test_research_seats_load_neutral_paths(sworld: SwarmWorld) -> None:
+    # Criterion 1 of pi-neutral-paths. Planted fault: a repository, public or free seat omits the
+    # neutral-path extension or loses its role extension, or a seat's real working directory moves.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    roles = {"repository": "repository-pathlock.mjs", "online": "research-tools.mjs"}
+    for kind, role in roles.items():
+        calls = sworld.calls(kind)
+        assert calls, f"no {kind} seat ran"
+        for call in calls:
+            argv = call["argv"]
+            pairs = [Path(argv[index + 1]) for index, flag in enumerate(argv) if flag == "-e"]
+            assert [pair.name for pair in pairs] == [role, "neutral-paths.mjs"], (
+                f"the {kind} seat loads {[(pair.name) for pair in pairs]}"
+            )
+            assert all(not pair.is_relative_to(sworld.root) for pair in pairs), "a copy lives in the repository"
+            if kind == "repository":
+                assert call["cwd"] == str(sworld.root), "the repository seat left the worktree"
+            else:
+                assert call["cwd"] != str(sworld.root), "an online seat started in the repository"
+                assert call["argv"][call["argv"].index("--tools") + 1] == "public_search,public_fetch"
+
+
 def test_peers_receive_identical_frozen_briefs_without_reports(sworld: SwarmWorld) -> None:
     # Criterion 26. Planted fault: a topic prompt carries a peer's or an earlier topic's report text.
     marker = "PEER-REPORT-MARKER"

@@ -712,6 +712,12 @@ class Run:
             # rg or fd release into the scratch directory and run it (deep review RS-3-4).
             "--offline",
         ]
+        # The neutral-path extension (bead coding-harness-xul8): local machine locations stay out
+        # of the outgoing request while the tools keep this working directory. A missing or
+        # unreadable source fails the launch here, before any dispatch.
+        neutral = scratch / "neutral-paths.mjs"
+        source = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
+        neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
         model = f"{GO}/{entry['model']}"
         if entry["tools"] == "public":
             research = scratch / "research"
@@ -725,6 +731,8 @@ class Run:
                 *common[:5],
                 "-e",
                 str(extension),
+                "-e",
+                str(neutral),
                 *common[5:],
                 "--tools",
                 stage2_swarm.PUBLIC_TOOLS,
@@ -745,8 +753,9 @@ class Run:
             return command, scratch, env
         prompt_file = scratch / "research-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
-        # The path lock (decisions.md Q-16): the one explicit extension of a repository seat, copied to a
-        # generic scratch path; it blocks every read, grep, find and ls call that resolves outside the worktree.
+        # The path lock (decisions.md Q-16): the seat's boundary extension, copied to a generic
+        # scratch path; it blocks every read, grep, find and ls call that resolves outside the
+        # worktree. The neutral-path extension rides after it.
         lock = scratch / "repository-pathlock.mjs"
         source = Path(__file__).resolve().parent / "stage2_repository_pathlock.mjs"
         lock.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
@@ -754,6 +763,8 @@ class Run:
             *common[:5],
             "-e",
             str(lock),
+            "-e",
+            str(neutral),
             *common[5:],
             "--tools",
             self.runner.PI_TOOLS,

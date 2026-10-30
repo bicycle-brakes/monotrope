@@ -162,6 +162,10 @@ class World:
         (policy,) = [p for p in self.policies() if p.is_dir()]
         return policy / stage2_session.POLICY_FILE
 
+    def neutral(self) -> Path:
+        (policy,) = [p for p in self.policies() if p.is_dir()]
+        return policy / stage2_session.NEUTRAL_FILE
+
     def script_file(self) -> Path:
         (policy,) = [p for p in self.policies() if p.is_dir()]
         return policy / stage2_session.SCRIPT_NAME
@@ -218,6 +222,7 @@ PI_VERSION_STEP = {"stdout": f"{stage2.PI_VERSION}\n"}
 PI_HELP_STEP = {
     "stdout": "Usage: pi [options] [messages...]\n\nOptions:\n"
     f"  {stage2_session.POLICY_FLAG}  stage2 session policy: file tools bounded to the worktree\n"
+    f"  {stage2_session.NEUTRAL_FLAG}  stage2 neutral paths: local machine locations stay out of the request\n"
 }
 
 
@@ -797,15 +802,18 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
     assert world.run(model=GO_MODEL) == 0
     version, readback, launch = world.calls("pi")
     extension = world.extension()
+    neutral = world.neutral()
     assert version["argv"] == ["--version"]
     assert readback["argv"] == [
         "--no-extensions",
         "-e",
         str(extension),
+        "-e",
+        str(neutral),
         "--offline",
         "--no-approve",
         "--help",
-    ], "the read-back runs once, bounded, with only this extension and no model call"
+    ], "the read-back runs once, bounded, with only these extensions and no model call"
     assert launch["argv"] == [
         "--no-extensions",
         "--no-mcp",
@@ -814,20 +822,46 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
         "--no-themes",
         "-e",
         str(extension),
+        "-e",
+        str(neutral),
         "--offline",
         "--no-approve",
         "--model",
         GO_MODEL,
         "--",
         expected_prompt(world, HANDOVER),
-    ], "discovery off, one extension, the declared model, then the prompt"
+    ], "discovery off, the two extensions, the declared model, then the prompt"
     for flag in ("--print", "-p", "--mode", "--pure"):
         assert flag not in launch["argv"], f"an interactive session never takes {flag}"
     assert launch["cwd"] == str(world.tree)
     assert extension.parent.parent == world.tree / stage2_session.SESSION_ROOT
     assert extension.read_bytes() == stage2_session.POLICY_SOURCE.read_bytes(), "the copy is the tested source"
-    assert {p.name for p in extension.parent.iterdir()} == {stage2_session.SCRIPT_NAME, stage2_session.POLICY_FILE}
+    assert neutral.read_bytes() == stage2_session.NEUTRAL_SOURCE.read_bytes(), "the copy is the tested source"
+    assert {p.name for p in extension.parent.iterdir()} == {
+        stage2_session.SCRIPT_NAME,
+        stage2_session.POLICY_FILE,
+        stage2_session.NEUTRAL_FILE,
+    }
     assert world.calls("opencode") == [], "the OpenCode CLI is never called"
+
+
+def test_pi_session_loads_neutral_paths_with_policy(world: World) -> None:
+    """Criterion 1 of pi-neutral-paths: the session loads both private copies, and nothing else moves."""
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0, (
+        "the launch failed; the read-back confirms both extensions only when both load"
+    )
+    _version, _readback, launch = world.calls("pi")
+    policy, neutral = world.extension(), world.neutral()
+    assert policy.read_bytes() == stage2_session.POLICY_SOURCE.read_bytes(), "the policy copy drifted from the source"
+    assert neutral.read_bytes() == stage2_session.NEUTRAL_SOURCE.read_bytes(), "the neutral copy drifted"
+    argv = launch["argv"]
+    pairs = [argv[index + 1] for index, flag in enumerate(argv) if flag == "-e"]
+    assert pairs == [str(policy), str(neutral)], f"the launch loads {pairs}, not exactly the two private copies"
+    assert "--no-context-files" not in argv, "the session lost its project context"
+    assert launch["cwd"] == str(world.tree), "the session left the worktree"
+    assert launch["env"]["HOME"] == os.environ["HOME"], "the session no longer signs in from the maintainer's home"
 
 
 def test_all_session_pi_launches_use_repository_wrapper(world: World) -> None:
@@ -959,10 +993,11 @@ def test_a_pi_that_hangs_on_the_read_back_refuses(
     assert world.calls("osascript") == [] and world.policies() == []
 
 
+@pytest.mark.parametrize("attribute", ["POLICY_SOURCE", "NEUTRAL_SOURCE"], ids=["policy", "neutral"])
 def test_a_missing_extension_source_refuses_and_cleans_up(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], attribute: str
 ) -> None:
-    monkeypatch.setattr(stage2_session, "POLICY_SOURCE", tmp_path / "nowhere.mjs")
+    monkeypatch.setattr(stage2_session, attribute, tmp_path / "nowhere.mjs")
     world.declare_go()
     world.script(pi=pi_steps())
     assert world.run(model=GO_MODEL) == 2
@@ -1052,7 +1087,11 @@ def test_launch_files_stay_inside_their_private_directory(world: World) -> None:
     strays = []
     for path in world.tree.rglob("*"):
         relative = path.relative_to(world.tree).as_posix()
-        launched = "terminal-session" in path.name or stage2_session.POLICY_FILE in path.name
+        launched = (
+            "terminal-session" in path.name
+            or stage2_session.POLICY_FILE in path.name
+            or stage2_session.NEUTRAL_FILE in path.name
+        )
         if path.is_file() and launched and not relative.startswith(stage2_session.SESSION_ROOT):
             strays.append(relative)
     assert strays == []

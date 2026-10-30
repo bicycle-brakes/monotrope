@@ -498,12 +498,20 @@ def probe_go(
         home.mkdir()
         prompt_file = scratch / "probe-prompt.md"
         prompt_file.write_text(text, encoding="utf-8")
+        # The neutral-path extension (bead coding-harness-xul8): the probe's scratch location and
+        # the pinned install stay out of the request. A missing or unreadable source fails the
+        # probe here, before any dispatch.
+        neutral = scratch / "neutral-paths.mjs"
+        source = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
+        neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
         command = [
             str(runner.PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
             "--no-extensions",
+            "-e",
+            str(neutral),
             "--no-mcp",
             "--no-skills",
             "--no-context-files",

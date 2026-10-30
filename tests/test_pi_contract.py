@@ -20,8 +20,10 @@ named in the test.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
@@ -42,16 +44,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_session  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
 PKG = "@earendil-works/pi-coding-agent"
 GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
 DRIVER = REPO_ROOT / "tests" / "pi_contract_driver.mjs"
 POLICY_SOURCE = REPO_ROOT / "scripts" / "stage2_session_policy.mjs"
+NEUTRAL_SOURCE = REPO_ROOT / "scripts" / "stage2_pi_neutral_paths.mjs"
+LOCK_SOURCE = REPO_ROOT / "scripts" / "stage2_repository_pathlock.mjs"
 SYNTHETIC_KEY = "ok-contract-synthetic-key"
 PLANTED_KEY = "ok-TRAP-credential-never-send"
 SENTINEL_IN = "INSIDE-CONTENT-7f3a41"
 SENTINEL_OUT = "OUTSIDE-SENTINEL-b2c95e"
+CONTEXT_CANARY = "CONTEXT-CANARY-neutral-paths"
 GO_NATIVE = "https://opencode.ai/zen/go/v1"
 ZEN_NATIVE = "https://opencode.ai/zen/v1"
 
@@ -412,6 +418,156 @@ def message_text(exchange: Exchange) -> str:
     return "\n".join(pieces)
 
 
+def system_text(exchange: Exchange) -> str:
+    """The request's system-prompt text."""
+    for message in exchange.body.get("messages", []):
+        if message.get("role") == "system":
+            content = message.get("content")
+            return content if isinstance(content, str) else json.dumps(content)
+    return ""
+
+
+def shape_identifiers(env: dict, worktree: Path | None, scratch: Path | None = None) -> dict[str, str]:
+    """The location canaries of one launch shape: scratch HOME and agent directory, worktree, install."""
+    identifiers = {
+        "home": env["HOME"],
+        "agent-dir": env["PI_CODING_AGENT_DIR"],
+        "repo-root": str(REPO_ROOT),
+        "install": str(REPO_ROOT / "tools" / "pi"),
+    }
+    if worktree is not None:
+        identifiers["worktree"] = str(worktree)
+    if scratch is not None:
+        identifiers["scratch"] = str(scratch)
+    return identifiers
+
+
+def assert_payloads_are_neutral(requests: list[Exchange], identifiers: dict[str, str], what: str) -> None:
+    """Every complete request body holds none of the planted locations (criterion 4)."""
+    assert requests, f"{what}: no request reached the stand-in"
+    for index, exchange in enumerate(requests):
+        body = json.dumps(exchange.body)
+        for name, path in identifiers.items():
+            assert path not in body, f"{what}: request {index + 1} carries the {name} location {path}"
+
+
+def extension_copy(source: Path, directory: Path, name: str) -> Path:
+    """An extension as a launch loads it: a copy beside the launch's own files."""
+    copy = directory / name
+    copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    return copy
+
+
+def drive_rpc(
+    project: Path,
+    scratch: Path,
+    argv: list[str],
+    providers: dict,
+    prompts: list[str],
+    *,
+    timeout: int = 180,
+) -> list[dict]:
+    """Run the captured interactive command with `--mode rpc` and send each prompt in order.
+
+    The production argv is kept byte for byte; the adapter appends only the RPC
+    mode switch, which ignores the trailing prompt argument, and points the
+    transport at the loopback stand-in. Every event of the run is returned; a
+    turn that outlives `timeout` fails the case.
+    """
+    agent = scratch / "agent"
+    home = scratch / "home"
+    agent.mkdir(parents=True, exist_ok=True)
+    home.mkdir(parents=True, exist_ok=True)
+    (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+    (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
+    env = {
+        **contract_environment(),
+        "HOME": str(home),
+        "PI_CODING_AGENT_DIR": str(agent),
+        "OPENCODE_API_KEY": SYNTHETIC_KEY,
+        "NODE_OPTIONS": f"--import {GUARD}",
+    }
+    stderr_log = scratch / "rpc-stderr.log"
+    lines: queue.Queue = queue.Queue()
+
+    def why() -> str:
+        return stderr_log.read_text(encoding="utf-8", errors="replace")[-600:]
+
+    with stderr_log.open("w", encoding="utf-8") as errors:
+        process = subprocess.Popen(
+            [str(stage2.PI_WRAPPER), *argv, "--mode", "rpc"],
+            cwd=project,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=errors,
+            text=True,
+            bufsize=1,
+        )
+
+        def pump() -> None:
+            for line in process.stdout:
+                try:
+                    lines.put(json.loads(line))
+                except json.JSONDecodeError:
+                    lines.put({"type": "unparseable-line"})
+            lines.put(None)
+
+        threading.Thread(target=pump, daemon=True).start()
+
+        def await_event(what: str, deadline: float) -> dict:
+            budget = deadline - time.monotonic()
+            if budget <= 0:
+                raise ContractFailure(f"the RPC run did not {what} within {timeout}s: {why()}")
+            try:
+                event = lines.get(timeout=budget)
+            except queue.Empty:
+                raise ContractFailure(f"the RPC run did not {what} within {timeout}s: {why()}") from None
+            if event is None:
+                raise ContractFailure(f"the RPC run ended before it could {what}: {why()}")
+            return event
+
+        events: list[dict] = []
+        deadline = time.monotonic() + timeout
+        try:
+            for index, prompt in enumerate(prompts):
+                process.stdin.write(json.dumps({"type": "prompt", "id": f"turn-{index}", "message": prompt}) + "\n")
+                process.stdin.flush()
+                settled = False
+                while not settled:
+                    event = await_event(f"answer turn {index}", deadline)
+                    events.append(event)
+                    if (
+                        event.get("type") == "response"
+                        and event.get("command") == "prompt"
+                        and not event.get("success")
+                    ):
+                        raise ContractFailure(f"turn {index} was refused: {event.get('error')}: {why()}")
+                    if event.get("type") == "agent_settled":
+                        settled = True
+        finally:
+            with contextlib.suppress(OSError):
+                process.stdin.close()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+    return events
+
+
+def rpc_argv(project: Path, scratch: Path, prompts_hint: str = "Handover text.") -> tuple[list[str], Path, Path]:
+    """The production interactive argv and its two extension copies, in the launch's private directory."""
+    private = scratch / "private"
+    private.mkdir(exist_ok=True)
+    policy = extension_copy(POLICY_SOURCE, private, "stage2-session-policy.mjs")
+    neutral = extension_copy(NEUTRAL_SOURCE, private, "neutral-paths.mjs")
+    argv = stage2_session.cli_argv(
+        "pi", project, str(stage2.PI_WRAPPER), "opencode-go/contract-rung", prompts_hint, policy, neutral
+    )
+    return argv[1:], policy, neutral
+
+
 def provider_data(provider: str) -> dict:
     """A provider's catalog of the installed Pi - the native address's own home.
 
@@ -520,7 +676,12 @@ def contract_environment() -> dict[str, str]:
 
 
 def reviewer_flags() -> list[str]:
-    """Capture the production prefix without starting Pi or copying its flag list."""
+    """Capture the production prefix without starting Pi or copying its flag list.
+
+    Explicit `-e <copy>` pairs are dropped: every production call loads its own
+    scratch copy of an extension, and the capture's scratch dies with its
+    temporary directory. A test that needs an extension loads a copy of its own.
+    """
     commands = []
 
     def capture(command, *_args, **_kwargs):
@@ -534,7 +695,16 @@ def reviewer_flags() -> list[str]:
             types.SimpleNamespace(change="contract", root=root), "contract-rung", "capture only", SYNTHETIC_KEY
         )
     command = commands[0]
-    return command[1 : command.index("--tools")]
+    flags = command[1 : command.index("--tools")]
+    filtered: list[str] = []
+    index = 0
+    while index < len(flags):
+        if flags[index] == "-e":
+            index += 2
+            continue
+        filtered.append(flags[index])
+        index += 1
+    return filtered
 
 
 REVIEWER_FLAGS = reviewer_flags()
@@ -924,6 +1094,276 @@ def test_real_session_policy_blocks_foreign_reads(project: Path, tmp_path: Path)
             assert "outside the worktree" in json.dumps(latest), latest
     finally:
         standin.close()
+
+
+# ---------------------------------------------------------------------------
+# pi-neutral-paths: local machine locations stay out of every request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_pi_neutral_cwd_on_every_run(project: Path, tmp_path: Path) -> None:
+    """Criterion 2: the first and a later run show the model `.` as the working directory, never the real one."""
+    scratch = scratch_of(tmp_path)
+    argv, _policy, _neutral = rpc_argv(project, scratch)
+    standin = StandIn(
+        [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+            {"content": "done"},
+            {"content": "done again"},
+        ]
+    )
+    try:
+        events = drive_rpc(
+            project,
+            scratch,
+            argv,
+            {"opencode-go": {"baseUrl": standin.url}},
+            ["Turn one: read the sentinel with a relative path.", "Turn two: stop."],
+        )
+        assert len(standin.requests) == 3, (
+            f"expected the first run, its tool follow-up and the later run, saw {len(standin.requests)}"
+        )
+    finally:
+        standin.close()
+    assert not [event for event in events if event.get("type") == "extension_error"], "an extension handler failed"
+    for index, exchange in enumerate(standin.requests):
+        system = system_text(exchange)
+        assert "<cwd>\n.\n</cwd>" in system, f"run {index + 1} does not show the neutral working directory"
+        assert str(project) not in system, f"run {index + 1} exposes the real working directory"
+    assert SENTINEL_IN in message_text(standin.requests[1]), (
+        "the relative read stopped resolving inside the real working directory"
+    )
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_pi_omits_local_docs(project: Path, transport, tmp_path: Path) -> None:
+    """Criterion 3: no <docs> section and no installation path travels; the control shows the original leak."""
+    scratch = scratch_of(tmp_path)
+    standin = StandIn([{"content": "No finding."}])
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        standin.close()
+    (exchange,) = standin.requests
+    system = system_text(exchange)
+    assert "<docs>" not in system, "the docs section still travels"
+    install = str(REPO_ROOT / "tools" / "pi")
+    assert install not in json.dumps(exchange.body), "an installation path still travels"
+    # neutralization removed one section only: the generated prompt stays
+    assert "You are an expert coding assistant operating inside pi" in system, "the preamble was dropped"
+    assert "<tools>" in system and "<rules>" in system, "the generated tools or rules were dropped"
+    # the extension-omitted control: the same harness sees the original cwd and docs leak
+    prompt_file = scratch / "control-prompt.md"
+    prompt_file.write_text("Control without the neutral-path extension.\n", encoding="utf-8")
+    control = StandIn([{"content": "No finding."}])
+    try:
+        done = run_pi(
+            project,
+            scratch,
+            *REVIEWER_FLAGS,
+            "--tools",
+            stage2.PI_TOOLS,
+            "--model",
+            "opencode-go/contract-rung",
+            "--append-system-prompt",
+            str(prompt_file),
+            "Control without the neutral-path extension.",
+            providers={"opencode-go": {"baseUrl": control.url}},
+        )
+        assert done.returncode == 0, f"the control run ended {done.returncode}: {done.stderr[-600:]}"
+        (leak,) = control.requests
+    finally:
+        control.close()
+    leaked = json.dumps(leak.body)
+    assert str(project) in leaked, "the control did not reproduce the original working-directory leak"
+    assert "<docs>" in system_text(leak) and install in leaked, "the control did not reproduce the docs leak"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_launch_payloads_have_no_local_identifiers(project: Path, transport, tmp_path: Path) -> None:
+    """Criterion 4: every complete request of every covered shape is free of local location identifiers.
+
+    Shapes: the paid reviewer (worktree, tools, a tool result and a tool error
+    following), the free member (scratch, no tools) and the interactive session
+    (its production argv in RPC mode) across two user turns, context labels and
+    a tool follow-up.
+    """
+    # the paid reviewer
+    standin = StandIn(
+        [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+            {"tool_calls": [{"name": "read", "arguments": {"path": "absent-file.txt"}}]},
+            {"content": "No finding."},
+        ]
+    )
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        standin.close()
+    assert len(standin.requests) == 3, "the tool result and the tool error did not each draw a follow-up"
+    assert_payloads_are_neutral(standin.requests, shape_identifiers(transport.calls[0]["env"], project), "the reviewer")
+    assert SENTINEL_IN in message_text(standin.requests[1]), "the positive control read never executed"
+    assert "absent-file.txt" in json.dumps(standin.requests[2].body), "the tool error did not travel"
+    assert str(project / "sentinel.txt") not in json.dumps(standin.requests[1].body), (
+        "the tool result kept its absolute path"
+    )
+    # the free member
+    free = StandIn([{"content": "No finding."}])
+    transport.providers["opencode-go"] = {"baseUrl": free.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=project), "acme-1-free", "Free review.", SYNTHETIC_KEY, free=True
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        free.close()
+    (one,) = free.requests
+    assert_payloads_are_neutral([one], shape_identifiers(transport.calls[-1]["env"], None), "the free member")
+    assert tool_names(one) == set(), "the free member was offered tools"
+    # the interactive session: context on, two user turns, one tool follow-up
+    (project / "AGENTS.md").write_text(CONTEXT_CANARY + "\n", encoding="utf-8")
+    scratch = scratch_of(tmp_path)
+    argv, _policy, _neutral = rpc_argv(project, scratch)
+    session = StandIn(
+        [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+            {"content": "done one"},
+            {"content": "done two"},
+        ]
+    )
+    try:
+        events = drive_rpc(
+            project,
+            scratch,
+            argv,
+            {"opencode-go": {"baseUrl": session.url}},
+            ["Turn one: read the sentinel.", "Turn two: stop."],
+        )
+        assert len(session.requests) == 3, "the session did not run both turns with the tool follow-up"
+    finally:
+        session.close()
+    assert not [event for event in events if event.get("type") == "extension_error"], "an extension handler failed"
+    session_env = {"HOME": str(scratch / "home"), "PI_CODING_AGENT_DIR": str(scratch / "agent")}
+    assert_payloads_are_neutral(session.requests, shape_identifiers(session_env, project, scratch), "the session")
+    first = json.dumps(session.requests[0].body)
+    assert CONTEXT_CANARY in first, "the session lost its project context"
+    assert 'path="AGENTS.md"' in first, "the context label did not survive as a relative reference"
+    assert SENTINEL_IN in message_text(session.requests[1]), "the session's tool follow-up never executed"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_neutralization_preserves_tool_roots_and_boundaries(project: Path, tmp_path: Path) -> None:
+    """Criterion 5: reads keep the real working directory; the path lock and the session policy still bound them."""
+    scratch = scratch_of(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "outside.txt").write_text(SENTINEL_OUT + "\n", encoding="utf-8")
+    (project / "escape").symlink_to(outside)
+    neutral = extension_copy(NEUTRAL_SOURCE, scratch, "neutral-paths.mjs")
+    lock = extension_copy(LOCK_SOURCE, scratch, "repository-pathlock.mjs")
+    identifiers = shape_identifiers(
+        {"HOME": str(scratch / "home"), "PI_CODING_AGENT_DIR": str(scratch / "agent")}, project, scratch
+    )
+    seat = StandIn(
+        [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+            {"tool_calls": [{"name": "read", "arguments": {"path": "../outside/outside.txt"}}]},
+            {"tool_calls": [{"name": "read", "arguments": {"path": "escape/outside.txt"}}]},
+            {"content": "done"},
+        ]
+    )
+    try:
+        done = run_pi(
+            project,
+            scratch,
+            *REVIEWER_FLAGS,
+            "-e",
+            str(lock),
+            "-e",
+            str(neutral),
+            "--tools",
+            stage2.PI_TOOLS,
+            "--model",
+            "opencode-go/contract-rung",
+            "--",
+            "Read what the conversation asks for.",
+            providers={"opencode-go": {"baseUrl": seat.url}},
+        )
+        assert done.returncode == 0, f"Pi ended {done.returncode}: {done.stderr[-600:]}"
+        assert not re.search(r"extension[_ ]error", done.stderr, re.I), "an extension handler failed"
+    finally:
+        seat.close()
+    assert len(seat.requests) == 4, f"expected the scripted four turns, saw {len(seat.requests)}"
+    assert SENTINEL_IN in message_text(seat.requests[1]), "the relative read no longer resolves inside the worktree"
+    for exchange in seat.requests:
+        assert SENTINEL_OUT not in json.dumps(exchange.body), "an outside read's content entered a payload"
+    for exchange in seat.requests[2:4]:
+        latest = [message for message in exchange.body["messages"] if message["role"] == "tool"][-1]
+        assert "resolves outside the worktree" in json.dumps(latest), latest
+    assert_payloads_are_neutral(seat.requests, identifiers, "the repository seat")
+    # the session's policy keeps its boundary beside the neutral-path extension
+    argv, _policy, _neutral = rpc_argv(project, scratch)
+    session = StandIn(
+        [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "../outside/outside.txt"}}]},
+            {"tool_calls": [{"name": "read", "arguments": {"path": "escape/outside.txt"}}]},
+            {"content": "done"},
+        ]
+    )
+    try:
+        events = drive_rpc(
+            project,
+            scratch,
+            argv,
+            {"opencode-go": {"baseUrl": session.url}},
+            ["Try the two reads, then stop."],
+        )
+        assert len(session.requests) == 3, f"expected the scripted three turns, saw {len(session.requests)}"
+    finally:
+        session.close()
+    assert not [event for event in events if event.get("type") == "extension_error"], "an extension handler failed"
+    for exchange in session.requests:
+        assert SENTINEL_OUT not in json.dumps(exchange.body), "an outside read's content entered a payload"
+    for exchange in session.requests[1:3]:
+        latest = [message for message in exchange.body["messages"] if message["role"] == "tool"][-1]
+        assert "outside the worktree" in json.dumps(latest), latest
+    assert_payloads_are_neutral(session.requests, identifiers, "the session")
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_neutralization_preserves_instructions_and_tools(project: Path, transport) -> None:
+    """Criterion 6: neutralization changes locations only - instructions, tool declarations and relative references stay."""
+    prompt = (
+        "INSTRUCTION-CANARY-neutral-paths: review the change.\n"
+        "Check `docs/guide.md` and `scripts/check.py` first; both are repository-relative references."
+    )
+    standin = StandIn([{"content": "No finding."}])
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=project), "contract-rung", prompt, SYNTHETIC_KEY
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        standin.close()
+    (exchange,) = standin.requests
+    system = system_text(exchange)
+    assert "INSTRUCTION-CANARY-neutral-paths" in system, "the appended instructions were changed"
+    assert "docs/guide.md" in system and "scripts/check.py" in system, "a relative file reference was corrupted"
+    assert tool_names(exchange) == {"read", "grep", "find", "ls"}, "the tool declarations changed"
+    assert "You are an expert coding assistant operating inside pi" in system, "the preamble was changed"
+    assert "<tools>" in system and "<rules>" in system, "the generated tools or rules were dropped"
+    assert "Pi documentation" not in system, "a line of the removed docs section stayed"
+    assert str(REPO_ROOT) not in json.dumps(exchange.body), "the checkout path stayed"
 
 
 # ---------------------------------------------------------------------------
