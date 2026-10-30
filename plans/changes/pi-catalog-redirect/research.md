@@ -8,21 +8,21 @@ updated: 2026-10-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-j2wb
-owner: Data Architect
-provenance: human-written
+owner: framework-architect
+class: bounded
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-30"}
+review: {status: pending, approved_by: null, approved_at: null}
+neighbours:
+  - plans/changes/research-swarm/spec.md
+  - plans/changes/pi-pin/spec.md
 tags: [research]
 ---
 
 # pi catalog redirect — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md), by the
+runner's GLM Flash route; the orchestrator's measured addendum closes its gaps.
 
 Stage-2 call, 2026-10-30: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 773 files, 2729 commits, 12 rules.
 
@@ -81,3 +81,27 @@ Validated as tracked files (the format `given_neighbours` expects, `scripts/stag
 - `plans/changes/loop-until-clean/spec.md` — the forced-refresh discovery path and its refutations (lines 32-74, 122-133).
 - `plans/changes/review-loop-deep-b/spec.md` — DL-B-8, the overlay `baseUrl` origin rule (redirect-adjacent catalog fields).
 - `plans/changes/pi-pin/spec.md` — the Pi 1.2.0 pin and its contract suite.
+
+## Orchestrator addendum — measured 2026-10-30 (closes the gaps above)
+
+- **The live redirect happens.** `prepare-explore` for bead
+  coding-harness-3g53 failed three times with `pi-refresh-failed` (2026-10-29
+  23:16 UTC twice, 2026-10-30 11:00 UTC). Run alone with an empty `HOME`,
+  the bridge reported `sources.pi.outcome: request-failed`, error
+  `fetch failed`, and `pi_runtime.errors` naming "only one Go catalog request
+  is permitted" (Pi's retry, refused by the guard).
+- **The exact error.** The underlying cause of `fetch failed` is undici's
+  `unexpected redirect`. Pi sends `accept: application/json` and
+  `user-agent: pi/1.2.0 (darwin; node/v26.12.0; arm64)`.
+- **What pi.dev answers.** With Pi's user agent,
+  `https://pi.dev/api/models/providers/opencode-go?types=chat%2Cimage%2Cclassifier`
+  answers `307` to the same URL plus `&pi-version=1.2.0`. That target answers
+  `200`. Without Pi's user agent, the original URL answers `200` directly.
+  The redirect parameter follows the user agent's version (`pi/1.3.0` gives
+  `pi-version=1.3.0`).
+- **Only the bridge is affected.** Pi's own CLI path follows redirects by
+  fetch's default, so the review loop's discovery keeps working; `models.dev`
+  answered `200` in the same run.
+- **The bead's motivation** is this failure (bead coding-harness-j2wb,
+  discovered from coding-harness-3g53).
+
