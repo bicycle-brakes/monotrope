@@ -67,3 +67,4 @@ shows the card unchanged before carrying out the manual implementation.
 ## Time used
 2026-10-29 22:56:49–22:58:17 UTC — implement · orchestrator bootstrap edit by hand (prompts/ is runner-held): test red first (all fifteen RUNNER_HELD entries missing), prompt item added, test green · measured with `date -u`
 2026-10-29 23:28:00–23:36:54 UTC — review loop round 1 · Flash swarm, nine rows, all repaired by the orchestrator: L1-1, L1-2, L1-9 in the prompt item and its test (red first on the word substantively), L1-3 to L1-8 in the change's own headers and research text · measured with `date -u` (start read from the prepare-loop line, to the minute)
+2026-10-30 00:07:00–00:10:54 UTC — review loop round 2 · glm-5.3-flash, three rows: L2-1 and L2-2 repaired by the orchestrator, test red first; L2-3 rejected as false · measured with `date -u` (start read from the verify line, to the minute)

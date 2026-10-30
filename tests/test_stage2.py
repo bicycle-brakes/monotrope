@@ -769,7 +769,9 @@ def test_the_plan_prompt_names_every_runner_held_path() -> None:
     review rows L1-1, L1-2, L1-9)."""
     prompt = (REPO_ROOT / "prompts" / "03-plan.md").read_text(encoding="utf-8")
     assert stage2.RUNNER_HELD, "the runner holds no path; the test would prove nothing"
+    assert HELD_ITEM in prompt, f"the plan prompt lost its held-paths item ({HELD_ITEM!r})"
     item = _held_item(prompt)
+    assert "derived leftovers" not in item, "the item names a carve-out wider than the runner's"
     assert _held_drift(item, stage2.RUNNER_HELD) == ([], [])
     assert "never commits" in item and "orchestrator" in item, "the item no longer routes held edits away"
     assert "substantive" not in item, "the item lets an attempt make a small held edit the runner refuses"
