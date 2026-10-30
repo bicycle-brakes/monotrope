@@ -146,7 +146,9 @@ mechanism, park that pull request.
 ## Queue after the lane items
 
 The maintainer asked at about 22:25 UTC for more beads ("Reihe mehr Beads
-ein"). Each lane works its queue in order once its items above are done.
+ein"). Each lane works its queue in order once its items above are done. Two
+beads first queued here were already done and were closed at about 22:40 UTC
+(coding-harness-pj98 by PR #247, coding-harness-s9m by PR #273).
 
 How far a queued bead goes:
 
@@ -161,8 +163,8 @@ How far a queued bead goes:
 
 | Lane | Queue, in order (bead, class) |
 | --- | --- |
-| A | the repair verb's targeted check (coding-harness-gxwg, bounded) · a free model that passes the probe but answers 429 blocks the loop (coding-harness-pj98, bounded) · a clean free round ends the loop too early (coding-harness-1gzo, bounded) · a member without readable content after format feedback is replaced for that round (coding-harness-mfth, bounded) · the Sonnet fallback continues from Flash's edits (coding-harness-6ie, bounded) · the runner writes the fixed-line skeleton per taken row (coding-harness-k93f, bounded) |
-| B | fewer full verifies: draft checks only the gates its documents touch (coding-harness-77qj, bounded; if it needs `scripts/stage2.py`, it moves behind lane A) · time records as data (coding-harness-v6vk, bounded) · the criterion-ledger gate tried against a differently laid-out instance (coding-harness-s9m, spike) |
+| A | the repair verb's targeted check (coding-harness-gxwg, bounded) · a clean free round ends the loop too early (coding-harness-1gzo, bounded) · a member without readable content after format feedback is replaced for that round (coding-harness-mfth, bounded) · the Sonnet fallback continues from Flash's edits (coding-harness-6ie, bounded) · the runner writes the fixed-line skeleton per taken row (coding-harness-k93f, bounded) |
+| B | fewer full verifies: draft checks only the gates its documents touch (coding-harness-77qj, bounded; if it needs `scripts/stage2.py`, it moves behind lane A) · time records as data (coding-harness-v6vk, bounded) |
 | C | fast pre-check and full failure messages before verify (coding-harness-csm, feature) · a live view of a running Pi round (coding-harness-uco, feature) |
 | D | the test-strategy docs (coding-harness-vxwp, bounded) · every change has a bead that declares its class (coding-harness-680l, bounded) · translate the remaining German, one area per pull request (coding-harness-yim, bounded) |
 | E | pin the merge queue's method and group sizes (coding-harness-tsdr, bounded; only after the maintainer merges the merge-queue decision) · auto-merge a self-mergeable pull request on green CI (coding-harness-p3xq, bounded) · small changes skip the review loop (coding-harness-fctf, feature) |
