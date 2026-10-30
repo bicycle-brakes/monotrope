@@ -9,6 +9,7 @@
 # Usage:
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
+#   bash scripts/verify_all.sh --job docs    # only the document gates (the draft verb, bead coding-harness-77qj)
 #   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not
 
@@ -69,7 +70,7 @@ LIST=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --job)
-            [ $# -ge 2 ] || { echo "--job needs a value (verify|drift)" >&2; exit 2; }
+            [ $# -ge 2 ] || { echo "--job needs a value (verify|drift|docs)" >&2; exit 2; }
             JOB="$2"; shift 2 ;;
         --ci) CI_MODE=1; shift ;;
         --list) LIST=1; shift ;;
