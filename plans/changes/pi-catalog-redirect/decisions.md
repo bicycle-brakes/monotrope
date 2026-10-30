@@ -38,6 +38,13 @@ to the same origin and path, with the same query parameters plus exactly
 only the version (measured), and the bridge's contract is fixed public
 sources with no wandering.
 
+*Addendum, 2026-10-30, by the orchestrating session (review rows L1-1, L1-7,
+L2-1, L5-1):* the second GET runs with `redirect: "manual"` too, not
+`redirect: "error"`, so a further redirect is recognised by its status and
+refused as `redirect-refused` without depending on a library's error text.
+This detail was the agent's, not a maintainer answer; the spec's closing
+`[DETAIL]` states the built mechanism.
+
 [DETAIL] **Pi still sees one request.** The guard keeps counting Pi's calls,
 and Pi's retry stays refused; the redirect hop is the bridge's own second
 I/O inside that one call. Reason: the guard exists so the shared deadline,

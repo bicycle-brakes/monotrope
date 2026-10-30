@@ -120,6 +120,8 @@ make verify
 - 7: tests/test_stage2_research_catalog.py::test_preflight_metadata_http_failure_keeps_fixed_slots — a metadata HTTP error drops fixed seats or admits free seats
 - 8: tests/test_stage2_research_catalog.py::test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date — direct fresh selection, credential/subprocess traps or request counts regress
 - 8: tests/test_stage2_research_catalog.py::test_preflight_direct_catalog_has_no_redirect_fields — a direct 200 claims a redirect
+- 1: tests/test_stage2_research_catalog.py::test_the_bridge_takes_the_admitted_version_from_the_pin_not_a_literal — the bridge carries the pinned version as a literal (row L1-5)
+- 2: tests/test_stage2_research_catalog.py::test_preflight_records_a_300_with_location_as_an_unfollowed_http_error — a 300 with a Location is followed or refused as a redirect (rows L2-2, L5-3)
 
 ## Time used
 
