@@ -1064,3 +1064,25 @@ def test_merely_opening_the_lock_file_is_no_relation(tmp_path: Path) -> None:
     finally:
         sibling.kill()
         sibling.wait(timeout=10)
+
+
+def test_a_fifo_in_place_of_the_holder_record_is_unusable_not_a_hang(tmp_path: Path) -> None:
+    """Row F6-7. Planted fault: the holder record was opened blocking before the regular-file check,
+    so a FIFO without a writer in its place hung every reader and a finishing holder's release."""
+    root = tmp_path / "state" / "coding-harness"
+    root.mkdir(parents=True)
+    os.mkfifo(root / verify_lock.HOLDER_NAME)
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; sys.path.insert(0, 'scripts'); import verify_lock; "
+            f"print(verify_lock.read_holder(Path({str(root)!r})))",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert done.stdout.strip() == "None", done.stderr

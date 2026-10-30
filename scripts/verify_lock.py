@@ -222,7 +222,8 @@ def read_holder(root: Path | None = None) -> dict | None:
     """The published ownership, read without following symlinks; None when absent or unusable."""
     base = state_root() if root is None else root
     try:
-        fd = os.open(base / HOLDER_NAME, os.O_RDONLY | os.O_NOFOLLOW)
+        # Non-blocking, so a FIFO planted in the record's place is refused below, never waited on (F6-7).
+        fd = os.open(base / HOLDER_NAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         return None
     try:
@@ -276,7 +277,7 @@ def nested_holder_pid() -> int | None:
     if not _related_to_holder(pid, holder):
         return None
     try:
-        fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         return None
     try:
