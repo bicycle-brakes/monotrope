@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -1013,6 +1014,12 @@ def test_preflight_accepts_one_pinned_version_redirect(tmp_path, sources, status
     built = build(sources.url, first_path)
     assert evidence["redirected_to"] == (built if built.startswith("http") else f"{sources.url}{built}")
     assert len(pi_requests(sources)) == 2, "the admitted hop is the only second request"
+    # Row L1-2: pi.dev's redirect depends on the user agent, so the hop sends the original headers.
+    first_headers, hop_headers = (
+        {k.lower(): v for k, v in h.items()} for p, h in sources.requests if p.startswith("/api/models/providers/")
+    )
+    for name in ("user-agent", "accept"):
+        assert hop_headers.get(name) == first_headers.get(name), f"the admitted hop dropped {name}"
     result = select(bridge)
     assert result["selected"] == ["alpha-free", "beta-free"]
     assert result["fixed"] == FIXED
@@ -1029,6 +1036,7 @@ def test_preflight_accepts_one_pinned_version_redirect(tmp_path, sources, status
         "other-path",
         "altered-original-value",
         "duplicated-original-pair",
+        "comma-collision",
         "wrong-version",
         "duplicate-version",
         "extra-parameter",
@@ -1055,6 +1063,14 @@ def test_preflight_refuses_unapproved_catalog_redirect(tmp_path, sources, fault)
                 location = f"{base}?{query.split('=', 1)[0]}=altered&pi-version={PIN}"
             elif fault == "duplicated-original-pair":
                 location = f"{path}&{query}&pi-version={PIN}"
+            elif fault == "comma-collision":
+                # Row L1-6: `types=chat,image` and `types,chat=image` joined to the same string.
+                name, value = next((n, v) for n, v in urllib.parse.parse_qsl(query) if "," in v)
+                head, _, rest = value.partition(",")
+                moved = urllib.parse.urlencode([(f"{name},{head}", rest)])
+                others = [(n, v) for n, v in urllib.parse.parse_qsl(query) if n != name]
+                tail = f"&{urllib.parse.urlencode(others)}" if others else ""
+                location = f"{base}?{moved}{tail}&pi-version={PIN}"
             elif fault == "wrong-version":
                 location = f"{path}&pi-version=0"
             elif fault == "duplicate-version":
@@ -1252,3 +1268,12 @@ def test_preflight_direct_catalog_has_no_redirect_fields(tmp_path, sources):
     result = select(bridge)
     assert result["selected"] == ["alpha-free", "beta-free"]
     assert "redirected_to" not in result["sources"]["pi"]
+
+
+def test_the_bridge_takes_the_admitted_version_from_the_pin_not_a_literal() -> None:
+    # Row L1-5 (criterion 1's refutation "the version is hard-coded independently of the pin"):
+    # every redirect case builds pi-version from the pin, so a literal would pass them all; the
+    # bridge source must not carry the pinned version as a literal.
+    source = (ROOT / "scripts/stage2_research_catalog.mjs").read_text(encoding="utf-8")
+    assert PIN not in source, "the bridge hard-codes the pinned Pi version"
+    assert "manifest.dependencies" in source, "the bridge no longer reads the version from the pin"

@@ -68,8 +68,10 @@ export async function collectCatalog({
     const original = [...new URLSearchParams(requested.search).entries()];
     const changed = [...new URLSearchParams(target.search).entries()];
     const versions = changed.filter(([name]) => name === "pi-version");
-    const samePairs = (left, right) =>
-      JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+    // Each pair is encoded on its own before sorting, so a comma inside a name or value can
+    // never make two different multisets compare equal (review rows L1-4, L1-6).
+    const canonical = (pairs) => JSON.stringify(pairs.map((pair) => JSON.stringify(pair)).sort());
+    const samePairs = (left, right) => canonical(left) === canonical(right);
     if (
       target.origin !== requested.origin || target.pathname !== requested.pathname ||
       target.username !== "" || target.password !== "" || target.hash !== "" ||
@@ -113,17 +115,17 @@ export async function collectCatalog({
       }
       const target = admittedTarget(first.headers.get("location"), url);
       Object.assign(sources.pi, { redirected_to: target.href, redirect_status: first.status });
-      let response;
-      try {
-        response = await originalFetch(target, {
-          ...init, signal: controller.signal, redirect: "error", credentials: "omit",
-        });
-      } catch (error) {
-        // The measured shape of a blocked second hop: "fetch failed", caused by
-        // "unexpected redirect" (research.md, orchestrator addendum). The hidden
-        // Location stays unread; the refusal names the admitted target instead.
-        const cause = error?.cause instanceof Error ? error.cause.message : error?.cause;
-        if (typeof cause !== "string" || !cause.includes("unexpected redirect")) throw error;
+      // The second hop is read manually too: a further redirect is recognised by its status, not by
+      // a library's error wording, and its Location stays unfollowed (review rows L1-1, L1-7).
+      const response = await originalFetch(target, {
+        ...init, signal: controller.signal, redirect: "manual", credentials: "omit",
+      });
+      if (REDIRECT_STATUSES.has(response.status)) {
+        try {
+          await response.body?.cancel();
+        } catch {
+          // A redirect body that cannot be released must not change the refusal.
+        }
         throw new RedirectRefused(`the admitted catalog target ${target.href} redirected again`);
       }
       return await answer(response);
