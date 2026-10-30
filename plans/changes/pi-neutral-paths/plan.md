@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
@@ -101,16 +101,16 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_all_review_members_load_neutral_paths — a free, Flash or ladder command omits the extension
-- 1: not yet written tests/test_stage2_swarm.py::test_research_seats_load_neutral_paths — a repository/public/free command omits it or loses its role extension
-- 1: not yet written tests/test_stage2_availability.py::test_review_probes_load_neutral_paths — a review probe omits it
-- 1: not yet written tests/test_stage2_research_availability.py::test_research_probes_load_neutral_paths — a research probe omits it
-- 1: not yet written tests/test_stage2_session.py::test_pi_session_loads_neutral_paths_with_policy — a session omits either extension
-- 2: not yet written tests/test_pi_contract.py::test_real_pi_neutral_cwd_on_every_run — the initial or subsequent run exposes its real cwd
-- 3: not yet written tests/test_pi_contract.py::test_real_pi_omits_local_docs — the installed Pi still sends its docs section or installation paths
-- 4: not yet written tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers — any complete initial/tool/error/repeated-turn request contains a planted location identifier
-- 5: not yet written tests/test_pi_contract.py::test_real_neutralization_preserves_tool_roots_and_boundaries — allowed relative reads fail or outside/symlink reads succeed
-- 6: not yet written tests/test_pi_contract.py::test_real_neutralization_preserves_instructions_and_tools — non-location instructions, tool declarations or relative references change
+- 1: tests/test_stage2.py::test_all_review_members_load_neutral_paths — a free, Flash or ladder command omits the extension
+- 1: tests/test_stage2_swarm.py::test_research_seats_load_neutral_paths — a repository/public/free command omits it or loses its role extension
+- 1: tests/test_stage2_availability.py::test_review_probes_load_neutral_paths — a review probe omits it
+- 1: tests/test_stage2_research_availability.py::test_research_probes_load_neutral_paths — a research probe omits it
+- 1: tests/test_stage2_session.py::test_pi_session_loads_neutral_paths_with_policy — a session omits either extension
+- 2: tests/test_pi_contract.py::test_real_pi_neutral_cwd_on_every_run — the initial or subsequent run exposes its real cwd
+- 3: tests/test_pi_contract.py::test_real_pi_omits_local_docs — the installed Pi still sends its docs section or installation paths
+- 4: tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers — any complete initial/tool/error/repeated-turn request contains a planted location identifier
+- 5: tests/test_pi_contract.py::test_real_neutralization_preserves_tool_roots_and_boundaries — allowed relative reads fail or outside/symlink reads succeed
+- 6: tests/test_pi_contract.py::test_real_neutralization_preserves_instructions_and_tools — non-location instructions, tool declarations or relative references change
 
 ## Verification
 
@@ -137,4 +137,12 @@ this worktree at draft time; use the phase-3 prompt's form and the available
 interview, handoff and criterion-ledger checks. The runner owns generated
 index updates and the final `make verify` gate.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-30 22:28:29–23:27:54 UTC, 3564 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 23:28:00–23:33:27 UTC, 327 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-30 23:33:33–23:37:17 UTC, 225 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
