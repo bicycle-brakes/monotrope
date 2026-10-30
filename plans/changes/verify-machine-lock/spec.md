@@ -141,7 +141,13 @@ never correctness.
 - Covered: normal exit, failure, cancellation and trapped signals (SIGINT,
   SIGTERM, SIGHUP, SIGQUIT) end the protected command's process group before
   release; a grandchild left in that group after the command exits is ended
-  before release, by the supervisor and by the runner's timed launches.
+  before release, by the supervisor and by the runner's timed launches. A trapped
+  signal that arrives while the protected command is being started is held back
+  until the command is registered for cleanup, in the supervisor as in the runner
+  (phase-6 row F6-9).
+- Accepted limit, signal timing (maintainer, 2026-10-30): after that deferral, a
+  further finding about the moment a signal arrives is an accepted limit, not a
+  finding: the lock protects the machine's load, never data.
 - Accepted limit: when an intermediate process is killed hard (SIGKILL) while
   its own descendants run in another process group or session, those
   descendants can outlive the admission and briefly overlap a successor. Their

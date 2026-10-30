@@ -710,7 +710,7 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-9 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:783–804 | A trapped signal arriving after `Popen` creates the protected process but before `_spawn_child()` returns leaves `child` unset. Cleanup skips that process group, allowing protected work to survive cancellation. A read-only probe at `d66e4d40`, injecting SIGTERM immediately after process creation, returned 143 with the child still alive. Signal delivery must be deferred until the child is registered for cleanup. [Acceptance criterion 6; Boundary] | Codex | open | — |
+| F6-9 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:783–804 | A trapped signal arriving after `Popen` creates the protected process but before `_spawn_child()` returns leaves `child` unset. Cleanup skips that process group, allowing protected work to survive cancellation. A read-only probe at `d66e4d40`, injecting SIGTERM immediately after process creation, returned 143 with the child still alive. Signal delivery must be deferred until the child is registered for cleanup. [Acceptance criterion 6; Boundary] | Codex | fixed — tests/test_verify_lock.py::test_a_signal_while_the_child_starts_still_ends_the_child | no |
 
 Phase 6 verdict: codex 01a18df8-1be5-7b93-b88d-8a8a798004f0, 2026-10-30
 Reviewer session: codex 01a18df8-1be5-7b93-b88d-8a8a798004f0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
