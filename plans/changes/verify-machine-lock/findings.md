@@ -681,3 +681,14 @@ Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a18cc6-f145-7243-96ee-c615aea86b57, 2026-10-30
 Reviewer session: codex 01a18cc6-f145-7243-96ee-c615aea86b57 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-30: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 738 files, 2736 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-30
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-5 | MAJOR | SPEC | phase-6 re-check | scripts/verify_lock.py:790–807; scripts/stage2.py:874–876 | Protected descendants in separate sessions still outlive admission. A nested runner starts checks with `start_new_session=True` and passes no lock descriptor when admission is inherited. If that runner exits or is killed, cleanup reaches only its original process group, allowing independent verification to overlap the surviving check. New read-only subprocess evidence at `cae53b7f`, exercising `_spawn_child()` and `end_lingering_group()`, confirmed an exited child, a live grandchild in another session, and an available lock. Ownership must cover that remaining protected work. [Acceptance criteria 1, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a18ce6-ca81-7d32-9b58-f5cd13e2e2c0, 2026-10-30
+Reviewer session: codex 01a18ce6-ca81-7d32-9b58-f5cd13e2e2c0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
