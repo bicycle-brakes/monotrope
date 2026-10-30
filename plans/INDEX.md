@@ -198,6 +198,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-fenced-examples/plan.md`](changes/interview-fenced-examples/plan.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/research.md`](changes/interview-fenced-examples/research.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
 | [`changes/interview-fenced-examples/spec.md`](changes/interview-fenced-examples/spec.md) | draft | partial | 2026-10-25 | coding-harness-k2r |
+| [`changes/kimi-admission/decisions.md`](changes/kimi-admission/decisions.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
+| [`changes/kimi-admission/research.md`](changes/kimi-admission/research.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
+| [`changes/kimi-admission/spec.md`](changes/kimi-admission/spec.md) | draft | partial | 2026-10-30 | coding-harness-bomd |
 | [`changes/ledger-instance-layout/research.md`](changes/ledger-instance-layout/research.md) | draft | none | 2026-10-12 | coding-harness-s9m |
 | [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
