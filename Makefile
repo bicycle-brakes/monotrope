@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock change index help
+.PHONY: verify test staleness gates leakcheck venv lock change index report help
 
 verify:
 	bash scripts/verify_all.sh
@@ -67,6 +67,14 @@ change:
 index:
 	@python3 scripts/plans_registry.py --index
 
+# The run report (bead coding-harness-o2yc): one local, read-only snapshot of the
+# active changes - recorded attempts, time against the plan-card appetite, live
+# process and memory figures. The optional CHANGE selection passes as data in the
+# environment; its value is never interpolated into the shell line. It is not a
+# gate and runs nowhere in verify (docs/WORKFLOW.md, "The run report").
+report:
+	@export CHANGE; python3 scripts/run_report.py
+
 help:
 	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
 	@echo 'make test                               the test suite, by hand'
@@ -78,4 +86,5 @@ help:
 	@echo 'make change NAME=<name> BEAD=<existing-bead-id>'
 	@echo '                                        create plans/changes/<name>/ linked to an existing bead'
 	@echo 'make index                              regenerate plans/INDEX.md from the registry'
+	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
 	@echo 'make help                               this list'

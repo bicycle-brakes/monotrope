@@ -117,6 +117,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
         "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
     ),
+    "run_report.py": (
+        "Entry point, not a gate — the local, read-only run report (make report); it snapshots the "
+        "maintainer's working tree and live system figures, which no CI checkout can stand in for; "
+        "tests/test_run_report.py runs it against stand-ins"
+    ),
     "stage2.py": (
         "Entry point, not a gate — starts the stage-2 reviewers on the maintainer's machine, with a "
         "subscription and a credential no CI step holds; tests/test_stage2.py runs it against stand-ins"
