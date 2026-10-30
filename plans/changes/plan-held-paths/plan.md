@@ -54,9 +54,11 @@ make verify
 ## Not touched
 
 No runner, provenance, gate, other prompt, template, ADR or sibling change edits.
-Only this change's `plan.md` (time used and ledger status), `spec.md`
-(implementation status) and `findings.md` (evidence and reviews) need record
-updates; `plans/INDEX.md` is rendered by the runner, never hand-edited.
+This change's own records are updated: `plan.md` (time used, ledger),
+`spec.md` (implementation status, review revisions), `research.md` (its
+provenance and an orchestrator note) and `findings.md` (evidence and
+reviews); `decisions.md` was written before the draft. `plans/INDEX.md` is
+rendered by `scripts/plans_registry.py --index`, never hand-edited.
 
 ## Route
 
@@ -69,3 +71,4 @@ shows the card unchanged before carrying out the manual implementation.
 2026-10-29 23:28:00–23:36:54 UTC — review loop round 1 · Flash swarm, nine rows, all repaired by the orchestrator: L1-1, L1-2, L1-9 in the prompt item and its test (red first on the word substantively), L1-3 to L1-8 in the change's own headers and research text · measured with `date -u` (start read from the prepare-loop line, to the minute)
 2026-10-30 00:07:00–00:10:54 UTC — review loop round 2 · glm-5.3-flash, three rows: L2-1 and L2-2 repaired by the orchestrator, test red first; L2-3 rejected as false · measured with `date -u` (start read from the verify line, to the minute)
 2026-10-30 00:35:00–00:38:32 UTC — review loop round 3 · hy3, three rows: L3-3 repaired by the orchestrator (red against a planted weakening); L3-1 rejected as false, L3-2 as an accepted limit · measured with `date -u` (start read from the verify line, to the minute)
+2026-10-30 01:03:00–01:09:37 UTC — review loop round 4 · mimo-v2.6-pro, eight rows: L4-1, L4-2, L4-3, L4-5, L4-6 repaired by the orchestrator (word bans dropped, spec says any held edit, prefix and case rule named, Not touched corrected); L4-4 an accepted limit, L4-7 and L4-8 false · measured with `date -u` (start read from the verify line, to the minute)

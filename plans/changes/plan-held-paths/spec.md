@@ -26,7 +26,7 @@ Sources: [research](research.md) and [decisions](decisions.md).
 
 ## Problem
 
-As measured on 2026-10-29, the runner rejects substantive edits under
+As measured on 2026-10-29, the runner rejects every edit, other than its own derived leftovers, under
 `RUNNER_HELD` and prefixes whose committed provenance permits only
 `human-decided`, but the plan prompt gives no such planning constraint
 (`research.md`, “The commit guard” and “Per-verb keep sets”). The accepted
@@ -47,7 +47,7 @@ is planning guidance and a list-drift test, not a weaker guard.
    *Refuted by:* any current entry is absent or described as committable by those attempts.
 2. When the draft model reads the plan prompt, its required planning instructions also identify prefixes allowed only as `human-decided` by the committed `provenance.yaml` as held.
    *Refuted by:* the rule is absent, uses the attempt's edited map, or treats a mixed-class prefix as held merely because it includes `human-decided`.
-3. If a planned step requires a substantive held-path edit, the plan prompt requires the plan to assign it to the orchestrator as a bootstrap edit after the accepted attempt.
+3. If a planned step requires any held-path edit, the plan prompt requires the plan to assign it to the orchestrator as a bootstrap edit after the accepted attempt.
    *Refuted by:* the prompt permits assigning that edit to the implement or repair attempt, or omits its owner or timing.
 
 ## Non-goals
@@ -85,6 +85,7 @@ None open. The reasoned interview skip and bounded class stand in
 
 [DETAIL] Phase 4 has a one-hour appetite, including repairs, because the
 implementation is one prompt item and one regression test; stop at that bound.
-[DETAIL] The test checks list coverage; review checks the meaning of the
-provenance rule and owner/timing instruction, avoiding assertions tied to
-incidental wording.
+[DETAIL] The test checks list coverage both ways and pins the provenance
+rule sentence; review checks the owner/timing instruction, so the test holds
+no word bans tied to incidental wording (revised 2026-10-30, review rows
+L1-1, L3-3, L4-1).
