@@ -316,7 +316,10 @@ def read_available_memory(platform: str | None = None) -> float | None:
         if output is None:
             return None
         found = MEMORY_FREE.search(output)
-        return float(found.group(1)) if found else None
+        if found is None:
+            return None
+        value = float(found.group(1))
+        return value if math.isfinite(value) else None  # 400 nines are infinity, not free memory (F6-4)
     if system == "linux":
         try:
             text = MEMINFO_PATH.read_text(encoding="utf-8")
@@ -503,11 +506,19 @@ class _Admission:
         """Publish pid, command and start time while owning admission."""
         payload = json.dumps({"pid": os.getpid(), "command": self.command, "start": _stamp()}).encode("utf-8")
         path = self.state.root / HOLDER_NAME
+        # A fresh file renamed over the record replaces the directory entry itself, so a hard link
+        # planted in its place is unlinked, never written through (review row F6-3).
+        fresh = self.state.root / f".{HOLDER_NAME}.{os.getpid()}"
         try:
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            with contextlib.suppress(FileNotFoundError):
+                fresh.unlink()
+            descriptor = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(payload)
+            os.replace(fresh, path)
         except OSError as error:
+            with contextlib.suppress(OSError):
+                fresh.unlink()
             raise VerifyLockRefused(
                 f"the holder record {path} cannot be published ({error.strerror or error})"
             ) from error

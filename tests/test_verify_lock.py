@@ -928,3 +928,30 @@ def test_hangup_and_quit_clean_up_like_terminate(tmp_path: Path, signum: int) ->
     assert not out.is_file(), "the protected child outlived its cleanup"
     with pytest.raises(ProcessLookupError):
         os.kill(child, 0)
+
+
+def test_a_non_finite_macos_reading_is_unmeasurable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-4. Planted fault: a percentage of 400 nines became float infinity and passed the floor."""
+    monkeypatch.setattr(
+        verify_lock,
+        "_memory_probe_output",
+        lambda _command: "System-wide memory free percentage: " + "9" * 400 + "%\n",
+    )
+    assert verify_lock.read_available_memory("darwin") is None
+
+
+def test_publishing_never_writes_through_a_hard_linked_holder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-3. Planted fault: the holder record was opened with O_TRUNC, so a hard link planted in its
+    place had its target truncated and overwritten when ownership was published."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
+    root = state / "coding-harness"
+    root.mkdir(parents=True, mode=0o700)
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    os.link(victim, root / verify_lock.HOLDER_NAME)
+    with verify_lock.hold_admission(["holder"]):
+        assert verify_lock.read_holder(root) is not None, "the holder was not published"
+    assert victim.read_text(encoding="utf-8") == "keep me\n", "publishing wrote through the planted hard link"
