@@ -78,9 +78,16 @@ the cap only covers invocations through `verify_all.sh`.
 - 6: not a test — phase-6 review compares the implementation diff with the protected paths and confirms no worker setting outside the local runner; any such edit refutes the boundary
 - 7: not a test — review the paired full-run records against commit, commands, actual worker counts, outcomes and lock/isolation evidence; missing or mismatched evidence refutes the criterion
 
+## Runner route — 2026-10-31
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-30 22:29:51–22:58:33 UTC, 1722 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-31 15:36:27–16:03:54 UTC, 1648 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 16:04:06–17:00:11 UTC, 3365 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 17:00:17–18:31:52 UTC, 5494 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Measured full runs — 2026-10-31
 

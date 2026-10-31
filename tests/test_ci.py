@@ -531,6 +531,14 @@ def test_the_makefile_runs_what_the_one_list_runs() -> None:
             fehlt.append(f"{target}: '{befehl}' is no longer in the one list (ci.yml)")
     assert not fehlt, "Makefile and the one list have drifted apart:\n  " + "\n  ".join(fehlt)
 
+    # This repository's local worker policy must name the actual platform
+    # readings; Linux MemTotal excludes reserved physical memory.
+    spec = (REPO_ROOT / "plans/changes/verify-worker-cap/spec.md").read_text(encoding="utf-8")
+    terms = spec.split("## Terms\n", 1)[1].split("## Acceptance criteria", 1)[0]
+    assert "`hw.memsize`" in terms
+    assert "`MemTotal`" in terms
+    assert "usable memory" in terms
+
 
 def test_concurrency_group_carries_the_event() -> None:
     """Otherwise a late run kills the one that executes the suite.
@@ -1620,12 +1628,18 @@ def test_runner_derives_worker_default_from_machine_size(
 def test_runner_preserves_explicit_worker_value(tmp_path: Path, caller_value: str) -> None:
     """Criterion 2: a non-empty caller value reaches the gate verbatim — never
     rewritten to the machine's default, never validated, whatever the machine."""
+    # The control: this machine (8 cores, 8 GiB) derives 4 on its own, which
+    # differs from the caller's 8 — so the run below can tell pass-through
+    # from an overwrite.
+    control = _run_with_resources(tmp_path, "control", system="Darwin", cores="8", memory="8589934592")
+    assert control.returncode == 0, f"exit {control.returncode}\n{control.stdout}\n{control.stderr}"
+    assert _inherited(tmp_path, "control") == ("4", "declared")
     done = _run_with_resources(
         tmp_path,
         "run",
         system="Darwin",
-        cores="16",
-        memory="17179869184",  # 16 GiB — the machine would derive 8 on its own
+        cores="8",
+        memory="8589934592",
         worker_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": caller_value},
     )
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
@@ -1662,6 +1676,10 @@ def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
         pytest.param("SunOS", "8", "8589934592", "", id="unknown-platform-has-no-commands"),
         pytest.param("Darwin", "abc", "-3", "", id="macos-malformed-and-negative"),
         pytest.param("Darwin", "0", "0", "", id="macos-zero-readings"),
+        pytest.param("Darwin", "00", "0000", "", id="macos-multi-digit-zero-readings"),
+        pytest.param("Linux", "0000", "00", "", id="linux-multi-digit-zero-readings"),
+        pytest.param("Darwin", "00", "8589934592", "4", id="macos-zero-cpu-memory-only"),
+        pytest.param("Linux", "00", "8388608", "4", id="linux-zero-cpu-memory-only"),
         pytest.param("Linux", "abc", "12.5", "", id="linux-malformed-readings"),
     ],
 )

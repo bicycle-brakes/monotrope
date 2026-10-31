@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
@@ -41,8 +41,11 @@ environment value inside the local verification runner.
 ## Terms
 
 **Caller value:** an exported, non-empty `PYTEST_XDIST_AUTO_NUM_WORKERS`.
-**Memory bound:** physical memory divided by 2 GiB (2,147,483,648 bytes),
-rounded down, with a minimum of one worker.
+**Memory bound:** usable memory divided by 2 GiB (2,147,483,648 bytes),
+rounded down, with a minimum of one worker. The reading is `hw.memsize` on
+macOS and `MemTotal` from `/proc/meminfo` on Linux; `MemTotal` excludes
+memory the kernel reserves, so a host with exactly 4 GiB installed may
+derive one worker.
 
 ## Acceptance criteria
 

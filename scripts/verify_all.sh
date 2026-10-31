@@ -90,7 +90,7 @@ fi
 # auto` would otherwise take every logical core, and a probe under that died in
 # memory pressure once. So a run without a caller's own choice sizes the
 # workers from the machine: the smaller of half the logical cores (floored, at
-# least one) and physical memory in 2-GiB steps (at least one). An exported
+# least one) and detected memory in 2-GiB steps (at least one). An exported
 # PYTEST_XDIST_AUTO_NUM_WORKERS passes through verbatim — an empty value counts
 # as unset — and a failed or malformed reading is ignored, never an error: with
 # no usable reading the variable stays unset and xdist's own auto applies.
@@ -116,8 +116,16 @@ else
     esac
     # Only a positive decimal integer is a reading: empty, non-numeric, zero
     # and negative output are all as good as no reading.
-    case "$worker_cores" in "" | *[!0-9]* | 0) worker_cores="" ;; esac
-    case "$worker_bytes" in "" | *[!0-9]* | 0) worker_bytes="" ;; esac
+    case "$worker_cores" in
+        "" | *[!0-9]*) worker_cores="" ;;
+        *[1-9]*) ;;
+        *) worker_cores="" ;;
+    esac
+    case "$worker_bytes" in
+        "" | *[!0-9]*) worker_bytes="" ;;
+        *[1-9]*) ;;
+        *) worker_bytes="" ;;
+    esac
     worker_cpu_bound=""
     worker_mem_bound=""
     if [ -n "$worker_cores" ]; then
