@@ -43,9 +43,10 @@ from test_stage2 import (  # noqa: E402
 )
 from test_stage2 import world as stage2_world  # noqa: E402
 from test_stage2_session import GO_BARE, GO_MODEL, pi_steps  # noqa: E402
-from test_stage2_session import world as session_world  # noqa: E402
+from test_stage2_session import world as _session_world  # noqa: E402
 
 world = stage2_world
+session_world = _session_world
 RECORDED_BASE = TEST_ADDRESS["apis"]["openai-completions"]["basis"]
 MOVED_BASE = "https://opencode.ai/inference/go/v1"
 

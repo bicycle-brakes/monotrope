@@ -574,6 +574,17 @@ def loop_state(consumed: tuple[str, ...] = ("free", "flash")) -> dict:
             },
             "catalog": list(TEST_FREE),
             "selected": list(TEST_FREE),
+            # The refreshed definitions a resumed run launches from: every Go
+            # launch assesses its destination against them and the address record.
+            "models_store": {
+                "opencode-go": {
+                    "models": [
+                        {"id": model, "provider": "opencode-go", "api": "openai-completions"}
+                        for model in (*TEST_FREE, *TEST_LADDER)
+                    ],
+                    "checkedAt": 1,
+                }
+            },
             "billing": "not measured; pi.dev is an intermediary",
         },
         "paid": {"ladder": list(TEST_LADDER), "flash": list(TEST_FLASH), "rungs": list(TEST_RUNGS)},
@@ -5382,8 +5393,9 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
         assert refused not in argv
     assert Path(argv[argv.index("--append-system-prompt") + 1]).name == "review-prompt.md"
     assert call["prompt_file"].rstrip().endswith(stage2.READ_REQUEST)
-    # the agent directory holds one file, and a second call gets a directory of its own
-    assert call["agent_listing"] == ["settings.json"]
+    # the agent directory holds the settings and the run's refreshed definitions (stored and activated),
+    # and a second call gets a directory of its own
+    assert call["agent_listing"] == ["models-store.json", "models.json", "settings.json"]
     assert json.loads(call["agent_settings"]) == {"retry": {"enabled": False}}
     env = call["env"]
     assert env["HOME"] != os.environ["HOME"] and not Path(env["HOME"]).is_relative_to(world.root)
@@ -6920,7 +6932,8 @@ def test_reordering_the_ladder_touches_no_code(world: World) -> None:
     forget_the_run(world)
     pin_entry(endpoints, ("spike-a", "spike-b", "spike-c"))
     (world.bin / "calls.jsonl").unlink()
-    world.script(pi=[{"stdout": rows(1)}] * 5)
+    # The refreshed catalog names the new ladder too: a launch needs its model's definition to assess.
+    world.script(pi=[{"stdout": rows(1)}] * 5, pi_overlay=[*TEST_FREE, "spike-a", "spike-b", "spike-c"])
     assert world.run("review-loop") == 0
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
@@ -7754,7 +7767,7 @@ def test_the_loop_stops_when_the_ladder_ends(world: World, capsys: pytest.Captur
     entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
     entry["flash_swarm"] = []
     endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    world.script(pi=[{"stdout": rows(1)}] * 3)
+    world.script(pi=[{"stdout": rows(1)}] * 3, pi_overlay=[*TEST_FREE, "solo-rung"])
     assert world.run("review-loop") == 0
     decide_record(world, status=FIXED)
     assert world.run("review-loop") == 0
@@ -14441,6 +14454,9 @@ def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
         "flash": list(TEST_FLASH),
         "rungs": ["mimo-v2.6-pro", "spike-a"],
     }
+    state["free"]["models_store"]["opencode-go"]["models"].append(
+        {"id": "spike-a", "provider": "opencode-go", "api": "openai-completions"}
+    )
     world.write_record([("L1-1", FIXED, "no")], state=state)
     world.script(
         pi=[
@@ -14891,7 +14907,8 @@ def test_refreshed_model_definitions_reach_each_launch(
         "id": TEST_FREE[0],
         "provider": stage2.OPENCODE,
         "api": "anthropic-messages",
-        "baseUrl": "https://catalog.example.invalid/messages",
+        # A different path on the admitted host: the address record admits it, with a notice.
+        "baseUrl": "https://opencode.ai/inference/go/v1/messages",
         "contextWindow": 123456,
     }
 
@@ -14904,7 +14921,11 @@ def test_refreshed_model_definitions_reach_each_launch(
             assert store[stage2.OPENCODE]["lastModified"] == last_modified, "server evidence was rewritten"
             assert (agent / "models.json").is_file(), "the refreshed catalog has no active model configuration"
             active = json.loads((agent / "models.json").read_text())
-            assert active == {"providers": {stage2.OPENCODE: {"models": store[stage2.OPENCODE]["models"]}}}
+            # The active configuration carries every refreshed definition with an explicit, checked base;
+            # the fetched store stays as it was retrieved.
+            models = active["providers"][stage2.OPENCODE]["models"]
+            assert [m["id"] for m in models] == [m["id"] for m in store[stage2.OPENCODE]["models"]]
+            assert all(m["baseUrl"].startswith("https://opencode.ai/") for m in models)
         result = launch(command, cwd, env, *args, **kwargs)
         if "update" in command:
             path = agent / "models-store.json"
@@ -18377,7 +18398,19 @@ def test_a_not_activated_catalog_field_carries_no_control_bytes(world: World, mo
     """Discovery escapes controls in both catalog ids and dropped field names on stderr."""
     model = "a\x1b[31mX"
     field = "ev\x1b]0;pwn\x07il"
-    store = {stage2.OPENCODE: {"models": [{"id": model, "samplingParams": {}, field: 1}]}}
+    store = {
+        stage2.OPENCODE: {
+            "models": [
+                {
+                    "id": model,
+                    "api": "openai-completions",
+                    "baseUrl": "https://opencode.ai/zen/go/v1",
+                    "samplingParams": {},
+                    field: 1,
+                }
+            ]
+        }
+    }
     original = copy.deepcopy(store)
     monkeypatch.setattr(stage2, "overlay_store", lambda *_args: store)
     stage2.discover_free(world.root, allow_empty=True)
@@ -18559,7 +18592,7 @@ def test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay(
         "id": "synthetic-free",
         "name": invalid_name,
         "api": "openai-completions",
-        "baseUrl": "https://catalog.example.invalid/v1",
+        "baseUrl": "https://opencode.ai/zen/go/v1",
         "samplingParams": {"model": "kimi-k3"},
         "headers": {"x-catalog": "forbidden"},
     }

@@ -718,3 +718,30 @@ Stage-2 call, 2026-10-31: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-31: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed twice; Sonnet continues at the saved work: 44 red tests remain, 35 in tests/test_stage2.py where the review-loop World gives the reviewer call no refreshed models_store ('no refreshed provider definitions accompany the reviewer call'); the swarm world got the same fix through with_go_store · leak check clean over 802 files, 2925 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/ci_gates.py` +5 -0
+> - `tests/test_stage2.py` +41 -9
+> - `tests/test_stage2_repository_pathlock.py` +16 -0
+> - `tests/test_stage2_research_deep_review.py` +23 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2_repository_pathlock.py`; ruff check left findings without a safe fix or a file that does not parse; ruff format exited 2.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:14928:96: SyntaxError: Simple statements must be separated by newlines or semicolons
+>       |
+> 14926 | …         models = active["providers"][stage2.OPENCODE]["models"]
+> 14927 | …         assert [m["id"] for m in models] == [m["id"] for m in store[stage2.OPENCODE]["models"]]
+> 14928 | …         assert all(m["baseUrl"].startswith("https://opencode.ai/") for m in models)        result = launch(command, cwd, env, *ar…
+>       |                                                                                              ^
+> 14929 | …     if "update" in command:
+> 14930 | …         path = agent / "models-store.json"
+>       |
+>
+> Found 1 error.
+> ```

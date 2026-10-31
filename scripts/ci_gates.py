@@ -197,6 +197,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
+    "stage2_go.py": (
+        "Library of scripts/stage2.py, stage2_swarm.py, stage2_availability.py and stage2_session.py, never an "
+        "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
+        "tests/test_stage2_go_access.py runs it against synthetic address records"
+    ),
     "verify_lock.py": (
         "Helper of the runner, never a gate of its own: the machine-wide verification admission "
         "(flock queue, free-memory check) that verify_all.sh execs as `-m scripts.verify_lock` and "

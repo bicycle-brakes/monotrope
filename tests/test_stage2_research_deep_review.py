@@ -334,6 +334,29 @@ def test_every_research_pi_launch_is_offline(tmp_path: Path, tools: str) -> None
 
     from stage2_research_run import Run
 
+    # The launch reads the one Go address record of its root (go-access-point); JSON is YAML.
+    (tmp_path / "model-endpoints.yaml").write_text(
+        __import__("json").dumps(
+            {
+                "endpunkte": [
+                    {
+                        "name": "opencode-go",
+                        "adresse": {
+                            "host": "opencode.ai",
+                            "apis": {
+                                "openai-completions": {
+                                    "basis": "https://opencode.ai/zen/go/v1",
+                                    "quelle": "a synthetic test record",
+                                    "gelesen": "2026-10-31",
+                                }
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     run = Run.__new__(Run)
     run.root, run.change, run.key = tmp_path, "some-change", "k"
     run.selection = {}

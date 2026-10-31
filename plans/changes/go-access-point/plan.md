@@ -230,6 +230,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash fai
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice; Sonnet continues: the full verify at 9d1fc216 left 158 red tests, most because research seats refuse to start without a refreshed definition the swarm world does not supply.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice; Sonnet continues at the saved work: 44 red tests remain, 35 in tests/test_stage2.py where the review-loop World gives the reviewer call no refreshed models_store ('no refreshed provider definitions accompany the reviewer call'); the swarm world got the same fix through with_go_store.
+
 ## Time used
 
 2026-10-31 17:02:22–18:45:11 UTC, 6169 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -237,3 +241,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash fai
 2026-10-31 18:49:10–18:49:54 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-31 19:09:22–19:36:45 UTC, 1643 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-31 20:34:57–21:26:18 UTC, 3080 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 21:28:07–21:39:30 UTC, 683 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
