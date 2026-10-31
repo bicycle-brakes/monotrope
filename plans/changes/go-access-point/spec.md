@@ -10,13 +10,13 @@ superseded_by: null
 bead: coding-harness-4tr4
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "GLM 5.3, 2026-10-31"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, opencode-go]
 class: feature
 appetite: 6
 change: go-access-point
-adr_question: {proposed: "no", reason: "The three answered records in decisions.md already carry the whole policy, and an ADR edit would raise this change's interview debt to five answers of which three exist; the maintainer can still answer yes through the decide-adr procedure."}
+adr_question: {proposed: "yes", reason: "The shared Go destination policy is a data-flow boundary beside ADR 0020, as the maintainer answered in Q-4."}
 adr_files: [docs/adr/0024-one-access-policy-for-opencode-go.md]
 neighbours:
   - plans/changes/review-loop-deep-b/spec.md
@@ -34,13 +34,15 @@ availability probes and the interactive session — reads its admitted address
 from one record and follows one policy: a different path on the admitted host
 runs on with a notice, any other destination is refused before a model
 request (bead `coding-harness-4tr4` — the central Go access point).
-Research: `research.md`. Intent: `decisions.md`, answers Q-1–Q-3.
+Research: `research.md`. Intent: `decisions.md`, answers Q-1–Q-5.
 
-This is a proposed, unimplemented specification. It creates no ADR: the
-header proposes "no" to the ADR question, `adr_files` stays empty, and the
-maintainer answers the question through `python3 scripts/harness.py decide
-adr` if they want one — an answer of yes would then owe the further
-interview records (ADR 0014).
+This is a proposed, unimplemented specification at `b126fce7`, inspected
+2026-10-31. The maintainer chose an architecture decision record (ADR) in
+Q-4 and the provider-entry storage with orchestrator maintenance in Q-5.
+The existing draft `docs/adr/0024-one-access-policy-for-opencode-go.md`
+belongs to this change; its acceptance still requires the maintainer's
+merge. The recorded feature ADR answer is already "yes"; this draft does
+not change that answer.
 
 ## Problem
 
@@ -60,7 +62,7 @@ interview records (ADR 0014).
 - The maintainer has authorised agent maintenance of documented same-host
   paths, but `model-endpoints.yaml` is held from stage-2 attempt commits, so
   the change must name the route by which the agent maintains the record
-  (`decisions.md#Q-3`; the route is a recorded detail below).
+  (`decisions.md#Q-3`; `decisions.md#Q-5` settles the orchestrator route).
 
 ## Terms
 
@@ -82,7 +84,7 @@ interview records (ADR 0014).
    *Refuted by:* changing the record affects one swarm but not the other, a
    probe or an interactive launch, or a caller keeps its own Go origin rule
    or missing-address default.
-   *Basis:* decisions.md#Q-1.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-5.
 2. If an effective base is not an unambiguous HTTPS URL on the admitted
    host `opencode.ai`, with the default port and without credentials, query
    or fragment, that destination is refused before a model request.
@@ -124,7 +126,7 @@ interview records (ADR 0014).
    fails with a diagnostic identifying the unusable record.
    *Refuted by:* duplicate keys, an invalid host, an invalid dated source
    or a malformed API mapping silently activate a literal or cached policy.
-   *Basis:* decisions.md#Q-1; decisions.md#Q-3.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-3; decisions.md#Q-5.
 9. When an agent records a documented same-host path change, the record
    gains the new path with its source and actual source-reading date,
    without a new maintainer approval step for that path move.
@@ -132,7 +134,7 @@ interview records (ADR 0014).
    for each move, a catalog observation alone counts as a source reading,
    or path maintenance changes the admitted host, credentials, model
    permissions or terms.
-   *Basis:* decisions.md#Q-3.
+   *Basis:* decisions.md#Q-3; decisions.md#Q-5.
 10. While address admission applies, all existing independent model, terms,
     data-class, measured-wire-API and leak restrictions still apply.
     *Refuted by:* an admitted address admits an unread paid model or an
@@ -157,9 +159,9 @@ interview records (ADR 0014).
 - New models, terms renewal, price changes, new measured wire APIs, Pi
   upgrades, credentials management, background scraping, or the record
   rewriting itself from a catalog refresh.
-- No ADR is written or changed: ADR 0011's recorded history, including its
-  zen address readings, stays as history, and this change creates no file
-  under `docs/adr/`.
+- No earlier ADR is rewritten: ADR 0011's recorded history, including its
+  zen address readings, stays as history; ADR 0024 alone records the new
+  boundary and the maintenance route chosen in Q-4 and Q-5.
 - No lifting of the runner's held-path guard: the address record is
   maintained through the orchestrator route the workflow already defines,
   not by exempting `model-endpoints.yaml` from the hold.
@@ -178,7 +180,8 @@ runner binds the initial model without inspecting the user's credentials.
 
 - `scripts/stage2_research_catalog.mjs` and its source and redirect policy:
   catalog acquisition is the merged neighbour `pi-catalog-redirect`.
-- Existing files under `docs/adr/`, `decisions/answers/`,
+- Files under `docs/adr/` other than this change's ADR 0024 draft,
+  `decisions/answers/`,
   `decisions/gates.yaml`, `provenance.yaml`, endpoint secrets and the
   model and terms declarations: no historical rewrite, no invented answer,
   no permission widening.
@@ -194,7 +197,9 @@ runner binds the initial model without inspecting the user's credentials.
 - Moved in the same pull request: the address record on the `opencode-go`
   entry of `model-endpoints.yaml` and the refreshed address prose in its
   `bemerkung` (orchestrator edits), one paragraph in `docs/WORKFLOW.md`,
-  and this change's artifacts; no ADR file.
+  `docs/adr/0024-one-access-policy-for-opencode-go.md`, and this change's
+  artifacts. The ADR makes this a decision pull request; it takes effect
+  only on the maintainer's merge.
 - The protected areas untouched and the non-goals unbuilt, shown by the
   pull request's file list.
 - The pull request closes bead `coding-harness-4tr4`; its final commit
@@ -208,22 +213,11 @@ runner binds the initial model without inspecting the user's credentials.
 None open. The details below were decided while drafting; each carries its
 reason.
 
-[DETAIL] **The address record lives on the `opencode-go` entry of
-`model-endpoints.yaml`.** Reason: Q-3's own record names that entry as the
-repository change and DL-B-8's smallest fix names it too; the runner's hold
-bars only the stage-2 attempt from committing the file, and the workflow's
-route for held paths assigns each such edit to the orchestrator — so the
-agent keeps the self-maintenance Q-3 grants, no hold is lifted, and no
-second address file exists. Every edit of that file in this change is an
-orchestrator step in the plan; a future path move takes the same route.
-
-[DETAIL] **The ADR question is proposed "no".** Reason: the whole policy —
-all paths through one place, same-host moves running on with a notice,
-foreign hosts refused, agent path maintenance — is recorded in the three
-answered records of `decisions.md`, and an ADR edit would raise this
-change's interview debt to five answers, of which three exist; the
-maintainer can still answer yes at the merge through
-`python3 scripts/harness.py decide adr`.
+**Settled by the maintainer:** Q-4 requires ADR 0024; Q-5 places the
+record on the `opencode-go` entry of `model-endpoints.yaml` and every edit
+of that held file with the orchestrator. These answers supersede the
+earlier draft's "no ADR" and separate-record alternatives; neither is an
+open decision or an agent-chosen detail.
 
 [DETAIL] **The phase-4 appetite is six hours, repairs included**, chosen as
 a visible stop for the cross-caller migration; neither research nor the

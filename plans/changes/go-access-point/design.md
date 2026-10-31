@@ -12,7 +12,7 @@ superseded_by: null
 bead: coding-harness-4tr4
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "GLM 5.3, 2026-10-31"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [design, stage-2, opencode-go]
 ---
@@ -20,8 +20,8 @@ tags: [design, stage-2, opencode-go]
 # Design — go-access-point
 
 How the system is shaped for what `spec.md` describes, written from
-`spec.md`, `research.md` and the three answered records of `decisions.md`,
-inspected at `2f240d90` on 2026-10-31. What the spec fixes is not decided
+`spec.md`, `research.md` and the five answered records of `decisions.md`,
+inspected at `b126fce7` on 2026-10-31. What the spec fixes is not decided
 again here.
 
 ## Alternatives
@@ -52,12 +52,16 @@ choice is a proposal; the merge of the pull request decides it.
 
 ## Interfaces
 
-- **Provider entry → policy:** one loader reads the `adresse` part of the
-  `opencode-go` entry through the existing entry readers, rejects duplicate
-  keys, unknown fields and bases not on the admitted host, and returns an
-  immutable policy. When this fails, Go admission fails with a diagnostic;
+- **Provider entry → policy:** one strict loader reads the `adresse` part
+  of the uniquely named `opencode-go` entry, rejects duplicate YAML keys,
+  duplicate endpoint entries, unknown address fields and bases not on the
+  admitted host, and returns an immutable policy. When this fails, Go
+  admission fails with a diagnostic;
   no code literal and no cached snapshot supplies a policy. The policy is
   read again at dispatch, not only at preparation.
+  The existing `endpoint_entry` uses `yaml.safe_load`, which loses
+  duplicate-key evidence; assessment therefore loads the original YAML
+  with a duplicate-rejecting loader rather than validating its result.
 - **Model definition → policy:** `assess(policy, model, definition)`
   returns an explicit effective definition and an optional move notice, or
   a refusal with a model-specific, sanitised reason. Its URL parser
@@ -103,7 +107,9 @@ choice is a proposal; the merge of the pull request decides it.
 ## Data model
 
 The `opencode-go` entry of the held `model-endpoints.yaml` gains one
-address part, in the file's own German-keyed style:
+address part, in the file's own German-keyed style. This example derives
+from the research's 2026-10-31 reading; it is not a fresh documentation
+reading by this drafter and is not yet the production declaration:
 
 ```yaml
     adresse:
@@ -112,15 +118,24 @@ address part, in the file's own German-keyed style:
         openai-completions:
           basis: "https://opencode.ai/inference/go/openai/v1"
           quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
-          gelesen: "2026-11-02"
+          gelesen: "2026-10-31"
+        openai-responses:
+          basis: "https://opencode.ai/inference/go/openai/v1"
+          quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
+          gelesen: "2026-10-31"
+        anthropic-messages:
+          basis: "https://opencode.ai/inference/go/anthropic/v1"
+          quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
+          gelesen: "2026-10-31"
 ```
 
 `host` is the admitted host and admits nothing else: every `basis` must be
 an HTTPS URL on exactly that host, default port, no credentials, query or
 fragment. `apis` is keyed by Pi wire API; each value carries `basis`,
 `quelle` and a quoted ISO `gelesen`, dated per reading as `modelle_terms`
-already dates its values. No model id, permission, price, terms record or
-credential belongs here, and runtime selection never writes the record:
+already dates its values. A mapping supplies a default address, not
+permission to use an unmeasured API. No model id, permission, price, terms
+record or credential belongs here, and runtime selection never writes it:
 same-host path maintenance is an agent edit of this entry — a change whose
 plan assigns the `model-endpoints.yaml` edit to the orchestrator, the
 workflow's route for held paths — recording the Go page as source and the
@@ -133,10 +148,21 @@ its notice, and is never rewritten to a recorded base.
 
 ## ADR draft
 
-None — the spec proposes "no" to the ADR question, so this change creates,
-changes or removes no file under `docs/adr/`; the maintainer can still
-answer yes at the merge, which would then owe the further interview
-records.
+The single draft is
+`docs/adr/0024-one-access-policy-for-opencode-go.md`, already created by
+this change before `b126fce7`; do not allocate a second number. It follows
+`templates/adr.md` and records one policy for every Go launch, same-host
+continuation with notice, foreign-host refusal, and the address part on
+the provider entry maintained by the orchestrator. The maintainer chose
+the ADR in Q-4 and the storage route in Q-5; all five interview answers
+and the recorded "yes" ADR answer exist as of 2026-10-31.
+
+It supplements the transport and research boundaries of ADR 0011 and ADR
+0020, amends no numbered decision and supersedes no ADR. Its direction
+is recorded, but the decision takes effect only when the maintainer merges
+the decision pull request. Phase-4 runner attempts never edit this held
+path; the orchestrator owns any bootstrap adjustment after the accepted
+attempt.
 
 ## Architecture delta
 

@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-4tr4
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "GLM 5.3, 2026-10-31"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, stage-2, opencode-go]
 ---
@@ -24,16 +24,18 @@ Done when:   Criteria 1-11 hold and make verify is green, with the review
              loop refusing a foreign catalog host it admits today.
 Appetite:    6 hours of phase 4, repair rounds included; then stop.
 Not now:     Catalog sources, the general model registry, model admissions,
-             credentials, and any ADR edit.
-Pre-mortem:  suppose it failed: most likely because the interactive session
-             binding could not be proven against the pinned Pi.
+             credentials, and changes to earlier ADRs.
+Pre-mortem:  suppose it failed: most likely because Pi overrode the checked base.
 Starts unless you say stop.
 ```
 
-Proposed, unimplemented; baseline `2f240d90`, inspected 2026-10-31. The
-spec proposes "no" to the ADR question, so no file under `docs/adr/` is
+Proposed, unimplemented; baseline `b126fce7`, inspected 2026-10-31. Q-4
+requires ADR 0024 and Q-5 settles storage and maintenance: the address
+part belongs on the `opencode-go` entry, edited by the orchestrator.
+The single ADR draft already belongs to this change; no second ADR is
 created. No `templates/plan.md` exists at this baseline; this file follows
-the phase-3 form.
+the phase-3 form. The five answered interview records settle intent;
+there is no new maintainer question.
 
 Explore route carried forward (`research.md`, 2026-10-31): phase 1 ran as
 a stage-2 `explore` on route `flash`, endpoint `glm-coding-plan`, model
@@ -46,12 +48,19 @@ with the interview; the change is a `feature`.
 ## Files and steps
 
 1. Add `scripts/stage2_go.py`: the one policy module. It loads the
-   `adresse` part of the `opencode-go` entry through the existing entry
-   reader, validates it strictly (one host, per-API bases on that host,
-   dated sources, no duplicate or unknown keys) and offers
+   `adresse` part of the uniquely named `opencode-go` entry from the
+   original YAML using a duplicate-rejecting loader; do not validate a
+   `safe_load` result after it has lost duplicate keys. Validate one
+   host, per-API bases on that host, dated sources, and known address keys;
+   then offer
    `assess(policy, model, definition)` — an explicit effective definition
    with an optional move notice, or a sanitised refusal. No literal
    default and no cached policy survive anywhere in it.
+   Shape: `adresse: {host: opencode.ai, apis: {<wire-api>: {basis, quelle,
+   gelesen}}}`; `basis` is the explicit HTTPS base, `quelle` its nonblank
+   documentation source, and `gelesen` a quoted ISO reading date. Resolve
+   provider/id/API offline before filling a missing base; an unmapped API
+   has no default, and a mapping grants no model or measured-API admission.
 2. Add `tests/test_stage2_go_access.py` with the ledger's regressions:
    real caller functions with synthetic send and terminal stand-ins, not
    bare checker calls — every launch family, hostile URL forms,
@@ -106,7 +115,12 @@ with the interview; the change is a `feature`.
    replaces the removed constant), `tests/test_stage2_session.py`,
    `tests/test_stage2_session_policy.py`, and
    `tests/test_stage2_terms_expiry.py` (destination evidence at dispatch,
-   expiry boundary unchanged).
+   expiry boundary unchanged). Put synthetic address records in test
+   declarations, including copies of the real entry used for discovery;
+   no test depends on a production record before the bootstrap. Preserve
+   loopback wire tests by routing the admitted HTTPS target at the existing
+   test subprocess/transport seam, recording its original destination;
+   never relax the production host check to allow the loopback URL.
 9. Change `scripts/research_capture.py` only to hand the offline capture
    fixture and its selector the central record; its evidence semantics
    stay.
@@ -124,8 +138,13 @@ with the interview; the change is a `feature`.
     the address prose in its `bemerkung`, and update the remark-test
     literals to the strings it then carries. Add
     `test_the_opencode_go_entry_declares_its_address_record` against the
-    real entry. Then run `make verify`. The stage-2 attempt never edits
-    this file.
+    real entry. Review
+    `docs/adr/0024-one-access-policy-for-opencode-go.md` against Q-1–Q-5
+    and the final implementation, adjusting only that draft if needed;
+    every phase-4 edit of this held ADR path is orchestrator-owned too.
+    Then run `make verify`. The stage-2 attempt never edits either held
+    file. Until this bootstrap finishes, Go launches fail closed on the
+    missing record; no temporary code default is permitted.
 13. Within this change, update `plan.md` as named tests land and the
     runner records time; `findings.md` holds runner and reviewer
     evidence. `spec.md`, `design.md`, `research.md` and `decisions.md`
@@ -134,12 +153,16 @@ with the interview; the change is a `feature`.
     edit it.
 
 No file is deleted. Do not touch `scripts/stage2_research_catalog.mjs`
-(catalog sources belong to `pi-catalog-redirect`), any file under
-`docs/adr/` (no ADR is due), `decisions/answers/`, `decisions/gates.yaml`,
+(catalog sources belong to `pi-catalog-redirect`), any earlier file under
+`docs/adr/` (only this change's ADR 0024 draft is in scope),
+`decisions/answers/`, `decisions/gates.yaml`,
 `provenance.yaml`, secrets, the Pi manifest and lock, `prompts/`,
 `templates/`, `.github/`, `CLAUDE.md`, `AGENTS.md`, `README.md`, or any
 other change's folder. `model-endpoints.yaml` is edited only by the
-orchestrator (step 12).
+orchestrator (step 12). The decision pull request uses
+`.github/PULL_REQUEST_TEMPLATE/decision.md`, a `decide(go-access-point):`
+title and the `decision` label; the orchestrator supplies these at phase 7,
+without changing the template. Only the maintainer merges it.
 
 ## Verification
 
@@ -158,18 +181,24 @@ python3 scripts/plans_registry.py --check
 make verify
 ```
 
-`scripts/validate_change_artefacts.py` does not exist at `2f240d90`; its
+`scripts/validate_change_artefacts.py` does not exist at `b126fce7`; its
 `--check` cannot be reported green. The runner owns the derived index,
 the full verification and the one commit; the orchestrator owns the held
 bootstrap edit before the final verification. No commit, tracker write or
 foreign model call belongs to a drafting attempt.
 
-Draft checks on 2026-10-31: the interview minimum for this feature is
-three counted answers and three exist; the criterion ledger parses; the
-research handoff reports its legacy exemption — the change has no
-`research-swarm/v2` run. The stale `docs/adr/0024-…` draft of the failed
-attempts belongs to no change and is the runner's to put back: no ADR is
-due here.
+Draft evidence belongs to this drafting run's report; previous failed
+attempt logs remain unchanged in `findings.md`. The ADR change owes five
+counted interview answers and Q-1–Q-5 supply them. There is no complete
+`research-swarm/v2` run; phase 1 used the maintainer's recorded routing
+exception. The registry check needs the tracker and the regenerated
+`plans/INDEX.md`; the runner owns those checks beyond this draft's write
+boundary. Do not repair unrelated failures or remove the ADR claim.
+
+Measured 2026-10-31: interview minimums, ADR answers and the criterion
+ledger pass; research handoff reports the legacy exemption. Registry and
+full verification are left to the runner; the missing artifact validator
+is not reported green. No phase-2a review rows exist to reconcile.
 
 ## Criterion ledger
 
@@ -185,7 +214,7 @@ due here.
 - 7: not yet written tests/test_pi_contract.py::test_real_session_binding_holds_the_assessed_base — real Pi resolves another base after the binding
 - 8: not yet written tests/test_stage2_go_access.py::test_an_unusable_record_stops_go_admission — a missing, duplicated or malformed record silently activates a literal
 - 9: not yet written tests/test_stage2_go_access.py::test_path_maintenance_records_source_and_date — an undated or unsourced path is accepted
-- 9: not a test — the phase-6 review reads the maintenance route and the final changed paths against the maintainer's Q-3 answer
+- 9: not a test — the phase-6 review reads the maintenance route and the final changed paths against the maintainer's Q-3 and Q-5 answers; a new human path approval or a runner edit of the held entry refutes it
 - 10: not yet written tests/test_stage2_go_access.py::test_admission_preserves_the_other_restrictions — a good host bypasses terms, wire-api, leak or free-class rules
 - 11: not yet written tests/test_stage2_go_access.py::test_notices_are_kept_and_sanitised — a move notice is transient, a refusal names no model, or a raw credential-bearing URL enters evidence
 

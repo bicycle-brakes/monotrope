@@ -19,17 +19,18 @@ tags: [adr, stage-2, opencode-go, destination-admission]
   ADR 0011's Go transport and ADR 0020's research-origin rule; amends no
   D- or O-number and supersedes no ADR.
 * Review: the maintainer chose all-path central control, same-host path
-  continuation with notice, and agent path maintenance in Q-1–Q-3 of
-  `plans/changes/go-access-point/decisions.md` on 2026-10-31. Record placement
-  remains undecided, two further counted interview answers are owed, and
-  the feature's ADR answer has not been recorded. This draft settles none
-  of those. Decider: maintainer · prepared by Codex. Acceptance is the merge
-  commit; the review header remains pending.
+  continuation with notice, agent path maintenance, an ADR of its own,
+  and storage on the provider entry with orchestrator maintenance in
+  Q-1–Q-5 of `plans/changes/go-access-point/decisions.md` on 2026-10-31.
+  The feature's ADR answer is recorded as "yes" in
+  `decisions/answers/go-access-point/adr.yaml`. Decider: maintainer ·
+  prepared by Codex. Acceptance is the merge commit; the review header
+  remains pending.
 * Date: 2026-10-31 · takes effect on merge.
 
 ## Context
 
-At `2f240d90`, inspected 2026-10-31, the research selector permits only
+At `b126fce7`, inspected 2026-10-31, the research selector permits only
 `https://opencode.ai/zen/go/v1`, while the review overlay activates catalog
 addresses without a destination check. Research reproduced the former's
 refusal of `/inference/go/v1`; the real-Pi contract expects a foreign host
@@ -37,11 +38,13 @@ to survive overlay activation. The two paths therefore disagree about
 where the same provider may receive content (destination finding DL-B-8;
 `plans/changes/go-access-point/research.md`).
 
-The three interview answers require one rule for review, research, probes
+The five interview answers require one rule for review, research, probes
 and interactive launch, permit a new path on the admitted host with notice,
-and let an agent maintain sourced same-host paths. The current runner holds
-the whole provider declaration file; the proposed storage/permission choice
-must be answered before that maintenance route is implemented.
+and let an agent maintain sourced same-host paths. The address record lives
+on the `opencode-go` entry of `model-endpoints.yaml`. The runner holds that
+whole file from foreign model attempts; the orchestrating session maintains
+it, with no new maintainer approval for each documented same-host path
+move. These directions are answered; this draft takes effect on merge.
 
 ## Decision Drivers
 
@@ -53,8 +56,10 @@ must be answered before that maintenance route is implemented.
 
 ## Considered Options
 
-* **Shared registry-backed policy and explicit Pi binding** — one rule,
-  with cross-caller migration and a separate storage decision.
+* **Shared provider-entry policy and explicit Pi binding** — one rule,
+  with cross-caller migration and orchestrator-owned record maintenance.
+* **Separate writable address record** — attempts could update paths,
+  but a second record splits provider governance; Q-5 chose the entry.
 * **Repair only the research allow-list** — unblocks that selector but
   leaves review/probes/session destination trust inconsistent.
 * **Require exact known paths everywhere** — refuses foreign hosts but
@@ -62,9 +67,9 @@ must be answered before that maintenance route is implemented.
 
 ## Decision
 
-Chosen proposal: "Shared registry-backed policy and explicit Pi binding",
-because it implements the three answered intentions at one destination
-boundary. The storage branch remains conditional on the spec's open decision.
+Chosen proposal: "Shared provider-entry policy and explicit Pi binding",
+because it implements the five answered intentions at one destination
+boundary and fits the future central registry without another model list.
 
 1. Every runner-controlled Go launch uses one current provider address
    policy, including probes, retries and calls using saved selections.
@@ -76,9 +81,10 @@ boundary. The storage branch remains conditional on the spec's open decision.
    and absent mappings never fall through to unchecked Pi defaults.
 5. Agent maintenance of documented paths records source and reading date;
    changing the host, model permissions or terms is outside that delegation.
-   Under the proposed separate-record option, the held provider entry owns
-   the admitted host and record reference; the writable record cannot
-   override either. This storage arrangement still awaits the maintainer.
+   The one record is the address part of the `opencode-go` entry in
+   `model-endpoints.yaml`; the orchestrating session owns its edits.
+   Foreign model attempts never edit it, and no held-path exemption is
+   added. A catalog observation alone never updates the record.
 6. Address admission supplements, rather than replaces, model terms,
    data-class, free-class, measured-API and leak checks.
 
@@ -88,8 +94,9 @@ boundary. The storage branch remains conditional on the spec's open decision.
   research accepts legitimate same-host path moves it rejects today.
 * One sourced record and explicit effective definitions replace divergent
   literals; launch evidence preserves path notices and raw catalog facts.
-* The storage choice must provide agent maintenance without silently
-  bypassing the runner's held-path guard. No broad guard exemption is made.
+* A path update requires an orchestrator edit and a documentation reading;
+  an implementation attempt cannot repair the held entry itself. The
+  initial bootstrap must finish before Go launches can use the new policy.
 * The boundary checks Pi's supplied destination. It does not confine HTTP
   redirects, DNS, arbitrary shell networking or later manual session switches.
 
@@ -98,6 +105,7 @@ boundary. The storage branch remains conditional on the spec's open decision.
 * The change's criterion ledger names deterministic policy, launch and
   saved-selection regressions, plus real pinned-Pi resolution contracts.
 * `make verify` must pass; no live model traffic is needed in the tests.
-* Before finalisation, the interview minimum is five counted answers, the
-  storage decision is answered, and the authorised procedure records the
-  maintainer's feature ADR answer. Merge, not this draft, accepts the ADR.
+* The interview and ADR-answer gates hold the five counted answers, the
+  claimed ADR file and the already recorded "yes" answer; phase 6 checks
+  the maintenance route against Q-3 and Q-5. Merge, not this draft,
+  accepts the ADR.
