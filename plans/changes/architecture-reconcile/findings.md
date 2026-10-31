@@ -268,3 +268,12 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 806 files, 2917 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 806 files, 2921 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 806 files, 2923 commits, 12 rules.
+
+## Orchestrator check — 2026-10-31
+
+`python3 scripts/check_docs.py --base docs/research` at `ee44684c`: no finding
+in `docs/research/2026-10-31-architecture-reconciliation.md`; the 23 findings
+the run lists sit in older research notes this change does not touch
+(missing `category`/`created` fields). Recorded for review row L5-3.
