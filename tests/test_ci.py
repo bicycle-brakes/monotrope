@@ -565,8 +565,10 @@ def _merge_ref_findings(doc: dict) -> list[str]:
     """What keeps the workflow from checking the pull request's merge ref; empty when nothing does.
 
     On `pull_request`, `actions/checkout` without `ref:` checks out
-    `refs/pull/<n>/merge` (RB-G7, MG-2). The ruleset's up-to-date requirement
-    (`tests/test_repo_settings.py`) makes that the merge which happens.
+    `refs/pull/<n>/merge` (RB-G7, MG-2). The ruleset's freshness requirement
+    makes that the merge which happens — the up-to-date flag, or, since
+    2026-10-30, the merge queue that checks each group's candidate
+    (`tests/test_repo_settings.py`).
     """
     findings: list[str] = []
     trigger = doc.get("on") or doc.get(True) or {}
@@ -845,8 +847,9 @@ def test_only_pull_request_runs_cancel_superseded_runs() -> None:
 
 
 def test_the_schedule_runs_only_the_drift_job() -> None:
-    """The matrix job and the summary job admit `push` and `pull_request`, never `schedule` or a manual start."""
-    events = "github.event_name == 'push' || github.event_name == 'pull_request'"
+    """The matrix job and the summary job admit `push`, `pull_request` and `merge_group`, never `schedule` or a
+    manual start."""
+    events = "github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'"
     # Exact conditions, not substrings: an appended `|| true` keeps every event name in place and
     # still runs the matrix on schedule and manual start (phase 6, F-1)
     expected = {ci_gates.MATRIX_JOB: events, ci_gates.SUMMARY_JOB: f"always() && ({events})"}
@@ -990,6 +993,190 @@ def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
         assert done.returncode == expected, (
             f"result {result!r}: exit {done.returncode}, expected {expected}\n{done.stdout}"
         )
+
+
+# --------------------------------------------------------------------------
+# 1c · The merge queue checks its group's candidate (bead coding-harness-eh42)
+#
+# On `merge_group` (types: [checks_requested]) GitHub builds the group's merge
+# candidate against current `main` and asks the required check there. The two
+# tests hold the trigger, both jobs' admission and the exact-success summary
+# in place, against the generated and the committed workflow.
+# --------------------------------------------------------------------------
+
+
+def _merge_group_findings(doc: dict) -> list[str]:
+    """What keeps the workflow from checking a merge group's candidate; empty when nothing does.
+
+    The queue builds each group's merge candidate and asks the required check
+    for it: the trigger must admit `checks_requested`, the gate job must run on
+    the event, and no checkout may point at anything but the candidate GitHub
+    prepared.
+    """
+    findings: list[str] = []
+    trigger = doc.get("on") or doc.get(True) or {}
+    if not isinstance(trigger, dict) or "merge_group" not in trigger:
+        findings.append("no `merge_group` trigger")
+    else:
+        # A bare `merge_group:` (None) or an empty mapping admits every activity type (rows L4-1, L4-2).
+        group = trigger["merge_group"]
+        if group is not None and not isinstance(group, dict):
+            findings.append(f"`merge_group` is not a mapping ({type(group).__name__}): its filters cannot be read")
+        elif isinstance(group, dict):
+            for key in ("branches", "branches-ignore"):
+                if key in group:
+                    findings.append(f"`merge_group` sets `{key}`: a group on another branch never starts a run")
+            if "types" in group:
+                types = [str(t) for t in group.get("types") or []]
+                if "checks_requested" not in types:
+                    findings.append(
+                        "`merge_group` narrows `types` without `checks_requested`: "
+                        "the queue's request never starts a run"
+                    )
+
+    jobs = doc.get("jobs") or {}
+    matrix_job = jobs.get(ci_gates.MATRIX_JOB)
+    if not isinstance(matrix_job, dict):
+        findings.append(f"no job `{ci_gates.MATRIX_JOB}`")
+    elif "merge_group" not in str(matrix_job.get("if", "")):
+        findings.append(f"job `{ci_gates.MATRIX_JOB}` does not run on `merge_group` (its `if`)")
+
+    for job_name, job in jobs.items():
+        for step in (job or {}).get("steps") or []:
+            if not str(step.get("uses", "")).startswith("actions/checkout@"):
+                continue
+            for key in ("ref", "repository"):
+                if key in (step.get("with") or {}):
+                    label = f"job `{job_name}`, step `{step.get('name') or step.get('id') or step.get('uses') or '?'}`"
+                    findings.append(f"{label}: the checkout sets `{key}`, so it is not the group's candidate")
+    return findings
+
+
+def _plant_no_merge_group(doc: dict) -> None:
+    del _trigger_of(doc)["merge_group"]
+
+
+def _plant_merge_group_types_without_checks_requested(doc: dict) -> None:
+    _trigger_of(doc)["merge_group"] = {"types": ["destroyed"]}
+
+
+def _plant_merge_group_branch_filter(doc: dict) -> None:
+    _trigger_of(doc)["merge_group"] = {"types": ["checks_requested"], "branches": ["release"]}
+
+
+def _plant_merge_group_not_a_mapping(doc: dict) -> None:
+    _trigger_of(doc)["merge_group"] = ["checks_requested"]
+
+
+def _plant_matrix_job_off_merge_group(doc: dict) -> None:
+    doc["jobs"][ci_gates.MATRIX_JOB]["if"] = "github.event_name == 'push' || github.event_name == 'pull_request'"
+
+
+@pytest.mark.parametrize("value", [None, {}], ids=["bare-trigger", "empty-mapping"])
+def test_a_bare_or_empty_merge_group_trigger_admits_every_type(value: object) -> None:
+    """Row L4-2: `merge_group:` with no value or an empty mapping admits every activity type,
+    so it is not reported as a narrowing."""
+    doc = _ci_doc(ci_gates.generate_ci())
+    _trigger_of(doc)["merge_group"] = value
+    assert _merge_group_findings(doc) == []
+
+
+@pytest.mark.parametrize(
+    "plant",
+    [
+        pytest.param(_plant_no_merge_group, id="no-merge-group-trigger"),
+        pytest.param(_plant_merge_group_types_without_checks_requested, id="types-without-checks-requested"),
+        pytest.param(_plant_merge_group_branch_filter, id="branch-filter-on-merge-group"),
+        pytest.param(_plant_merge_group_not_a_mapping, id="merge-group-not-a-mapping"),
+        pytest.param(_plant_matrix_job_off_merge_group, id="matrix-job-off-merge-group"),
+        pytest.param(_plant_head_sha, id="pull-request-head-on-the-candidate-checkout"),
+        pytest.param(_plant_repository, id="another-repository"),
+    ],
+)
+def test_merge_groups_run_the_gates_on_their_candidate(plant: Callable[[dict], None]) -> None:
+    """Criterion 5: the gates run on the group's merge candidate, not a pull-request head.
+
+    Fault planted: a missing trigger, a `types` list without
+    `checks_requested`, a gate job that skips the event, or a checkout aimed at
+    a pull-request head or another repository.
+    """
+    for source, doc in (("the committed ci.yml", _ci_doc()), ("generate_ci()", _ci_doc(ci_gates.generate_ci()))):
+        assert _merge_group_findings(doc) == [], f"{source} must be clean before a fault is planted"
+        planted = copy.deepcopy(doc)
+        plant(planted)
+        findings = _merge_group_findings(planted)
+        assert findings, f"{plant.__name__} left no finding in {source}"
+
+
+def _merge_group_summary_findings(doc: dict) -> list[str]:
+    """What keeps the check `verify` from gating a merge group; empty when nothing does.
+
+    The queue waits for the required check on the group's candidate: a summary
+    that skips `merge_group` leaves every queued pull request waiting, and one
+    without `always()` would skip a red or cancelled leg into a pass. The step
+    itself must pass only the result `success`, run here through the shell
+    GitHub would use.
+    """
+    findings: list[str] = []
+    job = (doc.get("jobs") or {}).get(ci_gates.SUMMARY_JOB)
+    if not isinstance(job, dict):
+        return [f"no job `{ci_gates.SUMMARY_JOB}`"]
+    condition = str(job.get("if", ""))
+    if "always()" not in condition:
+        findings.append("the summary job loses `always()`: a red leg would skip it into a pass")
+    if "merge_group" not in condition:
+        findings.append(
+            "the summary job does not run on `merge_group`: a queued group waits for a check that never comes"
+        )
+    run = next((str(s.get("run", "")) for s in job.get("steps") or [] if "run" in s), None)
+    placeholder = "${{ needs." + ci_gates.MATRIX_JOB + ".result }}"
+    if run is None or placeholder not in run:
+        findings.append("the summary step does not read the matrix job's result")
+        return findings
+    for result, code in (("success", 0), ("failure", 1), ("cancelled", 1), ("skipped", 1)):
+        done = subprocess.run(["sh", "-c", run.replace(placeholder, result)], capture_output=True, text=True)
+        if done.returncode != code:
+            findings.append(f"the summary step ends {result!r} with exit {done.returncode}, expected {code}")
+    return findings
+
+
+def _plant_summary_off_merge_group(doc: dict) -> None:
+    doc["jobs"][ci_gates.SUMMARY_JOB]["if"] = (
+        "always() && (github.event_name == 'push' || github.event_name == 'pull_request')"
+    )
+
+
+def _plant_summary_without_always(doc: dict) -> None:
+    doc["jobs"][ci_gates.SUMMARY_JOB]["if"] = (
+        "github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'"
+    )
+
+
+def _plant_summary_passes_a_red_leg(doc: dict) -> None:
+    step = doc["jobs"][ci_gates.SUMMARY_JOB]["steps"][0]
+    step["run"] = step["run"].replace("= success", "!= cancelled")
+
+
+@pytest.mark.parametrize(
+    "plant",
+    [
+        pytest.param(_plant_summary_off_merge_group, id="summary-off-merge-group"),
+        pytest.param(_plant_summary_without_always, id="summary-without-always"),
+        pytest.param(_plant_summary_passes_a_red_leg, id="a-red-leg-passes"),
+    ],
+)
+def test_merge_groups_require_a_successful_summary(plant: Callable[[dict], None]) -> None:
+    """Criterion 6: on `merge_group` the required check runs, and only a green group passes it.
+
+    Fault planted: a summary that skips the event, one that a skipped leg
+    would skip into a pass, and one that passes any result but `cancelled`.
+    """
+    for source, doc in (("the committed ci.yml", _ci_doc()), ("generate_ci()", _ci_doc(ci_gates.generate_ci()))):
+        assert _merge_group_summary_findings(doc) == [], f"{source} must be clean before a fault is planted"
+        planted = copy.deepcopy(doc)
+        plant(planted)
+        findings = _merge_group_summary_findings(planted)
+        assert findings, f"{plant.__name__} left no finding in {source}"
 
 
 def test_no_blocking_gate_step_carries_continue_on_error() -> None:

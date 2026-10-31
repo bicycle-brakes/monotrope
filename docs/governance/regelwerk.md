@@ -3,10 +3,10 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 5.0.0
+version: 6.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-10-28
+updated: 2026-10-30
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -135,7 +135,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 | **RB-G4** | Jedes Gate hat einen Mutationstest: einen Lauf, der rot wird, wenn man das kaputtmacht, wovor das Gate schützt — oder einen Grund in der Sperrklinke, die nur schrumpfen darf | 4 | `tests/test_ci.py`::test_every_gate_step_has_a_mutation_test · ::test_the_mutation_ratchet_only_turns_one_way | P L I |
 | **RB-G5** | Fehlender Input ist nicht „veraltet". Prüfer melden über das gemeinsame Vokabular, Schreiber über `check_verdict` — aktuell, veraltet, fehlend sind drei Zustände | 2 | `Ramp:kit-transfer` | P L I |
 | **RB-G6** | `--check` ist ein deklariertes Flag; ein unbekanntes Flag ist ein Fehler und kein Lauf; `--check` schreibt nie | 2 | `Ramp:kit-transfer` | P L I |
-| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf. Die CI prüft den Merge-Ref des Pull Requests, und das Ruleset verlangt, dass der Branch vor dem Merge auf dem Stand seines Ziels ist. Ob das Ruleset das verlangt, misst nur die Maschine des Maintainers (Gate `ruleset`, `placement: writer`): wird die Einstellung abgeschaltet, hält das einen Merge über GitHub nicht auf, nur den nächsten lokalen `make verify` | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_regelwerk.py`::test_the_list_is_not_empty · `tests/test_ci.py`::test_the_verification_runs_against_the_merge_ref · `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks | P L I |
+| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf. CI checks the merge candidate: the pull request's merge ref, and in a merge queue the merge group's ref. The ruleset makes the tested candidate the merged one: either by a merge queue that tests each group against the current target, or by requiring the branch to be up to date with its target before the merge. Ob das Ruleset das verlangt, misst nur die Maschine des Maintainers (Gate `ruleset`, `placement: writer`): wird die Einstellung abgeschaltet, hält das einen Merge über GitHub nicht auf, nur den nächsten lokalen `make verify` | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_regelwerk.py`::test_the_list_is_not_empty · `tests/test_ci.py`::test_the_verification_runs_against_the_merge_ref · `tests/test_ci.py`::test_merge_groups_run_the_gates_on_their_candidate · `tests/test_ci.py`::test_merge_groups_require_a_successful_summary · `tests/test_repo_settings.py`::test_merge_queue_supplies_freshness · `tests/test_repo_settings.py`::test_queue_supplier_is_measured_without_bypass · `tests/test_repo_settings.py`::test_queue_preserves_the_other_ruleset_requirements · `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks | P L I |
 
 ### M — Human Gates
 
@@ -193,6 +193,26 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 6.0.0 — 2026-10-30
+
+**RB-G7** accepts a merge queue as the freshness requirement. Updating every
+behind branch before its merge changed the heads against which merges were
+armed and cost one CI run per merge (eight sequential merges on 2026-10-30).
+A merge queue tests each group on GitHub's merge candidate against the
+current `main` and merges exactly that. Decided by the maintainer on
+2026-10-28 (change `merge-queue`, bead `coding-harness-eh42`). The rule text
+takes effect with the merge of its decision pull request; the queue itself is
+switched on afterwards, by a separate step on GitHub, and until then the
+up-to-date alternative carries RB-G7.
+
+MAJOR, because §4 says so: the rule's meaning changes — freshness may now come
+from either of two alternatives, and CI must also run on merge groups.
+
+- **Geändert:** RB-G7 — its second and third sentences: CI checks the pull request's merge ref and, in a queue, the merge group's ref; freshness comes from a merge queue or from the up-to-date requirement. enforcers extended by `tests/test_ci.py::test_merge_groups_run_the_gates_on_their_candidate`, `tests/test_ci.py::test_merge_groups_require_a_successful_summary`, `tests/test_repo_settings.py::test_merge_queue_supplies_freshness`, `::test_queue_supplier_is_measured_without_bypass` and `::test_queue_preserves_the_other_ruleset_requirements`; level (4) and scope unchanged. No id changed, none removed
+- **Tests:** `tests/test_repo_settings.py` accepts either alternative, holds a queue-only ruleset to the same fail-closed bypass measurement, and keeps every other floor requirement; `tests/test_ci.py` requires the `merge_group` trigger and the gate and summary jobs to run on it
+- **Agents/Hooks/Templates:** `prompts/07-commit.md`, "The merge", admits to the queue when it is active and keeps the branch update only for the strict alternative; `templates/repo-settings.md` describes both alternatives; `docs/governance/quality-gates.md` explains MG-2 for both; `docs/WORKFLOW.md`, "Pull requests stay mergeable", has the queue admission procedure, and its one-line summary in `AGENTS.md` names the queue
+- **lakeswitch-ai:** nothing required — its ruleset still meets RB-G7 by the up-to-date alternative; adopting the queue there is a follow-up for that repository, not done here
 
 ### 5.0.0 — 2026-10-08
 

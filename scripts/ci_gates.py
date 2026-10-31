@@ -627,7 +627,7 @@ def _summary_job() -> list[str]:
     return [
         f"  {SUMMARY_JOB}:",
         f"    needs: {MATRIX_JOB}",
-        "    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request')",
+        "    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')",
         "    runs-on: ubuntu-latest",
         "    steps:",
         "      - name: Every leg of the gates passed",
@@ -662,6 +662,10 @@ def generate_ci() -> str:
         "  push:",
         f"    branches: [{MAIN_BRANCH}]",
         "  pull_request:",
+        # The merge queue (bead coding-harness-eh42) builds a group's merge ref and asks for the
+        # required check `verify` there; without this trigger a queued PR waits forever.
+        "  merge_group:",
+        "    types: [checks_requested]",
         "  schedule:",
         '    - cron: "23 4 * * *"',
         "  workflow_dispatch:",
@@ -672,7 +676,7 @@ def generate_ci() -> str:
         "",
         "jobs:",
         f"  {MATRIX_JOB}:",
-        "    if: github.event_name == 'push' || github.event_name == 'pull_request'",
+        "    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'",
         # One leg per declared interpreter, and no fail-fast: a red leg must not
         # cancel the other, for the reason bead coding-harness-bl2 gave for steps.
         "    strategy:",

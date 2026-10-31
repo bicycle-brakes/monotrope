@@ -759,14 +759,20 @@ for another repository is `templates/agents-mergeable-prs.md`.
   itself, an in-progress merge or rebase and a dirty checkout, and it never
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
-- **Merging a series, one at a time.** With "branches must be up to date"
-  on `main`, every merge puts the other open pull requests behind. Each
+- **Merging a series, one at a time.** With the merge queue active on
+  `main` (rule RB-G7, bead coding-harness-eh42), a pull request the
+  maintainer asked to merge, restated and green, is admitted with the same
+  `gh pr merge <n> --merge --match-head-commit <sha>` and no branch update
+  first; the queue tests it on the current `main` and merges it. Admission
+  is not a merge: it is reported as queued until the pull request shows
+  `MERGED`. The maintainer's request, the restatement, the exact head and
+  the ban on `--admin` hold as before. Without the queue ("branches must be
+  up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
   pending rollup is not green), and it merges against its new head with
-  `--match-head-commit`. Merging eight pull requests on 2026-10-30 cost one
-  CI run each this way; a merge queue (bead coding-harness-eh42, decided
-  2026-10-28) replaces the rule.
+  `--match-head-commit`.
+  Merging eight pull requests on 2026-10-30 cost one CI run each that way.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
