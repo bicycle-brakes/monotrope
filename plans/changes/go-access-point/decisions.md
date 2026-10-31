@@ -17,7 +17,8 @@ tags: [decisions, interview, stage-2, opencode-go]
 
 # go-access-point — Decisions
 
-Class: feature (three counted interview records owed; three below). The change
+Class: feature with an ADR (ADR 0024; five counted interview records owed in
+total; five below). The change
 introduces one place that admits the OpenCode Go address for every Go path.
 Today the research swarm checks a hard-coded `/zen/go/v1`, while the review loop
 checks nothing (the open finding DL-B-8). Phase 1 ran through GLM 5.3 Flash and
@@ -93,6 +94,49 @@ held from agent commits today, so the spec must place the record where an
 agent may write it or the maintainer must lift the hold for that one field —
 a decision this change puts to the maintainer, not one it takes. — 2026-10-31
 
+## Q-4 · Does the Go address rule get an ADR of its own
+
+asked: 2026-10-31
+context: |
+  Topic: whether the one Go access point is recorded as an ADR.
+  Intention: the draft was blocked; Codex drew ADR 0024, and an ADR change owes five counted interview answers while three were recorded.
+  Today: the three answers (all Go paths central; same host runs on with a notice; the agent maintains the address) stand only in decisions.md.
+  Repository change: with an ADR, docs/adr/0024 joins the change and two more questions follow; without one, the rule stands only in design.md.
+  Architecture change: with an ADR, the address rule becomes a boundary rule beside ADR 0020 (where a change's content may be sent).
+  Question: should the Go address rule get an ADR of its own? Options: yes, ADR and two more questions (recommended) / no, design.md only / at the 15:00 block.
+answer: "Ja, ADR + 2 Fragen" — the rule gets ADR 0024; the two missing questions follow in this session.
+answered_by: maintainer
+status: answered
+
+In the context of a rule that decides where a change's content may be sent to
+a foreign model, facing a draft that wrote the rule as ADR 0024 and a design
+that would hold it alone, we decided that the Go address rule is an ADR of its
+own, to achieve a boundary rule that stands beside ADR 0020 and is read where
+the other boundaries are, accepting two more interview questions and a
+decision pull request for the ADR file. — 2026-10-31
+
+## Q-5 · Where the address record lives
+
+asked: 2026-10-31
+context: |
+  Topic: where the record of the admitted Go address lives (question 5 of 5 for ADR 0024).
+  Intention: Q-3 lets the agent record a new address itself; model-endpoints.yaml is held from the foreign models the runner starts (RUNNER_HELD in scripts/stage2.py), while the orchestrating session (Claude Code or Codex) may change it.
+  Today: the address stands as a fixed value in code (/zen/go/v1) and in prose.
+  Repository change: one address field (host, paths, reading date, source) in one entry.
+  Architecture change: yes — exactly one source for the Go address, fitting the later central model registry (bead coding-harness-wq1m).
+  Question: where does the address record live? Options: model-endpoints.yaml (recommended) / a file of its own that runner attempts may write / model-endpoints.yaml with every path change as a decision PR the maintainer merges.
+answer: "model-endpoints.yaml" — in the opencode-go entry; the orchestrating session maintains the path, foreign models never change it.
+answered_by: maintainer
+status: answered
+
+In the context of an address record the agent maintains itself (Q-3), facing a
+held file and the choice between a second writable file and a decision pull
+request for every path move, we decided that the record lives on the
+`opencode-go` entry of `model-endpoints.yaml` and that the orchestrating
+session maintains its path, to achieve one source for the Go address with the
+runner's hold left whole, accepting that a runner attempt can never correct
+the record and that an orchestrator step owns every edit of it. — 2026-10-31
+
 ## Details for the draft
 
 [DETAIL] **DL-B-8 is the first slice.** Reason: the review loop sends a
@@ -103,6 +147,12 @@ today, while the swarm's refusal only blocks work.
 they are where the catalog comes from, not where content goes. The catalog
 redirect is the merged change of bead coding-harness-j2wb, and the model
 registry (bead coding-harness-wq1m) will take them up.
+
+[DETAIL] **ADR 0024's record placement is settled by Q-5.** Reason: the
+draft's ADR left the storage arrangement open; Q-5 places the record on the
+`opencode-go` entry and its edits with the orchestrator, so the separate-record
+option leaves the ADR and the spec's "ADR question is proposed no" detail is
+superseded by Q-4.
 
 [DETAIL] **The design must fit the model registry** (bead coding-harness-wq1m).
 Reason: the maintainer asked on 2026-10-31 for every phase's model and every

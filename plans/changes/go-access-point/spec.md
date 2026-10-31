@@ -17,7 +17,7 @@ class: feature
 appetite: 6
 change: go-access-point
 adr_question: {proposed: "no", reason: "The three answered records in decisions.md already carry the whole policy, and an ADR edit would raise this change's interview debt to five answers of which three exist; the maintainer can still answer yes through the decide-adr procedure."}
-adr_files: []
+adr_files: [docs/adr/0024-one-access-policy-for-opencode-go.md]
 neighbours:
   - plans/changes/review-loop-deep-b/spec.md
   - plans/changes/pi-catalog-redirect/spec.md
