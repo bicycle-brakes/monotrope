@@ -458,6 +458,12 @@ def extension_copy(source: Path, directory: Path, name: str) -> Path:
     return copy
 
 
+def rpc_mode(argv: list[str]) -> list[str]:
+    """The argv with `--mode rpc` in front of its `--` end of options, or appended when there is none."""
+    end = argv.index("--") if "--" in argv else len(argv)
+    return [*argv[:end], "--mode", "rpc", *argv[end:]]
+
+
 def drive_rpc(
     project: Path,
     scratch: Path,
@@ -469,9 +475,11 @@ def drive_rpc(
 ) -> list[dict]:
     """Run the captured interactive command with `--mode rpc` and send each prompt in order.
 
-    The production argv is kept byte for byte; the adapter appends only the RPC
+    The production argv is kept byte for byte; the adapter adds only the RPC
     mode switch, which ignores the trailing prompt argument, and points the
-    transport at the loopback stand-in. Every event of the run is returned; a
+    transport at the loopback stand-in. The switch goes before a `--` end of
+    options, because after it Pi reads `--mode rpc` as prompt text and waits on
+    stdin for good. Every event of the run is returned; a
     turn that outlives `timeout` fails the case.
     """
     agent = scratch / "agent"
@@ -495,7 +503,7 @@ def drive_rpc(
 
     with stderr_log.open("w", encoding="utf-8") as errors:
         process = subprocess.Popen(
-            [str(stage2.PI_WRAPPER), *argv, "--mode", "rpc"],
+            [str(stage2.PI_WRAPPER), *rpc_mode(argv)],
             cwd=project,
             env=env,
             stdin=subprocess.PIPE,
@@ -1256,7 +1264,10 @@ def test_real_launch_payloads_have_no_local_identifiers(project: Path, transport
     assert_payloads_are_neutral(session.requests, shape_identifiers(session_env, project, scratch), "the session")
     first = json.dumps(session.requests[0].body)
     assert CONTEXT_CANARY in first, "the session lost its project context"
-    assert 'path="AGENTS.md"' in first, "the context label did not survive as a relative reference"
+    # The label is read in the system text, not the JSON dump, which escapes its quotes.
+    assert 'path="AGENTS.md"' in system_text(session.requests[0]), (
+        "the context label did not survive as a relative reference"
+    )
     assert SENTINEL_IN in message_text(session.requests[1]), "the session's tool follow-up never executed"
 
 
