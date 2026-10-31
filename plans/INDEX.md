@@ -270,6 +270,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/research.md`](changes/repair-fixed-lines/research.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/spec.md`](changes/repair-fixed-lines/spec.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
+| [`changes/repair-line-skeleton/research.md`](changes/repair-line-skeleton/research.md) | draft | none | 2026-10-31 | coding-harness-k93f |
 | [`changes/repair-restore-status/decisions.md`](changes/repair-restore-status/decisions.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/repair-restore-status/findings.md`](changes/repair-restore-status/findings.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/repair-restore-status/plan.md`](changes/repair-restore-status/plan.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
