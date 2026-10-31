@@ -117,3 +117,14 @@ the pytest times (710.73 s against 627.68 s, 12 % faster with 8). The actual
 worker count was set by `PYTEST_XDIST_AUTO_NUM_WORKERS`; the quiet pytest
 output does not print the started workers, so the count was not observed
 separately. The logs stayed in the session scratchpad and are not committed.
+
+Worker count, observed separately (review row L2-3), at `71b15fc6` on
+2026-10-31 21:48 UTC: `PYTEST_XDIST_AUTO_NUM_WORKERS=4 python -m pytest
+tests/test_ci.py -n auto` printed `created: 4/4 workers`, the same with `=8`
+printed `created: 8/8 workers` (165 passed, 2 skipped each). The full runs
+above use the same `-n auto` gate command and the same variable. Stated
+plainly: step 4 also asks that no implement, repair or draft run during the
+full runs; on 2026-10-31 four other lanes ran Codex and Pi calls meanwhile,
+so the full runs are not isolated in that sense. A quiet-machine repeat is
+owed before the numbers are used as a performance claim; whether to make it
+before the merge is the maintainer's call.

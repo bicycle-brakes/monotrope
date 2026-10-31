@@ -207,3 +207,5 @@ Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claud
 > tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: refs changed while the named test ran: refs/heads/docs/architecture-reconcile, refs/heads/docs/run-plan-2026-10-31, refs/heads/feat/go-access-point, refs/remotes/origin/__dolt_remote_info__, refs/remotes/origin/docs/architecture-reconcile, refs/remotes/origin/docs/run-plan-2026-10-31, refs/remotes/origin/feat/go-access-point
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-3-20261031T190808158515Z-90d0ef98.md
 > ```
+
+Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 803 files, 2929 commits, 12 rules.
