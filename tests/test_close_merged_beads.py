@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -512,3 +513,108 @@ def test_failed_publication_is_not_success(tmp_path: Path) -> None:
     assert "published: yes" not in erg.stdout
     assert "published: NO" in erg.stdout
     assert any(line.startswith(f"close {MAIN} ") for line in _closes(ns))
+
+
+def test_make_arguments_remain_literal_and_command_line_only(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    env = _env(ns)
+    env["ARGS"] = "--write"
+    result = _run_make(ns, env, "close-merged")
+    assert result.returncode == 0, result.stderr
+    assert "would close" in result.stdout
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+    marker = tmp_path / "expanded"
+    for raw in (f"$(shell touch {marker})--write", "--write\n", "--\twrite", "--write\t"):
+        result = _run_make(ns, _env(ns), "close-merged", f"ARGS={raw}")
+        assert result.returncode != 0, (raw, result.stdout, result.stderr)
+        assert "ARGS must be empty or --write" in result.stderr
+        assert not marker.exists(), "make expanded an argument as code"
+        assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_make_outside_checkout_explains_working_directory(tmp_path: Path) -> None:
+    result = subprocess.run(
+        ["make", "-f", str(MAKEFILE), "close-merged"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "use make -C <checkout> close-merged" in result.stderr
+
+
+def test_log_failure_is_preflight_failure(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    real_git = shutil.which("git")
+    wrapper = bindir / "git"
+    wrapper.write_text(
+        f'#!/bin/sh\nif [ "$1" = log ]; then echo "broken history" >&2; exit 2; fi\nexec "{real_git}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    env = _env(ns)
+    env["PATH"] = str(bindir) + os.pathsep + env["PATH"]
+    result = _run_script(ns, env, "--write")
+    assert result.returncode == 1
+    assert "preflight failed, nothing attempted" in result.stderr
+    assert "broken history" in result.stderr and "Traceback" not in result.stderr
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_export_failure_is_preflight_failure(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    stub = ns.klon / "tools" / "bd"
+    stub.write_text(STUB.replace("  export)", '  export)\n    echo "database unavailable" >&2; exit 3'))
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 1
+    assert "preflight failed, nothing attempted" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_startup_budget_reserves_publication(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    script = ns.klon / "scripts" / "close_merged_beads.py"
+    script.write_text(script.read_text().replace("BD_TIMEOUT = 60.0", "BD_TIMEOUT = 0.3"))
+    stub = ns.klon / "tools" / "bd"
+    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
+    result = _run_script(ns, _env(ns), "--write", "--budget-seconds", "0.8")
+    assert result.returncode == 1
+    assert "startup budget exhausted" in result.stderr
+    assert "dolt push" in _calls(ns), (result.stdout, result.stderr)
+    assert "published: yes" in result.stdout
+    assert len(_closes(ns)) < len(DECLARED)
+
+
+def test_renderer_unexpected_exit_is_preflight_failure(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    code = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import close_merged_beads as reconcile\n"
+        "def failed_render():\n    raise SystemExit(3)\n"
+        "reconcile.bead_render.render_pfad = failed_render\n"
+        "sys.exit(reconcile.main(['--write']))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(ns.klon / "scripts")],
+        cwd=ns.klon,
+        env=_env(ns),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "preflight failed, nothing attempted" in result.stderr
+    assert "tracker render is not readable" in result.stderr
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_make_argument_whitespace_is_rejected(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    for raw in ("--write\n", "--write\t", "--\twrite"):
+        result = _run_make(ns, _env(ns), "close-merged", f"ARGS={raw}")
+        assert result.returncode != 0
+        assert "ARGS must be empty or --write" in result.stderr
+        assert not _closes(ns) and "dolt push" not in _calls(ns)

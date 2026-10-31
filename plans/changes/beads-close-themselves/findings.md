@@ -279,3 +279,24 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 796 files, 2858 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 796 files, 2862 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2865 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `Makefile` +16 -6
+> - `scripts/close_merged_beads.py` +17 -4
+> - `tests/test_beads_start.py` +87 -0
+> - `tests/test_close_merged_beads.py` +106 -0
+> - `tools/claude-code/hooks/beads-start.sh` +33 -27
+> - `tools/claude-code/hooks/session-scan.sh` +19 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-14: tests/test_beads_start.py::test_unreadable_registry_never_writes: fixed-code proof: refs changed while the fixed-code proof ran
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261031T122842850583Z-9c68ccbf.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 796 files, 2865 commits, 12 rules.

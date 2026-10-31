@@ -78,14 +78,24 @@ report:
 # Closes beads whose work merged (bead coding-harness-l1if): the reconciler
 # reads Closes-Bead trailers from a freshly fetched origin/main and closes what
 # they declare through the pinned tools/bd — reporting only, unless ARGS=--write.
-# ARGS is validated at the make level: the recipe only ever receives nothing or
-# the literal --write, so an argument value stays data and never reaches a
-# shell. The script is taken from $(CURDIR), so the target reconciles the
-# checkout make runs in, from any directory.
-close_merged_args = $(if $(strip $(ARGS)),$(if $(and $(filter --write,$(strip $(ARGS))),$(filter 1,$(words $(strip $(ARGS))))),--write,INVALID),)
+# Only command-line ARGS is accepted. Capture its raw value without expanding
+# make functions, then validate the exact bytes in the shell as environment data.
+# The script and checkout come from make's working directory (use make -C there).
+ifeq ($(origin ARGS),command line)
+override CLOSE_MERGED_ARGS := $(value ARGS)
+else
+override CLOSE_MERGED_ARGS :=
+endif
+export CLOSE_MERGED_ARGS
+unexport ARGS
 
 close-merged:
-	python3 $(CURDIR)/scripts/close_merged_beads.py $(if $(filter INVALID,$(close_merged_args)),$(error close-merged: ARGS must be empty or --write),$(close_merged_args))
+	@test -f scripts/close_merged_beads.py || { echo 'close-merged: use make -C <checkout> close-merged' >&2; exit 2; }
+	@case "$$CLOSE_MERGED_ARGS" in \
+	  "") python3 scripts/close_merged_beads.py ;; \
+	  --write) python3 scripts/close_merged_beads.py --write ;; \
+	  *) echo 'close-merged: ARGS must be empty or --write' >&2; exit 2 ;; \
+	esac
 
 help:
 	@echo 'make verify                             every locally runnable gate (the CI runs the same)'

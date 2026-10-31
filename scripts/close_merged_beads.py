@@ -54,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 REPO_SCRIPTS = Path(__file__).resolve().parent
@@ -127,7 +128,7 @@ def load_state() -> dict[str, dict]:
     """Tracker state through the one access point, validated before any use."""
     try:
         render = bead_render.render_pfad()
-    except (FileNotFoundError, bead_render.RendererNichtMoeglich) as exc:
+    except (OSError, bead_render.RendererNichtMoeglich, SystemExit) as exc:
         raise PreflightError(f"the tracker render is not readable: {exc}") from None
     findings = check_render_lines(render)
     if findings:
@@ -198,7 +199,11 @@ def _unresolved(unknown: list[str], malformed: list[tuple[str, str]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Close beads whose completion a merged Closes-Bead trailer declared.")
     ap.add_argument("--write", action="store_true", help="close eligible beads and publish; without it, only report")
+    ap.add_argument("--budget-seconds", type=float, help="startup budget, including reserved publication time")
     args = ap.parse_args(argv)
+    if args.budget_seconds is not None and args.budget_seconds <= 0:
+        ap.error("--budget-seconds must be positive")
+    deadline = time.monotonic() + args.budget_seconds if args.budget_seconds is not None else None
 
     if args.write and os.environ.get(bead_render.UMGEBUNGS_RENDER, "").strip():
         print(
@@ -212,11 +217,11 @@ def main(argv: list[str] | None = None) -> int:
         root, bd = resolve_checkout()
         pinned = fetch_and_pin(root)
         state = load_state()
+        declarations, malformed = collect_declarations(root, pinned)
     except PreflightError as exc:
         print(f"close-merged: preflight failed, nothing attempted: {exc}", file=sys.stderr)
         return 1
 
-    declarations, malformed = collect_declarations(root, pinned)
     unknown = [bid for bid in declarations if bid not in state]
     eligible = [
         (bid, sha, subject)
@@ -238,13 +243,20 @@ def main(argv: list[str] | None = None) -> int:
     refused: list[tuple[str, str]] = []
     for bid, sha, subject in eligible:
         reason = closure_reason(sha, subject)
+        # Reserve a full wrapper timeout for publication. An exhausted startup
+        # budget defers remaining closures visibly, but still publishes the batch.
+        close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - time.monotonic() - BD_TIMEOUT)
+        if close_timeout <= 0:
+            refused.append((bid, "startup budget exhausted"))
+            print(f"refused: {bid}: startup budget exhausted; retry reconciliation", file=sys.stderr)
+            continue
         try:
             erg = subprocess.run(
                 [str(bd), "close", bid, f"--reason={reason}"],
                 cwd=root,
                 capture_output=True,
                 text=True,
-                timeout=BD_TIMEOUT,
+                timeout=close_timeout,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             refused.append((bid, str(exc)))
@@ -259,7 +271,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: {bid}: {detail}", file=sys.stderr)
 
     try:
-        push = subprocess.run([str(bd), "dolt", "push"], cwd=root, capture_output=True, text=True, timeout=BD_TIMEOUT)
+        push_timeout = BD_TIMEOUT if deadline is None else max(0.01, min(BD_TIMEOUT, deadline - time.monotonic()))
+        push = subprocess.run([str(bd), "dolt", "push"], cwd=root, capture_output=True, text=True, timeout=push_timeout)
         published = push.returncode == 0
         if not published:
             print(f"close-merged: publication failed: {(push.stderr or push.stdout).strip()}", file=sys.stderr)

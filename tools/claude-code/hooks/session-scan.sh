@@ -18,7 +18,13 @@
 own_sid=$1
 own_cwd=$2
 sdir="$HOME/.claude/sessions"
-[ -d "$sdir" ] || exit 0
+strict=${3:-}
+if [ "$strict" = "--strict" ]; then
+  # Startup may trust an empty scan only after all registry reads succeeded.
+  [ -d "$sdir" ] && [ -r "$sdir" ] && [ -x "$sdir" ] || exit 1
+else
+  [ -d "$sdir" ] || exit 0
+fi
 
 gq() { git --no-optional-locks -C "$1" "${@:2}" 2>/dev/null; }
 own_top=""; own_common=""
@@ -26,8 +32,18 @@ if [ -n "$own_cwd" ]; then
   own_top=$(gq "$own_cwd" rev-parse --show-toplevel)
   own_common=$(gq "$own_cwd" rev-parse --path-format=absolute --git-common-dir)
 fi
+if [ "$strict" = "--strict" ]; then
+  [ -n "$own_top" ] && [ -n "$own_common" ] || exit 1
+fi
 
 for f in "$sdir"/*.json; do
+  if [ "$strict" = "--strict" ] && { [ -e "$f" ] || [ -L "$f" ]; }; then
+    jq -e 'type == "object" and
+      (.pid | type == "number" and . > 0 and . == floor) and
+      (.sessionId | type == "string" and length > 0) and
+      (.cwd | type == "string" and length > 0) and
+      (.kind | type == "string" and length > 0)' "$f" >/dev/null 2>&1 || exit 1
+  fi
   [ -e "$f" ] || continue
   # Feldtrennung ohne Kollaps (bead hit): `IFS=$'\t' read` liess leere Felder
   # (Session ohne Namen oder Status) auf die Nachbarn rutschen — die Session
@@ -46,7 +62,8 @@ for f in "$sdir"/*.json; do
     i=$((i + 1))
   done < <(
     jq -j '[.pid, .sessionId, .cwd, (.name // ""), (.status // ""), (.kind // ""), (.procStart // "")]
-           | map(tostring) | join("\u0000")' "$f" 2>/dev/null)
+           | map(tostring) | join("\u0000") + "\u0000"' "$f" 2>/dev/null)
+  if [ "$strict" = "--strict" ] && [ "$i" -ne 7 ]; then exit 1; fi
   [ -z "$opid" ] || [ "$osid" = "$own_sid" ] || [ "$okind" != "interactive" ] && continue
   kill -0 "$opid" 2>/dev/null || continue
   if [ -n "$ostart" ]; then

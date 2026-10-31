@@ -37,28 +37,31 @@ PRIME_TIMEOUT=${BEADS_START_PRIME_TIMEOUT:-30}
 run_bounded() {
   local secs=$1 sin=$2 sout=$3 serr=$4
   shift 4
-  local flag pid watchdog
-  flag=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
-  rm -f "$flag"
-  if [ "$sin" = "-" ]; then
-    "$@" >"$sout" 2>"$serr" &
-  else
-    "$@" <"$sin" >"$sout" 2>"$serr" &
-  fi
-  pid=$!
-  # The watchdog's stdio stays away from the caller's: when it is killed, its
-  # `sleep` is left orphaned, and an inherited stdout would keep the session's
-  # pipe open after this hook has exited — the reader waits for an EOF that
-  # never comes.
-  ( sleep "$secs"; if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; : >"$flag"; fi ) \
-    >/dev/null 2>&1 </dev/null &
-  watchdog=$!
-  wait "$pid" 2>/dev/null
+  # A new process group contains the command and all descendants. Killing
+  # the whole group prevents a timed-out tracker write from outliving prime.
+  python3 - "$secs" "$sin" "$sout" "$serr" "$@" <<'PYBOUND'
+import os
+import signal
+import subprocess
+import sys
+
+seconds, stdin, stdout, stderr, *command = sys.argv[1:]
+with open(stdin if stdin != "-" else os.devnull, "rb") as source, open(stdout, "wb") as out, open(stderr, "wb") as err:
+    process = subprocess.Popen(command, stdin=source, stdout=out, stderr=err, start_new_session=True)
+    try:
+        result = process.wait(timeout=float(seconds))
+    except subprocess.TimeoutExpired:
+        result = 124
+    finally:
+        # Also reap descendants left behind by a command's own timeout.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+sys.exit(result)
+PYBOUND
   RUN_RC=$?
-  kill "$watchdog" 2>/dev/null
-  wait "$watchdog" 2>/dev/null
-  [ -e "$flag" ] && RUN_RC=124
-  rm -f "$flag"
   return 0
 }
 
@@ -75,11 +78,11 @@ source=$(jq_pick '.source')
 grund=""
 [ -n "$CLAUDE_RECAP_CHILD" ] && grund="Kindprozess des Recaps"
 [ -z "$grund" ] && [ "$source" = "compact" ] && grund="Start nach der Kompaktierung"
-if [ -z "$grund" ] && { [ -z "$sid" ] || [ -z "$cwd" ]; }; then
-  grund="Sitzungs-Identität unvollständig (session_id/cwd fehlen in der Hook-Eingabe)"
-fi
 if [ -z "$grund" ] && ! command -v jq >/dev/null 2>&1; then
   grund="jq fehlt — das Ergebnis des Sitzungs-Scans wäre nicht lesbar"
+fi
+if [ -z "$grund" ] && { [ -z "$sid" ] || [ -z "$cwd" ]; }; then
+  grund="Sitzungs-Identität unvollständig (session_id/cwd fehlen in der Hook-Eingabe)"
 fi
 if [ -z "$grund" ] && [ ! -x "$hook_dir/session-scan.sh" ]; then
   grund="Sitzungs-Scan fehlt oder ist nicht ausführbar"
@@ -88,7 +91,7 @@ if [ -z "$grund" ]; then
   scan_out=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
   # session-scan.sh reports its lines on stdout: they land in scan_out; the
   # scan's own chatter goes to /dev/null.
-  run_bounded "$SCAN_TIMEOUT" - "$scan_out" /dev/null "$hook_dir/session-scan.sh" "$sid" "$cwd"
+  run_bounded "$SCAN_TIMEOUT" - "$scan_out" /dev/null "$hook_dir/session-scan.sh" "$sid" "$cwd" --strict
   if [ "$RUN_RC" -ne 0 ]; then
     grund="Sitzungs-Scan fehlgeschlagen (Exit $RUN_RC)"
   elif grep -Eq $'^clash\t|^sibling\t' "$scan_out" 2>/dev/null; then
@@ -113,7 +116,8 @@ if [ -z "$grund" ]; then
   recon_out=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
   recon_err=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
   run_bounded "$RECONCILE_TIMEOUT" - "$recon_out" "$recon_err" \
-    python3 "$repo_root/scripts/close_merged_beads.py" --write
+    python3 "$repo_root/scripts/close_merged_beads.py" --write \
+      --budget-seconds "$(python3 -c 'import sys; print(max(0.01, float(sys.argv[1]) - 10))' "$RECONCILE_TIMEOUT")"
   recon_rc=$RUN_RC
   if [ "$recon_rc" -ne 0 ]; then
     if [ "$recon_rc" -eq 124 ]; then
@@ -127,6 +131,9 @@ $details"
   fi
   rm -f "$recon_out" "$recon_err"
 fi
+
+# Emit the diagnostic before prime so its failure cannot swallow it.
+[ -n "$hinweis" ] && printf '%s\n' "$hinweis" >&2
 
 # ── the prime context, in every case that can produce one ───────────────────
 p_in=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
@@ -149,7 +156,6 @@ if command -v jq >/dev/null 2>&1 && ! jq -e . "$p_out" >/dev/null 2>&1; then
   exit 1
 fi
 if [ -n "$hinweis" ]; then
-  printf '%s\n' "$hinweis" >&2
   if command -v jq >/dev/null 2>&1; then
     jq --arg n "$hinweis" \
       '.hookSpecificOutput.additionalContext = ((.hookSpecificOutput.additionalContext // "") + "\n\n" + $n)' "$p_out"

@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -327,3 +328,89 @@ def test_secondary_or_uncertain_start_never_writes(tmp_path: Path) -> None:
     assert "prime --hook-json" in _calls(unreadable)
     assert erg.stdout == PRIME_TEXT, "without jq the prime context passes through untouched"
     assert "übersprungen" in erg.stderr
+
+
+def test_missing_jq_names_missing_tool(tmp_path: Path) -> None:
+    ns = _project(tmp_path)
+    result = _start(ns, extra={"PATH": _path_without_jq(tmp_path)})
+    assert result.returncode == 0
+    assert "jq fehlt" in result.stderr
+    assert "Identität unvollständig" not in result.stderr
+    assert not _wrote(ns)
+
+
+@pytest.mark.parametrize("broken", ["missing", "unreadable", "invalid", "entry-unreadable"])
+def test_unreadable_registry_never_writes(tmp_path: Path, broken: str) -> None:
+    ns = _project(tmp_path)
+    registry = ns.home / ".claude" / "sessions"
+    if broken == "missing":
+        registry.rmdir()
+    elif broken == "unreadable":
+        registry.chmod(0o000)
+    else:
+        entry = registry / "123.json"
+        entry.write_text("not JSON" if broken == "invalid" else "{}")
+        if broken == "entry-unreadable":
+            entry.chmod(0o000)
+    try:
+        result = _start(ns)
+        assert result.returncode == 0, result.stderr
+        assert not _wrote(ns), "an unreadable registry was trusted as empty"
+        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "PRIME-KONTEXT" in context and "Scan fehlgeschlagen" in context
+    finally:
+        if registry.exists():
+            registry.chmod(0o700)
+
+
+def test_timeout_stops_descendants_before_prime(tmp_path: Path) -> None:
+    ns = _project(tmp_path)
+    marker = tmp_path / "orphan-write"
+    script = ns.klon / "scripts" / "close_merged_beads.py"
+    script.write_text(
+        "import subprocess, sys, time\n"
+        f"subprocess.Popen([sys.executable, '-c', \"import time; from pathlib import Path; time.sleep(0.5); Path({str(marker)!r}).touch()\"])\n"
+        "time.sleep(5)\n"
+    )
+    result = _start(ns, extra={"BEADS_START_RECONCILE_TIMEOUT": "0.1"})
+    assert result.returncode == 0, result.stderr
+    assert "abgebrochen" in result.stderr
+    assert "prime --hook-json" in _calls(ns)
+    time.sleep(0.6)
+    assert not marker.exists(), "a descendant wrote after prime"
+
+
+def test_prime_failure_preserves_reconciliation_diagnostic(tmp_path: Path) -> None:
+    ns = _project(tmp_path, push_rc=1)
+    stub = ns.klon / "tools" / "bd"
+    stub.write_text(STUB.replace("  prime)", "  prime)\n    exit 9"))
+    result = _start(ns)
+    assert result.returncode == 1
+    assert "prime --hook-json fehlgeschlagen" in result.stderr
+    assert "Beads-Abgleich fehlgeschlagen" in result.stderr
+    assert "publication failed" in result.stderr
+
+
+def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None:
+    ns = _project(tmp_path)
+    # Scale the production bounds together; the old outer-only timeout kills
+    # this batch after some closes and before its required publication.
+    hook = ns.hooks_dir / "beads-start.sh"
+    hook.write_text(hook.read_text().replace("float(sys.argv[1]) - 10", "float(sys.argv[1]) - 0.1"))
+    script = ns.klon / "scripts" / "close_merged_beads.py"
+    script.write_text(script.read_text().replace("BD_TIMEOUT = 60.0", "BD_TIMEOUT = 0.2"))
+    for i in range(14):
+        _commit(ns.origin, f"complete item {i}\n\nCloses-Bead: coding-harness-item-{i}")
+    ns.render.write_text(
+        ns.render.read_text()
+        + "".join(json.dumps({"id": f"coding-harness-item-{i}", "status": "open"}) + "\n" for i in range(14))
+    )
+    stub = ns.klon / "tools" / "bd"
+    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
+    result = _start(ns, extra={"BEADS_START_RECONCILE_TIMEOUT": "1.5"})
+    assert result.returncode == 0, result.stderr
+    calls = _calls(ns)
+    assert "dolt push" in calls, (calls, result.stderr)
+    assert calls.index("dolt push") < calls.index("prime --hook-json")
+    assert "startup budget exhausted" in result.stderr
+    assert "abgebrochen" not in result.stderr
