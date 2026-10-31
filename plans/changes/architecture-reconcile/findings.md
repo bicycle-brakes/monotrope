@@ -288,7 +288,7 @@ Stage-2 call, 2026-10-31: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MINOR | SPEC | base | docs/research/2026-10-31-architecture-reconciliation.md:193 | G8 claims every change’s spec contains all required change-contract fields. At baseline `b58c72e7` (2026-10-31), `plans/changes/free-member-rate-limit/spec.md` lacks both protected areas and a change-specific Definition of Done. The report therefore overstates delivered contract coverage; narrow the claim to verified examples and retain these omissions as gaps. [Acceptance criterion 5] | Codex | open | — |
+| F6-1 | MINOR | SPEC | base | docs/research/2026-10-31-architecture-reconciliation.md:193 | G8 claims every change’s spec contains all required change-contract fields. At baseline `b58c72e7` (2026-10-31), `plans/changes/free-member-rate-limit/spec.md` lacks both protected areas and a change-specific Definition of Done. The report therefore overstates delivered contract coverage; narrow the claim to verified examples and retain these omissions as gaps. [Acceptance criterion 5] | Codex | fixed — not a test — G8 narrowed to the specs read and names the exception (bd47fa33) | — |
 
 Phase 6 verdict: codex 01a193ed-02d7-7b21-8fde-36b038391eea, 2026-10-31
 Reviewer session: codex 01a193ed-02d7-7b21-8fde-36b038391eea — a fresh session reviewed: no phase-2a session was recorded
