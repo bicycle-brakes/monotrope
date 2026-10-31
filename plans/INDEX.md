@@ -159,6 +159,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/free-member-rate-limit/plan.md`](changes/free-member-rate-limit/plan.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/research.md`](changes/free-member-rate-limit/research.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
 | [`changes/free-member-rate-limit/spec.md`](changes/free-member-rate-limit/spec.md) | draft | partial | 2026-10-25 | coding-harness-pj98 |
+| [`changes/go-access-point/decisions.md`](changes/go-access-point/decisions.md) | draft | none | 2026-10-31 | coding-harness-4tr4 |
 | [`changes/go-access-point/research.md`](changes/go-access-point/research.md) | draft | none | 2026-10-31 | coding-harness-4tr4 |
 | [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/design.md`](changes/guard-test/design.md) | draft | none | 2026-10-29 | coding-harness-0ho |
