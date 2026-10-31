@@ -331,6 +331,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/sol-effort/plan.md`](changes/sol-effort/plan.md) | draft | none | 2026-10-14 | coding-harness-yzk |
 | [`changes/sol-effort/research.md`](changes/sol-effort/research.md) | draft | none | 2026-10-14 | coding-harness-yzk |
 | [`changes/sol-effort/spec.md`](changes/sol-effort/spec.md) | draft | none | 2026-10-14 | coding-harness-yzk |
+| [`changes/sonnet-continues-flash/research.md`](changes/sonnet-continues-flash/research.md) | draft | none | 2026-10-31 | coding-harness-6ie |
 | [`changes/stage2-format/decisions.md`](changes/stage2-format/decisions.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/findings.md`](changes/stage2-format/findings.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |
