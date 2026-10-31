@@ -371,6 +371,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/test-key-runtime/research.md`](changes/test-key-runtime/research.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-key-runtime/spec.md`](changes/test-key-runtime/spec.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-strength-rows/research.md`](changes/test-strength-rows/research.md) | draft | none | 2026-10-14 | coding-harness-y17 |
+| [`changes/time-records-data/decisions.md`](changes/time-records-data/decisions.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/research.md`](changes/time-records-data/research.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/tolerate-derived-leftovers/decisions.md`](changes/tolerate-derived-leftovers/decisions.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/tolerate-derived-leftovers/findings.md`](changes/tolerate-derived-leftovers/findings.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
