@@ -10,7 +10,7 @@ updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-190
-owner: framework-architect
+owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
@@ -81,6 +81,7 @@ python3 scripts/check_interview_minimums.py --change architecture-reconcile
 python3 scripts/check_research_handoff.py --change architecture-reconcile
 python3 scripts/check_criterion_ledger.py
 python3 scripts/check_docs.py --base docs/research
+python3 scripts/check_docs.py --base plans/changes/architecture-reconcile
 python3 scripts/plans_registry.py --index
 python3 scripts/plans_registry.py --check
 ```
@@ -111,6 +112,13 @@ was recorded. Preserve `decisions.md` and all protected paths from the spec.
 No held-path edit is planned; any necessary policy or mechanism repair is
 returned to the orchestrator as a finding, outside this accepted attempt.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-31 15:49:01–16:45:15 UTC, 3373 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-31 17:22:00–17:49:13 UTC, 1633 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 17:49:21–18:31:33 UTC, 2532 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 18:31:39–18:45:11 UTC, 811 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

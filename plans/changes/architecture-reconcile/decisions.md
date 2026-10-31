@@ -1,14 +1,16 @@
 ---
 title: "Decisions — architecture-reconcile"
+category: decisions
 status: draft
 implementation_status: none
+created: 2026-10-31
 date: 2026-10-31
 last_reviewed: 2026-10-31
 updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-190
-owner: framework-architect
+owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}

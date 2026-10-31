@@ -10,7 +10,7 @@ updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-190
-owner: framework-architect
+owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
