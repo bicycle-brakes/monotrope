@@ -102,12 +102,18 @@ alias = "pi" if name == "pin-pi" else name
 # The draft's document check runs through `bash scripts/verify_all.sh --job docs`; its steps
 # are keyed `docs`, so no other bash call consumes them. The record keeps the program name -
 # that is how the tests read the document check's calls among the bash calls.
-docs_check = alias == "bash" and argv[:1] == ["scripts/verify_all.sh"]
+scenario = json.loads((here / "scenario.json").read_text())
+# The document check's argv comes from the runner's own vector (`World.script` writes it), so a
+# respelt `DOCS_VERIFY` cannot make the stand-in run the real gates.
+docs_argv = scenario.get("_docs_argv") or []
+docs_check = alias == "bash" and bool(docs_argv) and argv[: len(docs_argv)] == docs_argv
 if alias == "bash" and not docs_check:
     # Any other bash call is no document check: it runs the real bash, so it neither consumes a
-    # scripted step nor answers green for a command no test scripted.
+    # scripted step nor answers green for a command no test scripted. Bash steps are not served.
+    if "bash" in scenario:
+        sys.stderr.write("stand-in: bash steps are not served; script the document check as `docs`\\n")
+        raise SystemExit(97)
     os.execv("/bin/bash", ["/bin/bash", *argv])
-scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 
 
@@ -143,7 +149,7 @@ assigned = []
 for call_ in previous:
     if call_["name"] != alias or call_.get("kind"):
         continue
-    if docs_check != (call_["argv"][:1] == ["scripts/verify_all.sh"]):
+    if docs_check != (bool(docs_argv) and call_["argv"][: len(docs_argv)] == docs_argv):
         continue
     for k in range(len(steps)):
         if k not in assigned and fits(steps[k], call_["argv"]):
@@ -328,7 +334,8 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
-        (self.bin / "scenario.json").write_text(json.dumps({**steps, "_since": since}), encoding="utf-8")
+        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:]}
+        (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
         log = self.bin / "calls.jsonl"
@@ -3961,7 +3968,6 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
 
 
-
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     # The stand-in shadows bash for every test; a call that is not the document check must neither
     # consume a scripted step nor answer green for a command no test scripted.
@@ -3969,6 +3975,13 @@ def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     out = subprocess.run([str(world.bin / "bash"), "-c", "echo real; exit 3"], capture_output=True, text=True)
     assert (out.returncode, out.stdout) == (3, "real\n"), "a non-document bash call was stubbed"
     assert world.calls("bash") == [], "a non-document bash call was recorded as a document check"
+    world.script(bash=[{"stdout": "stub"}])
+    out = subprocess.run([str(world.bin / "bash"), "-c", "echo real"], capture_output=True, text=True)
+    assert out.returncode == 97 and "not served" in out.stderr, "a scripted bash step was silently dropped"
+    world.script(docs=[{"stdout": "scripted", "exit": 4}])
+    respelt = subprocess.run([str(world.bin / "bash"), *stage2.DOCS_VERIFY[1:]], capture_output=True, text=True)
+    assert (respelt.returncode, respelt.stdout) == (4, "scripted"), "the runner's own vector is not the document check"
+
 
 OWED_ANSWER = (
     "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
