@@ -537,7 +537,7 @@ def test_make_arguments_remain_literal_and_command_line_only(tmp_path: Path) -> 
 
 
 def test_make_uses_its_own_checkout_from_any_directory(tmp_path: Path) -> None:
-    ns = _build(tmp_path, name="intended checkout")
+    ns = _build(tmp_path, name="intended")
     other = _build(tmp_path, name="other")
     _commit(other.origin, f"other declaration\n\nCloses-Bead: {REAL_A}")
     nested = tmp_path / "linked"
@@ -615,11 +615,9 @@ def test_export_failure_is_preflight_failure(tmp_path: Path) -> None:
 
 def test_startup_budget_reserves_publication(tmp_path: Path) -> None:
     ns = _build(tmp_path)
-    script = ns.klon / "scripts" / "close_merged_beads.py"
-    script.write_text(script.read_text().replace("BD_TIMEOUT = 60.0", "BD_TIMEOUT = 0.3"))
     stub = ns.klon / "tools" / "bd"
     stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
-    result = _run_script(ns, _env(ns), "--write", "--budget-seconds", "0.8")
+    result = _run_script(ns, {**_env(ns), "CLOSE_MERGED_BD_TIMEOUT": "0.3"}, "--write", "--budget-seconds", "0.8")
     assert result.returncode == 1
     assert "startup budget exhausted" in result.stderr
     assert "dolt push" in _calls(ns), (result.stdout, result.stderr)
@@ -721,3 +719,31 @@ def test_subsecond_startup_remainder_refuses_closures(monkeypatch, capsys) -> No
     assert reconcile.main(["--write", "--budget-seconds", "10"]) == 1
     assert calls == [["dolt", "push"]], "a sub-second remainder must not start a close"
     assert "startup budget exhausted" in capsys.readouterr().err
+
+
+def test_make_rejects_ambiguous_makefile_list(tmp_path: Path) -> None:
+    ns = _build(tmp_path)
+    extra = tmp_path / "extra.mk"
+    extra.write_text("# Extra make input\n")
+    spaced = tmp_path / "space path"
+    spaced.mkdir()
+    (spaced / "Makefile").write_bytes(MAKEFILE.read_bytes())
+    including = tmp_path / "including.mk"
+    including.write_text(f"include {ns.klon / 'Makefile'}\n")
+    for args, additions in (
+        (["-f", str(ns.klon / "Makefile"), "-f", str(extra)], {}),
+        (["-f", str(ns.klon / "Makefile")], {"MAKEFILES": str(extra)}),
+        (["-f", str(including)], {}),
+        (["-f", str(spaced / "Makefile")], {}),
+    ):
+        result = subprocess.run(
+            ["make", *args, "close-merged"],
+            cwd=tmp_path,
+            env={**_env(ns), **additions},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert "close-merged: expected exactly one Makefile path without whitespace" in result.stderr
+        assert not _calls(ns), "an ambiguous makefile list reached the tracker"

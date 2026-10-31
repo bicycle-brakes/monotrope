@@ -81,8 +81,8 @@ report:
 # Only command-line ARGS is accepted. Capture its raw value without expanding
 # make functions, then validate the exact bytes in the shell as environment data.
 # Anchor this target to this Makefile, even when invoked with -f elsewhere.
-# Export the full path as data so checkout paths containing spaces stay intact.
-override CLOSE_MERGED_MAKEFILE := $(strip $(MAKEFILE_LIST))
+# Make lists split on whitespace: refuse ambiguous inputs before using a path.
+override CLOSE_MERGED_MAKEFILE := $(abspath $(firstword $(MAKEFILE_LIST)))
 export CLOSE_MERGED_MAKEFILE
 ifeq ($(origin ARGS),command line)
 override CLOSE_MERGED_ARGS := $(value ARGS)
@@ -93,6 +93,10 @@ export CLOSE_MERGED_ARGS
 unexport ARGS
 
 close-merged:
+	@if [ "$(words $(MAKEFILE_LIST))" -ne 1 ]; then \
+	  echo 'close-merged: expected exactly one Makefile path without whitespace; invoke this Makefile directly' >&2; \
+	  exit 2; \
+	fi
 	@cd "$$(dirname "$$CLOSE_MERGED_MAKEFILE")" && \
 	case "$$CLOSE_MERGED_ARGS" in \
 	  "") python3 scripts/close_merged_beads.py ;; \

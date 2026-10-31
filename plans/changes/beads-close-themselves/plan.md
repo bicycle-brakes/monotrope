@@ -153,6 +153,10 @@ part of testing and must not be used merely to obtain evidence.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-31 09:39:20–10:37:10 UTC, 3470 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -162,3 +166,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-31 12:45:45–12:59:20 UTC, 815 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-31 13:10:07–13:36:19 UTC, 1572 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-31 14:14:59–14:30:06 UTC, 907 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-31 14:45:07–16:59:44 UTC, 8076 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 16:59:51–17:33:16 UTC, 2004 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 17:33:29–18:32:02 UTC, 3513 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

@@ -310,3 +310,38 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2883 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 796 files, 2887 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2894 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `Makefile` +6 -2
+> - `tests/test_beads_start.py` +79 -0
+> - `tests/test_close_merged_beads.py` +30 -1
+> - `tools/claude-code/hooks/beads-start.sh` +8 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L4-1: tests/test_beads_start.py::test_note_fold_failure_preserves_prime: refs changed while the named test ran: refs/heads/docs/architecture-reconcile, refs/heads/docs/run-plan-2026-10-31, refs/heads/fix/verify-worker-cap, refs/remotes/origin/__dolt_remote_info__, refs/remotes/origin/docs/architecture-reconcile, refs/remotes/origin/docs/run-plan-2026-10-31, refs/remotes/origin/fix/verify-worker-cap
+> - L4-2: tests/test_beads_start.py::test_successful_command_keeps_background_work: refs changed while the named test ran: refs/remotes/origin/docs/architecture-reconcile
+> - L4-3: tests/test_close_merged_beads.py::test_make_rejects_ambiguous_makefile_list: refs changed while the named test ran: refs/heads/docs/architecture-reconcile, refs/heads/feat/go-access-point, refs/heads/fix/pi-neutral-paths, refs/remotes/origin/__dolt_remote_info__, refs/remotes/origin/docs/architecture-reconcile, refs/remotes/origin/feat/go-access-point, refs/remotes/origin/fix/pi-neutral-paths
+> - L4-7: tests/test_beads_start.py::test_budget_scaling_rejects_changed_literals: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261031T144458114891Z-40445427.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 796 files, 2907 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L4-7: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-2-20261031T144458114891Z-40445427.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 796 files, 2908 commits, 12 rules.

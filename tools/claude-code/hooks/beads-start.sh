@@ -30,6 +30,8 @@ cd "$repo_root" || exit 1
 RECONCILE_TIMEOUT=${BEADS_START_RECONCILE_TIMEOUT:-180}
 SCAN_TIMEOUT=${BEADS_START_SCAN_TIMEOUT:-20}
 PRIME_TIMEOUT=${BEADS_START_PRIME_TIMEOUT:-30}
+# Seconds of the reconcile timeout kept back so publication fits inside it.
+BUDGET_RESERVE=${BEADS_START_BUDGET_RESERVE:-10}
 
 # run_bounded <seconds> <stdin-file|-> <stdout-file> <stderr-file> <command...>
 # Runs <command> with its streams bound to files and a watchdog; sets RUN_RC
@@ -52,8 +54,8 @@ with open(stdin if stdin != "-" else os.devnull, "rb") as source, open(stdout, "
         result = process.wait(timeout=float(seconds))
     except subprocess.TimeoutExpired:
         result = 124
-    finally:
-        # Also reap descendants left behind by a command's own timeout.
+        # Only a fired watchdog owns termination of the command's group.
+        # A successful command may deliberately leave background work alive.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -117,7 +119,7 @@ if [ -z "$grund" ]; then
   recon_err=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
   run_bounded "$RECONCILE_TIMEOUT" - "$recon_out" "$recon_err" \
     python3 "$repo_root/scripts/close_merged_beads.py" --write \
-      --budget-seconds "$(python3 -c 'import sys; print(max(0.01, float(sys.argv[1]) - 10))' "$RECONCILE_TIMEOUT")"
+      --budget-seconds "$(python3 -c 'import sys; print(max(0.01, float(sys.argv[1]) - float(sys.argv[2])))' "$RECONCILE_TIMEOUT" "$BUDGET_RESERVE")"
   recon_rc=$RUN_RC
   if [ "$recon_rc" -ne 0 ]; then
     if [ "$recon_rc" -eq 124 ]; then
@@ -157,9 +159,12 @@ if command -v jq >/dev/null 2>&1 && ! jq -e . "$p_out" >/dev/null 2>&1; then
 fi
 if [ -n "$hinweis" ]; then
   if command -v jq >/dev/null 2>&1; then
-    jq --arg n "$hinweis" \
-      '.hookSpecificOutput.additionalContext = ((.hookSpecificOutput.additionalContext // "") + "\n\n" + $n)' "$p_out"
-    exit 0
+    if folded=$(jq --arg n "$hinweis" \
+      '.hookSpecificOutput.additionalContext = ((.hookSpecificOutput.additionalContext // "") + "\n\n" + $n)' "$p_out"); then
+      printf '%s\n' "$folded"
+      exit 0
+    fi
+    echo "⚠ Beads-Start-Hook: Hinweis konnte nicht ins JSON eingefügt werden — Prime-Kontext unverändert; Hinweis siehe stderr." >&2
   fi
 fi
 cat "$p_out"

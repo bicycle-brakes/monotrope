@@ -395,10 +395,6 @@ def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None
     ns = _project(tmp_path)
     # Scale the production bounds together; the old outer-only timeout kills
     # this batch after some closes and before its required publication.
-    hook = ns.hooks_dir / "beads-start.sh"
-    hook.write_text(hook.read_text().replace("float(sys.argv[1]) - 10", "float(sys.argv[1]) - 0.1"))
-    script = ns.klon / "scripts" / "close_merged_beads.py"
-    script.write_text(script.read_text().replace("BD_TIMEOUT = 60.0", "BD_TIMEOUT = 0.2"))
     for i in range(14):
         _commit(ns.origin, f"complete item {i}\n\nCloses-Bead: coding-harness-item-{i}")
     ns.render.write_text(
@@ -407,10 +403,59 @@ def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None
     )
     stub = ns.klon / "tools" / "bd"
     stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
-    result = _start(ns, extra={"BEADS_START_RECONCILE_TIMEOUT": "1.5"})
+    result = _start(
+        ns,
+        extra={
+            "BEADS_START_RECONCILE_TIMEOUT": "1.5",
+            "BEADS_START_BUDGET_RESERVE": "0.1",
+            "CLOSE_MERGED_BD_TIMEOUT": "0.2",
+        },
+    )
     assert result.returncode == 0, result.stderr
     calls = _calls(ns)
     assert "dolt push" in calls, (calls, result.stderr)
     assert calls.index("dolt push") < calls.index("prime --hook-json")
     assert "startup budget exhausted" in result.stderr
     assert "abgebrochen" not in result.stderr
+
+
+@pytest.mark.parametrize("prime", ['{"hookSpecificOutput":[]}', '{"hookSpecificOutput":"context"}', "[]", '"context"'])
+def test_note_fold_failure_preserves_prime(tmp_path: Path, prime: str) -> None:
+    ns = _project(tmp_path)
+    ns.prime.write_text(prime + "\n")
+    result = _start(ns, extra={"CLAUDE_RECAP_CHILD": "1"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == prime + "\n"
+    assert "Prime-Kontext unverändert" in result.stderr
+    assert not _wrote(ns)
+
+
+def test_successful_command_keeps_background_work(tmp_path: Path) -> None:
+    ns = _project(tmp_path)
+    marker = tmp_path / "background-completed"
+    script = ns.klon / "scripts" / "close_merged_beads.py"
+    script.write_text(
+        "import subprocess, sys\n"
+        f"subprocess.Popen([sys.executable, '-c', \"import time; from pathlib import Path; time.sleep(0.4); Path({str(marker)!r}).touch()\"])\n"
+    )
+    result = _start(ns)
+    assert result.returncode == 0, result.stderr
+    assert "prime --hook-json" in _calls(ns)
+    deadline = time.monotonic() + 3
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert marker.exists(), "the watchdog killed background work after successful completion"
+
+
+def test_budget_bounds_are_scaled_through_the_environment() -> None:
+    # The budget tests scale the production bounds through these variables, not
+    # by patching a copy of the source, so a scaling that did not apply cannot
+    # silently run the tests at production bounds.
+    code = "import sys; sys.path.insert(0, sys.argv[1]); import close_merged_beads as m; print(m.BD_TIMEOUT)"
+    env = {**os.environ, "CLOSE_MERGED_BD_TIMEOUT": "0.25"}
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(REPO_ROOT / "scripts")], env=env, capture_output=True, text=True, timeout=30
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "0.25"
+    assert "BEADS_START_BUDGET_RESERVE" in HOOK.read_text()

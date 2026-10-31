@@ -79,7 +79,9 @@ LOG_FORMAT = "%H%x00%s%x00%(trailers:only=true,unfold=false)%x1e"
 
 GIT_TIMEOUT = 30.0
 FETCH_TIMEOUT = 60.0
-BD_TIMEOUT = 60.0
+# Overridable so budget tests scale the bound through the environment instead
+# of patching a copy of this source.
+BD_TIMEOUT = float(os.environ.get("CLOSE_MERGED_BD_TIMEOUT", "60.0"))
 
 
 class PreflightError(RuntimeError):
