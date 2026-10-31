@@ -262,3 +262,5 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy4-previ
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 792 files, 2866 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 792 files, 2867 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 792 files, 2868 commits, 12 rules.
