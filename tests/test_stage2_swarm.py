@@ -102,6 +102,25 @@ def selection_for(free: list[str] | None = None, online: list[dict] | None = Non
     }
 
 
+def with_go_store(selection: dict) -> dict:
+    """The selection with a refreshed definition for every Go seat it names.
+
+    A Go seat refuses to start without its model's refreshed definition (the
+    destination is assessed against the address record); the receipt's own
+    store is tested elsewhere. A store a test planted stays as it is.
+    """
+    catalog = dict(selection.get("catalog") or {})
+    if "models_store" in catalog:
+        return selection
+    seats = selection.get("seats") or {}
+    ids = {seat["model"] for role in seats.values() for seat in role if seat["endpoint"] == "opencode-go"}
+    ids |= set((selection.get("free") or {}).get("selected") or [])
+    catalog["models_store"] = {
+        "opencode-go": {"models": [{"id": model, "api": "openai-completions"} for model in sorted(ids)]}
+    }
+    return {**selection, "catalog": catalog}
+
+
 def locator_report(reason: str = "holds the value") -> str:
     return json.dumps(
         {
@@ -480,7 +499,11 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     # The consumed receipt's own contract is tested in test_stage2_research_availability.py; the run takes
     # the selection it returns. `w.selection` may be replaced per test.
     w.selection = selection_for()  # type: ignore[attr-defined]
-    monkeypatch.setattr(stage2_availability, "consume_research", lambda *_args, **_kwargs: w.selection)  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        stage2_availability,
+        "consume_research",
+        lambda *_args, **_kwargs: with_go_store(w.selection),  # type: ignore[attr-defined]
+    )
     w.script()
     return w
 
@@ -2865,7 +2888,14 @@ def test_research_launches_install_the_consumed_catalog_store(sworld: SwarmWorld
     # measured definitions.
     sworld.selection["catalog"] = {
         "pi_version": "test",
-        "models_store": {"opencode-go": {"models": [{"id": "qwen3.8-flash", "api": "openai-completions"}]}},
+        "models_store": {
+            "opencode-go": {
+                "models": [
+                    {"id": model, "api": "openai-completions"}
+                    for model in ("deepseek-v4.1-flash", "mimo-v2.6-pro", "qwen3.8-flash")
+                ]
+            }
+        },
     }
     sworld.complete()
     assert sworld.run() == 0

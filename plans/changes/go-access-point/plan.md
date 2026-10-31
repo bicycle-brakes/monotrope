@@ -226,9 +226,14 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice and the stage-1 attempt ran 44 s; Sonnet continues from the saved work at c17a2696.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice; Sonnet continues: the full verify at 9d1fc216 left 158 red tests, most because research seats refuse to start without a refreshed definition the swarm world does not supply.
+
 ## Time used
 
 2026-10-31 17:02:22–18:45:11 UTC, 6169 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 18:45:18–18:49:04 UTC, 226 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 18:49:10–18:49:54 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-10-31 19:09:22–19:36:45 UTC, 1643 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 20:34:57–21:26:18 UTC, 3080 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

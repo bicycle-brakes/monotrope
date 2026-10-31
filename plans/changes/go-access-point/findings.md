@@ -570,3 +570,151 @@ Stage-2 call, 2026-10-31: implement · attempt 1 · route stage-1 · endpoint cl
 > ERROR tests/test_stage2_go_access.py::test_the_session_refuses_without_the_address_record
 > 31 passed, 1 skipped, 2 errors in 18.97s
 > ```
+
+Stage-2 call, 2026-10-31: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed twice; Sonnet continues: the full verify at 9d1fc216 left 158 red tests, most because research seats refuse to start without a refreshed definition the swarm world does not supply · leak check clean over 802 files, 2922 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_swarm.py` +32 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 2665 lines of this gate left out …]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=98591) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/tests/test_stage2.py:16937: DeprecationWarning: This process (pid=98601) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason
+> FAILED tests/test_stage2.py::test_every_prompt_asks_to_read_nothing_outside
+> FAILED tests/test_stage2.py::test_the_review_loop_launches_pi_isolated - Asse...
+> FAILED tests/test_stage2.py::test_a_failed_stage_is_retired_by_an_explicit_command
+> FAILED tests/test_stage2.py::test_a_retirement_reason_cannot_create_rounds_or_control_rows
+> FAILED tests/test_stage2.py::test_reordering_the_ladder_touches_no_code - Ass...
+> FAILED tests/test_stage2.py::test_the_reviewer_call_can_only_read_and_search
+> FAILED tests/test_stage2.py::test_the_reviewer_prompt_carries_the_loop_prompt_and_the_uncommitted_diff
+> FAILED tests/test_stage2.py::test_a_round_is_written_as_its_rung - AssertionE...
+> FAILED tests/test_stage2.py::test_round_three_starts_only_after_a_taken_row
+> FAILED tests/test_stage2.py::test_a_refused_rung_stops_the_run_without_fallback
+> FAILED tests/test_stage2.py::test_a_model_without_the_cost_value_is_named_in_the_record_and_on_stderr
+> FAILED tests/test_stage2.py::test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung
+> FAILED tests/test_stage2.py::test_replacements_run_down_the_ladder_each_model_once
+> FAILED tests/test_stage2.py::test_a_spent_ladder_leaves_the_failed_member_named
+> FAILED tests/test_stage2.py::test_a_flash_swarm_that_is_not_the_three_cheapest_gets_a_notice
+> FAILED tests/test_stage2.py::test_a_replacement_that_answers_malformed_is_asked_again
+> FAILED tests/test_stage2.py::test_first_paid_rung_names_missing_cost_when_flash_is_skipped
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[review-loop-0]
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[review-loop-946684800000]
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[probe-0]
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[probe-946684800000]
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[prepare-loop-0]
+> FAILED tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch[prepare-loop-946684800000]
+> FAILED tests/test_stage2.py::test_the_loop_stops_when_the_ladder_ends - Asser...
+> FAILED tests/test_stage2.py::test_a_refused_flash_replacement_is_named_and_the_round_kept
+> FAILED tests/test_stage2.py::test_a_dropped_free_stage_with_no_stage_left_says_so
+> FAILED tests/test_stage2.py::test_a_stage_retirement_over_a_lost_record_is_refused
+> FAILED tests/test_stage2.py::test_a_replacement_the_deadline_stopped_is_not_consumed
+> FAILED tests/test_stage2.py::test_a_replacement_admitted_after_the_deadline_is_not_started
+> FAILED tests/test_stage2.py::test_a_deadline_stop_names_the_round_limit - Ass...
+> FAILED tests/test_stage2.py::test_a_continued_run_needs_a_verdict_after_the_last_release
+> FAILED tests/test_stage2_repository_pathlock.py::test_the_repository_seat_launch_loads_only_the_path_lock
+> FAILED tests/test_stage2.py::test_a_not_activated_catalog_field_carries_no_control_bytes
+> FAILED tests/test_stage2.py::test_a_flash_member_malformed_twice_is_still_replaced
+> FAILED tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay[-discovery]
+> FAILED tests/test_stage2.py::test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay[invalid_name1-discovery]
+> FAILED tests/test_stage2_research_deep_review.py::test_every_research_pi_launch_is_offline[repository]
+> FAILED tests/test_stage2_research_deep_review.py::test_every_research_pi_launch_is_offline[public]
+> FAILED tests/test_stage2_terms_expiry.py::test_paid_retries_and_replacements_recheck_expiry
+> FAILED tests/test_stage2_terms_expiry.py::test_paid_calls_recheck_expiry_after_leak_scan[retry]
+> FAILED tests/test_stage2_terms_expiry.py::test_paid_calls_recheck_expiry_after_leak_scan[replacement]
+> FAILED tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence[2026-11-04-review]
+> FAILED tests/test_stage2_terms_expiry.py::test_dispatch_time_warnings_reach_every_callers_evidence[2026-10-31-review]
+> 44 failed, 4380 passed, 17 skipped, 5 warnings in 673.59s (0:11:13)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [ruff-check] $ lauf_cmd
+> tests/test_stage2_go_access.py:46:42: F401 [*] `test_stage2_session.world` imported but unused
+>    |
+> 44 | from test_stage2 import world as stage2_world  # noqa: E402
+> 45 | from test_stage2_session import GO_BARE, GO_MODEL, pi_steps  # noqa: E402
+> 46 | from test_stage2_session import world as session_world  # noqa: E402
+>    |                                          ^^^^^^^^^^^^^ F401
+> 47 |
+> 48 | world = stage2_world
+>    |
+>    = help: Remove unused import: `test_stage2_session.world`
+>
+> tests/test_stage2_go_access.py:453:67: F811 Redefinition of unused `session_world` from line 46
+>     |
+> 453 | def test_the_session_binds_the_checked_model_without_reading_auth(session_world, monkeypatch):
+>     |                                                                   ^^^^^^^^^^^^^ F811
+> 454 |     """Criterion 7: the terminal receives the checked binding, and no credential file is read.
+>     |
+>     = help: Remove definition: `session_world`
+>
+> tests/test_stage2_go_access.py:506:57: F811 Redefinition of unused `session_world` from line 46
+>     |
+> 506 | def test_the_session_refuses_without_the_address_record(session_world, capsys):
+>     |                                                         ^^^^^^^^^^^^^ F811
+> 507 |     """Criterion 8 at the session: with the record gone, the session refuses before anything opens.
+>     |
+>     = help: Remove definition: `session_world`
+>
+> Found 3 errors.
+> [*] 1 fixable with the `--fix` option.
+> ── [ruff-check] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 24968 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
