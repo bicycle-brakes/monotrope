@@ -22,6 +22,7 @@ import functools
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -1487,7 +1488,9 @@ def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Pat
     assert "[probe] gruen" in done.stdout, done.stdout
 
 
-HOLDER_TOKEN = "ci-test-admission-token"
+# Generated per run: a literal token here reads as a key assignment to the leak check and blocks every review prompt
+# whose diff shows this line (bead coding-harness-l7sc, 2026-10-31).
+HOLDER_TOKEN = secrets.token_hex(16)
 
 
 @contextlib.contextmanager
