@@ -151,7 +151,7 @@ def test_the_extension_registers_only_a_gate_and_refuses_other_hosts(world: Worl
 
 
 def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> None:
-    """Run.pi_command keeps --no-extensions and adds the one explicit -e of the lock, copied to a scratch path."""
+    """Run.pi_command keeps --no-extensions and adds the lock's -e, then the neutral-path -e (bead coding-harness-xul8), both copied to a scratch path."""
     import sys
     from types import SimpleNamespace
 
@@ -169,9 +169,10 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     scratch.mkdir()
     command, cwd, _env = run.pi_command({"model": "qwen3.8-flash", "tools": "repository"}, "prompt", scratch)
     assert cwd == tmp_path
-    assert command.count("-e") == 1 and command.count("--no-extensions") == 1
+    assert command.count("-e") == 2 and command.count("--no-extensions") == 1
     assert command.index("--no-extensions") < command.index("-e")
-    loaded = Path(command[command.index("-e") + 1])
+    loaded, neutral = (Path(command[index + 1]) for index, flag in enumerate(command) if flag == "-e")
+    assert neutral.name == "neutral-paths.mjs" and neutral.parent == scratch
     assert loaded.parent == scratch and loaded.read_text(encoding="utf-8") == EXTENSION.read_text(encoding="utf-8")
     assert command[command.index("--tools") + 1] == "read,grep,find,ls"
 

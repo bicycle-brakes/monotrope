@@ -5602,7 +5602,10 @@ def test_all_review_members_load_neutral_paths(world: World) -> None:
     assert world.run("review-loop") == 0, "the free stage failed"
     decide_record(world, status=FIXED)
     world.script(pi=[{"stdout": rows(1)}] * 3)
-    assert world.run("review-loop") == 0, "the paid stages failed"
+    assert world.run("review-loop") == 0, "the Flash stage failed"
+    # each run is one round: the Flash swarm, then the ladder's first rung
+    decide_record(world, status=FIXED)
+    assert world.run("review-loop") == 0, "the ladder rung failed"
     calls = world.reviews("pi")
     assert len(calls) == 5, f"expected two free members, two Flash members and the rung, saw {len(calls)}"
     copies = []

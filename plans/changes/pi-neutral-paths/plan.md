@@ -146,3 +146,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-30 22:28:29–23:27:54 UTC, 3564 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 23:28:00–23:33:27 UTC, 327 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 23:33:33–23:37:17 UTC, 225 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 about 16:55–18:05 UTC, about 4200 s — hand reading of the red tests by the orchestrator (maintainer's choice of 2026-10-31, "Rote Tests lesen"), five stale tests repaired, targeted checks green; measured from the session's own timestamps, not by the runner
+
+Appetite: 2 hours of phase 4. Used by 2026-10-31 18:05 UTC: about 8300 s (2 h 18 min) — over the stop by about 18 minutes. The hand reading was owed 51 minutes and took about 70; the overrun is recorded here, and continuing past it is the maintainer's call.
