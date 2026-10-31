@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-v6vk
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -69,3 +71,25 @@ The exploration is complete. Here is the research, ready to append to `plans/cha
 Facts about the coupling, not a plan: any change to what time records *are* touches the writer (`scripts/stage2.py`: `time_entry`, `with_time_entry`, `persist_time_entry`, `time_log`, prompt texts), the reader (`scripts/run_report.py`: `RUNNER_ENTRY`, `parse_time_line`, `read_time`), their tests (`tests/test_stage2.py`, `tests/test_run_report.py`), the interactive contract (`prompts/04-implement.md`), and the two `docs/WORKFLOW.md` paragraphs. Coordination facts from the neighbours' own specs: the run-report spec's protected areas declare `scripts/stage2.py` and `scripts/stage2_runs.py` unchanged ("this adds a consumer of their formats"), and the runner-time-line/runner-time-line-exits specs protect `scripts/stage2_availability.py` and routing; a writer- or format-side change therefore overlaps declared protected areas of three active changes, which the interview and spec phases must reconcile. `plans/INDEX.md` is runner-derived and regenerated, never hand-edited.
 
 **Neighbours for the header:** `plans/changes/run-report/spec.md` (o2yc, active) · `plans/changes/runner-time-line/spec.md` (9wp, active) · `plans/changes/runner-time-line-exits/spec.md` (9wp, active) · `plans/changes/attempt-diagnostics/spec.md` (active) · `plans/changes/codex-drafts/spec.md` (active) · `plans/changes/archive/2026-09-30-adhd-frame/spec.md` (archived origin of the interactive rule) · `docs/WORKFLOW.md` (living doctrine, "The run report" and the Flash-rows paragraph).
+
+## Draft gap checks — 2026-10-31
+
+Repository baseline: `275efefd`. These are repository-answerable gaps, not
+new maintainer decisions.
+
+- The interview skip now records class `bounded`, the shared-writer remedy,
+  existing format and history-preservation policy; the earlier unread brief
+  and unstated direction above describe the exploration's earlier state.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent.
+  The available plan form is `prompts/03-plan.md`; the existing interview and
+  criterion-ledger checks are executable. Do not claim the missing validator
+  passed or introduce a replacement in this change.
+- `scripts/kit/manifest.yaml` classifies `scripts/harness.py` as travelling
+  mechanism, while its fallback for new scripts is repository stock. A new
+  shared import therefore needs its own mechanism entry, with portable tests.
+  `scripts/ci_gates.py` also inventories non-gate libraries explicitly.
+- The runner's existing restoration-safety refusal can intentionally leave
+  a completed attempt unwritten. The current regression
+  `tests/test_stage2.py::test_runner_early_refusal_recovers_time_destination_safely`
+  covers the aliased-parent case; consolidation must preserve this boundary,
+  rather than writing through an unsafe destination to satisfy exactly-once.
