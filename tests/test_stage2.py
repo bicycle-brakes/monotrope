@@ -74,6 +74,10 @@ FIXED = "fixed — tests/test_x.py::test_y"
 OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 
 # A stand-in: one template for both programs, the standard library only.
+# The real bash, resolved when this module loads, before any test puts its stand-in first on PATH:
+# the stand-in hands every non-document bash call to it, wherever the host keeps bash.
+REAL_BASH = shutil.which("bash") or "/bin/bash"
+
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
 import fcntl
@@ -113,7 +117,7 @@ if alias == "bash" and not docs_check:
     if "bash" in scenario:
         sys.stderr.write("stand-in: bash steps are not served; script the document check as `docs`\\n")
         raise SystemExit(97)
-    os.execv("/bin/bash", ["/bin/bash", *argv])
+    os.execv(scenario["_bash"], [scenario["_bash"], *argv])
 log = here / "calls.jsonl"
 
 
@@ -334,7 +338,7 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
-        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:]}
+        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH}
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
@@ -3976,6 +3980,7 @@ def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     out = subprocess.run([str(world.bin / "bash"), "-c", "echo real; exit 3"], capture_output=True, text=True)
     assert (out.returncode, out.stdout) == (3, "real\n"), "a non-document bash call was stubbed"
     assert world.calls("bash") == [], "a non-document bash call was recorded as a document check"
+    assert json.loads((world.bin / "scenario.json").read_text())["_bash"] == REAL_BASH != str(world.bin / "bash")
     world.script(bash=[{"stdout": "stub"}])
     out = subprocess.run([str(world.bin / "bash"), "-c", "echo real"], capture_output=True, text=True)
     assert out.returncode == 97 and "not served" in out.stderr, "a scripted bash step was silently dropped"
