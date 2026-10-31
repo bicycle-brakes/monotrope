@@ -1,8 +1,10 @@
 ---
 title: "Research — architecture-reconcile"
+category: research
 status: draft
 implementation_status: none
 date: 2026-10-31
+created: 2026-10-31
 last_reviewed: 2026-10-31
 updated: 2026-10-31
 supersedes: null
