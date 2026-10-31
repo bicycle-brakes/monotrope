@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-ut8q
@@ -18,14 +18,7 @@ tags: [research]
 
 # review diff order — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 exploration completed on 2026-10-29 through the Stage-2 route recorded below.
 
 Stage-2 call, 2026-10-29: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 733 files, 2633 commits, 12 rules.
 
@@ -37,9 +30,12 @@ Research complete. Below is the prose for `plans/changes/review-diff-order/resea
 
 ## What exists today
 
+Historical snapshot from exploration on 2026-10-29; the later decision and
+draft follow-up below record the changes to this starting point.
+
 **The direct predecessor artefact.** `docs/research/2026-10-29-review-diff-cut.md` (status draft, same bead coding-harness-ut8q) measured the review diff of three changes on 2026-10-29 and is the factual basis of this change. Its result: `change_diff` hands Git's diff over in path order, so the change's own workflow files (`docs/`, `plans/` with the growing `findings.md`, `prompts/`, `scripts/`) come first and `tests/` last; the 2000-line cut therefore drops the tests. Measured cases: `fail-fast-attempts` (head `78676b5e`, 3371 diff lines, 1445 before any code, `findings.md` alone 582, `tests/test_stage2.py` 698 and `tests/test_stage2_fail_fast.py` 615 not seen at all), `index-merge-regenerates` (`60cd44f2`, 3209 lines, `tests/test_pr_sync.py` 1029 not seen), `run-report` (`358472d8`, 2284 lines, last 284 of `tests/test_run_report.py` not seen). Twelve rounds ran over a cut diff that night. The note names three options — leave `findings.md` and `plans/INDEX.md` out of the diff, order code and tests before prose, split a large change across reviewers — states they combine, and states they touch ADR 0021, so the choice is the maintainer's. Its "Not measured" section records that reviewer finding quality under a new order is unknown, and that the free stage has its own bounds (`FREE_DIFF_MAX_LINES`, `FREE_DIFF_MAX_TOTAL`) which did not run that night.
 
-**The bead's origin and scope drift.** `docs/journal/handover/2026-10-23-night-run.md` (section "New bead coding-harness-ut8q") created the bead as a P1 spike: a diff over the 2000-line bound can never end the loop cleanly, with Pi auto-compaction as the background (`docs/compaction.md`; "whether disabling compaction also disables overflow recovery is not read", same handover). The night-run plans of 2026-10-26 and 2026-10-28 (`docs/research/2026-10-26-night-run-plan.md`, `docs/research/2026-10-28-night-run-plan.md`, item 5 each) still list it as "spike, research note only". The handover of 2026-10-29 (`docs/journal/handover/2026-10-29-three-lane-night.md` item 7) then carries the follow-up as a concrete change: "The review diff order (bead coding-harness-ut8q, PR #274; touches ADR 0021)", with the three options of the research note and the recorded recommendation to take the first two now as one bounded change and the split later. The recommendation is recorded text; no maintainer decision on an option exists in the tree.
+**The bead's origin and scope drift.** `docs/journal/handover/2026-10-23-night-run.md` (section "New bead coding-harness-ut8q") created the bead as a P1 spike: a diff over the 2000-line bound can never end the loop cleanly, with Pi auto-compaction as the background (`docs/compaction.md`; "whether disabling compaction also disables overflow recovery is not read", same handover). The night-run plans of 2026-10-26 and 2026-10-28 (`docs/research/2026-10-26-night-run-plan.md`, `docs/research/2026-10-28-night-run-plan.md`, item 5 each) still list it as "spike, research note only". The handover of 2026-10-29 (`docs/journal/handover/2026-10-29-three-lane-night.md` item 7) then carries the follow-up as a concrete change: "The review diff order (bead coding-harness-ut8q, PR #274; touches ADR 0021)", with the three options of the research note and the recorded recommendation to take the first two now as one bounded change and the split later. At exploration the recommendation was recorded text; the maintainer subsequently answered the choice in `decisions.md`, Q-1 (2026-10-29).
 
 **How the diff is built today (`scripts/stage2.py`).** `change_diff` builds the paid round's input as `git diff --no-color --no-ext-diff --no-textconv <merge-base>` for tracked changes plus one `git diff --no-index /dev/null <path>` per untracked file appended after, in `ls-files --others` order; it applies no ordering and no exclusion of its own, so the reviewer sees git's path order followed by the untracked tail. `bounded_review_diff` cuts that to the first `REVIEW_DIFF_MAX_LINES` = 2000 lines (constant near the top of the file; the count splits on `\n` only, per O191-4) and appends the marker `## (the change diff was cut at …; the rest is not carried)`, returning the cut note. `_review_round` embeds the result into the paid prompt as `prompts/04b-review-loop.md` body + round head + answer format + read request + `## The diff` + diff + read request; for the free stage it merges the free diff's own cut note with the prompt-bound note. The free stage's input comes from `free_diff`: the same merge base with uncommitted and untracked files, filtered through `_free_candidate` (only `scripts/*.py`, `tests/*.py` and executable non-text `tools/` source pass; `FREE_DIFF_SKIP_PARTS` excludes `node_modules`, `.venv`, `venv`, `dist`, `build`, `__pycache__`, `.git`, `.beads`; binaries, symlinked paths and deleted non-source fail), bounded per file at `FREE_DIFF_MAX_LINES` = 400 and in total at `FREE_DIFF_MAX_TOTAL` = 2000, with a `later files are not carried` marker and a cuts list. The free prompt (`free_round_prompt` over `FREE_REVIEW_BODY`) carries that diff alone — no tools, no repository access (criterion 3; ADR 0021 decision 3). The same `free_diff` feeds the free availability probe (`free_probe_prompt`) and the paid `probe` command. Free diff ordering follows the changed-then-untracked name list, deduped — the same git path order, but plans/docs never pass `_free_candidate`, so the prose-ordering problem exists only in the paid `change_diff`.
 
@@ -57,9 +53,12 @@ Research complete. Below is the prose for `plans/changes/review-diff-order/resea
 
 ## What is unclear
 
-- **The maintainer's choice among the three options is open.** The research note says the options touch ADR 0021, so the choice is the maintainer's; the 2026-10-29 handover records a recommendation, not a decision. No `[DECISION]` answer exists in the tree.
-- **Whether the cut-round rule stays as is under a new order.** The measured night shows rounds over a cut diff; if ordering keeps tests inside the bound, the interaction of the never-clean rule (`round_was_cut`) with an ordered-but-still-cut diff is not stated anywhere I read.
-- **Whether the untracked tail's position (after all tracked output) is intended.** `change_diff` concatenates it without comment; no source states the intent.
+The first three exploration questions are resolved; the remaining limits
+were not re-investigated by this repair.
+
+- **The maintainer's choice is answered.** `decisions.md`, Q-1 (2026-10-29), selects excluding the loop's own records and putting code and tests first; splitting stays outside this change.
+- **The cut-round rule stays.** `decisions.md`, "The cut-round rule stays", retains the never-clean rule for an ordered diff that is still cut.
+- **The paid untracked tail is superseded.** The accepted spec, criterion 2, orders tracked and untracked paths together. The free stage retains its existing order (`decisions.md`, "The free stage stays as it is").
 - **The measured numbers are recorded, not re-verified by me.** The three heads named in the research note (`78676b5e`, `60cd44f2`, `358472d8`) were not re-measured in this worktree.
 - **Pi compaction interplay remains unread**, as the bead's origin handover states: whether disabling Pi's compaction also disables overflow recovery (`docs/journal/handover/2026-10-23-night-run.md`).
 - **`_free_candidate` has no test named after it.** Searching `tests/` for the symbol finds no matches; its classification is covered only indirectly through `free_diff` behaviour tests. Not found as a direct test; not there as a direct test — two statements.
@@ -72,7 +71,7 @@ Research complete. Below is the prose for `plans/changes/review-diff-order/resea
 
 ---
 
-For you (the orchestrator/maintainer), the one open item before phase 1a: the three options in `docs/research/2026-10-29-review-diff-cut.md` are recorded as the maintainer's choice (they touch ADR 0021); the 2026-10-29 handover's recommendation (exclude the loop's own records + code/tests first, as one bounded change) is written down but not yet answered.
+The option choice raised by exploration was answered on 2026-10-29; the following section records that answer and `decisions.md`, Q-1, is its source.
 
 ## Objective and the decision recorded after exploration
 
@@ -82,7 +81,7 @@ loop cleanly. The measurement of 2026-10-29
 (`docs/research/2026-10-29-review-diff-cut.md`) showed that the cut drops the
 tests, because the change's own workflow files come first in Git's path order.
 
-The open item above — which option — was answered by the maintainer on
+The option choice raised during exploration was answered by the maintainer on
 2026-10-29 (recorded in the work item's notes and in `decisions.md`, Q-1):
 one change that leaves `findings.md` and `plans/INDEX.md` out of the
 review-loop diff and puts code and tests first. Splitting the diff across

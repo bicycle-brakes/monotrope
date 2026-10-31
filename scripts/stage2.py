@@ -3782,7 +3782,7 @@ def _is_prose(relative: str) -> bool:
 def paid_review_diff(root: Path) -> str:
     """The diff a paid review round embeds: implementation inputs first, then prose.
 
-    Files with the basename `findings.md` and the generated `plans/INDEX.md` stay out
+    Loop records `plans/changes/*/findings.md` and the generated `plans/INDEX.md` stay out
     (criterion 1): the loop writes them itself, and their growth consumed the paid
     prompt's bound before code and tests (bead coding-harness-ut8q). What remains is
     ordered by the spec's Terms (criterion 2): every implementation input before every
@@ -3802,6 +3802,14 @@ def paid_review_diff(root: Path) -> str:
         )
         if name
     ]
+    staged = [
+        name
+        for name in _git_output(
+            root, "diff", "--cached", "--name-only", "--no-renames", "-z", base, preserve_newlines=True
+        ).split("\0")
+        if name
+    ]
+    working_set = set(changed)
     untracked = [
         name
         for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", preserve_newlines=True).split(
@@ -3812,11 +3820,14 @@ def paid_review_diff(root: Path) -> str:
     untracked_set = set(untracked)
     names: list[str] = []
     seen: set[str] = set()
-    for rel in [*changed, *untracked]:
+    for rel in [*changed, *staged, *untracked]:
         if rel in seen:
             continue
         seen.add(rel)
-        if Path(rel).name == "findings.md" or rel == "plans/INDEX.md":
+        path = Path(rel)
+        if (
+            len(path.parts) == 4 and path.parts[:2] == ("plans", "changes") and path.name == "findings.md"
+        ) or rel == "plans/INDEX.md":
             continue
         names.append(rel)
     # The tuple puts implementation inputs (False) before prose (True), each group in path order.
@@ -3828,13 +3839,26 @@ def paid_review_diff(root: Path) -> str:
                 root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1), preserve_newlines=True
             )
         else:
+            # Prefer the combined base-to-working-tree diff; fall back to the index
+            # when the working file was restored to the base, so each path occurs once.
+            index_flags = [] if rel in working_set else ["--cached"]
             piece = _git_output(
-                root, "diff", *flags, "--no-renames", base, "--", f":(literal){rel}", preserve_newlines=True
+                root,
+                "diff",
+                *flags,
+                *index_flags,
+                "--no-renames",
+                base,
+                "--",
+                f":(literal){rel}",
+                preserve_newlines=True,
             )
         if not piece.strip():
             continue
         # Git's pieces end with their own newline; plain concatenation keeps the line count git's.
-        parts.append(piece)
+        # Path enumeration needs surrogateescape for lossless Git path arguments.
+        # Prompt text instead needs replacement decoding, without newline translation.
+        parts.append(os.fsencode(piece).decode("utf-8", errors="replace"))
     return "".join(parts)
 
 

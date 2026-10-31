@@ -42,16 +42,20 @@ no Stage-1 fallback was recorded. No design phase or ADR draft is due.
 2. `scripts/stage2.py`: add `paid_review_diff(root)` and use it only in the
    paid branch of `_review_round`, before `bounded_review_diff`.
    - Enumerate changed paths with `git diff --name-only --no-renames -z`
-     against `_merge_base(root)`, union with NUL-delimited untracked paths;
-     deduplicate, exclude exact basenames `findings.md` and `plans/INDEX.md`.
+     against `_merge_base(root)`, union with the corresponding `--cached`
+     listing and NUL-delimited untracked paths; deduplicate, exclude only
+     `plans/changes/*/findings.md` and `plans/INDEX.md`.
    - Sort by `(prose, relative_path)` using the spec's Terms: `docs/`,
      `plans/`, `prompts/` and suffixes `.md`, `.rst`, `.txt`, `.adoc` are prose;
      all other paths are implementation inputs. Tracked status is no sort key.
    - Emit each complete tracked file diff against the base with
-     `--no-renames` and a literal pathspec; untracked paths use the existing
-     relative `--no-index -- /dev/null <path>` form, allowing exits 0 and 1.
+     `--no-renames` and a literal pathspec; use the index diff for a path whose
+     working file matches the base but whose staged content differs. Untracked
+     paths use the existing relative `--no-index -- /dev/null <path>` form, allowing exits 0 and 1.
      Retain `--no-color --no-ext-diff --no-textconv` and `_git_output` refusal
-     behavior; use its `preserve_newlines=True` so hunk text is not rewritten.
+     behavior; use its `preserve_newlines=True` so line endings are retained.
+     Keep path enumeration lossless; decode emitted diff bytes as UTF-8 with
+     replacement for invalid bytes so every paid prompt can be written.
      Do not parse diff headers or import `_free_candidate` restrictions.
    - Keep `change_diff` unchanged: availability binding must hash the full
      raw diff. Leave `free_diff`, probes, bounds and cut/release parsers alone.
@@ -80,6 +84,8 @@ no Stage-1 fallback was recorded. No design phase or ADR draft is due.
 - 1: tests/test_stage2.py::test_paid_review_diff_excludes_only_named_records — an excluded tracked/untracked file appears, or a lookalike is dropped.
 - 2: tests/test_stage2.py::test_paid_review_diff_orders_tracked_and_untracked_together — tracked prose precedes untracked implementation or group/path order varies.
 - 3: tests/test_stage2.py::test_paid_review_diff_preserves_retained_file_diffs — any state, rename side, literal path or original line ending is lost or duplicated.
+- 3: tests/test_stage2.py::test_paid_review_diff_includes_an_index_only_change — a staged change disappears when its working file matches the base.
+- 3: tests/test_stage2.py::test_paid_round_writes_non_utf8_diff — a non-UTF-8 tracked or untracked text file prevents any paid member from writing its prompt, or CRLF is rewritten.
 - 4: tests/test_stage2.py::test_paid_round_bounds_the_filtered_ordered_diff — sorting/filtering happens after the cut, or a paid member receives the raw diff.
 - 4: tests/test_stage2.py::test_paid_review_diff_at_the_bound_is_not_cut — the at-limit input falsely records a cut.
 - 5: tests/test_stage2.py::test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so — an over-limit paid round hides its cut or ends cleanly.
@@ -126,3 +132,4 @@ Revised 2026-10-29 about 21:59 UTC (maintainer's decision of about 19:25 UTC): t
 2026-10-30 02:09:41–02:48:50 UTC, 2349 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-30 02:48:56–03:01:06 UTC, 730 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-10-30 23:40 UTC — the orchestrator's bootstrap edit of `prompts/04b-review-loop.md` (Input paragraph), as plan step 4 says; the maintainer's +1.5 h slot of 2026-10-30 ~06:20 UTC starts here · measured with `date -u`
+2026-10-31 00:30:05–00:44:00 UTC, 835 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

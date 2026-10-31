@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-30
+updated: 2026-10-31
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1382,8 +1382,8 @@ can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
 declaration — with the paid rounds' read-only tools. A paid round's diff is a
-projection of its own: the loop's own records — every `findings.md` and the
-generated `plans/INDEX.md` — stay out of it, every implementation input
+projection of its own: the loop's own records — `plans/changes/*/findings.md` (one change
+directory) and the generated `plans/INDEX.md` — stay out of it, every implementation input
 precedes every prose file, each group in one lexical repository-relative path
 order regardless of tracking state, every retained file keeps its complete
 diff against the merge base exactly once, and the `REVIEW_DIFF_MAX_LINES` bound

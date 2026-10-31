@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-ut8q
@@ -45,7 +45,7 @@ Maintainer's scope: [decisions.md, Q-1](decisions.md#q-1--which-remedy-for-the-c
 - **Implementation inputs:** paths outside `docs/`, `plans/` and `prompts/`
   whose suffix is not `.md`, `.rst`, `.txt` or `.adoc`; this includes source,
   tests, executable tools and runtime configuration. **Prose:** other paths.
-- **Excluded paths:** any file with basename exactly `findings.md`, plus
+- **Excluded paths:** exactly `plans/changes/*/findings.md` (one change directory), plus
   exactly the repository-relative path `plans/INDEX.md`.
 
 ## Acceptance criteria
@@ -107,8 +107,8 @@ no answer is inferred from the earlier handover's recommendation.
 - [DETAIL] Implementation inputs and prose use the explicit classification
   in Terms, with lexical path order inside each group: this reversible rule
   avoids a source-language allowlist and treats new tests like tracked tests.
-- [DETAIL] Exclude exact basenames `findings.md` throughout the tree and the
-  exact index path only: this applies the named exclusions without dropping
+- [DETAIL] Exclude only loop records `plans/changes/*/findings.md` and the
+  exact index path: this applies the named exclusions without dropping
   other plans, research, similarly named files or directories.
 - [DETAIL] Rename diffs may be deletion/addition pairs: both paths remain
   visible without making ordering depend on Git's similarity detection.

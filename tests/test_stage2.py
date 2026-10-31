@@ -1198,12 +1198,18 @@ def test_paid_review_diff_excludes_only_named_records(world: World) -> None:
     root = world.root
     (root / "docs").mkdir(exist_ok=True)
     (root / "docs" / "notes.md").write_text("TRACKED-PROSE-BODY\n", encoding="utf-8")
-    (root / "docs" / "findings.md").write_text("TRACKED-FINDINGS-BODY\n", encoding="utf-8")
+    (root / "docs" / "findings.md").write_text("RETAINED-DOC-FINDINGS\n", encoding="utf-8")
+    (root / "plans" / "changes" / "demo" / "findings.md").write_text("TRACKED-FINDINGS-BODY\n", encoding="utf-8")
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "prose and a tracked findings file")
-    world.findings.write_text("UNTRACKED-FINDINGS-BODY\n" * 40, encoding="utf-8")
+    (root / "plans" / "changes" / "untracked").mkdir(exist_ok=True)
+    (root / "plans" / "changes" / "untracked" / "findings.md").write_text(
+        "UNTRACKED-FINDINGS-BODY\n" * 40, encoding="utf-8"
+    )
     (root / "plans" / "INDEX.md").write_text("GENERATED-INDEX-BODY\n" * 40, encoding="utf-8")
-    # Lookalikes keep their place: the exclusion is the exact basename and the exact index path only.
+    # Other findings files and lookalikes remain visible; only the loop records are excluded.
+    (root / "templates").mkdir(exist_ok=True)
+    (root / "templates" / "findings.md").write_text("RETAINED-TEMPLATE-FINDINGS\n", encoding="utf-8")
     (root / "src" / "myfindings.md").write_text("MYFINDINGS-LOOKALIKE-BODY\n", encoding="utf-8")
     # (Not a lowercase index.md: on a case-insensitive filesystem that is the index itself.)
     (root / "plans" / "INDEX-old.md").write_text("SIBLING-INDEX-BODY\n", encoding="utf-8")
@@ -1213,10 +1219,12 @@ def test_paid_review_diff_excludes_only_named_records(world: World) -> None:
     expected = "".join(
         [
             git_piece(root, base, "scripts/helper.py", untracked=False),
+            git_piece(root, base, "docs/findings.md", untracked=False),
             git_piece(root, base, "docs/notes.md", untracked=False),
             git_piece(root, base, "plans/INDEX-old.md", untracked=True),
             git_piece(root, base, "plans/changes/demo/INDEX.md", untracked=True),
             git_piece(root, base, "src/myfindings.md", untracked=True),
+            git_piece(root, base, "templates/findings.md", untracked=True),
         ]
     )
     assert diff == expected, "the paid diff is not just the retained files' own diffs, prose last"
@@ -1302,6 +1310,44 @@ def test_paid_review_diff_preserves_retained_file_diffs(world: World) -> None:
     )
     assert "-value = 1\n" in diff and "+value = 3\n" in diff, "the staged and edited file lost one of its sides"
     assert "+CRLF_B = 2\r\n" in diff, "the carriage returns were rewritten"
+
+
+def test_paid_review_diff_includes_an_index_only_change(world: World) -> None:
+    """A staged change survives even when its working file matches the merge base."""
+    root = world.root
+    base = stage2._merge_base(root)
+    app = root / "src" / "app.py"
+    app.write_text("INDEX_ONLY = 2\n", encoding="utf-8")
+    git(root, "add", "src/app.py")
+    app.write_text(raw_git(root, "show", f"{base}:src/app.py"), encoding="utf-8")
+    assert git(root, "diff", base, "--", "src/app.py") == ""
+    expected = raw_git(root, "diff", "--cached", "--no-renames", base, "--", ":(literal)src/app.py")
+    diff = stage2.paid_review_diff(root)
+    assert expected and diff.count(expected) == 1
+    assert "+INDEX_ONLY = 2\n" in diff
+
+
+@pytest.mark.parametrize("tracked", [False, True])
+def test_paid_round_writes_non_utf8_diff(world: World, tracked: bool) -> None:
+    """Every paid member can write its UTF-8 prompt despite non-UTF-8 Git input."""
+    root = world.root
+    # Keep the filename portable on filesystems that require UTF-8 names.
+    name = "src/non-utf8.py"
+    path = root / name
+    if tracked:
+        path.write_bytes(b"old = 1\r\n")
+        git(root, "add", "--", name)
+        git(root, "commit", "--quiet", "-m", "tracked non-UTF-8 filename")
+    path.write_bytes(b"NON_UTF8 = 'caf\xe9'\r\n")
+    diff = stage2.paid_review_diff(root)
+    assert "+NON_UTF8 = 'caf\ufffd'\r\n" in diff
+    diff.encode("utf-8", errors="strict")
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free",)))
+    world.script(pi=[{"model": model, "stdout": "No finding."} for model in ("deepseek-v4.1-flash", "mimo-v2.6-flash")])
+    assert world.run("review-loop") == 0
+    prompts = paid_prompts(world, 2)
+    assert len(prompts) == 2
+    assert all("NON_UTF8 = 'caf\ufffd'" in prompt for prompt in prompts)
 
 
 def test_paid_round_bounds_the_filtered_ordered_diff(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
