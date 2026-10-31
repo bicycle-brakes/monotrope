@@ -258,3 +258,5 @@ Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/architecture-reconcile/stage2/attempts/architecture-reconcile/attempt-3-20261031T172140035376Z-af9f6eae.md
 > ````
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 806 files, 2912 commits, 12 rules.
