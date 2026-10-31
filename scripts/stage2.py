@@ -4872,7 +4872,9 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
-    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
+    """The bounded evidence of a red post-run check (`make verify`, or the draft's document check).
+
+    It renders the framed gates that blocked, else the run's tail.
 
     Read the active denylist at diagnostic emission time and raise Refused fail-closed if
     protection refuses, on every route including keyless routes (key=None). The complete
@@ -7460,15 +7462,23 @@ def card_problem(text: str) -> str | None:
     return None
 
 
+# The draft's post-run check is the verify job's existing document subset, selected through the
+# shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
+# bead coding-harness-77qj). Implement and repair keep the full `make verify`.
+DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
+DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
+
+
 def verify_draft(
     root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
 ) -> tuple[list[str], bool]:
     """A draft attempt's post-run checks: the problems, and whether the answer is owed.
 
-    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, `make verify` -
-    its exit code decides; the one missing answer it tolerates is the gate's own, asked for through
-    `check_adr_answers.TOLERATE_ENV`, never read from its output - the two
-    artefacts, the plan card and the `## Time used` heading.
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
+    `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
+    is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
+    the two artefacts, the plan card and the `## Time used` heading. The full suite stays with
+    implement, repair and the orchestrator.
     """
     owed = False
     if len(new_adrs) > 1:
@@ -7485,7 +7495,7 @@ def verify_draft(
                 "GIT_CONFIG_VALUE_0": "false",
                 # The one tolerance of a draft is the gate's own, set by this runner alone: with this
                 # variable `adr-answers` reports this change's missing answer and passes, so the
-                # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
+                # exit code of the document check decides and no output is read (spec, criterion 13; F-9, F-10).
                 check_adr_answers.TOLERATE_ENV: ctx.change,
             }
         ),
@@ -7497,9 +7507,9 @@ def verify_draft(
     try:
         # One machine-wide admission before the timed check: queue and memory waits consume no
         # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        with verify_lock.hold_admission(["make", "verify"]) as owned:
+        with verify_lock.hold_admission(DOCS_VERIFY) as owned:
             done = launch(
-                ["make", "verify"],
+                DOCS_VERIFY,
                 root,
                 verify_lock.inherit_env(env),
                 timeout=VERIFY_SECONDS,
@@ -7507,12 +7517,12 @@ def verify_draft(
                 pass_fds=_lock_fds(owned),
             )
     except (CallFailed, verify_lock.VerifyLockError) as error:
-        # A make that cannot start is as failed a post-run check as a red one: its diagnostics
-        # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
-        return [f"`make verify` could not run: {error}"], owed
+        # A document check that cannot start is as failed a post-run check as a red one: its
+        # diagnostics reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
+        return [f"`{DOCS_VERIFY_NAME}` could not run: {error}"], owed
     problems = []
     if done.returncode != 0:
-        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        problems.append(f"`{DOCS_VERIFY_NAME}` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     else:
         owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()

@@ -20,7 +20,7 @@ Usage:
 Exit: 0 = nothing found, 1 = findings, 3 = could not measure.
 
 Environment: `ADR_ANSWERS_TOLERATE_CHANGE=<change>` makes the missing answer of that one change
-a report line and not a finding. `scripts/stage2.py draft` sets it for its `make verify`: only
+a report line and not a finding. `scripts/stage2.py draft` sets it for its document check: only
 the maintainer may create the answer, so a drafted feature never has it, and the exit code then
 decides without the runner reading any output. Another change's missing answer, a refused answer
 file and every anchor problem stay findings.

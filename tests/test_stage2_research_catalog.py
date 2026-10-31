@@ -6,6 +6,7 @@ qualification remains separate from these catalog and seat-plan checks.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import json
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -50,6 +52,14 @@ def capability(ident: str, **changes) -> dict:
     return {"id": ident, "tool_call": True, **changes}
 
 
+def held_name(path: str) -> str | None:
+    """The held-set name of a request; the versioned hop is held apart from the initial request."""
+    base = path.split("?", 1)[0]
+    if base == f"/api/models/providers/{GO}":
+        return "pi-hop" if "pi-version=" in path else "pi"
+    return "metadata" if base == "/metadata" else None
+
+
 class Sources:
     def __init__(self) -> None:
         self.pi_models = [model(ident) for ident in FIXED] + [model("alpha-free"), model("beta-free")]
@@ -66,6 +76,13 @@ class Sources:
         # (bead coding-harness-jik: deadline tests wait on this event, not on wall-clock delays).
         self.held: set[str] = set()
         self.held_marker: Path | None = None
+        # A redirect rule answers one request with (status, Location); a callable rule receives the
+        # full request path, and a None Location sends no Location header at all. The request whose
+        # query carries pi-version is the admitted hop, not the initial catalog request.
+        self.pi_redirect: object | None = None
+        self.hop_redirect: object | None = None
+        self.metadata_redirect: object | None = None
+        self.hop_resets = False
 
 
 @pytest.fixture
@@ -78,7 +95,33 @@ def sources():
 
         def do_GET(self):  # noqa: N802 - stdlib callback
             path = self.path.split("?", 1)[0]
+            hop = "pi-version=" in self.path
             state.requests.append((self.path, dict(self.headers)))
+            if hop and state.hop_resets:
+                # The admitted hop's connection is dropped without a response: its network-failure case.
+                self.close_connection = True
+                return
+            rule = None
+            if path == f"/api/models/providers/{GO}":
+                rule = state.hop_redirect if hop else state.pi_redirect
+            elif path == "/metadata":
+                rule = state.metadata_redirect
+            if rule is not None:
+                status, location = rule(self.path) if callable(rule) else rule
+                state.events.append(("start", self.path))
+                payload = b"redirecting"  # a body the bridge must never record as the catalog
+                try:
+                    self.send_response(status)
+                    if location is not None:
+                        self.send_header("Location", location)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                state.events.append(("end", self.path))
+                return
             if path == f"/api/models/providers/{GO}":
                 body = state.pi_body if state.pi_body is not None else json.dumps(state.pi_models)
                 status, delay = state.pi_status, state.pi_delay
@@ -87,19 +130,17 @@ def sources():
                 status, delay = state.metadata_status, state.metadata_delay
             else:
                 body, status, delay = "unexpected endpoint", 404, 0
-            state.events.append(("start", path))
+            state.events.append(("start", self.path))
             if state.overlap is not None:
                 state.overlap.wait(timeout=60)
-            name = "pi" if path.startswith("/api/models/") else "metadata" if path == "/metadata" else None
+            name = held_name(self.path)
             if name in state.held:
-                arrived = {
-                    "pi" if p.startswith("/api/models/") else "metadata" for e, p in state.events if e == "start"
-                }
+                arrived = {held_name(p) for event, p in state.events if event == "start"}
                 if state.held_marker is not None and state.held <= arrived:
                     state.held_marker.write_text("held")
                 state.stop.wait()
             state.stop.wait(delay)
-            state.events.append(("end", path))
+            state.events.append(("end", self.path))
             encoded = body.encode()
             try:
                 self.send_response(status)
@@ -122,8 +163,27 @@ def sources():
     thread.join(timeout=2)
 
 
+def refuse_redirect_with_hold(sources: Sources) -> None:
+    """A redirect answers at once and skips the held wait and the overlap barrier, so the two never combine.
+
+    Without this, such a case would fail only at the outer subprocess timeout (review row L7-1).
+    """
+    redirected = {
+        name
+        for name, rule in (
+            ("pi", sources.pi_redirect),
+            ("pi-hop", sources.hop_redirect),
+            ("metadata", sources.metadata_redirect),
+        )
+        if rule is not None
+    }
+    assert not redirected & sources.held, f"a redirected request cannot be held: {sorted(redirected & sources.held)}"
+    assert not (redirected and sources.overlap is not None), "a redirect answers before the overlap barrier"
+
+
 def collect(tmp_path: Path, sources: Sources, **options) -> dict:
     """The actual pinned runtime; executable/auth-read traps surround it."""
+    refuse_redirect_with_hold(sources)
     script = r"""
 import fs from 'node:fs';
 import child from 'node:child_process';
@@ -201,11 +261,15 @@ console.log(JSON.stringify(result));
 
 
 def held_collect(tmp_path: Path, sources: Sources, held: set[str]) -> dict:
-    """`collect` with the named sources held until teardown and the shared deadline fired by event."""
+    """`collect` with the named requests held until teardown and the shared deadline fired by event.
+
+    Held names: "pi" is the initial catalog request, "pi-hop" the admitted versioned hop and
+    "metadata" the capability source. Every held request, like every redirect body, is a body the
+    bridge never reads, so exactly `2 - len(held)` reads remain answerable before the deadline.
+    """
     sources.held = set(held)
     sources.held_marker = tmp_path / f"held-{len(sources.requests)}"
-    answered = len({"pi", "metadata"} - sources.held)
-    control = {"marker": str(sources.held_marker), "answered": answered}
+    control = {"marker": str(sources.held_marker), "answered": 2 - len(sources.held)}
     return collect(tmp_path, sources, deadlineMs=10000, controlledDeadline=control)
 
 
@@ -895,3 +959,380 @@ def test_missing_metadata_id_excludes_only_that_candidate(tmp_path, sources):
     assert excluded["reason"] == "metadata-malformed"
     assert excluded["evidence"]["id"] == {"present": False}
     assert result["capability_status"] == "available"
+
+
+# ---------------------------------------------------------------------------
+# Pi catalog redirect (bead coding-harness-j2wb): the one admitted version hop
+# ---------------------------------------------------------------------------
+
+
+def versioned_location(path: str, pin: str = PIN, prefix: bool = False) -> str:
+    """A Location that repeats the request's own query and adds exactly `pi-version=<pin>`.
+
+    `prefix` puts the version parameter first: query order must not matter for admission.
+    """
+    base, _, query = path.partition("?")
+    version = f"pi-version={pin}"
+    if prefix:
+        return f"{base}?{version}&{query}" if query else f"{base}?{version}"
+    return f"{base}?{query}&{version}" if query else f"{base}?{version}"
+
+
+@contextlib.contextmanager
+def foreign_server():
+    """A second, independently counted loopback server: a foreign origin no request may reach."""
+    requests: list[tuple[str, dict]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):  # noqa: N802 - stdlib callback
+            requests.append((self.path, dict(self.headers)))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"[]")
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.daemon_threads = True
+    thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.02), daemon=True)
+    thread.start()
+    try:
+        yield requests, f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+@pytest.mark.parametrize(
+    "status,build",
+    [
+        (301, lambda _url, path: versioned_location(path)),
+        (302, lambda _url, path: versioned_location(path, prefix=True)),
+        (303, lambda _url, path: versioned_location(path).replace("%2C", ",")),
+        (307, lambda url, path: f"{url}{versioned_location(path)}"),
+        (308, lambda _url, path: versioned_location(path, prefix=True)),
+    ],
+)
+def test_preflight_accepts_one_pinned_version_redirect(tmp_path, sources, status, build):
+    # Criterion 1. Planted fault: the admitted version hop fails preflight, hard-codes the version
+    # independently of the pin, or loses fresh catalog entries on the way.
+    def admitted(path: str) -> tuple[int, str]:
+        return status, build(sources.url, path)
+
+    sources.pi_redirect = admitted
+    bridge = collect(tmp_path, sources)
+    assert bridge["exit_code"] == 0
+    first_path = next(p for p in pi_requests(sources) if "pi-version=" not in p)
+    assert sum("pi-version=" in p for p, _ in sources.requests) == 1, "the admitted hop ran once"
+    evidence = bridge["sources"]["pi"]
+    assert evidence["url"] == f"{sources.url}{first_path}", "the requested url was overwritten"
+    assert evidence["redirect_status"] == status
+    built = build(sources.url, first_path)
+    assert evidence["redirected_to"] == (built if built.startswith("http") else f"{sources.url}{built}")
+    assert len(pi_requests(sources)) == 2, "the admitted hop is the only second request"
+    # Row L1-2: pi.dev's redirect depends on the user agent, so the hop sends the original headers.
+    first_headers, hop_headers = (
+        {k.lower(): v for k, v in h.items()} for p, h in sources.requests if p.startswith("/api/models/providers/")
+    )
+    for name in ("user-agent", "accept"):
+        assert hop_headers.get(name) == first_headers.get(name), f"the admitted hop dropped {name}"
+    result = select(bridge)
+    assert result["selected"] == ["alpha-free", "beta-free"]
+    assert result["fixed"] == FIXED
+    kept = result["sources"]["pi"]
+    assert kept["redirected_to"] == evidence["redirected_to"]
+    assert kept["redirect_status"] == status
+    assert kept["sha256"] == hashlib.sha256(evidence["body"].encode()).hexdigest()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "foreign-origin",
+        "other-path",
+        "altered-original-value",
+        "duplicated-original-pair",
+        "comma-collision",
+        "wrong-version",
+        "duplicate-version",
+        "extra-parameter",
+        "credentials",
+        "fragment",
+        "empty-fragment",
+        "missing-location",
+        "unparsable-location",
+    ],
+)
+def test_preflight_refuses_unapproved_catalog_redirect(tmp_path, sources, fault):
+    # Criterion 2. Planted fault: a forbidden target is contacted before the refusal, or the refusal
+    # evidence is absent or reads as an empty catalog.
+    with foreign_server() as (foreign_requests, foreign_url):
+        chosen: dict[str, str | None] = {}
+
+        def refused(path: str) -> tuple[int, str | None]:
+            base, _, query = path.partition("?")
+            admitted = f"{path}&pi-version={PIN}"
+            if fault == "foreign-origin":
+                location = f"{foreign_url}{admitted}"
+            elif fault == "other-path":
+                location = f"/api/models/providers/other?{query}&pi-version={PIN}"
+            elif fault == "altered-original-value":
+                location = f"{base}?{query.split('=', 1)[0]}=altered&pi-version={PIN}"
+            elif fault == "duplicated-original-pair":
+                location = f"{path}&{query}&pi-version={PIN}"
+            elif fault == "comma-collision":
+                # Row L1-6: `types=chat,image` and `types,chat=image` joined to the same string.
+                name, value = next((n, v) for n, v in urllib.parse.parse_qsl(query) if "," in v)
+                head, _, rest = value.partition(",")
+                moved = urllib.parse.urlencode([(f"{name},{head}", rest)])
+                others = [(n, v) for n, v in urllib.parse.parse_qsl(query) if n != name]
+                tail = f"&{urllib.parse.urlencode(others)}" if others else ""
+                location = f"{base}?{moved}{tail}&pi-version={PIN}"
+            elif fault == "wrong-version":
+                location = f"{path}&pi-version=0"
+            elif fault == "duplicate-version":
+                location = f"{admitted}&pi-version={PIN}"
+            elif fault == "extra-parameter":
+                location = f"{admitted}&extra=1"
+            elif fault == "credentials":
+                location = f"{sources.url.replace('http://', 'http://catalog-user@')}{admitted}"
+            elif fault == "fragment":
+                location = f"{admitted}#catalog"
+            elif fault == "empty-fragment":
+                # Phase-6 row F6-1: a bare `#` leaves `URL.hash` empty, so the raw Location is checked.
+                location = f"{admitted}#"
+            elif fault == "missing-location":
+                location = None
+            else:
+                location = "http://"
+            chosen["location"] = location
+            return 307, location
+
+        sources.pi_redirect = refused
+        bridge = collect(tmp_path, sources)
+
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "redirect-refused"
+    if fault == "missing-location":
+        assert "no usable Location" in evidence["error"]
+    elif fault == "unparsable-location":
+        assert "not a usable URL" in evidence["error"] and "http://" in evidence["error"]
+    else:
+        named = chosen["location"]
+        assert (named if named.startswith("http") else f"{sources.url}{named}") in evidence["error"]
+    assert "body" not in evidence and "status" not in evidence, "a refusal was accepted as a snapshot"
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+    assert len(pi_requests(sources)) == 1, "the refused target was contacted"
+    assert not any("pi-version=" in path for path in pi_requests(sources)), "the versioned target was contacted"
+    assert not foreign_requests, "a foreign target was contacted"
+
+
+def test_preflight_refuses_a_second_catalog_redirect(tmp_path, sources):
+    # Criterion 3. Planted fault: a third GET happens, preflight succeeds, or the second redirect is
+    # an indistinguishable ordinary request failure.
+    def admitted(path: str) -> tuple[int, str]:
+        return 307, versioned_location(path)
+
+    with foreign_server() as (foreign_requests, foreign_url):
+
+        def again(path: str) -> tuple[int, str]:
+            return 307, f"{foreign_url}{path}"
+
+        sources.pi_redirect = admitted
+        sources.hop_redirect = again
+        bridge = collect(tmp_path, sources)
+
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "redirect-refused"
+    assert evidence["redirected_to"] in evidence["error"], "the admitted target is not named"
+    assert evidence["redirect_status"] == 307
+    assert "body" not in evidence and "status" not in evidence and "sha256" not in evidence
+    assert len(pi_requests(sources)) == 2, "a third catalog GET happened"
+    assert not foreign_requests, "the hidden second Location was followed"
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+
+
+def test_preflight_records_a_300_with_location_as_an_unfollowed_http_error(tmp_path, sources):
+    # Review row L2-2. Planted fault: a 300 Multiple Choices with a Location is followed, or classified
+    # as a redirect refusal instead of the ordinary answer it is outside the admitted status set.
+    with foreign_server() as (foreign_requests, foreign_url):
+
+        def choices(path: str) -> tuple[int, str]:
+            return 300, f"{foreign_url}{path}"
+
+        sources.pi_redirect = choices
+        bridge = collect(tmp_path, sources)
+
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "http-error" and evidence["status"] == 300
+    assert "redirected_to" not in evidence and "redirect_status" not in evidence
+    assert len(pi_requests(sources)) == 1, "a second catalog GET happened"
+    assert not foreign_requests, "the 300's Location was followed"
+
+
+def test_preflight_redirect_record_preserves_request_and_final_evidence(tmp_path, sources):
+    # Criterion 4. Planted fault: the requested url is overwritten, a hop field is missing, the
+    # digest describes the redirect body, or selection drops the hop evidence.
+    def admitted(path: str) -> tuple[int, str]:
+        return 307, versioned_location(path)
+
+    sources.pi_redirect = admitted
+    bridge = collect(tmp_path, sources)
+    first_path = next(p for p in pi_requests(sources) if "pi-version=" not in p)
+    evidence = bridge["sources"]["pi"]
+    assert evidence["url"] == f"{sources.url}{first_path}"
+    assert evidence["redirected_to"] == f"{sources.url}{versioned_location(first_path)}"
+    assert evidence["redirect_status"] == 307
+    assert evidence["status"] == 200 and evidence["outcome"] == "ok"
+    assert evidence["body"] == json.dumps(sources.pi_models), "the final body was not the recorded one"
+    assert evidence["sha256"] == hashlib.sha256(evidence["body"].encode()).hexdigest()
+    kept = select(bridge)["sources"]["pi"]
+    assert kept["url"] == evidence["url"]
+    assert kept["redirected_to"] == evidence["redirected_to"]
+    assert kept["redirect_status"] == evidence["redirect_status"]
+    assert kept["sha256"] == evidence["sha256"]
+    assert "body" not in kept
+
+
+def test_preflight_redirect_failure_keeps_hop_evidence(tmp_path, sources):
+    # Criterion 4. Planted fault: a followed HTTP or network failure loses the hop fields or is
+    # classified as a success.
+    def admitted(path: str) -> tuple[int, str]:
+        return 307, versioned_location(path)
+
+    sources.pi_redirect = admitted
+    sources.pi_status = 500
+    bridge = collect(tmp_path, sources)
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "http-error" and evidence["status"] == 500
+    assert evidence["redirect_status"] == 307 and evidence["redirected_to"]
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+    assert len(pi_requests(sources)) == 2
+    # A hop connection dropped without a response is a request failure, never a refusal or a success.
+    sources.requests.clear()
+    sources.pi_status = 200
+    sources.hop_resets = True
+    bridge = collect(tmp_path, sources)
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "request-failed"
+    assert evidence["redirect_status"] == 307 and evidence["redirected_to"]
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+    assert len(pi_requests(sources)) == 2, "a retry sent further catalog GETs"
+
+
+def test_preflight_redirect_failure_does_not_retry(tmp_path, sources):
+    # Criterion 5. Planted fault: Pi's retries send further catalog GETs or replace the refusal record.
+    sources.pi_redirect = (307, f"/api/models/providers/{GO}?types=chat&pi-version={PIN}")
+    bridge = collect(tmp_path, sources)
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "redirect-refused"
+    assert f"pi-version={PIN}" in evidence["error"], "the refusal no longer names the Location"
+    assert "only one Go catalog request" not in evidence["error"], "a retry replaced the refusal evidence"
+    assert len(pi_requests(sources)) == 1, "a direct refusal sent two catalog GETs"
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+    # A failed admitted hop also stays at two GETs: Pi's retry of the retryable 429 is aborted before I/O.
+    sources.requests.clear()
+
+    def admitted(path: str) -> tuple[int, str]:
+        return 307, versioned_location(path)
+
+    sources.pi_redirect = admitted
+    sources.pi_status = 429
+    bridge = collect(tmp_path, sources)
+    assert bridge["sources"]["pi"]["outcome"] == "http-error"
+    assert bridge["sources"]["pi"]["redirect_status"] == 307
+    assert len(pi_requests(sources)) == 2, "a followed failure sent three catalog GETs"
+
+
+def test_preflight_redirect_hop_uses_shared_deadline(tmp_path, sources):
+    # Criterion 6. Planted fault: the held hop gets a fresh deadline (held_collect asserts exactly one
+    # deadline timer), a third request starts, or the held hop yields a usable or measured-empty snapshot.
+    def admitted(path: str) -> tuple[int, str]:
+        return 307, versioned_location(path)
+
+    sources.pi_redirect = admitted
+    bridge = held_collect(tmp_path, sources, {"pi-hop"})
+    assert len(pi_requests(sources)) == 2, "a third request started while the hop was held"
+    assert sum("pi-version=" in p for p, _ in sources.requests) == 1, "the held request was not the hop"
+    evidence = bridge["sources"]["pi"]
+    assert evidence["outcome"] == "timeout"
+    assert evidence["redirect_status"] == 307 and evidence["redirected_to"]
+    assert "status" not in evidence, "a held hop produced a measured body"
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+
+
+def test_preflight_metadata_redirect_stays_refused(tmp_path, sources):
+    # Criterion 7. Planted fault: models.dev's redirect target is fetched, fixed seats are lost for
+    # that failure alone, or free seats are selected without capability evidence.
+    with foreign_server() as (foreign_requests, foreign_url):
+
+        def elsewhere(path: str) -> tuple[int, str]:
+            return 307, f"{foreign_url}{path}?pi-version={PIN}"
+
+        sources.metadata_redirect = elsewhere
+        bridge = collect(tmp_path, sources)
+        result = select(bridge)
+
+    evidence = bridge["sources"]["models_dev"]
+    assert evidence["outcome"] == "request-failed", "models.dev kept its refusal vocabulary"
+    assert "redirected_to" not in evidence and "redirect_status" not in evidence
+    assert not foreign_requests, "the metadata redirect target was fetched"
+    assert len([p for p, _ in sources.requests if p == "/metadata"]) == 1
+    assert result["selected"] == [] and result["fixed"] == FIXED
+    assert result["capability_status"] == "capability-unavailable"
+    assert result["capability_reason"] == "request-failed"
+
+
+def test_preflight_direct_catalog_has_no_redirect_fields(tmp_path, sources):
+    # Criterion 8. Planted fault: a direct 200 claims a redirect, costs an extra GET or a model
+    # subprocess, or touches credentials (the collect traps fail on the latter two).
+    bridge = collect(tmp_path, sources)
+    evidence = bridge["sources"]["pi"]
+    assert bridge["exit_code"] == 0 and evidence["outcome"] == "ok"
+    assert "redirected_to" not in evidence and "redirect_status" not in evidence
+    assert len(pi_requests(sources)) == 1 and len(sources.requests) == 2
+    result = select(bridge)
+    assert result["selected"] == ["alpha-free", "beta-free"]
+    assert "redirected_to" not in result["sources"]["pi"]
+
+
+def test_the_bridge_takes_the_admitted_version_from_the_pin_not_a_literal() -> None:
+    # Row L1-5 (criterion 1's refutation "the version is hard-coded independently of the pin"):
+    # every redirect case builds pi-version from the pin, so a literal would pass them all; the
+    # bridge source must not carry the pinned version as a literal.
+    source = (ROOT / "scripts/stage2_research_catalog.mjs").read_text(encoding="utf-8")
+    # Quoted or as a query value only: a comment naming the user agent is not a literal (row L4-2).
+    for literal in (f'"{PIN}"', f"'{PIN}'", f"`{PIN}`", f"pi-version={PIN}"):
+        assert literal not in source, f"the bridge hard-codes the pinned Pi version as {literal}"
+    assert "manifest.dependencies" in source, "the bridge no longer reads the version from the pin"
+
+
+@pytest.mark.parametrize("held", ["pi", "pi-hop", "metadata"])
+def test_a_redirected_request_cannot_also_be_held(sources, held):
+    # Review row L7-1: the redirect branch answers before the held wait, so the harness refuses the combination.
+    sources.pi_redirect = sources.hop_redirect = sources.metadata_redirect = (302, "/elsewhere")
+    sources.held = {held}
+    with pytest.raises(AssertionError, match="cannot be held"):
+        refuse_redirect_with_hold(sources)
+
+
+def test_a_redirect_cannot_meet_the_overlap_barrier(sources):
+    sources.metadata_redirect = (302, "/elsewhere")
+    sources.overlap = threading.Barrier(2)
+    with pytest.raises(AssertionError, match="overlap barrier"):
+        refuse_redirect_with_hold(sources)

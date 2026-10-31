@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-30
+updated: 2026-10-31
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -759,14 +759,20 @@ for another repository is `templates/agents-mergeable-prs.md`.
   itself, an in-progress merge or rebase and a dirty checkout, and it never
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
-- **Merging a series, one at a time.** With "branches must be up to date"
-  on `main`, every merge puts the other open pull requests behind. Each
+- **Merging a series, one at a time.** With the merge queue active on
+  `main` (rule RB-G7, bead coding-harness-eh42), a pull request the
+  maintainer asked to merge, restated and green, is admitted with the same
+  `gh pr merge <n> --merge --match-head-commit <sha>` and no branch update
+  first; the queue tests it on the current `main` and merges it. Admission
+  is not a merge: it is reported as queued until the pull request shows
+  `MERGED`. The maintainer's request, the restatement, the exact head and
+  the ban on `--admin` hold as before. Without the queue ("branches must be
+  up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
   pending rollup is not green), and it merges against its new head with
-  `--match-head-commit`. Merging eight pull requests on 2026-10-30 cost one
-  CI run each this way; a merge queue (bead coding-harness-eh42, decided
-  2026-10-28) replaces the rule.
+  `--match-head-commit`.
+  Merging eight pull requests on 2026-10-30 cost one CI run each that way.
 - **Hot files are split.** A file that most changes touch is split by
   responsibility, and each change gets its own test file (bead
   coding-harness-67yk).
@@ -1206,13 +1212,17 @@ Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
-If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
-after the put-back, and a red run fails the attempt — with one exception:
-the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that one run, and
-the gate `adr-answers` then reports this change's own missing ADR answer
-without failing (another change's missing answer, a refused answer file and
-every other gate still do), so the exit code of `make verify` decides and the
-runner reads no gate output. Only the maintainer's stated answer may create
+If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
+the verify job's existing document subset,
+`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
+check fails the attempt — with
+one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
+one run, and the gate `adr-answers` then reports this change's own missing ADR
+answer without failing (another change's missing answer, a refused answer file
+and every other gate still do), so the check's exit code decides and the
+runner reads no gate output. `implement` and `repair` keep the full
+`make verify`: only the draft drops to the document subset. Only the
+maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
 of the baseline and `origin/main` does not hold, so a second draft edits (or
@@ -1564,11 +1574,13 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
-  An appetite that runs out is not such a stop: by day the session extends
-  it by itself once, up to twice the card's appetite, and says so in its
-  next status message; it asks at twice the appetite, at an open
-  `[DECISION]` or at a structural choice like this one (maintainer,
-  2026-10-30; `prompts/04-implement.md`, "The appetite is a stop").
+  An appetite that runs out is not such a stop: by day and at night the
+  session extends it by itself once, up to twice the card's appetite, and
+  says so in its next status message or the night's ledger. By day it asks
+  at twice the appetite, at an open `[DECISION]` or at a structural choice
+  like this one; at night those cases go to the night rules (cut, park or
+  drop) (maintainer, 2026-10-30; `prompts/04-implement.md`, "The appetite
+  is a stop").
 - **When no choke point closes it, the spec names the boundary.** On
   2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
   mechanism in nine phase-6 rows: a protected descendant outliving the
