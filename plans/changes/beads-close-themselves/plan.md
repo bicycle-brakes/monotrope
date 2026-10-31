@@ -133,18 +133,26 @@ part of testing and must not be used merely to obtain evidence.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_close_merged_beads.py::test_all_merged_declarations_are_closed — a merged side-parent declaration is missed or local HEAD controls eligibility.
-- 2: not yet written tests/test_close_merged_beads.py::test_only_valid_merged_trailers_close — prose, an unmerged commit or a malformed value closes a bead.
-- 3: not yet written tests/test_close_merged_beads.py::test_duplicate_and_closed_beads_are_not_rewritten — repeats trigger another close or overwrite a reason.
-- 4: not yet written tests/test_close_merged_beads.py::test_reasons_identify_commit_and_explicit_pr — the declaring SHA or explicit PR is lost or an unrelated number becomes a PR.
-- 5: not yet written tests/test_close_merged_beads.py::test_reporting_and_make_default_do_not_write — default CLI/Make invocation calls close or push.
-- 6: not yet written tests/test_close_merged_beads.py::test_unreadable_preflight_never_closes — stale ref, shallow history, failed fetch or invalid/preset write render permits a closure.
-- 7: not yet written tests/test_close_merged_beads.py::test_unknown_and_refused_closures_are_reported_without_force — refusal is hidden or ownership bypassed while valid items are lost.
-- 8: not yet written tests/test_close_merged_beads.py::test_partial_and_retried_runs_publish — a partial batch or already-closed rerun omits dolt push.
-- 9: not yet written tests/test_close_merged_beads.py::test_failed_publication_is_not_success — failed push exits zero or claims remote publication.
-- 10: not yet written tests/test_beads_start.py::test_reconcile_finishes_before_prime — prime runs first or a failure loses prime context and its diagnostic.
-- 10: not yet written tests/test_omnigent_deny_layers.py::test_start_hook_wires_reconciliation_before_prime — repository settings retain the old direct prime entry; orchestrator writes this after the accepted attempt.
-- 11: not yet written tests/test_beads_start.py::test_secondary_or_uncertain_start_never_writes — a live same-repository session, child or unreadable scan permits writing.
+- 1: tests/test_close_merged_beads.py::test_all_merged_declarations_are_closed — a merged side-parent declaration is missed or local HEAD controls eligibility.
+- 2: tests/test_close_merged_beads.py::test_only_valid_merged_trailers_close — prose, an unmerged commit or a malformed value closes a bead.
+- 3: tests/test_close_merged_beads.py::test_duplicate_and_closed_beads_are_not_rewritten — repeats trigger another close or overwrite a reason.
+- 4: tests/test_close_merged_beads.py::test_reasons_identify_commit_and_explicit_pr — the declaring SHA or explicit PR is lost or an unrelated number becomes a PR.
+- 5: tests/test_close_merged_beads.py::test_reporting_and_make_default_do_not_write — default CLI/Make invocation calls close or push.
+- 6: tests/test_close_merged_beads.py::test_unreadable_preflight_never_closes — stale ref, shallow history, failed fetch or invalid/preset write render permits a closure.
+- 7: tests/test_close_merged_beads.py::test_unknown_and_refused_closures_are_reported_without_force — refusal is hidden or ownership bypassed while valid items are lost.
+- 8: tests/test_close_merged_beads.py::test_partial_and_retried_runs_publish — a partial batch or already-closed rerun omits dolt push.
+- 9: tests/test_close_merged_beads.py::test_failed_publication_is_not_success — failed push exits zero or claims remote publication.
+- 10: tests/test_beads_start.py::test_reconcile_finishes_before_prime — prime runs first or a failure loses prime context and its diagnostic.
+- 10: tests/test_omnigent_deny_layers.py::test_start_hook_wires_reconciliation_before_prime — repository settings retain the old direct prime entry; orchestrator writes this after the accepted attempt.
+- 11: tests/test_beads_start.py::test_secondary_or_uncertain_start_never_writes — a live same-repository session, child or unreadable scan permits writing.
 - 12: not a test — phase-6 review reads prompts/07-commit.md against criterion 12; missing writer restriction or reconciliation before MERGED confirmation refutes it.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-31 09:39:20–10:37:10 UTC, 3470 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 10:37:16–11:13:02 UTC, 2146 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 11:13:08–11:26:44 UTC, 815 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

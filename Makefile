@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock change index report help
+.PHONY: verify test staleness gates leakcheck venv lock change index report close-merged help
 
 verify:
 	bash scripts/verify_all.sh
@@ -75,6 +75,18 @@ index:
 report:
 	@export CHANGE; python3 scripts/run_report.py
 
+# Closes beads whose work merged (bead coding-harness-l1if): the reconciler
+# reads Closes-Bead trailers from a freshly fetched origin/main and closes what
+# they declare through the pinned tools/bd — reporting only, unless ARGS=--write.
+# ARGS is validated at the make level: the recipe only ever receives nothing or
+# the literal --write, so an argument value stays data and never reaches a
+# shell. The script is taken from $(CURDIR), so the target reconciles the
+# checkout make runs in, from any directory.
+close_merged_args = $(if $(strip $(ARGS)),$(if $(and $(filter --write,$(strip $(ARGS))),$(filter 1,$(words $(strip $(ARGS))))),--write,INVALID),)
+
+close-merged:
+	python3 $(CURDIR)/scripts/close_merged_beads.py $(if $(filter INVALID,$(close_merged_args)),$(error close-merged: ARGS must be empty or --write),$(close_merged_args))
+
 help:
 	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
 	@echo 'make test                               the test suite, by hand'
@@ -87,4 +99,5 @@ help:
 	@echo '                                        create plans/changes/<name>/ linked to an existing bead'
 	@echo 'make index                              regenerate plans/INDEX.md from the registry'
 	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
+	@echo 'make close-merged [ARGS=--write]        close beads a merged Closes-Bead trailer declared (report without ARGS)'
 	@echo 'make help                               this list'
