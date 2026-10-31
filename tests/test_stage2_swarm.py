@@ -933,8 +933,10 @@ def test_research_seats_load_neutral_paths(sworld: SwarmWorld) -> None:
     assert sworld.run() == 0
     roles = {"repository": "repository-pathlock.mjs", "online": "research-tools.mjs"}
     for kind, role in roles.items():
-        calls = sworld.calls(kind)
-        assert calls, f"no {kind} seat ran"
+        # Only Pi seats carry Pi extensions: a Claude Code seat (the plan's Haiku) names a bare
+        # model id, a Pi seat its provider-qualified one.
+        calls = [call for call in sworld.calls(kind) if "/" in call["argv"][call["argv"].index("--model") + 1]]
+        assert calls, f"no {kind} Pi seat ran"
         for call in calls:
             argv = call["argv"]
             pairs = [Path(argv[index + 1]) for index, flag in enumerate(argv) if flag == "-e"]
