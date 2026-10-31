@@ -47,3 +47,7 @@ uncommitted artifacts. No phase-2a rows were present to resolve.
 
 > Attempt 1 (codex): the runner put back what a draft may not change:
 > - `plans/changes/architecture-reconcile/decisions.md`
+
+Stage-2 call, 2026-10-31: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 805 files, 2900 commits, 12 rules.
+
+> The attempt edited findings.md; the runner restored it before the post-run checks, and the attempt passed them.
