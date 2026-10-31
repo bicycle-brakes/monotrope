@@ -3136,6 +3136,7 @@ def test_nonsecret_preparation_errors_stop_before_retry(
     world.script(
         **({"codex": [codex_step(s, n) for n, s in enumerate(steps)]} if verb == "draft" else {"claude": steps}),
         make=[{"stdout": "must not run"}],
+        docs=[{"stdout": "must not run"}],
     )
     real_stamp = stage2.check_frontmatter_current.stamp
 
@@ -3147,7 +3148,7 @@ def test_nonsecret_preparation_errors_stop_before_retry(
     monkeypatch.setattr(stage2.check_frontmatter_current, "stamp", fail_stamp)
     assert world.run(verb) == 2
     assert len(world.calls("codex" if verb == "draft" else "claude")) == 1
-    assert world.calls("make") == [] and LEAK not in world.text()
+    assert world.calls("make") == [] and world.calls("bash") == [] and LEAK not in world.text()
 
 
 @pytest.mark.parametrize("secret_rule", [False, True], ids=["nonsecret-rule", "secret-rule"])

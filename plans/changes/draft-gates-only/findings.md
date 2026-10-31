@@ -2,7 +2,7 @@
 title: "Findings — draft-gates-only"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
@@ -254,3 +254,5 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model longcat-2
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 792 files, 2856 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy3 · leak check clean over 792 files, 2858 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 792 files, 2861 commits, 12 rules.

@@ -4862,7 +4862,9 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
-    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
+    """The bounded evidence of a red post-run check (`make verify`, or the draft's document check).
+
+    It renders the framed gates that blocked, else the run's tail.
 
     Read the active denylist at diagnostic emission time and raise Refused fail-closed if
     protection refuses, on every route including keyless routes (key=None). The complete
