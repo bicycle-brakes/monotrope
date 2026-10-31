@@ -166,3 +166,44 @@ Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-5: tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: refs changed while the named test ran: refs/heads/fix/pi-neutral-paths, refs/remotes/origin/fix/pi-neutral-paths
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-3-20261031T153611005006Z-eb6884d3.md
 > ```
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 803 files, 2913 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-worker-cap/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - L1-5: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-1-20261031T190808158515Z-90d0ef98.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 803 files, 2916 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-worker-cap/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - L1-4: no fixed line
+> - L1-5: no fixed line
+> - L1-6: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-2-20261031T190808158515Z-90d0ef98.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 803 files, 2921 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - L1-5: tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: refs changed while the named test ran: refs/heads/docs/architecture-reconcile, refs/heads/docs/run-plan-2026-10-31, refs/heads/feat/go-access-point, refs/remotes/origin/__dolt_remote_info__, refs/remotes/origin/docs/architecture-reconcile, refs/remotes/origin/docs/run-plan-2026-10-31, refs/remotes/origin/feat/go-access-point
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-3-20261031T190808158515Z-90d0ef98.md
+> ```

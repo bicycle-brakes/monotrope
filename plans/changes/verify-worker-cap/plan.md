@@ -82,12 +82,19 @@ the cap only covers invocations through `verify_all.sh`.
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-30 22:29:51–22:58:33 UTC, 1722 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
 2026-10-31 15:36:27–16:03:54 UTC, 1648 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 16:04:06–17:00:11 UTC, 3365 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 17:00:17–18:31:52 UTC, 5494 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 19:08:22–19:36:24 UTC, 1681 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 19:36:37–20:06:41 UTC, 1804 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 20:06:49–21:39:29 UTC, 5560 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Measured full runs — 2026-10-31
 
