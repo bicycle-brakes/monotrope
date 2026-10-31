@@ -17,6 +17,7 @@ number, a publication reported as published).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -195,6 +196,7 @@ def _build(tmp_path: Path, *, name: str = "main", shallow: bool = False) -> Simp
     else:
         _git(tmp_path, "clone", "--quiet", str(origin), str(klon))
     _copy_scripts(klon)
+    (klon / "Makefile").write_bytes(MAKEFILE.read_bytes())
     _write_stub(klon)
     if not shallow:
         _git(klon, "checkout", "--quiet", "--detach", base)
@@ -248,7 +250,7 @@ def _run_script(ns: SimpleNamespace, env: dict[str, str], *args: str) -> subproc
 
 def _run_make(ns: SimpleNamespace, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["make", "-f", str(MAKEFILE), *args],
+        ["make", "-f", str(ns.klon / "Makefile"), *args],
         cwd=ns.klon,
         env=env,
         capture_output=True,
@@ -419,6 +421,7 @@ def test_unreadable_preflight_never_closes(tmp_path: Path) -> None:
     klon = tmp_path / "klon-nomain"
     _git(tmp_path, "clone", "--quiet", str(no_main), str(klon))
     _copy_scripts(klon)
+    (klon / "Makefile").write_bytes(MAKEFILE.read_bytes())
     _write_stub(klon)
     no_ref = SimpleNamespace(
         klon=klon,
@@ -533,16 +536,51 @@ def test_make_arguments_remain_literal_and_command_line_only(tmp_path: Path) -> 
         assert not _closes(ns) and "dolt push" not in _calls(ns)
 
 
-def test_make_outside_checkout_explains_working_directory(tmp_path: Path) -> None:
+def test_make_uses_its_own_checkout_from_any_directory(tmp_path: Path) -> None:
+    ns = _build(tmp_path, name="intended checkout")
+    other = _build(tmp_path, name="other")
+    _commit(other.origin, f"other declaration\n\nCloses-Bead: {REAL_A}")
+    nested = tmp_path / "linked"
+    _git(other.klon, "worktree", "add", "--detach", str(nested), "HEAD")
+    _copy_scripts(nested)
+    _write_stub(nested)
+    for cwd in (tmp_path, other.klon, nested):
+        result = subprocess.run(
+            ["make", "-f", str(ns.klon / "Makefile"), "close-merged"],
+            cwd=cwd,
+            env=_env(ns),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert ns.main in result.stdout, "make reconciled the caller's checkout"
+        assert f"would close {REAL_A}" not in result.stdout
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_script_uses_its_own_checkout_from_another_worktree(tmp_path: Path) -> None:
+    ns = _build(tmp_path, name="intended")
+    other = _build(tmp_path, name="other")
+    linked = tmp_path / "linked"
+    _git(ns.klon, "worktree", "add", "--detach", str(linked), "HEAD")
+    _copy_scripts(linked)
+    _write_stub(linked)
+    # Give the other checkout a different history, so using its cwd is visible.
+    _commit(other.origin, f"other repository declaration\n\nCloses-Bead: {REAL_A}")
     result = subprocess.run(
-        ["make", "-f", str(MAKEFILE), "close-merged"],
-        cwd=tmp_path,
+        [sys.executable, str(linked / "scripts" / "close_merged_beads.py"), "--write"],
+        cwd=other.klon,
+        env=_env(ns),
         capture_output=True,
         text=True,
         check=False,
     )
-    assert result.returncode != 0
-    assert "use make -C <checkout> close-merged" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert len(_closes(ns)) == len(DECLARED)
+    assert ns.main in result.stdout
+    assert not any(line.startswith(f"close {REAL_A} ") for line in _closes(ns))
+    assert "dolt push" in _calls(ns)
 
 
 def test_log_failure_is_preflight_failure(tmp_path: Path) -> None:
@@ -660,3 +698,26 @@ def test_miscased_trailers_are_reported_without_closing(tmp_path: Path) -> None:
         assert bid in result.stderr
     assert result.stderr.count("malformed Closes-Bead") == 3
     assert "dolt push" in _calls(ns)
+
+
+def test_subsecond_startup_remainder_refuses_closures(monkeypatch, capsys) -> None:
+    spec = importlib.util.spec_from_file_location("budget_reconciler", REPO_ROOT / "scripts/close_merged_beads.py")
+    reconcile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reconcile)
+    monkeypatch.delenv("BEAD_RENDER", raising=False)
+    monkeypatch.setattr(reconcile, "resolve_checkout", lambda: (REPO_ROOT, REPO_ROOT / "tools" / "bd"))
+    monkeypatch.setattr(reconcile, "fetch_and_pin", lambda _root: "a" * 40)
+    monkeypatch.setattr(reconcile, "load_state", lambda: {MAIN: {"status": "open"}})
+    monkeypatch.setattr(reconcile, "collect_declarations", lambda *_args: ({MAIN: ("a" * 40, "done")}, []))
+    ticks = iter([0.0, 9.5, 9.5])
+    monkeypatch.setattr(reconcile.time, "monotonic", lambda: next(ticks))
+    calls = []
+
+    def run(argv, **_kwargs):
+        calls.append(argv[1:])
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(reconcile.subprocess, "run", run)
+    assert reconcile.main(["--write", "--budget-seconds", "10"]) == 1
+    assert calls == [["dolt", "push"]], "a sub-second remainder must not start a close"
+    assert "startup budget exhausted" in capsys.readouterr().err

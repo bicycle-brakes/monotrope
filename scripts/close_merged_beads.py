@@ -24,7 +24,7 @@ What counts, exactly:
 
 How it runs:
 
-- The checkout is resolved from the working directory, linked worktrees
+- The checkout is resolved from this script's location, linked worktrees
   included; closures go through the pinned ``tools/bd`` as normal closures —
   argv calls, never ``--force``.
 - The tracker state is read through the one access point,
@@ -97,9 +97,9 @@ def _git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
 
 
 def resolve_checkout() -> tuple[Path, Path]:
-    """The checkout to reconcile, from the working directory — worktrees included."""
+    """Reconcile the checkout containing this script, including linked worktrees."""
     try:
-        top = _git(Path.cwd(), "rev-parse", "--show-toplevel").strip()
+        top = _git(REPO_SCRIPTS, "rev-parse", "--show-toplevel").strip()
     except PreflightError as exc:
         raise PreflightError(f"not inside a git checkout ({exc})") from None
     root = Path(top)
@@ -251,10 +251,11 @@ def main(argv: list[str] | None = None) -> int:
     refused: list[tuple[str, str]] = []
     for bid, sha, subject in eligible:
         reason = closure_reason(sha, subject)
-        # Bound each close by the remaining budget. Even a short budget permits
-        # quick closures; publication is still attempted after the batch.
+        # Bound each close by the remaining budget, but refuse to start with
+        # less than one second: process startup/timeout cleanup can overshoot
+        # a tiny timeout. Publication is still attempted after the batch.
         close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - time.monotonic())
-        if close_timeout <= 0:
+        if close_timeout < 1.0:
             refused.append((bid, "startup budget exhausted"))
             print(f"refused: {bid}: startup budget exhausted; retry reconciliation", file=sys.stderr)
             continue

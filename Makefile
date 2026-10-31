@@ -80,7 +80,10 @@ report:
 # they declare through the pinned tools/bd — reporting only, unless ARGS=--write.
 # Only command-line ARGS is accepted. Capture its raw value without expanding
 # make functions, then validate the exact bytes in the shell as environment data.
-# The script and checkout come from make's working directory (use make -C there).
+# Anchor this target to this Makefile, even when invoked with -f elsewhere.
+# Export the full path as data so checkout paths containing spaces stay intact.
+override CLOSE_MERGED_MAKEFILE := $(strip $(MAKEFILE_LIST))
+export CLOSE_MERGED_MAKEFILE
 ifeq ($(origin ARGS),command line)
 override CLOSE_MERGED_ARGS := $(value ARGS)
 else
@@ -90,8 +93,8 @@ export CLOSE_MERGED_ARGS
 unexport ARGS
 
 close-merged:
-	@test -f scripts/close_merged_beads.py || { echo 'close-merged: use make -C <checkout> close-merged' >&2; exit 2; }
-	@case "$$CLOSE_MERGED_ARGS" in \
+	@cd "$$(dirname "$$CLOSE_MERGED_MAKEFILE")" && \
+	case "$$CLOSE_MERGED_ARGS" in \
 	  "") python3 scripts/close_merged_beads.py ;; \
 	  --write) python3 scripts/close_merged_beads.py --write ;; \
 	  *) echo 'close-merged: ARGS must be empty or --write' >&2; exit 2 ;; \
