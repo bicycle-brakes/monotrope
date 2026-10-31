@@ -9,20 +9,17 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-k93f
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # repair line skeleton — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
+The exploration below came from the recorded Flash call; Codex added the
+draft gap checks and corrected the populated skeleton's provenance.
 
 Stage-2 call, 2026-10-31: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 788 files, 2844 commits, 12 rules.
 
@@ -65,3 +62,32 @@ The model must itself write the whole **fixed line** per taken row: `<ID>: fixed
 ## Neighbours
 
 `plans/changes/repair-fixed-lines/spec.md` (bead coding-harness-ugi, bounded, implementation partial — the fixed-line grammar and prose tolerance the parser implements today); `plans/changes/repair-fixed-line-format/spec.md` (bead coding-harness-hgvp, bounded, partial — unique-claim rules, retained answer evidence); `plans/changes/stage2-repair/spec.md` (the repair verb's origin; its plan already names the `no fixed line` diagnostic at `plans/changes/stage2-repair/plan.md:97`); `plans/changes/codex-repairs/spec.md` (not read — named as the ADR 0017 ladder change, content unverified); `plans/changes/malformed-answer-retry/spec.md` (not read — the asked-again call for loop members, bead coding-harness-70rw); `plans/changes/fail-fast-attempts/spec.md` (bead coding-harness-5tyh, bounded, in flight — cheap checks in the same attempts); `plans/changes/run-report/spec.md` (the change whose 2026-10-29 repair burned its ladder on these diagnostics); `plans/changes/red-first-pytest-failed/spec.md` (the loop-side wrong-format case); `plans/changes/loop-until-clean/spec.md` and `plans/changes/review-loop-deep-a/spec.md` / `review-loop-deep-b` (loop record machinery the repair writes into); the living spec `plans/specs/implementation-verification/spec.md` (accepted, done — implement-attempt preparation and the Flash route's repair limits, the only living spec); ADRs `docs/adr/0013-every-criterion-names-its-proof.md` (the `tests/<path>::<function>` ledger form the fixed line names), `docs/adr/0017-codex-repairs-taken-findings.md`, `docs/adr/0020-phase-1-research-swarm.md`, `docs/adr/0021-review-swarms-until-clean.md`.
+
+## Draft gap checks — 2026-10-31
+
+Read at `249840c7`, with only the draft-call audit file untracked:
+
+- `decisions.md` now settles the earlier alternatives: bounded scope, typed
+  copied lines in the existing grammar, and acceptance of other rows when
+  one completion fails. No phase-2a rows exist in `findings.md` at this point.
+- `check_repair_answer` returns empty fixes and marks at each problem
+  boundary, even when another row parsed or proved successfully.
+  `repair` retains its result only without problems. The findings and record
+  writers index every supplied taken row directly in the fixes dictionary;
+  merely returning a partial dictionary would therefore not implement partial
+  acceptance (`scripts/stage2.py`, those functions).
+- `run_attempts` calls the answer check only after `verify_attempt` succeeds;
+  only an empty problem list reaches the before/after-checkpoint callbacks.
+  Its findings snapshot and checkpoint rollback already protect whole-file
+  runner bookkeeping. Partial acceptance must distinguish row diagnostics
+  from failures of those shared checks, rather than suppress all problems.
+- `repair` currently takes HEAD as one baseline per invocation. A partial
+  checkpoint can include the still-unreported repair's code, so using that
+  new HEAD on a later call can destroy its red-first proof. The pending
+  rows need their original baseline retained across that checkpoint.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent
+  at this baseline. The phase-3 prompt supplies the plan form. Available
+  draft checks are the interview, criterion-ledger and research-handoff
+  scripts; the tracker-backed registry and full verification belong to the
+  outer runner. Current remote PR state and live session ownership were
+  not read; no tracker access or write was made.
