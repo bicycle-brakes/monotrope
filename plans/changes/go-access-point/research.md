@@ -335,3 +335,44 @@ Facts are marked **[fact]**. Opinions are marked **[opinion]**.
 - **`tests/test_model_endpoints.py::test_the_opencode_go_entry_is_declared`:** body not read.
 - **Repository changes:** none. No file edited, no commit, no tracker write. Nothing proposed here is implemented or tested.
 - **Dates:** "2026-10-15" is the server `lastModified` of a persisted store, not a verified start of Pi's switch.
+
+## Drafting gap checks — 2026-10-31
+
+Read inside this worktree at `2f240d90`; no live catalog or Go page was
+fetched, no model was called, and no tracker state was read.
+
+- `provenance.yaml` reserves `docs/adr/` as `human-decided`, but has no
+  `model-endpoints.yaml` reservation. The latter is nevertheless an explicit
+  held path in `scripts/stage2.py`'s attempt rules and the phase-3 prompt.
+  Moving address maintenance there therefore needs a deliberate permission
+  choice; an agent-writable address component linked from the provider entry
+  is the draft's alternative, not an accepted decision.
+- The worktree contains no general model-registry spec/plan found by searching
+  `plans/specs/` and `plans/changes/` for model-registry/registry terms. The
+  interview's requirement to fit that future registry still applies; its
+  tracker description was not read. The address component must contain no
+  second model list, terms or role/phase routing.
+- `dispatch_go` currently checks terms or discovered-free admission immediately
+  before its callback, but receives no effective destination. `run_reviewer`
+  permits a missing `models_store`; that branch must not keep an unchecked
+  shipped default after this change. `check_overlay` already resolves actual
+  selected definitions through the installed Pi's offline `ModelRuntime`
+  using empty fake credentials and rejects configuration errors/restored
+  fields. That is an available seam for destination evidence.
+- `stage2_session.py` constructs the interactive Pi command with the ordinary
+  Pi login and explicitly loaded copied policy. The policy currently controls
+  file tools/shell patterns, not destination binding. In the installed pinned
+  Pi, `dist/core/extensions/types.d.ts` exposes registry/provider registration;
+  `dist/core/extensions/runner.js::emitBeforeProviderRequest` catches handler
+  exceptions and continues with the payload. Throwing from that hook alone
+  would therefore not establish fail-closed request admission. The proposed
+  explicit initial-model binding needs a real installed-Pi contract before it
+  can be accepted; its behavior was not executed in this drafting check.
+- `scripts/validate_change_artefacts.py` and `templates/plan.md` are absent.
+  The existing interview, research-handoff and criterion-ledger gates can
+  measure their own contracts; this does not claim the absent validator ran.
+- No complete `research-swarm/v2` run exists in this research file. Phase 1
+  used the recorded maintainer exception, so the formal swarm handoff is
+  legacy-exempt; the spec still cites answered records and names relevant
+  neighbours. The similarly named tracker-access-point archive shares no
+  mechanism and is not a spec neighbour.
