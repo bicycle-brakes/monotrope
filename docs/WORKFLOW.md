@@ -1213,8 +1213,9 @@ see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
 If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
-the verify job's existing document subset, `bash scripts/verify_all.sh --job
-docs`: it runs after the put-back, and a red check fails the attempt — with
+the verify job's existing document subset,
+`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
+check fails the attempt — with
 one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file

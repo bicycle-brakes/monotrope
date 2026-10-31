@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-77qj
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash, 2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 

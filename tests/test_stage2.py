@@ -103,6 +103,10 @@ alias = "pi" if name == "pin-pi" else name
 # are keyed `docs`, so no other bash call consumes them. The record keeps the program name -
 # that is how the tests read the document check's calls among the bash calls.
 docs_check = alias == "bash" and argv[:1] == ["scripts/verify_all.sh"]
+if alias == "bash" and not docs_check:
+    # Any other bash call is no document check: it runs the real bash, so it neither consumes a
+    # scripted step nor answers green for a command no test scripted.
+    os.execv("/bin/bash", ["/bin/bash", *argv])
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 
@@ -3936,7 +3940,7 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     (world.bin / "calls.jsonl").unlink()
     second_gate = "\n".join(
         _gate("adr-answers", [owed], "red")
-        + _gate("docs-links", ["docs/adr/0007-existing-record.md: the link rots"], "red")
+        + _gate("frontmatter-current", ["plans/changes/demo/spec.md: last_reviewed is stale"], "red")
     )
     world.script(
         codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
@@ -3956,6 +3960,15 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
     assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
 
+
+
+def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
+    # The stand-in shadows bash for every test; a call that is not the document check must neither
+    # consume a scripted step nor answer green for a command no test scripted.
+    world.script(docs=[{"stdout": "scripted", "exit": 0}])
+    out = subprocess.run([str(world.bin / "bash"), "-c", "echo real; exit 3"], capture_output=True, text=True)
+    assert (out.returncode, out.stdout) == (3, "real\n"), "a non-document bash call was stubbed"
+    assert world.calls("bash") == [], "a non-document bash call was recorded as a document check"
 
 OWED_ANSWER = (
     "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
@@ -13438,8 +13451,7 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     # check again, or makes parsed gate output the verdict's source.
     text = WORKFLOW.read_text(encoding="utf-8")
     assert draft_document_check_problems(text) == []
-    planted = text.replace("`bash scripts/verify_all.sh --job\ndocs`", "`make verify`", 1)
-    planted = planted.replace("`bash scripts/verify_all.sh --job docs`", "`make verify`", 1)
+    planted = text.replace("`bash scripts/verify_all.sh --job docs`", "`make verify`", 1)
     assert draft_document_check_problems(planted), "the full suite passes as the draft's check again"
     parsed = text.replace("the check's exit code decides", "the parsed gate output decides", 1)
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
