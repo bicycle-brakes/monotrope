@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-30
+updated: 2026-10-31
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
@@ -81,3 +81,25 @@ the cap only covers invocations through `verify_all.sh`.
 ## Time used
 
 2026-10-30 22:29:51–22:58:33 UTC, 1722 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+
+## Measured full runs — 2026-10-31
+
+Recorded by the orchestrator (review rows L1-1 and L1-7). Both runs used the
+commands of "Verification and boundaries" above, sequentially, at commit
+`9236275e9f964bc56b6ce303c5eecf3f907c2f16`, on Darwin arm64 with 8 logical
+CPUs and 8589934592 bytes (8 GiB) of physical memory.
+
+| Workers | Start–end (UTC) | Wall time | Lock wait | pytest time | Outcome |
+|---|---|---|---|---|---|
+| 4 | 14:41:36–14:56:22 | 886.08 s | none (`[verify-lock] admitted`, memory 52 % free) | 710.73 s | 4411 passed, 17 skipped, 0 failed; second suite 104 passed; VERIFY GREEN |
+| 8 | 14:56:22–15:34:54 | 2311.46 s | 1507 s (`[verify-lock] admitted after 1507s`, memory 57 % free) | 627.68 s | 4411 passed, 17 skipped, 0 failed; second suite 104 passed; VERIFY GREEN |
+
+Isolation, stated plainly: the machine lock admitted each run alone, so no
+second `make verify` overlapped a measured pytest span. The machine was not
+otherwise idle: Codex and Pi runner calls of other lanes ran during both runs,
+and the eight-worker run waited 1507 s for two of their verify runs to release
+the lock. Its wall time is therefore not a measure of eight workers; compare
+the pytest times (710.73 s against 627.68 s, 12 % faster with 8). The actual
+worker count was set by `PYTEST_XDIST_AUTO_NUM_WORKERS`; the quiet pytest
+output does not print the started workers, so the count was not observed
+separately. The logs stayed in the session scratchpad and are not committed.
