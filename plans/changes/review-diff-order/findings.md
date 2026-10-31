@@ -504,7 +504,7 @@ Stage-2 call, 2026-10-31: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3837–3839 | When a base-tracked file is removed from the index with `git rm --cached` and edited in the working tree, Git lists it as both deleted and untracked. The untracked branch emits only an addition from `/dev/null`, discarding the original deletion and all removed lines. The paid reviewer therefore receives an incomplete change before any prompt limit applies. [Acceptance criterion 3] | Codex | open | — |
+| R6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3837–3839 | When a base-tracked file is removed from the index with `git rm --cached` and edited in the working tree, Git lists it as both deleted and untracked. The untracked branch emits only an addition from `/dev/null`, discarding the original deletion and all removed lines. The paid reviewer therefore receives an incomplete change before any prompt limit applies. [Acceptance criterion 3] | Codex | fixed — tests/test_stage2.py::test_paid_review_diff_preserves_removed_index_file | no |
 
 Phase 6 verdict: codex 01a18f8a-c984-7f33-b639-011208e92100, 2026-10-31
 Reviewer session: codex 01a18f8a-c984-7f33-b639-011208e92100 — a fresh session reviewed: no phase-2a session was recorded
@@ -591,3 +591,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-10-31: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 787 files, 2816 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 787 files, 2817 commits, 12 rules.

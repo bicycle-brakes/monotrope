@@ -3795,71 +3795,91 @@ def paid_review_diff(root: Path) -> str:
     """
     base = _merge_base(root)
     flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
-    changed = [
-        name
-        for name in _git_output(root, "diff", "--name-only", "--no-renames", "-z", base, preserve_newlines=True).split(
-            "\0"
+    # Build one effective tree, without touching the real index. Seed base-tracked
+    # paths as well as real index entries so ignored-but-tracked files stay tracked.
+    entries = _git_output(root, "ls-files", "--stage", "-z", preserve_newlines=True)
+    staged_names = set(
+        filter(
+            None,
+            _git_output(
+                root,
+                "diff",
+                "--cached",
+                "--name-only",
+                "--no-renames",
+                "-z",
+                base,
+                preserve_newlines=True,
+            ).split("\0"),
         )
-        if name
-    ]
-    staged = [
-        name
-        for name in _git_output(
-            root, "diff", "--cached", "--name-only", "--no-renames", "-z", base, preserve_newlines=True
-        ).split("\0")
-        if name
-    ]
-    working_set = set(changed)
-    untracked = [
-        name
-        for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", preserve_newlines=True).split(
-            "\0"
-        )
-        if name
-    ]
-    untracked_set = set(untracked)
-    names: list[str] = []
-    seen: set[str] = set()
-    for rel in [*changed, *staged, *untracked]:
-        if rel in seen:
-            continue
-        seen.add(rel)
-        path = Path(rel)
-        if (
-            len(path.parts) == 4 and path.parts[:2] == ("plans", "changes") and path.name == "findings.md"
-        ) or rel == "plans/INDEX.md":
-            continue
-        names.append(rel)
-    # The tuple puts implementation inputs (False) before prose (True), each group in path order.
-    names.sort(key=lambda rel: (_is_prose(rel), rel))
-    parts: list[str] = []
-    for rel in names:
-        if rel in untracked_set:
-            piece = _git_output(
-                root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1), preserve_newlines=True
+    )
+    with tempfile.TemporaryDirectory(prefix="stage2-paid-") as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        _git_output(root, "read-tree", base, env=env)
+        _git_output(root, "update-index", "-z", "--index-info", env=env, stdin=entries, preserve_newlines=True)
+        _git_output(root, "add", "-A", env=env)
+        working_names = set(
+            filter(
+                None,
+                _git_output(
+                    root,
+                    "diff",
+                    "--cached",
+                    "--name-only",
+                    "--no-renames",
+                    "-z",
+                    base,
+                    env=env,
+                    preserve_newlines=True,
+                ).split("\0"),
             )
-        else:
-            # Prefer the combined base-to-working-tree diff; fall back to the index
-            # when the working file was restored to the base, so each path occurs once.
-            index_flags = [] if rel in working_set else ["--cached"]
+        )
+        # Preserve the established index-only contract: when the working file
+        # matches base, keep its staged change (including a staged deletion).
+        index_only = staged_names - working_names
+        if index_only:
+            records = {record.split("\t", 1)[1]: record for record in entries.split("\0") if record}
+            restore = "".join(records.get(rel, f"0 {'0' * 40}\t{rel}") + "\0" for rel in sorted(index_only))
+            _git_output(root, "update-index", "-z", "--index-info", env=env, stdin=restore, preserve_newlines=True)
+        names = filter(
+            None,
+            _git_output(
+                root,
+                "diff",
+                "--cached",
+                "--name-only",
+                "--no-renames",
+                "-z",
+                base,
+                env=env,
+                preserve_newlines=True,
+            ).split("\0"),
+        )
+        retained = []
+        for rel in names:
+            path = Path(rel)
+            if (
+                len(path.parts) == 4 and path.parts[:2] == ("plans", "changes") and path.name == "findings.md"
+            ) or rel == "plans/INDEX.md":
+                continue
+            retained.append(rel)
+        # Every emitted path comes from the same projected index, exactly once.
+        parts = []
+        for rel in sorted(retained, key=lambda rel: (_is_prose(rel), rel)):
             piece = _git_output(
                 root,
                 "diff",
                 *flags,
-                *index_flags,
+                "--cached",
                 "--no-renames",
                 base,
                 "--",
                 f":(literal){rel}",
+                env=env,
                 preserve_newlines=True,
             )
-        if not piece.strip():
-            continue
-        # Git's pieces end with their own newline; plain concatenation keeps the line count git's.
-        # Path enumeration needs surrogateescape for lossless Git path arguments.
-        # Prompt text instead needs replacement decoding, without newline translation.
-        parts.append(os.fsencode(piece).decode("utf-8", errors="replace"))
-    return "".join(parts)
+            parts.append(os.fsencode(piece).decode("utf-8", errors="replace"))
+        return "".join(parts)
 
 
 # ---------------------------------------------------------------------------

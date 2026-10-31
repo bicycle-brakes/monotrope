@@ -1312,6 +1312,29 @@ def test_paid_review_diff_preserves_retained_file_diffs(world: World) -> None:
     assert "+CRLF_B = 2\r\n" in diff, "the carriage returns were rewritten"
 
 
+@pytest.mark.parametrize("body", ["value = 7\n", "value = 1\n", None])
+def test_paid_review_diff_preserves_removed_index_file(world: World, body: str | None) -> None:
+    """Removing an index entry must not turn a base-tracked edit into an addition."""
+    root = world.root
+    base = stage2._merge_base(root)
+    app = root / "src" / "app.py"
+    if body is None:
+        app.unlink()
+    else:
+        app.write_text(body, encoding="utf-8")
+    expected = "".join(git_piece(root, base, rel, untracked=False) for rel in ("scripts/helper.py", "src/app.py"))
+    git(root, "rm", "--cached", "-f", "--", "src/app.py")
+    if body == "value = 1\n":
+        # A working file restored to base retains its index-only staged deletion.
+        expected += raw_git(root, "diff", "--cached", "--no-renames", base, "--", ":(literal)src/app.py")
+    index = root / ".git" / "index"
+    before_index = index.read_bytes()
+    before_status = raw_git(root, "status", "--porcelain=v1", "-z")
+    assert stage2.paid_review_diff(root) == expected
+    assert index.read_bytes() == before_index, "paid projection changed the real index"
+    assert raw_git(root, "status", "--porcelain=v1", "-z") == before_status
+
+
 def test_paid_review_diff_includes_an_index_only_change(world: World) -> None:
     """A staged change survives even when its working file matches the merge base."""
     root = world.root
