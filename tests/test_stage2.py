@@ -95,9 +95,14 @@ CATALOG = (
 
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
+argv = sys.argv[1:]
 # The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
 # scripted steps line up; the record's path is what says which program ran.
 alias = "pi" if name == "pin-pi" else name
+# The draft's document check runs through `bash scripts/verify_all.sh --job docs`; its steps
+# are keyed `docs`, so no other bash call consumes them. The record keeps the program name -
+# that is how the tests read the document check's calls among the bash calls.
+docs_check = alias == "bash" and argv[:1] == ["scripts/verify_all.sh"]
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 
@@ -114,7 +119,7 @@ with locked(True):
     previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
-steps = scenario.get(alias, [])
+steps = scenario.get("docs" if docs_check else alias, [])
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
 # A step that names a `model` is kept for the call that asks for that model, so
@@ -130,10 +135,11 @@ def fits(step_, a):
     return step_.get("model") is None or model_of(a) == step_["model"]
 
 
-argv = sys.argv[1:]
 assigned = []
 for call_ in previous:
     if call_["name"] != alias or call_.get("kind"):
+        continue
+    if docs_check != (call_["argv"][:1] == ["scripts/verify_all.sh"]):
         continue
     for k in range(len(steps)):
         if k not in assigned and fits(steps[k], call_["argv"]):
@@ -571,7 +577,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("codex", "claude", "pi", "make", "pin-pi"):
+    # `bash` stands in for the draft's document check: `verify_draft` launches
+    # `bash scripts/verify_all.sh --job docs`, so the stand-in records the check under its program
+    # name and reads its scripted output and status from the scenario's `docs` key.
+    for name in ("bash", "codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
         program.write_text(
             STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
@@ -895,7 +904,7 @@ def test_every_git_call_names_the_resolved_path(world: World, monkeypatch: pytes
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
-    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], docs=[{"stdout": "green\n"}])
     assert world.run("draft") == 0
     verbs = {command[3] for command in seen if command[1] == "-C"}
     assert {"archive", "merge-base", "cat-file"} <= verbs, f"the seam did not reach these sites: {sorted(verbs)}"
@@ -2136,12 +2145,12 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
         assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
         assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
-        # and the draft post-run path preserves it too
+        # and the draft post-run path preserves it too, for its document check
         ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
         world.plan.write_text(PLAN_CARD, encoding="utf-8")
         problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
         assert problems == [], problems
-        draft_env = world.calls("make")[1]["env"]
+        draft_env = world.calls("bash")[0]["env"]
         assert draft_env[verify_lock.LOCK_ENV] == str(holder_pid), "the draft path lost its inherited marker"
         assert draft_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
     finally:
@@ -2787,7 +2796,7 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
             "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
             "plans/changes/demo/plan.md": PLAN_CARD,
         }
-        world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], make=[bad, green])
+        world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], docs=[bad, green])
         code, name = world.run("draft"), "codex"
     elif verb == "repair":
         repair_world(world)
@@ -3018,7 +3027,7 @@ def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys:
     plant = {"plans/changes/demo/plan.md": PLAN_CARD}
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
-        make=[{"stdout": FIXTURE_TRACEBACK, "exit": 1, "delete": [str(path)]}, {"stdout": "green\n"}],
+        docs=[{"stdout": FIXTURE_TRACEBACK, "exit": 1, "delete": [str(path)]}, {"stdout": "green\n"}],
     )
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 1
@@ -3049,7 +3058,7 @@ def test_nonsecret_diagnostic_matches_still_refuse(
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": f"E {planted}\n", "exit": 1}, {"stdout": "green\n"}],
+        docs=[{"stdout": f"E {planted}\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 1 and world.calls("claude") == []
@@ -3063,7 +3072,7 @@ def test_secret_rules_outside_diagnostics_still_block_retry(world: World) -> Non
     plant = {"plans/changes/demo/plan.md": PLAN_CARD}
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "must not run")],
-        make=[
+        docs=[
             {
                 "stdout": FIXTURE_TRACEBACK,
                 "exit": 1,
@@ -3276,7 +3285,7 @@ def clear_derived_leftovers(world: World) -> None:
 
 
 def passing_draft(world: World) -> None:
-    """One Codex step that plants spec and plan, and a `make` that answers green."""
+    """One Codex step that plants spec and plan, and a document check that answers green."""
     world.script(
         codex=[
             codex_ok(
@@ -3288,16 +3297,19 @@ def passing_draft(world: World) -> None:
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
 
 
 def red_verify(*gates: list[str]) -> dict:
-    """A red `make verify` with the given blocking gate bodies; `gates` entries are (name, lines)."""
+    """A red verification run with the given blocking gate bodies; `gates` entries are (name, lines)."""
     output = ""
     for name, lines in gates:
         output += "\n".join(_gate(name, lines, "red"))
     return {"stdout": output, "exit": 1}
+
+
+OTHER_RED = ("adr-answers", ["adr-answers: other: no answer — other.rel needs the maintainer's answer"])
 
 
 def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -> None:
@@ -3448,7 +3460,7 @@ def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
             codex_ok("T2", "drafted again"),
         ],
         claude=[{"stdout": "drafted by GLM"}],
-        make=[red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))] * 3,
+        docs=[red_verify(OTHER_RED)] * 3,
     )
     assert world.run("draft") == 1
     text = world.text()
@@ -3502,7 +3514,7 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     assert git(world.root, "status", "--porcelain") == ""
@@ -3541,7 +3553,7 @@ def test_a_draft_does_not_blame_the_model_for_a_derived_leftover(world: World) -
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     block = quote_blocks(world.text())[0]
@@ -3560,7 +3572,7 @@ def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
     }
     for n in range(stage2.ATTEMPT_FILES + 1):
         plant[f"stray/file-{n:02d}.txt"] = f"stray {n}\n"
-    world.script(codex=[codex_ok("T1", "drafted", plant=plant)], make=[{"stdout": "green\n"}])
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant)], docs=[{"stdout": "green\n"}])
     assert world.run("draft") == 0
     assert git(world.root, "status", "--porcelain") == ""
     block = quote_blocks(world.text())[0]
@@ -3585,7 +3597,7 @@ def test_an_edited_decisions_file_is_put_back(world: World) -> None:
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
@@ -3608,7 +3620,7 @@ def test_two_new_adr_files_fail_the_attempt(world: World) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plants), codex_ok("T2", "again", plant=plants)],
         claude=[{"stdout": "glm", "plant": plants}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
@@ -3628,7 +3640,7 @@ def test_a_second_draft_that_adds_another_adr_fails_the_attempt(world: World) ->
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
-    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], docs=[{"stdout": "green\n"}])
     assert world.run("draft") == 0
     (world.bin / "calls.jsonl").unlink()
     second = {"docs/adr/0017-second-record.md": "# Second\n"}
@@ -3667,25 +3679,217 @@ def test_a_draft_call_that_moves_head_stops_the_run(
 
 
 def test_a_red_verify_fails_the_draft_attempt(world: World) -> None:
-    # Criterion 12. Planted fault: the exit code of `make verify` ignored, or `make` never run.
+    # Criterion 12. Planted fault: the exit code of the document check ignored, or it never ran.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        make=[red, red, red],
+        docs=[red, red, red],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]] * 3
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV] * 3
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
     joined = "\n".join(block)
-    assert "`make verify` exited 1" in joined and "── [pytest] RED (block)" in joined
-    assert "FAILED tests/test_x.py::test_a" in joined
+    assert "`bash scripts/verify_all.sh --job docs` exited 1" in joined and "── [adr-answers] RED (block)" in joined
+    assert "other: no answer" in joined
+    assert "make verify" not in joined, "the failed check is not the full suite"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+
+
+DOCS_ARGV = ["scripts/verify_all.sh", "--job", "docs"]
+
+
+def test_draft_runs_the_existing_docs_subset(world: World) -> None:
+    # Criterion 1 (draft-gates-only). Planted fault: the draft invokes the full suite, runs a code
+    # gate such as pytest, or substitutes its own gate list for the existing document subset.
+    draft_world(world)
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV]
+    assert world.calls("make") == [], "the draft reached the full suite"
+
+
+def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 2 (draft-gates-only). Planted fault: the document check launches before the machine
+    # admission, loses the inherited admission, or runs under a timeout other than VERIFY_SECONDS.
+    draft_world(world)
+    passing_draft(world)
+    order: list[str] = []
+    seen: dict[str, object] = {}
+    real_hold = stage2.verify_lock.hold_admission
+    real_launch = stage2.launch
+
+    def hold_admission(command):
+        order.append("admission")
+        seen["admission_command"] = list(command)
+        return real_hold(command)
+
+    def launch(command, root, env, *rest, **kwargs):
+        if command[0] == "bash":
+            order.append("launch")
+            seen["command"] = list(command)
+            seen["env"] = dict(env)
+            seen["timeout"] = kwargs.get("timeout")
+            seen["pass_fds"] = kwargs.get("pass_fds", ())
+        return real_launch(command, root, env, *rest, **kwargs)
+
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+    monkeypatch.setattr(stage2, "launch", launch)
+    assert world.run("draft") == 0
+    assert order == ["admission", "launch"], "the document check ran outside the machine admission"
+    assert seen["admission_command"] == seen["command"] == ["bash", *DOCS_ARGV], "one vector for admission and launch"
+    assert seen["timeout"] == stage2.VERIFY_SECONDS, "the shared step limit was swapped"
+    assert seen["pass_fds"] != (), "the document check lost the admission's descriptor"
+    assert seen["env"][verify_lock.LOCK_ENV], "the document check lost the inherited admission marker"
+    assert seen["env"]["XDG_STATE_HOME"] == str(world.state), "the document check lost the shared state root"
+
+
+def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 3 (draft-gates-only). Planted fault: a red, unstartable, timed-out or
+    # admission-refused document check is accepted, committed as a passing draft, reported as a
+    # failed `make verify` run, or slips the retry chain.
+    draft_world(world)
+    spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+    plant = {"plans/changes/demo/spec.md": spec, "plans/changes/demo/plan.md": PLAN_CARD}
+    before = git(world.root, "rev-parse", "HEAD")
+
+    def reset() -> None:
+        """Back to the state a fresh draft starts from: no artefacts, no call log, no derived leftovers."""
+        (world.root / "plans/changes/demo/spec.md").unlink()
+        world.plan.unlink()
+        clear_derived_leftovers(world)
+        (world.bin / "calls.jsonl").unlink()
+
+    # a red exit: every attempt fails, the chain runs, nothing is committed
+    red = red_verify(OTHER_RED)
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        docs=[red, red, red],
+    )
+    assert world.run("draft") == 1
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV] * 3, "the chain did not retry"
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "a red document check was committed"
+    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0])
+    assert "`bash scripts/verify_all.sh --job docs` exited 1" in block and "make verify" not in block
+
+    # a check that cannot start is as failed a post-run check as a red one
+    reset()
+    (world.bin / "bash").chmod(0o644)
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], claude=[{"stdout": "glm"}])
+    assert world.run("draft") == 1
+    assert world.calls("bash") == [], "an unstartable document check was started"
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
+    assert "`bash scripts/verify_all.sh --job docs` could not run" in block and "Permission denied" in block
+    (world.bin / "bash").chmod(0o755)
+
+    # a timeout through the real launch: the shared step limit ends the hung check
+    reset()
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 0.5)
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        docs=[{"stdout": "slow", "sleep": 5}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert len(world.calls("bash")) == 3, "a timed-out document check was not retried"
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
+    assert "could not run" in block and "stopped by" in block
+
+    # an admission refusal is a failed check, never a started one
+    reset()
+
+    def refused(command):
+        raise verify_lock.VerifyLockRefused(f"the admission refused {command}")
+
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", refused)
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], claude=[{"stdout": "glm"}])
+    assert world.run("draft") == 1
+    assert world.calls("bash") == [], "a refused document check was started"
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
+    assert "`bash scripts/verify_all.sh --job docs` could not run" in block and "make verify" not in block
+
+
+def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 5 (draft-gates-only). Planted fault: the derived preparation moved behind the
+    # document gates, or an artefact failure the old checks rejected is accepted.
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    order: list[str] = []
+    real_launch = stage2.launch
+
+    def launch(command, *rest, **kwargs):
+        order.append("renderer" if command[0] == sys.executable else "docs")
+        return real_launch(command, *rest, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    # the derived preparation still precedes the document gates
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems == [], problems
+    assert order == ["renderer", "docs"], order
+    # and the artefact guards still reject what they rejected
+    spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+    (world.root / "plans/changes/demo/spec.md").unlink()
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert "plans/changes/demo/spec.md is missing after the draft." in problems, problems
+    world.plan.unlink()
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert "plans/changes/demo/plan.md is missing after the draft." in problems, problems
+    assert stage2.CARD_PROBLEM not in "\n".join(problems), "an absent plan was read as a cardless one"
+    (world.root / "plans/changes/demo/spec.md").write_text(spec, encoding="utf-8")
+    world.plan.write_text(PLAN_CARD.replace("For you:     one command drafts the change\n", ""), encoding="utf-8")
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert stage2.CARD_PROBLEM in problems, problems
+    world.plan.write_text(PLAN_CARD.replace("\n## Time used\n", "\n"), encoding="utf-8")
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert "plans/changes/demo/plan.md has no `## Time used` heading." in problems, problems
+    # and the new-ADR count still stops the attempt before any gate runs
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    order.clear()
+    (world.root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+    (world.root / "docs" / "adr" / "0016-first-record.md").write_text("# First\n", encoding="utf-8")
+    (world.root / "docs" / "adr" / "0017-second-record.md").write_text("# Second\n", encoding="utf-8")
+    # `new_adrs` is the caller's (`draft` reads it from `draft_keep`), so the direct call names
+    # the two files the scenario planted, the way a second attempt on their tree would.
+    new_adrs = ["docs/adr/0016-first-record.md", "docs/adr/0017-second-record.md"]
+    problems, _owed = stage2.verify_draft(world.root, ctx, None, new_adrs, stage2.tool_state(world.root))
+    assert len(problems) == 1 and "more than one new ADR file" in problems[0], problems
+    assert order == [], "the document check ran despite the rejected artefacts"
+
+
+def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) -> None:
+    # Criterion 6 (draft-gates-only). Planted fault: implement or repair selects the document
+    # subset, or omits full verification because a draft's document check already passed.
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "implement left the full suite"
+    assert world.calls("bash") == [], "implement ran the document subset"
+    # The repair route gets its own scenario: `test_other` reads `src/other.py`, so the file joins
+    # the baseline at its unfixed value, and the stand-in's call log starts over (its step index
+    # counts a program's calls across runs).
+    (world.root / "src" / "other.py").write_text("value = 1\n", encoding="utf-8")
+    seed_tests(world)
+    (world.bin / "calls.jsonl").unlink()
+    world.write_record([("L2-1", "taken — test_b", "no")])
+    step = {
+        "stdout": "L2-1: fixed — tests/test_other.py::test_other",
+        "plant": {"src/other.py": "value = 2\n", "tests/test_other.py": OTHER_TEST},
+        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+    }
+    world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair left the full suite"
+    assert world.calls("bash") == [], "repair ran the document subset"
 
 
 FEATURE_SPEC = (
@@ -3710,13 +3914,13 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
                 plant={"plans/changes/demo/spec.md": FEATURE_SPEC, "plans/changes/demo/plan.md": PLAN_CARD},
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
-    assert world.calls("make")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
+    assert world.calls("bash")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
     assert "ADR answer owed: decisions/answers/demo/adr.yaml does not exist" in world.text()
     assert "tolerated that for this run" in world.text()
-    assert "was red only because" not in world.text(), "make verify exited 0 (F-14)"
+    assert "was red only because" not in world.text(), "the document check exited 0 (F-14)"
     assert "the answer is the maintainer's" in world.text()
     assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex"
 
@@ -3725,18 +3929,19 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     world.script(
         codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": other, "exit": 1}] * 3,
+        docs=[{"stdout": other, "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert world.text().count("ADR answer owed") == 1, "another change's missing answer is not tolerated"
     (world.bin / "calls.jsonl").unlink()
     second_gate = "\n".join(
-        _gate("adr-answers", [owed], "red") + _gate("pytest", ["FAILED tests/test_x.py::test_a"], "red")
+        _gate("adr-answers", [owed], "red")
+        + _gate("docs-links", ["docs/adr/0007-existing-record.md: the link rots"], "red")
     )
     world.script(
         codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": second_gate, "exit": 1}] * 3,
+        docs=[{"stdout": second_gate, "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert world.text().count("ADR answer owed") == 1, "a second blocking gate is not tolerated"
@@ -3745,7 +3950,7 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_time}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "\n".join(_gate("adr-answers", [owed], "red")), "exit": 1}] * 3,
+        docs=[{"stdout": "\n".join(_gate("adr-answers", [owed], "red")), "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
@@ -3759,7 +3964,7 @@ OWED_ANSWER = (
 
 
 def refused_verification(world: World, verification: str) -> None:
-    """Run a draft whose every `make verify` prints `verification` and exits 1; nothing may be committed."""
+    """Run a draft whose every document check prints `verification` and exits 1; nothing may be committed."""
     draft_world(world)
     planted = {
         "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
@@ -3768,14 +3973,14 @@ def refused_verification(world: World, verification: str) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant=planted), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": verification, "exit": 1}] * 3,
+        docs=[{"stdout": verification, "exit": 1}] * 3,
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "the draft was committed"
     assert "ADR answer owed" not in world.text()
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
-    assert "`make verify` exited 1" in "\n".join(block)
+    assert "`bash scripts/verify_all.sh --job docs` exited 1" in "\n".join(block)
 
 
 def test_a_verification_that_stopped_before_its_gates_closed_owes_nothing(world: World) -> None:
@@ -3820,7 +4025,7 @@ def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) ->
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
-    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], docs=[{"stdout": "green\n"}])
     assert world.run("draft") == 0
     (world.bin / "calls.jsonl").unlink()
     world.script(
@@ -3832,7 +4037,7 @@ def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) ->
                 delete=["docs/adr/0016-first-record.md"],
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     assert (world.root / "docs/adr/0016-renamed-record.md").is_file()
@@ -3861,7 +4066,7 @@ def test_put_back_paths_are_named_in_full_however_long(world: World) -> None:
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     text = world.text()
@@ -3879,9 +4084,9 @@ def test_a_put_back_path_with_a_newline_is_never_cut() -> None:
     assert one.split("\n")[1] in block and two.split("\n")[1] in block
 
 
-def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:
-    # 2a's F-7. Planted fault: the `CallFailed` of a make that cannot start escapes the post-run
-    # checks, so the runner stops after one attempt without a block and starts no later route.
+def test_a_docs_check_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:
+    # 2a's F-7. Planted fault: the `CallFailed` of a document check that cannot start escapes the
+    # post-run checks, so the runner stops after one attempt without a block and starts no later route.
     draft_world(world)
     world.script(
         codex=[
@@ -3897,15 +4102,15 @@ def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: W
         ],
         claude=[{"stdout": "glm drafted"}],
     )
-    (world.bin / "make").chmod(0o644)
+    (world.bin / "bash").chmod(0o644)
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
-    assert world.calls("make") == [], "make never ran"
+    assert world.calls("bash") == [], "the document check never ran"
     assert len(world.calls("codex")) == 2 and len(world.calls("claude")) == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
     joined = "\n".join(block)
-    assert "`make verify` could not run" in joined and "could not be started" in joined
+    assert "`bash scripts/verify_all.sh --job docs` could not run" in joined and "could not be started" in joined
     assert "Permission denied" in joined
 
 
@@ -3915,7 +4120,7 @@ def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     assert "plans/changes/demo/spec.md is missing after the draft." in world.text()
@@ -3934,7 +4139,7 @@ def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md is missing after the draft." in world.text()
@@ -3955,7 +4160,7 @@ def test_a_missing_plan_md_is_reported_once(world: World) -> None:
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     text = world.text()
@@ -3971,7 +4176,7 @@ def test_a_plan_without_its_card_fails_the_attempt(world: World) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_pre}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     assert stage2.CARD_PROBLEM in world.text()
@@ -3985,7 +4190,7 @@ def test_a_plan_without_its_card_fails_the_attempt(world: World) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": late}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     assert stage2.CARD_PROBLEM in world.text()
@@ -3998,7 +4203,7 @@ def test_a_plan_without_time_used_fails_the_attempt(world: World) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_time}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        make=[{"stdout": "green\n"}] * 3,
+        docs=[{"stdout": "green\n"}] * 3,
     )
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
@@ -4021,7 +4226,7 @@ def test_a_passing_draft_makes_one_commit_and_leaves_a_clean_tree(world: World) 
 def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: World) -> None:
     # Criterion 18. Planted fault: the diagnostics not passed to the second prompt.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
@@ -4033,7 +4238,7 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: 
                 },
             ),
         ],
-        make=[red, {"stdout": "green\n"}],
+        docs=[red, {"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 2
@@ -4042,14 +4247,14 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: 
         assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["draft"]}"' in call["argv"]
     prompt = world.calls("codex")[1]["argv"][-1]
     assert "## Earlier attempts' diagnostics" in prompt
-    assert "Attempt 1 (codex)" in prompt and "── [pytest] RED (block)" in prompt
+    assert "Attempt 1 (codex)" in prompt and "── [adr-answers] RED (block)" in prompt
     assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex-repair"
 
 
 def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World) -> None:
     # Criterion 19. Planted fault: the GLM route on `glm-5.3-flash`, a shell tool, or a fourth attempt.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
         claude=[
@@ -4060,7 +4265,7 @@ def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World) -> None:
                 },
             }
         ],
-        make=[red, red, {"stdout": "green\n"}],
+        docs=[red, red, {"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 2
@@ -4091,7 +4296,7 @@ def test_a_failed_draft_call_is_put_back_and_recorded(world: World) -> None:
                 },
             ),
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     block = quote_blocks(world.text())[0]
@@ -4118,7 +4323,7 @@ def test_a_failed_draft_call_saves_the_attempt_before_putting_back(world: World)
 def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> None:
     # Criterion 21. Planted fault: the tree put back after a post-run failure.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[
             codex_ok(
@@ -4131,14 +4336,14 @@ def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> Non
             ),
             codex_ok("T2", "passed on the tree the first attempt left"),
         ],
-        make=[red, {"stdout": "green\n"}],
+        docs=[red, {"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     (block,) = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]]
     files = "\n".join(block)
     assert "plans/changes/demo/spec.md" in files and "plans/changes/demo/plan.md" in files
     prompt = world.calls("codex")[1]["argv"][-1]
-    assert "Attempt 1 (codex)" in prompt and "── [pytest] RED (block)" in prompt
+    assert "Attempt 1 (codex)" in prompt and "── [adr-answers] RED (block)" in prompt
     committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
     assert "plans/changes/demo/spec.md" in committed and "plans/changes/demo/plan.md" in committed
 
@@ -4146,14 +4351,14 @@ def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> Non
 def test_three_failed_draft_attempts_exit_1_without_a_commit(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     # Criterion 22. Planted fault: the loop ends without raising, or a commit is still made.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        make=[red, red, red],
+        docs=[red, red, red],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
@@ -4179,11 +4384,11 @@ def test_a_missing_glm_key_refuses_the_glm_draft_attempt(world: World, capsys: p
     # Criterion 24. Planted fault: a `None` key passed to the GLM call.
     draft_world(world)
     Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
         claude=[{"stdout": "must not run"}],
-        make=[red, red],
+        docs=[red, red],
     )
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 2 and world.calls("claude") == []
@@ -4195,11 +4400,11 @@ def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
 ) -> None:
     # Criterion 25. Planted fault: the scan skipped on the GLM route.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "glm drafted", "plant": {"plans/changes/demo/spec.md": "the key was @KEY@\n"}}],
-        make=[red, red, {"stdout": "green\n"}],
+        docs=[red, red, {"stdout": "green\n"}],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 2
@@ -4216,11 +4421,11 @@ def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
 ) -> None:
     # Repair L2-4. Planted fault: the failed-call branch scans nothing, so the key stays in findings.md.
     draft_world(world)
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    red = red_verify(OTHER_RED)
     world.script(
         codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
-        make=[red, red],
+        docs=[red, red],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 2
@@ -5454,7 +5659,7 @@ def test_a_draft_may_commit_its_own_new_adr(world: World) -> None:
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
-    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], docs=[{"stdout": "green\n"}])
     assert world.run("draft") == 0
     committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
     assert "docs/adr/0016-first-record.md" in committed, "the draft's own new ADR was blocked or reverted"
@@ -13080,7 +13285,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
     )
     if verb == "draft":
         draft_world(world)
-        red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+        red = red_verify(OTHER_RED)
         world.script(
             codex=[
                 codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
@@ -13092,7 +13297,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
                     },
                 ),
             ],
-            make=[red, {"stdout": "green\n"}],
+            docs=[red, {"stdout": "green\n"}],
         )
         assert world.run("draft") == 0
         for call in world.calls("codex"):  # the retry keeps the substituted draft entry
@@ -13208,6 +13413,42 @@ def test_the_workflow_states_the_order_of_a_drafted_change() -> None:
     steps = re.findall(r"^(\d+\. .*)$", section(text, "### The draft (phases 2, 2b and 3)"), re.M)
     for line in steps:
         assert draft_order_problems(text.replace(line + "\n", "", 1)), line
+
+
+def draft_document_check_problems(workflow: str) -> list[str]:
+    """The draft prose names the document check and its exit code as the gate (draft-gates-only, criterion 7)."""
+    draft = section(workflow, "### The draft (phases 2, 2b and 3)")
+    if not draft:
+        return ["section 4 has no draft section"]
+    prose = flat(draft.partition("A drafted change runs in this order:")[0])
+    found = []
+    if "`bash scripts/verify_all.sh --job docs`" not in prose:
+        found.append("the draft prose does not name the document check")
+    if prose.count("make verify") != 1 or "full `make verify`" not in prose or "repair" not in prose:
+        found.append("the draft prose does not keep the full suite for implement and repair alone")
+    if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
+        found.append("the draft prose does not make the check's exit code the verdict")
+    if "ADR_ANSWERS_TOLERATE_CHANGE" not in prose:
+        found.append("the draft prose lost the answer tolerance")
+    return found
+
+
+def test_the_workflow_names_the_draft_document_check() -> None:
+    # Criterion 7 (draft-gates-only). Planted fault: the draft section names `make verify` as its
+    # check again, or makes parsed gate output the verdict's source.
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert draft_document_check_problems(text) == []
+    planted = text.replace("`bash scripts/verify_all.sh --job\ndocs`", "`make verify`", 1)
+    planted = planted.replace("`bash scripts/verify_all.sh --job docs`", "`make verify`", 1)
+    assert draft_document_check_problems(planted), "the full suite passes as the draft's check again"
+    parsed = text.replace("the check's exit code decides", "the parsed gate output decides", 1)
+    assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
+    dropped = text.replace(
+        "`implement` and `repair` keep the full\n`make verify`: only the draft drops to the document subset. ",
+        "",
+        1,
+    )
+    assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
 
 
 def test_the_drafting_prompts_name_the_draft_verb() -> None:
@@ -15037,7 +15278,7 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
                 },
             )
         ],
-        make=[{"stdout": "green\n"}],
+        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
@@ -15515,7 +15756,7 @@ def test_work_verbs_skip_escaped_scan_parent(
     """A passing run checkpoints equally with a contained or escaped changed scan path."""
     if verb == "draft":
         draft_world(world)
-        red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+        red = red_verify(OTHER_RED)
         world.script(
             codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
             claude=[
@@ -15527,7 +15768,7 @@ def test_work_verbs_skip_escaped_scan_parent(
                     },
                 }
             ],
-            make=[red, red, {"stdout": "green\n"}],
+            docs=[red, red, {"stdout": "green\n"}],
         )
     elif verb == "repair":
         repair_world(world)

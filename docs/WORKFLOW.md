@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-30
+updated: 2026-10-31
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1212,13 +1212,16 @@ Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
-If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
-after the put-back, and a red run fails the attempt — with one exception:
-the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that one run, and
-the gate `adr-answers` then reports this change's own missing ADR answer
-without failing (another change's missing answer, a refused answer file and
-every other gate still do), so the exit code of `make verify` decides and the
-runner reads no gate output. Only the maintainer's stated answer may create
+If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
+the verify job's existing document subset, `bash scripts/verify_all.sh --job
+docs`: it runs after the put-back, and a red check fails the attempt — with
+one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
+one run, and the gate `adr-answers` then reports this change's own missing ADR
+answer without failing (another change's missing answer, a refused answer file
+and every other gate still do), so the check's exit code decides and the
+runner reads no gate output. `implement` and `repair` keep the full
+`make verify`: only the draft drops to the document subset. Only the
+maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
 of the baseline and `origin/main` does not hold, so a second draft edits (or

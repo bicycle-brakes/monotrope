@@ -66,14 +66,14 @@ plant the obsolete full-check wording and require it to fail.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_draft_runs_the_existing_docs_subset — the launched command omits --job docs or a full-suite call appears.
+- 1: tests/test_stage2.py::test_draft_runs_the_existing_docs_subset — the launched command omits --job docs or a full-suite call appears.
 - 1: tests/test_ci.py::test_the_docs_subset_holds_the_document_gates_and_no_code_gate — a code gate enters the selected subset or a document gate disappears.
-- 2: not yet written tests/test_stage2.py::test_draft_docs_check_keeps_admission_and_execution_limit — launch precedes admission, lacks inherited ownership or uses a timeout other than VERIFY_SECONDS.
-- 3: not yet written tests/test_stage2.py::test_failed_docs_checks_fail_the_draft_attempt — a nonzero exit, start error, timeout or admission refusal bypasses retries or yields a passing commit, or diagnostics name make verify.
+- 2: tests/test_stage2.py::test_draft_docs_check_keeps_admission_and_execution_limit — launch precedes admission, lacks inherited ownership or uses a timeout other than VERIFY_SECONDS.
+- 3: tests/test_stage2.py::test_failed_docs_checks_fail_the_draft_attempt — a nonzero exit, start error, timeout or admission refusal bypasses retries or yields a passing commit, or diagnostics name make verify.
 - 4: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — the docs command loses the scoped environment or another blocking failure is tolerated.
-- 5: not yet written tests/test_stage2.py::test_draft_docs_checks_preserve_preparation_and_artifact_guards — preparation runs late or a missing spec, plan, card, Time used heading or excess ADR is accepted.
-- 6: not yet written tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft — either implementation route launches document-only verification.
-- 7: not yet written tests/test_stage2.py::test_the_workflow_names_the_draft_document_check — the draft section names make verify as its check or treats parsed output as the verdict.
+- 5: tests/test_stage2.py::test_draft_docs_checks_preserve_preparation_and_artifact_guards — preparation runs late or a missing spec, plan, card, Time used heading or excess ADR is accepted.
+- 6: tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft — either implementation route launches document-only verification.
+- 7: tests/test_stage2.py::test_the_workflow_names_the_draft_document_check — the draft section names make verify as its check or treats parsed output as the verdict.
 
 ## Boundaries and route
 
@@ -84,4 +84,12 @@ No design or ADR is due for this bounded change. Explore ran through Stage 2
 on 2026-10-31, route flash, model `glm-5.3-flash`; no Stage-1 fallback is
 recorded. The shared execution limit remains unchanged.
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-31 09:36:16–10:23:28 UTC, 2832 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 10:23:34–10:45:22 UTC, 1308 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 10:45:28–10:57:58 UTC, 750 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
