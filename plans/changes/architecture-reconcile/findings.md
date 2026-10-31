@@ -277,3 +277,5 @@ Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model hy4-previ
 in `docs/research/2026-10-31-architecture-reconciliation.md`; the 23 findings
 the run lists sit in older research notes this change does not touch
 (missing `category`/`created` fields). Recorded for review row L5-3.
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 806 files, 2924 commits, 12 rules.

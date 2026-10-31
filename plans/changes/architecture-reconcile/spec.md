@@ -135,6 +135,21 @@ explains why an earlier requirement changed and does not prove delivery.
 - Special runtime runs: none. An unavailable measurement remains explicitly
   unmeasured, not a green result.
 
+## Verification status — 2026-10-31
+
+Completion is not yet established: no green CI verdict is recorded. The
+attempt-3 `make verify` failure is preserved in `findings.md` (1 failed,
+4390 passed, 17 skipped). Its failing test,
+`tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission`,
+reads an empty child-PID file at line 438 after waiting for file existence.
+At repair baseline `6e754cdb2f076bddb895e8d428bc03d33dc38931`, the diff
+from this spec’s frozen baseline is Markdown only; the test and
+`scripts/verify_lock.py` are unchanged. The failure belongs to existing test
+synchronization outside this text-only change; an independent baseline
+reproduction was not run. This attribution does not waive the green-CI
+criterion or turn the failed run green. The runner owns full verification;
+the orchestrator must obtain green CI before declaring completion.
+
 ## Open decisions
 
 None open. These reversible details are chosen by the agent with their reasons:

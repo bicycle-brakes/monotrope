@@ -29,8 +29,10 @@ outcomes, not as a current claim.
 ## Baseline, method and reading limits
 
 **Baseline: `b58c72e75af3283f4cc9e39148ecfb02642026f9`, 2026-10-31.** Every
-disposition below inherits this commit and date. No tracker snapshot exists
-in this report, so no row carries a second, differing date.
+source-based disposition below inherits this commit and date. Tracker status
+uses the separate 2026-10-31 19:53 UTC snapshot documented in
+[Bead statuses](#bead-statuses-cited-by-the-gap-table); later repair checks
+are dated verification records, not measurements of the frozen baseline.
 
 - **How the original implementation evidence was read.** Repository files were opened and read in
   the worktree of branch `docs/architecture-reconcile`, whose only commit
@@ -42,16 +44,30 @@ in this report, so no row carries a second, differing date.
   totals. Documentation repair subsequently inspected the living spec at
   the frozen baseline through Git and ran documentation checks; those checks
   do not qualify the runtime. Evidence is
-  therefore of two kinds only — *inspected source* (a file's content at the
-  reading) and *recorded decision* (an accepted ADR, a dated note). Where a
-  file's existence is the evidence, the row says what exists, never that it
-  ran or passed.
+  of four kinds — *inspected source* (file content at the declared baseline),
+  *recorded decision* (an accepted ADR or dated decision note), *tracker
+  snapshot* (title/status from the dated render access point in the bead
+  table), and *verification record* (a dated check result in this change’s
+  findings). Target, delivery and gap dispositions use inspected source and
+  recorded decisions; the bead table uses the tracker snapshot, and the
+  verification limits use verification records. Tracker closure does not
+  establish delivery. Where a file’s existence is the evidence, the row says
+  what exists, never that it ran or passed.
 - **What was not measured by this report.** The static comparison did not
   execute tests; later repair verification is recorded separately in
   [this change’s findings](../../plans/changes/architecture-reconcile/findings.md).
   That record includes a full `make verify` run that exited 2 with 1 failed,
   4390 passed and 17 skipped on 2026-10-31; it is not a green qualification
-  of the frozen report baseline. The suite totals of
+  of the frozen report baseline. The failure is
+  `tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission`:
+  line 438 reads an empty child-PID file after checking only its existence.
+  At repair baseline `6e754cdb2f076bddb895e8d428bc03d33dc38931`, the diff
+  from the report baseline changes only Markdown; neither that test nor
+  `scripts/verify_lock.py` is changed. This is an existing test synchronization
+  failure outside the text-only diff, not evidence of a report regression.
+  No baseline rerun was performed to reproduce it independently. The red
+  run remains red, and the green-CI completion criterion remains unmet
+  until a green CI result is recorded. The suite totals of
   2026-09-17 (64 failed, 182 passed, 4 skipped at `eddfc0b`) remain the
   historical measurement of the gap analysis and are not refreshed. No CI
   run was observed. The tracker (Dolt) was read afterwards by the orchestrator — see
@@ -258,7 +274,11 @@ bundle is done and names `coding-harness-jc3` under a Now theme; the
   including the 2026-10-31 `make verify` failure described in the method
   above; those results do not turn the static dispositions into runtime
   qualification. No CI verdict was observed.
-- **No tracker read, no tracker write** (spec non-goals; the section above).
+- **Tracker reading was limited to the dated render snapshot above.** It
+  supplies the ten cited beads’ titles and statuses as acceptance criterion 6
+  requires. No tracker item was created, claimed, closed or reprioritised
+  (spec non-goals); the original file-only attempt’s reading limit does not
+  apply to the orchestrator’s later snapshot.
 - **No CI run observed; no live service, sibling repository or private
   instance audited** (spec non-goals).
 - **Unmeasured where the wording says so:** the ruleset's live state at
