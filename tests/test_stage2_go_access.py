@@ -43,6 +43,7 @@ from test_stage2 import (  # noqa: E402
 )
 from test_stage2 import world as stage2_world  # noqa: E402
 from test_stage2_session import GO_BARE, GO_MODEL, pi_steps  # noqa: E402
+from test_stage2_session import world as session_world  # noqa: E402
 
 world = stage2_world
 RECORDED_BASE = TEST_ADDRESS["apis"]["openai-completions"]["basis"]

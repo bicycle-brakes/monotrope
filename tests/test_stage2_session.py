@@ -878,7 +878,11 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
     assert launch["cwd"] == str(world.tree)
     assert extension.parent.parent == world.tree / stage2_session.SESSION_ROOT
     assert extension.read_bytes() == stage2_session.POLICY_SOURCE.read_bytes(), "the copy is the tested source"
-    assert {p.name for p in extension.parent.iterdir()} == {stage2_session.SCRIPT_NAME, stage2_session.POLICY_FILE}
+    assert {p.name for p in extension.parent.iterdir()} == {
+        stage2_session.SCRIPT_NAME,
+        stage2_session.POLICY_FILE,
+        stage2_session.MODEL_SIDECAR,
+    }
     assert world.calls("opencode") == [], "the OpenCode CLI is never called"
 
 
