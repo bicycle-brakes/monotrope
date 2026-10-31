@@ -500,6 +500,17 @@ endpunkte:
         these ids are NOT read; this acceptance covers the diff-only review
         purpose alone — no paid model, no Zen id and no interactive session
         runs on it.
+    # The one admitted Go address (ADR 0024, go-access-point Q-1 to Q-5): the
+    # runner, both swarms, the probes and the session read it; the
+    # orchestrating session maintains the path, a runner attempt never does.
+    # Only the measured wire API is mapped; an unmapped one is refused.
+    adresse:
+      host: opencode.ai
+      apis:
+        openai-completions:
+          basis: "https://opencode.ai/inference/go/openai/v1"
+          quelle: "https://opencode.ai/docs/go (the Go page: Chat Completions at https://opencode.ai/inference/go/openai/v1/chat/completions)"
+          gelesen: "2026-10-31"
     bemerkung: >-
       The review loop (phase 4b), the interactive session verb (`stage2.py
       session`, ADR 0012) and, since ADR 0020, the research swarm's Go calls
@@ -542,6 +553,12 @@ endpunkte:
       shipped catalog; `gpt-6-luna` uses openai-responses. All four are
       skipped: wire API not measured. Their data-terms admission under Q-11
       stands; a probe must measure their real address before use.
+      On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
+      Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
+      models `https://opencode.ai/inference/go/v1/models`) and Pi's live
+      catalog reports `https://opencode.ai/inference/go/v1`; the admitted host
+      and the known base stand in `adresse` (ADR 0024), where a path on that
+      host runs on with a notice and any other host is refused.
       The Go page lists Pi among its
       validated clients (read 2026-10-08), and Pi sends the
       `x-opencode-session` header the page asks for.
