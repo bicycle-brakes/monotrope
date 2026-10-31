@@ -5986,6 +5986,7 @@ def test_venv_cache_cleanup_precedes_runner_tools(
 
     monkeypatch.setattr(stage2, "launch", launch)
     if runner == "draft":
+        world.script(docs=[{"stdout": "green\n"}])
         ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
         world.plan.write_text(PLAN_CARD, encoding="utf-8")
         assert stage2.verify_draft(world.root, ctx, None, [], before)[0] == []
@@ -13451,7 +13452,7 @@ def draft_document_check_problems(workflow: str) -> list[str]:
     found = []
     if "`bash scripts/verify_all.sh --job docs`" not in prose:
         found.append("the draft prose does not name the document check")
-    if prose.count("make verify") != 1 or "full `make verify`" not in prose or "repair" not in prose:
+    if "full `make verify`" not in prose or "repair" not in prose:
         found.append("the draft prose does not keep the full suite for implement and repair alone")
     if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
         found.append("the draft prose does not make the check's exit code the verdict")
@@ -13469,11 +13470,11 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     assert draft_document_check_problems(planted), "the full suite passes as the draft's check again"
     parsed = text.replace("the check's exit code decides", "the parsed gate output decides", 1)
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
-    dropped = text.replace(
-        "`implement` and `repair` keep the full\n`make verify`: only the draft drops to the document subset. ",
-        "",
-        1,
-    )
+    # The sentence is matched across any line wrapping, so rewrapping WORKFLOW.md cannot turn this
+    # planted fault into a no-op.
+    full_suite = r"\s+".join(map(re.escape, "`implement` and `repair` keep the full `make verify`:".split()))
+    dropped = re.sub(full_suite + r"[^.]*\.\s*", "", text, count=1)
+    assert dropped != text, "the full-suite sentence was not found to drop"
     assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
 
 

@@ -42,3 +42,9 @@ decided with PR #280; this change only calls it.
 [DETAIL] **The `--report` asymmetry the research names stays out.** Reason:
 it is a reporting detail of the job mechanism, not of the draft verb; it gets
 a bead of its own if it matters.
+
+[DETAIL] **ADR 0016 keeps its `make verify` wording in this change.** Reason:
+`docs/adr/` is human-decided, so the amendment that names the document check
+in Decision 3 is a decision pull request of its own (bead coding-harness-v9xx);
+`docs/WORKFLOW.md` and the gate's usage text state the current command
+(review row L5-5).
