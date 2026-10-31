@@ -49,7 +49,7 @@ in this report, so no row carries a second, differing date.
 - **What was not measured.** No test was run; the suite totals of
   2026-09-17 (64 failed, 182 passed, 4 skipped at `eddfc0b`) remain the
   historical measurement of the gap analysis and are not refreshed. No CI
-  run was observed. The tracker (Dolt) was not read — see
+  run was observed. The tracker (Dolt) was read afterwards by the orchestrator — see
   [Bead statuses](#bead-statuses-cited-by-the-gap-table). Live services,
   sibling repositories and private instances were not audited (non-goal).
 - **Disposition vocabulary.** *Supported* — inspected evidence at the
@@ -213,33 +213,30 @@ own).
 
 ## Bead statuses cited by the gap table
 
-The original gap table cites ten beads. **None was read.** Limitation: this
-attempt has file tools only — `scripts/bead_render.py` needs a command
-process, the tracker lives in Dolt behind `refs/dolt/data`, and no rendered
-copy is committed (house rule 2; ADR 0004 removed the JSONL copy). Per the
-accepted criterion, an unavailable tracker is recorded as *not read*, never
-as an empty tracker, and no closure is treated as delivery.
+The original gap table cites ten beads. The drafting attempt had file tools
+only and recorded them as *not read*; the orchestrator read them afterwards
+through the pinned tracker wrapper (`tools/bd show <id> --json`, rendered from
+`refs/dolt/data`) on 2026-10-31 at about 19:50 UTC (review row L3-1). A
+closed bead is tracker state, not proof that its gap is delivered; the
+dispositions above stand on their own evidence.
 
-| Bead (as cited) | Status | Attribution |
-|---|---|---|
-| `coding-harness-bo0` (G1, G14) | not read | — |
-| `coding-harness-2ee` (G2) | not read | — |
-| `coding-harness-m34` (G4) | not read | — |
-| `coding-harness-eev` (G5) | not read | — |
-| `coding-harness-9qo` (G8) | not read | — |
-| `coding-harness-jc3` (G8) | not read | — |
-| `coding-harness-21f` (G10) | not read | — |
-| `coding-harness-qvl` (G11) | not read | — |
-| `coding-harness-bt8` (G19) | not read | — |
-| `coding-harness-lir` (G20) | not read | — |
+| Bead (as cited) | Status 2026-10-31 | Closed | Title (shortened) |
+|---|---|---|---|
+| `coding-harness-bo0` (G1, G14) | closed | 2026-09-21 | Gate file and one verify command; ci.yml derived from it |
+| `coding-harness-2ee` (G2) | closed | 2026-09-20 | Classify the 60 red mechanism tests |
+| `coding-harness-m34` (G4) | closed | 2026-09-23 | Verify tracker writes from worktrees before lifting the write ban |
+| `coding-harness-eev` (G5) | closed | 2026-09-27 | Omnigent step M0: proof of concept in a throwaway repository |
+| `coding-harness-9qo` (G8) | closed | 2026-10-07 | Template bundle for M1 |
+| `coding-harness-jc3` (G8) | open | — | Change-artefact validator as a kit entry |
+| `coding-harness-21f` (G10) | closed | 2026-09-22 | CLAUDE.md imports AGENTS.md (since replaced: AGENTS.md is the only instruction file) |
+| `coding-harness-qvl` (G11) | open | — | Per-instance model routing: phase overrides in the instance's model-endpoints.yaml |
+| `coding-harness-bt8` (G19) | open | — | Corpus correction pull request: mechanical fixes and one stage vocabulary |
+| `coding-harness-lir` (G20) | open | — | Public readiness: licence, onboarding page, denylist gate |
 
 Dated *prose* mentions found in the tree are recorded as prose, not as
 tracker status: `ROADMAP.md` (last checked 2026-10-11) says the template
 bundle is done and names `coding-harness-jc3` under a Now theme; the
-2026-10-20 readiness note names `coding-harness-lir` items as open. The
-orchestrator, which owns tracker access, may re-run
-`python3 scripts/bead_render.py` and append a dated snapshot column to this
-section without touching any disposition above.
+2026-10-20 readiness note names `coding-harness-lir` items as open. 
 
 ---
 
