@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -87,3 +89,25 @@ Research complete. Here is the report, ready to append to `plans/changes/repair-
 - `plans/specs/implementation-verification/spec.md` (bead `coding-harness-mfv`) — the accepted living spec on runner verification preparation (stamp → index → `make verify`).
 - `plans/changes/loop-until-clean/plan.md` — the loop-round repair records the timing ledger form comes from.
 - `plans/changes/archive/2026-10-06-touch-map/spec.md` — the touch map's own spec.
+
+## Draft gap checks — 2026-10-31, baseline `9eae5d26`
+
+- The interview now declares `bounded` and explicitly extends targeted checking
+  to runner repairs; this supersedes the exploration's uncertainty about class
+  and the workflow's sentence retaining full verification after runner repairs.
+- `review()` currently proceeds from preflight and undecided-row checking to
+  the reviewer call without running full verification or checking a receipt.
+  Running full verification there avoids introducing a persistent receipt.
+- `verify_attempt()` holds admission around formatting, cheap checks, derived
+  preparation and full verification. `run_attempts()` calls it for both
+  implementation and repair; verification mode must therefore be explicit,
+  with the existing full mode retained as the default.
+- `ci_gates.gates()` exposes validated commands, enforcement, placement and
+  document-subset membership. Selection can refer to gate identifiers without
+  copying commands or changing the gate schema. No file-kind mapping exists.
+- `touch_map.links()` works over a snapshot's path inventory and source reader;
+  a working-tree adapter can reuse those rules without changing its committed
+  comparison command. Baseline links remain necessary for removed paths.
+- `scripts/validate_change_artefacts.py` and a plan template under `templates/`
+  are absent. Use the spec template and the phase-3 prompt's plan form; do not
+  build either missing artifact as part of this change.
