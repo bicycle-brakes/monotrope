@@ -82,7 +82,7 @@ intent:
 
 @pytest.fixture(autouse=True)
 def _no_tolerance_from_the_caller(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A draft run's `make verify` sets the tolerance; the tests below measure the gate without it."""
+    """A draft run's document check sets the tolerance; the tests below measure the gate without it."""
     monkeypatch.delenv(cag.TOLERATE_ENV, raising=False)
 
 

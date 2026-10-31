@@ -93,3 +93,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-31 09:36:16–10:23:28 UTC, 2832 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 10:23:34–10:45:22 UTC, 1308 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 10:45:28–10:57:58 UTC, 750 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+
+Overrun, owned by the orchestrator (review row L2-1): the three attempts together took 4890 s, past the one-hour stop. Under the appetite rule merged that morning (`docs/WORKFLOW.md`, PR #292) the appetite extends once by itself up to twice its size; the change ran under that extension, ending implement at 81.5 of 120 minutes, and no further extension was taken.
