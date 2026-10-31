@@ -275,6 +275,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/repair-restore-status/plan.md`](changes/repair-restore-status/plan.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/repair-restore-status/research.md`](changes/repair-restore-status/research.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
 | [`changes/repair-restore-status/spec.md`](changes/repair-restore-status/spec.md) | draft | partial | 2026-10-25 | coding-harness-rcyf |
+| [`changes/repair-targeted-check/research.md`](changes/repair-targeted-check/research.md) | draft | none | 2026-10-31 | coding-harness-gxwg |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
