@@ -39,6 +39,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import leakcheck
+import stage2_go
 import stage2_research_map
 import stage2_swarm
 import yaml
@@ -348,9 +349,9 @@ def _failed(runner, program: str, done, reason: str, key: str | None) -> object:
 # others into the provider request (`samplingParams` into the body, so a row could name another model than the
 # one checked; `headers`, `compat`), and the selection checks none of them; they are dropped and named.
 OVERLAY_FIELDS = ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
-# The origin the selection checks a row's absent `baseUrl` as (stage2_swarm.select_research_catalog); a row
-# without one is written with it, so Pi never fills in a shipped definition's other path (deep review RS-3-7).
-CHECKED_BASE_URL = "https://opencode.ai/zen/go/v1"
+# A Go row's absent `baseUrl` is filled from the one address record's default for its wire api
+# (`stage2_go`, go-access-point); an unmapped api has no default and the row is refused, so Pi never
+# fills in a shipped definition's other path (deep review RS-3-7).
 # Pi's stderr when it could not use its models.json, or fell back to an unconfigured model (deep review RS-3-1).
 PI_CONFIG_ERRORS = (
     "Failed to load models.json",
@@ -410,21 +411,35 @@ def pi_row_problem(row: dict) -> str | None:
     return None
 
 
-def install_measured_models(runner, agent: Path, store: dict | None, *, model: str | None = None) -> list[str]:
+def go_policy(runner, root: Path):
+    """The one address policy for this root, as a refusal when its record is unusable."""
+    try:
+        return stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise runner.Refused(f"the Go address record is unusable: {error}") from None
+
+
+def install_measured_models(
+    runner, agent: Path, store: dict | None, *, model: str | None = None, address: stage2_go.AddressPolicy | None = None
+) -> list[str]:
     """Give Pi's fresh agent directory the measured catalog: the retrieval evidence and its model definitions.
 
     ``models-store.json`` keeps the whole store as retrieval evidence. With ``model`` (every research launch and
     probe) ``models.json`` carries only that model's row (deep review RS-3-1: one malformed row elsewhere in the
-    catalog made Pi reject the file), restricted to ``OVERLAY_FIELDS``, with the checked ``baseUrl`` when it has
-    none, and checked against Pi's schema first: a row Pi would refuse raises ``OverlayError``. Returns one note
-    per row whose other fields were dropped, for the caller's audit. Without ``model`` the whole store goes
-    through ``runner.activate_overlay``, as before.
+    catalog made Pi reject the file), restricted to ``OVERLAY_FIELDS``, with the recorded default base filled in
+    when it has none, and checked against Pi's schema first: a row Pi would refuse raises ``OverlayError``.
+    Returns one note per row whose other fields were dropped or whose base was filled or moved, for the caller's
+    audit. Without ``model`` the whole store goes through ``runner.activate_overlay`` under the address policy.
+    The destination itself is judged at dispatch and at selection: an installation writes the row as the
+    catalog carried it (the one rewrite of the offline capture aside), never a refused send.
     """
     if not store:
         return []
     (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
     if model is None:
-        runner.activate_overlay(agent, store)
+        if address is None:
+            raise runner.Refused("activating the whole measured store needs the Go address record; none was passed.")
+        runner.activate_overlay(agent, store, address)
         return []
     providers: dict[str, dict] = {}
     dropped: list[str] = []
@@ -434,8 +449,19 @@ def install_measured_models(runner, agent: Path, store: dict | None, *, model: s
             if not isinstance(definition, dict) or definition.get("id") != model:
                 continue
             row = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
-            if provider == GO:
-                row.setdefault("baseUrl", CHECKED_BASE_URL)
+            if provider == GO and "baseUrl" not in row:
+                filled = address.default_base(row.get("api")) if address is not None else None
+                if filled is None:
+                    raise OverlayError(
+                        f"the measured row of {provider}/{model} has no base and its wire api "
+                        "has no recorded default; Pi would fill one in"
+                    )
+                row["baseUrl"] = filled
+                dropped.append(f"{provider}/{model}: base filled from the record's default for {row.get('api')}")
+            if provider == GO and address is not None:
+                verdict = stage2_go.assess(address, model, row)
+                if verdict.admitted and verdict.notice:
+                    dropped.append(f"address notice · {verdict.notice}")
             # `provider` naming the same provider is redundant for Pi, and dropping it changes nothing.
             extra = sorted(
                 str(name)
@@ -473,15 +499,36 @@ def probe_go(
     verb: str = "prepare-explore",
     timeout_seconds: int = PROBE_SECONDS,
     text: str = PROBE_TEXT,
+    destination: dict | None = None,
 ) -> None:
     """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, one text, one limit.
 
     `text` is the small static probe, or a free model's real-size one; the leak check sees the same text.
 
-    The limit is a parameter, not a constant: a probe that only ran out of time is tried once more
-    with a longer one (R-7 of the review-swarm review), and the longer try must use the same probe.
+    The probe assesses its destination against the one address record before
+    anything is installed or sent: a refused destination never probes, and a
+    same-host path move is named in the audit. `destination` hands in an
+    already-assessed effective definition - the caller vouches for it, and the
+    dispatch boundary re-checks it against the current record all the same.
+    The limit is a parameter, not a constant: a probe that only ran out of
+    time is tried once more with a longer one (R-7 of the review-swarm
+    review), and the longer try must use the same probe.
     """
     _checked_probe(runner, root, change, GO, model, audit, admission, verb, text)
+    policy = go_policy(runner, root)
+    if destination is None:
+        row = stage2_go.definition_of(store or {}, GO, model)
+        if row is None:
+            raise runner.Refused(f"the probe's model {model} has no refreshed definition; no probe starts.")
+        verdict = stage2_go.assess(policy, model, row)
+        if not verdict.admitted:
+            # One model's refused destination, not the operation's stop: the probe
+            # loop and the research selection name it and carry on (criterion 5).
+            raise stage2_go.DestinationRefused(verdict.problem)
+        if verdict.notice:
+            audit.append(f"address notice · {verdict.notice}")
+            print(f"Address notice: {verdict.notice}")
+        destination = verdict.definition
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
         scratch = Path(tmp)
         agent = scratch / "agent"
@@ -490,7 +537,13 @@ def probe_go(
         # Research preparation probes what its launches will use: one checked row (deep review RS-3-1). The review
         # loop's probes keep the whole overlay until that loop's own repair changes `activate_overlay`.
         try:
-            dropped = install_measured_models(runner, agent, store, model=model if verb == "prepare-explore" else None)
+            dropped = install_measured_models(
+                runner,
+                agent,
+                store,
+                model=model if verb == "prepare-explore" else None,
+                address=policy,
+            )
         except OverlayError as error:
             raise runner.CallFailed(f"pi call failed: {error}") from None
         audit.extend(dropped)
@@ -529,6 +582,7 @@ def probe_go(
             env,
             key,
             admission=admission,
+            destination=destination,
             timeout=timeout_seconds,
             limit=f"the probe limit of {timeout_seconds} seconds",
         )
@@ -852,6 +906,11 @@ class _Selection:
             except self.runner.CallFailed as error:
                 self.probed[key] = self.runner.scrub(str(error), self.key)
                 item.update(state="unreachable", reason=self.probed[key])
+            except stage2_go.DestinationRefused as error:
+                # A refused destination is a named skip for this preparation, never a
+                # seat: the model cannot return through filtering or substitution.
+                self.probed[key] = str(error)
+                item.update(state="unreachable", reason=str(error))
             else:
                 self.probed[key] = None
                 item.update(state="selected", reason="reachable")
@@ -941,6 +1000,9 @@ def probe_free_research(selection: _Selection, selected: list[str]) -> tuple[lis
                 if "stopped by" in failure:
                     continue  # only a stopped call is worth the longer try
                 break
+            except stage2_go.DestinationRefused as error:
+                failed[model] = str(error)
+                break  # a refused destination is not retried at any limit
             else:
                 failed.pop(model, None)
                 reachable.append(model)
@@ -974,6 +1036,7 @@ def preparation_terms(runner, entry: dict) -> dict:
 def research_report(state: dict) -> str:
     lines = [f"Availability checked: {state['checked_at']}"]
     lines.extend(f"Terms warning: {warning}" for warning in state.get("availability", {}).get("terms_warnings", []))
+    lines.extend(f"Address notice: {notice}" for notice in (state.get("catalog") or {}).get("address_notices") or [])
     for label in ("repository", "online"):
         for item in state["seats"][label]:
             if item is None:
@@ -1114,6 +1177,7 @@ def prepare_research(
             preferred,
             expected_version=runner.PI_VERSION,
             measured_wire_apis=rule["measured_wire_apis"],
+            address=go_policy(runner, root),
         )
     except stage2_swarm.ResearchCatalogError as error:
         if error.exit_code == 2:
@@ -1137,6 +1201,7 @@ def prepare_research(
                 "capability_status",
                 "capability_reason",
                 "measured_wire_apis",
+                "address_notices",
                 "sources",
                 "candidates",
                 "models",
@@ -1293,6 +1358,7 @@ def report(state: dict) -> str:
     # A receipt of an older runner holds no warning list; its absence is no
     # statement about current admission, which the round rechecks live.
     lines.extend(f"Terms warning: {warning}" for warning in available.get("terms_warnings", []))
+    lines.extend(f"Address notice: {notice}" for notice in (state["free"] or {}).get("notices") or [])
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
     # Escape untrusted controls per line, preserving only the runner's own separators.
     return "\n".join(
@@ -1392,6 +1458,11 @@ def prepare(root: Path, change: str, runner) -> None:
                 failed[model] = failure
                 # Only a stopped call is worth a longer try; a refused one stays refused.
                 stopped = "stopped by" in failure
+            except stage2_go.DestinationRefused as error:
+                # The record refuses this model's destination: named in the
+                # report's failed map, never retried, never substituted.
+                failed[model] = str(error)
+                stopped = False
             else:
                 failure = None
                 stopped = False

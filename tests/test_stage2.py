@@ -45,6 +45,7 @@ import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
+import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
 import verify_lock  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
@@ -184,7 +185,16 @@ if alias == "pi" and "update" in argv and "--models" in argv:
         ]
         ids = scenario.get("pi_overlay", listed)
         Path(agent_dir, "models-store.json").write_text(
-            json.dumps({"opencode-go": {"models": [{"id": i, "provider": "opencode-go"} for i in ids], "checkedAt": 1}})
+            json.dumps(
+                {
+                    "opencode-go": {
+                        "models": [
+                            {"id": i, "provider": "opencode-go", "api": "openai-completions"} for i in ids
+                        ],
+                        "checkedAt": 1,
+                    }
+                }
+            )
         )
     sys.stdout.write(scenario.get("pi_refresh_stdout", ""))
     raise SystemExit(scenario.get("pi_refresh_exit", 0))
@@ -449,6 +459,33 @@ TEST_FREE = ("acme-v1-free", "beacon-2-free")
 TEST_RUNGS = ("mimo-v2.6-pro",)
 
 
+def test_policy() -> stage2_go.AddressPolicy:
+    """The address policy of `TEST_ADDRESS`, as `stage2_go.load_address_policy` returns one."""
+    return stage2_go.AddressPolicy(
+        host=TEST_ADDRESS["host"],
+        apis={
+            api: stage2_go.BaseRecord(api=api, base=part["basis"], source=part["quelle"], read=part["gelesen"])
+            for api, part in TEST_ADDRESS["apis"].items()
+        },
+    )
+
+
+# The test worlds' synthetic Go address record (go-access-point): the real
+# held file stays the orchestrator's, so every world declares this copy and
+# the address tests rewrite it in place. Quoted ISO reading date, dated
+# source, one base per wire api - exactly the shape `stage2_go` validates.
+TEST_ADDRESS = {
+    "host": "opencode.ai",
+    "apis": {
+        "openai-completions": {
+            "basis": "https://opencode.ai/zen/go/v1",
+            "quelle": "the synthetic test record (go-access-point)",
+            "gelesen": "2026-10-31",
+        }
+    },
+}
+
+
 def grouped(called: list[str], *groups: tuple[str, ...]) -> bool:
     """Whether the calls came as the given swarms, one after the other; inside a swarm the members run in parallel, so their order is free."""
     start = 0
@@ -471,6 +508,7 @@ def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | No
         model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(ladder)
     }
     entry["flash_swarm"] = list(flash or ladder[:2])
+    entry["adresse"] = copy.deepcopy(TEST_ADDRESS)
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
@@ -491,6 +529,7 @@ def pin_the_ladder(target: Path) -> None:
         model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(TEST_LADDER)
     }
     entry["flash_swarm"] = list(TEST_FLASH)
+    entry["adresse"] = copy.deepcopy(TEST_ADDRESS)
     entry["free_stage"] = {
         "provider": "opencode-go",
         "id_suffix": "-free",
@@ -583,7 +622,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # These runner unit tests use a stand-in Pi. The offline real-Pi resolver is exercised
     # separately by the overlay regression and the Pi contract suite.
     if hasattr(stage2, "check_overlay"):
-        monkeypatch.setattr(stage2, "check_overlay", lambda *_args: None)
+        monkeypatch.setattr(stage2, "check_overlay", lambda *_args, **_kwargs: None)
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
@@ -14958,11 +14997,26 @@ def test_catalog_headers_are_activated_as_literal_data(tmp_path: Path) -> None:
         "X-Escapes": "$$ $! ! trailing$",
         "X-Plain": "catalog-value",
     }
-    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    store = {
+        stage2.OPENCODE: {
+            "models": [
+                {
+                    "id": "synthetic-free",
+                    "api": "openai-completions",
+                    "baseUrl": "https://opencode.ai/zen/go/v1",
+                    "headers": headers,
+                }
+            ],
+            "lastModified": 0,
+        }
+    }
     original = copy.deepcopy(store)
-    assert stage2.activate_overlay(tmp_path, store) == {"synthetic-free": ["headers"]}
+    dropped, notices = stage2.activate_overlay(tmp_path, store, test_policy())
+    assert dropped == {"synthetic-free": ["headers"]} and notices == []
     active = json.loads((tmp_path / "models.json").read_text())
-    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "synthetic-free"}]
+    assert active["providers"][stage2.OPENCODE]["models"] == [
+        {"id": "synthetic-free", "api": "openai-completions", "baseUrl": "https://opencode.ai/zen/go/v1"}
+    ]
     assert store == original, "activation modified the retrieved catalog"
 
 
@@ -16472,20 +16526,35 @@ def test_activation_copies_only_the_allowed_definition_fields(tmp_path: Path) ->
     }
     store = {stage2.OPENCODE: {"models": [definition], "lastModified": 0}}
     original = copy.deepcopy(store)
-    dropped = stage2.activate_overlay(tmp_path, store)
+    dropped, notices = stage2.activate_overlay(tmp_path, store, test_policy())
     active = json.loads((tmp_path / "models.json").read_text())["providers"][stage2.OPENCODE]["models"][0]
     assert set(active) == {*stage2.OVERLAY_FIELDS, "provider"}
     assert "kimi-k3" not in json.dumps(active) and "x-forged" not in json.dumps(active)
     assert dropped == {"deepseek-v4.1-flash": ["compat", "headers", "samplingParams"]}
+    assert notices == [], "an on-record base invented a move notice"
     assert store == original
 
 
 def test_a_non_string_header_value_does_not_break_activation(tmp_path: Path) -> None:
     """Criterion 14 (RS-3-8): a catalog header that is no string is dropped with the headers, not a crash."""
-    store = {stage2.OPENCODE: {"models": [{"id": "acme-v1-free", "headers": {"X-Number": 7, "X-None": None}}]}}
-    assert stage2.activate_overlay(tmp_path, store) == {"acme-v1-free": ["headers"]}
+    store = {
+        stage2.OPENCODE: {
+            "models": [
+                {
+                    "id": "acme-v1-free",
+                    "api": "openai-completions",
+                    "baseUrl": "https://opencode.ai/zen/go/v1",
+                    "headers": {"X-Number": 7, "X-None": None},
+                }
+            ]
+        }
+    }
+    dropped, notices = stage2.activate_overlay(tmp_path, store, test_policy())
+    assert dropped == {"acme-v1-free": ["headers"]} and notices == []
     active = json.loads((tmp_path / "models.json").read_text())
-    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "acme-v1-free"}]
+    assert active["providers"][stage2.OPENCODE]["models"] == [
+        {"id": "acme-v1-free", "api": "openai-completions", "baseUrl": "https://opencode.ai/zen/go/v1"}
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -18318,11 +18387,23 @@ def test_a_not_activated_catalog_field_carries_no_control_bytes(world: World, mo
 
 def test_a_malformed_catalog_definition_is_dropped_whole_and_named(tmp_path: Path) -> None:
     """Malformed definitions are named by position, without an empty model or a shared None key."""
-    store = {stage2.OPENCODE: {"models": [{"headers": {}}, {"compat": {}}, None, "bad", {"id": "good"}]}}
+    store = {
+        stage2.OPENCODE: {
+            "models": [
+                {"headers": {}},
+                {"compat": {}},
+                None,
+                "bad",
+                {"id": "good", "api": "openai-completions", "baseUrl": "https://opencode.ai/zen/go/v1"},
+            ]
+        }
+    }
     original = copy.deepcopy(store)
-    dropped = stage2.activate_overlay(tmp_path, store)
+    dropped, _notices = stage2.activate_overlay(tmp_path, store, test_policy())
     active = json.loads((tmp_path / "models.json").read_text())
-    assert active["providers"][stage2.OPENCODE]["models"] == [{"id": "good"}]
+    assert active["providers"][stage2.OPENCODE]["models"] == [
+        {"id": "good", "api": "openai-completions", "baseUrl": "https://opencode.ai/zen/go/v1"}
+    ]
     assert len(dropped) == 4
     for position in range(1, 5):
         assert any(f"definition {position}" in name for name in dropped)
@@ -18576,14 +18657,14 @@ def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str 
         "id": "synthetic-free",
         "name": "Synthetic",
         "api": "openai-completions",
-        "baseUrl": "https://catalog.example.invalid/v1",
+        "baseUrl": "https://opencode.ai/zen/go/v1",
         "samplingParams": {"model": "kimi-k3"},
         "headers": {"x-forbidden": "catalog"},
     }
     store = {stage2.OPENCODE: {"models": [definition], "lastModified": 9999999999999}}
     evidence = json.dumps(store)
     (agent / "models-store.json").write_text(evidence)
-    stage2.activate_overlay(agent, store)
+    stage2.activate_overlay(agent, store, test_policy())
     path = agent / "models.json"
     config = json.loads(path.read_text())
     model = config["providers"][stage2.OPENCODE]["models"][0]
@@ -18595,10 +18676,10 @@ def test_overlay_validation_checks_the_real_resolver(tmp_path: Path, fault: str 
     path.write_text(json.dumps(config))
     selected = "absent-free" if fault == "missing-model" else "synthetic-free"
     if fault is None:
-        stage2.check_overlay(agent, home, selected)
+        stage2.check_overlay(agent, home, selected, policy=test_policy())
     else:
         with pytest.raises(stage2.Refused, match="overlay validation failed"):
-            stage2.check_overlay(agent, home, selected)
+            stage2.check_overlay(agent, home, selected, policy=test_policy())
     assert (agent / "models-store.json").read_text() == evidence
 
 

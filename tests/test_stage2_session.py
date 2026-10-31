@@ -24,7 +24,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -119,6 +119,9 @@ class World:
     tree: Path
     bin: Path
     monkey: pytest.MonkeyPatch
+    # The binding confirmations the fixture records in place of running real Pi
+    # (its base-holding is proven against the pinned install by test_pi_contract).
+    bindings: list[dict] = field(default_factory=list)
 
     def script(self, **steps: object) -> None:
         (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
@@ -187,6 +190,21 @@ class World:
         # far-future expiry keeps every fixture from aging into a skip, and a boundary test sets
         # its own (tests/terms_fixtures.py).
         entry.setdefault("modelle_terms", {model: admissible_terms() for model in entry["modelle"]})
+        # The synthetic Go address record (go-access-point): the runner binds the
+        # initial model offline against it; no test reads the held real file.
+        entry.setdefault(
+            "adresse",
+            {
+                "host": "opencode.ai",
+                "apis": {
+                    "openai-completions": {
+                        "basis": "https://opencode.ai/zen/go/v1",
+                        "quelle": "the synthetic test record (go-access-point)",
+                        "gelesen": "2026-10-31",
+                    }
+                },
+            },
+        )
         path = self.tree / "model-endpoints.yaml"
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         data["endpunkte"] = [e for e in data["endpunkte"] if e.get("name") != "opencode-go"]
@@ -246,6 +264,29 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         program = bin_dir / name
         program.write_text(LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
         program.chmod(0o755)
+    # The pinned install's shipped catalog, as `checked_session_model` reads it
+    # beside the wrapper: a runner-owned stand-in file, never a user directory.
+    catalog_dir = bin_dir / "node_modules" / "@earendil-works" / "pi-ai" / "dist" / "providers" / "data"
+    catalog_dir.mkdir(parents=True)
+    (catalog_dir / "opencode-go.json").write_text(
+        json.dumps(
+            {
+                "openai-completions": {
+                    GO_BARE: {
+                        "id": GO_BARE,
+                        "name": GO_BARE,
+                        "api": "openai-completions",
+                        "reasoning": True,
+                        "input": ["text"],
+                        "cost": {"input": 0.14, "output": 0.28, "cacheRead": 0, "cacheWrite": 0},
+                        "contextWindow": 128000,
+                        "maxTokens": 4096,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     # The runner's one path to Pi is patched to the wrapper stand-in; the `pi`
     # stand-in stays on PATH, where nothing may call it.
     monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
@@ -279,6 +320,15 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     monkeypatch.setattr(stage2_session, "on_macos", lambda: True)
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"session read a secret: {name}"))
     w = World(root, tree, bin_dir, monkeypatch)
+    # The binding confirmation asks the real installed Pi in production; here it
+    # is recorded, so the stand-in's scripted steps stay three per launch.
+    monkeypatch.setattr(
+        stage2_session,
+        "confirm_binding",
+        lambda root, cli, extension, bare, _runner: w.bindings.append(
+            {"root": root, "cli": cli, "extension": extension, "bare": bare}
+        ),
+    )
     w.script()
     return w
 

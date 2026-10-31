@@ -5,7 +5,8 @@
 // A case is { mode: "handler", cwd, hasUI, answer, explode, event } (the
 // extension as Pi runs it: its default export, its `tool_call` handler) or
 // { mode: "decide", event, env } (the pure decision, for what the host fixes) or
-// { mode: "platform", platform } (the file-system case rule of a host).
+// { mode: "platform", platform } (the file-system case rule of a host) or
+// { mode: "register", sidecar } (the pure checked-model binding, go-access-point).
 import { pathToFileURL } from "node:url";
 
 const chunks = [];
@@ -27,14 +28,28 @@ for (const item of request.cases) {
     }
     continue;
   }
+  if (item.mode === "register") {
+    const registered = [];
+    try {
+      policy.registerCheckedModel({ registerProvider: (name, options) => registered.push({ name, options }) }, item.sidecar);
+      answers.push({ registered });
+    } catch (error) {
+      answers.push({ threw: String(error && error.message) });
+    }
+    continue;
+  }
   const handlers = {};
   const flags = [];
+  const registered = [];
   policy.default({
     on: (name, handler) => {
       handlers[name] = handler;
     },
     registerFlag: (name, options) => {
       flags.push({ name, ...options });
+    },
+    registerProvider: (name, options) => {
+      registered.push({ name, options });
     },
   });
   const asked = [];
@@ -59,6 +74,12 @@ for (const item of request.cases) {
     };
   }
   const result = await handlers.tool_call(event, ctx);
-  answers.push({ result: result === undefined ? null : result, asked, flags, handlers: Object.keys(handlers) });
+  answers.push({
+    result: result === undefined ? null : result,
+    asked,
+    flags,
+    handlers: Object.keys(handlers),
+    registered,
+  });
 }
 process.stdout.write(JSON.stringify(answers));

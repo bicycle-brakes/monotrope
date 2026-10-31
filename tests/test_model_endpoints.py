@@ -13,6 +13,7 @@ without a single row of payload data.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from pathlib import Path
 
@@ -484,6 +485,127 @@ def test_unread_terms_reach_the_free_stage_alone() -> None:
     assert "no" in one and "tools" in one, "the acceptance does not state the tool-free confinement"
     for forbidden in ("paid model", "Zen", "interactive session"):
         assert forbidden in one, f"the acceptance does not name what it does not cover: {forbidden}"
+
+
+# ---------------------------------------------------------------------------
+# The one Go address record (go-access-point)
+# ---------------------------------------------------------------------------
+
+
+def _address_problems(entry: dict) -> list[str]:
+    """What makes the entry's `adresse` unusable as the one Go address record.
+
+    The synthetic cases below carry the faults; the real entry is checked with
+    the same function, so the orchestrator's bootstrap cannot land a weaker
+    shape than these tests hold (plan step 10: the runner never edits the held
+    file). The strictness mirrors the runner's `load_address_policy`: exact
+    keys, one host, per-wire-api bases on that host, dated sources.
+    """
+    problems: list[str] = []
+    record = entry.get("adresse")
+    if not isinstance(record, dict):
+        return ["no adresse record"]
+    if set(record) != {"host", "apis"}:
+        problems.append(f"unknown or missing address keys: {sorted(record)}")
+        return problems
+    host = record["host"]
+    if not isinstance(host, str) or not re.fullmatch(r"[a-z0-9.-]+", host or ""):
+        problems.append(f"host is not a plain hostname: {host!r}")
+        return problems
+    apis = record["apis"]
+    if not isinstance(apis, dict) or not apis:
+        problems.append("no per-wire-api bases")
+        return problems
+    for api, part in apis.items():
+        if not isinstance(api, str) or not api:
+            problems.append("a wire api key is not a plain string")
+            continue
+        if not isinstance(part, dict) or set(part) != {"basis", "quelle", "gelesen"}:
+            problems.append(f"{api}: not exactly basis, quelle and gelesen")
+            continue
+        if not isinstance(part["basis"], str) or not part["basis"].startswith(f"https://{host}/"):
+            problems.append(f"{api}: basis is not an HTTPS URL on {host}")
+        if not isinstance(part["quelle"], str) or not part["quelle"].strip():
+            problems.append(f"{api}: quelle is missing or blank")
+        if not isinstance(part["gelesen"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", part["gelesen"] or ""):
+            problems.append(f"{api}: gelesen is not a quoted ISO date")
+    return problems
+
+
+def _address_fixture() -> dict:
+    """The minimal valid record, as the orchestrator's bootstrap will declare it."""
+    return {
+        "name": "opencode-go",
+        "adresse": {
+            "host": "opencode.ai",
+            "apis": {
+                "openai-completions": {
+                    "basis": "https://opencode.ai/zen/go/v1",
+                    "quelle": "https://opencode.ai/docs/go",
+                    "gelesen": "2026-10-31",
+                }
+            },
+        },
+    }
+
+
+ADDRESS_FAULTS = {
+    "no-record": lambda e: e.pop("adresse"),
+    "unknown-key": lambda e: e["adresse"].update(gueltig_bis="x"),
+    "no-apis": lambda e: e["adresse"].pop("apis"),
+    "apis-not-a-map": lambda e: e["adresse"].update(apis=[]),
+    "api-key-empty": lambda e: e["adresse"].update(apis={"": e["adresse"]["apis"]["openai-completions"]}),
+    "host-with-scheme": lambda e: e["adresse"].update(host="https://opencode.ai"),
+    "host-empty": lambda e: e["adresse"].update(host=""),
+    "base-keys-broken": lambda e: e["adresse"]["apis"]["openai-completions"].pop("quelle"),
+    "extra-base-key": lambda e: e["adresse"]["apis"]["openai-completions"].update(notiz="x"),
+    "foreign-host-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://elsewhere.invalid/zen/go/v1"
+    ),
+    "plain-http-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="http://opencode.ai/zen/go/v1"
+    ),
+    "userinfo-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://user@opencode.ai/zen/go/v1"
+    ),
+    "blank-source": lambda e: e["adresse"]["apis"]["openai-completions"].update(quelle="   "),
+    "native-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen=dt.date(2026, 10, 31)),
+    "impossible-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen="2026-13-45"),
+}
+
+
+def test_the_address_record_shape_is_validated() -> None:
+    """The record's faults are named: shape, dated sources, bases on the host (plan step 10)."""
+    assert _address_problems(_address_fixture()) == []
+    for name, fault in ADDRESS_FAULTS.items():
+        entry = _address_fixture()
+        fault(entry)
+        assert _address_problems(entry), f"{name}: the fault passed the record shape check"
+
+
+def test_the_opencode_go_entry_declares_its_address_record() -> None:
+    """Criterion 1 (go-access-point): the real entry carries the record the runner loads.
+
+    Until the orchestrator's bootstrap writes the held file (plan step 12),
+    this repository's entry has none and the real-record check rests; the
+    synthetic faults above carry the strictness meanwhile. From the bootstrap
+    on, a missing or malformed record fails here.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    stage2_go = pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+
+    entry = _endpunkt("opencode-go")
+    if "adresse" not in entry:
+        pytest.skip("no adresse record yet; the orchestrator's bootstrap writes it (go-access-point step 12)")
+    assert _address_problems(entry) == []
+    # The runner's own loader accepts exactly what the shape check accepts.
+    try:
+        policy = stage2_go.load_address_policy(REPO_ROOT)
+    except stage2_go.RecordUnusable as error:
+        raise AssertionError(f"the declared record does not load: {error}") from None
+    assert policy.host == entry["adresse"]["host"]
 
 
 def opencode_remark_problems(remark: str) -> list[str]:

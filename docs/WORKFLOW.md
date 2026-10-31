@@ -809,6 +809,19 @@ after two failed post-run checks, through the runner's `repair` verb — since t
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
+**One address record for OpenCode Go** (go-access-point, ADR 0024): every
+runner-controlled Go launch — a review-loop member, a probe, a research seat,
+an interactive session — reads its admitted address from the `adresse` record
+on the `opencode-go` entry of `model-endpoints.yaml` and follows one policy. A
+model that names another path on the recorded host runs on with a printed
+notice; any other destination (a foreign host or subdomain, plain HTTP, a
+non-default port, credentials, query or fragment in the URL) is refused before
+any model request — at selection, at activation, and again immediately before
+every send. The record holds no credentials and no model permissions, each
+base carries its documentation source and its reading date, and its
+maintenance route is an agent edit of the held entry through the orchestrator:
+no separate approval per documented same-host path move, and no catalog
+refresh ever writes the record by itself.
 **No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before

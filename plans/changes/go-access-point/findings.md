@@ -275,3 +275,252 @@ Stage-2 call, 2026-10-31: draft · attempt 3 · route glm · endpoint glm-coding
 > ````
 
 Stage-2 call, 2026-10-31: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 800 files, 2903 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 800 files, 2907 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +13 -0
+> - `plans/changes/go-access-point/plan.md` +14 -14
+> - `scripts/research_capture.py` +77 -1
+> - `scripts/stage2.py` +130 -36
+> - `scripts/stage2_availability.py` +89 -14
+> - `scripts/stage2_go.py` +333 -0
+> - `scripts/stage2_research_run.py` +24 -1
+> - `scripts/stage2_session.py` +127 -2
+> - `scripts/stage2_session_policy.mjs` +43 -1
+> - `scripts/stage2_swarm.py` +32 -18
+> - `tests/stage2_session_policy_driver.mjs` +23 -2
+> - `tests/test_model_endpoints.py` +122 -0
+> - `tests/test_pi_contract.py` +216 -20
+> - `tests/test_stage2.py` +96 -16
+> - `tests/test_stage2_go_access.py` +684 -0
+> - `tests/test_stage2_research_catalog.py` +21 -1
+> - `tests/test_stage2_research_deep_review.py` +27 -4
+> - `tests/test_stage2_session.py` +51 -1
+> - `tests/test_stage2_session_policy.py` +57 -0
+> - `tests/test_stage2_swarm.py` +12 -0
+> - `tests/test_stage2_terms_expiry.py` +20 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/research_capture.py`, `scripts/stage2.py`, `scripts/stage2_availability.py`, `tests/test_pi_contract.py`, `tests/test_stage2.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_terms_expiry.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> tests/test_pi_contract.py:607:15: F821 Undefined name `model_id`
+>     |
+> 605 |     """
+> 606 |     definition = {
+> 607 |         "id": model_id,
+>     |               ^^^^^^^^ F821
+> 608 |         "provider": "opencode-go",
+> 609 |         "api": "openai-completions",
+>     |
+>
+> tests/test_pi_contract.py:629:39: F821 Undefined name `model_id`
+>     |
+> 627 |     home = tmp_path / "home"
+> 628 |     home.mkdir()
+> 629 |     stage2.check_overlay(agent, home, model_id, policy=policy)
+>     |                                       ^^^^^^^^ F821
+>     |
+>
+> tests/test_stage2_go_access.py:459:37: C416 Unnecessary set comprehension (rewrite using `set()`)
+>     |
+> 457 |       assert carried["provider"] == "opencode-go" and carried["model"]["id"] == GO_BARE
+> 458 |       assert carried["model"]["baseUrl"] == RECORDED_BASE, "the terminal launch carries an unchecked base"
+> 459 |       assert set(carried["model"]) <= {
+>     |  _____________________________________^
+> 460 | |         name for name in ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
+> 461 | |     }, "the sidecar carries more than the allow-listed fields"
+>     | |_____^ C416
+> 462 |       # Unit level: the checked definition comes from the record for the shipped catalog's wire api.
+> 463 |       unit, _verdict = stage2_session.checked_session_model(w.tree, GO_BARE, stage2)
+>     |
+>     = help: Rewrite using `set()`
+>
+> tests/test_stage2_session.py:328:44: ARG005 Unused lambda argument: `runner`
+>     |
+> 326 |         stage2_session,
+> 327 |         "confirm_binding",
+> 328 |         lambda root, cli, extension, bare, runner: w.bindings.append(
+>     |                                            ^^^^^^ ARG005
+> 329 |             {"root": root, "cli": cli, "extension": extension, "bare": bare}
+> 330 |         ),
+>     |
+>
+> Found 4 errors.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-10-31: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 802 files, 2910 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-access-point/plan.md` +14 -14
+> - `tests/test_pi_contract.py` +1 -1
+> - `tests/test_stage2_go_access.py` +9 -1
+> - `tests/test_stage2_session.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> ==================================== ERRORS ====================================
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> __________________ ERROR collecting tests/test_pi_contract.py __________________
+> tests/test_pi_contract.py:671: in <module>
+>     REVIEWER_FLAGS = reviewer_flags()
+> tests/test_pi_contract.py:668: in reviewer_flags
+>     return command[1 : command.index("--tools")]
+> E   ValueError: '--tools' is not in list
+> =========================== short test summary info ============================
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> ERROR tests/test_pi_contract.py - ValueError: '--tools' is not in list
+> 8 errors in 5.59s
+> ```
+
+Stage-2 call, 2026-10-31: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 802 files, 2910 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_pi_contract.py` +2 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_go_access.py:142: in <lambda>
+>     return lambda: stage2.run_swarm(ctx, [model], {model: "prompt"}, "test-key", free=False)
+> scripts/stage2.py:2767: in run_swarm
+>     raise outcome
+> scripts/stage2.py:2743: in one
+>     answer = run_reviewer(ctx, member, prompts[member], key, free=free, deadline=deadline)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> ctx = Context(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-6215/popen-...'cacheRead': 0, 'cacheWrite': 0}, 'contextWindow': 128000, 'maxTokens': 4096}], 'lastModified': 0}}, go_admission=None)
+> model = 'deepseek-v4.1-flash', prompt = 'prompt', key = 'test-key'
+>
+>     def run_reviewer(
+>         ctx: Context,
+>         model: str,
+>         prompt: str,
+>         key: str,
+>         *,
+>         free: bool = False,
+>         timeout_seconds: int | None = None,
+>         task: str | None = None,
+>         deadline: float | None = None,
+>     ) -> str:
+>         """One reviewer call through Pi with this run's refreshed OpenCode Go definitions.
+>     
+>         The launch is the measured set (spec, criterion 8), started through the
+>         repository wrapper (ADR 0019): the rung's id under the `opencode-go`
+>         provider, thinking `max` (Pi clamps it per model), the read-only tools,
+>         every discovery switched off, no session, retries off. Each call gets its
+>         own scratch directory: a `HOME`, an agent directory with retry settings
+>         and the run's refreshed provider definitions, and the prompt file. The key reaches Pi as
+>         `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
+>         ended after `REVIEWER_MINUTES` is stopped (criterion 15).
+>     
+>         A free call (`free=True`, ADR 0021 decision 3) gets `--no-tools` instead of
+>         the read tools and starts in its scratch directory, not the worktree: its
+>         only input is the prompt it is given.
+>         """
+>         with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+>             scratch = Path(tmp)
+>             agent = scratch / "agent"
+>             agent.mkdir()
+>             (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+>             # The launch resolves and assesses its model offline, against the one
+>             # address record read fresh from the held declaration. Without the
+>             # run's refreshed definitions there is no checked destination, and no
+>             # unchecked launch stands in for one (criterion 2).
+>             try:
+>                 policy = stage2_go.load_address_policy(ctx.root)
+>             except stage2_go.RecordUnusable as error:
+> >               raise Refused(f"the Go address record is unusable: {error}") from None
+> E               stage2.Refused: the Go address record is unusable: the address record for openai-completions has an unusable base: the base's host is not the admitted host
+>
+> scripts/stage2.py:2635: Refused
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_policy
+>   /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/.venv/lib/python3.12/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_stage2.py::test_policy returned AddressPolicy(host='opencode.ai', apis={'openai-completions': BaseRecord(api='openai-completions', base='https://opencode.ai/zen/go/v1', source='the synthetic test record (go-access-point)', read='2026-10-31')}), which will be an error in a future version of pytest.  Did you mean to u [… 32 characters left out …]
+>     warnings.warn(
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_model_endpoints.py::test_the_address_record_shape_is_validated
+> FAILED tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[synthetic-protocol-check-free]
+> FAILED tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[deepseek-v4.1-flash]
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-0]
+> FAILED tests/test_pi_contract.py::test_real_reviewer_tool_contract - stage2.R...
+> FAILED tests/test_pi_contract.py::test_real_reviewer_ignores_ambient_credentials
+> FAILED tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-0]
+> FAILED tests/test_stage2_go_access.py::test_every_go_path_reads_the_one_address_record
+> FAILED tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff
+> FAILED tests/test_stage2_go_access.py::test_an_unusable_record_stops_go_admission[duplicate-entry]
+> FAILED tests/test_stage2_go_access.py::test_an_unusable_record_stops_go_admission[no-entries]
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-946684800000]
+> FAILED tests/test_stage2_session_policy.py::test_a_malformed_sidecar_beside_the_copy_fails_the_load
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-946684800000]
+> FAILED tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps
+> FAILED tests/test_stage2_go_access.py::test_every_send_rechecks_current_policy
+> ERROR tests/test_stage2_go_access.py::test_the_session_binds_the_checked_model_without_reading_auth
+> 17 failed, 54 passed, 1 skipped, 1 warning, 1 error in 10.46s
+> ```

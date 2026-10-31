@@ -19,7 +19,8 @@ import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import urlsplit
+
+import stage2_go
 
 # The free researcher's whole tool surface, as Pi's `--tools` allow-list: the
 # extension's two tools and no built-in one (the extension's own gate stays).
@@ -88,7 +89,9 @@ def _identity_doubt(entries):
     )
 
 
-def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
+def select_research_catalog(
+    bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",), address
+):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
     The bridge transports raw source bodies. Python retains duplicate identity and
@@ -97,7 +100,11 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
     preferred models) and every paid model of the fresh overlay; it does not
     authorize or dispatch any model. A candidate that is absent, baseline-only,
     non-chat, malformed or on an unmeasured wire API is skipped with its raw
-    evidence, never a failure of the whole preflight (Q-12, Q-14).
+    evidence, never a failure of the whole preflight (Q-12, Q-14). Its
+    destination is assessed against the one address record (`address`, the
+    loaded `stage2_go` policy): any path on the recorded host is admissible, a
+    move from the recorded path is kept as a notice, a foreign destination
+    refuses the candidate alone (go-access-point).
     """
     validate_research_free_policy(policy)
     provider = policy["provider"]
@@ -148,21 +155,14 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             return "not-chat"
         if item.get("provider", provider) != provider:
             return "pi-malformed"
-        try:
-            target = urlsplit(item.get("baseUrl", "https://opencode.ai/zen/go/v1"))
-            safe_origin = (
-                target.scheme == "https"
-                and target.hostname == "opencode.ai"
-                and target.port in (None, 443)
-                and target.username is None
-                and target.password is None
-                and target.path in ("/zen/go/v1", "/zen/go/v1/")
-                and not target.query
-                and not target.fragment
-            )
-        except (TypeError, ValueError, AttributeError):
-            safe_origin = False
-        if not safe_origin:
+        base = item.get("baseUrl")
+        if base is None:
+            # A row without a base resolves offline from the record for its
+            # wire api; an unmapped api has no default and no origin to check.
+            if address.default_base(item.get("api")) is None:
+                return "no-recorded-base"
+            return None
+        if stage2_go.url_problem(base, address.host) is not None:
             return "pi-malformed"
         return None
 
@@ -248,8 +248,17 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             return "deprecated"
         return None
 
+    def address_notice(ident: str) -> str | None:
+        """The same-host move notice of an admissible candidate, or None."""
+        item = models.get(ident)
+        if item is None:
+            return None
+        verdict = stage2_go.assess(address, ident, {"api": item.get("api"), "baseUrl": item.get("baseUrl")})
+        return verdict.notice if verdict.admitted else None
+
     candidates = []
     eligible = set()
+    notices: list[str] = []
     ids = sorted(
         {ident for ident in models if ident.endswith("-free")}
         | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
@@ -262,10 +271,14 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             reason = metadata_reason(ident)
         if reason is None:
             eligible.add(ident)
+            if (notice := address_notice(ident)) is not None:
+                notices.append(notice)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
         reason = seat_reason(ident)
+        if reason is None and (notice := address_notice(ident)) is not None:
+            notices.append(notice)
         seat_models.append(
             {
                 "id": ident,
@@ -292,6 +305,7 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         if selected
         else ("capability-unavailable" if capability_reason else "measured-empty"),
         "fixed": list(fixed_ids),
+        "address_notices": sorted(notices),
         "models_store": bridge["models_store"],
         "sources": {
             name: {key: value for key, value in source.items() if key != "body"} for name, source in sources.items()

@@ -59,6 +59,21 @@ FIXED_MODELS = ("deepseek-v4.1-flash", "mimo-v2.6-pro", "qwen3.8-flash")
 FREE_MODELS = ("alpha-free", "beta-free")
 ONLINE_MODEL, REPOSITORY_MODEL, PROBE_MODEL = FIXED_MODELS[0], FIXED_MODELS[2], FIXED_MODELS[1]
 FIXTURE_CHANGE = "capture-fixture"
+# The capture's own Go address record, the shape `stage2_go` reads: the fake
+# repository's `model-endpoints.yaml` declares it, so the seat launches resolve
+# their offline defaults against a valid record instead of the working tree's
+# held file. The bases name the real documented host; only the installed rows
+# are re-pointed at the mock (the one rewrite in `store_for_run`).
+CAPTURE_ADDRESS = {
+    "host": "opencode.ai",
+    "apis": {
+        "openai-completions": {
+            "basis": "https://opencode.ai/zen/go/v1",
+            "quelle": "https://opencode.ai/docs/go (the capture's fixture record)",
+            "gelesen": "2026-10-31",
+        }
+    },
+}
 ERROR_TEXT = re.compile(
     r"(error|not found|unknown tool|denied|refus|blocked|not allowed|invalid|forbidden|unavailable|failed|cannot"
     r"|no such|unsupported|not available"
@@ -576,6 +591,7 @@ def build_world(scratch: Path, seed: str | None = None) -> World:
     (prompts / "trap.md").write_text(f"{add('repo-prompt', 'repo')}\n", encoding="utf-8")
     where["repo-prompt"] = "repo/.pi/prompts/trap.md (tracked discovery trap)"
     (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    (repo / "model-endpoints.yaml").write_text(capture_declaration(), encoding="utf-8")
     _git(repo, home, "init", "-q", "-b", "main")
     _git(repo, home, "add", "-A")
     _git(repo, home, "commit", "-q", "-m", "fixture")
@@ -808,6 +824,7 @@ def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[s
         {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         list(FIXED_MODELS),
         expected_version=runner.PI_VERSION,
+        address=capture_policy(),
     )
     return selection, [line for line in done.stderr.splitlines() if "pi-network-guard" in line]
 
@@ -823,6 +840,55 @@ def synthetic_selection(pin: str) -> dict:
         "synthetic": True,
         "models_store": store,
     }
+
+
+def capture_policy():
+    """The address policy of the capture's own record, as `stage2_go` holds one."""
+    import stage2_go
+
+    records = {
+        api: stage2_go.BaseRecord(api=api, base=part["basis"], source=part["quelle"], read=part["gelesen"])
+        for api, part in CAPTURE_ADDRESS["apis"].items()
+    }
+    return stage2_go.AddressPolicy(host=CAPTURE_ADDRESS["host"], apis=records)
+
+
+def capture_declaration() -> str:
+    """The fake repository's `model-endpoints.yaml`: the capture's own address record."""
+    api, record = next(iter(CAPTURE_ADDRESS["apis"].items()))
+    return (
+        "endpunkte:\n"
+        f"  - name: {GO}\n"
+        "    adresse:\n"
+        f"      host: {CAPTURE_ADDRESS['host']}\n"
+        "      apis:\n"
+        f"        {api}:\n"
+        f"          basis: {json.dumps(record['basis'])}\n"
+        f"          quelle: {json.dumps(record['quelle'])}\n"
+        f"          gelesen: {json.dumps(record['gelesen'])}\n"
+    )
+
+
+def original_destination(selection: dict) -> dict:
+    """The probe's effective destination before the loopback rewrite (the capture's routing seam).
+
+    The production address policy never admits a loopback URL, so the probe
+    cannot assess the store it installs. It carries instead the destination
+    assessed from the unmodified selection store — `store_for_run` deep-copies
+    before its one rewrite — or, when that store has no row (stand-in mode),
+    the record's own default. The dispatch boundary re-checks it against the
+    current record as always; no loopback URL passes a production check.
+    """
+    import stage2_go
+
+    row = stage2_go.definition_of(selection.get("models_store") or {}, GO, PROBE_MODEL)
+    if row is None:
+        api = next(iter(CAPTURE_ADDRESS["apis"]))
+        row = {"id": PROBE_MODEL, "api": api, "baseUrl": CAPTURE_ADDRESS["apis"][api]["basis"]}
+    verdict = stage2_go.assess(capture_policy(), PROBE_MODEL, row)
+    if not verdict.admitted:
+        raise RuntimeError(f"the capture's probe destination is refused: {verdict.problem}")
+    return verdict.definition
 
 
 def store_for_run(selection: dict, server: MockServer, labels: dict[str, str]) -> dict:
@@ -1081,7 +1147,16 @@ def execute(args, scratch: Path) -> dict:
         stage2_availability._checked_probe = lambda *_args, **_kwargs: None
         probe_error = None
         try:
-            stage2_availability.probe_go(runner, REPO_ROOT, FIXTURE_CHANGE, PROBE_MODEL, key, probe_audit, store)
+            stage2_availability.probe_go(
+                runner,
+                REPO_ROOT,
+                FIXTURE_CHANGE,
+                PROBE_MODEL,
+                key,
+                probe_audit,
+                store,
+                destination=original_destination(selection),
+            )
         except Exception as error:  # noqa: BLE001 - a failed probe is evidence, recorded
             probe_error = f"{type(error).__name__}: {error}"
         finally:
@@ -1122,6 +1197,7 @@ def method_lines(real: bool) -> list[str]:
             if real
             else "synthetic (stand-in mode); the catalog helper needs the pinned Pi."
         ),
+        "Go address record: the fake repository declares the capture's own record (stage2_go's shape), so the seat launches resolve their offline defaults against it and never against the working tree's held file; the probe carries the destination assessed from the unmodified selection store (store_for_run deep-copies before its one rewrite) and the dispatch boundary re-checks it against the current record. No loopback URL passes a production address check.",
         "Skipped on purpose: the dispatcher's declaration check and exact-prompt leak check (covered by their own tests; the probe's _checked_probe is stubbed because the fake repository has no declaration).",
         "Verdicts: criterion 8 = no canary or credential in any outbound request of a free context or catalog read; 9 = only the two public tools declared, undeclared and private-address attempts refused, nothing reached the sink; 47 = the probe payload carries no canary and no tool. Missing evidence is FAIL. A tool attempt counts as refused when its result text reads as an error (a heuristic; the excerpts are in the report for a human read).",
     ]

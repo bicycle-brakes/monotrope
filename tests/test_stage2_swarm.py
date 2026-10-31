@@ -423,6 +423,18 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
             if live.get("anfragen_5h") is not None:
                 synthetic["anfragen_5h"] = live["anfragen_5h"]
             go["modelle_terms"][seat["model"]] = admissible_terms(**synthetic)
+    # The real entry has no address record until the orchestrator's bootstrap;
+    # the swarm world's Go launches read this synthetic one instead (plan step 8).
+    go["adresse"] = {
+        "host": "opencode.ai",
+        "apis": {
+            "openai-completions": {
+                "basis": "https://opencode.ai/zen/go/v1",
+                "quelle": "the synthetic swarm record (go-access-point)",
+                "gelesen": "2026-10-31",
+            }
+        },
+    }
     declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
 
     home = tmp_path / "home"

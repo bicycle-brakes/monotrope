@@ -23,7 +23,8 @@ than macOS, an invocation outside the change's dedicated worktree
 as the working one), a model the declaration does not clear for a session
 transport, a handover that is missing, empty, unreadable, oversized, NUL-bound
 or resolving outside the worktree, a missing CLI or `osascript`, a Pi that is not
-the pinned version, a policy extension that did not load, and a leak check that cannot measure or is not
+the pinned version, a policy extension that did not load, an initial Go model
+whose checked binding the record and the pinned catalog cannot establish, and a leak check that cannot measure or is not
 clean - scanned once after the handover is read and a second time immediately
 before the window opens.
 
@@ -40,6 +41,7 @@ the runner neither reads nor writes.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -50,6 +52,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import stage2_go
 import yaml
 
 SESSION_ROOT = ".stage2-sessions"
@@ -268,6 +271,21 @@ POLICY_SOURCE = Path(__file__).resolve().parent / "stage2_session_policy.mjs"
 POLICY_FILE = "stage2-session-policy.mjs"
 # The flag that extension registers; `pi --help` lists it when the file is loaded.
 POLICY_FLAG = "--stage2-session-policy"
+# The sidecar beside the policy copy that binds the checked initial Go model,
+# and the fields of the checked definition that cross into it: the model's own
+# facts and its checked base, never a credential, header or request parameter.
+MODEL_SIDECAR = "checked-model.json"
+MODEL_SIDECAR_FIELDS = (
+    "id",
+    "name",
+    "api",
+    "baseUrl",
+    "reasoning",
+    "input",
+    "contextWindow",
+    "maxTokens",
+    "cost",
+)
 
 
 def install_policy(private: Path, runner) -> Path:
@@ -316,6 +334,93 @@ def confirm_loaded(root: Path, cli: str, extension: Path, runner) -> None:
     if not re.search(rf"(?<![\w-]){re.escape(POLICY_FLAG)}(?![\w-])", done.stdout):
         raise runner.Refused(
             "pi did not list the policy extension's flag; the extension did not load, and no session starts."
+        )
+
+
+def checked_session_model(root: Path, bare: str, runner) -> tuple[dict, stage2_go.Assessment]:
+    """The checked definition a session's initial Go model binds, resolved offline.
+
+    The definition's own fields come from the pinned install's shipped catalog
+    (a runner-owned file, never the user's agent directory) and its base is
+    replaced by the record's default for the definition's wire API, so the
+    effective base is explicit and checked even when the shipped catalog names
+    another path. No credential-bearing file is read, and the user's saved
+    login stays where it is: the binding composes with it inside Pi.
+    """
+    try:
+        policy = stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise runner.Refused(f"the Go address record is unusable: {error}") from None
+    catalog = (
+        Path(runner.PI_WRAPPER).resolve().parent
+        / "node_modules"
+        / "@earendil-works"
+        / "pi-ai"
+        / "dist"
+        / "providers"
+        / "data"
+        / f"{stage2_go.PROVIDER}.json"
+    )
+    try:
+        data = json.loads(catalog.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise runner.Refused(
+            f"the pinned install's {stage2_go.PROVIDER} catalog cannot be read; "
+            "the session cannot bind its model offline."
+        ) from None
+    sections = [(api, part) for api, part in data.items() if isinstance(part, dict) and bare in part]
+    if len(sections) != 1:
+        raise runner.Refused(
+            f"the pinned install's catalog carries {bare} under {len(sections)} wire apis; "
+            "the session binds no ambiguous model."
+        )
+    api, part = sections[0]
+    base = policy.default_base(api)
+    if base is None:
+        raise runner.Refused(
+            f"the address record maps no base for the wire api {api}; the session's model has no checked base."
+        )
+    verdict = stage2_go.assess(policy, bare, {**part[bare], "baseUrl": base})
+    if not verdict.admitted:
+        raise runner.Refused(verdict.problem)
+    return {name: verdict.definition[name] for name in MODEL_SIDECAR_FIELDS if name in verdict.definition}, verdict
+
+
+def confirm_binding(root: Path, cli: str, extension: Path, bare: str, runner) -> None:
+    """Refuse unless Pi, loaded with the policy and the checked-model sidecar, resolves the bound model.
+
+    This proves the installed Pi accepts the binding - the definition's schema
+    and its registration - before the window opens; that the resolved base
+    stays the checked one is held against real Pi by
+    `tests/test_pi_contract.py`. No model is called and no output is printed;
+    a scratch `HOME` and agent directory keep this call from reading anything
+    of the maintainer's.
+    """
+    with tempfile.TemporaryDirectory(prefix="stage2-session-") as scratch:
+        env = runner.foreign_env({"HOME": scratch, "PI_CODING_AGENT_DIR": scratch})
+        try:
+            done = subprocess.run(
+                [cli, "--no-extensions", "-e", str(extension), "--offline", "--no-approve", "--list-models"],
+                cwd=root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=CLI_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise runner.Refused(
+                f"pi --list-models did not answer within {CLI_TIMEOUT:g}s; the checked model binding is not confirmed."
+            ) from error
+        except OSError as error:
+            raise runner.Refused(f"pi --list-models could not be started: {error}") from error
+    if done.returncode != 0:
+        raise runner.Refused(f"pi --list-models exited {done.returncode}; the checked model binding is not confirmed.")
+    if not re.search(rf"\b{re.escape(stage2_go.PROVIDER)}\s+{re.escape(bare)}\b", done.stdout):
+        raise runner.Refused(
+            f"pi did not resolve {stage2_go.PROVIDER}/{bare} from the checked binding; no session starts."
         )
 
 
@@ -519,6 +624,26 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
     private = prepare(root, transport, cli, runner)
     producer = "codex" if transport == "codex" else "pi"
     try:
+        destination = None
+        if transport == "pi":
+            # The initial model binds offline, before anything dispatches: the
+            # checked definition goes into the private launch directory as the
+            # sidecar the policy copy reads, and the installed Pi must resolve
+            # it - otherwise the preparation refuses and no session starts.
+            binding, _verdict = checked_session_model(root, endpoint[1], runner)
+            try:
+                # The extension's binding record: the provider and the checked
+                # definition it registers - the flat effective definition itself
+                # stays the dispatch destination.
+                (private / MODEL_SIDECAR).write_text(
+                    json.dumps({"provider": stage2_go.PROVIDER, "model": binding}), encoding="utf-8"
+                )
+            except OSError as error:
+                raise runner.Refused(
+                    f"the checked model could not be written into the private launch directory: {error}"
+                ) from error
+            confirm_binding(root, cli, private / POLICY_FILE, endpoint[1], runner)
+            destination = binding
         result = runner.checked_prompt(ctx, endpoint, prompt)
         command = terminal_command(
             root,
@@ -536,7 +661,7 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
             return dispatch(terminal, private / SCRIPT_NAME, command)
 
         if endpoint[0] == "opencode-go":
-            accepted, detail = runner.dispatch_go(root, endpoint[1], send)
+            accepted, detail = runner.dispatch_go(root, endpoint[1], send, destination=destination)
         else:
             accepted, detail = send()
     except BaseException:  # any failure before the dispatch, Ctrl-C included, leaves no private directory

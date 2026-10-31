@@ -36,6 +36,7 @@ from pathlib import Path, PurePosixPath
 
 import research_handoff
 import stage2_availability
+import stage2_go
 import stage2_research_map
 import stage2_swarm
 from stage2_research_dispatch import GateVerdict, Slot, dispatch
@@ -618,6 +619,23 @@ class Run:
                     )
 
                 if entry["endpoint"] == stage2_availability.GO:
+                    # The exact resolved definition this preparation selected:
+                    # every Go send of this seat — replacement and retry
+                    # included — dispatches this destination, and the boundary
+                    # re-checks it against the current record before sending.
+                    store = (self.selection.get("catalog") or {}).get("models_store")
+                    row = stage2_go.definition_of(store or {}, stage2_availability.GO, entry["model"])
+                    if row is None:
+                        raise self.runner.Refused(
+                            f"the research seat for {entry['model']} has no refreshed definition; it does not start."
+                        )
+                    verdict = stage2_go.assess(
+                        stage2_availability.go_policy(self.runner, self.root), entry["model"], row
+                    )
+                    if not verdict.admitted:
+                        raise self.runner.Refused(verdict.problem)
+                    if verdict.notice and hasattr(self, "lines"):
+                        self.line(f"Address notice: {verdict.notice}")
                     with self.runner.capture_terms_warnings() as warnings:
                         try:
                             return self.runner.dispatch_go(
@@ -625,6 +643,7 @@ class Run:
                                 entry["model"],
                                 send,
                                 admission=free_admission if entry["role"] == "online_free" else None,
+                                destination=verdict.definition,
                             )
                         finally:
                             # Each launch may run on a later UTC day than its
@@ -690,7 +709,11 @@ class Run:
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
         dropped = stage2_availability.install_measured_models(
-            self.runner, agent, (self.selection.get("catalog") or {}).get("models_store"), model=entry["model"]
+            self.runner,
+            agent,
+            (self.selection.get("catalog") or {}).get("models_store"),
+            model=entry["model"],
+            address=stage2_availability.go_policy(self.runner, self.root),
         )
         if hasattr(self, "lines"):  # the attended capture builds launches on a bare Run without an audit
             for note in dropped:

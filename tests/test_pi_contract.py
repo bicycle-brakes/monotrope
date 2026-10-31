@@ -42,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_go  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
 PKG = "@earendil-works/pi-coding-agent"
@@ -53,6 +54,7 @@ PLANTED_KEY = "ok-TRAP-credential-never-send"
 SENTINEL_IN = "INSIDE-CONTENT-7f3a41"
 SENTINEL_OUT = "OUTSIDE-SENTINEL-b2c95e"
 GO_NATIVE = "https://opencode.ai/zen/go/v1"
+GO_MOVED = "https://opencode.ai/inference/go/v1"
 ZEN_NATIVE = "https://opencode.ai/zen/v1"
 
 
@@ -61,8 +63,63 @@ def declare_contract_models(root: Path) -> None:
     models = ["contract-rung", "acme-1-free", "synthetic-protocol-check-free", "deepseek-v4.1-flash"]
     terms = {model: admissible_terms(quelle="synthetic loopback contract") for model in models}
     (root / "model-endpoints.yaml").write_text(
-        yaml.safe_dump({"endpunkte": [{"name": "opencode-go", "modelle": models, "modelle_terms": terms}]}),
+        yaml.safe_dump(
+            {
+                "endpunkte": [
+                    {
+                        "name": "opencode-go",
+                        "modelle": models,
+                        "modelle_terms": terms,
+                        # The synthetic Go address record (go-access-point): the loopback
+                        # wire tests route the admitted HTTPS target at the transport
+                        # seam, and the address tests here read this record, never the
+                        # held real file.
+                        "adresse": {
+                            "host": "opencode.ai",
+                            "apis": {
+                                "openai-completions": {
+                                    "basis": GO_NATIVE,
+                                    "quelle": "the synthetic contract record (go-access-point)",
+                                    "gelesen": "2026-10-31",
+                                }
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
+    )
+
+
+def contract_address_policy() -> stage2_go.AddressPolicy:
+    """The address policy of the contract record, as `load_address_policy` returns one."""
+    return stage2_go.AddressPolicy(
+        host="opencode.ai",
+        apis={
+            "openai-completions": stage2_go.BaseRecord(
+                api="openai-completions", base=GO_NATIVE, source="the synthetic contract record", read="2026-10-31"
+            )
+        },
+    )
+
+
+def contract_ctx(root: Path, model: str = "contract-rung") -> types.SimpleNamespace:
+    """A reviewer context whose refreshed store holds the model as the record assessed it.
+
+    The row keeps the recorded base: assessment and the move notice read as
+    production reads them, and the wire tests repoint the actual destination
+    at the loopback through the transport seam's models.json override.
+    """
+    return types.SimpleNamespace(
+        change="demo",
+        root=root,
+        models_store={
+            "opencode-go": {
+                "models": [{"id": model, "provider": "opencode-go", "api": "openai-completions", "baseUrl": GO_NATIVE}],
+                "lastModified": 0,
+            }
+        },
     )
 
 
@@ -443,12 +500,17 @@ def native_base_urls(provider: str, api: str) -> set[str]:
 def test_real_refreshed_definition_resolves_without_newer_server_date(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, last_modified: int, model_id: str
 ) -> None:
-    """P6-14: production scratch config activates new and replaced APIs without forged cache dates."""
+    """P6-14: production scratch config activates new and replaced APIs without forged cache dates.
+
+    The activated base is an admitted same-host changed path (go-access-point):
+    a foreign host would now be dropped at activation, so the exact-activation
+    proof runs on the move the record admits.
+    """
     definition = {
         "id": model_id,
         "provider": "opencode-go",
-        "api": "anthropic-messages",
-        "baseUrl": "https://catalog.example.invalid/fresh-endpoint",
+        "api": "openai-completions",
+        "baseUrl": GO_MOVED,
         "contextWindow": 123456,
         "maxTokens": 1234,
         "reasoning": False,
@@ -503,15 +565,68 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
         stage2, "free_rule", lambda _root: {"provider": "opencode-go", "id_suffix": "", "include": [{"id": model_id}]}
     )
     # Discovery reads the exclusions of the declaration (DL-B-2) and drops every id when it cannot.
-    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", tmp_path / "model-endpoints.yaml")
+    # The real entry's copy carries the synthetic record: the held file has none until the
+    # orchestrator's bootstrap, and a test never waits on it (plan step 8).
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(item for item in data["endpunkte"] if item.get("name") == "opencode-go")
+    entry["adresse"] = {
+        "host": "opencode.ai",
+        "apis": {
+            "openai-completions": {
+                "basis": GO_NATIVE,
+                "quelle": "the synthetic contract record (go-access-point)",
+                "gelesen": "2026-10-31",
+            }
+        },
+    }
+    (tmp_path / "model-endpoints.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     discovery = stage2.discover_free(tmp_path)
     assert discovery["selected"] == [model_id]
     assert discovery["models_store"] == store
+    assert any(GO_MOVED in notice for notice in discovery["notices"]), "the same-host move ran silent"
     declare_contract_models(tmp_path)
     ctx = types.SimpleNamespace(change="demo", root=tmp_path, models_store=discovery["models_store"])
     for free in (True, False):
         stage2.run_reviewer(ctx, model_id, "Review demo.", SYNTHETIC_KEY, free=free)
     assert len(observed) == 3
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("model_id", ["synthetic-protocol-check-free", "deepseek-v4.1-flash"])
+def test_real_resolution_uses_the_assessed_base(tmp_path: Path, model_id: str) -> None:
+    """Ledger 4: the real pinned Pi keeps the assessed base after validation.
+
+    The scratch state is the reviewer's own - the refreshed store and the
+    models.json `activate_overlay` writes against the contract record - and
+    the activated base is the record's moved path. Validation must keep it:
+    a shipped or cached base returning for these ids fails the case
+    (`deepseek-v4.1-flash` ships on the recorded path, so Pi knows a base to
+    wrongly restore).
+    """
+    definition = {
+        "id": model_id,
+        "provider": "opencode-go",
+        "api": "openai-completions",
+        "baseUrl": GO_MOVED,
+        "contextWindow": 123456,
+        "maxTokens": 1234,
+        "reasoning": False,
+        "input": ["text"],
+    }
+    store = {"opencode-go": {"models": [definition], "lastModified": 946684800000, "checkedAt": 1234567890}}
+    root = tmp_path / "declaration"
+    root.mkdir()
+    declare_contract_models(root)
+    policy = stage2_go.load_address_policy(root)
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+    dropped, notices = stage2.activate_overlay(agent, store, policy)
+    assert dropped == {}, f"the assessed definition was dropped: {dropped}"
+    assert any(GO_MOVED in notice for notice in notices), "the same-host move ran silent"
+    home = tmp_path / "home"
+    home.mkdir()
+    stage2.check_overlay(agent, home, model_id, policy=policy)
 
 
 def contract_environment() -> dict[str, str]:
@@ -530,10 +645,27 @@ def reviewer_flags() -> list[str]:
     with tempfile.TemporaryDirectory(prefix="pi-flags-") as tmp, patch.object(stage2, "launch", capture):
         root = Path(tmp)
         declare_contract_models(root)
+        store = {
+            "opencode-go": {
+                "models": [
+                    {
+                        "id": "contract-rung",
+                        "provider": "opencode-go",
+                        "api": "openai-completions",
+                        "baseUrl": GO_NATIVE,
+                    },
+                ],
+                "lastModified": 0,
+            }
+        }
         stage2.run_reviewer(
-            types.SimpleNamespace(change="contract", root=root), "contract-rung", "capture only", SYNTHETIC_KEY
+            types.SimpleNamespace(change="contract", root=root, models_store=store),
+            "contract-rung",
+            "capture only",
+            SYNTHETIC_KEY,
         )
-    command = commands[0]
+    # The overlay check launches Pi too; the reviewer's own command is the one that declares its tools.
+    command = next(command for command in commands if "--tools" in command)
     return command[1 : command.index("--tools")]
 
 
@@ -557,9 +689,11 @@ def test_real_reviewer_tool_contract(project: Path, transport) -> None:
     )
     transport.providers["opencode-go"] = {"baseUrl": standin.url}
     try:
-        ctx = types.SimpleNamespace(change="demo", root=project)
         answer = stage2.run_reviewer(
-            ctx, "contract-rung", "Review the change demo as the appended instructions say.", SYNTHETIC_KEY
+            contract_ctx(project),
+            "contract-rung",
+            "Review the change demo as the appended instructions say.",
+            SYNTHETIC_KEY,
         )
         assert "No finding." in answer, "the scripted stop never reached the runner"
         assert len(standin.requests) == 3, f"expected the scripted three turns, saw {len(standin.requests)}"
@@ -646,7 +780,11 @@ def test_real_free_reviewer_has_only_the_implementation_diff(transport, tmp_path
     transport.providers["opencode-go"] = {"baseUrl": standin.url}
     try:
         answer = stage2.run_reviewer(
-            types.SimpleNamespace(change="demo", root=root), "acme-1-free", prompt, SYNTHETIC_KEY, free=True
+            contract_ctx(root, model="acme-1-free"),
+            "acme-1-free",
+            prompt,
+            SYNTHETIC_KEY,
+            free=True,
         )
         assert "No finding." in answer, "the scripted stop never reached the runner"
     finally:
@@ -739,9 +877,7 @@ def test_real_reviewer_ignores_discovery_traps(project: Path, transport) -> None
         standin = StandIn([reply])
         transport.providers["opencode-go"] = {"baseUrl": standin.url}
         try:
-            answer = stage2.run_reviewer(
-                types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
-            )
+            answer = stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
             assert "No finding." in answer
             assert len(standin.requests) == 1
             reads = (
@@ -799,9 +935,7 @@ def test_real_reviewer_ignores_ambient_credentials(project: Path, transport, tmp
             )
             transport.providers["opencode-go"] = {"baseUrl": standin.url}
             try:
-                stage2.run_reviewer(
-                    types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
-                )
+                stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
                 assert not marker.exists()
                 assert PLANTED_KEY not in json.dumps(standin.requests[0].headers)
                 scratch = tmp_path / ("command-control" if command_key else "auth-control")
@@ -922,6 +1056,57 @@ def test_real_session_policy_blocks_foreign_reads(project: Path, tmp_path: Path)
         for exchange in standin.requests[2:4]:
             latest = [message for message in exchange.body["messages"] if message["role"] == "tool"][-1]
             assert "outside the worktree" in json.dumps(latest), latest
+    finally:
+        standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_session_binding_holds_the_assessed_base(project: Path, tmp_path: Path) -> None:
+    """Ledger 7: real Pi resolves the session's checked base, not the ambient one.
+
+    The private launch directory is composed as `stage2_session.run` does it:
+    the policy copy with the checked-model sidecar beside it, the definition
+    the record assessed. The scratch agent configuration names another
+    (`ambient`) base for the provider; the registered binding must win, and
+    the request's route shows which base held.
+    """
+    private = tmp_path / "private"
+    private.mkdir()
+    copy = private / "stage2-session-policy.mjs"
+    shutil.copyfile(POLICY_SOURCE, copy)
+    standin = StandIn([{"content": "ok"}])
+    try:
+        model = {
+            "id": "contract-rung",
+            "name": "Contract Rung",
+            "api": "openai-completions",
+            "baseUrl": f"{standin.url}/checked",
+            "reasoning": False,
+            "input": ["text"],
+            "contextWindow": 123456,
+            "maxTokens": 1234,
+        }
+        (private / "checked-model.json").write_text(
+            json.dumps({"provider": "opencode-go", "model": model}),
+            encoding="utf-8",
+        )
+        done = run_pi(
+            project,
+            scratch_of(tmp_path),
+            *REVIEWER_FLAGS,
+            "-e",
+            str(copy),
+            "--model",
+            "opencode-go/contract-rung",
+            "answer ok",
+            providers={"opencode-go": {"baseUrl": f"{standin.url}/ambient"}},
+        )
+        assert done.returncode == 0, f"Pi ended {done.returncode}: {done.stderr[-600:]}"
+        assert len(standin.requests) == 1, f"expected one scripted turn, saw {len(standin.requests)}"
+        (exchange,) = standin.requests
+        assert "/checked/chat/completions" in exchange.path, (
+            f"the ambient base won over the checked binding: {exchange.path}"
+        )
     finally:
         standin.close()
 
@@ -1110,9 +1295,7 @@ def test_real_truncated_pi_print_failure_is_refused(project: Path, transport) ->
     transport.providers["opencode-go"] = {"baseUrl": standin.url}
     try:
         with pytest.raises(stage2.CallFailed, match="answer is empty"):
-            stage2.run_reviewer(
-                types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
-            )
+            stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
         assert len(standin.requests) == 1
         result = transport.calls[-1]["result"]
         assert result.returncode == 0 and not result.stdout.strip(), (
@@ -1161,9 +1344,21 @@ def test_real_catalog_headers_remain_literal(tmp_path: Path) -> None:
         "X-Escapes": "$$ $! ! trailing$",
         "X-Plain": "catalog-value",
     }
-    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    store = {
+        stage2.OPENCODE: {
+            "models": [
+                {
+                    "id": "synthetic-free",
+                    "api": "openai-completions",
+                    "baseUrl": GO_NATIVE,
+                    "headers": headers,
+                }
+            ],
+            "lastModified": 0,
+        }
+    }
     evidence = json.dumps(store)
-    stage2.activate_overlay(tmp_path, store)
+    stage2.activate_overlay(tmp_path, store, contract_address_policy())
     composer = REPO_ROOT / "tools/pi/node_modules" / PKG / "dist/core/provider-composer.js"
     script = """
 import fs from 'node:fs';

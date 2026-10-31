@@ -59,6 +59,19 @@ def set_terms(w: World, model: str, **changes: object) -> None:
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
 
+RECORDED_BASE = "https://opencode.ai/zen/go/v1"
+
+
+def go_store(model: str) -> dict:
+    """A refreshed store whose one Go row sits on the record's path, ready to assess."""
+    return {
+        "opencode-go": {
+            "models": [{"id": model, "provider": "opencode-go", "api": "openai-completions", "baseUrl": RECORDED_BASE}],
+            "lastModified": 0,
+        }
+    }
+
+
 def disable_preparation(w: World) -> None:
     """Take the availability rule back out: the record's legacy path again."""
     path = w.root / "model-endpoints.yaml"
@@ -821,12 +834,12 @@ def test_research_probes_and_dispatch_recheck_expiry(
                 change="demo",
                 key="test-key",
                 audit=audit,
-                models_store=None,
+                models_store=go_store(model),
                 probed={},
                 models={f"{availability.GO}/{model}": {"state": "not-probed", "admitted": True}},
             )
             return availability._Selection.reachable(selection, availability.GO, model, "framework")
-        return availability.probe_go(stage2, world.root, "demo", model, "test-key", audit)
+        return availability.probe_go(stage2, world.root, "demo", model, "test-key", audit, go_store(model))
 
     if boundary != "dispatch":
         probe()
@@ -878,6 +891,7 @@ def _check_paid_dispatch(world: World, monkeypatch: pytest.MonkeyPatch, capsys: 
     monkeypatch.setattr(research.subprocess, "Popen", send)
     monkeypatch.setattr(availability, "_checked_probe", lambda *_args: None)
     ctx = stage2.Context(world.root, "demo", world.research.parent, "test-bead")
+    ctx.models_store = go_store(model)
     entry = {"program": "pi", "model": model, "endpoint": availability.GO, "role": "repository"}
     run = SimpleNamespace(
         runner=stage2,
@@ -886,12 +900,13 @@ def _check_paid_dispatch(world: World, monkeypatch: pytest.MonkeyPatch, capsys: 
         scratch={},
         line=lambda _text: None,
         pi_command=lambda *_args: (["synthetic-pi"], world.root, {}),
+        selection={"catalog": {"models_store": go_store(model)}},
     )
     slot = Slot("saved", availability.GO, True, (0,), 60, {}, "prompt")
     calls = [
         lambda: stage2.run_reviewer(ctx, model, "prompt", "key"),
         lambda: stage2.run_reviewer(ctx, model, "prompt", "key", free=True),
-        lambda: availability.probe_go(stage2, world.root, "demo", model, "key", []),
+        lambda: availability.probe_go(stage2, world.root, "demo", model, "key", [], go_store(model)),
         lambda: research.Run.launch(run, slot, 60),
         lambda: stage2.run_swarm(ctx, [model], {model: "prompt"}, "key", free=False),
     ]

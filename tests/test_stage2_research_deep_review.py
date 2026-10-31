@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import check_research_handoff  # noqa: E402
 import stage2  # noqa: E402
+import stage2_go  # noqa: E402
 import stage2_research_store  # noqa: E402
 import test_stage2_swarm as swarm  # noqa: E402
 from test_research_handoff import RUN1, run_text  # noqa: E402
@@ -247,6 +248,23 @@ GOOD_ROW = {
     "cost": {"input": 1, "output": 2, "cacheRead": 0, "cacheWrite": 0},
 }
 
+RECORDED_BASE = "https://opencode.ai/zen/go/v1"
+
+
+def address_policy() -> stage2_go.AddressPolicy:
+    """The synthetic record the seat rows are written against (go-access-point)."""
+    return stage2_go.AddressPolicy(
+        host="opencode.ai",
+        apis={
+            "openai-completions": stage2_go.BaseRecord(
+                api="openai-completions",
+                base=RECORDED_BASE,
+                source="the synthetic deep-review record (go-access-point)",
+                read="2026-10-31",
+            )
+        },
+    )
+
 
 def test_a_launch_writes_only_its_own_allow_listed_row(tmp_path: Path) -> None:
     # Criteria 11, 38, 61 (RS-3-1, RS-3-3, RS-3-7, RS-3-8). Planted faults: every catalog row reaches models.json,
@@ -270,11 +288,16 @@ def test_a_launch_writes_only_its_own_allow_listed_row(tmp_path: Path) -> None:
     }
     agent = tmp_path / "agent"
     agent.mkdir()
-    dropped = stage2_availability.install_measured_models(None, agent, store, model="seat-model")
+    dropped = stage2_availability.install_measured_models(
+        None, agent, store, model="seat-model", address=address_policy()
+    )
     written = json.loads((agent / "models.json").read_text(encoding="utf-8"))
     (row,) = written["providers"]["opencode-go"]["models"]
-    assert row == {**GOOD_ROW, "baseUrl": stage2_availability.CHECKED_BASE_URL}
-    assert dropped == ["opencode-go/seat-model: dropped catalog field(s) compat, headers, samplingParams"]
+    assert row == {**GOOD_ROW, "baseUrl": RECORDED_BASE}
+    assert dropped == [
+        "opencode-go/seat-model: base filled from the record's default for openai-completions",
+        "opencode-go/seat-model: dropped catalog field(s) compat, headers, samplingParams",
+    ]
     assert json.loads((agent / "models-store.json").read_text(encoding="utf-8")) == store, "evidence unchanged"
 
 
@@ -289,7 +312,7 @@ def test_a_row_pi_would_refuse_fails_the_launch_closed(tmp_path: Path, fault: di
     agent.mkdir()
     store = {"opencode-go": {"models": [dict(GOOD_ROW, **fault)]}}
     with pytest.raises(stage2_availability.OverlayError):
-        stage2_availability.install_measured_models(None, agent, store, model="seat-model")
+        stage2_availability.install_measured_models(None, agent, store, model="seat-model", address=address_policy())
 
 
 def test_a_pi_answer_without_its_measured_model_is_a_failed_slot(sworld: SwarmWorld) -> None:

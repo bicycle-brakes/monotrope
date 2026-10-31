@@ -218,4 +218,12 @@ is not reported green. No phase-2a review rows exist to reconcile.
 - 10: not yet written tests/test_stage2_go_access.py::test_admission_preserves_the_other_restrictions — a good host bypasses terms, wire-api, leak or free-class rules
 - 11: not yet written tests/test_stage2_go_access.py::test_notices_are_kept_and_sanitised — a move notice is transient, a refusal names no model, or a raw credential-bearing URL enters evidence
 
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-31 17:02:22–18:45:11 UTC, 6169 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 18:45:18–18:49:04 UTC, 226 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-31 18:49:10–18:49:54 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

@@ -23,6 +23,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import stage2_go  # noqa: E402
 import stage2_swarm as swarm  # noqa: E402
 
 GO = "opencode-go"
@@ -273,9 +274,28 @@ def held_collect(tmp_path: Path, sources: Sources, held: set[str]) -> dict:
     return collect(tmp_path, sources, deadlineMs=10000, controlledDeadline=control)
 
 
+def address_policy() -> stage2_go.AddressPolicy:
+    """The synthetic record every catalog model here is written against: the models' host and path."""
+    return stage2_go.AddressPolicy(
+        host="opencode.ai",
+        apis={
+            "openai-completions": stage2_go.BaseRecord(
+                api="openai-completions",
+                base="https://opencode.ai/zen/go/v1",
+                source="the synthetic catalog record (go-access-point)",
+                read="2026-10-31",
+            )
+        },
+    )
+
+
 def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None) -> dict:
     return swarm.select_research_catalog(
-        bridge, POLICY if policy is None else policy, FIXED if ids is None else ids, expected_version=PIN
+        bridge,
+        POLICY if policy is None else policy,
+        FIXED if ids is None else ids,
+        expected_version=PIN,
+        address=address_policy(),
     )
 
 

@@ -350,6 +350,63 @@ def test_a_question_that_fails_blocks_the_call(world: World) -> None:
     blocked(world.call("bash", command="sudo ls", answer="throw"), mentioning="handler failed")
 
 
+# --- (e) the checked initial model binds (go-access-point) ---------------------------------------
+
+CHECKED = {
+    "provider": "opencode-go",
+    "model": {
+        "id": "mimo-v2.6-flash",
+        "name": "Mimo",
+        "api": "openai-completions",
+        "baseUrl": "https://opencode.ai/zen/go/v1",
+        "reasoning": False,
+        "input": ["text"],
+        "contextWindow": 128000,
+        "maxTokens": 4096,
+    },
+}
+
+
+def test_the_checked_binding_registers_its_definition_on_the_provider(world: World) -> None:
+    # The sidecar the runner wrote is exactly the definition Pi gets, under the record's provider.
+    answer = world.run([{"mode": "register", "sidecar": json.dumps(CHECKED)}])[0]
+    assert answer["registered"] == [{"name": "opencode-go", "options": {"models": [CHECKED["model"]]}}]
+
+
+@pytest.mark.parametrize(
+    "sidecar",
+    [
+        "not json at all",  # not JSON
+        "null",
+        "17",
+        '"text"',
+        "[]",
+        json.dumps({"model": CHECKED["model"]}),  # no provider
+        json.dumps({"provider": "", "model": CHECKED["model"]}),
+        json.dumps({"provider": "opencode-go"}),  # no model
+        json.dumps({"provider": "opencode-go", "model": "mimo"}),
+        json.dumps({"provider": "opencode-go", "model": {"name": "no id"}}),
+    ],
+)
+def test_a_sidecar_that_is_no_binding_throws_instead_of_registering(world: World, sidecar: str) -> None:
+    answer = world.run([{"mode": "register", "sidecar": sidecar}])[0]
+    assert "threw" in answer, answer
+
+
+def test_a_sidecar_beside_the_copy_binds_at_load(world: World) -> None:
+    (world.policy.parent / "checked-model.json").write_text(json.dumps(CHECKED), encoding="utf-8")
+    answer = world.call("read", path="src/a.txt")
+    assert answer["registered"] == [{"name": "opencode-go", "options": {"models": [CHECKED["model"]]}}]
+    assert answer["handlers"] == ["tool_call"]
+
+
+def test_a_malformed_sidecar_beside_the_copy_fails_the_load(world: World) -> None:
+    # A session must never start on an unchecked model while pretending it was bound.
+    (world.policy.parent / "checked-model.json").write_text("{broken", encoding="utf-8")
+    with pytest.raises(pytest.fail.Exception):
+        world.call("read", path="src/a.txt")
+
+
 # --- what the runner relies on -------------------------------------------------------------------
 
 
