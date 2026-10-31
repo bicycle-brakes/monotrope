@@ -339,6 +339,22 @@ def test_missing_jq_names_missing_tool(tmp_path: Path) -> None:
     assert not _wrote(ns)
 
 
+def test_missing_python_names_missing_tool_before_scan(tmp_path: Path) -> None:
+    ns = _project(tmp_path)
+    bin_dir = Path(_path_without_jq(tmp_path))
+    (bin_dir / "python3").unlink()
+    jq = shutil.which("jq")
+    assert jq is not None
+    (bin_dir / "jq").symlink_to(jq)
+    result = _start(ns, extra={"PATH": str(bin_dir)})
+    # The watchdog for both scan and prime needs Python. Without it, the
+    # eligibility diagnostic must name the dependency before trying the scan.
+    assert result.returncode != 0
+    assert "python3 fehlt" in result.stderr
+    assert "Sitzungs-Scan fehlgeschlagen" not in result.stderr
+    assert not _wrote(ns)
+
+
 @pytest.mark.parametrize("broken", ["missing", "unreadable", "invalid", "entry-unreadable"])
 def test_unreadable_registry_never_writes(tmp_path: Path, broken: str) -> None:
     ns = _project(tmp_path)

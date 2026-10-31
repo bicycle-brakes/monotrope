@@ -89,6 +89,9 @@ fi
 if [ -z "$grund" ] && [ ! -x "$hook_dir/session-scan.sh" ]; then
   grund="Sitzungs-Scan fehlt oder ist nicht ausführbar"
 fi
+if [ -z "$grund" ] && ! command -v python3 >/dev/null 2>&1; then
+  grund="python3 fehlt"
+fi
 if [ -z "$grund" ]; then
   scan_out=$(mktemp "${TMPDIR:-/tmp}/beads-start.XXXXXX")
   # session-scan.sh reports its lines on stdout: they land in scan_out; the
@@ -104,10 +107,6 @@ fi
 if [ -z "$grund" ] && [ ! -f "$repo_root/scripts/close_merged_beads.py" ]; then
   grund="der Abgleich fehlt: scripts/close_merged_beads.py"
 fi
-if [ -z "$grund" ] && ! command -v python3 >/dev/null 2>&1; then
-  grund="python3 fehlt"
-fi
-
 hinweis=""
 if [ -n "$grund" ]; then
   hinweis="Hinweis: Beads-Abgleich übersprungen ($grund) — diese Session schreibt den Tracker nicht; die erste Sitzung im Repository gleicht beim Start ab."
