@@ -527,8 +527,14 @@ def _address_problems(entry: dict) -> list[str]:
             problems.append(f"{api}: basis is not an HTTPS URL on {host}")
         if not isinstance(part["quelle"], str) or not part["quelle"].strip():
             problems.append(f"{api}: quelle is missing or blank")
-        if not isinstance(part["gelesen"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", part["gelesen"] or ""):
+        read = part["gelesen"]
+        if not isinstance(read, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", read):
             problems.append(f"{api}: gelesen is not a quoted ISO date")
+        else:
+            try:
+                dt.date.fromisoformat(read)
+            except ValueError:
+                problems.append(f"{api}: gelesen is not a calendar date")
     return problems
 
 

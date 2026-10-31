@@ -524,3 +524,49 @@ Stage-2 call, 2026-10-31: implement · attempt 3 · route stage-1 · endpoint cl
 > ERROR tests/test_stage2_go_access.py::test_the_session_binds_the_checked_model_without_reading_auth
 > 17 failed, 54 passed, 1 skipped, 1 warning, 1 error in 10.46s
 > ```
+
+Stage-2 call, 2026-10-31: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed twice and the stage-1 attempt ran 44 s; Sonnet continues from the saved work at c17a2696 · leak check clean over 802 files, 2914 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-access-point/plan.md` +14 -14
+> - `tests/test_model_endpoints.py` +7 -1
+> - `tests/test_pi_contract.py` +41 -13
+> - `tests/test_stage2.py` +3 -0
+> - `tests/test_stage2_go_access.py` +42 -16
+> - `tests/test_stage2_session.py` +3 -1
+> - `tests/test_stage2_session_policy.py` +2 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2_go_access.py`.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> s......EE.........................                                       [100%]
+> ==================================== ERRORS ====================================
+> _ ERROR at setup of test_the_session_binds_the_checked_model_without_reading_auth _
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/.venv/bin/python3
+> file /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/tests/test_stage2_go_access.py, line 452
+>   def test_the_session_binds_the_checked_model_without_reading_auth(session_world, monkeypatch):
+> E       fixture 'session_world' not found
+> >       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, doctest_namespace, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, stage2_world, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, worker_id, world
+> >       use 'pytest --fixtures [testpath]' for help on them.
+>
+> /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/tests/test_stage2_go_access.py:452
+> ____ ERROR at setup of test_the_session_refuses_without_the_address_record _____
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/.venv/bin/python3
+> file /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/tests/test_stage2_go_access.py, line 505
+>   def test_the_session_refuses_without_the_address_record(session_world, capsys):
+> E       fixture 'session_world' not found
+> >       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, doctest_namespace, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, stage2_world, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, worker_id, world
+> >       use 'pytest --fixtures [testpath]' for help on them.
+>
+> /Users/mikypiky/coding-harness/.claude/worktrees/go-access-point/tests/test_stage2_go_access.py:505
+> =========================== short test summary info ============================
+> ERROR tests/test_stage2_go_access.py::test_the_session_binds_the_checked_model_without_reading_auth
+> ERROR tests/test_stage2_go_access.py::test_the_session_refuses_without_the_address_record
+> 31 passed, 1 skipped, 2 errors in 18.97s
+> ```

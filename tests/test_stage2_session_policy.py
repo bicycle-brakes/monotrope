@@ -403,7 +403,8 @@ def test_a_sidecar_beside_the_copy_binds_at_load(world: World) -> None:
 def test_a_malformed_sidecar_beside_the_copy_fails_the_load(world: World) -> None:
     # A session must never start on an unchecked model while pretending it was bound.
     (world.policy.parent / "checked-model.json").write_text("{broken", encoding="utf-8")
-    with pytest.raises(pytest.fail.Exception):
+    # The driver's node run ends non-zero when the extension throws at load; `World.run` asserts on it.
+    with pytest.raises(AssertionError):
         world.call("read", path="src/a.txt")
 
 

@@ -55,6 +55,8 @@ SENTINEL_IN = "INSIDE-CONTENT-7f3a41"
 SENTINEL_OUT = "OUTSIDE-SENTINEL-b2c95e"
 GO_NATIVE = "https://opencode.ai/zen/go/v1"
 GO_MOVED = "https://opencode.ai/inference/go/v1"
+# The move notice names paths only, never the authority (criterion 11).
+GO_MOVED_PATH = "/inference/go/v1"
 ZEN_NATIVE = "https://opencode.ai/zen/v1"
 
 
@@ -116,7 +118,18 @@ def contract_ctx(root: Path, model: str = "contract-rung") -> types.SimpleNamesp
         root=root,
         models_store={
             "opencode-go": {
-                "models": [{"id": model, "provider": "opencode-go", "api": "openai-completions", "baseUrl": GO_NATIVE}],
+                "models": [
+                    {
+                        "id": model,
+                        "provider": "opencode-go",
+                        "api": "openai-completions",
+                        "baseUrl": GO_NATIVE,
+                        "reasoning": False,
+                        "input": ["text"],
+                        "contextWindow": 128000,
+                        "maxTokens": 4096,
+                    }
+                ],
                 "lastModified": 0,
             }
         },
@@ -399,9 +412,32 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     providers: dict = {}
     controls = {"trusted": False, "omit": None, "mcp_control": False}
     original_launch = stage2.launch
-    original_env = stage2.foreign_env
+
+    def repoint(env):
+        """Route the admitted HTTPS target at the loopback stand-in, at the transport seam.
+
+        The runner's own checked `models.json` stays as it was through every
+        assessment and the offline overlay validation; only the launch that
+        reaches Pi has each activated model's base replaced, and the production
+        host check is never relaxed for the loopback URL.
+        """
+        base = providers.get("opencode-go", {}).get("baseUrl")
+        agent = env.get("PI_CODING_AGENT_DIR")
+        path = Path(agent, "models.json") if agent else None
+        if not base or path is None or not path.is_file():
+            return
+        activated = json.loads(path.read_text(encoding="utf-8"))
+        for entry in activated.get("providers", {}).values():
+            for model in entry.get("models", []):
+                model["baseUrl"] = base
+        path.write_text(json.dumps(activated), encoding="utf-8")
 
     def guarded_launch(command, cwd, env, key=None, timeout=None, limit=None):
+        if command[0] == "node":
+            # The offline overlay validation is the runner's check of the checked
+            # configuration, not a reviewer call: it is neither guarded nor recorded.
+            return original_launch(command, cwd, env, key, timeout=timeout, limit=limit)
+        repoint(env)
         env = {
             **env,
             "NODE_OPTIONS": f"--import {GUARD} --import {DRIVER}",
@@ -419,15 +455,7 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
         calls[-1]["result"] = done
         return done
 
-    def planted_env(own):
-        env = original_env(own)
-        agent = env.get("PI_CODING_AGENT_DIR")
-        if agent and providers:
-            Path(agent, "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
-        return env
-
     monkeypatch.setattr(stage2, "launch", guarded_launch)
-    monkeypatch.setattr(stage2, "foreign_env", planted_env)
     return types.SimpleNamespace(calls=calls, providers=providers, controls=controls)
 
 
@@ -583,7 +611,7 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
     discovery = stage2.discover_free(tmp_path)
     assert discovery["selected"] == [model_id]
     assert discovery["models_store"] == store
-    assert any(GO_MOVED in notice for notice in discovery["notices"]), "the same-host move ran silent"
+    assert any(GO_MOVED_PATH in notice for notice in discovery["notices"]), "the same-host move ran silent"
     declare_contract_models(tmp_path)
     ctx = types.SimpleNamespace(change="demo", root=tmp_path, models_store=discovery["models_store"])
     for free in (True, False):
@@ -623,7 +651,7 @@ def test_real_resolution_uses_the_assessed_base(tmp_path: Path, model_id: str) -
     (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
     dropped, notices = stage2.activate_overlay(agent, store, policy)
     assert dropped == {}, f"the assessed definition was dropped: {dropped}"
-    assert any(GO_MOVED in notice for notice in notices), "the same-host move ran silent"
+    assert any(GO_MOVED_PATH in notice for notice in notices), "the same-host move ran silent"
     home = tmp_path / "home"
     home.mkdir()
     stage2.check_overlay(agent, home, model_id, policy=policy)
@@ -917,7 +945,7 @@ def test_real_reviewer_ignores_ambient_credentials(project: Path, transport, tmp
     def ambient_env(own):
         env = original_env(own)
         home_agent = Path(env["HOME"]) / ".pi" / "agent"
-        home_agent.mkdir(parents=True)
+        home_agent.mkdir(parents=True, exist_ok=True)
         for name in ("models.json", "auth.json"):
             shutil.copyfile(ambient / name, home_agent / name)
         return env

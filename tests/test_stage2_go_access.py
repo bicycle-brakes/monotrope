@@ -21,6 +21,7 @@ import copy
 import datetime as dt
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,9 +54,12 @@ MOVED_BASE = "https://opencode.ai/inference/go/v1"
 # ---------------------------------------------------------------------------
 
 
-def edit_entry(w: World, change) -> None:
-    """Rewrite the world's `opencode-go` entry through `change`, in its own declaration."""
-    path = w.root / "model-endpoints.yaml"
+def edit_entry(w, change) -> None:
+    """Rewrite the world's `opencode-go` entry through `change`, in its own declaration.
+
+    A session world declares in its worktree (`tree`), a review world in its root.
+    """
+    path = getattr(w, "tree", w.root) / "model-endpoints.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
     change(entry)
@@ -124,11 +128,20 @@ class Harness:
         self.sent: list[tuple] = []
 
         def send(*args, **kwargs):
+            command = args[0] if args else kwargs.get("args")
+            if isinstance(command, list) and command[:1] == ["node"]:
+                # The offline overlay validation of the checked configuration: no model request.
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
             self.sent.append((args, kwargs))
             return SimpleNamespace(returncode=0, stdout="OK", stderr="")
 
         monkeypatch.setattr(stage2, "launch", send)
-        monkeypatch.setattr(research.subprocess, "Popen", send)
+        # Only the research module sees the stand-in; the process-wide `subprocess` stays real.
+        monkeypatch.setattr(
+            research,
+            "subprocess",
+            SimpleNamespace(Popen=send, DEVNULL=subprocess.DEVNULL, PIPE=subprocess.PIPE),
+        )
         monkeypatch.setattr(availability, "_checked_probe", lambda *_args, **_kwargs: None)
 
     def reviewer(self, model: str, store: dict, *, free: bool = False):
@@ -207,8 +220,10 @@ def test_every_go_path_reads_the_one_address_record(world, monkeypatch, capsys):
         with pytest.raises((stage2.Refused, stage2_go.DestinationRefused)) as raised:
             call()
         assert "not the admitted host" in str(raised.value)
-    answers = harness.swarm(model, store)()
-    assert isinstance(answers[model], stage2.Refused) and "not the admitted host" in str(answers[model])
+    # A refused member aborts the swarm: an admission refusal is no answer to replace.
+    with pytest.raises(stage2.Refused) as raised:
+        harness.swarm(model, store)()
+    assert "not the admitted host" in str(raised.value)
     assert len(harness.sent) == len(calls), "a changed record dispatched a further send"
     # The record disappears: fail closed, no caller fills a default in.
     edit_entry(world, lambda e: e.pop("adresse"))
@@ -216,8 +231,9 @@ def test_every_go_path_reads_the_one_address_record(world, monkeypatch, capsys):
         with pytest.raises(stage2.Refused) as raised:
             call()
         assert "unusable" in str(raised.value)
-    answers = harness.swarm(model, store)()
-    assert isinstance(answers[model], stage2.Refused) and "unusable" in str(answers[model])
+    with pytest.raises(stage2.Refused) as raised:
+        harness.swarm(model, store)()
+    assert "unusable" in str(raised.value)
     assert len(harness.sent) == len(calls), "a missing record admitted a launch"
 
 
@@ -423,8 +439,8 @@ def test_every_send_rechecks_current_policy(world, monkeypatch, capsys):
         with pytest.raises((stage2.Refused, stage2_go.DestinationRefused)) as raised:
             call()
         assert "not the admitted host" in str(raised.value)
-    answers = harness.swarm(model, store)()
-    assert isinstance(answers[model], stage2.Refused)
+    with pytest.raises(stage2.Refused):
+        harness.swarm(model, store)()
     assert (list(harness.sent), list(seat_lines)) == history, "earlier completed history was rewritten"
 
 
@@ -433,7 +449,7 @@ def test_every_send_rechecks_current_policy(world, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
-def test_the_session_binds_the_checked_model_without_reading_auth(session_world, monkeypatch, capsys):
+def test_the_session_binds_the_checked_model_without_reading_auth(session_world, monkeypatch):
     """Criterion 7: the terminal receives the checked binding, and no credential file is read.
 
     Fault: the terminal receives a launch whose selected model still resolves
@@ -477,16 +493,23 @@ def test_the_session_binds_the_checked_model_without_reading_auth(session_world,
         seen["command"], seen["env"] = list(command), dict(kwargs.get("env") or {})
         return SimpleNamespace(returncode=0, stdout=f"opencode-go  {GO_BARE}\n", stderr="")
 
+    evidence = sidecar.read_text(encoding="utf-8") + json.dumps(w.calls()) + w.command()
     monkeypatch.setattr(stage2_session.subprocess, "run", spy)
-    stage2_session.confirm_binding(w.tree, str(w.bin / "pin-pi"), binding["extension"], GO_BARE, stage2)
+    w.real_confirm_binding(w.tree, str(w.bin / "pin-pi"), binding["extension"], GO_BARE, stage2)
     assert seen["env"]["HOME"] != os.environ["HOME"], "the confirmation read the user's home"
     assert seen["env"]["PI_CODING_AGENT_DIR"] == seen["env"]["HOME"]
     # The canary reaches nothing: not the sidecar, not the command, not any recorded call.
-    evidence = sidecar.read_text(encoding="utf-8") + json.dumps(seen) + json.dumps(w.calls()) + w.command()
-    assert "bearer-canary" not in evidence, "a credential entered the launch"
-    # With the record gone, the session refuses before anything opens.
+    assert "bearer-canary" not in evidence + json.dumps(seen), "a credential entered the launch"
+
+
+def test_the_session_refuses_without_the_address_record(session_world, capsys):
+    """Criterion 8 at the session: with the record gone, the session refuses before anything opens.
+
+    Fault: a literal or cached base bound the model anyway and the window opened.
+    """
+    w = session_world
+    w.declare_go()
     edit_entry(w, lambda e: e.pop("adresse"))
-    w.bindings.clear()
     w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
     assert w.run(model=GO_MODEL) == 2
     assert "unusable" in capsys.readouterr().err
@@ -553,6 +576,8 @@ def test_an_unusable_record_stops_go_admission(world, monkeypatch, text):
         probe_call()
     assert len(harness.sent) == 0, "an unusable record activated a literal default"
     # A dict-level malformation refuses too: no host, no apis, an unknown key, a plain-http basis.
+    # Start from a declaration the edit helper can rewrite, whatever the case above broke.
+    (world.root / "model-endpoints.yaml").write_text(GOOD_RECORD_TEXT, encoding="utf-8")
     for adresse in (
         {"apis": {"openai-completions": {"basis": RECORDED_BASE, "quelle": "x", "gelesen": "2026-10-31"}}},
         {"host": "opencode.ai"},

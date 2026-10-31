@@ -470,6 +470,9 @@ def test_policy() -> stage2_go.AddressPolicy:
     )
 
 
+# A helper, not a test: pytest must not collect the name.
+test_policy.__test__ = False
+
 # The test worlds' synthetic Go address record (go-access-point): the real
 # held file stays the orchestrator's, so every world declares this copy and
 # the address tests rewrite it in place. Quoted ISO reading date, dated

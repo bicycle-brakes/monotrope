@@ -202,28 +202,33 @@ is not reported green. No phase-2a review rows exist to reconcile.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_go_access.py::test_every_go_path_reads_the_one_address_record — a caller keeps its own origin rule or default
-- 1: not yet written tests/test_model_endpoints.py::test_the_opencode_go_entry_declares_its_address_record — the real entry loads no valid record after the orchestrator bootstrap
-- 2: not yet written tests/test_stage2_go_access.py::test_unsafe_destinations_are_refused_before_any_send — a foreign host, subdomain, userinfo, http, port, query or fragment reaches the send stand-in
-- 3: not yet written tests/test_stage2_go_access.py::test_same_host_path_moves_run_with_notice — the inference path stops, is rewritten or runs silently
-- 4: not yet written tests/test_stage2_go_access.py::test_absent_bases_get_the_recorded_api_default — an invalid explicit base or unmapped api falls back to a Pi default
-- 4: not yet written tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base — real Pi restores a shipped or cached base after validation
-- 5: not yet written tests/test_stage2_go_access.py::test_refused_rows_stay_refused — a filtered row returns as a shipped model or an unrelated candidate is lost
-- 6: not yet written tests/test_stage2_go_access.py::test_every_send_rechecks_current_policy — a saved, resumed, replaced or retried launch dispatches a now-refused destination
-- 7: not yet written tests/test_stage2_go_access.py::test_the_session_binds_the_checked_model_without_reading_auth — the terminal receives an unbound model or the runner reads saved credentials
-- 7: not yet written tests/test_pi_contract.py::test_real_session_binding_holds_the_assessed_base — real Pi resolves another base after the binding
-- 8: not yet written tests/test_stage2_go_access.py::test_an_unusable_record_stops_go_admission — a missing, duplicated or malformed record silently activates a literal
-- 9: not yet written tests/test_stage2_go_access.py::test_path_maintenance_records_source_and_date — an undated or unsourced path is accepted
+- 1: tests/test_stage2_go_access.py::test_every_go_path_reads_the_one_address_record — a caller keeps its own origin rule or default
+- 1: tests/test_model_endpoints.py::test_the_opencode_go_entry_declares_its_address_record — the real entry loads no valid record after the orchestrator bootstrap
+- 2: tests/test_stage2_go_access.py::test_unsafe_destinations_are_refused_before_any_send — a foreign host, subdomain, userinfo, http, port, query or fragment reaches the send stand-in
+- 3: tests/test_stage2_go_access.py::test_same_host_path_moves_run_with_notice — the inference path stops, is rewritten or runs silently
+- 4: tests/test_stage2_go_access.py::test_absent_bases_get_the_recorded_api_default — an invalid explicit base or unmapped api falls back to a Pi default
+- 4: tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base — real Pi restores a shipped or cached base after validation
+- 5: tests/test_stage2_go_access.py::test_refused_rows_stay_refused — a filtered row returns as a shipped model or an unrelated candidate is lost
+- 6: tests/test_stage2_go_access.py::test_every_send_rechecks_current_policy — a saved, resumed, replaced or retried launch dispatches a now-refused destination
+- 7: tests/test_stage2_go_access.py::test_the_session_binds_the_checked_model_without_reading_auth — the terminal receives an unbound model or the runner reads saved credentials
+- 7: tests/test_pi_contract.py::test_real_session_binding_holds_the_assessed_base — real Pi resolves another base after the binding
+- 8: tests/test_stage2_go_access.py::test_an_unusable_record_stops_go_admission — a missing, duplicated or malformed record silently activates a literal
+- 9: tests/test_stage2_go_access.py::test_path_maintenance_records_source_and_date — an undated or unsourced path is accepted
 - 9: not a test — the phase-6 review reads the maintenance route and the final changed paths against the maintainer's Q-3 and Q-5 answers; a new human path approval or a runner edit of the held entry refutes it
-- 10: not yet written tests/test_stage2_go_access.py::test_admission_preserves_the_other_restrictions — a good host bypasses terms, wire-api, leak or free-class rules
-- 11: not yet written tests/test_stage2_go_access.py::test_notices_are_kept_and_sanitised — a move notice is transient, a refusal names no model, or a raw credential-bearing URL enters evidence
+- 10: tests/test_stage2_go_access.py::test_admission_preserves_the_other_restrictions — a good host bypasses terms, wire-api, leak or free-class rules
+- 11: tests/test_stage2_go_access.py::test_notices_are_kept_and_sanitised — a move notice is transient, a refusal names no model, or a raw credential-bearing URL enters evidence
 
 ## Runner route — 2026-10-31
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-10-31
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice and the stage-1 attempt ran 44 s; Sonnet continues from the saved work at c17a2696.
 
 ## Time used
 
 2026-10-31 17:02:22–18:45:11 UTC, 6169 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 18:45:18–18:49:04 UTC, 226 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-10-31 18:49:10–18:49:54 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 19:09:22–19:36:45 UTC, 1643 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

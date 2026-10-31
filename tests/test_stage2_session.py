@@ -122,6 +122,8 @@ class World:
     # The binding confirmations the fixture records in place of running real Pi
     # (its base-holding is proven against the pinned install by test_pi_contract).
     bindings: list[dict] = field(default_factory=list)
+    # The production confirmation, kept for the one test that drives it directly.
+    real_confirm_binding: object = None
 
     def script(self, **steps: object) -> None:
         (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
@@ -319,7 +321,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (tree / "plans" / "changes" / "demo" / "handover.md").write_text(HANDOVER, encoding="utf-8")
     monkeypatch.setattr(stage2_session, "on_macos", lambda: True)
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"session read a secret: {name}"))
-    w = World(root, tree, bin_dir, monkeypatch)
+    w = World(root, tree, bin_dir, monkeypatch, real_confirm_binding=stage2_session.confirm_binding)
     # The binding confirmation asks the real installed Pi in production; here it
     # is recorded, so the stand-in's scripted steps stay three per launch.
     monkeypatch.setattr(
