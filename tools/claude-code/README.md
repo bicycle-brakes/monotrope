@@ -48,6 +48,21 @@ automatic note is only a safety net for a session that ended without one: the
 next start shows it when the last session kept working after the newest
 handover, and says so.
 
+### The repository's own start hook
+
+`hooks/beads-start.sh` in this directory is not part of the user-level set
+`install.sh` copies: `.claude/settings.json` of this repository runs it as its
+SessionStart hook, in place of a bare `tools/bd prime --hook-json`. It first
+reconciles merged closures (`scripts/close_merged_beads.py --write`, the
+`Closes-Bead` trailers on `origin/main`), then runs `tools/bd prime`. It
+reconciles only when the session scan shows no other writing session in the
+same repository (the conservative writer check of house rule 4); otherwise it
+skips and says why. Each step runs under its own time bound
+(`BEADS_START_RECONCILE_TIMEOUT`, `BEADS_START_SCAN_TIMEOUT`,
+`BEADS_START_PRIME_TIMEOUT`), and the settings timeout lies above their sum. A
+failed or skipped reconciliation is reported in the session context, and prime
+still runs; `make close-merged ARGS=--write` repeats the reconciliation by hand.
+
 ## Install, check, update
 
 ```bash

@@ -74,12 +74,25 @@ Then the end of the artefact lifecycle: the delta into the living capability
 spec, lasting decisions as an ADR under `docs/adr/`, the rest into
 `plans/changes/archive/YYYY-MM-DD-<name>/`.
 
-After the merge, `make close-merged ARGS=--write` closes what was declared and
-what is an ancestor of the integration branch — both are checked, not claimed.
-Without `--write` the command only reports; writing is required, not forgotten.
-It runs locally: the tracker writes to a database this repository does not
-carry. CI only reports — a declared closure nobody carried out is a finding, not
-a job for the machine.
+The trailer is the only way to declare a closure on merge; a bead is never
+closed by hand for a merged pull request. Two places carry it out, both locally,
+because the tracker writes to a database this repository does not carry:
+
+- **In the merge step:** once `gh pr view <n> --json state,mergeCommit` shows
+  `MERGED` (never merely after queue admission), the tracker's writer runs
+  `make close-merged ARGS=--write`. It closes what a `Closes-Bead` trailer on
+  the integration branch declares and what is still open — both are checked,
+  not claimed. Without `--write` the command only reports.
+- **At session start:** the repository's SessionStart hook
+  (`tools/claude-code/hooks/beads-start.sh`) runs the same reconciliation
+  before `tools/bd prime`, so a closure the merge step missed is caught by the
+  next session. It writes only when this session is the only writing session
+  in the checkout's repository; a second session skips it and says why. A
+  failed reconciliation is shown, never silent; `make close-merged
+  ARGS=--write` repeats it by hand.
+
+Only the tracker's one writer reconciles (`AGENTS.md`, house rule 4). The
+command is idempotent: a bead that is already closed is left alone.
 
 ## The merge
 
@@ -110,7 +123,8 @@ restatement is its one-line summary.
    the pull request into the queue at that exact head; no branch update
    comes first, even when the branch is behind. Queued is not merged: the
    agent reports "queued" and, only once `gh pr view <n> --json
-   state,mergeCommit` shows `MERGED`, "merged" with the merge commit. A
+   state,mergeCommit` shows `MERGED`, "merged" with the merge commit, and
+   then reconciles the declared closures (above). A
    group that fails leaves the pull request open and unmerged; the agent
    says so and starts again at step 2 when the maintainer asks again.
 8. Only under the alternative without a queue — the ruleset requires

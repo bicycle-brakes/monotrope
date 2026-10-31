@@ -16,6 +16,7 @@ import fnmatch
 import json
 import os
 import pty
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -265,28 +266,23 @@ def test_write_keeps_foreign_ask_rules_and_replaces_owned_ones(tmp_path: Path) -
     assert op.check(tmp_path) == []
 
 
-def test_settings_keep_the_session_start_hook() -> None:
-    hooks = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]["SessionStart"]
-    assert [h["command"] for group in hooks for h in group["hooks"]] == [SESSION_START_HOOK]
-
-
 def test_start_hook_wires_reconciliation_before_prime() -> None:
     """The SessionStart hook runs the reconcile-then-prime wrapper, not the
     direct prime (bead coding-harness-l1if, criterion 10).
 
-    The wiring itself is the orchestrator's held-file step (plan step 5, this
-    attempt must not edit `.claude/`): while settings still carry the old
-    direct prime command the test skips; from the moment the wrapper is wired
-    in, a regression back to the bare prime command fails here.
+    The settings timeout must outlast the wrapper's own bounds (reconcile, scan
+    and prime defaults read from the hook), or the harness kills the wrapper
+    mid-reconciliation.
     """
     hooks = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]["SessionStart"]
     entries = [h for group in hooks for h in group["hooks"]]
     commands = [h["command"] for h in entries]
-    if commands == ['"$CLAUDE_PROJECT_DIR"/tools/bd prime --hook-json']:
-        pytest.skip("the held-file step has not wired beads-start.sh yet (plan step 5)")
     assert commands == [START_HOOK_COMMAND], f"the SessionStart hook must run the wrapper: {commands}"
-    assert all(isinstance(h.get("timeout"), int) and h["timeout"] > 0 for h in entries), (
-        "the wrapper needs an explicit timeout covering reconciliation and prime"
+    hook = (REPO / "tools" / "claude-code" / "hooks" / "beads-start.sh").read_text(encoding="utf-8")
+    bounds = sum(int(v) for v in re.findall(r"^[A-Z_]+_TIMEOUT=\$\{BEADS_START_[A-Z_]+:-(\d+)\}", hook, re.M))
+    assert bounds > 0, "the hook's own time bounds were not found"
+    assert all(isinstance(h.get("timeout"), int) and h["timeout"] > bounds for h in entries), (
+        f"the wrapper needs a timeout above its own bounds ({bounds} s) covering reconciliation and prime"
     )
 
 
