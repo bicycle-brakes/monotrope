@@ -32,8 +32,8 @@ file is empty until it has run.
 > swarm: every OpenCode Go model is refused at the swarm's origin check. The
 > maintainer approved phase 1 through GLM 5.3 Flash instead, plus a Claude
 > Haiku 5.5 sub-agent research of the repository and the public Go page, so
-> this header declares `class: spike` for the explore verb alone. From the
-> interview on, the change is a `feature` again; the spec's header says so.
+> this header declared `class: spike` for the explore verb alone (commit 6d1221d1). From the
+> interview on, the change is a `feature` again, and the header says so.
 
 Stage-2 call, 2026-10-31: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 793 files, 2870 commits, 12 rules.
 
