@@ -215,12 +215,13 @@ own).
 
 The original gap table cites ten beads. The drafting attempt had file tools
 only and recorded them as *not read*; the orchestrator read them afterwards
-through the pinned tracker wrapper (`tools/bd show <id> --json`, rendered from
-`refs/dolt/data`) on 2026-10-31 at about 19:50 UTC (review row L3-1). A
+through the render access point (`scripts/bead_render.py`, `render_pfad()`,
+source "gerendert" — a fresh render of `refs/dolt/data`) on 2026-10-31 at
+19:53 UTC (review rows L3-1 and L4-1). A
 closed bead is tracker state, not proof that its gap is delivered; the
 dispositions above stand on their own evidence.
 
-| Bead (as cited) | Status 2026-10-31 | Closed | Title (shortened) |
+| Bead (as cited) | Status 2026-10-31 19:53 UTC | Closed | Title (shortened) |
 |---|---|---|---|
 | `coding-harness-bo0` (G1, G14) | closed | 2026-09-21 | Gate file and one verify command; ci.yml derived from it |
 | `coding-harness-2ee` (G2) | closed | 2026-09-20 | Classify the 60 red mechanism tests |
