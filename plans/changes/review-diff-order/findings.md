@@ -593,3 +593,15 @@ Kept from the loop record:
 Stage-2 call, 2026-10-31: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 787 files, 2816 commits, 12 rules.
 
 Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 787 files, 2817 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 787 files, 2818 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-31
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3868–3881 | Replacing tracked file `node` with `node/child.py` emits the child's diff twice: Git's `:(literal)node` pathspec also matches descendants, which are emitted again individually. The same mechanism reintroduces excluded findings and index diffs when a tracked file becomes their parent directory. Exclusion and exact-once guarantees therefore fail before bounding. [Acceptance criteria 1, 3] | Codex | open | — |
+| R6-3 | MAJOR | MAINT | Phase 6 | scripts/stage2.py:3818–3820 | After a branch removes `local.env` from tracking and ignores its remaining local copy, seeding the temporary index from the merge base makes that file tracked again. `git add -A` consequently includes its ignored local contents in the paid prompt. Reproduction also shows that editing this file changes the paid diff while leaving `change_diff`, and therefore the availability receipt binding, unchanged. | Codex | open | — |
+
+Phase 6 verdict: codex 01a18f9a-17a4-7263-b2f1-b35279661207, 2026-10-31
+Reviewer session: codex 01a18f9a-17a4-7263-b2f1-b35279661207 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
