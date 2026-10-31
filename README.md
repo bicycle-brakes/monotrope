@@ -81,6 +81,27 @@ in parallel. Both follow the process overview below.
   the only one writing the tracker
   ([three lanes](docs/orchestration.md)).
 
+### Brakes that spare your attention
+
+Agents scale with the budget; the person deciding does not. When every
+change ends in a review and every step in a question, the day turns into a
+stream of small judgements. Monotrope treats that as a design problem: besides
+the parts that make agents faster, it builds brakes that keep their output
+safe and that decide what reaches you at all.
+
+| Brake | How Monotrope does it | Level |
+| --- | --- | --- |
+| Constrain the agent before it writes | Research, an interview with minimums by class, a spec with numbered criteria, a plan card you can veto, an appetite that stops the work at its limit | interview minimums and validators enforced; veto and appetite are written rules |
+| Limit the mistakes it can make | Foreign models start only through one runner, behind an endpoint allowlist and a leak check that stops without a fallback; one worktree per change; one tracker writer | runner and leak check enforced; worktree and writer rules written |
+| Check in layers before anything merges | `make verify`, a review loop of several vendors until a clean round, a separate phase-6 review, CI, and a merge queue that tests each pull request against the current `main` | enforced |
+| Raise only what needs you | Open points are sorted: `[DECISION]` goes to you, `[GAP]` is explored, `[DETAIL]` is decided by the agent with its reason written down; only decision pull requests wait for your merge, the rest merge themselves on green CI | a spec with an open `[DECISION]` fails its gate; decision PRs by template; self-merge is a written rule |
+| Batch what does reach you | Questions wait for one daily block, one at a time, each with its context (topic, why now, today, what changes); plan cards and status come together, not per step | written rules ([ADR 0018](docs/adr/0018-every-question-carries-its-context.md)) |
+| Let you step away | Every step commits; a session ends with a handover file, so the next one resumes without you rebuilding the chat; a night run works from a written plan | handover schema enforced; night plan written |
+
+Not built yet: a measurement of how many questions, decisions and reviews
+reach you per day, and a rule that routes your attention by a change's risk
+rather than by its class alone (bead coding-harness-n4bh).
+
 ## How a change runs
 
 A change runs through seven core phases, plus the optional steps the table
@@ -370,8 +391,9 @@ Checked on 2026-10-28 against `main` at `a6ddd9d1`.
   (ADR 0022).
 - A repair counts only when its test fails on the code before the repair —
   by an assertion or pytest's own failed outcome, never by a crash.
-- `main` takes a pull request only when it is up to date with `main` and the
-  `verify` check is green (repository ruleset).
+- `main` takes a pull request only when the `verify` check is green on the
+  merge candidate: through the merge queue, or, without it, once the branch is
+  up to date with `main` (repository ruleset, rule RB-G7).
 
 ### Written rules agents follow, not enforced by a tool
 
