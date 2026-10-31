@@ -9,20 +9,15 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash, 2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # beads close themselves — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md), run by GLM 5.3 Flash.
 
 Stage-2 call, 2026-10-31: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 788 files, 2822 commits, 12 rules.
 
