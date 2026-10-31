@@ -125,3 +125,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-31 19:06:47–19:21:08 UTC, 862 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 Appetite: 2 hours of phase 4, repairs included. Used by 2026-10-31 19:40 UTC: 3373 + 1633 + 2532 + 811 + 862 s, about 2 h 34 min — over the stop by about 34 minutes, a large part of it spent waiting for the shared verify slot while five lanes ran. Recorded by the orchestrator (review row L2-3); remaining work: the review loop to a clean round, phase 6 and the pull request. Continuing past the stop is the maintainer's call; the structural remedy is the runner stop at the appetite (bead coding-harness-uxa9).
+2026-10-31 19:54:21–20:56:58 UTC, 3757 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
