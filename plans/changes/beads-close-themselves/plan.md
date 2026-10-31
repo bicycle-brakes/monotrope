@@ -113,6 +113,8 @@ apply; no portability/rollout claim is made. No tracker writes during drafting,
 implementation tests or review; operational closure belongs to the tracker writer.
 The ordinary artefact/archive lifecycle remains a separate phase-7 duty.
 
+Exception, recorded by the orchestrator (review row L4-5, 2026-10-31): `scripts/ci_gates.py` gained one `OHNE_AUFRUFER` entry that declares the reconciler's local caller, because `test_every_script_has_a_caller_or_a_declared_reason` requires it for every new script. It adds no CI closure logic.
+
 ## Verification
 
 Run the targeted tests after implementation and again after the orchestrator

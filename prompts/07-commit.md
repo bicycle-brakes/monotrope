@@ -111,7 +111,8 @@ restatement is its one-line summary.
 4. If CI is red, the agent stops and says so. It never uses `--admin`.
 5. The agent runs `gh pr merge <n> --merge --match-head-commit <sha>`. The
    ask rule shows the prompt directly below the restatement, and the
-   maintainer confirms.
+   maintainer confirms. Once `gh pr view <n> --json state` shows `MERGED`,
+   the agent reconciles the declared closures (above).
 6. If the branch changed after the restatement, `--match-head-commit` makes
    the merge fail, and the agent restates again. This is rule RB-M1's idea
    ("what changes after the signature is unsigned again") applied to the
