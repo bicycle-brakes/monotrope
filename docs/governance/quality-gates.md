@@ -5,7 +5,7 @@ subcategory: quality-gates
 status: current
 created: 2026-04-17
 last_reviewed: 2026-08-14
-updated: 2026-10-28
+updated: 2026-10-30
 owner: Data Architect
 provenance: human-decided
 review:
@@ -69,16 +69,18 @@ a gate. This page describes the delivery gates and what a signature means.
 |---|---|---|---|---|
 | **MG-0** | Contract-Schema | bei jedem Contract-Write | Pydantic-Validierung der Contract-YAML | `scripts/validate_contract.py` |
 | **MG-1** | Pre-Commit | vor dem Commit | Lint, YAML-Syntax, Secrets-Guard, Frontmatter | Claude-Code-Hooks |
-| **MG-2** | PR-Verifikation | beim Pull Request | die eine Gate-Liste, gegen den Merge-Ref | `.github/workflows/ci.yml` |
+| **MG-2** | PR-Verifikation | beim Pull Request and for each merge group | die eine Gate-Liste, gegen den Merge-Ref or the merge group's ref | `.github/workflows/ci.yml` |
 | **MG-3** | Merge | vor dem Merge | Required Checks, Code-Owner-Review | GitHub-Ruleset |
 
-MG-2 prüft **`refs/pull/N/merge`**, nicht den Branch-Kopf. Lokal grün und in der
+MG-2 prüft **`refs/pull/N/merge`** (and, in the merge queue, the group's ref), nicht den Branch-Kopf. Lokal grün und in der
 CI rot ist deshalb kein Widerspruch, sondern der Normalfall: die CI baut, was
-nach dem Merge entsteht. Dass dieser Merge-Ref auch der gemergte ist, sichert das Ruleset: es
-verlangt, dass der Branch vor dem Merge auf dem Stand seines Ziels ist
-(RB-G7). Bewegt sich `main`, verweigert GitHub den Merge, bis jemand den
-Branch aktualisiert hat und die CI erneut grün ist; das tut niemand
-automatisch (`prompts/07-commit.md`, Merge-Schritt 7).
+nach dem Merge entsteht. That the tested candidate is the merged one is
+secured by the ruleset, in one of two ways (RB-G7, 6.0.0): with a merge queue
+active, the queue builds each merge group on the current `main`, MG-2 runs on
+that group's ref (`merge_group` event), and only a green group is merged; with
+the up-to-date requirement instead, GitHub refuses the merge of a behind
+branch until it is updated and CI is green again, which nobody does
+automatically (`prompts/07-commit.md`, "The merge", step 8).
 
 ### Human Gates
 

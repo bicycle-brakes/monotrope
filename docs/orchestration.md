@@ -76,8 +76,10 @@ A leak-check block or a security blocker stops the whole run.
 At night nothing is merged: a merge asks the maintainer, and nobody can
 answer it then. A pull request that meets the self-merge rules is marked
 ready. The morning handover lists the ready pull requests with their head
-commits, and one word from the maintainer merges them through GitHub's
-auto-merge. Every step is committed and pushed at once, tracker first, so an
+commits, and one word from the maintainer merges them: with the merge
+queue active (rule RB-G7), that word admits them to the queue, and each counts
+as merged only once GitHub shows it merged; a failing group leaves its pull
+request open. Every step is committed and pushed at once, tracker first, so an
 interrupted session loses nothing. A lane ledger with UTC times backs the
 handover.
 
