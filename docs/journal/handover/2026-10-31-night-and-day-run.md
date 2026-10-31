@@ -33,6 +33,8 @@ models at a new base path, and the swarm's origin check admits only the old one.
 
 ## Next step
 
+(Superseded by the addendum of 13:40 UTC at the end of this file.)
+
 Read the latest review-loop round of the draft's document-only check (bead
 coding-harness-77qj, worktree `.claude/worktrees/draft-gates-only`, loop record
 `~/.local/state/coding-harness/stage2/draft-gates-only@963156cd/loop.md`).
@@ -141,3 +143,47 @@ Status lives in Beads; this list only points.
 - Not read: the MemCurrent paper behind bead coding-harness-g4iq (only the
   Databricks blog post was read), and the course behind bead
   coding-harness-n4bh.
+
+## Addendum — 2026-10-31 13:40 UTC, the last hour
+
+- **The draft's document-only check (bead coding-harness-77qj) is done** and
+  sits in pull request #300 on auto-merge through the queue (head 07b425a5).
+  The review loop was clean at round 7, the full `make verify` was green at
+  13:23 UTC (ce467a8e), and phase 6 (fresh Codex session) reported no finding.
+  The bead closes through the `Closes-Bead` trailer; until the reconciler of
+  bead coding-harness-l1if merges, close it by hand after #300 shows `MERGED`.
+- **Self-closing beads (bead coding-harness-l1if):** Codex repaired the round-1
+  rows (1d9865ae) and the round-2 rows (c3211f52); round 3 was running at
+  13:37 UTC. Plan step 7 (the time record and the ledger in `plan.md`) and the
+  full `make verify` (owed for the `prompts/` change) are still open.
+- **The Go access point (bead coding-harness-4tr4)** was opened at
+  `plans/changes/go-access-point` (branch `feat/go-access-point`). Phase 1 ran
+  through GLM Flash by the maintainer's recorded exception, because the
+  research swarm is blocked by this bead's own subject, and through a Haiku
+  sub-agent. Both answers were committed unchanged (2c7ec3ee). Findings: the
+  review loop never checks the Go address (the open finding DL-B-8), the
+  research swarm checks it against a hard-coded `/zen/go/v1`, and the official
+  Go page documents only `https://opencode.ai/inference/go/`. Next: write the
+  interview answers below into `decisions.md`, then the spec.
+- **Interview answers, all given on 2026-10-31.** They are recorded verbatim in
+  the notes of each bead and are not asked again:
+  - coding-harness-4tr4: 3 of 3. Every Go path is controlled from one place.
+    Another path on the same host is blocked and reported. The agent maintains
+    the address record itself; this conflicts with today's hold on
+    `model-endpoints.yaml`, so the spec must resolve it.
+  - coding-harness-1gzo: 5 of 5. The free and Flash swarms run in parallel.
+    The first clean round from the Flash swarm on ends the loop. A ladder rung
+    stands in when no Flash member answers. The rule holds for all classes.
+  - coding-harness-6ie: 5 of 5. An abort counts as an attempt, and the next
+    attempt builds on the abort state. A route change shows in the runner
+    output and in `plan.md`, which replaces the earlier "findings.md".
+  - coding-harness-mfth: 5 of 5. One format reminder, then the cheapest
+    unconsumed model replaces the member. The failure rate covers the last 20
+    calls. This bead comes before coding-harness-np8z.
+- **Also merged:** #296 (12:08 UTC) and #297 (12:18 UTC). Opened as follow-ups
+  of 77qj: coding-harness-v9xx (ADR 0016 wording, a decision PR) and
+  coding-harness-ooj5 (the report header of `--job docs`).
+
+**Resume here instead:** close coding-harness-77qj once #300 is merged. Then
+read round 3 of coding-harness-l1if in
+`~/.local/state/coding-harness/stage2/beads-close-themselves@b8105439/loop.md`.
