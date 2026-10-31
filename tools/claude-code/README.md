@@ -63,6 +63,12 @@ skips and says why. Each step runs under its own time bound
 failed or skipped reconciliation is reported in the session context, and prime
 still runs; `make close-merged ARGS=--write` repeats the reconciliation by hand.
 
+Without `ARGS`, `make close-merged` only reports and never closes or publishes.
+Both reporting and writing return nonzero for unknown or malformed declarations;
+report-only describes the absence of writes, not an unconditional success status.
+Preflight failures also return nonzero; writing additionally fails on refused
+closures or failed publication. Fix unresolved declarations before retrying.
+
 ## Install, check, update
 
 ```bash

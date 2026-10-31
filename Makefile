@@ -110,4 +110,5 @@ help:
 	@echo 'make index                              regenerate plans/INDEX.md from the registry'
 	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
 	@echo 'make close-merged [ARGS=--write]        close beads a merged Closes-Bead trailer declared (report without ARGS)'
+	@echo '                                        reporting also fails on unresolved declarations (nonzero exit)'
 	@echo 'make help                               this list'

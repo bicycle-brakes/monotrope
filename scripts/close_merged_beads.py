@@ -11,8 +11,8 @@ What counts, exactly:
 
 - Only the trailer. A ``Closes-Bead:`` line is read where Git reads trailers —
   the trailing trailer block of a commit message. A mention in the body, PR
-  prose or any other spelling closes nothing (decisions.md, "Only the trailer
-  counts").
+  prose or any other spelling closes nothing; case variants in the trailer
+  block are reported as malformed (decisions.md, "Only the trailer counts").
 - Only merged history. Every commit reachable from a freshly fetched
   ``origin/main`` is scanned, whatever the local HEAD says; a trailer on an
   unmerged or local-only commit closes nothing.
@@ -73,9 +73,8 @@ MERGE_PULL_REQUEST = re.compile(r"^Merge pull request #(\d+)\b")
 SQUASH_NUMBER = re.compile(r"\(#(\d+)\)$")
 
 # One record per commit, delimited by 0x1e, fields by NUL: sha, subject, and
-# the raw trailer lines Git parsed. This file only reads the exact
-# ``Closes-Bead:`` lines out of them — case-sensitive, by design: the key is
-# exactly Closes-Bead, and any other spelling is prose.
+# the raw trailer lines Git parsed. Only exact ``Closes-Bead:`` keys close;
+# case variants are reported as malformed rather than silently ignored.
 LOG_FORMAT = "%H%x00%s%x00%(trailers:only=true,unfold=false)%x1e"
 
 GIT_TIMEOUT = 30.0
@@ -160,10 +159,12 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
             continue
         sha, subject, trailer_block = fields[0].strip(), fields[1], fields[2]
         for line in trailer_block.splitlines():
-            if not line.startswith(prefix):
+            if not line.lower().startswith(prefix.lower()):
                 continue
             value = line[len(prefix) :].strip()
-            if BEAD_ID.match(value):
+            if not line.startswith(prefix):
+                malformed.append((sha, line))
+            elif BEAD_ID.match(value):
                 declarations.setdefault(value, (sha, subject))
             else:
                 malformed.append((sha, value))
@@ -197,9 +198,16 @@ def _unresolved(unknown: list[str], malformed: list[tuple[str, str]]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Close beads whose completion a merged Closes-Bead trailer declared.")
+    ap = argparse.ArgumentParser(
+        description="Close beads whose completion a merged Closes-Bead trailer declared.",
+        epilog=(
+            "Exit status: 0 = nothing unresolved; 1 = preflight failure or unresolved work "
+            "(unknown/malformed declarations, refused closures, failed publication). "
+            "Read-only reporting also fails on unresolved declarations."
+        ),
+    )
     ap.add_argument("--write", action="store_true", help="close eligible beads and publish; without it, only report")
-    ap.add_argument("--budget-seconds", type=float, help="startup budget, including reserved publication time")
+    ap.add_argument("--budget-seconds", type=float, help="startup budget shared by closures and publication")
     args = ap.parse_args(argv)
     if args.budget_seconds is not None and args.budget_seconds <= 0:
         ap.error("--budget-seconds must be positive")
@@ -243,9 +251,9 @@ def main(argv: list[str] | None = None) -> int:
     refused: list[tuple[str, str]] = []
     for bid, sha, subject in eligible:
         reason = closure_reason(sha, subject)
-        # Reserve a full wrapper timeout for publication. An exhausted startup
-        # budget defers remaining closures visibly, but still publishes the batch.
-        close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - time.monotonic() - BD_TIMEOUT)
+        # Bound each close by the remaining budget. Even a short budget permits
+        # quick closures; publication is still attempted after the batch.
+        close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - time.monotonic())
         if close_timeout <= 0:
             refused.append((bid, "startup budget exhausted"))
             print(f"refused: {bid}: startup budget exhausted; retry reconciliation", file=sys.stderr)

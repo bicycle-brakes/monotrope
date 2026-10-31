@@ -618,3 +618,45 @@ def test_make_argument_whitespace_is_rejected(tmp_path: Path) -> None:
         assert result.returncode != 0
         assert "ARGS must be empty or --write" in result.stderr
         assert not _closes(ns) and "dolt push" not in _calls(ns)
+
+
+def test_short_startup_budget_allows_quick_closures(tmp_path: Path) -> None:
+    """A budget below BD_TIMEOUT still allows quick closes and publication."""
+    ns = _build(tmp_path)
+    result = _run_script(ns, _env(ns), "--write", "--budget-seconds", "30")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert len(_closes(ns)) == len(DECLARED)
+    assert "dolt push" in _calls(ns)
+    assert "published: yes" in result.stdout
+
+
+def test_reporting_exit_contract_is_exposed_in_help(tmp_path: Path) -> None:
+    """Report-only is read-only, but unresolved declarations still exit nonzero."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, "unknown declaration\n\nCloses-Bead: coding-harness-ghost")
+    _commit(ns.origin, "malformed declaration\n\nCloses-Bead: two beads")
+    for result in (_run_script(ns, _env(ns)), _run_make(ns, _env(ns), "close-merged")):
+        assert result.returncode != 0
+        assert "unknown bead" in result.stderr
+        assert "malformed Closes-Bead" in result.stderr
+    assert not _closes(ns) and "dolt push" not in _calls(ns)
+    cli_help = _run_script(ns, _env(ns), "--help")
+    make_help = _run_make(ns, _env(ns), "help")
+    assert cli_help.returncode == make_help.returncode == 0
+    for result in (cli_help, make_help):
+        assert "reporting also fails on unresolved declarations" in " ".join(result.stdout.split())
+
+
+def test_miscased_trailers_are_reported_without_closing(tmp_path: Path) -> None:
+    """Only the exact key closes; case mistakes are visible unresolved items."""
+    ns = _build(tmp_path)
+    for key, bid in (("closes-bead", REAL_A), ("CLOSES-BEAD", REAL_B), ("Closes-bead", UNMERGED)):
+        _commit(ns.origin, f"mistyped key\n\n{key}: {bid}")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert len(_closes(ns)) == len(DECLARED), "valid declarations must still close"
+    for bid in (REAL_A, REAL_B, UNMERGED):
+        assert not any(line.startswith(f"close {bid} ") for line in _closes(ns))
+        assert bid in result.stderr
+    assert result.stderr.count("malformed Closes-Bead") == 3
+    assert "dolt push" in _calls(ns)
