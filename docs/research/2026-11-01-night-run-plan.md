@@ -1,21 +1,16 @@
 ---
-title: "Night-run plan 2026-11-01/02 — five lanes, two backlog beads each"
+title: "Night-run plan — 2026-11-01 19:05 UTC to 2026-11-02 11:00 UTC"
 category: research
 created: 2026-11-01
 updated: 2026-11-01
-direction: framework->framework
+last_reviewed: 2026-11-01
+status: draft
+implementation_status: none
 provenance: ai-drafted-reviewed
-produced_by:
-  kind: llm-session
-  name: claude-code
-  version: "Opus 5.5, 2026-11-01"
-tags: [night-run, lanes, run-plan]
-target_ref: 37b78b0a
-status: pending
-review:
-  status: pending
-  approved_by: null
-  approved_at: null
+produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-11-01"}
+review: {status: pending, approved_by: null, approved_at: null}
+bead: coding-harness-4emv
+tags: [night-run, plan, lanes, stage-2]
 ---
 
 # Night-run plan 2026-11-01/02
