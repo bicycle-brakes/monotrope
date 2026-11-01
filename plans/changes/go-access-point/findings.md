@@ -2,7 +2,7 @@
 title: "Findings — go-access-point"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
@@ -898,3 +898,7 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 802 files, 2949 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 802 files, 2950 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model hy3 · leak check clean over 802 files, 2952 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 802 files, 2953 commits, 12 rules.
