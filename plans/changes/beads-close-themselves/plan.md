@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
@@ -176,3 +176,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-31 19:20:09–19:51:19 UTC, 1869 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 19:51:26–21:39:12 UTC, 6466 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 21:39:19–22:39:10 UTC, 3591 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 23:25:27–2026-11-01 00:01:47 UTC, 2179 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

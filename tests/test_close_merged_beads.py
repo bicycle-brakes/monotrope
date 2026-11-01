@@ -614,15 +614,25 @@ def test_export_failure_is_preflight_failure(tmp_path: Path) -> None:
 
 
 def test_startup_budget_reserves_publication(tmp_path: Path) -> None:
+    """Close part of a slow batch, then publish after the close budget runs out."""
     ns = _build(tmp_path)
     stub = ns.klon / "tools" / "bd"
-    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
-    result = _run_script(ns, {**_env(ns), "CLOSE_MERGED_BD_TIMEOUT": "0.3"}, "--write", "--budget-seconds", "0.8")
+    # Keep the per-close bound above the one-second admission floor. Five
+    # slow closes cannot all start within this budget, but some must finish.
+    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.3"))
+    result = _run_script(ns, {**_env(ns), "CLOSE_MERGED_BD_TIMEOUT": "1.5"}, "--write", "--budget-seconds", "2")
     assert result.returncode == 1
     assert "startup budget exhausted" in result.stderr
     assert "dolt push" in _calls(ns), (result.stdout, result.stderr)
     assert "published: yes" in result.stdout
-    assert len(_closes(ns)) < len(DECLARED)
+    closed = [
+        json.loads(line)["id"] for line in ns.render.read_text().splitlines() if json.loads(line)["status"] == "closed"
+    ]
+    completed = set(closed) & set(DECLARED)
+    assert 0 < len(completed) < len(DECLARED), (result.stdout, result.stderr)
+    assert len(_closes(ns)) == len(completed), "every attempted close must finish before publication"
+    calls = _calls(ns)
+    assert all(calls.index(close) < calls.index("dolt push") for close in _closes(ns))
 
 
 def test_renderer_unexpected_exit_is_preflight_failure(tmp_path: Path) -> None:

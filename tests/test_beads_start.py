@@ -409,8 +409,8 @@ def test_prime_failure_preserves_reconciliation_diagnostic(tmp_path: Path) -> No
 
 def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None:
     ns = _project(tmp_path)
-    # Scale the production bounds together; the old outer-only timeout kills
-    # this batch after some closes and before its required publication.
+    # Keep the close bound above the one-second admission floor. The batch
+    # must complete some closes before exhausting its budget and publishing.
     for i in range(14):
         _commit(ns.origin, f"complete item {i}\n\nCloses-Bead: coding-harness-item-{i}")
     ns.render.write_text(
@@ -418,18 +418,27 @@ def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None
         + "".join(json.dumps({"id": f"coding-harness-item-{i}", "status": "open"}) + "\n" for i in range(14))
     )
     stub = ns.klon / "tools" / "bd"
-    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.15"))
+    stub.write_text(
+        STUB.replace("  close)", "  close)\n    sleep 0.2").replace(
+            "    ;;\n  dolt)", '    printf "completed-close %s\\n" "$2" >>"${BEADS_STUB_LOG:?}"\n    ;;\n  dolt)'
+        )
+    )
     result = _start(
         ns,
         extra={
-            "BEADS_START_RECONCILE_TIMEOUT": "1.5",
+            "BEADS_START_RECONCILE_TIMEOUT": "3",
             "BEADS_START_BUDGET_RESERVE": "0.1",
-            "CLOSE_MERGED_BD_TIMEOUT": "0.2",
+            "CLOSE_MERGED_BD_TIMEOUT": "1.5",
         },
     )
     assert result.returncode == 0, result.stderr
     calls = _calls(ns)
     assert "dolt push" in calls, (calls, result.stderr)
+    closes = [call.split()[1] for call in calls if call.startswith("close ")]
+    completed = [call.split()[1] for call in calls if call.startswith("completed-close ")]
+    assert 0 < len(completed) < 15, (calls, result.stderr)
+    assert completed == closes, "every attempted close must finish before publication"
+    assert all(calls.index(f"completed-close {bid}") < calls.index("dolt push") for bid in completed)
     assert calls.index("dolt push") < calls.index("prime --hook-json")
     assert "startup budget exhausted" in result.stderr
     assert "abgebrochen" not in result.stderr
