@@ -11670,36 +11670,106 @@ def ref_writing_test(*commands: tuple[str, ...]) -> str:
     )
 
 
-def test_proofs_ignore_foreign_ref_changes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 1. Planted fault: a branch, remote-tracking or saved-attempt reference another
-    session moves in the source repository during a proof voids an otherwise valid proof."""
+def test_proofs_ignore_foreign_ref_changes(world: World) -> None:
+    """Criterion 1: each named test moves fresh source refs during its own call phase."""
     baseline = repair_world(world)
-    moves = {
-        "branch": ("update-ref", "refs/heads/foreign-branch", "HEAD"),
-        "remote": ("update-ref", "-d", "refs/remotes/origin/main"),
-        "attempt": ("update-ref", "refs/stage2/attempts/foreign", "HEAD"),
-    }
-    original_launch = stage2.launch
+    git(world.root, "commit", "--quiet", "--allow-empty", "-m", "foreign target")
+    target = git(world.root, "rev-parse", "HEAD")
+    for proof in ("baseline", "fixed"):
+        plant_proof(world, proof)
+        git(world.root, "update-ref", "-d", "refs/heads/foreign-branch")
+        git(world.root, "update-ref", "refs/stage2/attempts/foreign", baseline)
+        git(world.root, "update-ref", "refs/remotes/origin/main", baseline)
+        selector = "tests/test_foreign.py::test_foreign"
+        (world.root / "tests" / "test_foreign.py").write_text(
+            "import subprocess\nfrom pathlib import Path\n\n\ndef test_foreign():\n"
+            + f"    source = {str(world.root)!r}\n"
+            + "    commands = [\n"
+            + f"        ['update-ref', 'refs/heads/foreign-branch', {target!r}],\n"
+            + "        ['update-ref', '-d', 'refs/remotes/origin/main'],\n"
+            + f"        ['update-ref', 'refs/stage2/attempts/foreign', {target!r}],\n"
+            + "    ]\n"
+            + "    for command in commands:\n"
+            + "        subprocess.run(['git', '-C', source, *command], check=True)\n"
+            + '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text()\n'
+            + '    assert "value = 2" in value\n',
+            encoding="utf-8",
+        )
+        outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is None, (proof, outcome)
+        refs = stage2._ref_targets(world.root)
+        assert refs["refs/heads/foreign-branch"] == target
+        assert refs["refs/stage2/attempts/foreign"] == target
+        assert "refs/remotes/origin/main" not in refs
+
+
+def test_proofs_ignore_source_ref_created_after_clone(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A source ref to an object created after cloning must not break proof setup."""
+    baseline = repair_world(world)
+    original = stage2._git_output
     for proof in ("baseline", "fixed"):
         selector = plant_proof(world, proof)
-        for kind, move in moves.items():
-            state = {"moved": False}
+        created = []
 
-            def moving(command, cwd, env, *args, _move=move, _state=state, _original=original_launch, **kwargs):
-                if not _state["moved"] and any("pytest" in part for part in command):
-                    _state["moved"] = True
-                    git(world.root, *_move)
-                return _original(command, cwd, env, *args, **kwargs)
+        def cloning(root, *args, _proof=proof, _created=created, **kwargs):
+            result = original(root, *args, **kwargs)
+            if args[0] == "clone":
+                git(world.root, "commit", "--quiet", "--allow-empty", "-m", f"foreign {_proof}")
+                target = git(world.root, "rev-parse", "HEAD")
+                git(world.root, "update-ref", f"refs/stage2/attempts/after-{_proof}", target)
+                _created.append(target)
+            return result
 
-            with monkeypatch.context() as patch:
-                patch.setattr(stage2, "launch", moving)
-                outcome = run_proof(world, proof, selector, baseline)
-            assert outcome is None, (proof, kind, outcome)
-            listed = git(world.root, "for-each-ref")
-            if kind == "remote":
-                assert "refs/remotes/origin/main" not in listed, listed
-            else:
-                assert move[1] in listed, listed
+        with monkeypatch.context() as patch:
+            patch.setattr(stage2, "_git_output", cloning)
+            outcome = run_proof(world, proof, selector, baseline)
+        assert created
+        assert outcome is None, (proof, outcome)
+        assert git(world.root, "rev-parse", f"refs/stage2/attempts/after-{proof}") == created[0]
+
+
+def test_proofs_refuse_detached_head_commits(world: World) -> None:
+    """A named test's empty commit changes HEAD even with no branch or file changes."""
+    baseline = repair_world(world)
+    for proof in ("baseline", "fixed"):
+        plant_proof(world, proof)
+        selector = "tests/test_write.py::test_write"
+        (world.root / "tests" / "test_write.py").write_text(
+            ref_writing_test(
+                (
+                    "-c",
+                    "user.name=Proof",
+                    "-c",
+                    "user.email=proof@example.test",
+                    "commit",
+                    "--quiet",
+                    "--allow-empty",
+                    "-m",
+                    "private commit",
+                )
+            ),
+            encoding="utf-8",
+        )
+        outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is not None and "HEAD" in outcome and "refs changed" in outcome, (proof, outcome)
+
+
+def test_fixed_proof_names_refs_after_initial_tree_failure(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed tree measurement must retain the already captured reference snapshot."""
+    repair_world(world)
+    selector = plant_proof(world, "fixed")
+    original = stage2.worktree_tree
+
+    def failing(root):
+        if root != world.root:
+            git(root, "update-ref", "refs/heads/during-measurement", "HEAD")
+            raise stage2.Refused("planted initial tree failure")
+        return original(root)
+
+    monkeypatch.setattr(stage2, "worktree_tree", failing)
+    outcome = stage2.fixed_test_proof(world.root, selector, None)
+    assert outcome is not None and "planted initial tree failure" in outcome, outcome
+    assert "refs/heads/during-measurement" in outcome, outcome
 
 
 def test_proofs_refuse_private_ref_changes(world: World) -> None:

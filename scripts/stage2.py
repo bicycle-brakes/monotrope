@@ -5619,9 +5619,11 @@ def red_first_python(root: Path) -> str:
 
 
 def _ref_targets(root: Path) -> dict[str, str]:
-    """Every ref of the repository, remote-tracking ones included, with the object it names."""
+    """Every named ref and HEAD, including detached HEAD, with the object it names."""
     listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname)")
-    return {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+    refs = {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+    refs["HEAD"] = _git_output(root, "rev-parse", "HEAD").strip()
+    return refs
 
 
 def _red_report_bytes(path: Path) -> bytes | None:
@@ -5781,14 +5783,16 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     the index and the working tree. The source's refs, index and worktree are read here, never
     written (spec, criteria 1 and 6).
     """
+    # Snapshot before copying objects: later source refs may name objects the clone never saw.
+    refs = _ref_targets(root)
+    head = refs.pop("HEAD")
     _git_output(root, "clone", "--quiet", "--no-hardlinks", str(root), str(destination))
     # A local clone copies the objects directory; a stale alternates file from the source would
     # tie the proof's store to a foreign one, so it goes before anything reads the clone.
     with contextlib.suppress(FileNotFoundError):
         (destination / ".git" / "objects" / "info" / "alternates").unlink()
     _git_output(destination, "remote", "remove", "origin")
-    head = _git_output(root, "rev-parse", "HEAD").strip()
-    for name, target in _ref_targets(root).items():
+    for name, target in refs.items():
         _git_output(destination, "update-ref", name, target)
     _git_output(destination, "update-ref", "--no-deref", "HEAD", head)
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
@@ -5834,7 +5838,8 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         # read refuses the proof instead of running older bytes.
         fixed_tree = worktree_tree(root)
         _private_repository(root, private, fixed_tree)
-        refs_before, tree_before = _ref_targets(private), worktree_tree(private)
+        refs_before = _ref_targets(private)
+        tree_before = worktree_tree(private)
         # One machine-wide admission around the timed proof; queue and memory waits consume
         # none of the proof's time limit (bead coding-harness-p6mu).
         with verify_lock.hold_admission(["pytest", test]) as owned:
