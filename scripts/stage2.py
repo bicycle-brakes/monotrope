@@ -5788,10 +5788,11 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     refs = _ref_targets(root)
     head = refs.pop("HEAD")
     _git_output(root, "clone", "--quiet", "--no-hardlinks", str(root), str(destination))
-    # A local clone copies the objects directory; a stale alternates file from the source would
-    # tie the proof's store to a foreign one, so it goes before anything reads the clone.
-    with contextlib.suppress(FileNotFoundError):
-        (destination / ".git" / "objects" / "info" / "alternates").unlink()
+    # An alternates file makes the clone depend on another object store. Refuse rather than
+    # silently discarding that dependency and assuming all required objects were copied.
+    alternates = destination / ".git" / "objects" / "info" / "alternates"
+    if alternates.exists() or alternates.is_symlink():
+        raise Refused("the private repository contains objects/info/alternates")
     _git_output(destination, "remote", "remove", "origin")
     for name, target in refs.items():
         _git_output(destination, "update-ref", name, target)
@@ -5908,7 +5909,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
-    The private checkout's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
+    The private checkout's `tests/` is the attempt's Git-visible tests, without caches: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
     call git honest. The checkout is a clone with its own reference store (`_private_repository`), so
     another session's branch, remote-tracking or saved-attempt reference moving in the source repository
@@ -5955,10 +5956,28 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
         if outcome is None:
             shutil.rmtree(tree / "tests", ignore_errors=True)
             try:
-                shutil.copytree(
-                    root / "tests", tree / "tests", ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache")
-                )
-            except OSError as error:
+                # Use the same Git-visible snapshot as the fixed proof, including tracked
+                # ignored files, and preserve directory traversal only for included paths.
+                current = worktree_tree(root)
+                paths = _git_output(
+                    root, "ls-tree", "-r", "--name-only", "-z", current, "--", "tests", preserve_newlines=True
+                ).split("\0")
+                visible = set()
+                for path in filter(None, paths):
+                    relative = Path(path)
+                    visible.add(relative)
+                    visible.update(relative.parents)
+
+                def ignored(directory: str, names: list[str]) -> list[str]:
+                    relative = Path(directory).relative_to(root)
+                    return [
+                        name
+                        for name in names
+                        if name in {"__pycache__", ".pytest_cache"} or relative / name not in visible
+                    ]
+
+                shutil.copytree(root / "tests", tree / "tests", ignore=ignored, symlinks=True)
+            except (Refused, OSError) as error:
                 outcome = (
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
                 )

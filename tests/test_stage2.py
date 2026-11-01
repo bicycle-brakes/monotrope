@@ -11830,6 +11830,82 @@ def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> No
     assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n", "the proof wrote the source"
 
 
+def test_proofs_agree_on_git_visible_tests(world: World) -> None:
+    """Planted fault: ignored test fixtures enter only the baseline proof's test tree."""
+    baseline = repair_world(world)
+    (world.root / ".gitignore").write_text("tests/ignored-fixture\n", encoding="utf-8")
+    (world.root / "tests" / "ignored-fixture").write_text("local only\n", encoding="utf-8")
+    (world.root / "tests" / "visible-fixture").write_text("current\n", encoding="utf-8")
+    selector = "tests/test_visibility.py::test_visibility"
+    (world.root / "tests" / "test_visibility.py").write_text(
+        "from pathlib import Path\n\n\ndef test_visibility():\n"
+        "    tests = Path(__file__).parent\n"
+        "    if (tests / 'ignored-fixture').exists():\n"
+        "        raise RuntimeError('ignored fixture reached the proof')\n"
+        "    if (tests / 'visible-fixture').read_text() != 'current\\n':\n"
+        "        raise RuntimeError('current fixture missing')\n"
+        "    assert 'value = 2' in (tests.parent / 'src' / 'app.py').read_text()\n",
+        encoding="utf-8",
+    )
+    for proof in ("baseline", "fixed"):
+        if proof == "fixed":
+            (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+        outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is None, (proof, outcome)
+    assert (world.root / "tests" / "ignored-fixture").exists()
+
+
+def test_proofs_refuse_object_alternates(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: a cloned store with an alternates file is silently accepted."""
+    baseline = repair_world(world)
+    original = stage2._git_output
+    stores = []
+
+    def cloning(root, *args, **kwargs):
+        result = original(root, *args, **kwargs)
+        if args[0] == "clone":
+            store = Path(args[-1])
+            alternates = store / ".git" / "objects" / "info" / "alternates"
+            alternates.parent.mkdir(parents=True, exist_ok=True)
+            alternates.write_text(str(world.root / ".git" / "objects") + "\n", encoding="utf-8")
+            stores.append(store)
+        return result
+
+    monkeypatch.setattr(stage2, "_git_output", cloning)
+    for proof in ("baseline", "fixed"):
+        selector = plant_proof(world, proof)
+        outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is not None and "alternates" in outcome, (proof, outcome)
+    assert len(stores) == 2
+    assert all(not store.parent.exists() for store in stores)
+
+
+def test_fixed_proof_names_cleanup_failure(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: final removal failure leaves an otherwise passing fixed proof accepted."""
+    repair_world(world)
+    selector = plant_proof(world, "fixed")
+    original = stage2.shutil.rmtree
+    leftovers = []
+
+    def refusing(path, *args, **kwargs):
+        if Path(path).name.startswith("stage2-fixed-"):
+            leftovers.append(Path(path))
+            raise OSError(28, "planted fixed removal failure")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.shutil, "rmtree", refusing)
+    try:
+        outcome = stage2.fixed_test_proof(world.root, selector, None)
+        assert outcome is not None and "could not be removed" in outcome, outcome
+        assert "planted fixed removal failure" in outcome, outcome
+        assert selector in outcome, outcome
+        assert len(leftovers) == 1 and leftovers[0].exists()
+        assert len(git(world.root, "worktree", "list").splitlines()) == 1
+    finally:
+        for path in leftovers:
+            original(path)
+
+
 def test_baseline_proof_detaches_at_baseline_with_clean_index(world: World) -> None:
     """Planted fault: baseline bytes are staged against the attempt's HEAD, falsifying Git-reading tests."""
     baseline = repair_world(world)
