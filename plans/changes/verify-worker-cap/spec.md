@@ -1,10 +1,10 @@
 ---
 title: "Spec — verify-worker-cap"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
