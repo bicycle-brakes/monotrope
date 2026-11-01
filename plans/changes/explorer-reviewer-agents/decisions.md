@@ -46,7 +46,8 @@ choices over. — 2026-11-01
 
 ## Details for the draft
 
-[DETAIL] **Only the two agent files and a test that reads them.** Reason: the
+[DETAIL] **Only the two agent files and a test that reads them** (superseded
+on 2026-11-01 by Q-2 below). Reason: the
 stop hook is bead coding-harness-788 and the validator bead coding-harness-jc3;
 the explore's open point on scope is answered by the bead's title.
 
@@ -58,3 +59,25 @@ the held settings of coding-harness-l1if.
 [DETAIL] **The `model:` field's effect in this Claude Code version is checked
 once by hand** and recorded in findings.md. Reason: WORKFLOW §3 "Check after
 setup" asks for it; no record was found in the tree.
+
+## Q-2 · Complete delivery versus the recorded file limit
+
+asked: 2026-11-01
+context: |
+  The plan card's open [DECISION] of spec.md ("Complete delivery versus the recorded file limit"), shown to the maintainer unchanged on 2026-11-01.
+answer: "Ja" — option 1, complete delivery: docs/WORKFLOW.md lists both helpers as supplied, with its test, and scripts/kit/probe.py raises its cap from 42 to 44 with the stated reason.
+answered_by: maintainer
+answered_at: 2026-11-01, about 08:55 UTC
+status: answered
+
+In the context of delivering the two helpers, facing a choice between the
+recorded file limit and the companion changes a complete delivery needs, we
+decided to deliver completely — the workflow notice with its test and the kit
+cap raised from 42 to 44 — to achieve honest documentation and fully passing
+checks, accepting two more kit exceptions that show the target repository
+needs its own endpoint declaration for the model pins. — 2026-11-01
+
+The kit's phase-name check (`tests/test_kit.py`) had to ignore the two new
+file names, which contain phase words; that edit belongs to the kit
+bookkeeping this answer admits (review row L1-3).
+

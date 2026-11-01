@@ -82,8 +82,8 @@ The runner never edits `.claude/`; the orchestrator installs the two new
 definitions after the accepted attempt. All other files there stay untouched.
 `AGENTS.md`, `model-endpoints.yaml`, `provenance.yaml`, `decisions/gates.yaml`,
 `docs/governance/regelwerk.md`, existing ADRs and the tracker remain unchanged.
-The workflow notice, its test and kit bookkeeping remain outside the recorded
-scope until the open scope decision is answered; no gate is bypassed meanwhile.
+The workflow notice, its test and kit bookkeeping are inside the scope since
+the maintainer's answer of 2026-11-01 (`decisions.md#Q-2`); no gate is bypassed.
 
 ## Definition of Done
 
@@ -100,7 +100,9 @@ scope until the open scope decision is answered; no gate is bypassed meanwhile.
 ## Open decisions
 
 The model choice in `decisions.md#Q-1` is settled and is not asked again.
-The following scope conflict remains open; no maintainer answer is inferred.
+The scope conflict below was answered by the maintainer on 2026-11-01 at about
+08:55 UTC: option 1, complete delivery (`decisions.md#Q-2`). The text below is
+kept as it was asked.
 
 ### [DECISION] Complete delivery versus the recorded file limit
 

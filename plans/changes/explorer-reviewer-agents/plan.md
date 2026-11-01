@@ -140,3 +140,15 @@ The maintainer answered the plan card's question on 2026-11-01 at about 08:55
 UTC ("Ja"): step 3 runs — `docs/WORKFLOW.md` lists both helpers as supplied,
 with its test, and `scripts/kit/probe.py` raises its cap from 42 to 44 with
 the stated reason.
+
+## Appetite and acceptance, stated plainly — 2026-11-01
+
+Review rows L1-7, L1-13 and L1-16: the three implement attempts took 4762 s
+(about 79 min) against the one-hour appetite. All three were rejected by
+the runner because `.claude/` is held from runner attempts and the helper
+files were missing; the orchestrating session accepted attempt 1's saved
+work (WORKFLOW notice, probe cap, tests) and wrote the two held definitions
+itself (commit 8ae99e50). Continuing past the appetite was the
+orchestrator's call under the run plan's rule that lanes build to the pull
+request; it is named in the pull request.
+

@@ -32,7 +32,7 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
 > (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-11-01 against the
-> tree at `1eb84b6b` with the delivery of `explorer-reviewer-agents` (bead
+> tree at `8ae99e50` with the delivery of `explorer-reviewer-agents` (bead
 > coding-harness-9ll), these pieces it names are **not** in this repository:
 > `scripts/validate_change_artefacts.py` and the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`.

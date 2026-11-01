@@ -343,3 +343,18 @@ Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model longcat-2
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 808 files, 2968 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 808 files, 2968 commits, 12 rules.
+
+## Fresh-session model observation — 2026-11-01
+
+Plan step 4, spec criterion 6 (review rows L1-1, L1-8, L1-14, L1-17). Checked
+commit: 0abbc5b8 on `feat/explorer-reviewer-agents`, Claude Code 2.1.314,
+run from the change's worktree by the orchestrating session.
+
+| Helper | Command | Observed model (`modelUsage` of the JSON result) | Result |
+|---|---|---|---|
+| explorer | `claude --agent explorer -p "Reply with the single word ok. Do not use any tool." --output-format json` | `claude-haiku-5-5` | pass |
+| reviewer | `claude --agent reviewer -p "Reply with the single word ok. Do not use any tool." --output-format json` | `claude-opus-5-5` | pass for the model |
+
+Not observed: the reviewer's effort `high`. The JSON result names no effort
+field, and `/status` is interactive; the effort is an accepted limit of this
+observation, named in the pull request.
