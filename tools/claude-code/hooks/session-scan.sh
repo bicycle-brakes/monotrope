@@ -82,15 +82,40 @@ for f in "$sdir"/*.json; do
   st=${st//$'\n'/ }
   rel="other"
   if [ -n "$own_top" ]; then
-    otop=$(gq "$ocwd" rev-parse --show-toplevel)
-    top_rc=$?
-    ocommon=$(gq "$ocwd" rev-parse --path-format=absolute --git-common-dir)
-    common_rc=$?
+    outside_git=false
+    if [ "$strict" = "--strict" ]; then
+      # A removed working directory cannot belong to a current checkout.
+      # Otherwise only Git's explicit non-repository diagnostic establishes
+      # that the peer is unrelated; all other failures remain uncertain.
+      if [ ! -e "$ocwd" ]; then
+        outside_git=true
+        otop=""; top_rc=0
+      else
+        otop=$(LC_ALL=C git --no-optional-locks -C "$ocwd" rev-parse --show-toplevel 2>&1)
+        top_rc=$?
+        if [ "$top_rc" -ne 0 ] &&
+          [ "$otop" = "fatal: not a git repository (or any of the parent directories): .git" ]; then
+          outside_git=true
+          otop=""; top_rc=0
+        fi
+      fi
+    else
+      otop=$(gq "$ocwd" rev-parse --show-toplevel)
+      top_rc=$?
+    fi
+    if [ "$outside_git" = true ]; then
+      ocommon=""; common_rc=0
+    else
+      ocommon=$(gq "$ocwd" rev-parse --path-format=absolute --git-common-dir)
+      common_rc=$?
+    fi
     if [ "$strict" = "--strict" ]; then
       # A live peer with unreadable Git metadata has unknown ownership.
       # Failed commands can emit output; require success as well as a value.
-      [ "$top_rc" -eq 0 ] && [ "$common_rc" -eq 0 ] &&
-        [ -n "$otop" ] && [ -n "$ocommon" ] || exit 1
+      if [ "$outside_git" != true ]; then
+        [ "$top_rc" -eq 0 ] && [ "$common_rc" -eq 0 ] &&
+          [ -n "$otop" ] && [ -n "$ocommon" ] || exit 1
+      fi
     fi
     if [ -n "$otop" ] && [ "$otop" = "$own_top" ]; then rel="clash"
     elif [ -n "$ocommon" ] && [ "$ocommon" = "$own_common" ]; then rel="sibling"

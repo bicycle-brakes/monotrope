@@ -372,6 +372,40 @@ def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: 
     context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert "PRIME-KONTEXT" in context and "Scan fehlgeschlagen" in context
 
+    # Once the unreadable peer is gone, a live session outside Git must not
+    # keep ownership uncertain. This also checks recovery from the failure.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _session(ns.home, pid=os.getpid(), sid="outside-session", cwd=outside)
+    recovered = _start(ns, extra=extra)
+    assert recovered.returncode == 0, recovered.stderr
+    assert _wrote(ns), "an unrelated session prevented recovery after the failed query"
+
+
+@pytest.mark.parametrize("peer_state", ["outside-git", "removed"])
+def test_live_peer_outside_git_keeps_strict_scan_successful(tmp_path: Path, peer_state: str) -> None:
+    """A live peer outside Git or in a removed directory has relation other."""
+    ns = _project(tmp_path)
+    peer = tmp_path / "unrelated-peer"
+    peer.mkdir()
+    if peer_state == "removed":
+        peer.rmdir()
+    _session(ns.home, pid=os.getpid(), sid="outside-session", cwd=peer)
+    scan = subprocess.run(
+        ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
+        env={**os.environ, "HOME": str(ns.home), "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert scan.returncode == 0, scan.stderr
+    assert scan.stdout.split("\t")[0] == "other"
+    result = _start(ns)
+    assert result.returncode == 0, result.stderr
+    assert _wrote(ns), "a peer outside any repository blocked writing reconciliation"
+    assert "prime --hook-json" in _calls(ns)
+
 
 def test_missing_jq_names_missing_tool(tmp_path: Path) -> None:
     ns = _project(tmp_path)

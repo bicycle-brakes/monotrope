@@ -650,3 +650,252 @@ Kept from the loop record:
 Stage-2 call, 2026-11-01: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2979 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2981 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2988 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_beads_start.py` +34 -0
+> - `tools/claude-code/hooks/session-scan.sh` +31 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-2: tests/test_beads_start.py::test_uninspectable_live_peer_prevents_writing: refs changed while the named test ran: refs/heads/docs/night-plan-2026-11-01, refs/heads/docs/readme-2026-11-01, refs/heads/docs/readme-lanes-2026-11-01, refs/heads/feat/explorer-reviewer-agents, refs/remotes/origin/HEAD, refs/remotes/origin/docs/night-plan-2026-11-01, refs/remotes/origin/docs/readme-lanes-2026-11-01, refs/remotes/origin/feat/explorer-reviewer-agents, refs/remotes/origin/gh-readonly-queue/main/pr-3 [… 161 characters left out …]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261101T183543920122Z-854044fb.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 796 files, 3001 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 98 lines of this gate left out …]
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1047: in write_text
+>     with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-6763/popen-gw4/test_sol_effort_changes_propag4/repo/model-endpoints.yaml')
+> mode = 'w', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+>
+>     def open(self, mode='r', buffering=-1, encoding=None,
+>              errors=None, newline=None):
+>         """
+>         Open the file pointed to by this path and return a file object, as
+>         the built-in open() function does.
+>         """
+>         if "b" not in mode:
+>             encoding = io.text_encoding(encoding)
+> >       return io.open(self, mode, buffering, encoding, errors, newline)
+> E       OSError: [Errno 28] No space left on device: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-6763/popen-gw4/test_sol_effort_changes_propag4/repo/model-endpoints.yaml'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1013: OSError
+> =================================== FAILURES ===================================
+> _________ test_findings_edits_are_restored_without_spending_an_attempt _________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/beads-close-themselves/.venv/bin/python3
+>
+> self = <contextlib._GeneratorContextManager object at 0x109a4b050>, typ = None
+> value = None, traceback = None
+>
+>     def __exit__(self, typ, value, traceback):
+>         if typ is None:
+>             try:
+> >               next(self.gen)
+> E               OSError: [Errno 28] No space left on device
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:144: OSError
+> --------------------------- Captured stdout teardown ---------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> --------------------------- Captured stderr teardown ---------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=14521) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/beads-close-themselves/tests/test_stage2.py:16865: DeprecationWarning: This process (pid=14517) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_fail_fast.py::test_findings_edits_are_restored_without_spending_an_attempt
+> ERROR tests/test_stage2.py::test_sol_effort_changes_propagate_without_other_edits[review-low-xhigh-medium]
+> 1 failed, 4397 passed, 17 skipped, 5 warnings, 1 error in 916.62s (0:15:16)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 24726 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-2-20261101T183543920122Z-854044fb.md
+> ````
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 796 files, 3001 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 253695 lines of this gate left out …]
+> ERROR tests/test_verify_lock.py::test_release_keeps_the_lock_held_by_an_inherited_descriptor
+> ERROR tests/test_verify_lock.py::test_release_keeps_the_lock_held_by_an_inherited_descriptor
+> ERROR tests/test_verify_lock.py::test_a_second_signal_during_cleanup_still_releases
+> ERROR tests/test_verify_lock.py::test_an_unrelated_process_naming_the_published_pid_is_not_nested
+> ERROR tests/test_verify_lock.py::test_an_unrelated_process_naming_the_published_pid_is_not_nested
+> ERROR tests/test_verify_lock.py::test_admission_ends_only_after_a_lingering_grandchild_is_gone
+> ERROR tests/test_verify_lock.py::test_a_descendant_in_its_own_session_nests_after_the_holder_died
+> ERROR tests/test_verify_lock.py::test_a_descendant_in_its_own_session_nests_after_the_holder_died
+> ERROR tests/test_verify_lock.py::test_merely_opening_the_lock_file_is_no_relation
+> ERROR tests/test_workflow_entry.py::test_new_change_creates_the_folder_and_a_current_index
+> ERROR tests/test_workflow_entry.py::test_new_change_refuses_a_detached_head
+> ERROR tests/test_workflow_entry.py::test_the_precondition_is_actually_reached
+> ERROR tests/test_workflow_entry.py::test_a_missing_guard_blocks_the_entry - O...
+> ERROR tests/test_workflow_entry.py::test_a_missing_guard_blocks_the_entry - O...
+> ERROR tests/test_workflow_entry.py::test_new_change_refuses_a_closed_bead - O...
+> ERROR tests/test_workflow_entry.py::test_new_change_refuses_a_detached_head
+> ERROR tests/test_workflow_entry.py::test_make_change_delegates_to_scaffold - ...
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[empty-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[empty-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[empty-bead]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[unknown-bead]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[detached-head]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[ambient-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[ambient-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[duplicate-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[duplicate-name]
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[closed-bead]
+> ERROR tests/test_workflow_entry.py::test_workflow_start_name_rule_matches_the_entry_script
+> ERROR tests/test_workflow_entry.py::test_make_change_rejections_preserve_tree[ambient-bead]
+> ERROR tests/test_workflow_entry.py::test_workflow_start_name_rule_matches_the_entry_script
+> ERROR tests/test_workflow_entry.py::test_make_index_delegates_to_registry - O...
+> ERROR tests/test_workflow_entry.py::test_make_index_delegates_to_registry - O...
+> ERROR tests/test_worktree_state.py::test_the_guard_exists_and_is_executable
+> ERROR tests/test_workflow_entry.py::test_make_help_lists_targets_without_side_effects
+> ERROR tests/test_worktree_state.py::test_the_guard_exists_and_is_executable
+> ERROR tests/test_workflow_entry.py::test_workflow_start_delegates_to_scaffold
+> ERROR tests/test_workflow_entry.py::test_missing_workflow_start_fails_outside_kit_probe
+> ERROR tests/test_workflow_entry.py::test_missing_workflow_start_fails_outside_kit_probe
+> ERROR tests/test_workflow_entry.py::test_snapshot_detects_residual_empty_directory
+> ERROR tests/test_worktree_state.py::test_a_detached_head_on_an_ancestor_is_reattached
+> ERROR tests/test_worktree_state.py::test_the_wrong_branch_is_refused - OSErro...
+> ERROR tests/test_worktree_state.py::test_the_wrong_branch_is_refused - OSErro...
+> ERROR tests/test_worktree_state.py::test_head_moved_backward_is_refused - OSE...
+> ERROR tests/test_worktree_state.py::test_a_healthy_worktree_passes - OSError:...
+> ERROR tests/test_worktree_state.py::test_head_moved_backward_is_refused - OSE...
+> ERROR tests/test_worktree_state.py::test_a_directory_that_is_no_repository_is_refused
+> ERROR tests/test_worktree_state.py::test_a_directory_that_is_no_repository_is_refused
+> ERROR tests/test_worktree_state.py::test_any_branch_mode_passes_on_a_branch
+> ERROR tests/test_worktree_state.py::test_a_missing_directory_is_refused - OSE...
+> ERROR tests/test_worktree_state.py::test_a_rebase_in_progress_is_refused - OS...
+> ERROR tests/test_worktree_state.py::test_a_detached_head_off_the_branch_is_a_hard_stop
+> ERROR tests/test_worktree_state.py::test_a_rebase_in_progress_is_refused - OS...
+> ERROR tests/test_worktree_state.py::test_moving_forward_is_allowed - OSError:...
+> ERROR tests/test_worktree_state.py::test_a_detached_head_is_refused_in_any_branch_mode
+> ERROR tests/test_worktree_state.py::test_an_unknown_recorded_commit_is_refused
+> ERROR tests/test_worktree_state.py::test_moving_forward_is_allowed - OSError:...
+> 12 failed, 2017 passed, 16 skipped, 3468 errors in 262.94s (0:04:22)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 24777 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-3-20261101T183543920122Z-854044fb.md
+> ````
