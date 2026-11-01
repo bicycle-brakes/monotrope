@@ -430,8 +430,7 @@ def install_measured_models(
     when it has none, and checked against Pi's schema first: a row Pi would refuse raises ``OverlayError``.
     Returns one note per row whose other fields were dropped or whose base was filled or moved, for the caller's
     audit. Without ``model`` the whole store goes through ``runner.activate_overlay`` under the address policy.
-    The destination itself is judged at dispatch and at selection: an installation writes the row as the
-    catalog carried it, never a refused send.
+    Go rows are assessed before installation as well as at selection and dispatch; a refused row raises.
     """
     if not store:
         return []
@@ -458,9 +457,13 @@ def install_measured_models(
                     )
                 row["baseUrl"] = filled
                 dropped.append(f"{provider}/{model}: base filled from the record's default for {row.get('api')}")
-            if provider == GO and address is not None:
+            if provider == GO:
+                if address is None:
+                    raise OverlayError(f"installing {provider}/{model} needs the Go address record")
                 verdict = stage2_go.assess(address, model, row)
-                if verdict.admitted and verdict.notice:
+                if not verdict.admitted:
+                    raise OverlayError(verdict.problem)
+                if verdict.notice:
                     dropped.append(f"address notice · {verdict.notice}")
             # `provider` naming the same provider is redundant for Pi, and dropping it changes nothing.
             extra = sorted(
@@ -581,6 +584,7 @@ def probe_go(
             key,
             admission=admission,
             destination=destination,
+            configuration=agent / "models.json",
             timeout=timeout_seconds,
             limit=f"the probe limit of {timeout_seconds} seconds",
         )

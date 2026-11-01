@@ -368,14 +368,14 @@ def checked_session_model(root: Path, bare: str, runner) -> tuple[dict, stage2_g
             f"the pinned install's {stage2_go.PROVIDER} catalog cannot be read; "
             "the session cannot bind its model offline."
         ) from None
-    sections = [(api, part) for api, part in data.items() if isinstance(part, dict) and bare in part]
+    sections = [(api, part) for api, part in data.items() if isinstance(part, dict) and f"chat:{bare}" in part]
     if len(sections) != 1:
         raise runner.Refused(
             f"the pinned install's catalog carries {bare} under {len(sections)} wire apis; "
             "the session binds no ambiguous model."
         )
     api, part = sections[0]
-    verdict = stage2_go.assess(policy, bare, {"api": api, **part[bare]})
+    verdict = stage2_go.assess(policy, bare, {"api": api, **part[f"chat:{bare}"]})
     if not verdict.admitted:
         raise runner.Refused(verdict.problem)
     return {name: verdict.definition[name] for name in MODEL_SIDECAR_FIELDS if name in verdict.definition}, verdict
@@ -661,7 +661,9 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
             return dispatch(terminal, private / SCRIPT_NAME, command)
 
         if endpoint[0] == "opencode-go":
-            accepted, detail = runner.dispatch_go(root, endpoint[1], send, destination=destination)
+            accepted, detail = runner.dispatch_go(
+                root, endpoint[1], send, destination=destination, configuration=private / MODEL_SIDECAR
+            )
         else:
             accepted, detail = send()
     except BaseException:  # any failure before the dispatch, Ctrl-C included, leaves no private directory

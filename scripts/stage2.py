@@ -1663,7 +1663,9 @@ def terms_warnings(entry: dict) -> list[str]:
     return warnings
 
 
-def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, destination=None, **kwargs):
+def dispatch_go(
+    root: Path, model: str, send: Callable, *args, admission=None, destination=None, configuration=None, **kwargs
+):
     """The final shared Go send boundary, independent of tools, retries and saved admission.
 
     Only a caller's checked discovered-free admission can replace paid terms.
@@ -1675,7 +1677,9 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, d
     declaration (criterion 6): an earlier selection, a saved overlay, a
     receipt, a resumed round, a replacement or a retry never dispatches a
     destination the current record refuses. A same-host path move is announced
-    here once more; a foreign destination is refused before the send.
+    here once more; a foreign destination is refused before the send. The
+    caller supplies the models.json or checked-model.json that its launch
+    consumes; its selected API and explicit base must match the assessment.
     """
     if destination is None:
         raise Refused(f"the launch of {model} carries no checked destination; no model request starts.")
@@ -1701,6 +1705,27 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, d
         problem = admission(root, model)
     if problem:
         raise Refused(problem)
+    # Check the artifact Pi actually consumes, not just the caller's earlier assessment.
+    # Never echo its contents: a mismatched URL can carry credentials.
+    try:
+        if configuration is None:
+            raise ValueError("missing configuration")
+        content = json.loads(Path(configuration).read_text(encoding="utf-8"))
+        if Path(configuration).name == "checked-model.json":
+            actual = content.get("model") if content.get("provider") == OPENCODE else None
+        else:
+            actual = stage2_go.definition_of(content.get("providers"), OPENCODE, model)
+        if not isinstance(actual, dict) or actual.get("id") != model:
+            raise ValueError("missing or ambiguous model")
+        if any(actual.get(field) != verdict.definition.get(field) for field in ("api", "baseUrl")):
+            raise ValueError("destination mismatch")
+        checked = stage2_go.assess(policy, model, actual)
+        if not checked.admitted:
+            raise ValueError("refused destination")
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, AttributeError):
+        raise Refused(
+            f"the sending configuration of {model} does not match its checked destination; no request starts."
+        ) from None
     return send(*args, **kwargs)
 
 
@@ -2728,6 +2753,7 @@ def run_reviewer(
             secrets,
             admission=getattr(ctx, "go_admission", None),
             destination=assessment.definition,
+            configuration=agent / "models.json",
             timeout=seconds,
             limit=limit,
             **({"deadline": deadline} if deadline is not None else {}),

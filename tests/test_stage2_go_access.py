@@ -166,6 +166,15 @@ class Harness:
         from stage2_research_dispatch import Slot
 
         entry = {"program": "pi", "model": model, "endpoint": availability.GO, "role": "repository"}
+
+        def pi_command(_entry, _prompt, scratch):
+            agent = scratch / "agent"
+            agent.mkdir()
+            availability.install_measured_models(
+                stage2, agent, store, model=model, address=availability.go_policy(stage2, self.w.root)
+            )
+            return ["synthetic-pi"], self.w.root, {"PI_CODING_AGENT_DIR": str(agent)}
+
         run = SimpleNamespace(
             runner=stage2,
             root=self.w.root,
@@ -175,7 +184,7 @@ class Harness:
             lines=lines,
             selection={"catalog": {"models_store": store}},
             free=[],
-            pi_command=lambda *_args: (["synthetic-pi"], self.w.root, {}),
+            pi_command=pi_command,
         )
         slot = Slot("saved", availability.GO, True, (0,), 60, {}, "prompt")
 
@@ -483,7 +492,7 @@ def test_session_keeps_the_catalog_path_and_records_its_notice(session_world, ca
     catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
     data = json.loads(catalog.read_text(encoding="utf-8"))
     observed = "https://opencode.ai/inference/go/openai/v1"
-    data["openai-completions"][GO_BARE]["baseUrl"] = observed
+    data["openai-completions"][f"chat:{GO_BARE}"]["baseUrl"] = observed
     catalog.write_text(json.dumps(data), encoding="utf-8")
     w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
     assert w.run(model=GO_MODEL) == 0
@@ -797,3 +806,67 @@ def test_probe_checks_the_installed_definition_not_a_vouched_destination(world, 
     with pytest.raises(stage2_go.DestinationRefused, match="not the admitted host"):
         availability.probe_go(stage2, world.root, "demo", model, "test-key", [], store, **overrides)
     assert harness.sent == []
+
+
+def test_session_lookup_reads_the_real_pinned_chat_catalog(world, monkeypatch):
+    """The real pin's chat-prefixed keys must resolve, without synthetic catalog data."""
+    monkeypatch.setattr(stage2, "PI_WRAPPER", Path(__file__).resolve().parents[1] / "tools/pi/pi")
+    catalog = Path(stage2.PI_WRAPPER).parent / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    data = json.loads(catalog.read_text(encoding="utf-8"))
+    models = data["openai-completions"]
+    model = "mimo-v2.6-flash"
+    assert f"chat:{model}" in models and model not in models
+    binding, verdict = stage2_session.checked_session_model(world.root, model, stage2)
+    assert verdict.admitted
+    assert binding["id"] == model
+    assert binding["baseUrl"] == models[f"chat:{model}"]["baseUrl"]
+
+
+@pytest.mark.parametrize("family", ["reviewer", "probe", "seat", "session"])
+@pytest.mark.parametrize("field,value", [("baseUrl", MOVED_BASE), ("api", "openai-responses")])
+def test_dispatch_refuses_a_configuration_mismatch(request, monkeypatch, capsys, family, field, value):
+    """An admitted caller dictionary cannot conceal a different sending configuration."""
+    w = request.getfixturevalue("session_world" if family == "session" else "world")
+    harness = Harness(w, monkeypatch) if family != "session" else None
+    original = stage2.dispatch_go
+
+    def tampered(root, model, send, *args, **kwargs):
+        config = kwargs.get("configuration")
+        if config is not None:
+            content = json.loads(config.read_text(encoding="utf-8"))
+            if config.name == "checked-model.json":
+                content["model"][field] = value
+            else:
+                content["providers"]["opencode-go"]["models"][0][field] = value
+            config.write_text(json.dumps(content), encoding="utf-8")
+        return original(root, model, send, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "dispatch_go", tampered)
+    model = TEST_LADDER[0]
+    store = go_store(row(model))
+    if family == "session":
+        w.declare_go()
+        w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+        assert w.run(model=GO_MODEL) != 0
+        assert not w.calls("osascript")
+        assert "sending configuration" in capsys.readouterr().err
+    else:
+        call = {
+            "reviewer": lambda: harness.reviewer(model, store)(),
+            "probe": lambda: harness.probe(model, store)[0](),
+            "seat": lambda: harness.seat(model, store, [])(),
+        }[family]
+        with pytest.raises(stage2.Refused, match="configuration"):
+            call()
+        assert not harness.sent
+
+
+@pytest.mark.parametrize("base", ["https://foreign.invalid/go/v1", None])
+def test_installation_refuses_an_unassessed_go_row(world, tmp_path, base):
+    """A refused row must never be installed as dispatchable models.json."""
+    policy = stage2_go.load_address_policy(world.root)
+    with pytest.raises(availability.OverlayError):
+        availability.install_measured_models(
+            stage2, tmp_path, go_store(row(TEST_LADDER[0], baseUrl=base)), model=TEST_LADDER[0], address=policy
+        )
+    assert not (tmp_path / "models.json").exists()

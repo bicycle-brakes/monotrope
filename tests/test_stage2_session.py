@@ -274,7 +274,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         json.dumps(
             {
                 "openai-completions": {
-                    GO_BARE: {
+                    f"chat:{GO_BARE}": {
                         "id": GO_BARE,
                         "name": GO_BARE,
                         "api": "openai-completions",

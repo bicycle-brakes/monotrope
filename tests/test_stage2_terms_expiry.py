@@ -893,13 +893,22 @@ def _check_paid_dispatch(world: World, monkeypatch: pytest.MonkeyPatch, capsys: 
     ctx = stage2.Context(world.root, "demo", world.research.parent, "test-bead")
     ctx.models_store = go_store(model)
     entry = {"program": "pi", "model": model, "endpoint": availability.GO, "role": "repository"}
+
+    def pi_command(_entry, _prompt, scratch):
+        agent = scratch / "agent"
+        agent.mkdir()
+        availability.install_measured_models(
+            stage2, agent, go_store(model), model=model, address=availability.go_policy(stage2, world.root)
+        )
+        return ["synthetic-pi"], world.root, {"PI_CODING_AGENT_DIR": str(agent)}
+
     run = SimpleNamespace(
         runner=stage2,
         root=world.root,
         entries={"saved": entry},
         scratch={},
         line=lambda _text: None,
-        pi_command=lambda *_args: (["synthetic-pi"], world.root, {}),
+        pi_command=pi_command,
         selection={"catalog": {"models_store": go_store(model)}},
     )
     slot = Slot("saved", availability.GO, True, (0,), 60, {}, "prompt")

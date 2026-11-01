@@ -644,6 +644,7 @@ class Run:
                                 send,
                                 admission=free_admission if entry["role"] == "online_free" else None,
                                 destination=verdict.definition,
+                                configuration=Path(env["PI_CODING_AGENT_DIR"]) / "models.json",
                             )
                         finally:
                             # Each launch may run on a later UTC day than its
