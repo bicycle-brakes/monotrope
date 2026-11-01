@@ -108,10 +108,10 @@ means the spec gate is not complete. No implementation or runtime check ran.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_explorer_reviewer_agents.py::test_explorer_pins_haiku — remove the definition or change its model
-- 2: not yet written tests/test_explorer_reviewer_agents.py::test_reviewer_pins_opus_high — change the model or remove/change effort
-- 3: not yet written tests/test_explorer_reviewer_agents.py::test_helpers_allow_read_tools_only — add a shell, writer, delegation or inherited tool set
-- 4: not yet written tests/test_explorer_reviewer_agents.py::test_helpers_state_read_only_reporting_roles — remove the reporting role or authorize repairs
+- 1: tests/test_explorer_reviewer_agents.py::test_explorer_pins_haiku — remove the definition or change its model
+- 2: tests/test_explorer_reviewer_agents.py::test_reviewer_pins_opus_high — change the model or remove/change effort
+- 3: tests/test_explorer_reviewer_agents.py::test_helpers_allow_read_tools_only — add a shell, writer, delegation or inherited tool set
+- 4: tests/test_explorer_reviewer_agents.py::test_helpers_state_read_only_reporting_roles — remove the reporting role or authorize repairs
 - 5: tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim — modify the evidence paragraph
 - 5: tests/test_regelwerk.py::test_agent_definitions_carry_no_instance_terms — introduce prohibited instance vocabulary
 - 5: tests/test_model_endpoints.py::test_every_agent_model_resolves_to_a_declared_endpoint — pin an undeclared model
