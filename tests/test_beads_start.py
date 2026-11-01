@@ -330,6 +330,49 @@ def test_secondary_or_uncertain_start_never_writes(tmp_path: Path) -> None:
     assert "übersprungen" in erg.stderr
 
 
+@pytest.mark.parametrize("failed_query", ["--show-toplevel", "--git-common-dir"])
+def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: str) -> None:
+    """A failed peer Git query leaves ownership unknown, even with stdout."""
+    ns = _project(tmp_path)
+    peer = tmp_path / "peer"
+    _git(ns.klon, "worktree", "add", "--quiet", str(peer), "-b", "peer")
+    _session(ns.home, pid=os.getpid(), sid="peer-session", cwd=peer)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_git = bin_dir / "git"
+    fake_git.write_text(
+        "#!/bin/bash\n"
+        'if [ "$3" = "$PEER_CWD" ] && [ "${!#}" = "$FAILED_QUERY" ]; then\n'
+        '  printf "untrusted-output\\n"\n'
+        "  exit 128\n"
+        "fi\n"
+        'exec "$REAL_GIT" "$@"\n'
+    )
+    fake_git.chmod(0o755)
+    extra = {
+        "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        "REAL_GIT": real_git,
+        "PEER_CWD": str(peer),
+        "FAILED_QUERY": failed_query,
+    }
+    scan = subprocess.run(
+        ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
+        env={**os.environ, **extra, "HOME": str(ns.home)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert scan.returncode != 0, "strict scanning concealed uncertain peer ownership"
+    result = _start(ns, extra=extra)
+    assert result.returncode == 0, result.stderr
+    assert not _wrote(ns), "uncertain peer ownership allowed reconciliation"
+    assert "prime --hook-json" in _calls(ns)
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "PRIME-KONTEXT" in context and "Scan fehlgeschlagen" in context
+
+
 def test_missing_jq_names_missing_tool(tmp_path: Path) -> None:
     ns = _project(tmp_path)
     result = _start(ns, extra={"PATH": _path_without_jq(tmp_path)})

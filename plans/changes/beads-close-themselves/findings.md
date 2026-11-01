@@ -647,3 +647,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-01: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2979 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2981 commits, 12 rules.

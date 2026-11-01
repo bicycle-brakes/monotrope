@@ -83,7 +83,15 @@ for f in "$sdir"/*.json; do
   rel="other"
   if [ -n "$own_top" ]; then
     otop=$(gq "$ocwd" rev-parse --show-toplevel)
+    top_rc=$?
     ocommon=$(gq "$ocwd" rev-parse --path-format=absolute --git-common-dir)
+    common_rc=$?
+    if [ "$strict" = "--strict" ]; then
+      # A live peer with unreadable Git metadata has unknown ownership.
+      # Failed commands can emit output; require success as well as a value.
+      [ "$top_rc" -eq 0 ] && [ "$common_rc" -eq 0 ] &&
+        [ -n "$otop" ] && [ -n "$ocommon" ] || exit 1
+    fi
     if [ -n "$otop" ] && [ "$otop" = "$own_top" ]; then rel="clash"
     elif [ -n "$ocommon" ] && [ "$ocommon" = "$own_common" ]; then rel="sibling"
     fi

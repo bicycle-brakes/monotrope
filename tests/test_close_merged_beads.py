@@ -330,6 +330,20 @@ def test_only_valid_merged_trailers_close(tmp_path: Path) -> None:
     assert "unknown bead" not in erg.stderr, "prose mentions must not become declarations at all"
 
 
+def test_unicode_separators_in_trailer_values_never_close(tmp_path: Path) -> None:
+    """Git keeps these separators inside a logical trailer value."""
+    ns = _build(tmp_path)
+    for separator in ("\u2028", "\u2029", "\u0085"):
+        _commit(ns.origin, f"malformed Unicode trailer\n\nCloses-Bead: {REAL_A}{separator}{REAL_B}")
+        _commit(ns.origin, f"malformed trailing separator\n\nCloses-Bead: {REAL_A}{separator}")
+
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    closed_ids = {line.split()[1] for line in _closes(ns)}
+    assert closed_ids == set(DECLARED), "a fragment of a malformed logical value was closed"
+    assert result.stderr.count("malformed Closes-Bead value") == 6
+
+
 def test_duplicate_and_closed_beads_are_not_rewritten(tmp_path: Path) -> None:
     """Criterion 3: duplicates resolve newest-first; closed beads stay closed."""
     ns = _build(tmp_path)

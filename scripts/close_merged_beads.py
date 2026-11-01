@@ -184,13 +184,17 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
         if len(fields) < 3:
             continue
         sha, subject, trailer_block = fields[0].strip(), fields[1], fields[2]
-        for line in trailer_block.splitlines():
+        # Git separates logical trailers with LF. Unicode separators remain
+        # part of the value and must never turn a malformed value into an id.
+        for line in trailer_block.split("\n"):
             if not line.lower().startswith(prefix.lower()):
                 continue
             value = line[len(prefix) :].strip()
-            if not line.startswith(prefix):
+            if any(separator in line for separator in ("\u2028", "\u2029", "\u0085")):
+                malformed.append((sha, line[len(prefix) :]))
+            elif not line.startswith(prefix):
                 malformed.append((sha, line))
-            elif BEAD_ID.match(value):
+            elif BEAD_ID.fullmatch(value):
                 declarations.setdefault(value, (sha, subject))
             else:
                 malformed.append((sha, value))
