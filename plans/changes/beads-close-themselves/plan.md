@@ -34,8 +34,9 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-10-31; no Stage-1 fallback.
 1. **Implementation attempt — create `scripts/close_merged_beads.py`.**
    CLI: reporting by default, writing only with `--write`; resolve the checkout
    and pinned `tools/bd` from the repository, including linked worktrees.
-   Fetch `origin` main into `origin/main` with a bounded timeout, refuse shallow
-   or unreadable history, pin the fetched SHA, traverse all its reachable
+   Fetch `origin` main into a private `refs/close-merged/<uuid>` ref with a
+   bounded timeout, pin its commit and delete the transient ref without updating
+   `origin/main`. Refuse shallow or unreadable history, traverse all its reachable
    commits (not first-parent or HEAD), parse trailers through Git, and deduplicate
    exact `Closes-Bead` entries deterministically newest-first. Accept one
    identifier per trailer, never shell text, lists or a free-form message match.
@@ -184,3 +185,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-01 08:47:00–09:29:57 UTC, 2576 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 09:30:04–10:10:13 UTC, 2409 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 10:10:20–10:50:36 UTC, 2417 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-01 12:39:22–13:22:07 UTC, 2565 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

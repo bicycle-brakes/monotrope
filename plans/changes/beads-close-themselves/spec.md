@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
@@ -163,8 +163,15 @@ None open. The following reversible details are chosen here with their reasons.
   reject a preset `BEAD_RENDER` rather than mutating from a possibly stale
   snapshot. All writes use the pinned wrapper and no `--force`.
 - [DETAIL] Report malformed/unknown declarations and per-bead refusals, continue
-  independent valid closures, then publish and return nonzero if anything is
-  unresolved; one bad declaration must not silently hide or block all others.
+  independent valid closures, then publish. Unknown beads, refused closures,
+  publication failures and newly reported malformed declarations return nonzero;
+  one bad declaration must not silently hide or block all others. After a
+  published write run, malformed declarations are acknowledged locally in
+  `close-merged-malformed.json` in the checkout's Git directory, keyed by
+  declaring commit and malformed value. These immutable mistakes remain visible
+  but do not fail subsequent runs; a new commit/value pair fails again. Failed
+  publication records no acknowledgement. Reporting reads receipts without
+  writing them, and every run still scans all merged history.
 - [DETAIL] Select the first declaring commit in a deterministic newest-first
   traversal for duplicate declarations, and recognise only explicit PR-message
   forms such as `Merge pull request #N` or a subject's trailing `(#N)`; no API

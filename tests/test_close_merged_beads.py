@@ -824,3 +824,49 @@ def test_reported_malformed_trailers_do_not_fail_forever(tmp_path: Path) -> None
     for _ in range(2):
         unknown = _run_script(ns, _env(ns), "--write")
         assert unknown.returncode == 1 and "unknown bead" in unknown.stderr
+
+
+def test_wrapped_trailer_values_never_close_a_partial_identifier(tmp_path: Path) -> None:
+    """Read the complete logical value, including space and tab continuations."""
+    ns = _build(tmp_path)
+    for bid, continuation in ((REAL_A, " "), (REAL_B, "\t")):
+        _commit(ns.origin, f"wrapped list\n\nCloses-Bead: {bid}\n{continuation}{UNMERGED}")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert len(_closes(ns)) == len(DECLARED), "a physical first line became a declaration"
+    for bid in (REAL_A, REAL_B):
+        assert not any(line.startswith(f"close {bid} ") for line in _closes(ns))
+        assert f"{bid} {UNMERGED}" in result.stderr
+    assert result.stderr.count("malformed Closes-Bead") == 2
+    assert "dolt push" in _calls(ns)
+
+
+def test_utf8_output_survives_ascii_locale(tmp_path: Path) -> None:
+    """Git, wrapper diagnostics and the summary work without locale UTF-8."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, "Änderung — merged subject")
+    stub = ns.klon / "tools" / "bd"
+    stub.write_text(
+        STUB.replace("assignee is worker-a, actor is the reconciler", "Schließung — verweigert").replace(
+            "dolt push: the remote refused", "dolt push: Veröffentlichung — verweigert"
+        ),
+        encoding="utf-8",
+    )
+    env = _env(ns, refuse=MAIN, push_rc=1)
+    env.update(LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", PYTHONIOENCODING="ascii")
+    failed = _run_script(ns, env, "--write")
+    assert failed.returncode == 1, (failed.stdout, failed.stderr)
+    assert "Traceback" not in failed.stderr
+    assert "Schließung — verweigert" in failed.stderr
+    assert "Veröffentlichung — verweigert" in failed.stderr
+    assert "published: NO" in failed.stdout
+    env.update(BEADS_STUB_REFUSE="", BEADS_STUB_PUSH_RC="0")
+    success = _run_script(ns, env, "--write")
+    assert success.returncode == 0, (success.stdout, success.stderr)
+    assert "published: yes" in success.stdout
+    # A failed fetch with a non-ASCII diagnostic still uses the preflight report.
+    _git(ns.klon, "remote", "set-url", "origin", str(tmp_path / "fehlend-ä"))
+    preflight = _run_script(ns, env, "--write")
+    assert preflight.returncode == 1
+    assert "preflight failed, nothing attempted" in preflight.stderr
+    assert "Traceback" not in preflight.stderr

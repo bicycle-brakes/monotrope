@@ -13,9 +13,10 @@ What counts, exactly:
   the trailing trailer block of a commit message. A mention in the body, PR
   prose or any other spelling closes nothing; case variants in the trailer
   block are reported as malformed (decisions.md, "Only the trailer counts").
-- Only merged history. Every commit reachable from a freshly fetched
-  ``origin/main`` is scanned, whatever the local HEAD says; a trailer on an
-  unmerged or local-only commit closes nothing.
+- Only merged history. Every commit reachable from origin's freshly fetched
+  main is scanned, whatever the local HEAD says. The fetch uses a private
+  ``refs/close-merged/<uuid>`` ref, deleted after pinning its commit, and leaves
+  ``origin/main`` unchanged; an unmerged or local-only trailer closes nothing.
 - One identifier per trailer. A value that is not exactly one bead identifier
   (a list, prose, an empty value) is reported as malformed and closes nothing.
 - One attempt per bead. Duplicate declarations resolve deterministically to
@@ -78,9 +79,9 @@ MERGE_PULL_REQUEST = re.compile(r"^Merge pull request #(\d+)\b")
 SQUASH_NUMBER = re.compile(r"\(#(\d+)\)$")
 
 # One record per commit, delimited by 0x1e, fields by NUL: sha, subject, and
-# the raw trailer lines Git parsed. Only exact ``Closes-Bead:`` keys close;
+# the unfolded trailer lines Git parsed. Only exact ``Closes-Bead:`` keys close;
 # case variants are reported as malformed rather than silently ignored.
-LOG_FORMAT = "%H%x00%s%x00%(trailers:only=true,unfold=false)%x1e"
+LOG_FORMAT = "%H%x00%s%x00%(trailers:only=true,unfold=true)%x1e"
 
 GIT_TIMEOUT = 30.0
 FETCH_TIMEOUT = 60.0
@@ -95,7 +96,15 @@ class PreflightError(RuntimeError):
 
 def _git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
     try:
-        erg = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, timeout=timeout)
+        erg = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PreflightError(f"git {args[0]} failed: {exc}") from None
     if erg.returncode != 0:
@@ -320,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=root,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=close_timeout,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -336,7 +347,15 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         push_timeout = BD_TIMEOUT if deadline is None else max(0.01, min(BD_TIMEOUT, deadline - time.monotonic()))
-        push = subprocess.run([str(bd), "dolt", "push"], cwd=root, capture_output=True, text=True, timeout=push_timeout)
+        push = subprocess.run(
+            [str(bd), "dolt", "push"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=push_timeout,
+        )
         published = push.returncode == 0
         if not published:
             print(f"close-merged: publication failed: {(push.stderr or push.stdout).strip()}", file=sys.stderr)
@@ -356,4 +375,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Diagnostics and summaries use UTF-8 too, independently of the locale.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
