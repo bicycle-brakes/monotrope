@@ -126,3 +126,21 @@ full runs; on 2026-10-31 four other lanes ran Codex and Pi calls meanwhile,
 so the full runs are not isolated in that sense. A quiet-machine repeat is
 owed before the numbers are used as a performance claim; whether to make it
 before the merge is the maintainer's call.
+
+## Quiet-machine runs — 2026-11-01
+
+Recorded by the orchestrator (review rows L4-1, L4-2; the maintainer asked
+for this repeat before the merge on 2026-10-31). Both runs at commit
+`7074572438990a110bf11738eb99216095195ee4`, Darwin arm64, 8 logical CPUs,
+8589934592 bytes of memory, sequentially. The script waited until no
+`scripts/stage2.py`, `verify_all.sh` or `make verify` process was left
+(09:50:47 to 10:50:52 UTC) and started no other job until both runs ended;
+the maintainer's idle desktop apps stayed open. `PYTEST_ADDOPTS=-v` was set
+only so that pytest prints its worker line; the gate command is unchanged.
+
+| Workers | Command | Start–end (UTC) | Wall time | Lock | Workers started | pytest time | Outcome |
+|---|---|---|---|---|---|---|---|
+| 4 | `/usr/bin/time -p env PYTHON="$PWD/.venv/bin/python3" PYTEST_ADDOPTS=-v PYTEST_XDIST_AUTO_NUM_WORKERS=4 bash scripts/verify_all.sh` | 10:50:52–11:06:27 | 934.72 s | admitted at once | `created: 4/4 workers` | 751.57 s | 4421 passed, 17 skipped, 0 failed; 104 passed; VERIFY GREEN |
+| 8 | the same with `=8` | 11:06:27–11:19:46 | 799.14 s | admitted at once | `created: 8/8 workers` | 613.89 s | 4421 passed, 17 skipped, 0 failed; 104 passed; VERIFY GREEN |
+
+One sample each; the spec's non-goals keep this from being a speedup claim.
