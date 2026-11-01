@@ -63,7 +63,7 @@ FIXTURE_CHANGE = "capture-fixture"
 # repository's `model-endpoints.yaml` declares it, so the seat launches resolve
 # their offline defaults against a valid record instead of the working tree's
 # held file. The bases name the real documented host; only the installed rows
-# are re-pointed at the mock (the one rewrite in `store_for_run`).
+# are re-pointed at the mock by the capture's transport hardening seam.
 CAPTURE_ADDRESS = {
     "host": "opencode.ai",
     "apis": {
@@ -869,30 +869,8 @@ def capture_declaration() -> str:
     )
 
 
-def original_destination(selection: dict) -> dict:
-    """The probe's effective destination before the loopback rewrite (the capture's routing seam).
-
-    The production address policy never admits a loopback URL, so the probe
-    cannot assess the store it installs. It carries instead the destination
-    assessed from the unmodified selection store — `store_for_run` deep-copies
-    before its one rewrite — or, when that store has no row (stand-in mode),
-    the record's own default. The dispatch boundary re-checks it against the
-    current record as always; no loopback URL passes a production check.
-    """
-    import stage2_go
-
-    row = stage2_go.definition_of(selection.get("models_store") or {}, GO, PROBE_MODEL)
-    if row is None:
-        api = next(iter(CAPTURE_ADDRESS["apis"]))
-        row = {"id": PROBE_MODEL, "api": api, "baseUrl": CAPTURE_ADDRESS["apis"][api]["basis"]}
-    verdict = stage2_go.assess(capture_policy(), PROBE_MODEL, row)
-    if not verdict.admitted:
-        raise RuntimeError(f"the capture's probe destination is refused: {verdict.problem}")
-    return verdict.definition
-
-
-def store_for_run(selection: dict, server: MockServer, labels: dict[str, str]) -> dict:
-    """The fetched store with each model's base URL pointed at its seat's mock route (the one rewrite)."""
+def store_for_run(selection: dict, labels: dict[str, str]) -> dict:
+    """Copy the fetched store, filling synthetic stand-in rows from the fixture record."""
     store = json.loads(json.dumps(selection["models_store"]))
     entry = store.setdefault(GO, {"models": []})
     known = {m["id"] for m in entry["models"]}
@@ -910,7 +888,8 @@ def store_for_run(selection: dict, server: MockServer, labels: dict[str, str]) -
         if ident not in known:
             entry["models"].append({**template, "id": ident, "name": ident})
     for model in entry["models"]:
-        model["baseUrl"] = f"{server.url}/m/{labels.get(model['id'], 'unused-' + model['id'])}/v1"
+        if "baseUrl" not in model:
+            model["baseUrl"] = CAPTURE_ADDRESS["apis"][model["api"]]["basis"]
     return store
 
 
@@ -1025,9 +1004,21 @@ def execute(args, scratch: Path) -> dict:
     sandbox = bool(args.os_sandbox and sys.platform == "darwin" and shutil.which("sandbox-exec"))
     guard_lines: list[str] = []
     runner_calls: list[dict] = []
+    transport_routes: list[dict] = []
 
     def hardening(command: list[str], env: dict[str, str]):
         """Everything the capture adds around a production command: the guard, dead proxies, the optional OS sandbox."""
+        # This capture-only transport seam runs after production command construction
+        # and (for the probe) dispatch admission. Never hand a loopback row to admission.
+        agent = env.get("PI_CODING_AGENT_DIR")
+        models_path = Path(agent) / "models.json" if agent else None
+        if models_path is not None and models_path.is_file():
+            installed = json.loads(models_path.read_text(encoding="utf-8"))
+            for row in installed.get("providers", {}).get(GO, {}).get("models", []):
+                route = f"{server.url}/m/{labels.get(row['id'], 'unused-' + row['id'])}/v1"
+                transport_routes.append({"model": row["id"], "original_base": row["baseUrl"], "mock_base": route})
+                row["baseUrl"] = route
+            models_path.write_text(json.dumps(installed), encoding="utf-8")
         for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
             env[name] = f"http://127.0.0.1:{world.dead_port}"
         env.update(NO_PROXY="127.0.0.1,localhost", no_proxy="127.0.0.1,localhost")
@@ -1081,7 +1072,7 @@ def execute(args, scratch: Path) -> dict:
         ]
         labels = {seat["model"]: seat["label"] for seat in seats}
         labels[PROBE_MODEL] = "probe"
-        store = store_for_run(selection, server, labels)
+        store = store_for_run(selection, labels)
         for seat in seats:
             server.script(
                 seat["label"],
@@ -1149,13 +1140,15 @@ def execute(args, scratch: Path) -> dict:
         try:
             stage2_availability.probe_go(
                 runner,
-                REPO_ROOT,
+                world.repo,
                 FIXTURE_CHANGE,
                 PROBE_MODEL,
                 key,
                 probe_audit,
                 store,
-                destination=original_destination(selection),
+                # The offline fixture grants no paid-model terms: the declaration
+                # check is outside this capture, just like _checked_probe above.
+                admission=lambda _root, _model: None,
             )
         except Exception as error:  # noqa: BLE001 - a failed probe is evidence, recorded
             probe_error = f"{type(error).__name__}: {error}"
@@ -1170,6 +1163,7 @@ def execute(args, scratch: Path) -> dict:
         "catalog_note": catalog_note,
         "store_guard": state_guard,
         "probe_error": probe_error,
+        "transport_routes": transport_routes,
         "probe_call": runner_calls[-1:] or None,
         "sandbox": sandbox,
         "guard_lines": guard_lines,
@@ -1193,11 +1187,11 @@ def method_lines(real: bool) -> list[str]:
         ),
         "Models store: "
         + (
-            "the real pinned-Pi catalog helper and the real select_research_catalog read the mock catalog; the selected free ids and store are then re-pointed at the seat routes of the mock (the one rewrite)."
+            "the real pinned-Pi catalog helper and the real select_research_catalog read the mock catalog; only the installed transport configuration is then re-pointed at the seat routes of the mock."
             if real
             else "synthetic (stand-in mode); the catalog helper needs the pinned Pi."
         ),
-        "Go address record: the fake repository declares the capture's own record (stage2_go's shape), so the seat launches resolve their offline defaults against it and never against the working tree's held file; the probe carries the destination assessed from the unmodified selection store (store_for_run deep-copies before its one rewrite) and the dispatch boundary re-checks it against the current record. No loopback URL passes a production address check.",
+        "Go address record: the fake repository declares the capture's own record (stage2_go's shape), so the seat launches resolve their offline defaults against it and never against the working tree's held file; the probe assesses the same refreshed definition it installs, and dispatch re-checks it against the fixture record. Only the capture transport seam rewrites the installed base to loopback after admission; transport_routes records the original and mock destinations. No loopback URL passes a production address check.",
         "Skipped on purpose: the dispatcher's declaration check and exact-prompt leak check (covered by their own tests; the probe's _checked_probe is stubbed because the fake repository has no declaration).",
         "Verdicts: criterion 8 = no canary or credential in any outbound request of a free context or catalog read; 9 = only the two public tools declared, undeclared and private-address attempts refused, nothing reached the sink; 47 = the probe payload carries no canary and no tool. Missing evidence is FAIL. A tool attempt counts as refused when its result text reads as an error (a heuristic; the excerpts are in the report for a human read).",
     ]
@@ -1333,6 +1327,7 @@ def build_report(data: dict) -> dict:
             "guard_denials": data["guard_lines"],
         },
         "probe": {"error": data["probe_error"], "call": data["probe_call"]},
+        "transport_routes": data["transport_routes"],
         "sink_requests": [r for r in records if r.get("kind") == "sink"],
         "seats": seats_out,
         "checks": checks,

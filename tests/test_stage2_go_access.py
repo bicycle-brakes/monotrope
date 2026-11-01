@@ -781,3 +781,19 @@ def test_notices_are_kept_and_sanitised(world, monkeypatch, capsys, dispatch_onl
     probe_call, audit = harness.probe(model, store)
     probe_call()
     assert any("address notice" in line for line in audit)
+
+
+def test_probe_checks_the_installed_definition_not_a_vouched_destination(world, monkeypatch):
+    """A safe caller-supplied definition cannot authorise a hostile installed row."""
+    import inspect
+
+    model = TEST_LADDER[0]
+    harness = Harness(world, monkeypatch)
+    store = go_store(row(model, baseUrl="https://unassessed.invalid/v1"))
+    # Exercise the former override where present, and the store-only API after its removal.
+    overrides = (
+        {"destination": row(model)} if "destination" in inspect.signature(availability.probe_go).parameters else {}
+    )
+    with pytest.raises(stage2_go.DestinationRefused, match="not the admitted host"):
+        availability.probe_go(stage2, world.root, "demo", model, "test-key", [], store, **overrides)
+    assert harness.sent == []

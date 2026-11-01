@@ -431,7 +431,7 @@ def install_measured_models(
     Returns one note per row whose other fields were dropped or whose base was filled or moved, for the caller's
     audit. Without ``model`` the whole store goes through ``runner.activate_overlay`` under the address policy.
     The destination itself is judged at dispatch and at selection: an installation writes the row as the
-    catalog carried it (the one rewrite of the offline capture aside), never a refused send.
+    catalog carried it, never a refused send.
     """
     if not store:
         return []
@@ -499,7 +499,6 @@ def probe_go(
     verb: str = "prepare-explore",
     timeout_seconds: int = PROBE_SECONDS,
     text: str = PROBE_TEXT,
-    destination: dict | None = None,
 ) -> None:
     """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, one text, one limit.
 
@@ -507,28 +506,27 @@ def probe_go(
 
     The probe assesses its destination against the one address record before
     anything is installed or sent: a refused destination never probes, and a
-    same-host path move is named in the audit. `destination` hands in an
-    already-assessed effective definition - the caller vouches for it, and the
-    dispatch boundary re-checks it against the current record all the same.
+    same-host path move is named in the audit. The destination comes only from
+    the refreshed definition that is installed for this probe; callers cannot
+    vouch for a separate definition. Dispatch re-checks it against current policy.
     The limit is a parameter, not a constant: a probe that only ran out of
     time is tried once more with a longer one (R-7 of the review-swarm
     review), and the longer try must use the same probe.
     """
     _checked_probe(runner, root, change, GO, model, audit, admission, verb, text)
     policy = go_policy(runner, root)
-    if destination is None:
-        row = stage2_go.definition_of(store or {}, GO, model)
-        if row is None:
-            raise runner.Refused(f"the probe's model {model} has no refreshed definition; no probe starts.")
-        verdict = stage2_go.assess(policy, model, row)
-        if not verdict.admitted:
-            # One model's refused destination, not the operation's stop: the probe
-            # loop and the research selection name it and carry on (criterion 5).
-            raise stage2_go.DestinationRefused(verdict.problem)
-        if verdict.notice:
-            audit.append(f"address notice · {verdict.notice}")
-            print(f"Address notice: {verdict.notice}")
-        destination = verdict.definition
+    row = stage2_go.definition_of(store or {}, GO, model)
+    if row is None:
+        raise runner.Refused(f"the probe's model {model} has no refreshed definition; no probe starts.")
+    verdict = stage2_go.assess(policy, model, row)
+    if not verdict.admitted:
+        # One model's refused destination, not the operation's stop: the probe
+        # loop and the research selection name it and carry on (criterion 5).
+        raise stage2_go.DestinationRefused(verdict.problem)
+    if verdict.notice:
+        audit.append(f"address notice · {verdict.notice}")
+        print(f"Address notice: {verdict.notice}")
+    destination = verdict.definition
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
         scratch = Path(tmp)
         agent = scratch / "agent"
