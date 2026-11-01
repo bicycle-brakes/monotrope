@@ -236,6 +236,9 @@ def test_the_kit_does_not_describe_the_phases() -> None:
         # separation the test went red because `REIST_NICHT` names six test
         # cases whose pytest ID carries the prompt file name.
         text = re.sub(r"\d\d-[a-z]+\.md", "", text)
+        # The same holds for the two helper definitions' file names in a pytest
+        # case ID (`explorer.md`, `reviewer.md`, bead coding-harness-9ll).
+        text = re.sub(r"\b(?:explorer|reviewer)\.md\b", "", text)
         genannt = [ph for ph in PHASEN if ph in text]
         assert len(genannt) < 5, (
             f"{p.relative_to(REPO_ROOT)} names {len(genannt)} of the seven phase names "

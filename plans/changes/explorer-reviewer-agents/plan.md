@@ -124,7 +124,15 @@ tracker, hook, validator, model registry, ADR, harness settings or gate-policy
 changes. Conditional inventory/kit maintenance remains blocked on the scope
 answer; held definitions are always the orchestrator's responsibility.
 
+## Runner route — 2026-11-01
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-01 08:50:28–09:29:43 UTC, 2354 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 09:29:52–10:09:40 UTC, 2387 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 10:09:50–10:10:11 UTC, 21 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Scope answer — 2026-11-01
 
