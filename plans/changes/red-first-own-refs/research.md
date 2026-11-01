@@ -9,7 +9,10 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-wkxm
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, 2026-11-01"}
+review: {status: pending, approved_by: null, approved_at: null}
+class: bounded
 tags: [research]
 ---
 
