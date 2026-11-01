@@ -270,6 +270,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-own-refs/research.md`](changes/red-first-own-refs/research.md) | draft | none | 2026-11-01 | coding-harness-wkxm |
 | [`changes/red-first-pytest-failed/decisions.md`](changes/red-first-pytest-failed/decisions.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/findings.md`](changes/red-first-pytest-failed/findings.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
