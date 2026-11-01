@@ -411,6 +411,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-stages-new-files/plan.md`](changes/verify-stages-new-files/plan.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/research.md`](changes/verify-stages-new-files/research.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/spec.md`](changes/verify-stages-new-files/spec.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-worker-cap/decisions.md`](changes/verify-worker-cap/decisions.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/findings.md`](changes/verify-worker-cap/findings.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/plan.md`](changes/verify-worker-cap/plan.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/research.md`](changes/verify-worker-cap/research.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/spec.md`](changes/verify-worker-cap/spec.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
 | [`changes/workflow-promises/decisions.md`](changes/workflow-promises/decisions.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/findings.md`](changes/workflow-promises/findings.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/plan.md`](changes/workflow-promises/plan.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
