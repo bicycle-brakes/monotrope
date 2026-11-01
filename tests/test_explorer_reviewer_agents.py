@@ -48,8 +48,16 @@ ACTIONS = {
     "reviewer": SHARED_ACTIONS,
 }
 CUE = re.compile(
-    r"\b(never|not|no|without|avoid|leaves?|leaving|instead|stays?|remains?|belongs?"
-    r"|outside|neither|nor|only|caller|orchestrator|human|maintainer)\b",
+    r"\b(never|not|no|without|avoid|neither|nor)\b",
+    re.IGNORECASE,
+)
+# Naming another actor is not attribution: "when the caller asks, you commit"
+# still grants permission. Accept only an explicit handoff or ownership clause.
+ATTRIBUTION = re.compile(
+    r"(?:leave\b.+\bto|[\w ,'-]+\b(?:belong(?:s)? to|stay(?:s)? with|remain(?:s)? with))"
+    r"\s+(?:the\s+)?(?:caller|orchestrator|human|maintainer)"
+    r"|(?:the\s+)?(?:caller|orchestrator|human|maintainer)"
+    r"\s+(?:writes?|repairs?|commits?|accepts?)\b[^,;]*",
     re.IGNORECASE,
 )
 # The reporting concepts each role must state, beside its prohibitions.
@@ -155,7 +163,7 @@ def _role_problems(role: str, kind: str) -> list[str]:
             problems.append(f"no sentence states the prohibition on {label}")
             continue
         for sentence in hits:
-            if not CUE.search(sentence):
+            if not CUE.search(sentence) and not ATTRIBUTION.fullmatch(sentence):
                 problems.append(f"the role text authorizes {label}: {sentence!r}")
     for pattern, label in CONCEPTS[kind]:
         if not re.search(pattern, role, re.IGNORECASE):
@@ -329,6 +337,11 @@ def test_the_fixture_roles_pass_their_own_check(kind: str) -> None:
     assert _role_problems(_role(kind), kind) == []
 
 
+@pytest.mark.parametrize("kind", ["explorer", "reviewer"])
+def test_an_explicit_action_by_the_caller_is_not_helper_authorization(kind: str) -> None:
+    assert _role_problems(_role(kind) + " The caller commits the fix.", kind) == []
+
+
 @pytest.mark.parametrize(
     ("kind", "authorization"),
     [
@@ -336,12 +349,22 @@ def test_the_fixture_roles_pass_their_own_check(kind: str) -> None:
         ("explorer", "After mapping you commit the result."),
         ("reviewer", "Update the tracker with your verdict."),
         ("reviewer", "Accept your own findings when they hold."),
+        ("explorer", "You only repair what you find."),
+        ("reviewer", "When the caller asks, you commit the fix."),
+        ("reviewer", "You may commit only with approval."),
+        ("reviewer", "When the orchestrator asks, you commit the fix."),
+        ("reviewer", "When the maintainer asks, you commit the fix."),
     ],
     ids=[
         "repair-authorized",
         "commit-authorized",
         "tracker-write-authorized",
         "self-acceptance-authorized",
+        "repair-only-authorized",
+        "caller-condition-authorized",
+        "approval-condition-authorized",
+        "orchestrator-condition-authorized",
+        "maintainer-condition-authorized",
     ],
 )
 def test_a_role_that_authorizes_an_action_is_caught(kind: str, authorization: str) -> None:

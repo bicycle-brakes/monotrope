@@ -358,3 +358,5 @@ run from the change's worktree by the orchestrating session.
 Not observed: the reviewer's effort `high`. The JSON result names no effort
 field, and `/status` is interactive; the effort is an accepted limit of this
 observation, named in the pull request.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 808 files, 2977 commits, 12 rules.

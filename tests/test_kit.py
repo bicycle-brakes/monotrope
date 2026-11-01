@@ -219,6 +219,34 @@ def _kit_dateien() -> list[Path]:
     return sorted(p for p in KIT.rglob("*") if p.is_file() and p.suffix in (".py", ".yaml", ".md"))
 
 
+@pytest.mark.parametrize("helper", ["explorer", "reviewer"])
+def test_helper_names_in_kit_prose_still_count_as_phases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper: str
+) -> None:
+    prose = tmp_path / "prose.md"
+    prose.write_text(f"spec plan implement verify {helper}.md", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "_kit_dateien", lambda: [prose])
+    with pytest.raises(AssertionError, match="names 5 of the seven phase names"):
+        test_the_kit_does_not_describe_the_phases()
+
+
+@pytest.mark.parametrize("helper", ["explorer", "reviewer"])
+def test_helper_names_in_endpoint_case_ids_do_not_count_as_phases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper: str
+) -> None:
+    case = tmp_path / "cases.py"
+    case.write_text(
+        "spec plan implement verify "
+        "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint"
+        f"[{helper}.md-claude-haiku-5-5]",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "_kit_dateien", lambda: [case])
+    test_the_kit_does_not_describe_the_phases()
+
+
 def test_the_kit_does_not_describe_the_phases() -> None:
     """The kit calls the workflow, it does not describe it.
 
@@ -238,7 +266,13 @@ def test_the_kit_does_not_describe_the_phases() -> None:
         text = re.sub(r"\d\d-[a-z]+\.md", "", text)
         # The same holds for the two helper definitions' file names in a pytest
         # case ID (`explorer.md`, `reviewer.md`, bead coding-harness-9ll).
-        text = re.sub(r"\b(?:explorer|reviewer)\.md\b", "", text)
+        text = re.sub(
+            r"(tests\.test_model_endpoints::"
+            r"test_every_agent_model_resolves_to_a_declared_endpoint\[)"
+            r"(?:explorer|reviewer)\.md(?=-[^\]\n]+\])",
+            r"\1",
+            text,
+        )
         genannt = [ph for ph in PHASEN if ph in text]
         assert len(genannt) < 5, (
             f"{p.relative_to(REPO_ROOT)} names {len(genannt)} of the seven phase names "

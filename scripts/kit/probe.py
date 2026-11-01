@@ -199,8 +199,8 @@ REIST_NICHT: dict[str, str] = {
 # also `scripts/stage2.py`), which the kit leaves home — `bestand-dieses-repos`, the same reason
 # as the entry's older cases.
 # 42 -> 44 on 2026-11-01 (bead coding-harness-9ll): the two read-only
-# helpers `.claude/agents/explorer.md` (Haiku 5.5) and `.claude/agents/reviewer.md`
-# (Opus 5.5, high effort) join the agent definitions, which travel as `mechanismus`,
+# helper definitions (Haiku 5.5 and Opus 5.5, high effort) join the agent
+# definitions, which travel as `mechanismus`,
 # while `model-endpoints.yaml` stays home. Their two endpoint cases go red in the
 # throwaway repo for the reason the seven before them carry: the kit carries the
 # definitions but no endpoint declaration of its own.
