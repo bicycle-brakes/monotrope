@@ -64,10 +64,16 @@ failed or skipped reconciliation is reported in the session context, and prime
 still runs; `make close-merged ARGS=--write` repeats the reconciliation by hand.
 
 Without `ARGS`, `make close-merged` only reports and never closes or publishes.
-Both reporting and writing return nonzero for unknown or malformed declarations;
+Both reporting and writing return nonzero for unknown or newly reported malformed declarations;
 report-only describes the absence of writes, not an unconditional success status.
 Preflight failures also return nonzero; writing additionally fails on refused
-closures or failed publication. Fix unresolved declarations before retrying.
+closures or failed publication. A published write run records malformed trailers
+by declaring commit and value in `close-merged-malformed.json` in the checkout's
+Git directory. Later runs still display them but do not fail for the same
+immutable mistake. Reporting never writes these receipts. New malformed trailers
+still fail once; unknown beads and refused closures keep failing until resolved.
+Deleting the receipt file makes historical malformed trailers fail once again;
+no history is skipped, and valid closures always use the current tracker state.
 
 ## Install, check, update
 

@@ -757,3 +757,70 @@ def test_make_rejects_ambiguous_makefile_list(tmp_path: Path) -> None:
         assert result.returncode != 0
         assert "close-merged: expected exactly one Makefile path without whitespace" in result.stderr
         assert not _calls(ns), "an ambiguous makefile list reached the tracker"
+
+
+def test_fetch_pin_survives_concurrent_fetch(tmp_path: Path, monkeypatch) -> None:
+    """Another fetch may own FETCH_HEAD's lock and replace its contents."""
+    ns = _build(tmp_path)
+    spec = importlib.util.spec_from_file_location("fetch_reconciler", REPO_ROOT / "scripts/close_merged_beads.py")
+    reconcile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reconcile)
+    real_git = reconcile._git
+    old_remote = _git(ns.klon, "rev-parse", "origin/main")
+    expected = _commit(ns.origin, "new merged tip after the clone")
+    lock = ns.klon / ".git" / "FETCH_HEAD.lock"
+    remote_lock = ns.klon / ".git" / "refs" / "remotes" / "origin" / "main.lock"
+    remote_lock.parent.mkdir(parents=True, exist_ok=True)
+
+    def competing_git(root, *args, **kwargs):
+        if args[0] != "fetch":
+            return real_git(root, *args, **kwargs)
+        lock.touch()
+        remote_lock.touch()
+        try:
+            result = real_git(root, *args, **kwargs)
+        finally:
+            lock.unlink()
+            remote_lock.unlink()
+        # A second real fetch completes before the caller can resolve its pin.
+        _git(root, "fetch", "origin", "side")
+        return result
+
+    monkeypatch.setattr(reconcile, "_git", competing_git)
+    try:
+        pinned = reconcile.fetch_and_pin(ns.klon)
+    except reconcile.PreflightError as exc:
+        raise AssertionError(f"a concurrent fetch must not fail reconciliation: {exc}") from exc
+    assert pinned == expected
+    assert _git(ns.klon, "rev-parse", "FETCH_HEAD") == ns.side
+    assert _git(ns.klon, "rev-parse", "origin/main") == old_remote
+    assert _git(ns.klon, "for-each-ref", "refs/close-merged/") == ""
+
+
+def test_reported_malformed_trailers_do_not_fail_forever(tmp_path: Path) -> None:
+    """Remember only reported immutable mistakes; fresh faults still fail."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, "bad list\n\nCloses-Bead: two beads")
+    _commit(ns.origin, f"bad case\n\ncloses-bead: {REAL_A}")
+    # Reporting is read-only and does not acknowledge errors for a later writer.
+    for _ in range(2):
+        report = _run_script(ns, _env(ns))
+        assert report.returncode == 1 and "malformed Closes-Bead" in report.stderr
+    unpublished = _run_script(ns, _env(ns, push_rc=1), "--write")
+    assert unpublished.returncode == 1 and "publication failed" in unpublished.stderr
+    # A failed write must not acknowledge the mistake as successfully handled.
+    first = _run_script(ns, _env(ns), "--write")
+    assert first.returncode == 1 and "malformed Closes-Bead" in first.stderr
+    assert len(_closes(ns)) == len(DECLARED)
+    for args in ((), ("--write",)):
+        repeated = _run_script(ns, _env(ns), *args)
+        assert repeated.returncode == 0, (repeated.stdout, repeated.stderr)
+        assert "malformed Closes-Bead" in repeated.stderr, "old mistakes must remain visible"
+    _commit(ns.origin, "new bad list\n\nCloses-Bead: two beads")
+    fresh = _run_script(ns, _env(ns), "--write")
+    assert fresh.returncode == 1, "the same value in a new commit is a new mistake"
+    assert _run_script(ns, _env(ns), "--write").returncode == 0
+    _commit(ns.origin, "unknown still fails\n\nCloses-Bead: coding-harness-ghost")
+    for _ in range(2):
+        unknown = _run_script(ns, _env(ns), "--write")
+        assert unknown.returncode == 1 and "unknown bead" in unknown.stderr

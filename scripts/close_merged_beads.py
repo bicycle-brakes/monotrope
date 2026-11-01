@@ -42,8 +42,11 @@ How it runs:
   separately.
 
 Exit codes: 0 = nothing unresolved (or, without ``--write``, a clean report);
-1 = preflight failure, or unknown/malformed declarations, refused closures, or
-a failed publication. No cursor, committed export, PR API or git push.
+1 = preflight failure, unknown or newly reported malformed declarations, refused closures, or
+a failed publication. After a published write run, malformed declarations are
+remembered locally in the checkout's Git directory: they remain visible but do
+not fail subsequent runs. Reporting reads these receipts without writing them.
+No history cursor, committed export, PR API or git push.
 """
 
 from __future__ import annotations
@@ -54,7 +57,9 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
+import uuid
 from pathlib import Path
 
 REPO_SCRIPTS = Path(__file__).resolve().parent
@@ -113,11 +118,21 @@ def resolve_checkout() -> tuple[Path, Path]:
 
 def fetch_and_pin(root: Path) -> str:
     """Fetch origin's main and pin the commit this run reads — never a stale ref."""
-    _git(root, "fetch", "origin", "main", timeout=FETCH_TIMEOUT)
+    # Each run owns its ref; background status-line fetches own FETCH_HEAD.
+    ref = f"refs/close-merged/{uuid.uuid4().hex}"
     try:
-        pinned = _git(root, "rev-parse", "FETCH_HEAD^{commit}").strip()
-    except PreflightError as exc:
-        raise PreflightError(f"origin's main is not readable as a commit ({exc})") from None
+        _git(
+            root,
+            "fetch",
+            "--no-write-fetch-head",
+            "--refmap=",
+            "origin",
+            f"+refs/heads/main:{ref}",
+            timeout=FETCH_TIMEOUT,
+        )
+        pinned = _git(root, "rev-parse", f"{ref}^{{commit}}").strip()
+    finally:
+        _git(root, "update-ref", "-d", ref)
     if not FULL_SHA.match(pinned):
         raise PreflightError(f"origin's main does not resolve to a commit sha ({pinned!r})")
     if _git(root, "rev-parse", "--is-shallow-repository").strip() == "true":
@@ -199,13 +214,49 @@ def _unresolved(unknown: list[str], malformed: list[tuple[str, str]]) -> None:
         print(f"malformed {TRAILER_KEY} value in {sha}: {value!r}", file=sys.stderr)
 
 
+def malformed_receipts(root: Path) -> tuple[Path, set[tuple[str, str]]]:
+    """Local acknowledgements, not a history cursor: every run still scans all commits."""
+    path = Path(_git(root, "rev-parse", "--git-path", "close-merged-malformed.json").strip())
+    if not path.is_absolute():
+        path = root / path
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, list) or any(
+            not isinstance(row, list)
+            or len(row) != 2
+            or not all(isinstance(value, str) for value in row)
+            or not FULL_SHA.fullmatch(row[0])
+            for row in data
+        ):
+            raise ValueError("expected pairs of commit SHA and malformed value")
+        return path, {tuple(row) for row in data}
+    except FileNotFoundError:
+        return path, set()
+    except (OSError, ValueError) as exc:
+        raise PreflightError(f"malformed declaration receipts are unreadable: {exc}") from None
+
+
+def save_malformed_receipts(path: Path, receipts: set[tuple[str, str]]) -> None:
+    """Replace atomically so interruption cannot leave a partial receipt file."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(sorted(receipts), stream)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Close beads whose completion a merged Closes-Bead trailer declared.",
         epilog=(
             "Exit status: 0 = nothing unresolved; 1 = preflight failure or unresolved work "
-            "(unknown/malformed declarations, refused closures, failed publication). "
-            "Read-only reporting also fails on unresolved declarations."
+            "(unknown/new malformed declarations, refused closures, failed publication). "
+            "Read-only reporting also fails on unresolved declarations; previously reported malformed "
+            "trailers remain visible but do not fail again after a published write run."
         ),
     )
     ap.add_argument("--write", action="store_true", help="close eligible beads and publish; without it, only report")
@@ -228,6 +279,8 @@ def main(argv: list[str] | None = None) -> int:
         pinned = fetch_and_pin(root)
         state = load_state()
         declarations, malformed = collect_declarations(root, pinned)
+        receipt_path, receipts = malformed_receipts(root) if malformed else (None, set())
+        new_malformed = set(malformed) - receipts
     except PreflightError as exc:
         print(f"close-merged: preflight failed, nothing attempted: {exc}", file=sys.stderr)
         return 1
@@ -247,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         for bid, sha, subject in eligible:
             print(f"would close {bid} ({closure_reason(sha, subject)})")
         _unresolved(unknown, malformed)
-        return 1 if (unknown or malformed) else 0
+        return 1 if (unknown or new_malformed) else 0
 
     closed: list[str] = []
     refused: list[tuple[str, str]] = []
@@ -293,7 +346,13 @@ def main(argv: list[str] | None = None) -> int:
 
     _unresolved(unknown, malformed)
     print(f"local closures: {len(closed)} ({len(refused)} refused) · published: {'yes' if published else 'NO'}")
-    return 1 if (unknown or malformed or refused or not published) else 0
+    if published and new_malformed:
+        try:
+            save_malformed_receipts(receipt_path, receipts | new_malformed)
+        except OSError as exc:
+            print(f"close-merged: could not record malformed declaration receipts: {exc}", file=sys.stderr)
+            return 1
+    return 1 if (unknown or new_malformed or refused or not published) else 0
 
 
 if __name__ == "__main__":

@@ -496,3 +496,37 @@ Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claud
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 796 files, 2937 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2938 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 796 files, 2940 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 2955 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/close_merged_beads.py` +69 -10
+> - `tests/test_close_merged_beads.py` +63 -0
+> - `tools/claude-code/README.md` +8 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L7-1: tests/test_close_merged_beads.py::test_fetch_pin_survives_concurrent_fetch: the call of `tests/test_close_merged_beads.py::test_fetch_pin_survives_concurrent_fetch` failed with PreflightError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261101T084651164656Z-a6397cc5.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 796 files, 2957 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_close_merged_beads.py` +5 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L7-2: tests/test_close_merged_beads.py::test_reported_malformed_trailers_do_not_fail_forever: refs changed while the named test ran: refs/heads/feat/go-access-point
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-2-20261101T084651164656Z-a6397cc5.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 796 files, 2959 commits, 12 rules.
