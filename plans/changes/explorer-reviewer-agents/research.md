@@ -73,3 +73,35 @@ Promise sites: `docs/WORKFLOW.md` header notice ("Not all of it is here yet.") a
 ## Which files a change would have to touch
 
 New files `.claude/agents/explorer.md` and `.claude/agents/reviewer.md` (RB-A1 clause byte-equal from `docs/governance/regelwerk.md` §6; a `model:` line that resolves in `model-endpoints.yaml` against `tests/test_model_endpoints.py`; no instance vocabulary; no document frontmatter per `provenance.yaml`; English per house rule 1). The notice in `docs/WORKFLOW.md` ("Not all of it is here yet.") loses the two agents from its absent list and re-dates its check with its commit; `tests/test_workflow_entry.py::test_workflow_notice_records_supplied_commands` moves with it. `plans/INDEX.md` regenerates through `scripts/plans_registry.py --index` (`make index`). The parametrized endpoint test picks up new `model:` lines automatically; `scripts/kit/probe.py` maps the existing parametrize ids for the kit's reduced suite and may need the new ids. The seven existing definitions and `docs/governance/regelwerk.md` are held by tests and the human-decided map respectively and are not free to edit.
+
+## Draft follow-up — 2026-11-01
+
+[GAP] **Adding the definitions also changes the kit's endpoint-test set.**
+Checked against `544cb659` on 2026-11-01: `scripts/kit/manifest.yaml` classifies
+`.claude/agents/` as `mechanismus`, but `model-endpoints.yaml` as `bestand`.
+`tests/test_model_endpoints.py::agent_modelle` discovers every Markdown agent's
+model, and `test_every_agent_model_resolves_to_a_declared_endpoint` is
+parameterized over that inventory. The kit therefore gains cases ending
+`[explorer.md-claude-haiku-5-5]` and `[reviewer.md-claude-opus-5-5]` while its
+endpoint declaration remains absent. This is a consequence of the readers,
+not a measured kit run with the proposed files installed.
+
+An AST read of `scripts/kit/probe.py` on 2026-11-01 measured 42 existing
+`REIST_NICHT` entries and `DECKEL = 42`. `pruefe` blocks unexplained red cases,
+entries with no collected case, and cap overruns; `decisions/gates.yaml`
+runs that probe as a blocking gate. The existing agent-model exceptions use
+`braucht-die-vollstaendige-suite`. Thus simply installing the pair is expected
+to require two additional named exceptions and a visible cap change, or an
+independently specified change to the portable checking mechanism. Neither
+is among the three delivery files permitted by the scope note in
+`decisions.md`; the draft records this conflict as an open scope decision,
+without changing that note or inferring a maintainer answer.
+
+The workflow notice is historical: it explicitly describes the tree at
+`e61554b0` on 2026-10-27. Updating its inventory is companion maintenance,
+not evidence that its past check was false. Its supplied/absent assertions
+are in `tests/test_workflow_entry.py::test_workflow_notice_records_supplied_commands`.
+No additional sibling spec or plan for this pair was found by a search of
+`plans/specs/` and live `plans/changes/` on 2026-11-01. There is no plan template
+under `templates/`; `prompts/03-plan.md` and the existing change-plan form
+supply the card, ledger and time section instead.
