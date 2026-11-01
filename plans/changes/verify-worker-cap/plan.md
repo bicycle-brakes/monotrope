@@ -144,3 +144,16 @@ only so that pytest prints its worker line; the gate command is unchanged.
 | 8 | the same with `=8` | 11:06:27–11:19:46 | 799.14 s | admitted at once | `created: 8/8 workers` | 613.89 s | 4421 passed, 17 skipped, 0 failed; 104 passed; VERIFY GREEN |
 
 One sample each; the spec's non-goals keep this from being a speedup claim.
+
+Appetite, stated plainly (review row L5-1): the recorded phase-4 spans sum to
+30151 s (about 8.4 h; 1722 s implement, 28429 s for nine repair attempts),
+against the spec's appetite, much of it waiting for the shared verify slot
+while five lanes ran. The maintainer chose on 2026-11-01 about 11:35 UTC to
+merge with the default of four workers; continuing past the stop was the
+maintainer's call, and the runner stop at the appetite is bead
+coding-harness-uxa9.
+
+Trade-off, stated plainly (review row L5-2): on this machine the new default
+(4) is slower than the old `-n auto` (8) on a quiet machine — pytest 751.57 s
+against 613.89 s on 2026-11-01 — and keeps memory headroom for the other
+lanes; whether the bounds may loosen is measured in bead coding-harness-351h.

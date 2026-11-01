@@ -257,3 +257,5 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model hy3 · leak check clean over 803 files, 2943 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 803 files, 2944 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 803 files, 2964 commits, 12 rules.
