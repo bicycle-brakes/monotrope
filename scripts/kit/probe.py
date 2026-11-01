@@ -106,9 +106,11 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[code-generation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-builder.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-deployer.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[explorer.md-claude-haiku-5-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[migration-supervisor.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reviewer.md-claude-opus-5-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-gpt-6.1-sol]": "bestand-dieses-repos",
@@ -196,7 +198,13 @@ REIST_NICHT: dict[str, str] = {
 # `model-endpoints.yaml` (and `tests.test_model_endpoints::test_free_selection_exceptions_require_dates_and_reasons`
 # also `scripts/stage2.py`), which the kit leaves home — `bestand-dieses-repos`, the same reason
 # as the entry's older cases.
-DECKEL = 42  # raised on 2026-10-16 (39 -> 42); earlier: raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+# 42 -> 44 on 2026-11-01 (bead coding-harness-9ll): the two read-only
+# helper definitions (Haiku 5.5 and Opus 5.5, high effort) join the agent
+# definitions, which travel as `mechanismus`,
+# while `model-endpoints.yaml` stays home. Their two endpoint cases go red in the
+# throwaway repo for the reason the seven before them carry: the kit carries the
+# definitions but no endpoint declaration of its own.
+DECKEL = 44  # raised on 2026-11-01 (42 -> 44); earlier: raised on 2026-10-16 (39 -> 42); raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------
