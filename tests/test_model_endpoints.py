@@ -651,6 +651,7 @@ def opencode_remark_problems(remark: str) -> list[str]:
         "0 days",
         '"Not used"',
         "valid through 2026-10-31",
+        "Address until 2026-10-31 (history; the admitted address is the `adresse` record)",
         "On 2026-10-31 the Go page names only `/inference/go/` addresses",
         "the admitted host and the known base stand in `adresse` (ADR 0024)",
         "states no region",

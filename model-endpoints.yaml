@@ -545,7 +545,8 @@ endpunkte:
       forced refresh skips that cache — and being an intermediary it does not
       measure what Go actually bills. A paid model enters only with a dated
       reading of its retention and training terms in `modelle_terms`; a model
-      without one is skipped and named for the handover. Address:
+      without one is skipped and named for the handover. Address until
+      2026-10-31 (history; the admitted address is the `adresse` record):
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
       page (read 2026-10-07) listed the three measured ids; the
       Anthropic-compatible
