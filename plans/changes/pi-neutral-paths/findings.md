@@ -346,3 +346,162 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-3: tests/test_stage2_session.py::test_pi_cli_argv_refuses_missing_extension_paths: refs changed while the named test ran: refs/heads/feat/beads-close-themselves
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-3-20261031T193523195322Z-0faad25e.md
 > ```
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 806 files, 2944 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 806 files, 2946 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 806 files, 2946 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +2 -2
+> - `scripts/stage2_availability.py` +2 -3
+> - `scripts/stage2_pi_extensions.py` +16 -0
+> - `scripts/stage2_pi_neutral_paths.mjs` +29 -5
+> - `scripts/stage2_research_run.py` +2 -8
+> - `scripts/stage2_session.py` +2 -8
+> - `tests/test_pi_contract.py` +57 -2
+> - `tests/test_stage2_pi_extensions.py` +43 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 85 lines of this gate left out …]
+>         heimatlos = _heimatlose_namen([p.name for p in _scripts()], ci, runner, OHNE_AUFRUFER)
+> >       assert not heimatlos, (
+>             "Without a caller and without a reason:\n  "
+>             + "\n  ".join(heimatlos)
+>             + "\n\nEither a step in ci.yml or a line in ci_gates.OHNE_AUFRUFER."
+>         )
+> E       AssertionError: Without a caller and without a reason:
+> E           stage2_pi_extensions.py
+> E         
+> E         Either a step in ci.yml or a line in ci_gates.OHNE_AUFRUFER.
+> E       assert not ['stage2_pi_extensions.py']
+>
+> tests/test_ci.py:1898: AssertionError
+> ______________ test_every_script_has_a_test_or_a_declared_reason _______________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/pi-neutral-paths/.venv/bin/python3
+>
+>     def test_every_script_has_a_test_or_a_declared_reason() -> None:
+>         """A tool without a test is invisibly broken.
+>     
+>         Without a caller, a script is conspicuous: it does nothing. Without a test it
+>         is not conspicuous — it may be doing the wrong thing, and nobody runs it to
+>         notice. Hence the same rule as for the callers: either a test executes it, or
+>         it stands with a reason in `ci_gates.OHNE_TEST`.
+>         """
+>         from ci_gates import OHNE_TEST
+>     
+>         ungehalten = [p.name for p in _scripts() if p.name not in OHNE_TEST and not _belegt(p)]
+> >       assert not ungehalten, (
+>             "Without a test and without a reason:\n  "
+>             + "\n  ".join(ungehalten)
+>             + "\n\nEither a test file that imports the module or starts it as a "
+>             "subprocess, or a line in ci_gates.OHNE_TEST."
+>         )
+> E       AssertionError: Without a test and without a reason:
+> E           stage2_pi_extensions.py
+> E         
+> E         Either a test file that imports the module or starts it as a subprocess, or a line in ci_gates.OHNE_TEST.
+> E       assert not ['stage2_pi_extensions.py']
+>
+> tests/test_ci.py:2059: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=81443) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/pi-neutral-paths/tests/test_stage2.py:17180: DeprecationWarning: This process (pid=81444) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason
+> FAILED tests/test_ci.py::test_every_script_has_a_test_or_a_declared_reason - ...
+> 2 failed, 4416 passed, 17 skipped, 5 warnings in 571.57s (0:09:31)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 24925 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-1-20261101T073634885341Z-f042820e.md
+> ````
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 808 files, 2950 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/ci_gates.py` +4 -0
+> - `tests/test_stage2_pi_extensions.py` +9 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-2: tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal: the call of `tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal[failure0-review]` failed with FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - L2-3: tests/test_pi_contract.py::test_neutral_registration_covers_launch_directories: refs changed while the named test ran: refs/heads/feat/go-access-point
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-2-20261101T073634885341Z-f042820e.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 808 files, 2952 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_pi_extensions.py` +15 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2_pi_extensions.py`.
+> - L2-2: tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal: the call of `tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal[failure0-review]` failed with FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-3-20261101T073634885341Z-f042820e.md
+> ```

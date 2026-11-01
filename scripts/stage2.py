@@ -176,6 +176,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import stage2_pi_extensions  # noqa: E402
 import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -2577,8 +2578,7 @@ def run_reviewer(
         # The neutral-path extension (bead coding-harness-xul8): the scratch and worktree locations
         # and the pinned install stay out of the request. A missing or unreadable source fails the
         # call here, before any dispatch.
-        neutral = scratch / "neutral-paths.mjs"
-        neutral.write_text(NEUTRAL_SOURCE.read_text(encoding="utf-8"), encoding="utf-8")
+        neutral = stage2_pi_extensions.install_neutral(scratch, sys.modules[__name__], source=NEUTRAL_SOURCE)
         command = [
             str(PI_WRAPPER),
             "--print",

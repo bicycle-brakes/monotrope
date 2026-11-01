@@ -36,6 +36,7 @@ from pathlib import Path, PurePosixPath
 
 import research_handoff
 import stage2_availability
+import stage2_pi_extensions
 import stage2_research_map
 import stage2_swarm
 from stage2_research_dispatch import GateVerdict, Slot, dispatch
@@ -715,14 +716,7 @@ class Run:
         # The neutral-path extension (bead coding-harness-xul8): local machine locations stay out
         # of the outgoing request while the tools keep this working directory. A missing or
         # unreadable source fails the launch here, before any dispatch.
-        neutral = scratch / "neutral-paths.mjs"
-        source = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
-        try:
-            neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-        except OSError as error:
-            raise self.runner.Refused(
-                f"the neutral-path extension {source.name} could not be copied: {error}"
-            ) from error
+        neutral = stage2_pi_extensions.install_neutral(scratch, self.runner)
         model = f"{GO}/{entry['model']}"
         if entry["tools"] == "public":
             research = scratch / "research"

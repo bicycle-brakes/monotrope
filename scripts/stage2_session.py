@@ -52,6 +52,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import stage2_pi_extensions
 import yaml
 
 SESSION_ROOT = ".stage2-sessions"
@@ -292,14 +293,7 @@ def install_policy(private: Path, runner) -> Path:
 
 def install_neutral(private: Path, runner) -> Path:
     """Copy the neutral-path extension next to the policy copy, for the same reason."""
-    copy = private / NEUTRAL_FILE
-    try:
-        shutil.copyfile(NEUTRAL_SOURCE, copy)
-    except OSError as error:
-        raise runner.Refused(
-            f"the neutral-path extension {NEUTRAL_SOURCE.name} could not be copied: {error}"
-        ) from error
-    return copy
+    return stage2_pi_extensions.install_neutral(private, runner, source=NEUTRAL_SOURCE)
 
 
 def confirm_loaded(root: Path, cli: str, extensions: list[Path], runner) -> None:

@@ -131,6 +131,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Entry point, not a gate — starts the stage-2 reviewers on the maintainer's machine, with a "
         "subscription and a credential no CI step holds; tests/test_stage2.py runs it against stand-ins"
     ),
+    "stage2_pi_extensions.py": (
+        "Library — copies the neutral-path extension for review, probe, research and session launches; "
+        "tests/test_stage2_pi_extensions.py exercises the shared preparation and refusal paths"
+    ),
     "stage2_runs.py": (
         "Entry point, not a gate - a person counts what stage-2 runs left in their change folders and pastes "
         "the output into a research note; it decides nothing; tests/test_stage2_runs.py runs it"

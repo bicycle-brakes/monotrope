@@ -27,6 +27,9 @@
 // replaced). The tools keep the real working directory; only what the model sees
 // is neutral. The pure helpers are exported so tests run them without Pi.
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 // The model-visible working directory: it conveys relative-path use without
 // pretending that a new absolute tool root exists.
 export const NEUTRAL_CWD = ".";
@@ -52,6 +55,10 @@ export function docsPaths(prompt) {
   for (const match of String(prompt ?? "").matchAll(DOCS_LINE)) {
     const path = match[1];
     found.push(path, parentOf(path));
+    // Pi's docs live below the pinned install's node_modules. Cover the install
+    // root itself too, rather than only the README/docs/examples directories.
+    const install = path.search(/[\\/]node_modules[\\/]/);
+    if (install > 0) found.push(path.slice(0, install));
   }
   return found;
 }
@@ -76,7 +83,7 @@ export function prefixForms({ home = "", cwd = "", extras = [] }) {
 }
 
 // Remove a local prefix only at a token boundary and when followed by a path
-// separator or the end of the text. A hit inside another path or URL stays
+// separator, a delimiter or the end of the text. A hit inside another path or URL stays
 // untouched. Boundaries are read from the original text, so stripping one
 // prefix cannot make a later embedded occurrence look like a new token.
 export function replacePrefix(text, form) {
@@ -90,10 +97,17 @@ export function replacePrefix(text, form) {
     const previous = original[at - 1];
     const next = original[after];
     const boundary = at === 0 || /[\s"'`([{=,;]/.test(previous);
-    if (boundary && (next === "/" || next === "\\" || next === undefined)) {
+    const separator = next === "/" || next === "\\";
+    // A period ends a sentence only when it is not a filename continuation.
+    const delimiter = next === undefined || /[\s"'`()[\]{},;:!?]/.test(next) ||
+      (next === "." && (original[after + 1] === undefined || /[\s"'`)\]}]/.test(original[after + 1])));
+    if (boundary && (separator || delimiter)) {
       out += original.slice(cursor, at);
-      if (next === undefined) return out + ".";
-      cursor = after + 1;
+      if (separator) cursor = after + 1;
+      else {
+        out += ".";
+        cursor = after;
+      }
     } else {
       out += original.slice(cursor, after);
       cursor = after;
@@ -120,8 +134,18 @@ export function redactPayload(payload, forms) {
 
 export function registerNeutralPaths(pi, { home = process.env.HOME ?? "", cwd = process.cwd() } = {}) {
   if (!pi || typeof pi.on !== "function") throw new Error("stage2 neutral paths: no Pi extension API to register on");
+  const configuredAgent = process.env.PI_CODING_AGENT_DIR || `${home}/.pi/agent`;
+  const agent = configuredAgent.replace(/^~(?=[/\\]|$)/, () => home);
+  // Each builder loads a private scratch copy. Its directory is a location in
+  // its own right, even when HOME and the agent are distinct child directories.
+  const scratch = dirname(fileURLToPath(import.meta.url));
+  const agentPath = resolve(agent);
+  // RPC/session captures can put the copies in a private child of the scratch
+  // root. Sibling HOME/agent directories identify that root without treating
+  // an ambient user's home parent as a scratch directory.
+  const sharedRoot = home && dirname(resolve(home)) === dirname(agentPath) ? dirname(agentPath) : "";
   const harvested = new Set();
-  const forms = () => prefixForms({ home, cwd, extras: [...harvested] });
+  const forms = () => prefixForms({ home, cwd, extras: [agentPath, scratch, sharedRoot, ...harvested] });
   pi.on("before_agent_start", (event) => {
     if (event.systemPromptOptions && typeof event.systemPromptOptions === "object") {
       event.systemPromptOptions.cwd = NEUTRAL_CWD;

@@ -39,6 +39,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import leakcheck
+import stage2_pi_extensions
 import stage2_research_map
 import stage2_swarm
 import yaml
@@ -501,9 +502,7 @@ def probe_go(
         # The neutral-path extension (bead coding-harness-xul8): the probe's scratch location and
         # the pinned install stay out of the request. A missing or unreadable source fails the
         # probe here, before any dispatch.
-        neutral = scratch / "neutral-paths.mjs"
-        source = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
-        neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        neutral = stage2_pi_extensions.install_neutral(scratch, runner)
         command = [
             str(runner.PI_WRAPPER),
             "--print",

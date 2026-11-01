@@ -479,8 +479,8 @@ def drive_rpc(
     mode switch, which ignores the trailing prompt argument, and points the
     transport at the loopback stand-in. The switch goes before a `--` end of
     options, because after it Pi reads `--mode rpc` as prompt text and waits on
-    stdin for good. Every event of the run is returned; a
-    turn that outlives `timeout` fails the case.
+    stdin for good. Every event of the run is returned; one shared
+    `timeout` deadline covers all turns, including the time between them.
     """
     agent = scratch / "agent"
     home = scratch / "home"
@@ -1241,6 +1241,17 @@ def test_real_launch_payloads_have_no_local_identifiers(project: Path, transport
     (project / "AGENTS.md").write_text(CONTEXT_CANARY + "\n", encoding="utf-8")
     scratch = scratch_of(tmp_path)
     argv, _policy, _neutral = rpc_argv(project, scratch)
+    # Plant bare locations as shell-like output in the read result, including
+    # roots that are neither HOME nor cwd. Later requests must remove them too.
+    locations = [
+        str(project),
+        str(scratch / "home"),
+        str(scratch / "agent"),
+        str(scratch),
+        str(REPO_ROOT / "tools" / "pi"),
+    ]
+    planted = "\n".join(f'{path}\nquoted="{path}"; sentence={path}. ' for path in locations)
+    (project / "sentinel.txt").write_text(SENTINEL_IN + "\n" + planted, encoding="utf-8")
     session = StandIn(
         [
             {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
@@ -1662,6 +1673,50 @@ for (const [input, expected] of cases) {
   if (actual !== expected) throw new Error(JSON.stringify({input, actual, expected}));
 }
 """.replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri()))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode == 0, done.stderr
+
+
+def test_neutral_prefix_redacts_bare_locations() -> None:
+    """A shell result or quoted/parenthesized bare cwd must not survive into the next request."""
+    script = r"""
+import { replacePrefix } from MODULE;
+for (const suffix of ['\n', '\r\n', ' ', '\t', '.', ',', ':', ';', '!', '?', "'", '"', '`', ')', ']', '}']) {
+  const actual = replacePrefix('cwd=/tmp/build' + suffix + ' keep', '/tmp/build');
+  if (actual !== 'cwd=.' + suffix + ' keep') throw new Error(JSON.stringify({suffix, actual}));
+}
+for (const suffix of ['-other', '_other', '.json', 'ing']) {
+  const text = '/tmp/build' + suffix;
+  if (replacePrefix(text, '/tmp/build') !== text) throw new Error('unrelated path corrupted: ' + text);
+}
+""".replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri()))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode == 0, done.stderr
+
+
+def test_neutral_registration_covers_launch_directories(tmp_path: Path) -> None:
+    """Plant agent, scratch and pinned-install roots directly, outside the synthetic HOME/cwd."""
+    copy = extension_copy(NEUTRAL_SOURCE, tmp_path, "neutral-paths.mjs")
+    script = r"""
+import { registerNeutralPaths } from MODULE;
+const handlers = {};
+process.env.PI_CODING_AGENT_DIR = '/separate/agent-canary';
+registerNeutralPaths({on(name, handler) { handlers[name] = handler; }}, {home: '/home-canary', cwd: '/repo-canary'});
+handlers.before_agent_start({systemPromptOptions: {}, systemPrompt:
+  '<docs>\n- Main documentation: /pinned-canary/node_modules/@earendil-works/pi-coding-agent/README.md\n</docs>'});
+const paths = ['/separate/agent-canary', SCRATCH, '/pinned-canary'];
+const payload = {messages: paths.map(path => ({content: 'location=' + path + '/child.txt'}))};
+const before = JSON.stringify(payload);
+const result = handlers.before_provider_request({payload});
+for (const path of paths) {
+  if (JSON.stringify(result).includes(path)) throw new Error('location survived: ' + path);
+}
+if (JSON.stringify(payload) !== before) throw new Error('local transcript was mutated');
+""".replace("MODULE", json.dumps(copy.as_uri())).replace("SCRATCH", json.dumps(str(tmp_path)))
     done = subprocess.run(
         ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
     )
