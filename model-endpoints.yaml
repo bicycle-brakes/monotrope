@@ -503,7 +503,9 @@ endpunkte:
     # The one admitted Go address (ADR 0024, go-access-point Q-1 to Q-5): the
     # runner, both swarms, the probes and the session read it; the
     # orchestrating session maintains the path, a runner attempt never does.
-    # Only the measured wire API is mapped; an unmapped one is refused.
+    # Only the measured wire API is mapped. A definition without a base under an
+    # unmapped wire API is refused; one that names a base is admitted only on
+    # the admitted host, like every other.
     adresse:
       host: opencode.ai
       apis:
