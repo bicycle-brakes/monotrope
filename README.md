@@ -91,7 +91,7 @@ safe and that decide what reaches you at all.
 
 | Brake | How Monotrope does it | Level |
 | --- | --- | --- |
-| Constrain the agent before it writes | Research, an interview with minimums by class, a spec with numbered criteria, a plan card you can veto, an appetite that stops the work at its limit | interview minimums and validators enforced; veto and appetite are written rules |
+| Constrain the agent before it writes | Research, an interview with minimums by class, a spec with numbered criteria, a plan card you can veto, an appetite that stops the work at its limit (it extends once by itself, up to twice its size) | interview minimums and validators enforced; veto and appetite are written rules |
 | Limit the mistakes it can make | Foreign models start only through one runner, behind an endpoint allowlist and a leak check that stops without a fallback; one worktree per change; one tracker writer | runner and leak check enforced; worktree and writer rules written |
 | Check in layers before anything merges | `make verify`, a review loop of several vendors until a clean round, a separate phase-6 review, CI, and a merge queue that tests each pull request against the current `main` | enforced |
 | Raise only what needs you | Open points are sorted: `[DECISION]` goes to you, `[GAP]` is explored, `[DETAIL]` is decided by the agent with its reason written down; only decision pull requests wait for your merge, the rest merge themselves on green CI | a spec with an open `[DECISION]` fails its gate; decision PRs by template; self-merge is a written rule |
@@ -289,7 +289,8 @@ since then (maintainer, 2026-10-27; [`docs/WORKFLOW.md`](docs/WORKFLOW.md),
   same heavily used file; the oldest is finished first.
 - **Reviewed on a current base:** the final review runs after `main` is
   merged, and its verdict holds only for the commit it saw.
-- **Generated files are regenerated** on a conflict, never merged by hand.
+- **Generated files are regenerated** on a conflict, never merged by hand
+  (`python3 scripts/pr_sync.py merge-main` does it for `plans/INDEX.md`).
 
 ### The rhythm of a working day
 
@@ -308,9 +309,9 @@ since then (maintainer, 2026-10-27; [`docs/WORKFLOW.md`](docs/WORKFLOW.md),
 
 What is not enforced: the one-writer rule is a working agreement until the
 write guard exists; worktrees share git's refs, hooks and configuration, so
-isolation separates files, not execution; and orchestrating many agents in
-parallel is evaluated, not built (the third development stage:
-orchestration).
+isolation separates files, not execution; and the lanes are run by hand by
+one orchestrating session — a lane watch that serves an idle lane by itself
+is not built.
 
 ## Not every change is the same size
 
@@ -366,14 +367,16 @@ summaries. The full set, with the gate count and the focus rules, is in
 
 `make verify` runs the same gate list as CI: tests, lint, the kit's classified
 tree, documents and process rules. The environment is locked, and a repair
-counts only when its test fails on the code before the repair. The strategy,
+counts only when its test fails on the code before the repair. One machine runs
+one `make verify` or runner check at a time; the next one queues, and waits
+while free memory is low. The strategy,
 in six layers and with what it does not prove, is in
 [how the workflow tests](docs/testing.md); this repository's numbers are in
 [how it works](docs/how-it-works.md#how-testing-works-and-what-it-does-not-prove).
 
 ## What works today
 
-Checked on 2026-10-28 against `main` at `a6ddd9d1`.
+Checked on 2026-11-01 against `main` at `ac11da5d`.
 
 ### Enforced by tooling
 
@@ -391,6 +394,11 @@ Checked on 2026-10-28 against `main` at `a6ddd9d1`.
   (ADR 0022).
 - A repair counts only when its test fails on the code before the repair —
   by an assertion or pytest's own failed outcome, never by a crash.
+- A runner attempt fails fast: lint and the attempt's own tests run before the
+  full `make verify`, and a draft runs only its document gates.
+- One admission per machine: a second `make verify` or runner check queues
+  instead of overloading the machine, and waits while free memory is below a
+  floor.
 - `main` takes a pull request only when the `verify` check is green on the
   merge candidate: through the merge queue, or, without it, once the branch is
   up to date with `main` (repository ruleset, rule RB-G7).
@@ -403,8 +411,12 @@ Checked on 2026-10-28 against `main` at `a6ddd9d1`.
   is worded.
 - One writer per tracker, until the write guard exists.
 - The rules that keep pull requests mergeable, the daily decision block and
-  the night-run rules: the daily sync is done by hand or by an agent until
-  its script exists.
+  the night-run rules. The sync of open pull requests is a script
+  (`python3 scripts/pr_sync.py sync`), run on request; nothing schedules it.
+- The appetite: it extends once by itself, up to twice its size, and the
+  extension is written into the plan. `make report CHANGE=<name>` shows the
+  time used against it, read-only; nothing stops a run at the limit yet (bead
+  coding-harness-uxa9).
 
 ### Not built yet
 
@@ -414,10 +426,13 @@ Checked on 2026-10-28 against `main` at `a6ddd9d1`.
   (`docs/governance/gate-catalog.md`) exist since bead coding-harness-i0l.
 - A sandbox around paid reviewers, and keeping the work of a failed model
   call (partly built).
-- The daily pull-request sync as a script, and regenerating `plans/INDEX.md`
-  on a merge conflict (in work, beads coding-harness-eq6y and
-  coding-harness-hfsz).
-- Orchestration of many agents in parallel: evaluated, not built.
+- Lanes that run themselves. One orchestrating session already keeps
+  several changes moving at once ([three lanes](docs/orchestration.md); five
+  lanes on 2026-10-31/11-01), with the machine-wide verify admission and the
+  run report as its tools. What is still done by hand: noticing an idle or
+  stopped lane, starting its next backlog bead, and committing a stopped
+  attempt's output (beads coding-harness-5q2p, coding-harness-4emv,
+  coding-harness-t3s3).
 
 ## See a completed change
 
