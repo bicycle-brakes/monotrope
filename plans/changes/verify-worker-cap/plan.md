@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
@@ -78,11 +78,7 @@ the cap only covers invocations through `verify_all.sh`.
 - 6: not a test — phase-6 review compares the implementation diff with the protected paths and confirms no worker setting outside the local runner; any such edit refutes the boundary
 - 7: not a test — review the paired full-run records against commit, commands, actual worker counts, outcomes and lock/isolation evidence; missing or mismatched evidence refutes the criterion
 
-## Runner route — 2026-10-31
-
-Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
-
-## Runner route — 2026-10-31
+## Runner route — 2026-11-01
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
@@ -95,6 +91,9 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-31 19:08:22–19:36:24 UTC, 1681 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 19:36:37–20:06:41 UTC, 1804 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-31 20:06:49–21:39:29 UTC, 5560 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-10-31 21:49:36–22:39:28 UTC, 2992 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 22:39:35–2026-11-01 00:02:07 UTC, 4951 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-01 00:02:13–00:17:47 UTC, 934 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Measured full runs — 2026-10-31
 

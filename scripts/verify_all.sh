@@ -110,12 +110,22 @@ else
             # MemTotal is reported in KiB; the bound below counts bytes.
             case "$worker_kib" in
                 "" | *[!0-9]* | 0) worker_bytes="" ;;
-                *) worker_bytes=$((10#$worker_kib * 1024)) ;;
+                *)
+                    # At most 15 digits keeps even KiB-to-byte multiplication
+                    # inside signed 64-bit arithmetic; larger readings are unusable.
+                    if [ "${#worker_kib}" -le 15 ]; then
+                        worker_bytes=$((10#$worker_kib * 1024))
+                    fi
+                    ;;
             esac
             ;;
     esac
     # Only a positive decimal integer is a reading: empty, non-numeric, zero
-    # and negative output are all as good as no reading.
+    # and negative output are all as good as no reading. Limit raw CPU/byte
+    # readings to 18 digits before arithmetic: every such decimal fits in a
+    # signed 64-bit integer, independent of its value or leading zeroes.
+    [ "${#worker_cores}" -le 18 ] || worker_cores=""
+    [ "${#worker_bytes}" -le 18 ] || worker_bytes=""
     case "$worker_cores" in
         "" | *[!0-9]*) worker_cores="" ;;
         *[1-9]*) ;;

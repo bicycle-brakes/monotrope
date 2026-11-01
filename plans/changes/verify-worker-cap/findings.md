@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-29
 created: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-l7sc
@@ -209,3 +209,47 @@ Stage-2 call, 2026-10-31: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-31: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 803 files, 2929 commits, 12 rules.
+
+Stage-2 call, 2026-10-31: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 803 files, 2930 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-worker-cap/plan.md` +0 -4
+> - `scripts/verify_all.sh` +12 -2
+> - `tests/test_ci.py` +6 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-5: tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: refs changed while the named test ran: refs/remotes/origin/__dolt_remote_info__
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-1-20261031T214857652833Z-6ac2399b.md
+> ```
+
+Stage-2 call, 2026-10-31: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 803 files, 2936 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-worker-cap/plan.md` +0 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-5: tests/test_ci.py::test_runner_worker_detection_degrades_without_failure: refs changed while the named test ran: refs/heads/feat/beads-close-themselves, refs/remotes/origin/feat/beads-close-themselves
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-2-20261031T214857652833Z-6ac2399b.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 803 files, 2939 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-worker-cap/plan.md` +0 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-5: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-worker-cap/stage2/attempts/verify-worker-cap/attempt-3-20261031T214857652833Z-6ac2399b.md
+> ```

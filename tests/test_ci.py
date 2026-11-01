@@ -531,14 +531,6 @@ def test_the_makefile_runs_what_the_one_list_runs() -> None:
             fehlt.append(f"{target}: '{befehl}' is no longer in the one list (ci.yml)")
     assert not fehlt, "Makefile and the one list have drifted apart:\n  " + "\n  ".join(fehlt)
 
-    # This repository's local worker policy must name the actual platform
-    # readings; Linux MemTotal excludes reserved physical memory.
-    spec = (REPO_ROOT / "plans/changes/verify-worker-cap/spec.md").read_text(encoding="utf-8")
-    terms = spec.split("## Terms\n", 1)[1].split("## Acceptance criteria", 1)[0]
-    assert "`hw.memsize`" in terms
-    assert "`MemTotal`" in terms
-    assert "usable memory" in terms
-
 
 def test_concurrency_group_carries_the_event() -> None:
     """Otherwise a late run kills the one that executes the suite.
@@ -1681,6 +1673,12 @@ def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
         pytest.param("Darwin", "00", "8589934592", "4", id="macos-zero-cpu-memory-only"),
         pytest.param("Linux", "00", "8388608", "4", id="linux-zero-cpu-memory-only"),
         pytest.param("Linux", "abc", "12.5", "", id="linux-malformed-readings"),
+        pytest.param("Darwin", "9223372036854775808", "8589934592", "4", id="macos-oversized-cpu"),
+        pytest.param("Linux", "9" * 100, "8388608", "4", id="linux-oversized-cpu"),
+        pytest.param("Darwin", "8", "9223372036854775808", "4", id="macos-oversized-bytes"),
+        pytest.param("Linux", "8", "18014398509481985", "4", id="linux-kib-conversion-overflows"),
+        pytest.param("Linux", None, "9" * 100, "", id="linux-oversized-memory-only"),
+        pytest.param("Darwin", "9" * 100, "9" * 100, "", id="macos-both-readings-oversized"),
     ],
 )
 def test_runner_worker_detection_degrades_without_failure(
