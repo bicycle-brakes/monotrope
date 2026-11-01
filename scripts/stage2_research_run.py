@@ -717,7 +717,12 @@ class Run:
         # unreadable source fails the launch here, before any dispatch.
         neutral = scratch / "neutral-paths.mjs"
         source = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
-        neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        try:
+            neutral.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        except OSError as error:
+            raise self.runner.Refused(
+                f"the neutral-path extension {source.name} could not be copied: {error}"
+            ) from error
         model = f"{GO}/{entry['model']}"
         if entry["tools"] == "public":
             research = scratch / "research"

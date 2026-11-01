@@ -407,6 +407,8 @@ def cli_argv(
             "--",
             prompt,
         ]
+    if extension is None or neutral is None:
+        raise ValueError("Pi requires both the policy extension and the neutral-path extension")
     # Discovery is off like in the reviewer call (spec criterion 11): no MCP servers (an MCP file tool would
     # bypass the policy's worktree bounds), skills, prompt templates or themes. Context files stay on, so the
     # session reads the repository's AGENTS.md (maintainer, 2026-10-09); the neutral-path extension keeps the

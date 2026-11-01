@@ -75,27 +75,28 @@ export function prefixForms({ home = "", cwd = "", extras = [] }) {
   return [...seen].sort((left, right) => right.length - left.length);
 }
 
-// One prefix occurrence, native or slash-normalized, followed by a separator or
-// ending the text, is removed (`/w/file` -> `file`); a bare occurrence that is
-// the whole text becomes `.`. An occurrence inside a longer name (`/w/abc` for
-// prefix `/w`) is kept, and a bare basename is never touched: relative file
-// references survive.
+// Remove a local prefix only at a token boundary and when followed by a path
+// separator or the end of the text. A hit inside another path or URL stays
+// untouched. Boundaries are read from the original text, so stripping one
+// prefix cannot make a later embedded occurrence look like a new token.
 export function replacePrefix(text, form) {
+  const original = String(text);
   let out = "";
-  let rest = String(text);
+  let cursor = 0;
   for (;;) {
-    const at = rest.indexOf(form);
-    if (at < 0) return out + rest;
+    const at = original.indexOf(form, cursor);
+    if (at < 0) return out + original.slice(cursor);
     const after = at + form.length;
-    const next = rest[after];
-    if (next === "/" || next === "\\") {
-      out += rest.slice(0, at);
-      rest = rest.slice(after + 1);
-    } else if (next === undefined) {
-      return out + rest.slice(0, at) + ".";
+    const previous = original[at - 1];
+    const next = original[after];
+    const boundary = at === 0 || /[\s"'`([{=,;]/.test(previous);
+    if (boundary && (next === "/" || next === "\\" || next === undefined)) {
+      out += original.slice(cursor, at);
+      if (next === undefined) return out + ".";
+      cursor = after + 1;
     } else {
-      out += rest.slice(0, after);
-      rest = rest.slice(after);
+      out += original.slice(cursor, after);
+      cursor = after;
     }
   }
 }

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-26
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -980,7 +980,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 51: tests/test_stage2_research_dispatch.py::test_terminal_callback_precedes_the_workers_next_launch — The same worker launches its next slot before the terminal callback returns, or a launch lacks a prior launch record.
 - 52: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — The store lies inside the worktree, its git directory or a model directory, or grants group or other access.
 - 17: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — The state store writes inside the worktree.
-- 52: tests/test_stage2_repository_pathlock.py::test_an_absolute_path_outside_the_worktree_is_refused — A repository seat's read, grep, find or ls call with an absolute path outside the worktree (the model's home, the state store) is not blocked (finding F-24, Q-16); the same file covers the `..` escape, the symlink escape, `~`, a glob outside and the launch argv (`test_the_repository_seat_launch_loads_only_the_path_lock`).
+- 52: tests/test_stage2_repository_pathlock.py::test_an_absolute_path_outside_the_worktree_is_refused — A repository seat's read, grep, find or ls call with an absolute path outside the worktree (the model's home, the state store) is not blocked (finding F-24, Q-16); the same file covers the `..` escape, the symlink escape, `~`, a glob outside and the launch argv (`test_the_repository_seat_launch_loads_the_path_lock_and_neutral_paths`).
 - 52: tests/test_stage2_swarm.py::test_store_paths_and_peer_results_never_reach_a_model — A store canary or a peer's stored report reaches a model's prompt, argv, environment or working directory before the barrier.
 - 52: tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted — The default store beneath the home directory Claude research processes inherit passes the placement guard.
 - 52: tests/test_stage2_research_store.py::test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing — A store under the home directory passes the guard when its path spells .. or reaches home through a parent link.

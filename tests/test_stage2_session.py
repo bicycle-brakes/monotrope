@@ -1204,3 +1204,14 @@ def test_the_amendment_moved_into_the_decision_record() -> None:
     assert re.search(r"^status: accepted$", head, re.M) and re.search(r"^provenance: human-decided$", head, re.M)
     draft = REPO_ROOT / "plans" / "changes" / "stage2-session" / "adr-0007-session-amendment.md"
     assert re.search(r"^Status: moved .*ADR 0012", draft.read_text(encoding="utf-8"), re.M | re.S)
+
+
+@pytest.mark.parametrize("missing", ["extension", "neutral", "both"])
+def test_pi_cli_argv_refuses_missing_extension_paths(tmp_path: Path, missing: str) -> None:
+    # Fault: an omitted extension silently becomes the literal Pi argument `-e None`.
+    policy = None if missing in {"extension", "both"} else tmp_path / "policy.mjs"
+    neutral = None if missing in {"neutral", "both"} else tmp_path / "neutral.mjs"
+    with pytest.raises(ValueError, match="extension"):
+        stage2_session.cli_argv("pi", tmp_path, "pi", GO_MODEL, "prompt", policy, neutral)
+    # Codex has no Pi extensions and must still accept the defaults.
+    assert stage2_session.cli_argv("codex", tmp_path, "codex", "model", "prompt")[-1] == "prompt"

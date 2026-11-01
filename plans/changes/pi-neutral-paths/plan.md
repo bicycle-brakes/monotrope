@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-31
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
@@ -141,6 +141,10 @@ index updates and the final `make verify` gate.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-01
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-30 22:28:29–23:27:54 UTC, 3564 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -149,3 +153,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-31 about 16:55–18:05 UTC, about 4200 s — hand reading of the red tests by the orchestrator (maintainer's choice of 2026-10-31, "Rote Tests lesen"), five stale tests repaired, targeted checks green; measured from the session's own timestamps, not by the runner
 
 Appetite: 2 hours of phase 4. Used by 2026-10-31 18:05 UTC: about 8300 s (2 h 18 min) — over the stop by about 18 minutes. The hand reading was owed 51 minutes and took about 70; the overrun is recorded here, and continuing past it is the maintainer's call.
+2026-10-31 19:35:29–22:39:29 UTC, 11038 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 22:39:35–23:09:19 UTC, 1783 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-31 23:09:27–2026-11-01 00:02:23 UTC, 3175 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

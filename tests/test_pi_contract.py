@@ -1639,3 +1639,30 @@ console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefine
     assert "catalog-command-ran" not in done.stdout and "catalog-value" not in done.stdout
     assert "headers" not in (tmp_path / "models.json").read_text()
     assert json.dumps(store) == evidence
+
+
+def test_neutral_prefix_preserves_embedded_paths() -> None:
+    # Fault: matching only the right boundary corrupts unrelated paths and URLs.
+    script = r"""
+import { replacePrefix } from MODULE;
+const prefix = "/tmp/build";
+const cases = [
+  ["/var/tmp/build/x", "/var/tmp/build/x"],
+  ["https://host/tmp/build/x", "https://host/tmp/build/x"],
+  ["relative/tmp/build/x", "relative/tmp/build/x"],
+  ["/tmp/build-other/x", "/tmp/build-other/x"],
+  ["/tmp/build/x", "x"],
+  ["read '/tmp/build/x'", "read 'x'"],
+  ["cwd=/tmp/build", "cwd=."],
+  ["/var/tmp/build/x then /tmp/build/y", "/var/tmp/build/x then y"],
+  ["/tmp/build/a/tmp/build/x", "a/tmp/build/x"],
+];
+for (const [input, expected] of cases) {
+  const actual = replacePrefix(input, prefix);
+  if (actual !== expected) throw new Error(JSON.stringify({input, actual, expected}));
+}
+""".replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri()))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode == 0, done.stderr

@@ -1,7 +1,8 @@
 """The repository seats' path lock, tested without Pi and without network.
 
-`scripts/stage2_repository_pathlock.mjs` is the ONLY extension a repository
-seat's Pi context loads (decisions.md Q-16, finding F-24, spec criterion 52).
+`scripts/stage2_repository_pathlock.mjs` gates the repository seat's file tools
+(decisions.md Q-16, finding F-24, spec criterion 52); its launch also loads
+the neutral-path extension.
 A node driver loads a copy of it and calls its `tool_call` gate the way Pi
 does: a path outside the worktree - absolute, through `..`, through a symbolic
 link, through `~` - is blocked for read, grep, find and ls; a path inside is
@@ -150,7 +151,7 @@ def test_the_extension_registers_only_a_gate_and_refuses_other_hosts(world: Worl
     assert "threw" in bare and "Pi host" in bare["threw"]
 
 
-def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> None:
+def test_the_repository_seat_launch_loads_the_path_lock_and_neutral_paths(tmp_path: Path) -> None:
     """Run.pi_command keeps --no-extensions and adds the lock's -e, then the neutral-path -e (bead coding-harness-xul8), both copied to a scratch path."""
     import sys
     from types import SimpleNamespace
@@ -220,3 +221,36 @@ def test_reads_through_pi_fallback_names_are_judged_too(world: World, planted: s
     (world.root / f"{planted}-in").mkdir()
     (world.root / f"{planted}-in" / "x.txt").write_text("x", encoding="utf-8")
     assert world.gate("read", path=f"{asked}-in/x.txt") is None
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError("missing source"), PermissionError("unreadable source")])
+def test_research_neutral_source_failure_is_a_named_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: OSError
+) -> None:
+    import sys
+
+    sys.path.insert(0, str(HERE.parent / "scripts"))
+    import stage2
+    import stage2_availability
+    from stage2_research_run import Run
+
+    run = Run.__new__(Run)
+    run.root, run.selection, run.runner = tmp_path, {}, stage2
+    monkeypatch.setattr(stage2_availability, "install_measured_models", lambda *_args, **_kwargs: [])
+    original = Path.read_text
+
+    def read(path: Path, *args, **kwargs):
+        if path.name == "stage2_pi_neutral_paths.mjs":
+            raise failure
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read)
+    scratch = tmp_path / "seat"
+    scratch.mkdir()
+    # Fault: the source read escapes as a raw OSError instead of a named refusal.
+    with pytest.raises(stage2.Refused, match="neutral-path extension stage2_pi_neutral_paths.mjs") as caught:
+        try:
+            run.pi_command({"model": "qwen3.8-flash", "tools": "repository"}, "prompt", scratch)
+        except OSError as error:
+            pytest.fail(f"neutral-path source failure escaped without a named refusal: {error}")
+    assert caught.value.__cause__ is failure
