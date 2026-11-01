@@ -1286,17 +1286,30 @@ def test_runner_reports_what_it_cannot_run() -> None:
 # (bead coding-harness-ei0).
 
 
-def _runner_tree(base: Path, gate_command: str) -> Path:
-    tree = base / "tree"
+def _runner_tree_files(tree: Path) -> Path:
+    """The copied runner, its gate reader and its admission module — no gates yet."""
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
     shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
     shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_lock.py", tree / "scripts" / "verify_lock.py")
+    return tree
+
+
+def _write_gate_file(tree: Path, gate_list: list[dict]) -> None:
     gate_file = {
         "schema_version": 2,
         "tools": {"python": ["3.11", "3.12"]},
-        "gates": [
+        "gates": gate_list,
+    }
+    (tree / "decisions" / "gates.yaml").write_text(yaml.safe_dump(gate_file, sort_keys=False), encoding="utf-8")
+
+
+def _runner_tree(base: Path, gate_command: str) -> Path:
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
             {
                 "id": "probe",
                 "title": "The one gate of the runner tree",
@@ -1308,8 +1321,7 @@ def _runner_tree(base: Path, gate_command: str) -> Path:
                 "reason": "a seed for the runner tests",
             }
         ],
-    }
-    (tree / "decisions" / "gates.yaml").write_text(yaml.safe_dump(gate_file, sort_keys=False), encoding="utf-8")
+    )
     return tree
 
 
@@ -1339,12 +1351,14 @@ def _runner_env(tree: Path, home: Path, path_dirs: list[Path], extra: dict[str, 
     return env
 
 
-def _run_runner(tree: Path, home: Path, path_dirs: list[Path], *args: str) -> subprocess.CompletedProcess:
+def _run_runner(
+    tree: Path, home: Path, path_dirs: list[Path], *args: str, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     bash = shutil.which("bash") or "/bin/bash"
     return subprocess.run(
         [bash, str(tree / "scripts" / "verify_all.sh"), *args],
         cwd=tree,
-        env=_runner_env(tree, home, path_dirs),
+        env=_runner_env(tree, home, path_dirs, extra_env),
         capture_output=True,
         text=True,
     )
@@ -1486,6 +1500,240 @@ def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Pat
     done = _run_runner(tree, tmp_path / "home", [])
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "[probe] gruen" in done.stdout, done.stdout
+
+
+# --------------------------------------------------------------------------
+# 2c · The local worker default (bead coding-harness-l7sc)
+# --------------------------------------------------------------------------
+
+# Every test below starts the copied runner with PATH stubs that answer the
+# machine's resource readings from baked-in values, and a gate that copies the
+# inherited PYTEST_XDIST_AUTO_NUM_WORKERS out. `_runner_env` builds the child
+# environment from scratch, so no worker setting of the outer run can leak
+# into a default test.
+
+
+def _probe_action(value: str | None) -> str:
+    """The shell line for one resource reading: print it, or fail like a missing tool."""
+    return "exit 127" if value is None else f"printf '%s\\n' '{value}'"
+
+
+def _resource_stub(path: Path, value: str | None) -> None:
+    """A PATH stub that prints `value` — or, for None, exits like a missing tool."""
+    path.write_text(f"#!/bin/sh\n{_probe_action(value)}\n", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _fake_resource_tools(bin_dir: Path, *, system: str, cores: str | None, memory: str | None) -> Path:
+    """Controlled machine readings on PATH: `uname -s` names `system`, the
+    platform's own commands answer from `cores` and `memory`.
+
+    The readings travel in each platform's raw unit — bytes on macOS
+    (`sysctl hw.memsize`), KiB on Linux (`awk` over /proc/meminfo). `None`
+    makes a command exit 127; any string is echoed verbatim, malformed
+    readings included, so the runner's validation is measured, not the host.
+    """
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    _resource_stub(bin_dir / "uname", system)
+    if system == "Darwin":
+        (bin_dir / "sysctl").write_text(
+            "#!/bin/sh\n"
+            'case "$*" in\n'
+            f"  *hw.logicalcpu*) {_probe_action(cores)} ;;\n"
+            f"  *hw.memsize*) {_probe_action(memory)} ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        (bin_dir / "sysctl").chmod(0o755)
+    else:
+        _resource_stub(bin_dir / "nproc", cores)
+        _resource_stub(bin_dir / "awk", memory)
+    return bin_dir
+
+
+def _worker_probe_tree(base: Path, out: Path) -> Path:
+    """A runner tree whose one gate copies the worker setting it inherited to `out`.
+
+    `<out>.value` carries the variable's content and `<out>.declared` carries
+    `declared` when the gate saw the variable at all — so "left unset" and
+    "exported empty" tell themselves apart.
+    """
+    gate = (
+        f'printf %s "$PYTEST_XDIST_AUTO_NUM_WORKERS" > "{out}.value"; '
+        f'printf %s "${{PYTEST_XDIST_AUTO_NUM_WORKERS+declared}}" > "{out}.declared"'
+    )
+    return _runner_tree(base, gate)
+
+
+def _run_with_resources(
+    tmp_path: Path,
+    name: str,
+    *,
+    system: str,
+    cores: str | None,
+    memory: str | None,
+    worker_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    """One runner run under controlled readings; the gate reports what it inherited."""
+    base = tmp_path / name
+    _worker_probe_tree(base, base / "inherited")
+    tree = base / "tree"
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    tools = _fake_resource_tools(tmp_path / f"{name}-tools", system=system, cores=cores, memory=memory)
+    return _run_runner(tree, tmp_path / "home", [tools], extra_env=worker_env)
+
+
+def _inherited(tmp_path: Path, name: str) -> tuple[str, str]:
+    base = tmp_path / name
+    return (
+        (base / "inherited.value").read_text(encoding="utf-8"),
+        (base / "inherited.declared").read_text(encoding="utf-8"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("system", "cores", "memory", "expected"),
+    [
+        pytest.param("Darwin", "8", "8589934592", "4", id="macos-half-the-cores"),
+        pytest.param("Darwin", "16", "4294967296", "2", id="macos-memory-binds-first"),
+        pytest.param("Darwin", "7", "8589934592", "3", id="macos-odd-cores-floored"),
+        pytest.param("Darwin", "1", "8589934592", "1", id="macos-one-core-still-one"),
+        pytest.param("Darwin", "8", "1073741824", "1", id="macos-under-2-gib-still-one"),
+        pytest.param("Linux", "8", "8388608", "4", id="linux-half-the-cores"),
+        pytest.param("Linux", "16", "4194304", "2", id="linux-memory-binds-first"),
+        pytest.param("Linux", "3", "2097152", "1", id="linux-small-machine-still-one"),
+    ],
+)
+def test_runner_derives_worker_default_from_machine_size(
+    tmp_path: Path, system: str, cores: str, memory: str, expected: str
+) -> None:
+    """Criterion 1: without a caller value the default is the smaller of half
+    the logical cores (floored, at least one) and the 2-GiB memory bound —
+    derived on either platform from controlled readings, not from the host."""
+    done = _run_with_resources(tmp_path, "run", system=system, cores=cores, memory=memory)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert _inherited(tmp_path, "run") == (expected, "declared")
+
+
+@pytest.mark.parametrize("caller_value", ["8", "not-a-number"])
+def test_runner_preserves_explicit_worker_value(tmp_path: Path, caller_value: str) -> None:
+    """Criterion 2: a non-empty caller value reaches the gate verbatim — never
+    rewritten to the machine's default, never validated, whatever the machine."""
+    # The control: this machine (8 cores, 8 GiB) derives 4 on its own, which
+    # differs from the caller's 8 — so the run below can tell pass-through
+    # from an overwrite.
+    control = _run_with_resources(tmp_path, "control", system="Darwin", cores="8", memory="8589934592")
+    assert control.returncode == 0, f"exit {control.returncode}\n{control.stdout}\n{control.stderr}"
+    assert _inherited(tmp_path, "control") == ("4", "declared")
+    done = _run_with_resources(
+        tmp_path,
+        "run",
+        system="Darwin",
+        cores="8",
+        memory="8589934592",
+        worker_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": caller_value},
+    )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert _inherited(tmp_path, "run") == (caller_value, "declared")
+
+
+def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
+    """Criterion 3: an exported empty value is treated exactly like an unset
+    one — the same readable machine derives the same default for both."""
+    unset_run = _run_with_resources(tmp_path, "unset", system="Darwin", cores="8", memory="8589934592")
+    empty_run = _run_with_resources(
+        tmp_path,
+        "empty",
+        system="Darwin",
+        cores="8",
+        memory="8589934592",
+        worker_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": ""},
+    )
+    for run in (unset_run, empty_run):
+        assert run.returncode == 0, f"exit {run.returncode}\n{run.stdout}\n{run.stderr}"
+    assert _inherited(tmp_path, "unset") == ("4", "declared")
+    assert _inherited(tmp_path, "empty") == ("4", "declared")
+
+
+@pytest.mark.parametrize(
+    ("system", "cores", "memory", "expected"),
+    [
+        pytest.param("Darwin", "8", None, "4", id="macos-cpu-reading-only"),
+        pytest.param("Darwin", None, "8589934592", "4", id="macos-memory-reading-only"),
+        pytest.param("Linux", "8", None, "4", id="linux-cpu-reading-only"),
+        pytest.param("Linux", None, "8388608", "4", id="linux-memory-reading-only"),
+        pytest.param("Darwin", None, None, "", id="macos-nothing-readable"),
+        pytest.param("Linux", None, None, "", id="linux-nothing-readable"),
+        pytest.param("SunOS", "8", "8589934592", "", id="unknown-platform-has-no-commands"),
+        pytest.param("Darwin", "abc", "-3", "", id="macos-malformed-and-negative"),
+        pytest.param("Darwin", "0", "0", "", id="macos-zero-readings"),
+        pytest.param("Darwin", "00", "0000", "", id="macos-multi-digit-zero-readings"),
+        pytest.param("Linux", "0000", "00", "", id="linux-multi-digit-zero-readings"),
+        pytest.param("Darwin", "00", "8589934592", "4", id="macos-zero-cpu-memory-only"),
+        pytest.param("Linux", "00", "8388608", "4", id="linux-zero-cpu-memory-only"),
+        pytest.param("Linux", "abc", "12.5", "", id="linux-malformed-readings"),
+        pytest.param("Darwin", "9223372036854775808", "8589934592", "4", id="macos-oversized-cpu"),
+        pytest.param("Linux", "9" * 100, "8388608", "4", id="linux-oversized-cpu"),
+        pytest.param("Darwin", "8", "9223372036854775808", "4", id="macos-oversized-bytes"),
+        pytest.param("Linux", "8", "18014398509481985", "4", id="linux-kib-conversion-overflows"),
+        pytest.param("Linux", None, "9" * 100, "", id="linux-oversized-memory-only"),
+        pytest.param("Darwin", "9" * 100, "9" * 100, "", id="macos-both-readings-oversized"),
+    ],
+)
+def test_runner_worker_detection_degrades_without_failure(
+    tmp_path: Path, system: str, cores: str | None, memory: str | None, expected: str
+) -> None:
+    """Criterion 4: partial or failed readings degrade to the remaining bound —
+    or to no default at all — and never fail a run that would pass."""
+    done = _run_with_resources(tmp_path, "run", system=system, cores=cores, memory=memory)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
+    value, declared = _inherited(tmp_path, "run")
+    assert (value, declared) == (expected, "declared" if expected else "")
+
+
+def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
+    """Criterion 5: with the default applied the run behaves as before — every
+    gate inherits it, an advisory failure reports without blocking, a blocking
+    failure turns the run red, and the gates after it still run."""
+    tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="8", memory="8589934592")
+    order = tmp_path / "order.txt"
+
+    def gate(gid: str, enforcement: str, ending: str) -> dict:
+        return {
+            "id": gid,
+            "title": f"The {gid} gate",
+            "command": (
+                f'printf %s "$PYTEST_XDIST_AUTO_NUM_WORKERS" > "{tmp_path / gid}.inherited"; '
+                f'echo {gid} >> "{order}"; {ending}'
+            ),
+            "job": "verify",
+            "enforcement": enforcement,
+            "floor": True,
+            "placement": "both",
+            "reason": "a verdict seed for the worker-default test",
+        }
+
+    for scenario, beta_enforcement, verdict, marker in (
+        ("advisory", "advisory", 0, "rot, aber nur advisory"),
+        ("blocking", "block", 1, "RED (block)"),
+    ):
+        base = tmp_path / f"{scenario}-run"
+        tree = _runner_tree_files(base / "tree")
+        _write_gate_file(
+            tree,
+            [gate("alpha", "block", "true"), gate("beta", beta_enforcement, "exit 1"), gate("gamma", "block", "true")],
+        )
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        done = _run_runner(tree, tmp_path / "home", [tools])
+        assert done.returncode == verdict, f"{scenario}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        assert marker in done.stdout, done.stdout
+        for gid in ("alpha", "beta", "gamma"):
+            assert (tmp_path / f"{gid}.inherited").read_text(encoding="utf-8") == "4", scenario
+    # Both runs walked their gates in list order: gamma started after beta's
+    # failure in each — an advisory and even a blocking failure stop nothing.
+    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n" * 2
 
 
 # Generated per run: a literal token here reads as a key assignment to the leak check and blocks every review prompt

@@ -86,6 +86,81 @@ if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
 fi
 
+# The local worker default (bead coding-harness-l7sc): the pytest gate's `-n
+# auto` would otherwise take every logical core, and a probe under that died in
+# memory pressure once. So a run without a caller's own choice sizes the
+# workers from the machine: the smaller of half the logical cores (floored, at
+# least one) and detected memory in 2-GiB steps (at least one). An exported
+# PYTEST_XDIST_AUTO_NUM_WORKERS passes through verbatim — an empty value counts
+# as unset — and a failed or malformed reading is ignored, never an error: with
+# no usable reading the variable stays unset and xdist's own auto applies.
+if [ -n "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
+    :
+else
+    worker_cores=""
+    worker_bytes=""
+    case "$(uname -s 2>/dev/null)" in
+        Darwin)
+            worker_cores=$(sysctl -n hw.logicalcpu 2>/dev/null) || worker_cores=""
+            worker_bytes=$(sysctl -n hw.memsize 2>/dev/null) || worker_bytes=""
+            ;;
+        Linux)
+            worker_cores=$(nproc 2>/dev/null) || worker_cores=""
+            worker_kib=$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null) || worker_kib=""
+            # MemTotal is reported in KiB; the bound below counts bytes.
+            case "$worker_kib" in
+                "" | *[!0-9]* | 0) worker_bytes="" ;;
+                *)
+                    # At most 15 digits keeps even KiB-to-byte multiplication
+                    # inside signed 64-bit arithmetic; larger readings are unusable.
+                    if [ "${#worker_kib}" -le 15 ]; then
+                        worker_bytes=$((10#$worker_kib * 1024))
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+    # Only a positive decimal integer is a reading: empty, non-numeric, zero
+    # and negative output are all as good as no reading. Limit raw CPU/byte
+    # readings to 18 digits before arithmetic: every such decimal fits in a
+    # signed 64-bit integer, independent of its value or leading zeroes.
+    [ "${#worker_cores}" -le 18 ] || worker_cores=""
+    [ "${#worker_bytes}" -le 18 ] || worker_bytes=""
+    case "$worker_cores" in
+        "" | *[!0-9]*) worker_cores="" ;;
+        *[1-9]*) ;;
+        *) worker_cores="" ;;
+    esac
+    case "$worker_bytes" in
+        "" | *[!0-9]*) worker_bytes="" ;;
+        *[1-9]*) ;;
+        *) worker_bytes="" ;;
+    esac
+    worker_cpu_bound=""
+    worker_mem_bound=""
+    if [ -n "$worker_cores" ]; then
+        worker_cpu_bound=$((10#$worker_cores / 2))
+        [ "$worker_cpu_bound" -ge 1 ] || worker_cpu_bound=1
+    fi
+    if [ -n "$worker_bytes" ]; then
+        worker_mem_bound=$((10#$worker_bytes / 2147483648))
+        [ "$worker_mem_bound" -ge 1 ] || worker_mem_bound=1
+    fi
+    # Each usable bound alone decides; with both, the smaller one does.
+    if [ -n "$worker_cpu_bound" ]; then
+        PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_cpu_bound
+        if [ -n "$worker_mem_bound" ] && [ "$worker_mem_bound" -lt "$worker_cpu_bound" ]; then
+            PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_mem_bound
+        fi
+        export PYTEST_XDIST_AUTO_NUM_WORKERS
+    elif [ -n "$worker_mem_bound" ]; then
+        PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_mem_bound
+        export PYTEST_XDIST_AUTO_NUM_WORKERS
+    else
+        unset PYTEST_XDIST_AUTO_NUM_WORKERS
+    fi
+fi
+
 # One machine-wide admission for this user (queue, free-memory check) before
 # any protected work: concurrent full checks across repositories and worktrees
 # exhausted the machine (bead coding-harness-p6mu). A valid inherited marker

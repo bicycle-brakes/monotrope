@@ -13,6 +13,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/adr-owning-change/plan.md`](changes/adr-owning-change/plan.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/research.md`](changes/adr-owning-change/research.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/spec.md`](changes/adr-owning-change/spec.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/architecture-reconcile/decisions.md`](changes/architecture-reconcile/decisions.md) | draft | none | 2026-10-31 | coding-harness-190 |
+| [`changes/architecture-reconcile/findings.md`](changes/architecture-reconcile/findings.md) | draft | none | 2026-10-31 | coding-harness-190 |
+| [`changes/architecture-reconcile/plan.md`](changes/architecture-reconcile/plan.md) | draft | none | 2026-10-31 | coding-harness-190 |
+| [`changes/architecture-reconcile/research.md`](changes/architecture-reconcile/research.md) | draft | none | 2026-10-31 | coding-harness-190 |
+| [`changes/architecture-reconcile/spec.md`](changes/architecture-reconcile/spec.md) | draft | none | 2026-10-31 | coding-harness-190 |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
 | [`changes/archive/2026-09-21-reproducible-bead-export/decisions.md`](changes/archive/2026-09-21-reproducible-bead-export/decisions.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/findings.md`](changes/archive/2026-09-21-reproducible-bead-export/findings.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
@@ -411,6 +416,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-stages-new-files/plan.md`](changes/verify-stages-new-files/plan.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/research.md`](changes/verify-stages-new-files/research.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
 | [`changes/verify-stages-new-files/spec.md`](changes/verify-stages-new-files/spec.md) | draft | partial | 2026-10-25 | coding-harness-fdz |
+| [`changes/verify-worker-cap/decisions.md`](changes/verify-worker-cap/decisions.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/findings.md`](changes/verify-worker-cap/findings.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/plan.md`](changes/verify-worker-cap/plan.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/research.md`](changes/verify-worker-cap/research.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-cap/spec.md`](changes/verify-worker-cap/spec.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
 | [`changes/workflow-promises/decisions.md`](changes/workflow-promises/decisions.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/findings.md`](changes/workflow-promises/findings.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/plan.md`](changes/workflow-promises/plan.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
