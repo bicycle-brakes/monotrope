@@ -592,10 +592,8 @@ def test_the_address_record_shape_is_validated() -> None:
 def test_the_opencode_go_entry_declares_its_address_record() -> None:
     """Criterion 1 (go-access-point): the real entry carries the record the runner loads.
 
-    Until the orchestrator's bootstrap writes the held file (plan step 12),
-    this repository's entry has none and the real-record check rests; the
-    synthetic faults above carry the strictness meanwhile. From the bootstrap
-    on, a missing or malformed record fails here.
+    The orchestrator's bootstrap has landed (plan step 12): a missing or
+    malformed record must fail, including deletion of the whole record.
     """
     import sys
 
@@ -603,8 +601,6 @@ def test_the_opencode_go_entry_declares_its_address_record() -> None:
     stage2_go = pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
 
     entry = _endpunkt("opencode-go")
-    if "adresse" not in entry:
-        pytest.skip("no adresse record yet; the orchestrator's bootstrap writes it (go-access-point step 12)")
     assert _address_problems(entry) == []
     # The runner's own loader accepts exactly what the shape check accepts.
     try:
@@ -612,6 +608,24 @@ def test_the_opencode_go_entry_declares_its_address_record() -> None:
     except stage2_go.RecordUnusable as error:
         raise AssertionError(f"the declared record does not load: {error}") from None
     assert policy.host == entry["adresse"]["host"]
+
+
+def test_missing_address_record_fails_the_real_entry_proof(monkeypatch) -> None:
+    """Deleting the bootstrapped address must fail the criterion's named proof, never skip it."""
+    # The exported kit carries this test but not the runner. Only that missing
+    # dependency may skip the proof; a missing production address may not.
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+    entry = dict(_endpunkt("opencode-go"))
+    entry.pop("adresse", None)
+    monkeypatch.setattr(__import__(__name__), "_endpunkt", lambda _name: entry)
+    try:
+        with pytest.raises(AssertionError, match="no adresse record"):
+            test_the_opencode_go_entry_declares_its_address_record()
+    except pytest.skip.Exception:
+        pytest.fail("the missing production address record skipped its proof")
 
 
 def opencode_remark_problems(remark: str) -> list[str]:

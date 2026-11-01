@@ -337,6 +337,9 @@ def test_absent_bases_get_the_recorded_api_default(world, monkeypatch, tmp_path)
     assert not stage2_go.assess(
         policy, model, {"id": model, "api": "openai-completions", "baseUrl": "http://opencode.ai/x"}
     ).admitted
+    assert not stage2_go.assess(policy, model, {"id": model, "api": "openai-completions", "baseUrl": None}).admitted, (
+        "an explicit null base was treated as omitted"
+    )
     # An unmapped api has no default, and neither has a definition without an api.
     assert not stage2_go.assess(policy, model, {"id": model, "api": "other-wire"}).admitted
     assert not stage2_go.assess(policy, model, {"id": model}).admitted
@@ -411,6 +414,22 @@ def test_refused_rows_stay_refused(world, monkeypatch):
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
 
 
+def test_compatibility_probe_continues_after_a_refused_destination(world, monkeypatch, capsys):
+    """A refused first paid member must not prevent the next valid member's send."""
+    bad, good = TEST_LADDER[:2]
+    harness = Harness(world, monkeypatch)
+    store = go_store(row(bad, baseUrl="https://evil.test/go/v1"), row(good))
+    monkeypatch.setattr(stage2, "require_pi", lambda: None)
+    monkeypatch.setattr(stage2, "discover_free", lambda *_args, **_kwargs: {"selected": [], "models_store": store})
+    monkeypatch.setattr(stage2, "ladder", lambda _root: [bad, good])
+    with pytest.raises(stage2.CallFailed, match=f"1 members failed: {bad}"):
+        stage2.probe(world.root, "demo")
+    assert len(harness.sent) == 1, "the valid member was skipped or the refused member sent"
+    output = capsys.readouterr().out
+    assert f"{bad} failed:" in output and "not the admitted host" in output
+    assert f"{good} · OK" in output
+
+
 # ---------------------------------------------------------------------------
 # Criterion 6: every send re-checks current policy
 # ---------------------------------------------------------------------------
@@ -449,6 +468,23 @@ def test_every_send_rechecks_current_policy(world, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 # Criterion 7: the session binds the checked model without reading auth
 # ---------------------------------------------------------------------------
+
+
+def test_session_keeps_the_catalog_path_and_records_its_notice(session_world, capsys):
+    """The shipped same-host base survives binding and its move stays in the launch audit."""
+    w = session_world
+    w.declare_go()
+    catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    data = json.loads(catalog.read_text(encoding="utf-8"))
+    observed = "https://opencode.ai/inference/go/openai/v1"
+    data["openai-completions"][GO_BARE]["baseUrl"] = observed
+    catalog.write_text(json.dumps(data), encoding="utf-8")
+    w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert w.run(model=GO_MODEL) == 0
+    sidecar = w.bindings[0]["extension"].parent / "checked-model.json"
+    assert json.loads(sidecar.read_text(encoding="utf-8"))["model"]["baseUrl"] == observed
+    for evidence in (capsys.readouterr().out, w.text()):
+        assert GO_BARE in evidence and "/zen/go/v1" in evidence and "/inference/go/openai/v1" in evidence
 
 
 def test_the_session_binds_the_checked_model_without_reading_auth(session_world, monkeypatch):

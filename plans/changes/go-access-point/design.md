@@ -2,7 +2,7 @@
 title: "Design — go-access-point"
 category: design
 created: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-01
 status: draft
 implementation_status: none
 date: 2026-10-31
@@ -119,15 +119,12 @@ reading by this drafter and is not yet the production declaration:
           basis: "https://opencode.ai/inference/go/openai/v1"
           quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
           gelesen: "2026-10-31"
-        openai-responses:
-          basis: "https://opencode.ai/inference/go/openai/v1"
-          quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
-          gelesen: "2026-10-31"
-        anthropic-messages:
-          basis: "https://opencode.ai/inference/go/anthropic/v1"
-          quelle: "endpoints table of the Go page, https://opencode.ai/docs/go"
-          gelesen: "2026-10-31"
 ```
+
+Only the measured wire API, `openai-completions`, is mapped. A wire API
+without an entry has no recorded default: a definition resolving to it
+and omitting its base is refused, never guessed at. Another API is added
+when it is measured and its address read from the Go page.
 
 `host` is the admitted host and admits nothing else: every `basis` must be
 an HTTPS URL on exactly that host, default port, no credentials, query or
@@ -142,7 +139,8 @@ workflow's route for held paths — recording the Go page as source and the
 actual reading date. The documented paths the Haiku research read on
 2026-10-31 (`/inference/go/openai/v1` for chat and responses,
 `/inference/go/anthropic/v1` for messages) are evidence for the initial
-values, not the reading itself: the orchestrator reads the Go page before
+values (the chat path only is recorded; the responses and messages
+paths stay unrecorded until measured), not the reading itself: the orchestrator reads the Go page before
 writing them. A catalog path such as `/inference/go/v1` still runs, with
 its notice, and is never rewritten to a recorded base.
 

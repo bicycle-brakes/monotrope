@@ -301,7 +301,7 @@ def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
     if api is not None and not isinstance(api, str):
         return Assessment({}, problem=f"the model {model} has an unreadable wire api")
     base = definition.get("baseUrl")
-    if base is not None and not isinstance(base, str):
+    if "baseUrl" in definition and not isinstance(base, str):
         return Assessment({}, problem=f"the model {model} has an unreadable base")
     if base is None:
         filled = policy.default_base(api)

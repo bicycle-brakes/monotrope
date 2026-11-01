@@ -8368,12 +8368,12 @@ def probe(root: Path, change: str) -> None:
     failed: list[str] = []
 
     def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
-        # Declaration and leak checks stay outside this handler: only a model
-        # call failure permits continuing, never a failed admission check.
+        # Declaration and leak checks stay outside this handler. A member's
+        # refused destination, like a failed call, must not skip valid peers.
         ctx.models_store = discovery.get("models_store")
         try:
             answer = run_reviewer(ctx, model, prompt, key, free=free)
-        except CallFailed as error:
+        except (CallFailed, Refused) as error:
             print(f"probe: {model} failed: {scrub(str(error), key)}")
             failed.append(model)
             return

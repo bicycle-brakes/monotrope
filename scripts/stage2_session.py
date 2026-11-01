@@ -341,10 +341,10 @@ def checked_session_model(root: Path, bare: str, runner) -> tuple[dict, stage2_g
     """The checked definition a session's initial Go model binds, resolved offline.
 
     The definition's own fields come from the pinned install's shipped catalog
-    (a runner-owned file, never the user's agent directory) and its base is
-    replaced by the record's default for the definition's wire API, so the
-    effective base is explicit and checked even when the shipped catalog names
-    another path. No credential-bearing file is read, and the user's saved
+    (a runner-owned file, never the user's agent directory). Its explicit base
+    is preserved; only an omitted base takes the record's wire-API default.
+    A same-host path move carries a notice into the launch audit. No
+    credential-bearing file is read, and the user's saved
     login stays where it is: the binding composes with it inside Pi.
     """
     try:
@@ -375,12 +375,7 @@ def checked_session_model(root: Path, bare: str, runner) -> tuple[dict, stage2_g
             "the session binds no ambiguous model."
         )
     api, part = sections[0]
-    base = policy.default_base(api)
-    if base is None:
-        raise runner.Refused(
-            f"the address record maps no base for the wire api {api}; the session's model has no checked base."
-        )
-    verdict = stage2_go.assess(policy, bare, {**part[bare], "baseUrl": base})
+    verdict = stage2_go.assess(policy, bare, {"api": api, **part[bare]})
     if not verdict.admitted:
         raise runner.Refused(verdict.problem)
     return {name: verdict.definition[name] for name in MODEL_SIDECAR_FIELDS if name in verdict.definition}, verdict
@@ -625,12 +620,14 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
     producer = "codex" if transport == "codex" else "pi"
     try:
         destination = None
+        address_notice = None
         if transport == "pi":
             # The initial model binds offline, before anything dispatches: the
             # checked definition goes into the private launch directory as the
             # sidecar the policy copy reads, and the installed Pi must resolve
             # it - otherwise the preparation refuses and no session starts.
-            binding, _verdict = checked_session_model(root, endpoint[1], runner)
+            binding, verdict = checked_session_model(root, endpoint[1], runner)
+            address_notice = verdict.notice
             try:
                 # The extension's binding record: the provider and the checked
                 # definition it registers - the flat effective definition itself
@@ -657,7 +654,10 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
         attempt = uuid.uuid4().hex[:12]
 
         def send():
-            write_pending(ctx, runner, audit_line(runner, attempt, selection, endpoint, source, result), producer)
+            line = audit_line(runner, attempt, selection, endpoint, source, result)
+            if address_notice:
+                line = f"Address notice: {address_notice}\n\n{line}"
+            write_pending(ctx, runner, line, producer)
             return dispatch(terminal, private / SCRIPT_NAME, command)
 
         if endpoint[0] == "opencode-go":
