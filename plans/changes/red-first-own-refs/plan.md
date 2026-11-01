@@ -125,18 +125,18 @@ partial check for a full green implementation verdict.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_proofs_ignore_foreign_ref_changes — a valid proof fails after concurrent source branch, remote or attempt-ref movement
-- 2: not yet written tests/test_stage2.py::test_proofs_refuse_private_ref_changes — either proof accepts a created, deleted or retargeted private ref in any tested namespace
+- 1: tests/test_stage2.py::test_proofs_ignore_foreign_ref_changes — a valid proof fails after concurrent source branch, remote or attempt-ref movement
+- 2: tests/test_stage2.py::test_proofs_refuse_private_ref_changes — either proof accepts a created, deleted or retargeted private ref in any tested namespace
 - 2: tests/test_stage2.py::test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_deleted — a private branch creation passes or a source branch is deleted
 - 2: tests/test_stage2.py::test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof — a private existing branch's new target goes undetected
-- 3: not yet written tests/test_stage2.py::test_proofs_name_all_changed_refs — either diagnostic omits a changed ref or selector, or fails credential scrubbing
-- 4: not yet written tests/test_stage2.py::test_baseline_proof_uses_baseline_code_and_current_tests — fixed production bytes reach baseline proof or current tests do not
-- 5: not yet written tests/test_stage2.py::test_fixed_proof_uses_current_file_tree — fixed proof loses uncommitted files, deletions, modes, symlinks or export-ignored files
-- 6: not yet written tests/test_stage2.py::test_proofs_leave_source_state_untouched — private Git writes or cleanup change source bytes, index or refs
-- 7: not yet written tests/test_stage2.py::test_proofs_refuse_unmeasured_state — setup, before/after ref reads or tree measurement fail yet a proof succeeds
-- 7: not yet written tests/test_stage2.py::test_fixed_proof_refuses_tree_changes — the fixed test modifies a Git-visible file yet receives passing evidence
+- 3: tests/test_stage2.py::test_proofs_name_all_changed_refs — either diagnostic omits a changed ref or selector, or fails credential scrubbing
+- 4: tests/test_stage2.py::test_baseline_proof_uses_baseline_code_and_current_tests — fixed production bytes reach baseline proof or current tests do not
+- 5: tests/test_stage2.py::test_fixed_proof_uses_current_file_tree — fixed proof loses uncommitted files, deletions, modes, symlinks or export-ignored files
+- 6: tests/test_stage2.py::test_proofs_leave_source_state_untouched — private Git writes or cleanup change source bytes, index or refs
+- 7: tests/test_stage2.py::test_proofs_refuse_unmeasured_state — setup, before/after ref reads or tree measurement fail yet a proof succeeds
+- 7: tests/test_stage2.py::test_fixed_proof_refuses_tree_changes — the fixed test modifies a Git-visible file yet receives passing evidence
 - 7: tests/test_stage2.py::test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named — adapted private cleanup failure is ignored or leaves a source registry entry
-- 8: not yet written tests/test_stage2.py::test_proofs_remove_private_repositories_on_all_exits — success, refusal, partial setup or timeout leaves scratch files or a worktree entry
+- 8: tests/test_stage2.py::test_proofs_remove_private_repositories_on_all_exits — success, refusal, partial setup or timeout leaves scratch files or a worktree entry
 - 8: tests/test_stage2.py::test_the_red_first_run_leaves_no_worktree_behind — repair leaves a temporary checkout or source registry entry
 - 9: tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — qualifying baseline evidence is refused
 - 9: tests/test_stage2.py::test_red_first_accepts_pytest_failed_call_outcomes — pytest's qualifying call failure is refused
@@ -145,6 +145,14 @@ partial check for a full green implementation verdict.
 - 9: tests/test_stage2.py::test_red_first_refuses_a_timed_out_run — timeout certifies red first
 - 9: tests/test_stage2.py::test_red_first_refuses_a_changed_venv — modified interpreter executes
 - 9: tests/test_stage2.py::test_fixed_code_proof_keeps_pytest_failed_red — nonpassing fixed cases receive proof
-- 9: not yet written tests/test_stage2.py::test_isolated_proofs_keep_execution_limits — either private pytest launch drops admission, environment scrubbing or the existing timeout
+- 9: tests/test_stage2.py::test_isolated_proofs_keep_execution_limits — either private pytest launch drops admission, environment scrubbing or the existing timeout
+
+## Runner route — 2026-11-01
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-11-01 07:55:19–09:29:44 UTC, 5665 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 09:29:53–10:09:58 UTC, 2405 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 10:10:05–10:24:47 UTC, 883 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

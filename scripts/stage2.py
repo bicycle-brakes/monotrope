@@ -5754,13 +5754,57 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
     return None
 
 
+def _remove_private(path: Path) -> str | None:
+    """Remove one proof's private directory; a failure is named, never ignored.
+
+    The private repository and its store are the proof's own scratch: deleting them after the
+    measurement is normal cleanup, never permission to delete a source reference. A failed
+    removal is reported, so no successful proof stands on a leftover (spec, criterion 8).
+    """
+    try:
+        shutil.rmtree(path)
+    except OSError as error:
+        return f"{error.strerror or error} ({path})"
+    return None
+
+
+def _private_repository(root: Path, destination: Path, checkout: str) -> None:
+    """Create a proof's private repository at `destination`, its checkout materialized at `checkout`.
+
+    The clone carries the source's objects wholesale - unreferenced ones included - with no
+    hardlinks and no object alternates, so the proof runs against bytes of its own and a local
+    object copy carries the fixed tree `worktree_tree` wrote without a ref. Every source ref is
+    preserved under its own name first, so a ref the source already had stays a move in the
+    proof's store, not an accidental creation; the remote configuration goes, so an ordinary
+    Git operation in the proof has no path back to the source. HEAD is detached at the source's
+    HEAD commit and `checkout` - the baseline commit, or the fixed code's tree id - is read into
+    the index and the working tree. The source's refs, index and worktree are read here, never
+    written (spec, criteria 1 and 6).
+    """
+    _git_output(root, "clone", "--quiet", "--no-hardlinks", str(root), str(destination))
+    # A local clone copies the objects directory; a stale alternates file from the source would
+    # tie the proof's store to a foreign one, so it goes before anything reads the clone.
+    with contextlib.suppress(FileNotFoundError):
+        (destination / ".git" / "objects" / "info" / "alternates").unlink()
+    _git_output(destination, "remote", "remove", "origin")
+    head = _git_output(root, "rev-parse", "HEAD").strip()
+    for name, target in _ref_targets(root).items():
+        _git_output(destination, "update-ref", name, target)
+    _git_output(destination, "update-ref", "--no-deref", "HEAD", head)
+    _git_output(destination, "read-tree", "--reset", "-u", checkout)
+
+
 def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
 
     A green suite can include a skipped or expected-failing named test. The same runner-owned probe
     used for red first must show passing setup, call and teardown for every selected case here.
-    Load the probe by its private absolute path, outside the attempt's tree. A proof that changes
-    the tree or any ref is refused, and no changed ref is deleted or reset.
+    The proof runs in a private repository of its own: the source worktree's current Git-visible
+    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
+    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
+    activity in the source cannot void the proof. A proof that changes its own tree or any of its
+    own refs is refused, with every changed reference named; nothing in the source is compared,
+    deleted or reset, and the private repository is removed on every exit.
     """
     tampered = tool_problem(root, tools)
     if tampered:
@@ -5772,56 +5816,99 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
     )
     token = os.urandom(16).hex()
+    tmp = None
+    fault = None
+    cleanup = None
+    named: list[str] = []
+    refs_before: dict[str, str] | None = None
+    tree_before: str | None = None
+    private: Path | None = None
     try:
-        with tempfile.TemporaryDirectory(prefix="stage2-fixed-") as tmp:
-            probe = Path(tmp) / "probe.py"
-            report = Path(tmp) / "outcome.json"
-            probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
-            refs_before, tree_before = _ref_targets(root), worktree_tree(root)
-            # One machine-wide admission around the timed proof; queue and memory waits consume
-            # none of the proof's time limit (bead coding-harness-p6mu).
-            with verify_lock.hold_admission(["pytest", test]) as owned:
-                done = launch(
-                    [red_first_python(root), "-c", bootstrap, str(probe), test],
-                    root,
-                    verify_lock.inherit_env(
-                        runner_env(
-                            foreign_env(
-                                {
-                                    "STAGE2_RED_REPORT": str(report),
-                                    "STAGE2_RED_TOKEN": token,
-                                    "STAGE2_RED_SELECTOR": test,
-                                }
-                            ),
-                            root,
-                        )
-                    ),
-                    key,
-                    timeout=RED_FIRST_MINUTES * 60,
-                    limit="the fixed-code proof time limit",
-                    pass_fds=_lock_fds(owned),
-                )
-            fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
-            if done.returncode != 0:
-                fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
-            if _ref_targets(root) != refs_before:
-                fault = "refs changed while the fixed-code proof ran"
-            elif worktree_tree(root) != tree_before:
-                fault = "the worktree changed while the fixed-code proof ran"
+        tmp = Path(tempfile.mkdtemp(prefix="stage2-fixed-"))
+        private = tmp / "tree"
+        probe = tmp / "probe.py"
+        report = tmp / "outcome.json"
+        probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+        # The fixed tree is captured before the clone copies objects: the tree `worktree_tree`
+        # writes is unreferenced, and the local object copy carries it; a tree the clone cannot
+        # read refuses the proof instead of running older bytes.
+        fixed_tree = worktree_tree(root)
+        _private_repository(root, private, fixed_tree)
+        refs_before, tree_before = _ref_targets(private), worktree_tree(private)
+        # One machine-wide admission around the timed proof; queue and memory waits consume
+        # none of the proof's time limit (bead coding-harness-p6mu).
+        with verify_lock.hold_admission(["pytest", test]) as owned:
+            done = launch(
+                [red_first_python(root), "-c", bootstrap, str(probe), test],
+                private,
+                verify_lock.inherit_env(
+                    runner_env(
+                        foreign_env(
+                            {
+                                "STAGE2_RED_REPORT": str(report),
+                                "STAGE2_RED_TOKEN": token,
+                                "STAGE2_RED_SELECTOR": test,
+                            }
+                        ),
+                        root,
+                        tmp,
+                    )
+                ),
+                key,
+                timeout=RED_FIRST_MINUTES * 60,
+                limit="the fixed-code proof time limit",
+                pass_fds=_lock_fds(owned),
+            )
+        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
+        if done.returncode != 0:
+            fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
+    finally:
+        # The private store's own names and targets are compared before it is deleted, on a
+        # launch failure or a timeout exactly as on a finished run; the source's refs are not
+        # an acceptance condition and are not read here.
+        if refs_before is not None and private is not None:
+            try:
+                refs_now = _ref_targets(private)
+            except Refused as error:
+                named.append(f"the private ref listing failed ({error})")
+            else:
+                changed = sorted(
+                    ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
+                )
+                if changed:
+                    named.append("refs changed while the fixed-code proof ran: " + ", ".join(changed))
+        if tree_before is not None and private is not None:
+            try:
+                tree_now = worktree_tree(private)
+            except Refused as error:
+                named.append(f"the private tree could not be measured ({error})")
+            else:
+                if tree_now != tree_before:
+                    named.append("the private checkout changed while the fixed-code proof ran")
+        if tmp is not None:
+            cleanup = _remove_private(tmp)
+    if named:
+        fault = f"{fault}; {'; '.join(named)}" if fault else "; ".join(named)
+    if cleanup is not None:
+        removal = f"the private fixed-code proof repository could not be removed ({cleanup})"
+        fault = f"{fault}; {removal}" if fault else removal
     return scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
-    """Run one named test against the baseline's code in a temporary git worktree; None when it was red.
+    """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
-    The worktree's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
+    The private checkout's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
-    call git honest. The interpreter must start pytest first: a `No module named pytest` startup failure
+    call git honest. The checkout is a clone with its own reference store (`_private_repository`), so
+    another session's branch, remote-tracking or saved-attempt reference moving in the source repository
+    while the proof runs cannot void it, and the source's refs, index and worktree are never written. The
+    interpreter must start pytest first: a `No module named pytest` startup failure
     exits 1 too, and reading it as red would accept a run in which the named test never ran (phase 6,
     F-1). Exit 1 alone proves nothing either: the runner-owned probe (`RED_PROBE_SOURCE`) travels into
-    the temporary checkout and records, in a private JSON report outside the copied tests, which cases
+    the private checkout and records, in a private JSON report outside the copied tests, which cases
     pytest selected and how every setup, call and teardown phase ended. The proof holds only when the
     report is this invocation's, the session finished as exit 1, at least one selected call of the
     requested test failed by an expectation the test itself states - an ordinary assertion or pytest's
@@ -5830,11 +5917,12 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     teardown passed and no skip, xfail, XPASS, collection error or nonqualifying failure stands among
     them - so a missing dependency failing its fixture refuses instead of certifying the repair (bead
     coding-harness-omp). Never is a
-    success inferred from terminal output or the exit code alone. Every ref's name and target is
-    compared before and after: a difference fails the proof with the refs named and nothing is deleted,
-    so another session's branch is never touched (phase 6, F-6 and F-7). The clean-up deletes the
-    temporary directory before it prunes, so a failed `git worktree remove` leaves no dead entry
-    behind, and a failed removal is named in the returned problem.
+    success inferred from terminal output or the exit code alone. Every ref of the private store is
+    compared before and after, and the comparison stands in `finally`, before the store is deleted: a
+    difference in a ref's name or target fails the proof with the refs named, and nothing is deleted or
+    reset - a test's write into its own store is interference, while a neighbour's branch in the source
+    is never this proof's business (phase 6, F-6 and F-7, over the private store). The clean-up removes
+    the private repository on every exit, and a failed removal is named in the returned problem.
     """
     tampered = tool_problem(root, tools)
     if tampered:
@@ -5843,23 +5931,19 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     file, _, function = test.partition("::")
     selector = f"{file}::{function}"
     token = os.urandom(16).hex()
-    tree = None
     tmp = None
     outcome = None
-    removal = None
-    added = False
+    cleanup = None
     refs_before: dict[str, str] | None = None
     refs_changed: list[str] = []
     try:
-        tmp = tempfile.mkdtemp(prefix="stage2-red-")
-        tree = Path(tmp) / "tree"
-        report = Path(tmp) / "red-outcome.json"
+        tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
+        tree = tmp / "tree"
+        report = tmp / "red-outcome.json"
         try:
-            _git_output(root, "worktree", "add", "--detach", str(tree), baseline)
-        except Refused as error:
+            _private_repository(root, tree, baseline)
+        except (Refused, OSError) as error:
             outcome = f"{test}: the red-first checkout failed ({scrub(str(error), key)})"
-        else:
-            added = True
         if outcome is None:
             shutil.rmtree(tree / "tests", ignore_errors=True)
             try:
@@ -5876,10 +5960,9 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except OSError as error:
                 outcome = f"{test}: the red-first outcome probe could not be written ({scrub(str(error), key)})"
         if outcome is None:
-            # Branches are shared with the temporary checkout; a failed snapshot fails the attempt,
-            # because branch state could not be proven preserved.
+            # A failed snapshot fails the attempt, because branch state could not be proven preserved.
             try:
-                refs_before = _ref_targets(root)
+                refs_before = _ref_targets(tree)
             except Refused as error:
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
@@ -5890,7 +5973,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     started = launch(
                         [red_first_python(root), "-c", "import pytest"],
                         tree,
-                        verify_lock.inherit_env(runner_env(foreign_env({}), root, tree)),
+                        verify_lock.inherit_env(runner_env(foreign_env({}), root, tmp)),
                         key,
                         timeout=RED_FIRST_MINUTES * 60,
                         limit="the red-first time limit",
@@ -5932,7 +6015,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                                     }
                                 ),
                                 root,
-                                tree,
+                                tmp,
                             )
                         ),
                         key,
@@ -5953,47 +6036,25 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     if fault is not None:
                         outcome = f"{test}: {scrub(fault, key)}"
     finally:
-        if tree is not None:
-            try:
-                done = subprocess.run(
-                    [GIT, "-C", str(root), "worktree", "remove", "--force", str(tree)],
-                    capture_output=True,
-                    check=False,
-                    timeout=GIT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                done = None
-            if added and done is not None and done.returncode != 0:
-                removal = f"`git worktree remove` ended {done.returncode} on the red-first checkout"
-        if tmp is not None:
-            shutil.rmtree(tmp, ignore_errors=True)
-        if tree is not None:
-            # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                # A prune that hangs leaves an entry behind; the removal above already failed then.
-                subprocess.run(
-                    [GIT, "-C", str(root), "worktree", "prune"],
-                    capture_output=True,
-                    check=False,
-                    timeout=GIT_SECONDS,
-                )
         if refs_before is not None:
-            # Nothing is deleted or reset here: another session may create a branch meanwhile, and only
-            # the comparison tells a change of the run from one of a neighbour. Any difference in a
-            # ref's name or target fails the proof with the refs named (phase 6, F-6 and F-7).
+            # The private store's own names and targets, compared before the store is deleted: a
+            # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
+            # or reset here - the comparison is the whole verdict.
             try:
-                refs_now = _ref_targets(root)
+                refs_now = _ref_targets(tree)
             except Refused as error:
                 refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
             else:
                 refs_changed = sorted(
                     ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
                 )
+        if tmp is not None:
+            cleanup = _remove_private(tmp)
     if refs_changed:
         named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
         outcome = f"{outcome}\n{named}" if outcome else named
-    if removal is not None:
-        named = scrub(f"{test}: {removal}", key)
+    if cleanup is not None:
+        named = scrub(f"{test}: the red-first checkout could not be removed ({cleanup})", key)
         outcome = f"{outcome}\n{named}" if outcome else named
     return outcome
 

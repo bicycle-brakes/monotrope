@@ -945,7 +945,9 @@ def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
         and isinstance(node.elts[0], ast.Name)
         and node.elts[0].id == "GIT"
     ]
-    assert len(named) >= 8, "fewer git launches name GIT than the eight this check was written against"
+    # Seven since red-first-own-refs (bead coding-harness-wkxm): the proofs run in a private clone
+    # through `_git_output`, so the `worktree remove` and `prune` launches are gone.
+    assert len(named) >= 7, "fewer git launches name GIT than the seven this check was written against"
 
 
 @pytest.mark.parametrize(
@@ -11521,19 +11523,34 @@ def test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt(worl
     assert git(world.root, "rev-parse", "HEAD") == head, "a checkpoint landed without the named test running"
 
 
-def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
-    """Criterion 19. Planted fault: the temporary worktree not removed."""
+def test_the_red_first_run_leaves_no_worktree_behind(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 19. Planted fault: the repair's private proof repositories or a source worktree
+    entry are left behind."""
     repair_world(world)
+    made: list[str] = []
+    original_mkdtemp = stage2.tempfile.mkdtemp
+
+    def recording_mkdtemp(*args: object, **kwargs: object) -> str:
+        path = original_mkdtemp(*args, **kwargs)  # type: ignore[arg-type]
+        if Path(path).name.startswith("stage2-"):
+            made.append(path)
+        return path
+
+    monkeypatch.setattr(stage2.tempfile, "mkdtemp", recording_mkdtemp)
     refs_before = {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()}
     assert world.run("repair") == 0
     listed = git(world.root, "worktree", "list").splitlines()
     assert len(listed) == 1, listed
     assert git(world.root, "status", "--porcelain") == ""
     assert {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()} == refs_before
+    assert made, "no private repository was created for the proofs"
+    for left in made:
+        assert not Path(left).exists(), left
 
 
 def test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_deleted(world: World) -> None:
-    """Phase 6, F-6. Planted fault: the clean-up deleted a branch that appeared during the red-first run."""
+    """Phase 6, F-6, over the private store. Planted fault: a branch the named test creates in its
+    own proof store passes the proof, or the proof's store reaches the source's."""
     repair_world(world)
     branch_test = (
         "import subprocess\nfrom pathlib import Path\n\n\ndef test_branch():\n"
@@ -11555,12 +11572,13 @@ def test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_del
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert "refs changed while the named test ran: refs/heads/red-first-probe" in prompt, prompt
-    assert "refs/heads/red-first-probe" in git(world.root, "for-each-ref"), "a neighbour's branch was deleted"
+    assert "refs/heads/red-first-probe" not in git(world.root, "for-each-ref"), "the proof's branch reached the source"
     assert len(git(world.root, "worktree", "list").splitlines()) == 1
 
 
 def test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof(world: World) -> None:
-    """Phase 6, F-7. Planted fault: the snapshot kept ref names only, so a moved branch passed as red first."""
+    """Phase 6, F-7. Planted fault: the snapshot kept ref names only, so a moved branch passed as red first -
+    or the named test's write reached the source store and moved a neighbour's branch for real."""
     repair_world(world)
     git(world.root, "branch", "keep-me")
     git(world.root, "commit", "--quiet", "--allow-empty", "-m", "advance past keep-me")
@@ -11581,30 +11599,390 @@ def test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof(world: W
         ],
         make=[{"stdout": "green\n"}] * 2,
     )
+    kept = git(world.root, "rev-parse", "keep-me")
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert "refs changed while the named test ran: refs/heads/keep-me" in prompt, prompt
+    assert git(world.root, "rev-parse", "keep-me") == kept, "the named test moved a source branch"
 
 
 def test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Repair round 3, L3-4. Planted fault: a failed removal left a dead entry and went unnamed."""
+    """Repair round 3, L3-4, retargeted to the private store. Planted fault: a failed private
+    removal goes unnamed, or a dead entry stays in the source worktree registry."""
     seed_tests(world)
     (world.root / "tests" / "test_fix.py").write_text(FIX_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
-    original_run = stage2.subprocess.run
+    original_rmtree = stage2.shutil.rmtree
 
-    def refusing(command, *args, **kwargs):
-        if "worktree" in command and "remove" in command:
-            return subprocess.CompletedProcess(command, 128, stdout="", stderr="planted removal failure")
-        return original_run(command, *args, **kwargs)
+    def refusing(path, *args, **kwargs):
+        if Path(path).name.startswith("stage2-red-"):
+            raise OSError(28, "planted removal failure")
+        return original_rmtree(path, *args, **kwargs)
 
-    monkeypatch.setattr(stage2.subprocess, "run", refusing)
+    monkeypatch.setattr(stage2.shutil, "rmtree", refusing)
     outcome = stage2.red_first(world.root, baseline, "tests/test_fix.py::test_fix", None)
     listed = git(world.root, "worktree", "list")
     assert "stage2-red-" not in listed, listed
-    assert outcome is not None and "`git worktree remove` ended 128" in outcome, outcome
+    assert len(listed.splitlines()) == 1, listed
+    assert outcome is not None and "could not be removed" in outcome, outcome
+    assert "planted removal failure" in outcome, outcome
+
+
+# ---------------------------------------------------------------------------
+# The proofs' private repositories (bead coding-harness-wkxm)
+# ---------------------------------------------------------------------------
+
+
+def plant_proof(world: World, proof: str) -> str:
+    """Plant the named test a proof needs and return its selector: red on the baseline's code for
+    the baseline proof, green on the worktree's fixed bytes for the fixed-code proof."""
+    if proof == "fixed":
+        (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+        (world.root / "tests" / "test_fix.py").write_text(FIX_TEST, encoding="utf-8")
+        return "tests/test_fix.py::test_fix"
+    (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
+    return RED_SELECTOR
+
+
+def run_proof(world: World, proof: str, selector: str, baseline: str, key: str | None = None) -> str | None:
+    """Run one proof against the world: the baseline proof (`red_first`) or the fixed-code proof."""
+    if proof == "fixed":
+        return stage2.fixed_test_proof(world.root, selector, key)
+    return stage2.red_first(world.root, baseline, selector, key)
+
+
+def ref_writing_test(*commands: tuple[str, ...]) -> str:
+    """A named test that runs the given git commands in its own checkout, then asserts the fixed bytes.
+
+    The checkout is the proof's private repository, so the commands write its store, never the
+    source's. The test stays red on the baseline (`value = 1` there) and green on fixed bytes."""
+    parts = []
+    for command in commands:
+        args = ", ".join(repr(arg) for arg in command)
+        parts.append(f'    subprocess.run(["git", {args}], check=True)\n')
+    return (
+        "import subprocess\nfrom pathlib import Path\n\n\ndef test_write():\n"
+        + "".join(parts)
+        + '    source = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        + '    assert "value = 2" in source\n'
+    )
+
+
+def test_proofs_ignore_foreign_ref_changes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault: a branch, remote-tracking or saved-attempt reference another
+    session moves in the source repository during a proof voids an otherwise valid proof."""
+    baseline = repair_world(world)
+    moves = {
+        "branch": ("update-ref", "refs/heads/foreign-branch", "HEAD"),
+        "remote": ("update-ref", "-d", "refs/remotes/origin/main"),
+        "attempt": ("update-ref", "refs/stage2/attempts/foreign", "HEAD"),
+    }
+    original_launch = stage2.launch
+    for proof in ("baseline", "fixed"):
+        selector = plant_proof(world, proof)
+        for kind, move in moves.items():
+            state = {"moved": False}
+
+            def moving(command, cwd, env, *args, _move=move, _state=state, _original=original_launch, **kwargs):
+                if not _state["moved"] and any("pytest" in part for part in command):
+                    _state["moved"] = True
+                    git(world.root, *_move)
+                return _original(command, cwd, env, *args, **kwargs)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(stage2, "launch", moving)
+                outcome = run_proof(world, proof, selector, baseline)
+            assert outcome is None, (proof, kind, outcome)
+            listed = git(world.root, "for-each-ref")
+            if kind == "remote":
+                assert "refs/remotes/origin/main" not in listed, listed
+            else:
+                assert move[1] in listed, listed
+
+
+def test_proofs_refuse_private_ref_changes(world: World) -> None:
+    """Criterion 2. Planted fault: a created, deleted or retargeted reference of the proof's own
+    store, in any tested namespace, is accepted - or the source store is blamed for it."""
+    baseline = repair_world(world)
+    writes = {
+        "branch": ("refs/heads/private-created", ("update-ref", "refs/heads/private-created", "HEAD")),
+        "remote": ("refs/remotes/origin/main", ("update-ref", "-d", "refs/remotes/origin/main")),
+        "attempt": ("refs/stage2/attempts/private", ("update-ref", "refs/stage2/attempts/private", "HEAD")),
+    }
+    for proof in ("baseline", "fixed"):
+        plant_proof(world, proof)
+        for name, (ref, command) in writes.items():
+            selector = "tests/test_write.py::test_write"
+            (world.root / "tests" / "test_write.py").write_text(ref_writing_test(command), encoding="utf-8")
+            refs_before = stage2._ref_targets(world.root)
+            outcome = run_proof(world, proof, selector, baseline)
+            assert outcome is not None and ref in outcome, (proof, name, outcome)
+            assert stage2._ref_targets(world.root) == refs_before, (proof, name)
+
+
+def test_proofs_name_all_changed_refs(world: World) -> None:
+    """Criterion 3. Planted fault: a refusal diagnostic omits a changed reference or the selector,
+    or the credential reaches it unscrubbed."""
+    baseline = repair_world(world)
+    for proof in ("baseline", "fixed"):
+        plant_proof(world, proof)
+        selector = "tests/test_write.py::test_write"
+        (world.root / "tests" / "test_write.py").write_text(
+            ref_writing_test(
+                ("update-ref", "refs/heads/first-probe", "HEAD"),
+                ("update-ref", f"refs/heads/probe-{KEY}", "HEAD"),
+            ),
+            encoding="utf-8",
+        )
+        outcome = run_proof(world, proof, selector, baseline, KEY)
+        assert outcome is not None, (proof, outcome)
+        assert KEY not in outcome and "[credential]" in outcome, (proof, outcome)
+        assert selector in outcome, (proof, outcome)
+        assert "refs/heads/first-probe" in outcome, (proof, outcome)
+        assert "refs/heads/probe-[credential]" in outcome, (proof, outcome)
+
+
+def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> None:
+    """Criterion 4. Planted fault: the worktree's fixed production bytes reach the baseline proof,
+    or the attempt's current tests do not travel into it."""
+    baseline = repair_world(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    (world.root / "tests" / "test_current.py").write_text(
+        "from pathlib import Path\n\n\ndef test_current():\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 2" in value\n',
+        encoding="utf-8",
+    )
+    outcome = stage2.red_first(world.root, baseline, "tests/test_current.py::test_current", None)
+    assert outcome is None, outcome
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n", "the proof wrote the source"
+
+
+def test_fixed_proof_uses_current_file_tree(world: World) -> None:
+    """Criterion 5. Planted fault: the fixed proof checks committed HEAD instead of the worktree's
+    current Git-visible tree - an uncommitted change, a deletion, a new file, an executable bit, a
+    symlink or an export-ignored file goes missing."""
+    repair_world(world)
+    (world.root / "src" / "extra.py").write_text("VALUE = 0\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a file the attempt deletes")
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    (world.root / "src" / "extra.py").unlink()
+    (world.root / "src" / "added.py").write_text("VALUE = 3\n", encoding="utf-8")
+    (world.root / "tool.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (world.root / "tool.sh").chmod(0o755)
+    (world.root / "src" / "linked.py").symlink_to("app.py")
+    (world.root / ".gitattributes").write_text("secret/ export-ignore\n", encoding="utf-8")
+    (world.root / "secret").mkdir()
+    (world.root / "secret" / "file").write_text("carried\n", encoding="utf-8")
+    (world.root / "tests" / "test_fix.py").write_text(
+        "import os\n"
+        "from pathlib import Path\n"
+        "\n"
+        "\n"
+        "def test_fix():\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        '    assert "value = 2" in (root / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "VALUE = 3" in (root / "src" / "added.py").read_text(encoding="utf-8")\n'
+        '    assert not (root / "src" / "extra.py").exists()\n'
+        '    assert os.access(root / "tool.sh", os.X_OK)\n'
+        '    assert (root / "src" / "linked.py").is_symlink()\n'
+        '    assert "value = 2" in (root / "src" / "linked.py").read_text(encoding="utf-8")\n'
+        '    assert "carried" in (root / "secret" / "file").read_text(encoding="utf-8")\n',
+        encoding="utf-8",
+    )
+    assert stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
+
+
+def test_proofs_leave_source_state_untouched(world: World) -> None:
+    """Criterion 6. Planted fault: the proof's own Git operations or a named test's file writes
+    reach the source worktree, its index or its refs."""
+    baseline = repair_world(world)
+    for proof in ("baseline", "fixed"):
+        if proof == "fixed":
+            (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+        selector = "tests/test_write.py::test_write"
+        writer = (
+            "from pathlib import Path\n\n\ndef test_write():\n"
+            "    root = Path(__file__).resolve().parent.parent\n"
+            '    (root / ".git" / "private-probe").write_text("touched", encoding="utf-8")\n'
+            '    value = (root / "src" / "app.py").read_text(encoding="utf-8")\n'
+            '    assert "value = 2" in value\n'
+        )
+        (world.root / "tests" / "test_write.py").write_text(writer, encoding="utf-8")
+        refs_before = stage2._ref_targets(world.root)
+        head_before = git(world.root, "rev-parse", "HEAD")
+        status_before = git(world.root, "status", "--porcelain", "--untracked-files=no")
+        outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is None, (proof, outcome)
+        assert stage2._ref_targets(world.root) == refs_before, proof
+        assert git(world.root, "rev-parse", "HEAD") == head_before, proof
+        assert git(world.root, "status", "--porcelain", "--untracked-files=no") == status_before, proof
+        assert len(git(world.root, "worktree", "list").splitlines()) == 1, proof
+        assert not (world.root / ".git" / "private-probe").exists(), proof
+
+
+def test_proofs_refuse_unmeasured_state(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 7 (measurement). Planted fault: a failed setup, a failed before or after read of
+    the private refs, or a failed measurement of the fixed tree still yields a successful proof."""
+    baseline = repair_world(world)
+    original_refs = stage2._ref_targets
+    original_tree = stage2.worktree_tree
+    for proof in ("baseline", "fixed"):
+        selector = plant_proof(world, proof)
+        points = [("refs", "before"), ("refs", "after")]
+        if proof == "fixed":
+            points += [("tree", "before"), ("tree", "after")]
+        for measure, point in points:
+            with monkeypatch.context() as patch:
+                seen = {"refs": 0, "tree": 0}
+                strike = 1 if point == "before" else 2
+
+                def failing_refs(root, _seen=seen, _measure=measure, _strike=strike, _original=original_refs):
+                    if "stage2-" in str(root):
+                        _seen["refs"] += 1
+                        if _measure == "refs" and _seen["refs"] == _strike:
+                            raise stage2.Refused("planted state measurement failure")
+                    return _original(root)
+
+                def failing_tree(root, _seen=seen, _measure=measure, _strike=strike, _original=original_tree):
+                    if "stage2-" in str(root):
+                        _seen["tree"] += 1
+                        if _measure == "tree" and _seen["tree"] == _strike:
+                            raise stage2.Refused("planted state measurement failure")
+                    return _original(root)
+
+                patch.setattr(stage2, "_ref_targets", failing_refs)
+                patch.setattr(stage2, "worktree_tree", failing_tree)
+                outcome = run_proof(world, proof, selector, baseline)
+            assert outcome is not None and "planted state measurement failure" in outcome, (
+                proof,
+                measure,
+                point,
+                outcome,
+            )
+
+
+def test_fixed_proof_refuses_tree_changes(world: World) -> None:
+    """Criterion 7 (fixed tree). Planted fault: the named test modifies a Git-visible file of its
+    fixed checkout and still receives passing evidence."""
+    repair_world(world)
+    plant_proof(world, "fixed")
+    (world.root / "tests" / "test_fix.py").write_text(
+        "from pathlib import Path\n\n\ndef test_fix():\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        '    (root / "src" / "touched.py").write_text("touched\\n", encoding="utf-8")\n'
+        '    assert "value = 2" in (root / "src" / "app.py").read_text(encoding="utf-8")\n',
+        encoding="utf-8",
+    )
+    outcome = stage2.fixed_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    assert outcome is not None and "the private checkout changed while the fixed-code proof ran" in outcome, outcome
+
+
+def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 8. Planted fault: a finished, refused, failed or timed-out proof leaves its private
+    repository behind, or the source worktree registry keeps an entry."""
+    baseline = repair_world(world)
+    made: list[str] = []
+    original_mkdtemp = stage2.tempfile.mkdtemp
+    for proof in ("baseline", "fixed"):
+        for scene in ("success", "refusal", "partial-setup", "timeout"):
+            here = len(made)
+            selector = plant_proof(world, proof)
+            if scene == "refusal":
+                selector = "tests/test_write.py::test_write"
+                (world.root / "tests" / "test_write.py").write_text(
+                    ref_writing_test(("update-ref", "refs/heads/private-created", "HEAD")), encoding="utf-8"
+                )
+            with monkeypatch.context() as patch:
+
+                def recording_mkdtemp(*args, _original=original_mkdtemp, _made=made, **kwargs):
+                    path = _original(*args, **kwargs)
+                    if Path(path).name.startswith("stage2-"):
+                        _made.append(path)
+                    return path
+
+                patch.setattr(stage2.tempfile, "mkdtemp", recording_mkdtemp)
+                if scene == "partial-setup":
+                    if proof == "baseline":
+
+                        def failing_copytree(*_args, **_kwargs):
+                            raise OSError(28, "planted copy failure")
+
+                        patch.setattr(stage2.shutil, "copytree", failing_copytree)
+                    else:
+                        original_git = stage2._git_output
+
+                        def failing_clone(root, *args, _original=original_git, **kwargs):
+                            if args[0] == "clone":
+                                raise stage2.Refused("planted clone failure")
+                            return _original(root, *args, **kwargs)
+
+                        patch.setattr(stage2, "_git_output", failing_clone)
+                elif scene == "timeout":
+                    original_launch = stage2.launch
+
+                    def timing_out(command, cwd, env, *args, _original=original_launch, **kwargs):
+                        if any("pytest" in part for part in command):
+                            raise stage2.StepTimedOut("the planted proof ran into its time limit")
+                        return _original(command, cwd, env, *args, **kwargs)
+
+                    patch.setattr(stage2, "launch", timing_out)
+                outcome = run_proof(world, proof, selector, baseline)
+            if scene == "success":
+                assert outcome is None, (proof, scene, outcome)
+            else:
+                assert outcome is not None, (proof, scene, outcome)
+            if scene == "refusal":
+                assert "refs changed while the" in outcome, (proof, outcome)
+            if scene == "partial-setup":
+                assert "planted" in outcome, (proof, outcome)
+            if scene == "timeout":
+                assert "the planted proof ran into its time limit" in outcome, (proof, outcome)
+            for left in made[here:]:
+                assert not Path(left).exists(), (proof, scene, left)
+            assert len(git(world.root, "worktree", "list").splitlines()) == 1, (proof, scene)
+
+
+def test_isolated_proofs_keep_execution_limits(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 9 (isolation keeps the execution rules). Planted fault: the private launch drops
+    the machine admission, the environment scrubbing or the existing time limit."""
+    baseline = repair_world(world)
+    original_admission = stage2.verify_lock.hold_admission
+    original_launch = stage2.launch
+    for proof in ("baseline", "fixed"):
+        selector = plant_proof(world, proof)
+        admissions = []
+        launches = []
+        with monkeypatch.context() as patch:
+            patch.setenv("PATH", os.environ["PATH"] + os.pathsep + str(world.root / ".venv" / "bin"))
+
+            def recording_admission(spec, _original=original_admission, _admissions=admissions):
+                _admissions.append(list(spec))
+                return _original(spec)
+
+            def recording_launch(command, cwd, env, *args, _original=original_launch, _launches=launches, **kwargs):
+                _launches.append({"cwd": str(cwd), "env": dict(env), "kwargs": kwargs})
+                return _original(command, cwd, env, *args, **kwargs)
+
+            patch.setattr(stage2.verify_lock, "hold_admission", recording_admission)
+            patch.setattr(stage2, "launch", recording_launch)
+            outcome = run_proof(world, proof, selector, baseline)
+        assert outcome is None, (proof, outcome)
+        assert admissions, proof
+        assert all(spec[0] == "pytest" for spec in admissions), admissions
+        assert launches, proof
+        prefix = "stage2-red-" if proof == "baseline" else "stage2-fixed-"
+        decoy = str(world.root / ".venv" / "bin")
+        for call in launches:
+            assert call["kwargs"]["timeout"] == stage2.RED_FIRST_MINUTES * 60, call
+            assert call["kwargs"]["limit"].endswith("time limit"), call
+            assert call["env"]["PYTHONDONTWRITEBYTECODE"] == "1", call
+            assert decoy not in call["env"]["PATH"].split(os.pathsep), call
+            assert call["cwd"] != str(world.root), call
+            assert prefix in call["cwd"], call
 
 
 # ---------------------------------------------------------------------------
@@ -11620,8 +11998,9 @@ RED_SELECTOR = "tests/test_red.py::test_red"
 
 # The missing-install case of criterion 2: the fixture keeps the shape of the real
 # `require_installed_pi` (a `pytest.fail`, never a skip), and asserts first that the ignored
-# stand-in dependency did not reach the scratch checkout - worktree adds carry committed files
-# only, so the stand-in planted in the source worktree is absent there. A leaked stand-in
+# stand-in dependency did not reach the private checkout - the checkout carries the committed
+# tree, and the proof takes only the attempt's `tests/`, so the stand-in planted untracked and
+# ignored in the source worktree is absent there. A leaked stand-in
 # aborts with exit 3, distinguishable from the missing-install setup failure at exit 1.
 MISSING_PI_TEST = (
     "from pathlib import Path\n\n"

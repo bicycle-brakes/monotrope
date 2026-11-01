@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-28
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-omp
@@ -31,6 +31,14 @@ and 4 below speak of an assertion failure, the successor
 [red-first-pytest-failed](../red-first-pytest-failed/spec.md) governs: its
 **Qualifying failure** also counts pytest's own `pytest.fail.Exception` in
 the call phase as red. Setup and teardown failures remain refused.
+
+Amendment — 2026-11-01: criterion 8's cleanup and reference protection are
+preserved through isolation, not narrowed. The successor
+[red-first-own-refs](../red-first-own-refs/spec.md) runs each proof in a
+private repository with its own reference store: the scratch worktree is gone,
+a created or moved reference is still detected and named — now in the proof's
+own store — and cleanup never deletes or resets a source reference. This
+spec's criteria and historical evidence stand as written.
 
 ## Problem
 
