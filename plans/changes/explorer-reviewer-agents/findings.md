@@ -355,6 +355,17 @@ run from the change's worktree by the orchestrating session.
 | explorer | `claude --agent explorer -p "Reply with the single word ok. Do not use any tool." --output-format json` | `claude-haiku-5-5` | pass |
 | reviewer | `claude --agent reviewer -p "Reply with the single word ok. Do not use any tool." --output-format json` | `claude-opus-5-5` | pass for the model |
 
+Delegated from a parent on another model (phase-6 row P6-1), 2026-11-01,
+Claude Code 2.1.316, same worktree, parent `claude -p --model
+claude-sonnet-5-5 --allowedTools Agent --output-format json`, told to call the
+Agent tool once with the helper as `subagent_type` and the prompt "Reply with
+the single word ok. Do not use any tool.":
+
+| Helper | Parent model | Models in `modelUsage` | Result |
+|---|---|---|---|
+| explorer | `claude-sonnet-5-5` | `claude-haiku-5-5`, `claude-sonnet-5-5` | pass: the child ran on Haiku 5.5, not the parent's model |
+| reviewer | `claude-sonnet-5-5` | `claude-opus-5-5`, `claude-sonnet-5-5` | pass for the model: the child ran on Opus 5.5 |
+
 Not observed: the reviewer's effort `high`. The JSON result names no effort
 field, and `/status` is interactive; the effort is an accepted limit of this
 observation, named in the pull request.
@@ -369,7 +380,7 @@ Stage-2 call, 2026-11-01: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | Phase 6 | plans/changes/explorer-reviewer-agents/findings.md:355 | Both recorded checks run the helper directly through `claude --agent` and prohibit tool use; neither invokes a delegated helper from a parent using a different model. These checks can pass while delegated helpers still inherit the parent's model—the failure this observation must detect. Record both child-model observations from differently configured parents before marking this requirement passed. [Acceptance criterion 6; plan step 4] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | Phase 6 | plans/changes/explorer-reviewer-agents/findings.md:355 | Both recorded checks run the helper directly through `claude --agent` and prohibit tool use; neither invokes a delegated helper from a parent using a different model. These checks can pass while delegated helpers still inherit the parent's model—the failure this observation must detect. Record both child-model observations from differently configured parents before marking this requirement passed. [Acceptance criterion 6; plan step 4] | Codex | fixed — not a test — both helpers observed delegated from a Sonnet 5.5 parent: explorer on Haiku 5.5, reviewer on Opus 5.5 (fresh-session model observation, 2026-11-01) | no — not a test |
 
 Phase 6 verdict: codex 01a1987d-52fb-71f2-ae4b-2d39c8f5c743, 2026-11-01
 Reviewer session: codex 01a1987d-52fb-71f2-ae4b-2d39c8f5c743 — a fresh session reviewed: no phase-2a session was recorded
