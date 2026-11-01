@@ -309,9 +309,9 @@ since then (maintainer, 2026-10-27; [`docs/WORKFLOW.md`](docs/WORKFLOW.md),
 
 What is not enforced: the one-writer rule is a working agreement until the
 write guard exists; worktrees share git's refs, hooks and configuration, so
-isolation separates files, not execution; and orchestrating many agents in
-parallel is evaluated, not built (the third development stage:
-orchestration).
+isolation separates files, not execution; and the lanes are run by hand by
+one orchestrating session — a lane watch that serves an idle lane by itself
+is not built.
 
 ## Not every change is the same size
 
@@ -426,7 +426,13 @@ Checked on 2026-11-01 against `main` at `ac11da5d`.
   (`docs/governance/gate-catalog.md`) exist since bead coding-harness-i0l.
 - A sandbox around paid reviewers, and keeping the work of a failed model
   call (partly built).
-- Orchestration of many agents in parallel: evaluated, not built.
+- Lanes that run themselves. One orchestrating session already keeps
+  several changes moving at once ([three lanes](docs/orchestration.md); five
+  lanes on 2026-10-31/11-01), with the machine-wide verify admission and the
+  run report as its tools. What is still done by hand: noticing an idle or
+  stopped lane, starting its next backlog bead, and committing a stopped
+  attempt's output (beads coding-harness-5q2p, coding-harness-4emv,
+  coding-harness-t3s3).
 
 ## See a completed change
 
