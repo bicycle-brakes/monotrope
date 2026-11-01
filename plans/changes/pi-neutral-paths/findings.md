@@ -550,3 +550,9 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > - L3-3: tests/test_pi_contract.py::test_neutral_prefix_redacts_colon_locations: refs changed while the named test ran: refs/heads/feat/beads-close-themselves
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-3-20261101T085557541965Z-9f26e0d6.md
 > ```
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 808 files, 2965 commits, 12 rules.
+
+Loop attempt: 2026-11-01 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (5 days left).
