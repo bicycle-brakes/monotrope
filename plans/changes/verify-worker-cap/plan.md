@@ -111,8 +111,7 @@ Isolation, stated plainly: the machine lock admitted each run alone, so no
 second `make verify` overlapped a measured pytest span. The machine was not
 otherwise idle: Codex and Pi runner calls of other lanes ran during both runs,
 and the eight-worker run waited 1507 s for two of their verify runs to release
-the lock. Its wall time is therefore not a measure of eight workers; compare
-the pytest times (710.73 s against 627.68 s, 12 % faster with 8). The actual
+the lock. Its wall time is therefore not a measure of eight workers; the pytest times are 710.73 s and 627.68 s; one sample each proves no speedup (spec, non-goals). The actual
 worker count was set by `PYTEST_XDIST_AUTO_NUM_WORKERS`; the quiet pytest
 output does not print the started workers, so the count was not observed
 separately. The logs stayed in the session scratchpad and are not committed.
