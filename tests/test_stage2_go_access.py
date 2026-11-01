@@ -246,6 +246,10 @@ def test_every_go_path_reads_the_one_address_record(world, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 HOSTILE = {
+    "missing-path": "https://opencode.ai",
+    "root-path": "https://opencode.ai/",
+    "missing-path-default-port": "https://opencode.ai:443",
+    "root-path-default-port": "https://opencode.ai:443/",
     "plain-http": "http://opencode.ai/zen/go/v1",
     "foreign-host": "https://evil.test/zen/go/v1",
     "host-suffix": "https://opencode.ai.evil.test/zen/go/v1",

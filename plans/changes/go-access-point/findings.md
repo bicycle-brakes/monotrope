@@ -1210,3 +1210,5 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > 4 failed, 32 passed in 4.16s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-access-point/stage2/attempts/go-access-point/attempt-3-20261101T085433714403Z-ad91832b.md
 > ```
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 802 files, 2958 commits, 12 rules.

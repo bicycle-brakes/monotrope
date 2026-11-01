@@ -242,8 +242,8 @@ def url_problem(value: object, host: str) -> str | None:
 
     Strict forms only: HTTPS, the admitted host (case-insensitive), the
     default port — explicit 443 tolerated — no userinfo, query, fragment,
-    control character or backslash, and a parseable authority. The path is
-    free: a same-host path move is admissible with a notice, not a refusal.
+    control character or backslash, and a parseable authority. A non-root
+    path is required; a same-host path move is admissible with a notice.
     The reason names the structural fault alone and never echoes the value,
     so a credential-bearing URL cannot enter a diagnostic.
     """
@@ -272,6 +272,8 @@ def url_problem(value: object, host: str) -> str | None:
         return "the base carries a query"
     if parts.fragment:
         return "the base carries a fragment"
+    if parts.path in ("", "/"):
+        return "the base has no API path"
     return None
 
 
