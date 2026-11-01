@@ -272,3 +272,21 @@ Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model longcat-2
 Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 2975 commits, 12 rules.
 
 Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 811 files, 2979 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 2991 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-install/spec.md` +7 -5
+> - `scripts/stage2.py` +7 -4
+> - `tests/test_stage2.py` +53 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-2: tests/test_stage2.py::test_fixed_proof_refuses_post_run_tree_oserror: the call of `tests/test_stage2.py::test_fixed_proof_refuses_post_run_tree_oserror` failed with OSError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-1-20261101T184735737922Z-6631b72a.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 811 files, 3001 commits, 12 rules.

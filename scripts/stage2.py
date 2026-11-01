@@ -5778,9 +5778,10 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     object copy carries the fixed tree `worktree_tree` wrote without a ref. Every source ref is
     preserved under its own name first, so a ref the source already had stays a move in the
     proof's store, not an accidental creation; the remote configuration goes, so an ordinary
-    Git operation in the proof has no path back to the source. HEAD is detached at the source's
-    HEAD commit and `checkout` - the baseline commit, or the fixed code's tree id - is read into
-    the index and the working tree. The source's refs, index and worktree are read here, never
+    Git operation in the proof has no path back to the source. HEAD is detached at `checkout`
+    when it names the baseline commit, or at the source's HEAD for a fixed-code tree id.
+    `checkout` is read into the index and the working tree, leaving a baseline clean against
+    its own commit. The source's refs, index and worktree are read here, never
     written (spec, criteria 1 and 6).
     """
     # Snapshot before copying objects: later source refs may name objects the clone never saw.
@@ -5794,6 +5795,8 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     _git_output(destination, "remote", "remove", "origin")
     for name, target in refs.items():
         _git_output(destination, "update-ref", name, target)
+    if _git_output(destination, "cat-file", "-t", checkout).strip() == "commit":
+        head = checkout
     _git_output(destination, "update-ref", "--no-deref", "HEAD", head)
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
 
@@ -5887,7 +5890,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         if tree_before is not None and private is not None:
             try:
                 tree_now = worktree_tree(private)
-            except Refused as error:
+            except (Refused, OSError) as error:
                 named.append(f"the private tree could not be measured ({error})")
             else:
                 if tree_now != tree_before:

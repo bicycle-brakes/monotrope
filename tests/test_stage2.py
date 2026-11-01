@@ -11830,6 +11830,36 @@ def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> No
     assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n", "the proof wrote the source"
 
 
+def test_baseline_proof_detaches_at_baseline_with_clean_index(world: World) -> None:
+    """Planted fault: baseline bytes are staged against the attempt's HEAD, falsifying Git-reading tests."""
+    baseline = repair_world(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    git(world.root, "add", "src/app.py")
+    git(world.root, "commit", "--quiet", "-m", "attempt production fix")
+    attempt = git(world.root, "rev-parse", "HEAD")
+    (world.root / "tests" / "test_baseline_git.py").write_text(
+        "import subprocess\n\n\ndef test_baseline_git():\n"
+        f"    git = {GIT!r}\n"
+        "    def read(*args):\n"
+        "        return subprocess.check_output([git, *args], text=True).strip()\n"
+        f"    if read('rev-parse', 'HEAD') != {baseline!r}:\n"
+        "        raise RuntimeError('proof HEAD is not the baseline')\n"
+        "    if read('diff', '--cached', '--name-only'):\n"
+        "        raise RuntimeError('baseline index is dirty')\n"
+        "    if read('status', '--porcelain', '--', 'src'):\n"
+        "        raise RuntimeError('baseline production checkout is dirty')\n"
+        f"    if {attempt!r} in read('log', '--format=%H'):\n"
+        "        raise RuntimeError('attempt history reached the baseline')\n"
+        "    if subprocess.run([git, 'symbolic-ref', '-q', 'HEAD']).returncode == 0:\n"
+        "        raise RuntimeError('baseline HEAD is not detached')\n"
+        "    assert False, 'qualifying failure from a clean baseline'\n",
+        encoding="utf-8",
+    )
+    outcome = stage2.red_first(world.root, baseline, "tests/test_baseline_git.py::test_baseline_git", None)
+    assert outcome is None, outcome
+    assert git(world.root, "rev-parse", "HEAD") == attempt
+
+
 def test_fixed_proof_uses_current_file_tree(world: World) -> None:
     """Criterion 5. Planted fault: the fixed proof checks committed HEAD instead of the worktree's
     current Git-visible tree - an uncommitted change, a deletion, a new file, an executable bit, a
@@ -11933,6 +11963,32 @@ def test_proofs_refuse_unmeasured_state(world: World, monkeypatch: pytest.Monkey
                 point,
                 outcome,
             )
+
+
+def test_fixed_proof_refuses_post_run_tree_oserror(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: an OSError in the final tree measurement escapes and prevents cleanup."""
+    repair_world(world)
+    selector = plant_proof(world, "baseline")  # Also retain the already recorded nonpassing verdict.
+    original_tree = stage2.worktree_tree
+    measured: list[Path] = []
+
+    def failing_tree(root):
+        if root != world.root:
+            measured.append(root)
+            if len(measured) == 2:
+                raise OSError(28, "planted post-run temporary index failure")
+        return original_tree(root)
+
+    monkeypatch.setattr(stage2, "worktree_tree", failing_tree)
+    try:
+        outcome = stage2.fixed_test_proof(world.root, selector, None)
+    except OSError as error:
+        pytest.fail(f"the post-run measurement escaped instead of refusing the proof: {error}")
+    assert outcome is not None and "private tree could not be measured" in outcome, outcome
+    assert "planted post-run temporary index failure" in outcome, outcome
+    assert "pytest ended 1 on the fixed code" in outcome, outcome
+    assert len(measured) == 2
+    assert not measured[0].parent.exists(), "measurement failure skipped private repository cleanup"
 
 
 def test_fixed_proof_refuses_tree_changes(world: World) -> None:

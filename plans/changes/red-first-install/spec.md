@@ -32,13 +32,15 @@ and 4 below speak of an assertion failure, the successor
 **Qualifying failure** also counts pytest's own `pytest.fail.Exception` in
 the call phase as red. Setup and teardown failures remain refused.
 
-Amendment — 2026-11-01: criterion 8's cleanup and reference protection are
-preserved through isolation, not narrowed. The successor
+Amendment — 2026-11-01: criterion 8's cleanup protection is preserved, and
+its reference-change refusals now apply to the proof's private store. The successor
 [red-first-own-refs](../red-first-own-refs/spec.md) runs each proof in a
 private repository with its own reference store: the scratch worktree is gone,
-a created or moved reference is still detected and named — now in the proof's
-own store — and cleanup never deletes or resets a source reference. This
-spec's criteria and historical evidence stand as written.
+and shared-store reference movement no longer refuses the proof. A reference
+created or moved in the proof's private store is still detected, named and
+refused; cleanup never deletes or resets a source reference. This spec's
+criteria and historical evidence remain as written, with the successor
+governing this change in the scope of reference-change refusals.
 
 ## Problem
 
