@@ -1617,6 +1617,31 @@ def retain_terms_warnings(warnings: list[str]) -> list[str]:
     return evidence
 
 
+_address_notice_evidence: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "address_notice_evidence", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_address_notices() -> Iterator[list[str]]:
+    """Collect a round's notices across concurrent members, retries and replacements."""
+    notices: list[str] = []
+    token = _address_notice_evidence.set(notices)
+    try:
+        yield notices
+    finally:
+        _address_notice_evidence.reset(token)
+
+
+def retain_address_notices(notices: list[str]) -> list[str]:
+    """Keep assessed, path-only diagnostics for the operation's durable evidence."""
+    evidence = _address_notice_evidence.get()
+    if evidence is None:
+        return notices
+    evidence.extend(notice for notice in notices if notice not in evidence)
+    return evidence
+
+
 def terms_warnings(entry: dict) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
@@ -1660,6 +1685,7 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, d
         raise Refused(f"the Go address record is unusable: {error}") from None
     verdict = stage2_go.assess(policy, model, destination)
     if verdict.notice:
+        retain_address_notices([verdict.notice])
         print(f"Address notice: {verdict.notice}")
     if verdict.problem:
         raise Refused(verdict.problem)
@@ -2641,6 +2667,7 @@ def run_reviewer(
             )
         (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
         _dropped, notices = activate_overlay(agent, store, policy)
+        retain_address_notices(notices)
         for notice in notices:
             print(f"Address notice: {notice}", file=sys.stderr)
         home = scratch / "home"
@@ -8036,6 +8063,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 ) from None
 
 
+@capture_address_notices()
 def _review_round(
     root: Path,
     change: str,
@@ -8291,6 +8319,8 @@ def _review_round(
             note = f"Notice: {warning}."
             if note not in notes:
                 notes.append(note)
+        for notice in retain_address_notices([]):
+            notes.append(f"Address notice: {notice}")
         parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
         for member, block in reviewer_blocks:
             # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.
@@ -8303,6 +8333,10 @@ def _review_round(
         state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
         write_round(change, "\n\n".join(parts), state, root)
     except BaseException:
+        for notice in retain_address_notices([]):
+            note = f"Address notice: {notice}"
+            if note not in notes:
+                notes.append(note)
         if audited:
             # The calls above wrote no round: say so in findings.md, so their audit lines read as an
             # attempt that consumed nothing and not as a lost record (DL-A-6 of the deep review).

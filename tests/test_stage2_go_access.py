@@ -39,7 +39,9 @@ import stage2_swarm as swarm  # noqa: E402
 from test_stage2 import (  # noqa: E402
     TEST_ADDRESS,
     TEST_LADDER,
+    TEST_RUNGS,
     World,
+    loop_state,
 )
 from test_stage2 import world as stage2_world  # noqa: E402
 from test_stage2_session import GO_BARE, GO_MODEL, pi_steps  # noqa: E402
@@ -723,13 +725,36 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_notices_are_kept_and_sanitised(world, monkeypatch, capsys):
+@pytest.mark.parametrize("dispatch_only", [False, True])
+def test_notices_are_kept_and_sanitised(world, monkeypatch, capsys, dispatch_only):
     """Criterion 11: a move notice reaches durable evidence; refusals sanitise; raw evidence stands.
 
     Fault: the notice was transient console output, a refusal echoed a
     credential-bearing URL, or admission rewrote the catalog's raw evidence.
     """
-    model = TEST_LADDER[0]
+    model = TEST_RUNGS[0] if dispatch_only else TEST_LADDER[0]
+    # Resume a paid round: discovery notices cannot stand in for reviewer evidence.
+    state = loop_state(consumed=("free", "flash") if dispatch_only else ("free",))
+    state["free"]["models_store"] = go_store(*(row(member, baseUrl=MOVED_BASE) for member in TEST_LADDER))
+    world.write_record([("L1-1", "fixed — tests/test_x.py::test_y", "no")], state=state)
+    if dispatch_only:
+        # Activation sees a known path; the policy changes before the final send.
+        edit_entry(world, lambda e: e["adresse"]["apis"]["openai-completions"].update(basis=MOVED_BASE))
+        real_check = stage2.check_overlay
+
+        def check_then_move(*args, **kwargs):
+            real_check(*args, **kwargs)
+            edit_entry(world, lambda e: e["adresse"]["apis"]["openai-completions"].update(basis=RECORDED_BASE))
+
+        monkeypatch.setattr(stage2, "check_overlay", check_then_move)
+    world.script(pi=[{"stdout": "No finding."}] * len(TEST_LADDER))
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    if dispatch_only:
+        assert "Address notice:" not in capsys.readouterr().err, "activation already saw the move"
+    record = world.record().read_text(encoding="utf-8").split("## Round 2", 1)[1]
+    assert f"Address notice: opencode-go/{model}:" in record, "the reviewer's move notice stayed transient"
+    assert "/zen/go/v1" in record and "/inference/go/v1" in record
     harness = Harness(world, monkeypatch)
     store = go_store(row(model, baseUrl=MOVED_BASE))
     capsys.readouterr()

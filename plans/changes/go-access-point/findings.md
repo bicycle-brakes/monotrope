@@ -894,3 +894,7 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-5: `tests/test_stage2_go_access.py::test_absent_bases_get_the_recorded_api_default. `assess` in `scripts/stage2_go.py` refuses an explicit `baseUrl: null` and fills only an omitted one.` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-access-point/stage2/attempts/go-access-point/attempt-3-20261031T222304389911Z-be6c8a0e.md
 > ```
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 802 files, 2949 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 802 files, 2950 commits, 12 rules.
