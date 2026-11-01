@@ -18,7 +18,7 @@ English technical terms, dated sources per value, as `modelle_terms` does):
       host: opencode.ai
       apis:
         openai-completions:
-          basis: "https://opencode.ai/zen/go/v1"
+          basis: "https://opencode.ai/inference/go/openai/v1"
           quelle: "https://opencode.ai/docs/go (the Go page)"
           gelesen: "2026-10-31"
 """
