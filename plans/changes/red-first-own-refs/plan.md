@@ -1,7 +1,7 @@
 ---
 title: "Plan — red-first-own-refs"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-01
 last_reviewed: 2026-11-01
 updated: 2026-11-01
@@ -156,3 +156,13 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-01 07:55:19–09:29:44 UTC, 5665 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-01 09:29:53–10:09:58 UTC, 2405 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-01 10:10:05–10:24:47 UTC, 883 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+
+## Implementation accepted by hand — 2026-11-01
+
+The implement runner rejected three attempts; the third failed only on
+`test_no_git_launch_in_the_runner_names_a_bare_git` (`assert 7 >= 8`): the
+change removed one bare `git` launch, which is the change's purpose. The
+orchestrating session accepted the third attempt's saved work and lowered
+that guard's floor from 8 to 7 with a comment naming the removed launch
+(commit 5581e35a); no fourth attempt ran. Full `make verify` was green on
+that commit (2026-11-01). Review row L1-8 asked for this record.

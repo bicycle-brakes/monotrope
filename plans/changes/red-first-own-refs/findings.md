@@ -2,7 +2,7 @@
 title: "Findings — red-first-own-refs"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-01
 created: 2026-11-01
 last_reviewed: 2026-11-01

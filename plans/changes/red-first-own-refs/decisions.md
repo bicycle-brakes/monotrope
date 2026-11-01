@@ -2,7 +2,7 @@
 title: "Decisions — red-first-own-refs"
 category: decisions
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-01
 created: 2026-11-01
 last_reviewed: 2026-11-01
@@ -24,7 +24,7 @@ Class: bounded (one counted interview record or a reasoned skip owed).
 ## SKIP · interview
 
 status: skipped
-reason: the second finding of one mechanism (AGENTS.md, the mechanism rule) — on 2026-10-31 and 2026-11-01 the red-first and fixed-code proofs of three changes (verify-worker-cap, beads-close-themselves, pi-neutral-paths, and go-access-point's round 1) were voided by refs that other lanes moved — obliges a structural remedy, and the remedy chosen here keeps the protection of red-first-install criterion 8 whole instead of narrowing it, so no decision of the maintainer's is changed; narrowing the watched refs would weaken that criterion and is kept out of scope for the maintainer.
+reason: the second finding of one mechanism (AGENTS.md, the mechanism rule) — on 2026-10-31 and 2026-11-01 the red-first and fixed-code proofs of four changes (verify-worker-cap, beads-close-themselves, pi-neutral-paths and go-access-point, the last in its round 1) were voided by refs that other lanes moved — obliges a structural remedy, and the remedy chosen here keeps the protection of red-first-install criterion 8 whole instead of narrowing it, so no decision of the maintainer's is changed; narrowing the watched refs would weaken that criterion and is kept out of scope for the maintainer.
 
 ## Details for the draft
 

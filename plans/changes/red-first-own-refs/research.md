@@ -1,7 +1,7 @@
 ---
 title: "Research — red-first-own-refs"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-01
 last_reviewed: 2026-11-01
 updated: 2026-11-01
@@ -14,30 +14,6 @@ produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore,
 review: {status: pending, approved_by: null, approved_at: null}
 class: bounded
 tags: [research]
----
-
-# red first own refs — Research
-
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
-Stage-2 call, 2026-11-01: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 807 files, 2946 commits, 12 rules.
-
-## Runner exploration — 2026-11-01
-
-The research is complete. Here is the content for `plans/changes/red-first-own-refs/research.md`, ready for the runner to append below the existing stage-2 call line.
-
----
-
-Suggested frontmatter addition (the skeleton lacks it; the sibling research `plans/changes/red-first-pytest-failed/research.md` carries the same field):
-
-```yaml
 neighbours:
   - plans/changes/red-first-install/spec.md
   - plans/changes/red-first-pytest-failed/spec.md
@@ -45,9 +21,13 @@ neighbours:
   - plans/changes/guard-test/research.md
   - plans/changes/repair-fixed-line-format/findings.md
   - plans/changes/terms-expiry/findings.md
-```
+---
 
 # red first own refs — Research
+
+Stage-2 call, 2026-11-01: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 807 files, 2946 commits, 12 rules.
+
+## Runner exploration — 2026-11-01
 
 ## What exists today
 
