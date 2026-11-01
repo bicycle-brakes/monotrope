@@ -37,8 +37,29 @@ export const FLAG = "stage2-neutral-paths";
 
 // The three lines Pi renders into its <docs> block; each value is an absolute
 // installation path. `(extensions, custom tools, SDK)` follows the examples path,
-// which is why the capture stops at the first whitespace.
-const DOCS_LINE = /^\s*-\s*(?:Main documentation|Additional docs|Examples):\s*(\S+)/gm;
+// which is removed before harvesting; paths may contain spaces. Unknown lines
+// fail closed rather than hiding an unharvested installation prefix.
+const DOCS_LINE = /^- (Main documentation|Additional docs|Examples): (.+)$/;
+const DOCS_PROSE = [
+  "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
+  "- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
+  "- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md), environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md), codemode scripts and non-LLM models such as classifiers and image models (docs/codemode.md)",
+  "- When working on pi topics, read the docs and examples, and follow .md cross-references before implementing",
+  "- Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)",
+];
+
+function failClosed(reason) {
+  // Pi catches hook exceptions and continues with the original prompt/payload.
+  // Exit synchronously instead: no unsafe request may follow a failed check.
+  process.stderr.write(`stage2 neutral paths: ${reason}; refusing model contact\n`);
+  process.exit(1);
+}
+
+function checkCwd(prompt) {
+  for (const match of String(prompt).matchAll(/<cwd>([\s\S]*?)<\/cwd>/g)) {
+    if (match[1].trim() !== NEUTRAL_CWD) failClosed("working-directory override did not hold");
+  }
+}
 
 // The directory of `path`: everything before its last separator.
 export function parentOf(path) {
@@ -52,13 +73,24 @@ export function parentOf(path) {
 // every other mention of the installation anywhere in the payload.
 export function docsPaths(prompt) {
   const found = [];
-  for (const match of String(prompt ?? "").matchAll(DOCS_LINE)) {
-    const path = match[1];
-    found.push(path, parentOf(path));
-    // Pi's docs live below the pinned install's node_modules. Cover the install
-    // root itself too, rather than only the README/docs/examples directories.
-    const install = path.search(/[\\/]node_modules[\\/]/);
-    if (install > 0) found.push(path.slice(0, install));
+  const text = String(prompt ?? "");
+  const blocks = [...text.matchAll(/<docs>([\s\S]*?)<\/docs>/g)];
+  if (text.replace(/<docs>[\s\S]*?<\/docs>/g, "").match(/<\/?docs>/)) {
+    failClosed("unrecognized documentation block");
+  }
+  for (const block of blocks) {
+    for (const raw of block[1].split("\n")) {
+      const line = raw.trim();
+      if (!line || DOCS_PROSE.includes(line)) continue;
+      const match = line.match(DOCS_LINE);
+      if (!match) failClosed("unrecognized documentation line");
+      const path = match[1] === "Examples"
+        ? match[2].replace(/ \(extensions, custom tools, SDK\)$/, "") : match[2];
+      if (!/^(?:\/|[A-Za-z]:[\\/])/.test(path)) failClosed("non-absolute documentation location");
+      found.push(path, parentOf(path));
+      const install = path.search(/[\\/]node_modules[\\/]/);
+      if (install > 0) found.push(path.slice(0, install));
+    }
   }
   return found;
 }
@@ -96,7 +128,7 @@ export function replacePrefix(text, form) {
     const after = at + form.length;
     const previous = original[at - 1];
     const next = original[after];
-    const boundary = at === 0 || /[\s"'`([{=,;]/.test(previous);
+    const boundary = at === 0 || /[\s"'`([{=,;:]/.test(previous);
     const separator = next === "/" || next === "\\";
     // A period ends a sentence only when it is not a filename continuation.
     const delimiter = next === undefined || /[\s"'`()[\]{},;:!?]/.test(next) ||
@@ -151,10 +183,32 @@ export function registerNeutralPaths(pi, { home = process.env.HOME ?? "", cwd = 
       event.systemPromptOptions.cwd = NEUTRAL_CWD;
     }
     const rendered = event.systemPrompt;
+    checkCwd(rendered);
     for (const path of docsPaths(rendered)) harvested.add(path);
     return { systemPrompt: stripDocsBlock(rendered) };
   });
-  pi.on("before_provider_request", (event) => redactPayload(event.payload, forms()));
+  pi.on("before_provider_request", (event) => {
+    // Check the actual rendered wire prompt too, after Pi applied our override.
+    // Do this before redaction: redaction must not mask a broken cwd renderer.
+    const inspect = (value) => {
+      if (typeof value === "string") {
+        checkCwd(value);
+        if (/<\/?docs>/.test(value)) failClosed("documentation block survived the override");
+      } else if (value && typeof value === "object") {
+        for (const child of Object.values(value)) inspect(child);
+      }
+    };
+    // Only the rendered system prompt is subject to this format assertion.
+    // A read result or user message may legitimately quote Pi documentation.
+    const payload = event.payload;
+    inspect(payload?.system);
+    inspect(payload?.instructions);
+    inspect(payload?.systemInstruction);
+    for (const message of payload?.messages ?? []) {
+      if (message.role === "system" || message.role === "developer") inspect(message.content);
+    }
+    return redactPayload(event.payload, forms());
+  });
 }
 
 export default function (pi) {

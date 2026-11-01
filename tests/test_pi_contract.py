@@ -44,6 +44,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_availability  # noqa: E402
+import stage2_research_run  # noqa: E402
 import stage2_session  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
@@ -1197,7 +1199,8 @@ def test_real_launch_payloads_have_no_local_identifiers(project: Path, transport
     """Criterion 4: every complete request of every covered shape is free of local location identifiers.
 
     Shapes: the paid reviewer (worktree, tools, a tool result and a tool error
-    following), the free member (scratch, no tools) and the interactive session
+    following), the free member (scratch, no tools), repository/public/free research
+    seats, both availability probes, and the interactive session
     (its production argv in RPC mode) across two user turns, context labels and
     a tool follow-up.
     """
@@ -1237,6 +1240,9 @@ def test_real_launch_payloads_have_no_local_identifiers(project: Path, transport
     (one,) = free.requests
     assert_payloads_are_neutral([one], shape_identifiers(transport.calls[-1]["env"], None), "the free member")
     assert tool_names(one) == set(), "the free member was offered tools"
+    # Exercise the production research builders and both probe entry routes too.
+    for shape in ("repository", "public", "free", "review-probe", "research-probe"):
+        capture_research_or_probe(project, tmp_path, shape)
     # the interactive session: context on, two user turns, one tool follow-up
     (project / "AGENTS.md").write_text(CONTEXT_CANARY + "\n", encoding="utf-8")
     scratch = scratch_of(tmp_path)
@@ -1721,3 +1727,193 @@ if (JSON.stringify(payload) !== before) throw new Error('local transcript was mu
         ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
     )
     assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize("phase", ["before_agent_start", "before_provider_request"])
+def test_neutral_cwd_fails_closed(phase: str) -> None:
+    """A Pi renderer ignoring the cwd override must stop, even when Pi catches hook errors."""
+    script = r"""
+import { registerNeutralPaths } from MODULE;
+const handlers = {};
+registerNeutralPaths({on(name, handler) { handlers[name] = handler; }}, {home: '/home-canary', cwd: '/repo-canary'});
+try {
+  const prompt = '<cwd>\n/repo-canary\n</cwd>';
+  if (PHASE === 'before_agent_start') {
+    handlers.before_agent_start({systemPromptOptions: {}, systemPrompt: prompt});
+  } else {
+    handlers.before_agent_start({systemPromptOptions: {}, systemPrompt: '<cwd>\n.\n</cwd>'});
+    handlers.before_provider_request({payload: {messages: [{role: 'system', content: prompt}]}});
+  }
+} catch (_) { /* Pi catches extension errors and continues: a throw is insufficient. */ }
+console.log('unsafe turn continued');
+""".replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri())).replace("PHASE", json.dumps(phase))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode != 0 and "unsafe turn continued" not in done.stdout, done.stdout + done.stderr
+    assert "stage2 neutral paths" in done.stderr
+
+
+@pytest.mark.parametrize("line", ["- Manual location: /unknown-install/manual.md", "unrecognized documentation format"])
+def test_neutral_docs_fail_closed(line: str) -> None:
+    """An unfamiliar docs layout cannot silently bypass installation-prefix harvesting."""
+    script = r"""
+import { registerNeutralPaths } from MODULE;
+const handlers = {};
+registerNeutralPaths({on(name, handler) { handlers[name] = handler; }}, {home: '/home-canary', cwd: '/repo-canary'});
+try {
+  handlers.before_agent_start({systemPromptOptions: {}, systemPrompt: '<docs>\n' + LINE + '\n</docs>'});
+} catch (_) { /* Match Pi's error swallowing. */ }
+console.log('unsafe turn continued');
+""".replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri())).replace("LINE", json.dumps(line))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode != 0 and "unsafe turn continued" not in done.stdout, done.stdout + done.stderr
+    assert "stage2 neutral paths" in done.stderr
+
+
+def test_neutral_prefix_redacts_colon_locations() -> None:
+    script = r"""
+import { replacePrefix } from MODULE;
+for (const [input, expected] of [['cwd:/abs/repo/x', 'cwd:x'], ['cwd:/abs/repo', 'cwd:.']]) {
+  if (replacePrefix(input, '/abs/repo') !== expected) throw new Error('colon location survived');
+}
+""".replace("MODULE", json.dumps(NEUTRAL_SOURCE.as_uri()))
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False
+    )
+    assert done.returncode == 0, done.stderr
+
+
+def capture_research_or_probe(project: Path, tmp_path: Path, shape: str) -> None:
+    """Keep production argv/extensions/cwd; change only the offline transport and plant location metadata."""
+    requests = []
+    observed = []
+    tool = "read" if shape == "repository" else "public_fetch"
+    args = {"path": "sentinel.txt"} if shape == "repository" else {"url": "file:///not-public"}
+    script = [{"content": "done"}]
+    if not shape.endswith("probe"):
+        script = [
+            {"tool_calls": [{"name": tool, "arguments": args}]},
+            {"tool_calls": [{"name": tool, "arguments": {"path": "missing.txt"} if tool == "read" else args}]},
+            *script,
+        ]
+    standin = StandIn(script)
+    original_launch = stage2.launch
+
+    def send(command, cwd, env, key=None, timeout=None, limit=None):
+        env = {**contract_environment(), **env, "NODE_OPTIONS": f"--import {GUARD}"}
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        (agent / "models.json").write_text(
+            json.dumps(
+                {
+                    "providers": {
+                        "opencode-go": {
+                            "baseUrl": standin.url,
+                            "models": [
+                                {
+                                    "id": command[command.index("--model") + 1].split("/", 1)[1],
+                                    "api": "openai-completions",
+                                }
+                            ],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        identifiers = shape_identifiers(env, Path(cwd), agent.parent)
+        planted = "\n".join(f"cwd:{path}/canary.txt" for name, path in identifiers.items() if name != "repo-root")
+        prompt = Path(command[command.index("--append-system-prompt") + 1])
+        prompt.write_text(prompt.read_text() + "\n" + planted, encoding="utf-8")
+        observed.append(identifiers)
+        done = original_launch(command, cwd, env, key, timeout=timeout, limit=limit)
+        assert done.returncode == 0, done.stderr
+        assert "extension_error" not in done.stderr, done.stderr
+        return done
+
+    try:
+        with patch.object(stage2, "launch", send):
+            if shape.endswith("probe"):
+                # Admission/leak scanning are independent gates, already covered by
+                # their own suites; never read the machine's private denylist here.
+                with patch.object(stage2_availability, "_checked_probe"):
+                    stage2_availability.probe_go(
+                        stage2,
+                        project,
+                        "contract",
+                        "contract-rung",
+                        SYNTHETIC_KEY,
+                        [],
+                        verb="prepare-loop" if shape == "review-probe" else "prepare-explore",
+                    )
+            else:
+                scratch = tmp_path / ("research-" + shape)
+                scratch.mkdir()
+                run = stage2_research_run.Run(project, "contract", stage2, "bounded", {})
+                run.key = SYNTHETIC_KEY
+                command, cwd, env = run.pi_command(
+                    {
+                        "model": "acme-1-free" if shape == "free" else "contract-rung",
+                        "tools": "repository" if shape == "repository" else "public",
+                    },
+                    "INSTRUCTION-CANARY-research: follow the scripted tools.",
+                    scratch,
+                )
+                send(command, cwd, env, SYNTHETIC_KEY)
+        requests = standin.requests
+    finally:
+        standin.close()
+    assert len(requests) == len(script), f"{shape}: missing tool/error follow-up"
+    assert_payloads_are_neutral(requests, observed[0], shape)
+    for request in requests:
+        assert "<cwd>\n.\n</cwd>" in system_text(request), shape
+        assert "<docs>" not in system_text(request), shape
+    if shape == "repository":
+        assert SENTINEL_IN in message_text(requests[1])
+        assert "missing.txt" in message_text(requests[2])
+    elif not shape.endswith("probe"):
+        assert tool_names(requests[0]) == {"public_search", "public_fetch"}
+        assert "only https:// destinations are fetched" in message_text(requests[1])
+        assert "only https:// destinations are fetched" in message_text(requests[2])
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("fault", ["cwd", "docs"])
+def test_real_neutralization_aborts_unsafe_rendering(project: Path, tmp_path: Path, fault: str) -> None:
+    """Simulate a changed renderer through real Pi hooks; no unsafe request may reach the provider."""
+    scratch = scratch_of(tmp_path)
+    neutral = extension_copy(NEUTRAL_SOURCE, scratch, "neutral-paths.mjs")
+    regression = scratch / "renderer-regression.mjs"
+    if fault == "cwd":
+        # Run after the neutral hook, simulating Pi restoring cwd after its override.
+        body = "return {systemPrompt: event.systemPrompt.replace('<cwd>\\n.\\n</cwd>', '<cwd>\\n' + process.cwd() + '\\n</cwd>')};"
+        extensions = ["-e", str(neutral), "-e", str(regression)]
+    else:
+        # Run first, so the neutral hook sees an unfamiliar Pi documentation label.
+        body = "return {systemPrompt: event.systemPrompt.replace('Main documentation:', 'Manual location:')};"
+        extensions = ["-e", str(regression), "-e", str(neutral)]
+    regression.write_text(
+        "export default function(pi) { pi.on('before_agent_start', event => {" + body + "}); }",
+        encoding="utf-8",
+    )
+    standin = StandIn([{"content": "unsafe request answered"}])
+    try:
+        done = run_pi(
+            project,
+            scratch,
+            *REVIEWER_FLAGS,
+            *extensions,
+            "--no-tools",
+            "--model",
+            "opencode-go/contract-rung",
+            "--",
+            "Stop without sending an unsafe prompt.",
+            providers={"opencode-go": {"baseUrl": standin.url}},
+        )
+    finally:
+        standin.close()
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert "stage2 neutral paths" in done.stderr, done.stderr
+    assert not standin.requests, "unsafe rendering reached the provider"

@@ -505,3 +505,48 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > - L2-2: tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal: the call of `tests/test_stage2_pi_extensions.py::test_neutral_copy_failure_is_shared_named_refusal[failure0-review]` failed with FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-3-20261101T073634885341Z-f042820e.md
 > ```
+
+Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model hy3 · leak check clean over 808 files, 2956 commits, 12 rules.
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 808 files, 2957 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_pi_neutral_paths.mjs` +65 -11
+> - `tests/test_pi_contract.py` +197 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers: the setup phase of `tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers` ended failed; red first needs passing setup and teardown
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-1-20261101T085557541965Z-9f26e0d6.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 808 files, 2957 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers: the setup phase of `tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers` ended failed; red first needs passing setup and teardown
+> - L3-2: tests/test_pi_contract.py::test_neutral_cwd_fails_closed: refs changed while the named test ran: refs/heads/feat/go-access-point
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-2-20261101T085557541965Z-9f26e0d6.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 808 files, 2959 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers: the setup phase of `tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers` ended failed; red first needs passing setup and teardown
+> - L3-3: tests/test_pi_contract.py::test_neutral_prefix_redacts_colon_locations: refs changed while the named test ran: refs/heads/feat/beads-close-themselves
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/pi-neutral-paths/stage2/attempts/pi-neutral-paths/attempt-3-20261101T085557541965Z-9f26e0d6.md
+> ```
