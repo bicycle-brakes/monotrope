@@ -125,3 +125,10 @@ changes. Conditional inventory/kit maintenance remains blocked on the scope
 answer; held definitions are always the orchestrator's responsibility.
 
 ## Time used
+
+## Scope answer — 2026-11-01
+
+The maintainer answered the plan card's question on 2026-11-01 at about 08:55
+UTC ("Ja"): step 3 runs — `docs/WORKFLOW.md` lists both helpers as supplied,
+with its test, and `scripts/kit/probe.py` raises its cap from 42 to 44 with
+the stated reason.
