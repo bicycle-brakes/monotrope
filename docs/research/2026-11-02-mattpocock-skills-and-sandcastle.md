@@ -147,3 +147,20 @@ worktree and a private temporary directory, and what that breaks.
 Nothing was installed or run. No skill was tried on this repository; the
 recommendations rest on the text of the skills and guides, and on the
 harness's own logs of 2026-11-02.
+
+## Beads (2026-11-02)
+
+Existing beads checked first; three already held a point:
+
+- The repairing model runs the named tests only — **already bead
+  coding-harness-gxwg** (in progress since 2026-10-31, plan card waiting for
+  the maintainer); the measurement and the repair prompt's own `make verify`
+  permission were added as a note.
+- Question frontier and yes-wording — new bead coding-harness-e4zd, linked to
+  coding-harness-04xk (the same protocol; one decision PR for both).
+- Glossary and three ADR criteria — new bead coding-harness-il3o, linked to
+  the epic coding-harness-3ar and to the paraphrase step coding-harness-m1ba.
+- Seatbelt spike — new bead coding-harness-nevd, linked to
+  coding-harness-s9r (isolate each writing attempt).
+- Expand–contract — notes on coding-harness-vg9 (split `stage2.py`) and
+  coding-harness-32xf (hot files and merge order).
