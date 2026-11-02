@@ -58,10 +58,10 @@ PYTHON=.venv/bin/python3 make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_runner_report_matches_selected_job — docs or drift reports verify, or default/explicit verify reports another name.
-- 2: not yet written tests/test_ci.py::test_runner_report_matches_selected_job — selected/global counts are confused or placement removes a gate from the membership count.
-- 3: not yet written tests/test_ci.py::test_runner_report_matches_selected_job — keys, known git values, unavailable-reference nulls or the configuration byte digest change.
-- 4: not yet written tests/test_ci.py::test_runner_report_keeps_gate_verdict — unselected gates run, later gates are skipped, or block/report/advisory failures give the wrong exit code.
+- 1: tests/test_ci.py::test_runner_report_matches_selected_job — docs or drift reports verify, or default/explicit verify reports another name.
+- 2: tests/test_ci.py::test_runner_report_matches_selected_job — selected/global counts are confused or placement removes a gate from the membership count.
+- 3: tests/test_ci.py::test_runner_report_matches_selected_job — keys, known git values, unavailable-reference nulls or the configuration byte digest change.
+- 4: tests/test_ci.py::test_runner_report_keeps_gate_verdict — unselected gates run, later gates are skipped, or block/report/advisory failures give the wrong exit code.
 
 ## Boundaries and route
 
@@ -74,3 +74,5 @@ Stage 2 on 2026-11-02, route flash, endpoint `glm-coding-plan`, model
 `glm-5.3-flash`; no Stage-1 fallback is recorded.
 
 ## Time used
+
+2026-11-02 09:27:18–10:12:26 UTC, 2708 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner

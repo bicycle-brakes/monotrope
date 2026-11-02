@@ -19,6 +19,7 @@ import contextlib
 import copy
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import re
@@ -1838,6 +1839,230 @@ def test_guarded_runner_preserves_gate_verdicts_and_ci_selection(tmp_path: Path)
         f"a validly nested run could not finish inside its ancestor's admission:\n{nested.stdout}\n{nested.stderr}"
     )
     assert nested_gate_ran.exists()
+
+
+def _runner_report(stdout: str) -> dict:
+    """The initial JSON report of a runner run, parsed where it starts.
+
+    The report is the first thing the runner prints, but the gate banners and
+    their output follow on the same stream; `raw_decode` takes exactly the one
+    JSON document and never reads later gate output as more of it.
+    """
+    bericht, _ = json.JSONDecoder().raw_decode(stdout, stdout.index("{"))
+    assert isinstance(bericht, dict), f"the runner's report did not parse as JSON: {stdout[:200]!r}"
+    return bericht
+
+
+def _report_gate(
+    base: Path,
+    gid: str,
+    job: str,
+    enforcement: str,
+    *,
+    subsets: list[str] | None = None,
+    placement: str = "both",
+    action: str | None = None,
+    command: str | None = None,
+) -> dict:
+    """One fixture gate for the runner's report and verdict tests.
+
+    Without `command` or `action` a gate writes its own `{gid}.ran` marker file
+    beside `base` and passes. An `action` gate stands for a selected member the
+    local runner never executes but the membership count still includes.
+    """
+    gate = {
+        "id": gid,
+        "title": f"The {gid} gate",
+        "job": job,
+        "enforcement": enforcement,
+        "floor": True,
+        "placement": placement,
+        "reason": "a seed for the report and verdict tests",
+    }
+    if action is not None:
+        gate["action"] = action
+    else:
+        gate["command"] = command if command is not None else f"touch {base / f'{gid}.ran'}"
+    if subsets:
+        gate["subsets"] = subsets
+    return gate
+
+
+def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
+    """The initial report names the selected job and counts membership, not execution.
+
+    Ledger criteria 1-3 of docs-job-report-header: a report that names `verify`
+    under a docs or drift selection, confuses the subset, verify, drift and total
+    counts, changes the field set, fills candidate or base from another checkout's
+    refs, or digests other bytes than the gate file's — each goes red here. The
+    fixture's counts are deliberately distinct (docs 2, verify 3, drift 1, total 4),
+    and a selected hosted-only gate keeps the membership count (2) apart from the
+    locally executed commands (1).
+    """
+    known_head = "a" * 40
+    known_base = "b" * 40
+    home = tmp_path / "home"
+
+    def fixture(base: Path) -> list[dict]:
+        return [
+            _report_gate(base, "docs-local", "verify", "block", subsets=["docs"]),
+            _report_gate(
+                base,
+                "docs-hosted",
+                "verify",
+                "report",
+                subsets=["docs"],
+                placement="hosted",
+                action="example/ci-only-action@v1",
+            ),
+            _report_gate(base, "plain-verify", "verify", "block"),
+            _report_gate(base, "drift-only", "drift", "block"),
+        ]
+
+    def fake_git(base: Path, *, failing: bool) -> Path:
+        """A git on PATH ahead of the system's: known answers, or no answer at all."""
+        bin_dir = base / "bin"
+        bin_dir.mkdir(parents=True)
+        shim = bin_dir / "git"
+        if failing:
+            body = "#!/bin/sh\nexit 1\n"
+        else:
+            body = (
+                "#!/bin/sh\n"
+                f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
+                f'if [ "$1" = merge-base ] && [ "$2" = origin/main ] && [ "$3" = HEAD ]; '
+                f"then echo {known_base}; exit 0; fi\n"
+                "exit 1\n"
+            )
+        shim.write_text(body, encoding="utf-8")
+        shim.chmod(0o755)
+        return bin_dir
+
+    memberships = {"verify": 3, "docs": 2, "drift": 1}
+    selections = [
+        ("default", (), "verify", {"docs-local", "plain-verify"}),
+        ("explicit-verify", ("--job", "verify"), "verify", {"docs-local", "plain-verify"}),
+        ("docs", ("--job", "docs"), "docs", {"docs-local"}),
+        ("drift", ("--job", "drift"), "drift", {"drift-only"}),
+    ]
+    for label, args, job, expected_ran in selections:
+        base = tmp_path / label
+        tree = _runner_tree_files(base / "tree")
+        _write_gate_file(tree, fixture(base))
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        done = _run_runner(tree, home, [fake_git(base, failing=False)], *args)
+        assert done.returncode == 0, f"{label}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        report = _runner_report(done.stdout)
+        assert set(report) == {"job", "candidate", "base", "config_sha256", "gates_total", "gates_job"}, label
+        assert report["job"] == job, f"{label}: the report named {report['job']!r}, not the {job!r} selection"
+        assert report["gates_job"] == memberships[job], (
+            f"{label}: gates_job said {report['gates_job']}, the {job!r} membership is {memberships[job]}"
+        )
+        assert report["gates_total"] == 4, f"{label}: gates_total said {report['gates_total']}, the list holds 4"
+        assert report["candidate"] == known_head and report["base"] == known_base, label
+        digest = hashlib.sha256((tree / "decisions" / "gates.yaml").read_bytes()).hexdigest()
+        assert report["config_sha256"] == digest, label
+        ran = {gid for gid in ("docs-local", "plain-verify", "drift-only") if (base / f"{gid}.ran").exists()}
+        assert ran == expected_ran, (
+            f"{label}: executed {sorted(ran)}, expected {sorted(expected_ran)} — "
+            "the membership count is not the count of locally executed commands"
+        )
+
+    # A git that cannot answer keeps the field meanings: nulls, never another checkout's refs.
+    base = tmp_path / "git-unavailable"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(tree, fixture(base))
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    done = _run_runner(tree, home, [fake_git(base, failing=True)])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    report = _runner_report(done.stdout)
+    assert report["candidate"] is None and report["base"] is None, report
+    assert report["job"] == "verify", report
+    assert report["gates_job"] == memberships["verify"] and report["gates_total"] == 4, report
+
+
+def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
+    """While the report names the selected job, gate selection and verdict rules hold.
+
+    Ledger criterion 4 of docs-job-report-header, measured on a docs selection —
+    the subset whose report used to name verify: an unselected gate stays out even
+    when it would fail, a blocking failure turns the run red without abandoning a
+    later gate, and solely advisory or report failures speak up without blocking.
+    """
+    home = tmp_path / "home"
+    gitless = tmp_path / "bin"
+    gitless.mkdir()
+    shim = gitless / "git"
+    shim.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    shim.chmod(0o755)
+
+    selected_pass = [("docs-a", "block", "pass"), ("docs-b", "block", "pass")]
+    blocking = [
+        ("docs-a", "block", "pass"),
+        ("docs-b", "block", "fail"),
+        ("docs-c", "block", "pass"),
+    ]
+    nonblocking = [
+        ("docs-a", "advisory", "fail"),
+        ("docs-b", "report", "fail"),
+        ("docs-c", "block", "pass"),
+    ]
+    # (label, expected exit, expected banner, expected execution order, gate shapes)
+    scenarios = [
+        ("selected-pass", 0, "VERIFY GREEN", ["docs-a", "docs-b"], selected_pass),
+        ("blocking-failure", 1, "VERIFY RED", ["docs-a", "docs-b", "docs-c"], blocking),
+        ("nonblocking-failures", 0, "VERIFY GREEN", ["docs-a", "docs-b", "docs-c"], nonblocking),
+    ]
+    for label, verdict, banner, ordered, listed in scenarios:
+        base = tmp_path / label
+        gates = []
+        for gid, enforcement, outcome in listed:
+            ending = "exit 1" if outcome == "fail" else "true"
+            gates.append(
+                _report_gate(
+                    base,
+                    gid,
+                    "verify",
+                    enforcement,
+                    subsets=["docs"],
+                    command=f"touch {base / f'{gid}.ran'}; echo {gid} >> {base / 'order.txt'}; {ending}",
+                )
+            )
+        # An unselected gate that would fail: a leak into the verify job turns the run
+        # red and leaves its marker — either one fails these runs.
+        gates.append(
+            _report_gate(
+                base,
+                "verify-other",
+                "verify",
+                "block",
+                command=f"touch {base / 'verify-other.ran'}; exit 1",
+            )
+        )
+        gates.append(
+            _report_gate(
+                base,
+                "docs-hosted",
+                "verify",
+                "report",
+                subsets=["docs"],
+                placement="hosted",
+                action="example/ci-only-action@v1",
+            )
+        )
+        tree = _runner_tree_files(base / "tree")
+        _write_gate_file(tree, gates)
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        done = _run_runner(tree, home, [gitless], "--job", "docs")
+        assert done.returncode == verdict, f"{label}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        assert banner in done.stdout, done.stdout
+        assert (base / "order.txt").read_text(encoding="utf-8") == "".join(f"{gid}\n" for gid in ordered), label
+        for gid in ordered:
+            assert (base / f"{gid}.ran").exists(), f"{label}: {gid} left no marker"
+        assert not (base / "verify-other.ran").exists(), f"{label}: an unselected gate executed"
+        assert _runner_report(done.stdout)["job"] == "docs", f"{label}: the report did not name the docs selection"
+        if label == "nonblocking-failures":
+            assert "rot, aber nur advisory" in done.stdout and "rot, aber nur report" in done.stdout, done.stdout
 
 
 def test_no_second_verification_workflow() -> None:
