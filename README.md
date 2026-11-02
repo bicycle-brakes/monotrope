@@ -42,7 +42,7 @@ one-line install for any repository.
 
 <p align="center">
   <img src="docs/assets/readme-who-steers-a-change.png"
-       alt="Who steers a change: the person sets goals and merges decision PRs; the orchestrating agent reads and updates the versioned state and starts the Python runner; the runner builds the phase instructions, applies the endpoint policy and leak check, and sends allowed input to external model sessions; those sessions edit the change worktree and return a response to the post-run checks, whose results go back to the agent; the worktree goes through local gates, a separate review and CI, failures return to the agent as repair work, and passed changes are merged."
+       alt="Who steers a change: the person sets goals, answers decisions and merges every pull request; the orchestrating agent reads and updates the versioned state and starts the Python runner; the runner builds the phase instructions, applies the endpoint policy and leak check, and sends allowed input to external model sessions; those sessions edit the change worktree and return a response to the post-run checks, whose results go back to the agent; the worktree goes through local gates, a separate review and CI, failures return to the agent as repair work, and passed changes are merged."
        width="720">
 </p>
 
@@ -227,7 +227,50 @@ execution; lanes are run by one orchestrating session, by hand
 
 ## Change classes
 
-Every change names its class; the class sets how much process it gets.
+Not every change needs the same amount of process. A one-line fix should not
+go through the same ceremony as a new subsystem, and a new subsystem should not
+slip through as a quick fix. So every change states its class at the start, and
+the class decides which steps it must go through.
+
+<p align="center">
+  <img src="docs/assets/readme-four-classes-of-change.png"
+       alt="Four classes of change. spike: answers a question; explored by GLM 5.3 Flash; owes three interview topics or a reasoned skip; no design; no other-vendor review. bounded: changes an existing flow and decides nothing new; explored by GLM 5.3 Flash; owes one answer or a reasoned skip; no design; other-vendor review, spec review optional. feature: changes what the system must do; explored by the research swarm; owes three answers, five with an ADR; a design or a reason why not; other-vendor review. architectural: a new subsystem or a broken interface; explored by the research swarm; owes five answers with an ADR; always a design with an ADR draft; other-vendor review."
+       width="100%">
+</p>
+
+The four classes, from lightest to heaviest:
+
+- **`spike`** answers a question. Its result is a recommendation, not
+  shipped behaviour.
+- **`bounded`** changes a flow that already exists and decides nothing new.
+- **`feature`** changes what the system must do, or how it is checked.
+- **`architectural`** adds a new subsystem or breaks an existing interface.
+
+How to read the rows:
+
+- **Explore (1)** is who reads the code and history first. A light change is
+  explored by one fast, cheap model (GLM 5.3 Flash). A heavier one goes to the
+  *research swarm*: several models research eleven fixed topics in parallel,
+  some in the repository and some in public sources, and one model reconciles
+  their findings ([ADR 0020](docs/adr/0020-phase-1-research-swarm.md)).
+- **Answers owed** is how many questions you, the person, must answer in the
+  interview before the spec is written. A *reasoned skip* means the agent
+  writes down why no question is needed. An *ADR* (architecture decision
+  record, under `docs/adr/`) is a decision that outlives the change; a change
+  that needs one owes five answers.
+- **Design (2b)** is a separate design document before the plan. Light changes
+  skip it; an architectural change always writes one, with a draft ADR.
+- **Other-vendor review** means the change is read by models from other
+  vendors than the one that wrote it: the review loop and the final review,
+  plus a review of the spec where one is held. Each of those calls passes the
+  leak check first (the shield). A spike skips them.
+
+A gate counts the interview answers against the class, so a change cannot
+skip its questions. Nothing yet checks that the class itself is right: a
+feature declared as a spike would skip the other-vendor reviews, and only the
+final review before the merge would catch it.
+
+<details><summary>The same as a table</summary>
 
 | | `spike` | `bounded` | `feature` | `architectural` |
 | --- | --- | --- | --- | --- |
@@ -237,8 +280,7 @@ Every change names its class; the class sets how much process it gets.
 | Design (2b) | never | never | yes, or a reason why not | always, with an ADR draft |
 | Other-vendor review | no | yes; spec review optional | yes | yes |
 
-A gate counts the answers against the class. Nothing yet checks that the
-class itself is right.
+</details>
 
 ## Where decisions live
 
