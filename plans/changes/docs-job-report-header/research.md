@@ -1,7 +1,7 @@
 ---
 title: "Research — docs-job-report-header"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-02
 last_reviewed: 2026-11-02
 updated: 2026-11-02
@@ -9,28 +9,19 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-ooj5
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: pi, version: "glm-5.3-flash, 2026-11-02"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # docs job report header — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
 
 Stage-2 call, 2026-11-02: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 815 files, 3011 commits, 12 rules.
 
 ## Runner exploration — 2026-11-02
-
-Research complete. Here is the phase-1 result as prose, ready to append to `plans/changes/docs-job-report-header/research.md`.
-
----
 
 ## What exists today
 
@@ -64,7 +55,6 @@ Research complete. Here is the phase-1 result as prose, ready to append to `plan
 - **What a subset header should claim is an open question.** The facts: 11 gates measure under `--job docs`, 21 sit in the verify job, 23 exist in total; `gates_total` is already job-independent. Nothing in the tree states which number a subset run's header should name — that is a human decision the interview owes.
 - **Documentation of the report fields does not exist.** A search over `docs/**/*.md` for `config_sha256`, `gates_total` and `gates_job` finds no matches: the fields are described nowhere outside the code, so no docs text contradicts a fix — but whether the doctrine should name the header after the fix is unrecorded. The `report()` docstring is German (`scripts/ci_gates.py:480`); per house rule 1 German in `scripts/` is translated in pull requests of its own (bead `coding-harness-yim`), never in passing.
 - **Aged references in the trail.** draft-gates-only's research cites `verify_all.sh:104` for the report call; the current call sits at :179 — the file grew by the admission supervisor (bead `coding-harness-p6mu`) and the worker sizing block (bead `coding-harness-l7sc`). Anyone consuming those line numbers must re-read the file; the symbols are stable.
-- **Frontmatter obligation from the skeleton itself.** The research skeleton asks whoever fills it to set `provenance: ai-drafted-reviewed` with `produced_by:` and `review:` (`plans/changes/docs-job-report-header/research.md`, the blockquote; `provenance.yaml`, class `ai-drafted-reviewed`, `review_required: true`). The runner owns that edit; I state it, I do not apply it.
 
 ## Which files a change would have to touch
 

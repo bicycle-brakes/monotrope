@@ -1,7 +1,7 @@
 ---
 title: "Plan — docs-job-report-header"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-02
 last_reviewed: 2026-11-02
 updated: 2026-11-02

@@ -2,7 +2,7 @@
 title: "Decisions — docs-job-report-header"
 category: decisions
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-02
 created: 2026-11-02
 last_reviewed: 2026-11-02
