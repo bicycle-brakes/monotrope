@@ -164,3 +164,4 @@ Existing beads checked first; three already held a point:
   coding-harness-s9r (isolate each writing attempt).
 - Expand–contract — notes on coding-harness-vg9 (split `stage2.py`) and
   coding-harness-32xf (hot files and merge order).
+- Prototype as an interview option (course lesson 3, `prototype` capture rule) — new bead coding-harness-7izx.
