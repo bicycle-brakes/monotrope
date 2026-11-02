@@ -76,3 +76,5 @@ The two new runner tests, run by the orchestrator on 2026-11-02 with
 Stage-2 call, 2026-11-02: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 819 files, 3033 commits, 12 rules.
 
 Stage-2 call, 2026-11-02: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 819 files, 3033 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: review-loop · endpoint opencode-go · model hy3 · leak check clean over 819 files, 3034 commits, 12 rules.
