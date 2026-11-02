@@ -11990,6 +11990,33 @@ def test_proofs_exclude_ignored_children_of_replaced_tracked_file(world: World, 
 
 
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_preserve_existing_symbolic_refs(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """F-6: existing remote HEAD stays symbolic and permits both qualifying proof runs."""
+    baseline = repair_world(world)
+    selector = plant_proof(world, proof)
+    target = "refs/remotes/origin/main"
+    name = "refs/remotes/origin/HEAD"
+    git(world.root, "update-ref", target, baseline)
+    git(world.root, "symbolic-ref", name, target)
+    before = stage2._ref_targets(world.root)
+    original = stage2._private_repository
+    inspected = []
+
+    def inspecting(root, destination, checkout):
+        original(root, destination, checkout)
+        assert git(destination, "symbolic-ref", "-q", name) == target
+        assert git(destination, "rev-parse", name) == baseline
+        inspected.append(destination)
+
+    monkeypatch.setattr(stage2, "_private_repository", inspecting)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (proof, outcome)
+    assert len(inspected) == 1
+    assert not inspected[0].exists()
+    assert stage2._ref_targets(world.root) == before
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_refuse_symbolic_ref_at_same_commit(world: World, proof: str) -> None:
     """F-5: making a branch symbolic changes its target without changing resolved object ids."""
     baseline = repair_world(world)

@@ -546,7 +546,48 @@ Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-6 | MAJOR | MAINT | Phase 6 | scripts/stage2.py:5823 | A source repository containing symbolic `refs/remotes/origin/HEAD` cannot run either proof. This repository has that reference pointing to `refs/remotes/origin/main`. `_ref_targets` now returns `<oid> refs/remotes/origin/main`, which restoration inserts into `update <name> <target>`. Git interprets the symbolic target as an old-object argument, rather than restoring a symbolic reference. Since `remote remove origin` already removed the destination's remote references, the transaction fails and both proofs refuse before executing the named test. The new tests cover symbolic references created during execution, but omit symbolic references already present in the source. [Acceptance criterion 9] | Codex | taken — fix-r: caused by the F-5 repair, which made the measured target of a symbolic reference "<oid> <refname>" and then fed that string to the restore transaction. No new remedy: the measurement keeps both parts for the before/after comparison, and `_private_repository` restores each source reference by its kind — an object reference with `update <name> <oid>`, a symbolic reference as a symbolic reference to its recorded target (`symref-update`, or `git symbolic-ref` where the pinned Git lacks it). Regression that must fail on the code before the repair: a source repository with a symbolic `refs/remotes/origin/HEAD` runs both proofs, and the private repository holds that reference as symbolic to the same target; the F-4 and F-5 regressions stay green | — |
+| F-6 | MAJOR | MAINT | Phase 6 | scripts/stage2.py:5823 | A source repository containing symbolic `refs/remotes/origin/HEAD` cannot run either proof. This repository has that reference pointing to `refs/remotes/origin/main`. `_ref_targets` now returns `<oid> refs/remotes/origin/main`, which restoration inserts into `update <name> <target>`. Git interprets the symbolic target as an old-object argument, rather than restoring a symbolic reference. Since `remote remove origin` already removed the destination's remote references, the transaction fails and both proofs refuse before executing the named test. The new tests cover symbolic references created during execution, but omit symbolic references already present in the source. [Acceptance criterion 9] | Codex | fixed — tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs — accepted by hand on 2026-11-02: all three runner attempts were refused because the runner proves red first with its own pre-repair code, which carries F-6 and cannot set up a private repository in a source with a symbolic origin/HEAD; the orchestrator proved red first by hand (the test fails on HEAD a50c817f by its `assert outcome is None`, the update-ref refusal, for both proofs) and green on attempt 1's code with the F-1 to F-5 regressions | yes — tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs |
 
 Phase 6 verdict: codex 01a19e0b-5209-7263-99ca-e0237e162a83, 2026-11-02
 Reviewer session: codex 01a19e0b-5209-7263-99ca-e0237e162a83 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 840 files, 3081 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +7 -1
+> - `tests/test_stage2.py` +27 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-6: tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs: the red-first checkout failed (git update-ref failed: Schwerwiegend: update refs/remotes/origin/HEAD: invalid <old-oid>: refs/remotes/origin/main)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-1-20261102T205710540870Z-055a67e7.md
+> ```
+
+Stage-2 call, 2026-11-02: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 840 files, 3083 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-6: tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs: the red-first checkout failed (git update-ref failed: Schwerwiegend: update refs/remotes/origin/HEAD: invalid <old-oid>: refs/remotes/origin/main)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-2-20261102T205710540870Z-055a67e7.md
+> ```
+
+Stage-2 call, 2026-11-02: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 840 files, 3086 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-6: tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs: the red-first checkout failed (git update-ref failed: Schwerwiegend: update refs/remotes/origin/HEAD: invalid <old-oid>: refs/remotes/origin/main)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-3-20261102T205710540870Z-055a67e7.md
+> ```

@@ -5820,10 +5820,16 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
         "--stdin",
         stdin=(
             f"start\nupdate HEAD {head}\nprepare\ncommit\nstart\n"
-            + "".join(f"update {name} {target}\n" for name, target in refs.items())
+            + "".join(f"update {name} {target}\n" for name, target in refs.items() if " " not in target)
             + "prepare\ncommit\n"
         ),
     )
+    # Measurements retain both the resolved object and symbolic target. Restore
+    # symbolic refs by kind, using symbolic-ref for Git versions without symref-update.
+    for name, target in refs.items():
+        _, _, symbolic = target.partition(" ")
+        if symbolic:
+            _git_output(destination, "symbolic-ref", name, symbolic)
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
 
 
