@@ -203,6 +203,15 @@ gates:
     subsets: [docs]
     reason: A research decision that never reached the maintainer is the loss the swarm exists to prevent (bead coding-harness-icw), so every complete research-swarm/v2 run's obligations need linked maintainer answers, the spec's neighbours header must follow the runs' confirmed paths, and every criterion basis must name supported claims or answered records; a change without v2 evidence is a reported exemption.
 
+  - id: guard-test-environment
+    title: Verification never runs with a guard test's planting switch present
+    command: python3 scripts/check_guard_test_environment.py
+    job: verify
+    enforcement: block
+    floor: false
+    placement: both
+    reason: A guard test plants its real fault only under STAGE2_PLANT_FAULT, set by the repair runner in the planted proof run alone (ADR 0023, bead coding-harness-0ho); a green suite run with the switch present would count planted faults as passing proof, so repeatable guard proofs must never count as green verification.
+
   - id: gate-schema
     title: This gate file satisfies its own schema
     command: python3 scripts/ci_gates.py --check-schema
