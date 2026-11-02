@@ -926,7 +926,7 @@ def test_every_git_call_names_the_resolved_path(world: World, monkeypatch: pytes
 
 
 def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
-    """O192-4: source check for the sites no verb in this suite reaches (`show`, `worktree remove` and `prune`)."""
+    """O192-4: source check for git launches no verb in this suite reaches, such as `show`."""
     tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
     bare = [
         node.lineno
