@@ -296,3 +296,101 @@ Stage-2 call, 2026-11-01: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 3004 commits, 12 rules.
 
 Stage-2 call, 2026-11-02: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 811 files, 3007 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 3021 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex at capacity (Selected model is at capacity, 2026-11-02 06:52 UTC); standing rule of bead coding-harness-yuw.4: Codex at capacity falls back to Sonnet · leak check clean over 811 files, 3021 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-own-refs/plan.md` +6 -0
+> - `scripts/stage2.py` +69 -51
+> - `tests/test_stage2.py` +60 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         original_refs = stage2._ref_targets
+>         original_mkdtemp = stage2.tempfile.mkdtemp
+>         for proof in ("baseline", "fixed"):
+>             selector = plant_proof(world, proof)
+>             made: list[str] = []
+>             seen = {"private": 0}
+>     
+>             def failing_refs(root, _seen=seen, _original=original_refs):
+>                 if "stage2-" in str(root):
+>                     _seen["private"] += 1
+>                     if _seen["private"] == 2:
+>                         raise OSError(5, "planted ref listing exec failure")
+>                 return _original(root)
+>     
+>             def recording_mkdtemp(*args, _made=made, **kwargs):
+>                 path = original_mkdtemp(*args, **kwargs)
+>                 if Path(path).name.startswith("stage2-"):
+>                     _made.append(path)
+>                 return path
+>     
+>             with monkeypatch.context() as patch:
+>                 patch.setattr(stage2, "_ref_targets", failing_refs)
+>                 patch.setattr(stage2.tempfile, "mkdtemp", recording_mkdtemp)
+>                 try:
+>                     outcome = run_proof(world, proof, selector, baseline)
+>                 except OSError as error:
+>                     pytest.fail(f"{proof}: the ref listing error escaped the proof: {error}")
+>             assert outcome is not None and "planted ref listing exec failure" in outcome, (proof, outcome)
+> >           assert len(made) == 1 and not Path(made[0]).exists(), (proof, made)
+> E           AssertionError: ('baseline', ['/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-red-rr1jomwr', '/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-dr60bs4c'])
+> E           assert (2 == 1)
+> E            +  where 2 = len(['/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-red-rr1jomwr', '/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-dr60bs4c'])
+>
+> tests/test_stage2.py:12102: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ________ test_proofs_share_one_git_visible_test_tree_for_tracked_caches ________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/red-first-own-refs/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-6891/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-6891/popen-gw7/test_proofs_share_one_git_visi0/state'))
+>
+>     def test_proofs_share_one_git_visible_test_tree_for_tracked_caches(world: World) -> None:
+>         """Planted fault: the baseline copy drops a tracked-but-ignored cache directory that the fixed
+>         checkout keeps, so a test reading such a fixture passes one proof and fails the other."""
+>         baseline = repair_world(world)
+>         (world.root / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+>         cache = world.root / "tests" / "__pycache__"
+>         cache.mkdir()
+>         (cache / "fixture.txt").write_text("tracked cache\n", encoding="utf-8")
+>         git(world.root, "add", "-f", "tests/__pycache__/fixture.txt")
+>         selector = "tests/test_cache_fixture.py::test_cache_fixture"
+>         (world.root / "tests" / "test_cache_fixture.py").write_text(
+>             "from pathlib import Path\n\n\ndef test_cache_fixture():\n"
+>             "    tests = Path(__file__).parent\n"
+>             "    if (tests / '__pycache__' / 'fixture.txt').read_text() != 'tracked cache\\n':\n"
+>             "        raise RuntimeError('tracked cache fixture missing')\n"
+>             "    assert 'value = 2' in (tests.parent / 'src' / 'app.py').read_text()\n",
+>             encoding="utf-8",
+>         )
+>         for proof in ("baseline", "fixed"):
+>             if proof == "fixed":
+>                 (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+>             outcome = run_proof(world, proof, selector, baseline)
+> >           assert outcome is None, (proof, outcome)
+> E           AssertionError: ('baseline', "tests/test_cache_fixture.py::test_cache_fixture: the call of `tests/test_cache_fixture.py::test_cache_fi...h FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)")
+> E           assert "tests/test_cache_fixture.py::test_cache_fixture: the call of `tests/test_cache_fixture.py::test_cache_fixture` failed with FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)" is None
+>
+> tests/test_stage2.py:12127: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_proofs_refuse_and_clean_up_after_post_run_ref_oserror
+> FAILED tests/test_stage2.py::test_proofs_share_one_git_visible_test_tree_for_tracked_caches
+> 2 failed, 21 passed in 27.34s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-1-20261102T065335493192Z-8687efd0.md
+> ```
