@@ -12017,6 +12017,80 @@ def test_proofs_preserve_existing_symbolic_refs(world: World, monkeypatch: pytes
 
 
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_dangling_symbolic_ref(world: World, proof: str) -> None:
+    """F-7: an unresolved symbolic ref is absent from for-each-ref but still changes the store."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    selector = "tests/test_write.py::test_write"
+    (world.root / "tests" / "test_write.py").write_text(
+        ref_writing_test(("symbolic-ref", "refs/heads/probe", "refs/heads/missing")), encoding="utf-8"
+    )
+    before = stage2._ref_targets(world.root)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "refs changed while the named test ran: refs/heads/probe" in outcome, (
+        proof,
+        outcome,
+    )
+    assert selector in outcome
+    assert stage2._ref_targets(world.root) == before
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("path", ["HEAD", "packed-refs", "refs/heads/unresolved"])
+@pytest.mark.parametrize("operation", ["rewrite", "delete"])
+def test_proofs_refuse_raw_reference_file_changes(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, path: str, operation: str
+) -> None:
+    """Raw files protect unresolved refs and byte changes absent from the resolved reference map."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    original = stage2._private_repository
+
+    def preparing(root, destination, checkout):
+        original(root, destination, checkout)
+        (destination / ".git" / "refs" / "heads" / "unresolved").write_bytes(b"ref: refs/heads/missing\n")
+        (destination / ".git" / "packed-refs").write_bytes(b"# pack-refs with: peeled fully-peeled sorted\n")
+
+    monkeypatch.setattr(stage2, "_private_repository", preparing)
+    selector = "tests/test_write.py::test_write"
+    source = ref_writing_test()
+    mutation = "    ref.unlink()\n" if operation == "delete" else "    ref.write_bytes(ref.read_bytes() + b'\\n')\n"
+    (world.root / "tests" / "test_write.py").write_text(
+        source.replace(
+            "def test_write():\n",
+            f"def test_write():\n    ref = Path('.git') / {path!r}\n" + mutation,
+        ),
+        encoding="utf-8",
+    )
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and path in outcome and selector in outcome, outcome
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("point", [1, 2])
+def test_proofs_refuse_raw_reference_measurement_failure(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, point: int
+) -> None:
+    """A failed raw snapshot before or after execution refuses and still removes the private store."""
+    baseline = repair_world(world)
+    selector = plant_proof(world, proof)
+    original = stage2._raw_ref_store
+    measured = []
+
+    def failing(root):
+        measured.append(root)
+        if len(measured) == point:
+            raise OSError("planted raw reference measurement failure")
+        return original(root)
+
+    monkeypatch.setattr(stage2, "_raw_ref_store", failing)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "planted raw reference measurement failure" in outcome, outcome
+    assert selector in outcome
+    assert not measured[0].parent.exists()
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_refuse_symbolic_ref_at_same_commit(world: World, proof: str) -> None:
     """F-5: making a branch symbolic changes its target without changing resolved object ids."""
     baseline = repair_world(world)

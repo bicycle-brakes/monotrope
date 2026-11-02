@@ -5833,18 +5833,52 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
 
 
-def _proof_reference_guard(root: Path, before: dict[str, str], test: str, key: str | None) -> str | None:
+def _raw_ref_store(root: Path) -> dict[str, bytes]:
+    """Measure private reference files, including symbolic refs Git cannot resolve."""
+    store = root / ".git"
+    refs = store / "refs"
+
+    def unreadable(error: OSError) -> None:
+        if isinstance(error, FileNotFoundError) and error.filename == str(refs):
+            return  # A removed refs directory is measured as removal of all its files.
+        raise error
+
+    snapshot: dict[str, bytes] = {}
+    for name in ("HEAD", "packed-refs"):
+        # Absence is state too: tests can delete HEAD, and Git need not pack refs.
+        with contextlib.suppress(FileNotFoundError):
+            snapshot[name] = (store / name).read_bytes()
+    for directory, _, files in os.walk(refs, onerror=unreadable):
+        for name in files:
+            path = Path(directory) / name
+            snapshot[path.relative_to(store).as_posix()] = path.read_bytes()
+    return snapshot
+
+
+def _proof_reference_guard(
+    root: Path, before: dict[str, str], test: str, key: str | None, raw_before: dict[str, bytes] | None
+) -> str | None:
     """Measure private refs before disposal, with one scrubbed verdict for both proof paths."""
+    changed: set[str] = set()
+    faults = []
     try:
         after = _ref_targets(root)
     except Exception as error:
-        fault = f"the private ref listing failed ({error})"
+        faults.append(f"the private ref listing failed ({error})")
     else:
-        changed = sorted(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
-        if not changed:
-            return None
-        fault = "refs changed while the named test ran: " + ", ".join(changed)
-    return scrub(f"{test}: {fault}", key)
+        changed.update(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
+    if raw_before is not None:
+        try:
+            raw_after = _raw_ref_store(root)
+        except Exception as error:
+            faults.append(f"the private raw ref listing failed ({error})")
+        else:
+            changed.update(
+                path for path in raw_before.keys() | raw_after.keys() if raw_before.get(path) != raw_after.get(path)
+            )
+    if changed:
+        faults.append("refs changed while the named test ran: " + ", ".join(sorted(changed)))
+    return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
 
 
 def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -5874,6 +5908,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     cleanup = None
     named: list[str] = []
     refs_before: dict[str, str] | None = None
+    raw_refs_before: dict[str, bytes] | None = None
     tree_before: str | None = None
     private: Path | None = None
     ref_fault = None
@@ -5889,6 +5924,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         fixed_tree = worktree_tree(root)
         _private_repository(root, private, fixed_tree)
         refs_before = _ref_targets(private)
+        raw_refs_before = _raw_ref_store(private)
         tree_before = worktree_tree(private)
         # One machine-wide admission around the timed proof; queue and memory waits consume
         # none of the proof's time limit (bead coding-harness-p6mu).
@@ -5925,7 +5961,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
             # launch failure or a timeout exactly as on a finished run; the source's refs are not
             # an acceptance condition and are not read here.
             if refs_before is not None and private is not None:
-                ref_fault = _proof_reference_guard(private, refs_before, test, key)
+                ref_fault = _proof_reference_guard(private, refs_before, test, key, raw_refs_before)
             if tree_before is not None and private is not None:
                 try:
                     tree_now = worktree_tree(private)
@@ -5986,6 +6022,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     outcome = None
     cleanup = None
     refs_before: dict[str, str] | None = None
+    raw_refs_before: dict[str, bytes] | None = None
     ref_fault = None
     try:
         tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
@@ -6016,6 +6053,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             # A failed snapshot fails the attempt, because branch state could not be proven preserved.
             try:
                 refs_before = _ref_targets(tree)
+                raw_refs_before = _raw_ref_store(tree)
             except Refused as error:
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
@@ -6096,7 +6134,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 # The private store's own names and targets, compared before the store is deleted: a
                 # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
                 # or reset here - the comparison is the whole verdict.
-                ref_fault = _proof_reference_guard(tree, refs_before, test, key)
+                ref_fault = _proof_reference_guard(tree, refs_before, test, key, raw_refs_before)
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)
