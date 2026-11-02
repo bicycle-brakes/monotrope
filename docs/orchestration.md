@@ -87,7 +87,7 @@ handover.
 
 | Rule | Today | Planned |
 | --- | --- | --- |
-| One verify-bearing step at a time, memory floor | kept by hand | a machine-wide lock and a memory floor (bead coding-harness-p6mu) |
+| One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |
@@ -95,5 +95,6 @@ handover.
 | One tracker writer | stated | the write guard (lakeswitch-ai D-60) |
 
 What the run costs and where its time goes is measured in the night plans
-and handovers, not here. A run report is being built (bead
-coding-harness-o2yc).
+and handovers, not here. `make report CHANGE=<name>` shows a change's runner
+attempts, its time against the appetite and the live load, read-only (bead
+coding-harness-o2yc, #277).
