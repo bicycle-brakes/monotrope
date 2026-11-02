@@ -499,3 +499,14 @@ Kept from the loop record:
 Stage-2 call, 2026-11-02: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 3062 commits, 12 rules.
 
 Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3065 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3068 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-02
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4587–4589 | Copying the real index preserves `assume-unchanged` flags, so `git add -A` can retain stale blobs instead of capturing current files. A named fixed-code test can run `git update-index --assume-unchanged src/app.py`, overwrite that file and pass. The final snapshot then equals the initial tree, no reference changes, and the proof accepts the modified checkout. The same flags in the source index cause proofs to exercise stale contents. Clear these flags in the temporary index before capturing file contents, and cover both cases with regressions. [Acceptance criteria 4, 5 and 7] | Codex | open | — |
+
+Phase 6 verdict: codex 01a19d86-fcdb-7c51-9b08-7f19f4de2699, 2026-11-02
+Reviewer session: codex 01a19d86-fcdb-7c51-9b08-7f19f4de2699 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
