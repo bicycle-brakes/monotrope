@@ -232,9 +232,10 @@ Every change names its class; the class sets how much process it gets.
 | | `spike` | `bounded` | `feature` | `architectural` |
 | --- | --- | --- | --- | --- |
 | What it is | answers a question | changes an existing flow, decides nothing new | changes what the system must do | a new subsystem or a broken interface |
+| Explore (1) | GLM 5.3 Flash | GLM 5.3 Flash | research swarm | research swarm |
 | Answers owed | three topics, or a reasoned skip | one, or a reasoned skip | three; five with an ADR | five with an ADR |
 | Design (2b) | never | never | yes, or a reason why not | always, with an ADR draft |
-| Other-vendor review | no | yes | yes | yes |
+| Other-vendor review | no | yes; spec review optional | yes | yes |
 
 A gate counts the answers against the class. Nothing yet checks that the
 class itself is right.
