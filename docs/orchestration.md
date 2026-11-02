@@ -1,10 +1,10 @@
 ---
-title: "Three lanes — how one session runs three changes at once"
+title: "Lanes — how one session runs several changes at once"
 category: architecture
 status: proposed
 created: 2026-10-28
-last_reviewed: 2026-10-28
-updated: 2026-10-28
+last_reviewed: 2026-11-02
+updated: 2026-11-02
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -12,14 +12,16 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [orchestration, lanes, night-run, parallel-work]
 ---
 
-# Three lanes
+# Lanes
 
-**One orchestrating session works three queues of changes at once, by day
+**One orchestrating session works several queues of changes at once, by day
 and by night.** Most of a change's time is spent waiting for a remote model,
-so three lanes keep the work moving. The limits are the machine's memory,
+so parallel lanes keep the work moving. The trial began with three lanes on
+2026-10-27; since 2026-10-31 up to five run, and the run plan of each day or
+night names how many. The limits are the machine's memory,
 the one local verification slot and the maintainer's attention, not the
 number of lanes. This page describes how this repository runs it as of
-2026-10-28. Much of it is still kept by hand.
+2026-11-02. Much of it is still kept by hand.
 
 ## What a lane is
 
@@ -27,7 +29,7 @@ number of lanes. This page describes how this repository runs it as of
   branch and one worktree ([Working in parallel](../README.md#working-in-parallel)).
   The queues are written down before a run starts. The night plan of
   2026-10-28 is an example ([night plan](research/2026-10-28-night-run-plan.md)).
-- **One session orchestrates all three.** It is the only tracker writer. It
+- **One session orchestrates all of them.** It is the only tracker writer. It
   starts the runner's verbs, decides review rows, writes the record and
   commits. Models do the explore, draft, implement, repair and review work
   through `scripts/stage2.py`.
@@ -44,7 +46,9 @@ then:
 
 1. **One verify-bearing step at a time, across all lanes.** Such a step runs
    `make verify`: an implement or repair attempt, or the orchestrator's own
-   full run, which runs at lower priority (`nice -n 10`, `-n 4`).
+   full run, which runs at lower priority (`nice -n 10`). The number of test
+   workers is sized from the machine: half the logical cores, at most one per
+   2 GiB of memory (bead coding-harness-l7sc, #305).
 2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,
    the phase-6 review, CI waits and pull-request text use little local
    memory.
