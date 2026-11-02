@@ -11814,6 +11814,50 @@ def test_proofs_name_all_changed_refs(world: World) -> None:
         assert "refs/heads/probe-[credential]" in outcome, (proof, outcome)
 
 
+def test_private_repository_batches_reference_restore(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: restoring many source references starts one update-ref process per ref."""
+    baseline = repair_world(world)
+    refs = {f"refs/stage2/attempts/batch-{number}": baseline for number in range(40)}
+    for ref, target in refs.items():
+        git(world.root, "update-ref", ref, target)
+    original_git = stage2._git_output
+    updates = []
+
+    def recording_git(root, *args, **kwargs):
+        if args[0] == "update-ref":
+            updates.append((args, kwargs.get("stdin")))
+        return original_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", recording_git)
+    private = world.root.parent / "private-batch"
+    stage2._private_repository(world.root, private, baseline)
+    # HEAD detachment remains separate; every named source ref travels in one stdin batch.
+    restores = [(args, stdin) for args, stdin in updates if "HEAD" not in args]
+    assert len(restores) == 1, restores
+    args, stdin = restores[0]
+    assert args == ("update-ref", "--stdin"), restores
+    assert all(f"update {ref} {target}\n" in stdin for ref, target in refs.items()), stdin
+    measured = stage2._ref_targets(private)
+    assert all(measured.get(ref) == target for ref, target in refs.items()), measured
+
+
+def test_proofs_share_reference_verdict(world: World) -> None:
+    """Planted fault: the two proof paths word or scrub the same reference change differently."""
+    baseline = repair_world(world)
+    verdicts = []
+    for proof in ("baseline", "fixed"):
+        plant_proof(world, proof)
+        selector = "tests/test_write.py::test_write"
+        (world.root / "tests" / "test_write.py").write_text(
+            ref_writing_test(("update-ref", f"refs/heads/probe-{KEY}", "HEAD")), encoding="utf-8"
+        )
+        outcome = run_proof(world, proof, selector, baseline, KEY)
+        assert outcome is not None and selector in outcome, (proof, outcome)
+        assert KEY not in outcome, (proof, outcome)
+        verdicts.append(outcome[outcome.index("refs changed while") :])
+    assert verdicts == ["refs changed while the named test ran: refs/heads/probe-[credential]"] * 2, verdicts
+
+
 def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> None:
     """Criterion 4. Planted fault: the worktree's fixed production bytes reach the baseline proof,
     or the attempt's current tests do not travel into it."""
@@ -12158,8 +12202,23 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
                 elif scene == "timeout":
                     original_launch = stage2.launch
 
-                    def timing_out(command, cwd, env, *args, _original=original_launch, **kwargs):
-                        if any("pytest" in part for part in command):
+                    timed_runs = []
+
+                    def timing_out(
+                        command,
+                        cwd,
+                        env,
+                        *args,
+                        _original=original_launch,
+                        _selector=selector,
+                        _runs=timed_runs,
+                        **kwargs,
+                    ):
+                        # The report belongs only to the actual pytest run, never an interpreter probe.
+                        if "STAGE2_RED_REPORT" in env:
+                            assert kwargs["timeout"] == stage2.RED_FIRST_MINUTES * 60
+                            assert _selector in command
+                            _runs.append(command)
                             raise stage2.StepTimedOut("the planted proof ran into its time limit")
                         return _original(command, cwd, env, *args, **kwargs)
 
@@ -12174,6 +12233,7 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
             if scene == "partial-setup":
                 assert "planted" in outcome, (proof, outcome)
             if scene == "timeout":
+                assert len(timed_runs) == 1, (proof, timed_runs)
                 assert "the planted proof ran into its time limit" in outcome, (proof, outcome)
             for left in made[here:]:
                 assert not Path(left).exists(), (proof, scene, left)

@@ -5794,12 +5794,28 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     if alternates.exists() or alternates.is_symlink():
         raise Refused("the private repository contains objects/info/alternates")
     _git_output(destination, "remote", "remove", "origin")
-    for name, target in refs.items():
-        _git_output(destination, "update-ref", name, target)
+    _git_output(
+        destination,
+        "update-ref",
+        "--stdin",
+        stdin="".join(f"update {name} {target}\n" for name, target in refs.items()),
+    )
     if _git_output(destination, "cat-file", "-t", checkout).strip() == "commit":
         head = checkout
     _git_output(destination, "update-ref", "--no-deref", "HEAD", head)
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
+
+
+def _private_reference_fault(private: Path, before: dict[str, str], key: str | None) -> str | None:
+    """Compare the private store before cleanup, with one verdict and scrubbing for both proofs."""
+    try:
+        after = _ref_targets(private)
+    except Exception as error:
+        return scrub(f"the private ref listing failed ({error})", key)
+    changed = sorted(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
+    if changed:
+        return scrub("refs changed while the named test ran: " + ", ".join(changed), key)
+    return None
 
 
 def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -5879,16 +5895,9 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
             # launch failure or a timeout exactly as on a finished run; the source's refs are not
             # an acceptance condition and are not read here.
             if refs_before is not None and private is not None:
-                try:
-                    refs_now = _ref_targets(private)
-                except Exception as error:
-                    named.append(f"the private ref listing failed ({error})")
-                else:
-                    changed = sorted(
-                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                    )
-                    if changed:
-                        named.append("refs changed while the fixed-code proof ran: " + ", ".join(changed))
+                ref_fault = _private_reference_fault(private, refs_before, key)
+                if ref_fault:
+                    named.append(ref_fault)
             if tree_before is not None and private is not None:
                 try:
                     tree_now = worktree_tree(private)
@@ -5946,7 +5955,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     outcome = None
     cleanup = None
     refs_before: dict[str, str] | None = None
-    refs_changed: list[str] = []
+    ref_fault = None
     try:
         tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
         tree = tmp / "tree"
@@ -6053,22 +6062,13 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     finally:
         try:
             if refs_before is not None:
-                # The private store's own names and targets, compared before the store is deleted: a
-                # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
-                # or reset here - the comparison is the whole verdict.
-                try:
-                    refs_now = _ref_targets(tree)
-                except Exception as error:
-                    refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
-                else:
-                    refs_changed = sorted(
-                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                    )
+                # Compare even on launch failure or timeout, before deleting the private store.
+                ref_fault = _private_reference_fault(tree, refs_before, key)
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)
-    if refs_changed:
-        named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
+    if ref_fault:
+        named = f"{test}: {ref_fault}"
         outcome = f"{outcome}\n{named}" if outcome else named
     if cleanup is not None:
         named = scrub(f"{test}: the red-first checkout could not be removed ({cleanup})", key)

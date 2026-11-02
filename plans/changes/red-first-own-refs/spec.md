@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-01
 last_reviewed: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-02
 supersedes: null
 superseded_by: null
 bead: coding-harness-wkxm
@@ -70,13 +70,17 @@ draft").
    *Refuted by:* a fixed-code refusal saying only that references changed, an
    omitted changed reference, a missing selector or an exposed credential.
 4. When the baseline proof runs, it exercises the baseline's production files
-   with the attempted repair's current tests.
+   with the attempted repair's current Git-visible tests, including caches
+   tracked by Git; untracked files excluded by ignore rules do not travel.
    *Refuted by:* the attempted production fix reaching the baseline proof or
-   a newly added or amended test being absent from that proof.
+   a new or amended Git-visible test being absent, or an untracked fixture
+   excluded by ignore rules reaching that proof.
 5. When the fixed-code proof runs, it exercises the attempted repair's current
-   Git-visible file tree, including uncommitted changes and new files.
+   Git-visible file tree, including uncommitted changes and new nonignored
+   files. Untracked files excluded by ignore rules do not travel.
    *Refuted by:* checking committed HEAD instead, losing a deletion, executable
-   bit or symlink, or failing to include a new test or production file.
+   bit or symlink, failing to include a new Git-visible test or production
+   file, or carrying an untracked fixture excluded by ignore rules.
 6. While either proof prepares, runs or cleans up, its ordinary Git operations
    and file writes leave the source worktree, index and references unchanged.
    *Refuted by:* proof setup moving a source branch, a test's cwd-relative
@@ -108,6 +112,14 @@ draft").
 - Phase 2b and an ADR: this is a `bounded` correction of proof execution, preserving the existing protection contract.
 
 ## Boundary
+
+Both proofs carry only the Git-visible snapshot from `worktree_tree`:
+tracked files (including tracked caches or ignored fixtures) and untracked
+nonignored files. Locally generated, untracked fixtures excluded by ignore
+rules reach neither proof. This narrows the former baseline `copytree`
+behavior, which carried ignored test fixtures except caches. A named test
+that depends on such a local fixture must make it Git-visible first;
+otherwise its missing-fixture error is nonqualifying and the repair is refused.
 
 Isolation covers Git commands resolving their repository from the proof's
 working directory and the runner's own setup and cleanup. It is not an

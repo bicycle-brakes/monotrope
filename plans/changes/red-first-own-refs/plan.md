@@ -58,7 +58,8 @@ unavailable, never green.
    operations cannot push back to the source. All setup is local, bounded by
    existing Git timeouts, and failures become scrubbed proof refusals.
 3. For baseline proof, check out the supplied baseline and replace `tests/`
-   with the attempt's tests as today, excluding caches. For fixed proof,
+   with the attempt's Git-visible `tests/` tree, including caches tracked by
+   Git. Untracked files excluded by ignore rules do not travel. For fixed proof,
    capture `worktree_tree(root)` with its temporary index before cloning;
    materialize that exact tree in the private checkout: tracked files as
    present on disk rather than stale staged bytes, deletions, untracked
