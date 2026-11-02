@@ -2355,6 +2355,64 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
 
 
+GUARD_GATE_SCRIPT = "scripts/check_guard_test_environment.py"
+GUARD_GATE_ID = "guard-test-environment"
+# A value that must never reach the gate's output: the gate names the variable,
+# never the environment or the value it found (spec, criterion 11's refusal rule).
+_GUARD_GATE_MARKER = "guard-marker-7f3a-not-printed"
+
+
+def _guard_gate_run(value: str | None) -> subprocess.CompletedProcess[str]:
+    """Run the presence gate in a child environment that carries `value` or nothing."""
+    base = {name: text for name, text in os.environ.items() if name != "STAGE2_PLANT_FAULT"}
+    if value is not None:
+        base["STAGE2_PLANT_FAULT"] = value
+    return subprocess.run(
+        [sys.executable, GUARD_GATE_SCRIPT],
+        capture_output=True,
+        text=True,
+        env=base,
+        timeout=120,
+        check=False,
+    )
+
+
+def test_guard_environment_gate_goes_red_when_the_switch_is_present() -> None:
+    """A set planting switch blocks verification locally and in hosted CI (spec, criterion 11).
+
+    The switch `STAGE2_PLANT_FAULT` belongs to the repair runner's planted proof
+    run alone; verification with it set would count planted faults as passing
+    proof. Any present value fails the gate - empty and `0` included - and the
+    gate must stand in the one list for both verification paths: the local `make
+    verify` job and the generated hosted workflow, blocking on each.
+    """
+    assert _guard_gate_run(None).returncode == 0, "the gate fails although the switch is absent"
+    for value in ("1", "", "0", _GUARD_GATE_MARKER):
+        done = _guard_gate_run(value)
+        assert done.returncode != 0, f"a present value passed the gate: {value!r}"
+        output = done.stdout + done.stderr
+        assert "STAGE2_PLANT_FAULT" in output, f"the gate does not name the switch for value {value!r}"
+        assert _GUARD_GATE_MARKER not in output, "the gate printed the value it found"
+
+    listed = [g for g in gates() if g["id"] == GUARD_GATE_ID]
+    assert listed, f"decisions/gates.yaml declares no {GUARD_GATE_ID} gate"
+    gate = listed[0]
+    assert gate["command"] == f"python3 {GUARD_GATE_SCRIPT}"
+    assert gate["job"] == "verify"
+    assert gate["enforcement"] == "block"
+    assert gate["floor"] is False
+    assert gate["placement"] == "both"
+    assert misst_in(gate, "lokal"), "the gate does not measure in local verification"
+    assert misst_in(gate, "ci"), "the gate does not measure in hosted verification"
+    assert GUARD_GATE_SCRIPT in gate["command"] and gate["reason"].strip(), "the gate carries no reason"
+
+    for where, doc in (("generated", _ci_doc(ci_gates.generate_ci())), ("committed", _ci_doc())):
+        job = doc["jobs"][ci_gates.MATRIX_JOB]
+        steps = [s for s in job["steps"] if s.get("id") == GUARD_GATE_ID]
+        assert steps, f"the {where} verify job carries no {GUARD_GATE_ID} step"
+        assert not any(s.get("continue-on-error") for s in steps), f"the {where} step is not blocking"
+
+
 # Test files that name a gate's script without seeding a fault into it. Each
 # holds a mutation-named test that has nothing to do with the script (bead
 # coding-harness-a05). The second is the shape of the call-site test of
