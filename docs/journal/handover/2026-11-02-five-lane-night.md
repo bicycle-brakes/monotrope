@@ -171,3 +171,31 @@ Saved stopped attempts (pushed to origin):
 - Lane A: 51 tests of the self-closing beads change passed at 4355e852.
 - Lane C: 183 tests passed at a95e3789; L7-1..L7-3 shown red at 7a6a1095^.
 - This handover: `tests/test_feedback_channel.py` (see the pull request).
+
+## Addendum — 2026-11-02, after the handover pull request
+
+- **Lane D (bead coding-harness-ooj5):** implement verified and committed
+  (c5317952). Review loop: round 1 four document rows and round 2 one
+  test-strength row, all repaired by hand (6dcb536d, 34c0d55f; the two new
+  tests fail on df326e26 and pass on c5317952); round 3 clean (hy3, 98d58db9).
+  The full `make verify` before phase 6 was stopped at 38 % by the
+  orchestrator's disk guard at 381 MB free; phase 6 and the pull request are
+  next.
+- **Lane B (bead coding-harness-wkxm):** round 4 repaired (6dd9d966, verify
+  green); round 5 found five rows, all taken (one shared reference guard, one
+  `git update-ref --stdin`, plan and spec text, the timeout test). Its repair
+  was stopped for disk space; the attempt is saved at
+  `refs/stage2/attempts/red-first-own-refs/disk-r5-20261102`, the branch is
+  clean at d100bfcb. Round-5 row L5-1 also names the unpruned
+  `refs/stage2/attempts/` refs, which this night's side-ref saves add to.
+- **The machine cannot run two lanes, nor a full `make verify`,** while
+  `fseventsd` holds its swap: swap grew from 18.9 to 22 GB by 11:12 UTC and
+  free disk fell to 156 MB even with every job paused. A paused job keeps its
+  memory, so the guard now terminates instead of pausing. Resume only after
+  `sudo killall fseventsd` or a restart.
+
+### Next step (replaces the one above)
+
+After `fseventsd` is restarted: run `make verify` in the worktree
+`docs-job-report-header`, then the phase-6 review, then the pull request with
+auto-merge; then restart lane B's round-5 repair.
