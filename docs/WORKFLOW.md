@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-30
+updated: 2026-11-02
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -31,16 +31,17 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 >
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
-> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-10-27 against the
-> tree at `e61554b0`, these pieces it names are **not** in this repository:
-> `scripts/validate_change_artefacts.py`, the sub-agents
-> `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
+> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-11-01 against the
+> tree at `8ae99e50` with the delivery of `explorer-reviewer-agents` (bead
+> coding-harness-9ll), these pieces it names are **not** in this repository:
+> `scripts/validate_change_artefacts.py` and the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`.
-> Supplied since the last check: `docs/governance/gate-catalog.md` and the
-> targets `make change` and `make index`, plus `.claude/commands/` with
-> `/workflow-start`. Where the text below says one of
-> the missing pieces does something, it describes the target, not this tree.
-> Since 2026-10-05, `tests/test_repo_settings.py`
+> Supplied since the last check: the sub-agents
+> `.claude/agents/explorer.md` and `reviewer.md`, the gate catalog
+> `docs/governance/gate-catalog.md`, the targets `make change` and
+> `make index`, and `.claude/commands/` with `/workflow-start`. Where the
+> text below says one of the missing pieces does something, it describes
+> the target, not this tree. Since 2026-10-05, `tests/test_repo_settings.py`
 > exists: it asserts the branch ruleset (rule RB-M6); the container fence §3
 > describes is not in it yet.
 >
@@ -809,7 +810,7 @@ after two failed post-run checks, through the runner's `repair` verb — since t
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
-**No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
+**No Fable:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
 any foreign call: a green leak check and a declared endpoint stay and are
@@ -824,8 +825,10 @@ a reviewer from another house does not know, by construction, that it is
 checking itself. The ladder draws on the training lineages configured in
 `model-endpoints.yaml`, so a round can see what the round before it did not.
 **Disagreements are recorded, not resolved automatically.**
-"Rung 1 flagged it, rung 2 did not" is the information. Kimi was considered
-and dropped (ADR 0007).
+"Rung 1 flagged it, rung 2 did not" is the information. Kimi was dropped on
+2026-09-30 and admitted again on 2026-10-30 (ADR 0007, decision 6): which
+models on the declared endpoints run is the declaration's job, in
+`model-endpoints.yaml`.
 
 ### Which change gets what
 
@@ -1212,13 +1215,17 @@ Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
-If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
-after the put-back, and a red run fails the attempt — with one exception:
-the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that one run, and
-the gate `adr-answers` then reports this change's own missing ADR answer
-without failing (another change's missing answer, a refused answer file and
-every other gate still do), so the exit code of `make verify` decides and the
-runner reads no gate output. Only the maintainer's stated answer may create
+If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
+the verify job's existing document subset,
+`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
+check fails the attempt — with
+one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
+one run, and the gate `adr-answers` then reports this change's own missing ADR
+answer without failing (another change's missing answer, a refused answer file
+and every other gate still do), so the check's exit code decides and the
+runner reads no gate output. `implement` and `repair` keep the full
+`make verify`: only the draft drops to the document subset. Only the
+maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
 of the baseline and `origin/main` does not hold, so a second draft edits (or
@@ -1570,11 +1577,13 @@ one central check point or a fail-closed rule replaced the case repairs
   so far. The maintainer chooses; a case repair stays possible when the
   maintainer says so.
 - **By day the session stops and asks**; at night the rule below applies.
-  An appetite that runs out is not such a stop: by day the session extends
-  it by itself once, up to twice the card's appetite, and says so in its
-  next status message; it asks at twice the appetite, at an open
-  `[DECISION]` or at a structural choice like this one (maintainer,
-  2026-10-30; `prompts/04-implement.md`, "The appetite is a stop").
+  An appetite that runs out is not such a stop: by day and at night the
+  session extends it by itself once, up to twice the card's appetite, and
+  says so in its next status message or the night's ledger. By day it asks
+  at twice the appetite, at an open `[DECISION]` or at a structural choice
+  like this one; at night those cases go to the night rules (cut, park or
+  drop) (maintainer, 2026-10-30; `prompts/04-implement.md`, "The appetite
+  is a stop").
 - **When no choke point closes it, the spec names the boundary.** On
   2026-10-30 the machine lock (bead coding-harness-p6mu) met the same
   mechanism in nine phase-6 rows: a protected descendant outliving the

@@ -1,0 +1,288 @@
+---
+title: "Architecture reconciliation — target, delivery plan and gap analysis at the 2026-10-31 baseline"
+category: research
+created: 2026-10-31
+updated: 2026-10-31
+last_reviewed: 2026-10-31
+status: draft
+implementation_status: none
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 implement, 2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
+bead: coding-harness-190
+owner: Data Architect
+tags: [architecture, reconciliation, target, delivery-plan, gap-analysis, baseline]
+---
+
+# Architecture reconciliation — target, delivery plan and gap analysis at the 2026-10-31 baseline
+
+This report compares the four architecture documents with the repository,
+without changing any of them. It answers bead `coding-harness-190`: which
+promises of the [Omnigent-first target](../architecture/2026-09-17-omnigent-first-target.md),
+the [implementation plan](../architecture/2026-09-17-implementation-plan.md)
+and the [gap analysis](../architecture/2026-09-17-gap-analysis.md) hold today,
+which remain open, and which were amended by a later decision. The
+superseded predecessor, [target-architecture.md](../architecture/target-architecture.md),
+is read only as the historical source of the D-1–D-17 and O-1–O-4 interview
+outcomes, not as a current claim.
+
+## Baseline, method and reading limits
+
+**Baseline: `b58c72e75af3283f4cc9e39148ecfb02642026f9`, 2026-10-31.** Every
+source-based disposition below inherits this commit and date. Tracker status
+uses the separate 2026-10-31 19:53 UTC snapshot documented in
+[Bead statuses](#bead-statuses-cited-by-the-gap-table); later repair checks
+are dated verification records, not measurements of the frozen baseline.
+
+- **How the original implementation evidence was read.** Repository files were opened and read in
+  the worktree of branch `docs/architecture-reconcile`, whose only commit
+  beyond the baseline (`27e071b8`) drafts this change's own artefacts under
+  `plans/changes/architecture-reconcile/`. No command tool was available in
+  that implementation attempt: no command, test or runtime qualification was
+  executed. Static inventories below (gate ids, test files, continuity ids)
+  were counted from source text or glob results; they are not executed-test
+  totals. Documentation repair subsequently inspected the living spec at
+  the frozen baseline through Git and ran documentation checks; those checks
+  do not qualify the runtime. Evidence is
+  of four kinds — *inspected source* (file content at the declared baseline),
+  *recorded decision* (an accepted ADR or dated decision note), *tracker
+  snapshot* (title/status from the dated render access point in the bead
+  table), and *verification record* (a dated check result in this change’s
+  findings). Target, delivery and gap dispositions use inspected source and
+  recorded decisions; the bead table uses the tracker snapshot, and the
+  verification limits use verification records. Tracker closure does not
+  establish delivery. Where a file’s existence is the evidence, the row says
+  what exists, never that it ran or passed.
+- **What was not measured by this report.** The static comparison did not
+  execute tests; later repair verification is recorded separately in
+  [this change’s findings](../../plans/changes/architecture-reconcile/findings.md).
+  That record includes a full `make verify` run that exited 2 with 1 failed,
+  4390 passed and 17 skipped on 2026-10-31; it is not a green qualification
+  of the frozen report baseline. The failure is
+  `tests/test_verify_lock.py::test_exit_interrupt_and_dead_waiter_release_admission`:
+  line 438 reads an empty child-PID file after checking only its existence.
+  At repair baseline `6e754cdb2f076bddb895e8d428bc03d33dc38931`, the diff
+  from the report baseline changes only Markdown; neither that test nor
+  `scripts/verify_lock.py` is changed. This is an existing test synchronization
+  failure outside the text-only diff, not evidence of a report regression.
+  No baseline rerun was performed to reproduce it independently. The red
+  run remains red, and the green-CI completion criterion remains unmet
+  until a green CI result is recorded. The suite totals of
+  2026-09-17 (64 failed, 182 passed, 4 skipped at `eddfc0b`) remain the
+  historical measurement of the gap analysis and are not refreshed. No CI
+  run was observed. The tracker (Dolt) was read afterwards by the orchestrator — see
+  [Bead statuses](#bead-statuses-cited-by-the-gap-table). Live services,
+  sibling repositories and private instances were not audited (non-goal).
+- **Disposition vocabulary.** *Supported* — inspected evidence at the
+  baseline answers the original obligation. *Partial* — a delivered part
+  holds; a named part is missing or unproven. *Open* — not built, not
+  proven, or not entered. *Amended* — a later accepted decision changed the
+  obligation; the amendment is cited. *Not read* — the evidence source was
+  outside this attempt's reach, with the reason.
+- **What a disposition does not claim.** A green gate, a reached milestone
+  or a qualified runtime is never inferred from a file's existence. Where
+  only the mechanism exists and its execution is CI's or a run's to show,
+  the row says so. Declaring milestone qualification is outside this
+  report's scope (spec, non-goals).
+
+The four source documents are unchanged by this report; their banners,
+decision-continuity rows and supersession metadata are treated as source
+evidence, and every contradiction below is recorded with a *proposed*
+remedy, not an adopted one.
+
+---
+
+## 1. The architecture target, section by section
+
+Source: [`2026-09-17-omnigent-first-target.md`](../architecture/2026-09-17-omnigent-first-target.md)
+(contract), its three dated banners (ADR 0006, ADR 0007, ADR 0009) and its
+decision-continuity table. One row per obligation; split where evidence or
+disposition differs.
+
+| # | Source and original obligation | Disposition | Evidence at the baseline | Residual gap / candidate remedy |
+|---|---|---|---|---|
+| T1 | [Outcome and boundaries](../architecture/2026-09-17-omnigent-first-target.md#outcome-and-boundaries) — a change becomes a reviewable pull request through bounded workers, reproducible checks and independent review | Partial | Routine PR flow is visible in the branch history (e.g. merge of pull request #299, read 2026-10-31); reproducible checks: [`decisions/gates.yaml`](../../decisions/gates.yaml) + [`scripts/verify_all.sh`](../../scripts/verify_all.sh) + generated [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml); independent review: prompts/06, review loop per ADR 0021. The "bounded workers" part was reshaped by ADR 0006 — see T2, T15. | Whether every candidate PR passes the same gate set is CI's verdict to show, not measured here. |
+| T2 | Outcome — "Omnigent owns dispatch and observation", one coordinator, two bounded workers | Amended | ADR 0006 (accepted 2026-09-27): no pilot, no coordinator; parallel sessions each in a worktree, at most `writing_sessions_per_repository` (default 2, D-59/D-60); recorded in the target's banner and D-3/D-7 rows; practice: AGENTS.md house rules 4 and "Sessions across checkouts". | The banner exists; the plan document was not given the matching notice (see R3 in §4). |
+| T3 | Outcome — interruption is safe: a fresh session resumes from a durable checkpoint | Partial | The handover series [`docs/journal/handover/`](../journal/handover/2026-10-31-night-and-day-run.md) (2026-09-16 → 2026-10-31, each with one resumption action); AGENTS.md session-continuity rules; this change's own artefacts resume the same way. | Resumption is a written discipline, not a tested mechanism; no fresh-context resume test is evidenced. |
+| T4 | Outcome — Git holds the change, Beads holds status, the human holds the merge | Supported | Git: the change artefacts; Beads: `.beads/config.yaml` (`sync.remote` to origin, `export.auto: false`); human merge: [`.claude/settings.json`](../../.claude/settings.json) asks before merge/push-to-main commands; `ruleset` gate (writer-placed) asserts the branch ruleset; ADR 0008 (a decision takes effect on merge). | The ruleset's live state at GitHub was not measured (writer gate; needs `gh` on a writer machine). |
+| T5 | Outcome — harness vs instances: the kit travels, instances own domain rules | Supported | [`scripts/kit/manifest.yaml`](../../scripts/kit/manifest.yaml) with role rules and REIST_NICHT exceptions; `leerprobe` gate (`scripts/kit/probe.py --strict`, floor block); instance ownership stated in AGENTS.md. | The probe's green run is CI's to show; kit transfer to an instance is in flight (ROADMAP Now theme 2), not completed. |
+| T6 | Outcome — customer expressions never enter harness artefacts | Supported | AGENTS.md house rule 6; the leak check before every foreign call ([`scripts/leakcheck.py`](../../scripts/leakcheck.py), `make leakcheck`, Makefile comment "runs before a foreign call … never in CI"); the 2026-10-20 public-readiness checks ([research note](2026-10-20-public-readiness.md)) measured the tree, history and tracker against the denylist. | The check runs per foreign call on the writer machine; no pull-request gate re-measures it (see R4 in §4). |
+| T7 | Outcome — English content, commits and PR bodies | Partial | House rule 1 (English repository); most living documents are English. | German remains in `scripts/` (e.g. `verify_all.sh` messages), `decisions/gates.yaml` reasons, `docs/governance/` and parts of `tests/`; tracked for translation in PRs of its own (house rule 1, bead `coding-harness-yim`), explicitly not this report's work. |
+| T8 | Outcome — naming amendment (D-17): the public scan permits tool names, rejects customer/employer identifiers and secrets | Amended | ADR 0003 (accepted 2026-09-22) sets the naming boundary; the scan itself is not built — no scan/denylist gate id exists in `decisions/gates.yaml` (the 23 ids listed there were read; none is a content scan); recorded as open by the 2026-10-20 readiness note. | See R4 in §4. |
+| T9 | [Decision continuity](../architecture/2026-09-17-omnigent-first-target.md#decision-continuity) — every D-1–D-17 and O-1–O-4 id stays mapped; every amendment has its ADR | Supported, one exception | The table names all 21 ids (D-1–D-17, O-1–O-4; the table was read in full); [`scripts/check_decision_continuity.py`](../../scripts/check_decision_continuity.py) enforces ids and the `AMENDMENT_ADRS` map (D-3, D-4, D-7, D-13, D-15, D-17, O-3, coordinator-permission → ADRs 0001–0007, 0009 and 0010, all present; ADR 0008 is not in this map); the `decision-continuity` gate is floor block. The exception is D-16 — its row says "Retain" while the tree contradicts it and no ADR is mapped (§4). | The gate's own run is CI's to show; not executed here. D-16 needs the maintainer's chosen remedy (§4). |
+| T10 | [Source of truth](../architecture/2026-09-17-omnigent-first-target.md#source-of-truth-and-execution-topology) — direction in `ROADMAP.md`; change contract in spec/design/plan; status in Beads | Partial | `ROADMAP.md` exists as a trial (maintainer, 2026-10-05; three Now themes, dated "Last checked"); spec/design/plan templates exist ([`templates/spec.md`](../../templates/spec.md), `design.md`; no `templates/plan.md` — the header convention lives in `prompts/03-plan.md`); Beads gates: `bead-export`, `dangling-beads`, `plans-registry` (all `needs_tracker`). | The change-artefact validator named by D-11 (`validate_change_artefacts.py`) is absent from `scripts/` (searched); structure is held by the docs gates instead. The absent validator is reported, not built (spec, Open decisions, last [DETAIL]). |
+| T11 | Source of truth — execution evidence: run records under the change's `runs/` directory | Partial | Attempt and check evidence lives in `findings.md` attempt lines, stage-2 runner records and handovers; the `runs/` layout the target names exists nowhere in this change's folder (globbed) and none of the change folders read. | Either the doctrine row or the practice needs the maintainer's wording decision; recorded here, not changed. |
+| T12 | Source of truth — verification: one gate manifest, canonical verifier, reports bound to candidate and base SHAs | Supported | `decisions/gates.yaml` (the one list, 23 gate ids); `verify_all.sh` holds no commands of its own and runs `ci_gates.py --report`; `ci.yml` is generated and ratcheted by the floor gate `ci-drift`; `gate-schema` and `Makefile`/gate-list cross-pinning via `tests/test_ci.py` (named in the Makefile header). | Execution (a green verify) not shown here — the runner and CI own that check. |
+| T13 | Source of truth — review: `findings.md` for a specified candidate, fresh context, one contract | Supported | `templates/findings.md`; `prompts/06-review.md`; review loop until a clean round (ADR 0021); reviewer never repairs its own finding (ADR 0015, ADR 0017); spec review on Opus 5.5 (ADR 0016). | — |
+| T14 | Source of truth — runtime: pinned Omnigent configuration plus bounded sessions, supervisor-enforced limits | Amended | ADR 0006: Omnigent runs unmodified (`omnigent claude --use-native-config`), no Omnigent sandbox, no supervisor; boundaries moved to Claude Code permission rules (`.claude/settings.json`: 27 Omnigent tools denied by name, merge/push commands ask) and an optional per-machine second layer ([`tools/omnigent/`](../../tools/omnigent/README.md), "Nothing in this repository depends on it"). | The sandbox-based supervision contracts (limits, cancellation, quarantine) have no runtime that enforces them; they stay open records per ADR 0006's own consequence list. |
+| T15 | [Tracker ownership and activation](../architecture/2026-09-17-omnigent-first-target.md#tracker-ownership-and-activation) — one authorized writer, exclusive lock, second coordinator fails closed | Amended | ADR 0002 → ADR 0005 (workers claim their own bead) → ADR 0006 (no coordinator; first writing session writes the tracker, a worker claims its one bead); house rule 4 states the current rule and says the D-60 write guard "is stated, not enforced". bd's own claim rules were measured 2026-09-23 ([research note](2026-09-23-worktree-tracker-writes.md)). | The write guard does not exist yet; the events-journal after-check is named by ADR 0006 but no journal check is evidenced in tree. |
+| T16 | [Candidate integration and final merge](../architecture/2026-09-17-omnigent-first-target.md#candidate-integration-and-final-merge) — candidate branch assembly, red blocks promotion, stale evidence invalidates, the human merges | Partial | The human-merge and red-blocks parts hold: CI blocks, `.claude/settings.json` asks on merge, the merge queue is the merge path (AGENTS.md; handover 2026-10-31). Stale evidence: prompts require re-verification on a changed base. | The coordinator's candidate-branch assembly never existed — no coordinator; each change integrates through its own branch and pull request instead. The assembly contracts are lapsed design, not built machinery. |
+| T17 | [Common review contract](../architecture/2026-09-17-omnigent-first-target.md#common-review-contract) — SPEC/MAINT dimensions, base/fix origin, severity, ambiguity blocks, `[DIVERGENT]` is BLOCKER, escalation after two fix rounds; external engines propose, the harness reviewer decides | Supported | The contract is carried in `templates/findings.md`, `prompts/06-review.md` and AGENTS.md ("no open BLOCKER — `[DIVERGENT]` counts as BLOCKER"); the review loop implements proposal-vs-decision with foreign models (ADR 0011, ADR 0021); reviewer qualification fixtures are owed by M1/M2, not evidenced (see G23). | — |
+| T18 | [Run limits](../architecture/2026-09-17-omnigent-first-target.md#run-limits-context-and-recovery) — at most two coding workers; one run-wide ledger; finite spend/wall-time/tool-call limits set before dispatch | Amended, partial | Amended: the two-worker cap gave way to the per-repository writing-session cap (ADR 0006, D-59/D-60). Partial: appetite is a plan-card field and the stage-2 runner records measured attempts; a runtime spend/wall-time meter for interactive sessions exists in neither the tree nor the doctrine. | Budget enforcement beyond the runner's own attempt records is open. |
+| T19 | Run limits — retry ceiling (two attempts per task), retries consume the run budget, approval waits time out | Partial | The repair ladder is codified and guarded (ADR 0017: Codex, a fresh Codex attempt, then Sonnet 5.5 after failed post-checks; a taken code row needs a red test first); attempt records land in `findings.md`. | These are stage-2 runner rules, not the pilot's whole-run budget protocol; approval timeouts cannot occur in interactive sessions. |
+| T20 | Run limits — stop means stop everything; stale workers cannot publish; a cost stop actually stops | Partial | Runner-side fail-fast is held by tests (`tests/test_stage2_fail_fast.py` exists; definition evidence only — not run here); "model downgrading is not a cost stop" is honoured in doctrine (`--stage2-off` records a reason instead of downgrading silently). | Process-group cancellation semantics belonged to the lapsed pilot; no equivalent runtime proof exists. |
+| T21 | Run limits — the six-field context packet, bounded packet budgets, resume proven, compaction hooks | Partial | The durable checkpoint is the change artefact set plus the dated handover with its one resumption action (AGENTS.md, house rule 5); instruction budgets are stated (AGENTS.md ≤ 200 lines is pinned by `tests/test_entry_points.py::test_instruction_file_is_under_200_lines`; the separate `test_agents_md_is_the_only_instruction_file` checks the one-instruction-file condition). | The generated six-field packet, its adapter size budgets and a proven fresh-context resume test are not built; compaction is delegated to the running harness. |
+| T22 | Run limits — startup check first (checkout identity, pinned dependencies, required tools, baseline gate result) | Partial | `make venv` refuses a wrong interpreter before building (Makefile, bead `coding-harness-y9q`); the hash-locked `requirements-ci.txt`; `verify_all.sh` runs a machine-wide admission supervisor ([`scripts/verify_lock.py`](../../scripts/verify_lock.py)); the stage-2 runner checks the leak check and endpoint declaration before every foreign call (ADR 0007). | No combined "startup check before coding" gate for interactive sessions; the pieces exist separately. |
+| T23 | Run limits — two failure classes; M0 proves process restart; host-loss recovery later; backup realism | Partial | Process/session restart is daily practice (handovers); host-loss: Dolt remote sync is configured (`.beads/config.yaml`), but the Dolt-native backup block is disabled by default (commented), and no full restore exercise is recorded anywhere read. | The restore rehearsal (gap G15, M3) remains open; nothing here claims uncommitted work survives. |
+| T24 | Run limits — living-spec deltas use ADDED/MODIFIED/REMOVED/RENAMED | Open | `plans/specs/` holds `.gitkeep` and one living spec, `plans/specs/implementation-verification/spec.md` (listed in `plans/INDEX.md` as accepted/done since 2026-10-08, bead `coding-harness-mfv`); its baseline contents were read during documentation repair and contain Acceptance criteria, Non-goals and Verification evidence, but no ADDED/MODIFIED/REMOVED/RENAMED sections. | The existing living spec does not demonstrate the delta-section convention; the requirement remains open on this evidence. Its accepted/done status proves neither delta use nor absence of a living spec. |
+| T25 | [Trust and enforcement](../architecture/2026-09-17-omnigent-first-target.md#trust-and-enforcement) — every rule has an enforcer or a dated ramp valve; gates prove they examined the intended inputs | Partial | The rule set with its test ([`docs/governance/regelwerk.md`](../governance/regelwerk.md), `tests/test_regelwerk.py`), the ramp-valve gate (`ramp-valves`, enforcement block over [`scripts/ramp_valves.py`](../../scripts/ramp_valves.py)), and the criterion ledger (ADR 0013) that holds every named proof. | Stated-but-unenforced rules remain, the D-60 write guard among them (house rule 4 says so in those words). |
+| T26 | Trust — one gate list; runtime policies are not a second quality list | Supported | `decisions/gates.yaml` header ("Exactly one artefact enumerates the machine gates"); the gate catalog page renders the list and is held to it by `tests/test_gate_catalog.py` ([`docs/governance/gate-catalog.md`](../governance/gate-catalog.md)); the Omnigent policy files deny tools, not quality checks. | — |
+| T27 | Trust — workers cannot self-authorize; harness changes are their own class; branch-provided gate changes cannot grant authority | Partial, amended | No Omnigent workers exist (ADR 0006); Claude Code deny/ask lists (`.claude/settings.json`) fence the named tools; `provenance.yaml` reserves `human-decided` files; decision pull requests carry the decision template (AGENTS.md house rule 8); ADR 0008 makes the merge the acceptance act. | The fixture-based proof that an injected instruction cannot weaken a gate (the target's "harmless injected-instruction fixture") is not found in tree. |
+| T28 | Trust — bypass must be seen to fail; gates have known-bad cases | Partial | Gate machinery tests exist (`tests/test_gate_machinery.py`, `scripts/mutation_evidence.py`, ADR 0013's lesson); the criterion-ledger gate exists because a deleted proof went unseen (bead `coding-harness-909`). | Whether *every* gate has its known-bad case is asserted by tests this attempt did not run; no per-gate mutation inventory was verified. |
+| T29 | Trust — external tools are components, not authorities; control inputs stay protected; installation is a reviewed choice | Supported | Pi is repository-pinned with offline contract tests (ADR 0019, `tests/test_pi_contract.py`); endpoints are declared in [`model-endpoints.yaml`](../../model-endpoints.yaml) (not listed = BLOCK, tested by `tests/test_model_endpoints.py`); the Omnigent policy is generated from one list ([`scripts/omnigent_policy.py`](../../scripts/omnigent_policy.py)) and installed by hand; AGENTS.md is the one instruction file (no `CLAUDE.md` exists — globbed). | — |
+| T30 | Trust — worktrees share Git; constrain shells, symlinks, child processes, shared refs; "if isolation cannot be shown, stop" | Open | ADR 0006 records the consequence in its own words: "Worktrees are not a security boundary … The target document's trust contracts that assume a sandbox are open, not settled by this ADR." Worktree isolation is a working agreement; `docs/WORKFLOW.md` cites this exact limit (line ~679, citing the gap analysis). | No constraint probe (shell, symlink, child process, shared refs) is evidenced. The target's own stop condition was never triggered because the pilot it guards was dropped. |
+| T31 | Trust — every model call is checked; foreign calls require the disclosure decision and leak check | Partial | For stage-2 calls the runner enforces a green leak check and a clearing endpoint declaration before *every* call (ADR 0007 decision 1; `scripts/stage2.py`; `tests/test_leakcheck.py` exists). Endpoints and data classes: `model-endpoints.yaml`. | The weekly research re-check deliberately runs *without* the leak check — an accepted, dated departure (ADR 0010, "Accepted risk"); the maintenance of that acceptance is the maintainer's, listed in this report only. |
+| T32 | [Human planning and attention support](../architecture/2026-09-17-omnigent-first-target.md#human-planning-and-attention-support) — portable Markdown start page, generated view `docs/planning/HOME.md`, read-only UI, idea inbox | Partial | `ROADMAP.md` (Now/Next/Later, appetites, dated trial rule); the read-only snapshot exists as `scripts/run_report.py` ("one read-only snapshot of the active changes (not a gate)", Makefile); the planning research addendum exists ([2026-09-18 note](2026-09-18-human-planning-and-harness-gaps.md)). | `docs/planning/` does not exist (globbed); the generated HOME view with source revision and tracker snapshot time is unbuilt; the idea inbox is Beads conventions, not a surface. |
+| T33 | Human planning — ADHD defaults to trial (one focus, ≤ 3 Now themes, batched updates, no timers/streaks) | Partial | `ROADMAP.md` caps Now at three themes in its own header; the question protocol with mandatory context is a gate (`question-context`, ADR 0018); the ADHD frame note exists ([2026-09-30](2026-09-30-adhd-frame.md)). | The trial's usability validation with the maintainer is not recorded in tree. |
+| T34 | Human planning — approvals explicit; separate planning checkout; no file-sync for live state | Partial | Approvals: ADR 0008, Touch-ID-signed acceptances recorded in ADRs 0004–0006, `.claude/settings.json` ask rules; the checkout/sync rules are stated in AGENTS.md and `docs/WORKFLOW.md`. | No separate planning checkout exists; the rule is doctrine, not practice to inspect. |
+| T35 | [Acceptance scenarios](../architecture/2026-09-17-omnigent-first-target.md#acceptance-scenarios) — "First parallel run" | Amended, partial | Parallel work exists in the amended shape: sessions in separate worktrees, capped (house rule 4; this attempt itself runs in `.claude/worktrees/architecture-reconcile`). The scenario's fenced coordinator and candidate branch belong to the lapsed pilot. | The scenario text is unchanged in the target; the amended topology is recorded only in banners/ADRs — same remedy as R3 in §4. |
+| T36 | Acceptance scenarios — "Second coordinator or stale result fails closed" | Partial | bd's claim rules were measured 2026-09-23: a contested claim has exactly one winner ([research note](2026-09-23-worktree-tracker-writes.md)); ADR 0006 supersedes ADR 0002 "in part" — its pilot store and its W1 roles lapse, the rest stands. | No coordinator exists to fail closed; the events-journal check is not evidenced. |
+| T37 | Acceptance scenarios — "Integration changes after a green check → evidence stale" | Partial | CI re-runs per push; the `frontmatter-current` and `ci-drift` gates invalidate stale claims in their own domains; prompts require renewal after a changed base. | No general SHA-bound evidence store exists to invalidate; the report binding in `verify_all.sh` covers the verify run itself. |
+| T38 | Acceptance scenarios — "Rule bypass or cross-worker write is blocked; a trusted check detects gate weakening" | Open | The deny lists fence named tools (`.claude/settings.json`, `tools/omnigent/policy.yaml`), and ADR 0006 accepts that they are brakes, not locks ("another spelling passes", AGENTS.md house rule 8 note). | The harmless-probe experiment was never run; no bypass-failure evidence exists. |
+| T39 | Acceptance scenarios — "Retry or cancellation: budget does not reset; children stop; no late acceptance" | Partial | Runner guards and their tests exist (`tests/test_stage2_fail_fast.py`, `tests/test_stage2_session_policy.py` — definition evidence); the repair ladder counts attempts (ADR 0017). | Not executed here; interactive sessions have no child-process model at all. |
+| T40 | Acceptance scenarios — "Context reset or worker crash: fresh session resumes the checkpoint" | Partial | The handover discipline is the standing resumption path (house rule 5; the handover series; every ADR and change folder is readable without a session). | The "resume must be proven" fresh-context test of the target is not recorded. |
+| T41 | Acceptance scenarios — "Review quality: seeded faults detected, clean controls accepted, defect-free real change can pass" | Partial | The loop reviews until a clean round with per-round records (ADR 0021); real PRs require no minimum findings (doctrine and AGENTS.md). | The fixed faulty/clean/ambiguous qualification fixture set (M1/M2 machinery) is not in tree (searched `tests/`); the scenario's experiment is not evidenced. |
+| T42 | Acceptance scenarios — "Human planning: maintainer starts, captures, resumes; plain Markdown suffices" | Partial | `ROADMAP.md` + Beads + handovers cover the essential path in plain Markdown (daily practice); the trial's acceptance record does not exist in tree. | — |
+| T43 | Acceptance scenarios — "Routine adoption: a fresh instance bootstraps the kit, passes gates, completes a Bounded change, resumes" | Open | The probe measures the tracked tree (`leerprobe --strict`); no fresh-instance bootstrap run is recorded; LakeSwitch is scheduled to read pinned releases instead of copying (ROADMAP Now theme 2). | — |
+| T44 | Acceptance scenarios — "Expanded permissions meet their separate mode, restore and recovery requirements before activation" | Open | W2 remains disabled (house rule 4; W2 row in §2 below); ADR 0010 admits one outside-the-phases job with its own guards, explicitly "not an M3 run". | — |
+
+---
+
+## 2. The delivery plan: M0–M4 and W0–W2
+
+Source: [`2026-09-17-implementation-plan.md`](../architecture/2026-09-17-implementation-plan.md)
+with its two banners (ADR 0007, ADR 0009) and its
+[dependency path](../architecture/2026-09-17-implementation-plan.md#dependency-path).
+Entry, exit and stop obligations are retained per row. The plan still
+presents W0/W1 → M0 → M1 → M2 → M3 → M4 as the path; the M0 discrepancy is
+recorded in §4.
+
+| Step | Original obligation (entry → exit → stop) | Disposition | Evidence at the baseline | Residual gap / candidate remedy |
+|---|---|---|---|---|
+| W0 — worktree isolation (mandatory M0 prerequisite in the original path) | In-repository worktrees from one fetched base SHA; workers commit only to their branch; probe shared Git, symlinks, shells, child processes; a W0 failure blocks M0 | Partial | Standing practice: one worktree per change from a fresh `origin/main` (AGENTS.md; this attempt runs in one). The probe set was never evidenced; the blocking relationship lapsed with M0. | The isolation probes remain undone and are recorded as open by ADR 0006 (T30). |
+| W1 — coordinator authorization (mandatory M0 prerequisite) | Explicit rule change to one authorized writer; exclusive ownership; stopped-writer takeover; run/attempt identity checks | Amended | The exclusive coordinator was superseded: ADR 0005 (workers claim their own bead; bd's claim rules measured), then ADR 0006 (no coordinator; first session writes, second claims). Takeover and identity checks belong to the lapsed coordinator design; ADR 0006 supersedes ADR 0002 in part (its pilot store and its W1 roles lapse). | The D-60 write guard ("per-checkout lock, session cap, tracker-write refusal") is owed and "stated, not enforced" (AGENTS.md house rule 4; ADR 0006 "Owed before this holds by tool rather than by rule"). |
+| W2 — worker-side tracker access (off the critical path) | Five checks (shared visibility, environment propagation, cross-checkout writes, concurrent claims, full prefix) in a disposable copy with supported mode; backup/restore verified; explicit rule change before activation | Open, correctly disabled | The five checks were measured once on 2026-09-23 with bd 1.3.0 ([research note](2026-09-23-worktree-tracker-writes.md)); activation never happened: house rule 4 still limits a non-first session to claim + handover comment. | Restore verification and the explicit rule change remain undone; W2 stays closed until they exist. |
+| M0 — two-worker pilot in a throwaway repository | Eleven controls (runtime, policies, trust boundary, model calls, parallel progress, candidate freshness, review, aggregate limits, retry/cancellation, restart/compaction, fallback); exit: all controls pass and one parallel loop reaches a reviewable PR; abort conditions named | Amended — dropped | ADR 0006 (accepted 2026-09-27) supersedes ADR 0001: "No pilot … There is no M0 and no throwaway repository." The target document carries the banner and amended D-3/D-7 rows; bead `coding-harness-36z` lost its M0 proof by the ADR's own wording. The pilot material was kept outside the repository. | The plan document still routes the path through M0 without a superseding notice (§4, "M0 pilot"). |
+| M1 — repeatable Bounded operation and kit delivery | Dogfood here; English doctrine, four classes, phase 2b, one vocabulary; routing schema and example; roadmap; `discovered-from`; templates; backup/restore test; D-17 foundations by exit. Exit: ten Bounded changes through contract/review/merge with measured human minutes (ten-minute calibration), fresh-instance bootstrap green, every new rule enforced or valved. Hold: unresolved controls, recurring overhead, unexplained non-fire | Partial | Delivered parts: English doctrine with classes and 2b ([`docs/WORKFLOW.md`](../WORKFLOW.md), `prompts/02b-design.md`, `templates/design.md`); the template bundle (10 files in `templates/`, incl. `spec.md`, `findings.md`, `arc42.md`, `adr.md`); `ROADMAP.md`; `discovered-from` in house rule 4; handover schema and gate (`tests/test_handover_entry.py`); routing decided by ADRs and `model-endpoints.yaml` (see R1 in §4 for the divergent form); kit probe strict (`leerprobe` floor gate). Not evidenced: the ten measured Bounded runs with human-minute figures, the fresh-instance bootstrap, the full backup/restore test (G15). Divergence: the kit's packaging roles are now `mechanismus`/`bestand` — the render contract retired the `geruest` role the plan's packaging table names ([`scripts/kit/manifest.yaml`](../../scripts/kit/manifest.yaml) header). | The measured exit is unproven; the packaging-contract wording predates ADR 0004's render decision. Both are recorded, not repaired here. |
+| M2 — Feature and cross-vendor operation | Enter only after D-13 qualification; three Feature changes through all phases with traceable artefacts and human merges; reviewer controls; unfamiliar-reader reconstruction; disclosure/leak checks per call. Hold: disclosure failure disables foreign calls | Open — not entered | ADR 0007 states in its own words: "It does not enter M2"; D-13's four criteria were amended for framework content (measured stage-2 runs replace qualification runs; leak check and declared endpoint enforced per call). Cross-vendor *reviewing* runs inside the loop (ADR 0011, ADR 0021) instead of the milestone path. | M2's remaining entry conditions (Omnigent topology, lakeswitch-ai adoption) are unmet; no Feature-class milestone run is evidenced. |
+| M3 — qualified unattended runs | Prove total budgets, process-group cancellation, approval timeout, restart, remote checkpoint recovery, complete tracker restore; rehearse a night run; trial criterion ≥ 1 mergeable PR/week, ≤ 15 min morning review over assigned weeks; abort after two failed weeks or double review overrun | Amended, partial | Amended by ADR 0010 (D-7's M3 clause): "M3 qualifies unattended runs of the seven-phase workflow; a recurring job outside the phases is admitted by an ADR of its own" — the research re-check is that job, with stand-in proofs at its size. Unattended seven-phase practice is routine: the night-run handover series runs 2026-10-12 → 2026-10-31, and the merge queue is the merge path since 2026-10-31 (handover; AGENTS.md). | M3's own proof set (budgets, cancellation, restore, tracked trial criterion) is not evidenced as met; the ADR's revisit trigger 4 names exactly this hand-over. |
+| M4 — justified hardening | Mutation-score tools, generated traceability, stronger attestations when measured risk warrants; each blocking check with known-bad case and callable enforcer; fallback rehearsed. Publication as a separate D-17 event: "Apache-2.0, onboarding and scan are already delivered; both instances ≥ 95 % kit-probe; M2 entry runs measured; unfamiliar reader completes a Bounded change" | Open, with a false delivery claim | Event-driven, so mostly untouched: a mutation-evidence script exists ([`scripts/mutation_evidence.py`](../../scripts/mutation_evidence.py)); no traceability matrix or attestation machinery is evidenced. The publication sentence contradicts the tree: no onboarding page exists (glob `**/onboarding*` empty), no scan gate exists in `decisions/gates.yaml`, the 2026-10-20 readiness note lists both as "Still open before the switch", and the licence it names differs from the baseline licence (R2 in §4; the cited sources do not establish the replacement date relative to the public switch). | R2 and R4 in §4; the milestone's qualification itself stays outside this report's scope. |
+
+---
+
+## 3. The gap analysis re-measured: all 26 rows
+
+Source: [`2026-09-17-gap-analysis.md`](../architecture/2026-09-17-gap-analysis.md),
+section [Gaps ordered by effect on the target](../architecture/2026-09-17-gap-analysis.md#gaps-ordered-by-effect-on-the-target),
+at its snapshot `eddfc0b`, 2026-09-17. The 2026-09-29 revision states it
+"restructured presentation only", so the September measurements were never
+re-taken — until the rows below. Priority and gap title are preserved; the
+original numbering order is kept so each row stays independently
+assessable. The old test totals are historical and are not re-asserted as
+current anywhere in this report.
+
+| # | Priority | Original gap (title, beads) | Disposition at baseline `b58c72e7` | Evidence at the baseline | Residual gap / candidate remedy |
+|---|---|---|---|---|---|
+| G1 | P0 | No one-command quality gate — no `Makefile`, gate file or `ci.yml`; 27 CI tests fail (`coding-harness-bo0`) | Supported (superseded measurement) | All three named artefacts exist and are one chain: [`Makefile`](../../Makefile) `verify` → [`scripts/verify_all.sh`](../../scripts/verify_all.sh) → `ci_gates.py` → [`decisions/gates.yaml`](../../decisions/gates.yaml) (23 gates); `.github/workflows/ci.yml` is generated and ratcheted by floor gate `ci-drift`; `tests/test_ci.py` pins Makefile and gate list together (named in the Makefile header). | The "27 CI tests fail" figure belongs to `eddfc0b` and is not refreshed; today's verdict is CI's to produce. |
+| G2 | P0 | Rules claim enforcers that are missing (`coding-harness-2ee`) | Partial | The rule file and its test exist ([`docs/governance/regelwerk.md`](../governance/regelwerk.md), `tests/test_regelwerk.py`); every gate in the one list carries a reason; the ramp-valve gate turns dated promises red. | Whether every remaining rule row names an enforcer in *this* repository is held by tests not run here; stated-not-enforced rules remain (e.g. the D-60 guard, T25). |
+| G3 | P0 | Parallel orchestration has no runnable harness adapter | Amended, partial | The pilot the row asked for was dropped (ADR 0006); Omnigent runs native and unpatched. What exists instead: `.claude/settings.json` deny/ask lists, the optional per-machine Omnigent policy layer ([`tools/omnigent/`](../../tools/omnigent/README.md)), and the pinned stage-2 runner with its own checked verbs. | No policy config *inside* a pinned Omnigent deployment record exists; the ADR-0006 layers are the accepted substitute. |
+| G4 | P0 | Worktree and Beads write behavior unproven; five-check protocol open (`coding-harness-m34`) | Partial | Measured 2026-09-23: four concurrent writers, bd 1.3.0, nothing lost ([research note](2026-09-23-worktree-tracker-writes.md)); bd claim rules + one-writer rule + claim exception carry the boundary (ADR 0005/0006, house rule 4). | The D-60 write guard is not built; the events-journal after-check is not evidenced. |
+| G5 | P0 | Policy and sandbox claims untested (`coding-harness-eev`) | Amended | The sandbox left with the pilot (ADR 0006: native config, no Omnigent sandbox); boundary layers exist as files whose stated contents are (27 denied, 16 allowed, 1 asked — `tools/omnigent/README.md`; `.claude/settings.json`). | No egress/telemetry measurement is evidenced; the boundary now rests on Claude Code permission rules whose brakes-not-locks nature is documented (house rule 8 note). |
+| G6 | P0 | Worktree policy and cost-stop semantics unproven | Partial | Worktree creation is daily practice and rule-bound (fresh `origin/main`, one change per worktree — AGENTS.md). Cost stops: plan-card appetites + runner-measured attempts; `--stage2-off` forbids silent downgrading. | No real-termination or aggregate-spend experiment is recorded; aggregate limits for interactive sessions remain prose. |
+| G7 | P0 | Runtime state and data flow need one explicit contract | Partial | The contract lives in artefacts: change folders + `findings.md` attempt records + handovers; run/attempt identity is enforced inside the stage-2 runner (ADR 0012's checked runner). | The `runs/` layout the target names is unused (T11); no runtime-wide ownership/cancellation contract exists outside the runner. |
+| G8 | P0/P1 | Proportionality is prose, not an enforced field (`coding-harness-9qo`, `coding-harness-jc3`) | Partial | The D-2 fields exist in the spec template and in the change specs read (this change's included), but not in every one: `plans/changes/free-member-rate-limit/spec.md` at `b58c72e7` lacks protected areas and a change-specific Definition of Done (phase-6 row F6-1); the class field is gate-checked indirectly (`interview-minimums`, `research-handoff`, `gate-schema` read headers; `check_docs.py` checks frontmatter). | The dedicated change-artefact validator (D-11, `validate_change_artefacts.py`) is absent (searched `scripts/`); of the two beads, 9qo is closed and jc3 open (see "Bead statuses cited by the gap table"); a spec without the fields is a residual gap. ROADMAP (2026-10-11 prose) still lists the validator as Now work. |
+| G9 | P0/P1 | Handover and review templates incomplete | Supported | `templates/findings.md`, `templates/handover.md`, `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`, `prompts/06-review.md` all exist; the review contract is pinned in AGENTS.md; the handover has a schema gate. | — |
+| G10 | P1 | Doctrine and adapters disagree; `WORKFLOW.md` names fixed vendors; `CLAUDE.md` does not import `AGENTS.md` (`coding-harness-21f`) | Partial, amended | The import problem was removed rather than fixed: no `CLAUDE.md` exists (globbed); Claude Code ≥ 2.1.277 reads `AGENTS.md` itself (AGENTS.md header). The doctrine is English, phased and class-routed. The vendor point inverted: the doctrine *now names models by decision* (R1 in §4) — a maintained routing table pinned by `STAGE2_ROUTING` in `tests/test_stage2.py`, not the accident the gap feared. | D-16's "no fixed model names in doctrine" is contradicted by governed practice (R1 in §4). |
+| G11 | P1 | Model routing is not a validated instance file (`coding-harness-qvl`) | Open (as specified), amended (in substance) | `model-routing.yaml` does not exist (glob empty). Routing resolves differently: doctrine tables + `STAGE2_ROUTING` (test-pinned) + endpoint declarations in `model-endpoints.yaml` (not-listed-is-BLOCK, `tests/test_model_endpoints.py`). | R1 in §4. |
+| G12 | P1 | Foreign-model qualification incomplete (no active foreign profile/leak gate) | Amended | ADR 0007 replaced the qualification criteria for framework content and put enforcement in the runner: green leak check + declared endpoint before *every* call; endpoint/data-class declarations live in `model-endpoints.yaml`; `tests/test_leakcheck.py` exists. | The accepted ADR-0010 departure (re-check without leak check) is the one dated exception (T31). |
+| G13 | P0 | No measured run supervision | Partial | Supervision exists for stage-2 runs: the checked runner records attempts, enforces leak checks and declarations, and forbids silent downgrade (`scripts/stage2.py`; ADR 0012, ADR 0017); night runs are routine with recorded attempts (handover series). | Bounded-retry/ownership-takeover/child-cancellation proofs belonged to the lapsed pilot; interactive sessions have no such supervisor. |
+| G14 | P0 | Tracker export discipline configured but not gated (`coding-harness-bo0`) | Amended, supported | ADR 0004 (accepted 2026-09-23) removed the committed copy and retired `export-identity`; the render is the portable contract ([`scripts/bead_render.py`](../../scripts/bead_render.py) is the access point); `export.auto: false` in `.beads/config.yaml`; the tracker gates (`bead-export`, `dangling-beads`, `plans-registry`; all `needs_tracker`, all floor) render fresh through the access point or fail honestly — "not measured", never green (`decisions/gates.yaml`). | — |
+| G15 | P1 | No full Beads restore exercise | Open | No restore rehearsal is recorded anywhere read: the backup block in `.beads/config.yaml` is commented out (disabled by default); M3's tracker-restore proof is unmet (§2); the Dolt remote is configured, which is transport, not restore evidence. | Still owed before W2 or routine unattended tracker writes. |
+| G16 | P1 | No explicit human planning surface | Partial | `ROADMAP.md` (trial, three Now themes, dated rule); `scripts/run_report.py` renders a read-only snapshot ("not a gate"); the planning addendum exists. | `docs/planning/HOME.md` unbuilt (T32); idea inbox is convention, not surface. |
+| G17 | P0/P1 | Compaction and discovered-work protocol incomplete | Partial | `discovered-from` is a standing convention (house rule 4: follow-up work is created as `discovered-from`); resume runs through handovers with a mandatory one-action resumption line; stage-2 sessions resume through the runner's guarded records (ADR 0012). | The tested six-field packet is unbuilt (T21); compaction is delegated to the harness. |
+| G18 | P1 | Public-template rule conflicts with the chosen runtime | Amended, supported | ADR 0003 (accepted 2026-09-22) drew the boundary exactly as the row asks: tool names permitted, customer/employer identifiers and secrets rejected; the leak check implements the reject side per foreign call. | The scan side is unbuilt (R4 in §4). |
+| G19 | P2 | Corpus has unresolved document defects (`coding-harness-bt8`) | Partial | Corrections are ongoing and gated where living: `docs-links` checks frontmatter/links/anchors; `research-currency` (drift, report) lists stale research notes; the gate catalog's reasons name bead `coding-harness-yim` for translating remaining German at source. | German remains in scripts/tests/governance (T7); the corpus's historical disagreements are preserved by rule, not erased. |
+| G20 | P1 | Public adoption not ready — no licence, onboarding or public scan (`coding-harness-lir`) | Partial | The repository went public 2026-10-20 ([readiness note](2026-10-20-public-readiness.md)): leak/denylist checks over tree, history and tracker clean; licence present (the readiness note names Apache-2.0); README rewritten (#177). Onboarding and the scan gate were open then and are open now. | The baseline licence is PolyForm NC 1.0.0 (R2 in §4; the cited sources do not establish the replacement date relative to the public switch); onboarding/scan remedy in R4. |
+| G21 | P0 | Checkers can be weakened unless protected | Partial | Named fences exist: `.claude/settings.json` deny/ask lists; `provenance.yaml` `human-decided` reservations + decision PRs (house rule 8); the `ruleset` gate asserts branch protection from a writer machine; ADR 0008 makes merge the acceptance act. | No worker-self-approval fixture is evidenced; the fences are brakes by their own documentation. |
+| G22 | P0 | Worktrees share Git resources — file separation is not a security boundary | Open (deliberately) | ADR 0006 records the limit in its own words and leaves the target's trust contracts open (T30); `docs/WORKFLOW.md` cites the gap analysis for exactly this point, so the row still serves doctrine. | The per-route constraint tests remain undone; nothing here claims isolation is proven. |
+| G23 | P1 | No behavioral qualification set | Partial | The review loop's rounds are recorded per model with taken/rejected findings (ADR 0021; the loop's working rows live outside phase 6 per README/AGENTS.md); runner machinery is held by an extensive test suite (64 `tests/test_*.py` files in a glob result of this worktree, 2026-10-31 — listed, not run). | The fixed faulty/clean/ambiguous reviewer fixture set is not in tree; no false-positive calibration record exists. |
+| G24 | P1 | Third-party components lack a qualification boundary | Partial | The assessments exist and are cited as dated evidence (CrewAI, Open Code Review, Agent Skills notes of 2026-09-18); foreign calls are governed by ADR 0007/0011/0021 through declared endpoints and the leak check; Pi is pinned with contract tests (ADR 0019). | No pinned synthetic bounded comparison for an adapter/skill trial is recorded; the boundary is governance, not yet experiment. |
+| G25 | P1 | Kit copying does not prove a usable instance | Partial | The probe is a floor gate over the tracked tree (`leerprobe --strict`, gate title "The kit probe holds over the tracked tree"); the manifest defines roles and REIST_NICHT reasons. | The full acceptance — first Bounded change in a fresh instance, resume, preserving update + rollback — is unrecorded; the planned direction changed to a pinned-release read (ROADMAP Now theme 2), which the plan's packaging table predates. |
+| G26 | P1 | Architecture decisions can disappear during rewrite | Supported | The exact failure got a machine: `check_decision_continuity.py` exists because of this row (its docstring cites it), the `decision-continuity` gate is floor block, the continuity table maps all 21 ids, the ADR series grew to 0001–0023, and ADR 0013's criterion ledger holds proofs against deletion. | The gate's green is CI's to show; D-16's unmapped contradiction is the one known continuity gap (R1 in §4). |
+
+**Row count check:** 26 rows, G1–G26, one disposition each; no original gap
+merged or dropped; priorities and titles preserved.
+
+---
+
+## 4. Discrepancies and proposed remedies
+
+Per the accepted decisions for this change: contradictions become rows with
+a *proposed* remedy — none of the remedies below is adopted, and this
+change changes no decision, no banner and no gate. Each remedy needs the
+maintainer's choice (banner, `AMENDMENT_ADRS` extension, or an ADR of its
+own).
+
+| # | Discrepancy | Observed contradiction (evidence at the baseline) | Proposed remedy (not adopted) |
+|---|---|---|---|
+| R1 | Routing file (D-16) | The continuity row reads "Retain — Instance `model-routing.yaml` resolves phase requirements … No fixed model names in doctrine" ([target, Decision continuity](../architecture/2026-09-17-omnigent-first-target.md#decision-continuity)). The tree: no `model-routing.yaml` anywhere (glob); routing lives in the doctrine tables of `docs/WORKFLOW.md` (§3 and §4 name Haiku 5.5, Sonnet 5.5, GLM 5.3 Flash, Opus 5.5, `gpt-6.1-sol` per phase), pinned by `STAGE2_ROUTING` in `tests/test_stage2.py`; endpoints live in `model-endpoints.yaml`; ADR 0007 decision 6 puts models on endpoints by dated declaration. No ADR amends D-16 and `AMENDMENT_ADRS` has no D-16 entry. | (a) A dated banner in the target document recording the routing practice and its deciding ADRs (0007/0011/0016/0021); or (b) map D-16 to ADR 0007 in `AMENDMENT_ADRS` with a matching row edit — touches the gate script and its tests in the same pull request; or (c) a small ADR of its own. Recommendation: (a), cheapest and reversible. |
+| R2 | Licence (D-17) | The continuity row and D-17 retain "Apache-2.0, onboarding and the public scan". The tree: [`LICENSE`](../../LICENSE) is PolyForm Noncommercial 1.0.0; [`COMMERCIAL.md`](../../COMMERCIAL.md) states this "replaces the Apache-2.0 choice in the public-readiness decision D-17 … for future releases"; [`README.md`](../../README.md): "Releases published before 2026-10-20 were under Apache 2.0". No ADR under `docs/adr/` (0001–0023) records the replacement; the 2026-10-20 readiness note names Apache-2.0, while the baseline uses PolyForm. These sources establish the discrepancy, not the replacement date or its timing relative to the public switch. | (a) A dated banner in the target document pointing at `COMMERCIAL.md` as the recorded replacement decision; or (b) an ADR of its own so `decision-continuity` can map D-17's licence clause. Recommendation: (b) if the maintainer wants the replacement machine-checked, else (a). |
+| R3 | The abandoned M0 pilot | ADR 0006 (accepted 2026-09-27) dropped the pilot, and the *target* document carries the banner plus amended D-3/D-7 rows. The *implementation plan* carries banners only for ADR 0007 and ADR 0009: its "Read this first" path line ("gates and enforcers → contracts → W0/W1 → M0 pilot → M1 → M2 → M3 → M4") and its dependency diagram still present M0 (and W0/W1-as-prerequisites) as current, and its M0 section stands without a supersession notice. A reader of the plan alone would take M0 for a live prerequisite. | (a) A dated banner in the implementation plan naming ADR 0006 (and ADR 0010's M3 clause), matching the two existing banners — test-pinned strings ("Changed, 2026-09-30" etc. in `tests/test_stage2.py`) are untouched by an *additional* banner; or (b) an explicit supersession header edit, which would touch pinned text and needs the maintainer's word. Recommendation: (a). |
+| R4 | Onboarding / public-scan delivery claim | The M4 section states "Apache-2.0, onboarding and scan are already delivered". The tree: no onboarding file exists (glob `**/onboarding*` empty); no scan/denylist gate id exists in `decisions/gates.yaml` (23 ids read); `scripts/leakcheck.py` covers the denylist per foreign call but "never in CI" (Makefile comment); the 2026-10-20 readiness note lists "the denylist gate as a kit gate" and "an onboarding page" under "Still open before the switch". The licence third of the sentence is separately untrue since the PolyForm replacement (R2). | (a) A dated banner in the implementation plan correcting the M4 publication sentence to the observed state (onboarding open, scan open, licence replaced), with a pointer to the readiness note; or fold the correction into the R2/R3 banner work. Recommendation: fold into one banner pass so the plan is touched once. |
+
+---
+
+## Bead statuses cited by the gap table
+
+The original gap table cites ten beads. The drafting attempt had file tools
+only and recorded them as *not read*; the orchestrator read them afterwards
+through the render access point (`scripts/bead_render.py`, `render_pfad()`,
+source "gerendert" — a fresh render of `refs/dolt/data`) on 2026-10-31 at
+19:53 UTC (review rows L3-1 and L4-1). A
+closed bead is tracker state, not proof that its gap is delivered; the
+dispositions above stand on their own evidence.
+
+| Bead (as cited) | Status 2026-10-31 19:53 UTC | Closed | Title (shortened) |
+|---|---|---|---|
+| `coding-harness-bo0` (G1, G14) | closed | 2026-09-21 | Gate file and one verify command; ci.yml derived from it |
+| `coding-harness-2ee` (G2) | closed | 2026-09-20 | Classify the 60 red mechanism tests |
+| `coding-harness-m34` (G4) | closed | 2026-09-23 | Verify tracker writes from worktrees before lifting the write ban |
+| `coding-harness-eev` (G5) | closed | 2026-09-27 | Omnigent step M0: proof of concept in a throwaway repository |
+| `coding-harness-9qo` (G8) | closed | 2026-10-07 | Template bundle for M1 |
+| `coding-harness-jc3` (G8) | open | — | Change-artefact validator as a kit entry |
+| `coding-harness-21f` (G10) | closed | 2026-09-22 | CLAUDE.md imports AGENTS.md (since replaced: AGENTS.md is the only instruction file) |
+| `coding-harness-qvl` (G11) | open | — | Per-instance model routing: phase overrides in the instance's model-endpoints.yaml |
+| `coding-harness-bt8` (G19) | open | — | Corpus correction pull request: mechanical fixes and one stage vocabulary |
+| `coding-harness-lir` (G20) | open | — | Public readiness: licence, onboarding page, denylist gate |
+
+Dated *prose* mentions found in the tree are recorded as prose, not as
+tracker status: `ROADMAP.md` (last checked 2026-10-11) says the template
+bundle is done and names `coding-harness-jc3` under a Now theme; the
+2026-10-20 readiness note names `coding-harness-lir` items as open. 
+
+---
+
+## What this report did not measure
+
+- **No runtime qualification command ran.** The original implementation had
+  no command tool; later documentation-repair checks do not change that
+  measurement limit. Verification results belong to the repair/runner
+  output, not to the static dispositions in this report.
+- **The report’s static comparison did not execute tests.** Every "tests
+  exist" above is definition evidence. Repair verification is recorded in
+  [this change’s findings](../../plans/changes/architecture-reconcile/findings.md),
+  including the 2026-10-31 `make verify` failure described in the method
+  above; those results do not turn the static dispositions into runtime
+  qualification. No CI verdict was observed.
+- **Tracker reading was limited to the dated render snapshot above.** It
+  supplies the ten cited beads’ titles and statuses as acceptance criterion 6
+  requires. No tracker item was created, claimed, closed or reprioritised
+  (spec non-goals); the original file-only attempt’s reading limit does not
+  apply to the orchestrator’s later snapshot.
+- **No CI run observed; no live service, sibling repository or private
+  instance audited** (spec non-goals).
+- **Unmeasured where the wording says so:** the ruleset's live state at
+  GitHub (writer-placed gate), the events journal, and every row marked
+  Partial or Open keeps its missing part named.
+- **Proposed follow-ups stay findings** for the authorized tracker writer:
+  the four remedies of §4 are candidates, not beads opened by this change.
