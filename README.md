@@ -64,37 +64,19 @@ autonomous workflow engine.
 
 ## A refused repair
 
-The check that matters most is the one that says no. During the night run of
-2026-11-01/02 it did:
+The check that matters most is the one that says no. When an agent repairs a
+bug, it must show that its new test fails on the code before the repair and
+passes after it ("red first"). A test that passes on both proves nothing: it
+may not detect the defect at all.
 
-1. The run plan said to save a stopped runner job as a WIP commit on the
-   change's branch ([rule 6](docs/research/2026-11-01-night-run-plan.md)).
-2. Those commits already held the attempt's fix
-   ([`036589b6`](https://github.com/bicycle-brakes/monotrope/commit/036589b6),
-   [`2db9fe70`](https://github.com/bicycle-brakes/monotrope/commit/2db9fe70),
-   [`7a6a1095`](https://github.com/bicycle-brakes/monotrope/commit/7a6a1095)).
-   So the "code before the repair" that the next run tested against already
-   contained the repair.
-3. The new tests passed on that code. The runner reported "pytest ended 0 on
-   the baseline's code" and did not accept the repairs.
-4. The repairs themselves were correct; the orchestrator then proved red first
-   by hand against the commit before the WIP. But the runner could not show
-   that the tests detect the defect, so it refused instead of accepting a claim
-   it could not check.
-5. The mistake was in the process, not in the code. A stopped attempt now goes
-   on a side ref, `refs/stage2/attempts/<change>/<label>`, never on the branch
-   (bead coding-harness-c99h).
-
-The mechanism: `red_first` in [`scripts/stage2.py`](scripts/stage2.py) runs
-the named test in a temporary checkout of the code before the repair. It
-accepts only a failure by an assertion or by pytest's own failed outcome; a
-crash, a skip or a setup error shows only that the test could not run. The
-test `test_a_named_test_that_is_not_red_first_fails_the_attempt` in
-[`tests/test_stage2.py`](tests/test_stage2.py) holds the refusal.
-
-A passing test alone does not show that it detects the original defect. A
-false refusal costs a rerun; a false acceptance leaves a test that guards
-nothing.
+The runner checks this itself instead of trusting the agent's word. It runs the
+named test against the code before the repair and accepts only a real
+assertion failure; a crash, a skip or a setup error counts as "could not run",
+not as red. In one night run a process slip had put a fix into that "before"
+code, so the new tests passed there and the runner refused repairs that were in
+fact correct. The refusal was right: it could not check the claim. A false
+refusal costs a rerun; a false acceptance leaves a test that guards nothing.
+How it works and where it is tested: [`docs/WORKFLOW.md`](docs/WORKFLOW.md) §4.
 
 ## Prompt advice and the mechanism behind it
 
