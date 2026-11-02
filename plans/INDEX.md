@@ -139,6 +139,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/dirty-index/plan.md`](changes/dirty-index/plan.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/research.md`](changes/dirty-index/research.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/spec.md`](changes/dirty-index/spec.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/docs-job-report-header/research.md`](changes/docs-job-report-header/research.md) | draft | none | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/draft-gates-only/decisions.md`](changes/draft-gates-only/decisions.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
 | [`changes/draft-gates-only/findings.md`](changes/draft-gates-only/findings.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
 | [`changes/draft-gates-only/plan.md`](changes/draft-gates-only/plan.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
