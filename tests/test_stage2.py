@@ -11831,15 +11831,24 @@ def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> No
 
 
 def test_proofs_agree_on_git_visible_tests(world: World) -> None:
-    """Planted fault: ignored test fixtures enter only the baseline proof's test tree."""
-    baseline = repair_world(world)
-    (world.root / ".gitignore").write_text("tests/ignored-fixture\n", encoding="utf-8")
+    """Both proofs preserve tracked cache fixtures and exclude untracked ignored fixtures."""
+    repair_world(world)
+    cache = world.root / "tests" / "__pycache__" / "fixture"
+    cache.parent.mkdir()
+    cache.write_text("tracked cache fixture\n", encoding="utf-8")
+    (world.root / ".gitignore").write_text("tests/ignored-fixture\n__pycache__/\n", encoding="utf-8")
+    git(world.root, "add", "-f", "tests/__pycache__/fixture")
+    git(world.root, "add", ".gitignore")
+    git(world.root, "commit", "--quiet", "-m", "tracked ignored cache fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
     (world.root / "tests" / "ignored-fixture").write_text("local only\n", encoding="utf-8")
     (world.root / "tests" / "visible-fixture").write_text("current\n", encoding="utf-8")
     selector = "tests/test_visibility.py::test_visibility"
     (world.root / "tests" / "test_visibility.py").write_text(
         "from pathlib import Path\n\n\ndef test_visibility():\n"
         "    tests = Path(__file__).parent\n"
+        "    if (tests / '__pycache__' / 'fixture').read_text() != 'tracked cache fixture\\n':\n"
+        "        raise RuntimeError('tracked cache fixture missing')\n"
         "    if (tests / 'ignored-fixture').exists():\n"
         "        raise RuntimeError('ignored fixture reached the proof')\n"
         "    if (tests / 'visible-fixture').read_text() != 'current\\n':\n"
@@ -12041,6 +12050,35 @@ def test_proofs_refuse_unmeasured_state(world: World, monkeypatch: pytest.Monkey
             )
 
 
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("failure", [OSError, RuntimeError])
+def test_proofs_refuse_post_run_ref_errors_and_remove_private(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, failure: type[Exception]
+) -> None:
+    """A post-run ref measurement exception must refuse and still remove the private store."""
+    baseline = repair_world(world)
+    selector = plant_proof(world, proof)
+    original = stage2._ref_targets
+    measured: list[Path] = []
+
+    def failing_refs(root):
+        if root != world.root:
+            measured.append(root)
+            if len(measured) == 2:
+                raise failure("planted post-run ref listing failure")
+        return original(root)
+
+    monkeypatch.setattr(stage2, "_ref_targets", failing_refs)
+    try:
+        outcome = run_proof(world, proof, selector, baseline)
+    finally:
+        # Check cleanup even if the planted exception escapes the proof.
+        assert len(measured) == 2
+        assert not measured[0].parent.exists(), "measurement failure skipped private repository cleanup"
+    assert outcome is not None and "ref listing failed" in outcome, outcome
+    assert "planted post-run ref listing failure" in outcome and selector in outcome, outcome
+
+
 def test_fixed_proof_refuses_post_run_tree_oserror(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Planted fault: an OSError in the final tree measurement escapes and prevents cleanup."""
     repair_world(world)
@@ -12110,10 +12148,10 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
                 if scene == "partial-setup":
                     if proof == "baseline":
 
-                        def failing_copytree(*_args, **_kwargs):
+                        def failing_snapshot(*_args, **_kwargs):
                             raise OSError(28, "planted copy failure")
 
-                        patch.setattr(stage2.shutil, "copytree", failing_copytree)
+                        patch.setattr(stage2, "_snapshot_tests", failing_snapshot)
                     else:
                         original_git = stage2._git_output
 
