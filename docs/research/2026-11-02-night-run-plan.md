@@ -60,6 +60,15 @@ per lane, maintainer, 2026-11-02 21:20 UTC). Implementations touching
    or its appetite.
 7. Auto-merge for pull requests without a decision, as on 2026-11-01.
 8. #316 and #317 go into the merge queue.
+9. The machine stays awake through the night (`caffeinate` until 11:00 UTC);
+   this session stays open.
+10. Lane B repairs for at most three more phase-6 re-checks; if it is not
+    clean then, its pull request opens with the open findings as named limits
+    and without auto-merge, and lane C stays blocked.
+11. The Pi context probe covers every admitted model, the paid ones included.
+12. A push notification only when all five lanes stop or something
+    security-relevant happens (a leak-check block, a full disk); otherwise the
+    status at 07:00 UTC in the chat.
 
 ## Rules for this run
 
