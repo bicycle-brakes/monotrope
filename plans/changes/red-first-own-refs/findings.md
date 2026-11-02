@@ -526,3 +526,14 @@ Phase 6 verdict: codex 01a19dc0-867b-7231-8246-ab25454a7543, 2026-11-02
 Reviewer session: codex 01a19dc0-867b-7231-8246-ab25454a7543 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3074 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3075 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-02
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-5 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5636–5640 | Symbolic-target changes remain undetected outside HEAD. With private branches `a` and `b` pointing to the same commit, a qualifying named test can run `git symbolic-ref refs/heads/a refs/heads/b`. The persistent target of `a` changes, but `for-each-ref` still returns the same names and resolved object IDs; HEAD and the file tree also remain unchanged. Both proofs therefore accept this reference mutation. This extends the earlier HEAD finding with a concrete non-HEAD case: the repair records symbolic targets only for HEAD. [Acceptance criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a19deb-11ff-7662-ba6f-2d9dd3eb57f6, 2026-11-02
+Reviewer session: codex 01a19deb-11ff-7662-ba6f-2d9dd3eb57f6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
