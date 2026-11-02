@@ -11954,6 +11954,54 @@ def test_proofs_include_uncommitted_force_added_fixtures(world: World, proof: st
     assert git(world.root, "show", ":tests/__pycache__/fixture") == "staged bytes"
 
 
+@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_capture_current_contents_despite_index_flags(world: World, flag: str, proof: str) -> None:
+    """F-2: copying index flags makes both proofs read stale tracked bytes."""
+    repair_world(world)
+    fixture = world.root / "tests" / "tracked-fixture"
+    fixture.write_text("old contents\n", encoding="utf-8")
+    git(world.root, "add", "tests/tracked-fixture")
+    git(world.root, "commit", "--quiet", "-m", "track proof fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    git(world.root, "update-index", flag, "tests/tracked-fixture", "src/app.py")
+    fixture.write_text("current contents\n", encoding="utf-8")
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    selector = "tests/test_index_flags.py::test_index_flags"
+    (world.root / "tests" / "test_index_flags.py").write_text(
+        "from pathlib import Path\n\n\ndef test_index_flags():\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        "    if (root / 'tests' / 'tracked-fixture').read_text() != 'current contents\\n':\n"
+        "        raise RuntimeError('stale fixture reached proof')\n"
+        "    assert 'value = 2' in (root / 'src' / 'app.py').read_text()\n",
+        encoding="utf-8",
+    )
+    index = Path(git(world.root, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    before = index.read_bytes()
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (flag, proof, outcome)
+    assert index.read_bytes() == before
+    assert fixture.read_text() == "current contents\n"
+    assert git(world.root, "show", ":tests/tracked-fixture") == "old contents"
+
+
+@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
+def test_fixed_proof_refuses_changes_hidden_by_index_flags(world: World, flag: str) -> None:
+    """F-2: a passing test hides its file write behind an index flag."""
+    repair_world(world)
+    selector = "tests/test_hidden_write.py::test_hidden_write"
+    (world.root / "tests" / "test_hidden_write.py").write_text(
+        "import subprocess\nfrom pathlib import Path\n\n\ndef test_hidden_write():\n"
+        f"    subprocess.run([{GIT!r}, 'update-index', {flag!r}, 'src/app.py'], check=True)\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        "    (root / 'src' / 'app.py').write_text('hidden write\\n')\n",
+        encoding="utf-8",
+    )
+    outcome = stage2.fixed_test_proof(world.root, selector, None)
+    assert outcome is not None and "the private checkout changed while the fixed-code proof ran" in outcome, outcome
+    assert (world.root / "src" / "app.py").read_text() != "hidden write\n"
+
+
 def test_proofs_refuse_object_alternates(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Planted fault: a cloned store with an alternates file is silently accepted."""
     baseline = repair_world(world)

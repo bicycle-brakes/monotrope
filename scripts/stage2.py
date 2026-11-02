@@ -4575,17 +4575,27 @@ def credential_message(exposed: list[Path]) -> str:
 def worktree_tree(root: Path) -> str:
     """The tree id of the worktree as git counts it, written through a temporary index.
 
-    Copy the real index to preserve tracked membership, including newly force-added ignored
-    files, then capture current file contents. The real index is only read; it, the stash and
-    the refs are never changed (spec, criterion 10).
+    Read only tracked names from the real index, including newly force-added ignored files.
+    Seed a fresh index from HEAD and add those paths' current contents, never inheriting flags
+    that could hide changes. The real index is only read; it, the stash and the refs are never
+    changed (spec, criterion 10).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        index = Path(_git_output(root, "rev-parse", "--path-format=absolute", "--git-path", "index").strip())
         temporary_index = Path(tmp) / "index"
-        # Git uses the index timestamp to recheck racily clean entries. A newer copy's
-        # timestamp could make unchanged stat data hide freshly edited file contents.
-        shutil.copy2(index, temporary_index)
+        tracked = _git_bytes(root, "ls-files", "-z", "--cached")
         env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
+        _git_output(root, "read-tree", "HEAD", env=env)
+        if tracked:
+            _git_bytes(
+                root,
+                "--literal-pathspecs",
+                "add",
+                "-f",
+                "--pathspec-from-file=-",
+                "--pathspec-file-nul",
+                env=env,
+                stdin=tracked,
+            )
         _git_output(root, "add", "-A", env=env)
         return _git_output(root, "write-tree", env=env).strip()
 
