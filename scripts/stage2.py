@@ -5632,9 +5632,9 @@ def red_first_python(root: Path) -> str:
 
 
 def _ref_targets(root: Path) -> dict[str, str]:
-    """Every named ref's object, plus HEAD's object and symbolic target (or detached state)."""
-    listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname)")
-    refs = {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+    """Every ref's object and symbolic target, including HEAD's detached state."""
+    listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
+    refs = {name: target.rstrip() for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
     head = _git_output(root, "rev-parse", "HEAD").strip()
     symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
     refs["HEAD"] = f"{head} {symbolic or '(detached)'}"

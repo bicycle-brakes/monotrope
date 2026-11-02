@@ -11990,6 +11990,24 @@ def test_proofs_exclude_ignored_children_of_replaced_tracked_file(world: World, 
 
 
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_symbolic_ref_at_same_commit(world: World, proof: str) -> None:
+    """F-5: making a branch symbolic changes its target without changing resolved object ids."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    for branch in ("a", "b"):
+        git(world.root, "update-ref", f"refs/heads/{branch}", baseline)
+    selector = "tests/test_write.py::test_write"
+    (world.root / "tests" / "test_write.py").write_text(
+        ref_writing_test(("symbolic-ref", "refs/heads/a", "refs/heads/b")), encoding="utf-8"
+    )
+    before = stage2._ref_targets(world.root)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "refs changed while the named test ran: refs/heads/a" in outcome, (proof, outcome)
+    assert selector in outcome
+    assert stage2._ref_targets(world.root) == before
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_refuse_head_attachment_at_same_commit(world: World, proof: str) -> None:
     """F-4: attaching detached HEAD changes its target without changing any object id."""
     baseline = repair_world(world)
