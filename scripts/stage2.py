@@ -5874,30 +5874,32 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
     finally:
-        # The private store's own names and targets are compared before it is deleted, on a
-        # launch failure or a timeout exactly as on a finished run; the source's refs are not
-        # an acceptance condition and are not read here.
-        if refs_before is not None and private is not None:
-            try:
-                refs_now = _ref_targets(private)
-            except Refused as error:
-                named.append(f"the private ref listing failed ({error})")
-            else:
-                changed = sorted(
-                    ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                )
-                if changed:
-                    named.append("refs changed while the fixed-code proof ran: " + ", ".join(changed))
-        if tree_before is not None and private is not None:
-            try:
-                tree_now = worktree_tree(private)
-            except (Refused, OSError) as error:
-                named.append(f"the private tree could not be measured ({error})")
-            else:
-                if tree_now != tree_before:
-                    named.append("the private checkout changed while the fixed-code proof ran")
-        if tmp is not None:
-            cleanup = _remove_private(tmp)
+        try:
+            # The private store's own names and targets are compared before it is deleted, on a
+            # launch failure or a timeout exactly as on a finished run; the source's refs are not
+            # an acceptance condition and are not read here.
+            if refs_before is not None and private is not None:
+                try:
+                    refs_now = _ref_targets(private)
+                except Exception as error:
+                    named.append(f"the private ref listing failed ({error})")
+                else:
+                    changed = sorted(
+                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
+                    )
+                    if changed:
+                        named.append("refs changed while the fixed-code proof ran: " + ", ".join(changed))
+            if tree_before is not None and private is not None:
+                try:
+                    tree_now = worktree_tree(private)
+                except Exception as error:
+                    named.append(f"the private tree could not be measured ({error})")
+                else:
+                    if tree_now != tree_before:
+                        named.append("the private checkout changed while the fixed-code proof ran")
+        finally:
+            if tmp is not None:
+                cleanup = _remove_private(tmp)
     if named:
         fault = f"{fault}; {'; '.join(named)}" if fault else "; ".join(named)
     if cleanup is not None:
@@ -5909,7 +5911,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
-    The private checkout's `tests/` is the attempt's Git-visible tests, without caches: a test of the
+    The private checkout's `tests/` is the attempt's Git-visible tests, including tracked caches: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
     call git honest. The checkout is a clone with its own reference store (`_private_repository`), so
     another session's branch, remote-tracking or saved-attempt reference moving in the source repository
@@ -5950,33 +5952,17 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
         tree = tmp / "tree"
         report = tmp / "red-outcome.json"
         try:
+            current = worktree_tree(root)
             _private_repository(root, tree, baseline)
         except (Refused, OSError) as error:
             outcome = f"{test}: the red-first checkout failed ({scrub(str(error), key)})"
         if outcome is None:
             shutil.rmtree(tree / "tests", ignore_errors=True)
             try:
-                # Use the same Git-visible snapshot as the fixed proof, including tracked
-                # ignored files, and preserve directory traversal only for included paths.
-                current = worktree_tree(root)
-                paths = _git_output(
-                    root, "ls-tree", "-r", "--name-only", "-z", current, "--", "tests", preserve_newlines=True
-                ).split("\0")
-                visible = set()
-                for path in filter(None, paths):
-                    relative = Path(path)
-                    visible.add(relative)
-                    visible.update(relative.parents)
-
-                def ignored(directory: str, names: list[str]) -> list[str]:
-                    relative = Path(directory).relative_to(root)
-                    return [
-                        name
-                        for name in names
-                        if name in {"__pycache__", ".pytest_cache"} or relative / name not in visible
-                    ]
-
-                shutil.copytree(root / "tests", tree / "tests", ignore=ignored, symlinks=True)
+                # Both proofs use worktree_tree's Git-visible snapshot, including tracked
+                # ignored fixtures. Restore the captured bytes, modes and symlinks from its
+                # objects in the private store, with no second filesystem copy/filter.
+                _git_output(tree, "restore", "--source", current, "--worktree", "--", "tests")
             except (Refused, OSError) as error:
                 outcome = (
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
@@ -6062,21 +6048,25 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     fault = _red_record_fault(_red_report_bytes(report), token, selector)
                     if fault is not None:
                         outcome = f"{test}: {scrub(fault, key)}"
+    except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
+        outcome = f"{test}: {scrub(str(error), key)}"
     finally:
-        if refs_before is not None:
-            # The private store's own names and targets, compared before the store is deleted: a
-            # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
-            # or reset here - the comparison is the whole verdict.
-            try:
-                refs_now = _ref_targets(tree)
-            except Refused as error:
-                refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
-            else:
-                refs_changed = sorted(
-                    ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                )
-        if tmp is not None:
-            cleanup = _remove_private(tmp)
+        try:
+            if refs_before is not None:
+                # The private store's own names and targets, compared before the store is deleted: a
+                # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
+                # or reset here - the comparison is the whole verdict.
+                try:
+                    refs_now = _ref_targets(tree)
+                except Exception as error:
+                    refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
+                else:
+                    refs_changed = sorted(
+                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
+                    )
+        finally:
+            if tmp is not None:
+                cleanup = _remove_private(tmp)
     if refs_changed:
         named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
         outcome = f"{outcome}\n{named}" if outcome else named

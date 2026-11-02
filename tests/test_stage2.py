@@ -11833,15 +11833,24 @@ def test_baseline_proof_uses_baseline_code_and_current_tests(world: World) -> No
 def test_proofs_agree_on_git_visible_tests(world: World) -> None:
     """Planted fault: ignored test fixtures enter only the baseline proof's test tree."""
     baseline = repair_world(world)
-    (world.root / ".gitignore").write_text("tests/ignored-fixture\n", encoding="utf-8")
+    (world.root / ".gitignore").write_text("tests/ignored-fixture\n__pycache__/\n.pytest_cache/\n", encoding="utf-8")
     (world.root / "tests" / "ignored-fixture").write_text("local only\n", encoding="utf-8")
     (world.root / "tests" / "visible-fixture").write_text("current\n", encoding="utf-8")
+    for cache in ("__pycache__", ".pytest_cache"):
+        fixture = world.root / "tests" / cache / "tracked-fixture"
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_text("tracked cache fixture\n", encoding="utf-8")
+        git(world.root, "add", "-f", str(fixture.relative_to(world.root)))
+    git(world.root, "commit", "-m", "Track ignored cache fixtures")
     selector = "tests/test_visibility.py::test_visibility"
     (world.root / "tests" / "test_visibility.py").write_text(
         "from pathlib import Path\n\n\ndef test_visibility():\n"
         "    tests = Path(__file__).parent\n"
         "    if (tests / 'ignored-fixture').exists():\n"
         "        raise RuntimeError('ignored fixture reached the proof')\n"
+        "    for cache in ('__pycache__', '.pytest_cache'):\n"
+        "        if (tests / cache / 'tracked-fixture').read_text() != 'tracked cache fixture\\n':\n"
+        "            raise RuntimeError('tracked cache fixture missing')\n"
         "    if (tests / 'visible-fixture').read_text() != 'current\\n':\n"
         "        raise RuntimeError('current fixture missing')\n"
         "    assert 'value = 2' in (tests.parent / 'src' / 'app.py').read_text()\n",
@@ -12041,6 +12050,36 @@ def test_proofs_refuse_unmeasured_state(world: World, monkeypatch: pytest.Monkey
             )
 
 
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("error_type", [OSError, RuntimeError])
+def test_proofs_refuse_post_run_ref_exception_and_remove_repository(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, error_type: type[Exception]
+) -> None:
+    """A final measurement exception must refuse, name its cause and still remove all scratch."""
+    baseline = repair_world(world)
+    selector = plant_proof(world, proof)
+    original = stage2._ref_targets
+    measured = []
+
+    def failing_refs(root):
+        if root != world.root:
+            measured.append(root)
+            if len(measured) == 2:
+                raise error_type("planted post-run ref measurement failure")
+        return original(root)
+
+    monkeypatch.setattr(stage2, "_ref_targets", failing_refs)
+    try:
+        outcome = run_proof(world, proof, selector, baseline)
+    except Exception as error:
+        pytest.fail(f"post-run measurement escaped instead of refusing and cleaning up: {error}")
+    assert outcome is not None and selector in outcome, outcome
+    assert "ref listing failed" in outcome, outcome
+    assert "planted post-run ref measurement failure" in outcome, outcome
+    assert len(measured) == 2
+    assert not measured[0].parent.exists(), "post-run measurement skipped repository removal"
+
+
 def test_fixed_proof_refuses_post_run_tree_oserror(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Planted fault: an OSError in the final tree measurement escapes and prevents cleanup."""
     repair_world(world)
@@ -12108,21 +12147,14 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
 
                 patch.setattr(stage2.tempfile, "mkdtemp", recording_mkdtemp)
                 if scene == "partial-setup":
-                    if proof == "baseline":
+                    original_git = stage2._git_output
 
-                        def failing_copytree(*_args, **_kwargs):
-                            raise OSError(28, "planted copy failure")
+                    def failing_setup(root, *args, _original=original_git, _proof=proof, **kwargs):
+                        if args[0] == ("restore" if _proof == "baseline" else "clone"):
+                            raise stage2.Refused("planted proof setup failure")
+                        return _original(root, *args, **kwargs)
 
-                        patch.setattr(stage2.shutil, "copytree", failing_copytree)
-                    else:
-                        original_git = stage2._git_output
-
-                        def failing_clone(root, *args, _original=original_git, **kwargs):
-                            if args[0] == "clone":
-                                raise stage2.Refused("planted clone failure")
-                            return _original(root, *args, **kwargs)
-
-                        patch.setattr(stage2, "_git_output", failing_clone)
+                    patch.setattr(stage2, "_git_output", failing_setup)
                 elif scene == "timeout":
                     original_launch = stage2.launch
 

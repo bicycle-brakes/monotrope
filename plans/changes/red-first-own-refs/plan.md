@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-01
 last_reviewed: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-02
 supersedes: null
 superseded_by: null
 bead: coding-harness-wkxm
@@ -160,6 +160,17 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-01 18:48:27–19:44:33 UTC, 3366 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 19:44:41–21:03:08 UTC, 4706 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-01 21:17:58–22:35:01 UTC, 4622 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-02 09:32:10–10:13:03 UTC, 2454 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-02 10:13:12–10:33:47 UTC, 1235 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+
+## Appetite clarification — 2026-11-02
+
+The runner's Time used record above shows that phase 4, repairs included,
+ran past the two-hour appetite. No extension or maintainer decision was
+recorded. The orchestrator continued under the night plan of 2026-11-01;
+that continuation is not a recorded waiver of the appetite stop. The
+question of this overrun goes to the maintainer's 15:00 decision block.
+This clarification adds no time entry and grants no new appetite.
 
 ## Implementation accepted by hand — 2026-11-01
 
