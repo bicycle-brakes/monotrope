@@ -1044,3 +1044,15 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > - F6-3: tests/test_beads_start.py::test_live_peer_outside_git_keeps_strict_scan_successful: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-3-20261101T211152887110Z-3f6792d8.md
 > ```
+
+Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 3008 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-02
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:103–105,189 | A merged trailer containing `Closes-Bead: coding-harness-alpha<CR>coding-harness-beta` closes `coding-harness-alpha` instead of rejecting the malformed value. New evidence beyond F6-1: Git preserves the carriage return inside the logical value, but subprocess `text=True` converts it to LF before validation. Reproduced with Git's trailer parser and `collect_declarations()`, which returns the partial identifier without any malformed declaration. Preserve logical value boundaries through decoding. [Acceptance criterion 2] | Codex | open | — |
+| F6-5 | MAJOR | SPEC | Phase 6 re-check | tools/claude-code/hooks/session-scan.sh:90–92 | When a live peer's recorded working directory is a subsequently deleted subdirectory of this same checkout, strict scanning classifies it as `other` and exits 0. The startup hook consequently permits writing reconciliation despite another live session in the repository. Reproduced with a live peer PID and a missing path directly beneath the current worktree. A missing directory does not establish unrelated ownership; inspect surviving ancestors or skip writing when ownership remains uncertain. [Acceptance criterion 11] | Codex | open | — |
+
+Phase 6 verdict: codex 01a19af2-8df8-7492-9e54-f0ccd2cb1894, 2026-11-02
+Reviewer session: codex 01a19af2-8df8-7492-9e54-f0ccd2cb1894 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
