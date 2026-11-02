@@ -155,14 +155,9 @@ def select_research_catalog(
             return "not-chat"
         if item.get("provider", provider) != provider:
             return "pi-malformed"
-        base = item.get("baseUrl")
-        if base is None:
-            # A row without a base resolves offline from the record for its
-            # wire api; an unmapped api has no default and no origin to check.
-            if address.default_base(item.get("api")) is None:
-                return "no-recorded-base"
-            return None
-        if stage2_go.url_problem(base, address.host) is not None:
+        # Preserve field presence: only the shared policy decides whether a
+        # base is omitted (defaultable) or explicitly unreadable (refused).
+        if not stage2_go.assess(address, item["id"], item).admitted:
             return "pi-malformed"
         return None
 

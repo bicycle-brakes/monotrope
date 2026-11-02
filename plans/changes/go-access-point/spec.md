@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-02
 supersedes: null
 superseded_by: null
 bead: coding-harness-4tr4
@@ -43,6 +43,7 @@ The existing draft `docs/adr/0024-one-access-policy-for-opencode-go.md`
 belongs to this change; its acceptance still requires the maintainer's
 merge. The recorded feature ADR answer is already "yes"; this draft does
 not change that answer.
+The original proposal "no", preserved in the answer record's `shown` fields, was superseded by the maintainer's interview answer in Q-4; the header reflects that answer.
 
 ## Problem
 

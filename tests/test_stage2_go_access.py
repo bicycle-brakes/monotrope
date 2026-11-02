@@ -388,6 +388,32 @@ def test_absent_bases_get_the_recorded_api_default(world, monkeypatch, tmp_path)
 # ---------------------------------------------------------------------------
 
 
+def test_research_preflight_refuses_explicit_null_bases(world):
+    """Explicit null bases are refused for seats and free members; omission still defaults."""
+    policy = stage2_go.load_address_policy(world.root)
+    omitted = [row("omitted-free"), row("omitted-paid")]
+    for item in omitted:
+        del item["baseUrl"]
+    bridge = bridge_with(row("null-free", baseUrl=None), row("null-paid", baseUrl=None), *omitted)
+    original = copy.deepcopy(bridge)
+    result = swarm.select_research_catalog(
+        bridge,
+        selector_policy(),
+        ["null-paid", "omitted-paid"],
+        expected_version="test-pin",
+        address=policy,
+    )
+    assert result["selected"] == ["omitted-free"]
+    candidates = {item["id"]: item for item in result["candidates"] + result["models"]}
+    for ident in ("null-free", "null-paid"):
+        assert candidates[ident]["reason"] == "pi-malformed"
+        assert candidates[ident]["evidence"]["pi"]["baseUrl"] == {"present": True, "value": None}
+    for ident in ("omitted-free", "omitted-paid"):
+        assert candidates[ident]["reason"] is None
+        assert candidates[ident]["evidence"]["pi"]["baseUrl"] == {"present": False}
+    assert bridge == original, "preflight rewrote the raw catalog evidence"
+
+
 def test_refused_rows_stay_refused(world, monkeypatch):
     """Criterion 5: a refused catalog row returns as neither a shipped model nor a lost peer.
 
