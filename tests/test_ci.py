@@ -19,6 +19,7 @@ import contextlib
 import copy
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import re
@@ -1500,6 +1501,211 @@ def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Pat
     done = _run_runner(tree, tmp_path / "home", [])
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "[probe] gruen" in done.stdout, done.stdout
+
+
+# --------------------------------------------------------------------------
+# 2b · The report header names the selected job (bead coding-harness-ooj5)
+# --------------------------------------------------------------------------
+
+# The report is the runner's first output and binds the run to a state of the
+# world. These tests start the real shell runner over a seeded gate file whose
+# docs, verify, drift and total counts are all different, so a header that
+# keeps reporting the default `verify` while the caller selected something
+# else cannot hide behind equal numbers. A stub `git` on PATH answers the
+# report's two identity questions from baked-in values — the developer's own
+# refs never reach one of these runs.
+
+_REPORT_KEYS = {"job", "candidate", "base", "config_sha256", "gates_total", "gates_job"}
+
+_ANSWERING_GIT = "\n".join(
+    [
+        "#!/bin/sh",
+        'case "$1" in',
+        "  rev-parse) echo fake-candidate-sha ;;",
+        "  merge-base) echo fake-base-sha ;;",
+        "  *) exit 1 ;;",
+        "esac",
+        "",
+    ]
+)
+_BROKEN_GIT = "#!/bin/sh\nexit 1\n"
+
+
+def _fake_git(bin_dir: Path, *, broken: bool = False) -> Path:
+    """A PATH stub that answers the report's git questions — or, when broken, fails like no git."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    body = _BROKEN_GIT if broken else _ANSWERING_GIT
+    (bin_dir / "git").write_text(body, encoding="utf-8")
+    (bin_dir / "git").chmod(0o755)
+    return bin_dir
+
+
+def _report_fixture_gates(marker_dir: Path) -> list[dict]:
+    """Four gates whose docs, verify, drift and total counts are deliberately unequal (2/3/1/4).
+
+    `doc-hosted` belongs to the docs subset but measures hosted-only: the
+    membership count includes it while the local command list declaredly leaves
+    it out — so a header that counted executed commands instead of membership
+    would fail the docs run.
+    """
+
+    def gate(gid: str, job: str, placement: str, subsets: tuple[str, ...] = ()) -> dict:
+        entry = {
+            "id": gid,
+            "title": f"The {gid} gate",
+            "command": f'touch "{marker_dir / gid}"',
+            "job": job,
+            "enforcement": "block",
+            "floor": True,
+            "placement": placement,
+            "reason": "a header seed for the report test",
+        }
+        if subsets:
+            entry["subsets"] = list(subsets)
+        return entry
+
+    return [
+        gate("doc-local", "verify", "both", ("docs",)),
+        gate("doc-hosted", "verify", "hosted", ("docs",)),
+        gate("verify-only", "verify", "both"),
+        gate("drift-only", "drift", "both"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "git_mode",
+    [
+        pytest.param("answering", id="git-answers"),
+        pytest.param("failing", id="git-fails"),
+    ],
+)
+@pytest.mark.parametrize(
+    "selection",
+    [
+        pytest.param(None, id="default"),
+        pytest.param("verify", id="explicit-verify"),
+        pytest.param("docs", id="docs-subset"),
+        pytest.param("drift", id="drift-job"),
+    ],
+)
+def test_runner_report_matches_selected_job(tmp_path: Path, selection: str | None, git_mode: str) -> None:
+    """The header names the job the caller selected and counts membership, not executed commands.
+
+    One run per selection — no `--job` (the default `verify`), explicit
+    `verify`, the `docs` subset and `drift`. The unequal seeded counts make a
+    confused count fail; the exact key set, the stub git's known HEAD and
+    merge-base (nulls when it fails) and the gate file's byte digest pin the
+    rest of the report contract; and the executed markers show the hosted gate
+    is counted without running locally.
+    """
+    base = tmp_path / f"header-{selection or 'default'}-{git_mode}"
+    tree = _runner_tree_files(base / "tree")
+    markers = base / "markers"
+    markers.mkdir(parents=True)
+    gate_file = tree / "decisions" / "gates.yaml"
+    _write_gate_file(tree, _report_fixture_gates(markers))
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    git_stubs = _fake_git(tmp_path / f"git-{git_mode}", broken=git_mode == "failing")
+
+    args = () if selection is None else ("--job", selection)
+    done = _run_runner(tree, tmp_path / "home", [git_stubs], *args)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+
+    # The report is the runner's first output; everything after it is gate
+    # output that must not be read as JSON.
+    header, _ = json.JSONDecoder().raw_decode(done.stdout)
+    expected_job = selection or "verify"
+    expected_membership = {"verify": 3, "docs": 2, "drift": 1}[expected_job]
+    assert set(header) == _REPORT_KEYS, "the report's field set changed"
+    assert header["job"] == expected_job, done.stdout
+    assert header["gates_job"] == expected_membership, "the membership count is not the selected job's"
+    assert header["gates_total"] == 4, "the total count is not the whole configuration"
+    assert header["config_sha256"] == hashlib.sha256(gate_file.read_bytes()).hexdigest()
+    if git_mode == "answering":
+        assert (header["candidate"], header["base"]) == ("fake-candidate-sha", "fake-base-sha")
+    else:
+        assert (header["candidate"], header["base"]) == (None, None), "an unavailable reference is not null"
+
+    # The hosted gate is counted as membership but declaredly left out of the
+    # locally executed commands — and no gate of another job started.
+    executed = {path.name for path in markers.iterdir()}
+    expected_executed = {
+        "verify": {"doc-local", "verify-only"},
+        "docs": {"doc-local"},
+        "drift": {"drift-only"},
+    }[expected_job]
+    assert executed == expected_executed
+
+
+def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
+    """The report precedes the gates without changing any verdict rule.
+
+    A default run leaves the drift gate out, a blocking failure turns the run
+    red without abandoning the gates after it, solely report/advisory failures
+    keep it green, and a report that cannot be produced stops the run with
+    exit 2 before any gate starts.
+    """
+
+    def seed(name: str, gate_list: list[dict]) -> Path:
+        base = tmp_path / name
+        tree = _runner_tree_files(base / "tree")
+        _write_gate_file(tree, gate_list)
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        return tree
+
+    def marker_gate(gid: str, job: str, enforcement: str, ending: str) -> dict:
+        marker = tmp_path / f"{gid}.marker"
+        return {
+            "id": gid,
+            "title": f"The {gid} gate",
+            "command": f'touch "{marker}"; {ending}',
+            "job": job,
+            "enforcement": enforcement,
+            "floor": True,
+            "placement": "both",
+            "reason": "a verdict seed for the report test",
+        }
+
+    red = seed(
+        "block-red",
+        [
+            marker_gate("alpha", "verify", "block", "true"),
+            marker_gate("beta", "verify", "block", "exit 1"),
+            marker_gate("gamma", "verify", "block", "true"),
+            marker_gate("driftgate", "drift", "block", "true"),
+        ],
+    )
+    done = _run_runner(red, tmp_path / "home", [])
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "RED (block)" in done.stdout, done.stdout
+    for gid in ("alpha", "beta", "gamma"):
+        assert (tmp_path / f"{gid}.marker").is_file(), f"{gid} was abandoned after the blocking failure"
+    assert not (tmp_path / "driftgate.marker").exists(), "an unselected gate ran"
+
+    green = seed(
+        "nonblocking-green",
+        [
+            marker_gate("rep", "verify", "report", "exit 1"),
+            marker_gate("advis", "verify", "advisory", "exit 1"),
+            marker_gate("fin", "verify", "block", "true"),
+        ],
+    )
+    done = _run_runner(green, tmp_path / "home", [])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "nur report" in done.stdout and "nur advisory" in done.stdout, done.stdout
+    for gid in ("rep", "advis", "fin"):
+        assert (tmp_path / f"{gid}.marker").is_file(), f"{gid} was skipped"
+
+    broken = seed("report-broken", [marker_gate("only", "verify", "block", "true")])
+    gate_file = broken / "decisions" / "gates.yaml"
+    gate_file.write_text(
+        gate_file.read_text(encoding="utf-8").replace("schema_version: 2", "schema_version: 9"),
+        encoding="utf-8",
+    )
+    done = _run_runner(broken, tmp_path / "home", [])
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "gates: job=" not in done.stdout, "the run reached its gates although the report failed"
+    assert not (tmp_path / "only.marker").exists(), "a gate started although the report failed"
 
 
 # --------------------------------------------------------------------------
