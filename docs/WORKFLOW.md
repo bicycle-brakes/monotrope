@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-31
+updated: 2026-11-02
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -31,16 +31,17 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 >
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
-> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-10-27 against the
-> tree at `e61554b0`, these pieces it names are **not** in this repository:
-> `scripts/validate_change_artefacts.py`, the sub-agents
-> `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
+> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-11-01 against the
+> tree at `8ae99e50` with the delivery of `explorer-reviewer-agents` (bead
+> coding-harness-9ll), these pieces it names are **not** in this repository:
+> `scripts/validate_change_artefacts.py` and the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`.
-> Supplied since the last check: `docs/governance/gate-catalog.md` and the
-> targets `make change` and `make index`, plus `.claude/commands/` with
-> `/workflow-start`. Where the text below says one of
-> the missing pieces does something, it describes the target, not this tree.
-> Since 2026-10-05, `tests/test_repo_settings.py`
+> Supplied since the last check: the sub-agents
+> `.claude/agents/explorer.md` and `reviewer.md`, the gate catalog
+> `docs/governance/gate-catalog.md`, the targets `make change` and
+> `make index`, and `.claude/commands/` with `/workflow-start`. Where the
+> text below says one of the missing pieces does something, it describes
+> the target, not this tree. Since 2026-10-05, `tests/test_repo_settings.py`
 > exists: it asserts the branch ruleset (rule RB-M6); the container fence §3
 > describes is not in it yet.
 >
@@ -809,7 +810,7 @@ after two failed post-run checks, through the runner's `repair` verb — since t
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
-**No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
+**No Fable:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
 any foreign call: a green leak check and a declared endpoint stay and are
@@ -824,8 +825,10 @@ a reviewer from another house does not know, by construction, that it is
 checking itself. The ladder draws on the training lineages configured in
 `model-endpoints.yaml`, so a round can see what the round before it did not.
 **Disagreements are recorded, not resolved automatically.**
-"Rung 1 flagged it, rung 2 did not" is the information. Kimi was considered
-and dropped (ADR 0007).
+"Rung 1 flagged it, rung 2 did not" is the information. Kimi was dropped on
+2026-09-30 and admitted again on 2026-10-30 (ADR 0007, decision 6): which
+models on the declared endpoints run is the declaration's job, in
+`model-endpoints.yaml`.
 
 ### Which change gets what
 
