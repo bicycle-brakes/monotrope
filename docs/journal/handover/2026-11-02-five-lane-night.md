@@ -199,3 +199,33 @@ Saved stopped attempts (pushed to origin):
 After `fseventsd` is restarted: run `make verify` in the worktree
 `docs-job-report-header`, then the phase-6 review, then the pull request with
 auto-merge; then restart lane B's round-5 repair.
+
+## Addendum — 2026-11-02 afternoon, tracker cleanup and cluster epics
+
+At the maintainer's request ("Was sich schnell schließen lässt schließ, was
+sich zusammenfassen lässt fasst zusammen"; "bilde epics und beads entsprechend
+von Clustern"), measured on the tracker on 2026-11-02:
+
+- **Closed, done or superseded (9 + 1):** coding-harness-l7sc (PR #305), -s05q
+  (its five parked PRs resolved), -cj6b (superseded by the lanes), -pg2r and
+  -m254 (superseded by the merge queue), and three spikes answered in research
+  notes of PR #313: -hleu (route success), -52pd (TokenEconomizer), -c97e
+  (Orca, Codebase Memory MCP, Superpowers).
+- **Merged into a keeper (closed, evidence moved as a note):** -er46 → -g19n,
+  -2d6o → -ofmz, -y17 → -0ho and -at27 → -mvzr (both by earlier maintainer
+  decisions), -up2m → -4ft9, -326 and -rhn7 → -25h.1, -eyia → -np8z,
+  -9ca → -36z.
+- **Cluster epics:** every open bead now sits under one of 15 top-level epics:
+  review loop (coding-harness-mwzv), repair and red-first (-iksh), runner
+  robustness (-yv9i), model access and terms (-363r), lanes and night runs
+  (-bw73, holding the night-run epic -yuw), verify speed (-bxxt), gates and
+  evidence (-uh5a), knowledge and handover currency (-89d8), tracker (-qwpx),
+  maintainer attention (-8v2c), phase prompts (-8e96), kit and LakeSwitch
+  (-04fj, holding -3ar), outside practice (-5cf8), language and public face
+  (-6fki), and the existing harness-neutral epic -25h (holding -i3y). 182 open
+  beads, 168 of them work items.
+- **Not closed, with reason:** most remaining beads are real open work; a few
+  checked candidates stay open on evidence — -jmtl (the ValueError is still on
+  main), -kkh (two portfolio entry checks have no counterpart here), -uxx
+  (lakeswitch-ai still requires Python below 3.12), -al8 (the pilot waits for
+  the no-visual-tools rule), -yb1l, -rm8, -8j7, -7so.
