@@ -57,6 +57,14 @@ The same good practice, as text in a prompt and as a mechanism here:
 | Decide, don't drift | "record decisions" | A decision takes effect when the maintainer merges its pull request; files only a person may change are declared, and touching one makes a decision pull request | `provenance.yaml`, `docs/adr/` |
 | Track the work | "make tickets" | A tracker in the repository's own git refs; one writer at a time, a claim for everyone else; CI renders its gate from the tracker, so a push that outruns it goes red | `tools/bd`, `.beads/` |
 
+**Why red first.** A test that passes after a fix proves nothing unless it
+failed before it — like a smoke detector you have never heard beep. So the
+runner runs the new test twice: on the code from before the repair, where it
+must fail by an assertion (a crash only shows that the test could not run),
+and on the repaired code, where it must pass. When a session once saved a
+stopped attempt as a commit, the fix slipped into the "before" code, the test
+passed there, and the runner refused the repair — rightly.
+
 Where a rule is still text rather than a tool, [What works today](#what-works-today)
 says so.
 
