@@ -40,23 +40,19 @@ one-line install for any repository.
 
 ## Architecture
 
-```text
-Human goals and decisions
-          ↓
-Versioned context: research → spec → plan
-          ↓
-Orchestrating agent (Claude Code)
-          ↓
-Python runner → endpoint policy + leak check → model/tool execution
-          ↓
-Output validation → regression tests → separate review
-          ↓
-CI checks → merge under the repository's decision rules
-```
+<p align="center">
+  <img src="docs/assets/readme-who-steers-a-change.png"
+       alt="Who steers a change: the person sets goals and merges decision PRs; the orchestrating agent reads and updates the versioned state and starts the Python runner; the runner builds the phase instructions, applies the endpoint policy and leak check, and sends allowed input to external model sessions; those sessions edit the change worktree and return a response to the post-run checks, whose results go back to the agent; the worktree goes through local gates, a separate review and CI, failures return to the agent as repair work, and passed changes are merged."
+       width="720">
+</p>
+
+The policy and leak-check boundary applies only to model calls dispatched
+through the Python runner. Model sessions may change the worktree according to
+their role; read-only instructions are not an operating-system sandbox.
 
 | Component | What it does | Where |
 | --- | --- | --- |
-| Versioned context | research, interview answers, spec, plan, findings and handovers as files per change | `plans/changes/<name>/`, `docs/journal/handover/` |
+| Versioned state | research, interview answers, spec, plan, findings and handovers as files per change; task status in the Beads tracker | `plans/changes/<name>/`, `docs/journal/handover/`, `.beads/` |
 | Orchestrating agent | runs the phases, asks the person, starts the runner | `AGENTS.md`, `prompts/` |
 | Python runner | starts other models for named phases, checks the endpoint, runs the leak check, validates what comes back | `scripts/stage2.py`, `scripts/leakcheck.py`, `model-endpoints.yaml` |
 | Gates | one list drives the local run and CI; each gate blocks, reports or is advisory | `decisions/gates.yaml`, `scripts/verify_all.sh` |
