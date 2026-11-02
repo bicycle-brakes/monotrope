@@ -591,3 +591,14 @@ Stage-2 call, 2026-11-02: repair · attempt 3 · route stage-1 · endpoint claud
 > - F-6: tests/test_stage2.py::test_proofs_preserve_existing_symbolic_refs: the red-first checkout failed (git update-ref failed: Schwerwiegend: update refs/remotes/origin/HEAD: invalid <old-oid>: refs/remotes/origin/main)
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-3-20261102T205710540870Z-055a67e7.md
 > ```
+
+Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 840 files, 3095 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-02
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-7 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5636–5640 | A qualifying named test can create a persistent reference with `git symbolic-ref refs/heads/probe refs/heads/missing`, where the target does not exist. `for-each-ref` omits dangling symbolic references, so both snapshots remain identical; HEAD and the file tree also remain unchanged. Both proofs therefore accept the reference creation. The symbolic-reference regressions cover existing targets only. Include unresolved symbolic references in the measurement and cover this case in both proof paths. [Acceptance criterion 2] | Codex | taken — the third finding on reference measurement (F-4, F-5, F-7): `for-each-ref` leaves out what Git cannot resolve. Structural remedy chosen by the orchestrator at night on 2026-11-02 under the maintainer's word to repair on (at most three re-checks), flagged for the maintainer's morning review: both proofs' reference guards also compare the private repository's raw reference store — every file under `.git/refs/`, `.git/packed-refs` and `.git/HEAD`, by path and bytes — before and after the named test, so any created, deleted or rewritten reference counts, resolvable or not, and the diagnostic names each changed path; the existing `_ref_targets` comparison stays. Regression that must fail on the code before the repair: a named test that runs `git symbolic-ref refs/heads/probe refs/heads/missing` is refused in both proofs and the diagnostic names `refs/heads/probe`; the F-4, F-5 and F-6 regressions stay green | — |
+
+Phase 6 verdict: codex 01a19e6b-7464-7303-94db-313438adabd8, 2026-11-02
+Reviewer session: codex 01a19e6b-7464-7303-94db-313438adabd8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
