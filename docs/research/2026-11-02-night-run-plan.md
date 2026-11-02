@@ -36,35 +36,30 @@ session works the lanes and is the only tracker writer.
 
 ## Lanes
 
-Each lane runs its first item, then its backlog in order. An item marked
-**needs** waits for that answer; without it the lane goes straight to its
-backlog.
+Each lane runs its first item, then its backlog in order (two to three beads
+per lane, maintainer, 2026-11-02 21:20 UTC). Implementations touching
+`scripts/stage2.py` run one at a time across lanes A and D (rule 3).
 
-| Lane | First tonight | Backlog 1 | Backlog 2 |
-|---|---|---|---|
-| A | Self-closing beads (bead coding-harness-l1if): repair F6-4 and F6-5 with the two structural remedies, phase-6 re-check, pull request — **needs** question 1; the maintainer merges | Sonnet continues Flash's edits (bead coding-harness-6ie): implement — **needs** question 2 (its plan card) | Repair scope guard (bead coding-harness-t83): stays at its interview |
-| B | Red-first proofs in a private clone (bead coding-harness-wkxm): F-5 repair, phase-6 re-check, full `make verify`, pull request with auto-merge | Runner stops at the appetite (bead coding-harness-uxa9): explore with GLM Flash, draft up to the plan card | Stop hook (bead coding-harness-788): explore up to the interview |
-| C | One Go access point (bead coding-harness-4tr4): only after wkxm merges — merge `main`, round-8 repair from `refs/stage2/attempts/go-access-point/enospc-20261102`, loop, phase 6; stops before the ADR 0024 decision pull request | A clean free round ends the loop (bead coding-harness-1gzo): draft up to the plan card | ADR 0016 names the draft's document check (bead coding-harness-v9xx): the amended text as a proposal |
-| D | Time records as data (bead coding-harness-v6vk): implement — **needs** question 2 (its plan card) | Repair line skeleton (bead coding-harness-k93f): implement — **needs** question 2 | Targeted check per repair (bead coding-harness-gxwg): implement — **needs** question 2 |
-| E | Guard test (bead coding-harness-0ho): plan step 5 — **needs** question 3 | Review diff order (bead coding-harness-ut8q, worktree `review-diff-order`): decide R6-2 and R6-3 — **needs** question 4 | The Pi context probe for ut8q: one tool-free call per admitted Go model with a prompt just over its catalog window and `compaction.enabled: false` — **needs** question 4 |
+| Lane | First tonight | Backlog 1 | Backlog 2 | Backlog 3 |
+|---|---|---|---|---|
+| A | Self-closing beads (bead coding-harness-l1if): repair F6-4 and F6-5 with the accepted structural remedies, phase-6 re-check, pull request; the maintainer merges it | Sonnet continues Flash's edits (bead coding-harness-6ie): implement on its approved plan card | Repair line skeleton (bead coding-harness-k93f): implement on its approved plan card | — |
+| B | Red-first proofs in a private clone (bead coding-harness-wkxm): F-6 repair, phase-6 re-check, repairs until clean (the brake is lifted for tonight), full `make verify`, pull request with auto-merge | Runner stops at the appetite (bead coding-harness-uxa9): explore with GLM Flash, draft up to the plan card | Stop hook (bead coding-harness-788): explore up to the interview | — |
+| C | One Go access point (bead coding-harness-4tr4): after wkxm merges — merge `main`, round-8 repair from `refs/stage2/attempts/go-access-point/enospc-20261102`, loop, phase 6; stops before the ADR 0024 decision pull request | A clean free round ends the loop (bead coding-harness-1gzo): draft up to the plan card | ADR 0016 names the draft's document check (bead coding-harness-v9xx): the amended text as a proposal | — |
+| D | Time records as data (bead coding-harness-v6vk): implement on its approved plan card | Targeted check per repair (bead coding-harness-gxwg): implement on its approved plan card | Questions through the interview tool (bead coding-harness-8v2c.1): explore and draft up to the plan card; the AGENTS.md text goes to the maintainer as a proposal | — |
+| E | Guard test (bead coding-harness-0ho): Sonnet finishes the saved attempt (`refs/stage2/attempts/guard-test/orchestrator-saved-20261102`) until the five red guard tests pass; the plan records the hand acceptance; the gate entry is already on the branch (3755e313), so its pull request is a decision pull request | Review diff order (bead coding-harness-ut8q, worktree `review-diff-order`): repair R6-2 and R6-3 with lane B's remedy (index entries only, no flags), re-check | The Pi context probe for ut8q: one tool-free call per admitted Go model with a prompt just over its catalog window and `compaction.enabled: false`; a note in `docs/research/` | Keep rate (bead coding-harness-363r.1): explore with GLM Flash up to the interview |
 
-## Needed from the maintainer before the start
+## Answers given before the start (2026-11-02, 21:00–21:25 UTC)
 
-One at a time, in this order; each unlocks the lane named.
-
-1. **Lane A:** accept the two structural remedies for the self-closing beads
-   (F6-4: read Git's output as raw bytes and accept only a full bead-id match;
-   F6-5: fail closed, a peer is unrelated only outside every Git repository).
-   Recommendation: accept both.
-2. **Lanes A and D:** the four plan cards shown since 2026-10-31 and 2026-11-02
-   (6ie, v6vk, k93f, gxwg) — each shown unchanged, one answer each. Without
-   them, A and D run only their explore and draft items.
-3. **Lane E:** the `guard-test-environment` entry in `decisions/gates.yaml`
-   (agents may not write it).
-4. **Lane E:** for ut8q, whether the night may (a) decide R6-2 and R6-3 of
-   `review-diff-order` with a structural remedy — R6-1 to R6-3 are one
-   mechanism, the temporary index seeded from the merge base, the same one lane
-   B closed with "entries only, no flags" — and (b) run the Pi context probe.
+1. Lane A: both structural remedies for F6-4 and F6-5 accepted.
+2. All four plan cards approved: 6ie, v6vk, k93f, gxwg.
+3. Lane E's gate goes into the guard-test branch, not into a pull request of
+   its own; that branch's pull request becomes a decision pull request.
+4. Lane E: Sonnet finishes the saved attempt.
+5. Bead ut8q: both the R6-2/R6-3 repair and the Pi context probe.
+6. Lane B: the repair brake is lifted for tonight; B repairs on until clean
+   or its appetite.
+7. Auto-merge for pull requests without a decision, as on 2026-11-01.
+8. #316 and #317 go into the merge queue.
 
 ## Rules for this run
 
