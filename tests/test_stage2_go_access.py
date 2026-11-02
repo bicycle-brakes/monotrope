@@ -812,6 +812,7 @@ def test_session_lookup_reads_the_real_pinned_chat_catalog(world, monkeypatch):
     """The real pin's chat-prefixed keys must resolve, without synthetic catalog data."""
     monkeypatch.setattr(stage2, "PI_WRAPPER", Path(__file__).resolve().parents[1] / "tools/pi/pi")
     catalog = Path(stage2.PI_WRAPPER).parent / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    assert catalog.is_file(), "the pinned Pi install's opencode-go catalog is missing; run tools/pi/install.sh"
     data = json.loads(catalog.read_text(encoding="utf-8"))
     models = data["openai-completions"]
     model = "mimo-v2.6-flash"
