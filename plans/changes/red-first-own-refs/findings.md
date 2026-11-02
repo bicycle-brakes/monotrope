@@ -394,3 +394,5 @@ Stage-2 call, 2026-11-02: repair · attempt 1 · route stage-1 · endpoint claud
 > 2 failed, 21 passed in 27.34s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-own-refs/stage2/attempts/red-first-own-refs/attempt-1-20261102T065335493192Z-8687efd0.md
 > ```
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 811 files, 3024 commits, 12 rules.
