@@ -11919,6 +11919,41 @@ def test_proofs_agree_on_git_visible_tests(world: World) -> None:
     assert (world.root / "tests" / "ignored-fixture").exists()
 
 
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_include_uncommitted_force_added_fixtures(world: World, proof: str) -> None:
+    """Planted fault: seeding from HEAD loses newly staged fixtures under ignored paths."""
+    baseline = repair_world(world)
+    (world.root / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    fixture = world.root / "tests" / "__pycache__" / "fixture"
+    fixture.parent.mkdir(parents=True, exist_ok=True)
+    fixture.write_text("staged bytes\n", encoding="utf-8")
+    git(world.root, "add", "-f", "tests/__pycache__/fixture")
+    fixture.write_text("current bytes\n", encoding="utf-8")
+    (fixture.parent / "untracked-fixture").write_text("ignored\n", encoding="utf-8")
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    selector = "tests/test_staged_fixture.py::test_staged_fixture"
+    (world.root / "tests" / "test_staged_fixture.py").write_text(
+        "from pathlib import Path\n\n\ndef test_staged_fixture():\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        "    cache = root / 'tests' / '__pycache__'\n"
+        "    if (cache / 'fixture').read_text() != 'current bytes\\n':\n"
+        "        raise RuntimeError('fixture has stale staged contents')\n"
+        "    if (cache / 'untracked-fixture').exists():\n"
+        "        raise RuntimeError('ignored untracked fixture reached proof')\n"
+        "    assert 'value = 2' in (root / 'src' / 'app.py').read_text()\n",
+        encoding="utf-8",
+    )
+    index = Path(git(world.root, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    index_before = index.read_bytes()
+    refs_before = stage2._ref_targets(world.root)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (proof, outcome)
+    assert index.read_bytes() == index_before
+    assert stage2._ref_targets(world.root) == refs_before
+    assert fixture.read_text() == "current bytes\n"
+    assert git(world.root, "show", ":tests/__pycache__/fixture") == "staged bytes"
+
+
 def test_proofs_refuse_object_alternates(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Planted fault: a cloned store with an alternates file is silently accepted."""
     baseline = repair_world(world)

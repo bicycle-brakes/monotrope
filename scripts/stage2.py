@@ -4575,13 +4575,17 @@ def credential_message(exposed: list[Path]) -> str:
 def worktree_tree(root: Path) -> str:
     """The tree id of the worktree as git counts it, written through a temporary index.
 
-    The temporary index is seeded with `git read-tree HEAD`, not copied from the real one: a file
-    tracked although ignored stays in the snapshot, and the real index, the stash and the refs are
-    never touched (spec, criterion 10).
+    Copy the real index to preserve tracked membership, including newly force-added ignored
+    files, then capture current file contents. The real index is only read; it, the stash and
+    the refs are never changed (spec, criterion 10).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
-        _git_output(root, "read-tree", "HEAD", env=env)
+        index = Path(_git_output(root, "rev-parse", "--path-format=absolute", "--git-path", "index").strip())
+        temporary_index = Path(tmp) / "index"
+        # Git uses the index timestamp to recheck racily clean entries. A newer copy's
+        # timestamp could make unchanged stat data hide freshly edited file contents.
+        shutil.copy2(index, temporary_index)
+        env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
         _git_output(root, "add", "-A", env=env)
         return _git_output(root, "write-tree", env=env).strip()
 
