@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -170,4 +170,13 @@ only in isolated child environments. Full verification belongs to the runner.
 - 12: not yet written tests/test_stage2.py::test_guard_repairs_preserve_the_planting_branch_for_replay — a successful repair removes its branch or its retained test cannot repeat the two-run proof
 - 12: not yet written tests/test_stage2.py::test_guard_status_does_not_extend_the_criterion_ledger — a guard repair status parses as a ledger entry
 
+## Runner route — 2026-11-01
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-01 18:48:27–20:24:27 UTC, 5760 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 20:24:46–21:01:39 UTC, 2212 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 21:01:51–21:03:03 UTC, 73 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-02 — hand acceptance: the 2026-11-01 implement attempt was finished by a Sonnet 5.5 sub-agent on the maintainer's word, from the saved attempt (refs/stage2/attempts/guard-test/orchestrator-saved-20261102). Five guard tests went from red to green by test-side repairs only, no change to scripts/stage2.py: the launch spy gained `key=None` (criteria 3 and 8), the retry prompt is read at index 1 and the worktree is reset between runs (criterion 4), the expected-fail case expects the classifier's "session ended 0" refusal (criterion 5), the `guard_step` kwargs merge and a findings-row mark expectation that contradicted the spec's "existing location" (criterion 7), and a duplicate seed commit removed (criterion 8)
