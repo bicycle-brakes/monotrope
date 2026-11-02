@@ -11954,6 +11954,58 @@ def test_proofs_include_uncommitted_force_added_fixtures(world: World, proof: st
     assert git(world.root, "show", ":tests/__pycache__/fixture") == "staged bytes"
 
 
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_exclude_ignored_children_of_replaced_tracked_file(world: World, proof: str) -> None:
+    """F-3: forced path replay recursively includes an ignored, untracked child."""
+    repair_world(world)
+    fixture = world.root / "tests" / "fixture"
+    fixture.write_text("tracked file\n", encoding="utf-8")
+    (world.root / ".gitignore").write_text("tests/fixture/local-only\n", encoding="utf-8")
+    git(world.root, "add", "tests/fixture", ".gitignore")
+    git(world.root, "commit", "--quiet", "-m", "track file before directory replacement")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    fixture.unlink()
+    fixture.mkdir()
+    (fixture / "local-only").write_text("ignored bytes\n", encoding="utf-8")
+    (fixture / "visible").write_text("visible bytes\n", encoding="utf-8")
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    selector = "tests/test_replaced_fixture.py::test_replaced_fixture"
+    (world.root / "tests" / "test_replaced_fixture.py").write_text(
+        "from pathlib import Path\n\n\ndef test_replaced_fixture():\n"
+        "    root = Path(__file__).resolve().parent.parent\n"
+        "    fixture = root / 'tests' / 'fixture'\n"
+        "    if (fixture / 'local-only').exists():\n"
+        "        raise RuntimeError('ignored child reached proof')\n"
+        "    if (fixture / 'visible').read_text() != 'visible bytes\\n':\n"
+        "        raise RuntimeError('visible child missing')\n"
+        "    assert 'value = 2' in (root / 'src' / 'app.py').read_text()\n",
+        encoding="utf-8",
+    )
+    index = Path(git(world.root, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    before = index.read_bytes()
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (proof, outcome)
+    assert index.read_bytes() == before
+    assert (fixture / "local-only").read_text() == "ignored bytes\n"
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_head_attachment_at_same_commit(world: World, proof: str) -> None:
+    """F-4: attaching detached HEAD changes its target without changing any object id."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    git(world.root, "update-ref", "refs/heads/same-commit", baseline)
+    selector = "tests/test_write.py::test_write"
+    (world.root / "tests" / "test_write.py").write_text(
+        ref_writing_test(("symbolic-ref", "HEAD", "refs/heads/same-commit")), encoding="utf-8"
+    )
+    before = stage2._ref_targets(world.root)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "refs changed while the named test ran: HEAD" in outcome, (proof, outcome)
+    assert selector in outcome
+    assert stage2._ref_targets(world.root) == before
+
+
 @pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_capture_current_contents_despite_index_flags(world: World, flag: str, proof: str) -> None:

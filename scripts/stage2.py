@@ -4575,24 +4575,23 @@ def credential_message(exposed: list[Path]) -> str:
 def worktree_tree(root: Path) -> str:
     """The tree id of the worktree as git counts it, written through a temporary index.
 
-    Read only tracked names from the real index, including newly force-added ignored files.
-    Seed a fresh index from HEAD and add those paths' current contents, never inheriting flags
-    that could hide changes. The real index is only read; it, the stash and the refs are never
+    Seed a fresh index with the real index's path, mode and object entries, including newly
+    force-added ignored files, never inheriting flags that could hide changes. Then add current
+    contents without forcing ignored, untracked children of a replaced path into the tree.
+    The real index is only read; it, the stash and the refs are never
     changed (spec, criterion 10).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         temporary_index = Path(tmp) / "index"
-        tracked = _git_bytes(root, "ls-files", "-z", "--cached")
+        tracked = _git_bytes(root, "ls-files", "-s", "-z")
         env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
-        _git_output(root, "read-tree", "HEAD", env=env)
+        _git_output(root, "read-tree", "--empty", env=env)
         if tracked:
             _git_bytes(
                 root,
-                "--literal-pathspecs",
-                "add",
-                "-f",
-                "--pathspec-from-file=-",
-                "--pathspec-file-nul",
+                "update-index",
+                "-z",
+                "--index-info",
                 env=env,
                 stdin=tracked,
             )
@@ -5633,10 +5632,12 @@ def red_first_python(root: Path) -> str:
 
 
 def _ref_targets(root: Path) -> dict[str, str]:
-    """Every named ref and HEAD, including detached HEAD, with the object it names."""
+    """Every named ref's object, plus HEAD's object and symbolic target (or detached state)."""
     listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname)")
     refs = {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
-    refs["HEAD"] = _git_output(root, "rev-parse", "HEAD").strip()
+    head = _git_output(root, "rev-parse", "HEAD").strip()
+    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
+    refs["HEAD"] = f"{head} {symbolic or '(detached)'}"
     return refs
 
 
@@ -5800,7 +5801,7 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     """
     # Snapshot before copying objects: later source refs may name objects the clone never saw.
     refs = _ref_targets(root)
-    head = refs.pop("HEAD")
+    head = refs.pop("HEAD").split(" ", 1)[0]
     _git_output(root, "clone", "--quiet", "--no-hardlinks", str(root), str(destination))
     # An alternates file makes the clone depend on another object store. Refuse rather than
     # silently discarding that dependency and assuming all required objects were copied.
