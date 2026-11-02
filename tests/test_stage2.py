@@ -11670,6 +11670,61 @@ def ref_writing_test(*commands: tuple[str, ...]) -> str:
     )
 
 
+def test_private_repository_restores_many_refs_in_one_process(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ref restoration uses one process even when saved attempts accumulate."""
+    baseline = repair_world(world)
+    expected = {f"refs/stage2/attempts/saved-{number}": baseline for number in range(40)}
+    for name, target in expected.items():
+        git(world.root, "update-ref", name, target)
+    original = stage2.subprocess.run
+    updates = []
+
+    def recording(command, *args, **kwargs):
+        if "update-ref" in command:
+            updates.append(list(command))
+        return original(command, *args, **kwargs)
+
+    destination = world.root.parent / "private-many-refs"
+    monkeypatch.setattr(stage2.subprocess, "run", recording)
+    stage2._private_repository(world.root, destination, baseline)
+    assert len(updates) == 1, updates
+    assert "--stdin" in updates[0], updates
+    actual = stage2._ref_targets(destination)
+    assert all(actual.get(name) == target for name, target in expected.items())
+    assert git(destination, "rev-parse", "HEAD") == baseline
+    assert (destination / ".git" / "HEAD").read_text().strip() == baseline
+
+
+def test_proofs_share_reference_guard_verdicts(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both paths use the same scrubbed verdict for ref changes and measurement failures."""
+    baseline = repair_world(world)
+    original = stage2._ref_targets
+    for scene in ("changed", "unreadable"):
+        verdicts = []
+        for proof in ("baseline", "fixed"):
+            plant_proof(world, proof)
+            selector = "tests/test_write.py::test_write"
+            (world.root / "tests" / "test_write.py").write_text(
+                ref_writing_test(("update-ref", f"refs/heads/probe-{KEY}", "HEAD")), encoding="utf-8"
+            )
+            measured = []
+
+            def measuring(root, _measured=measured, _scene=scene):
+                if root != world.root:
+                    _measured.append(root)
+                    if _scene == "unreadable" and len(_measured) == 2:
+                        raise OSError(f"planted ref read failure {KEY}")
+                return original(root)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(stage2, "_ref_targets", measuring)
+                outcome = run_proof(world, proof, selector, baseline, KEY)
+            assert outcome is not None and KEY not in outcome and "[credential]" in outcome, outcome
+            assert selector in outcome, outcome
+            verdicts.append(outcome)
+        assert verdicts[0] == verdicts[1], verdicts
+
+
 def test_proofs_ignore_foreign_ref_changes(world: World) -> None:
     """Criterion 1: each named test moves fresh source refs during its own call phase."""
     baseline = repair_world(world)
@@ -12131,6 +12186,7 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
     for proof in ("baseline", "fixed"):
         for scene in ("success", "refusal", "partial-setup", "timeout"):
             here = len(made)
+            timed_launches = []
             selector = plant_proof(world, proof)
             if scene == "refusal":
                 selector = "tests/test_write.py::test_write"
@@ -12158,8 +12214,19 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
                 elif scene == "timeout":
                     original_launch = stage2.launch
 
-                    def timing_out(command, cwd, env, *args, _original=original_launch, **kwargs):
-                        if any("pytest" in part for part in command):
+                    def timing_out(
+                        command,
+                        cwd,
+                        env,
+                        *args,
+                        _original=original_launch,
+                        _selector=selector,
+                        _timed=timed_launches,
+                        **kwargs,
+                    ):
+                        if env.get("STAGE2_RED_SELECTOR") == _selector:
+                            assert kwargs["timeout"] == stage2.RED_FIRST_MINUTES * 60
+                            _timed.append(list(command))
                             raise stage2.StepTimedOut("the planted proof ran into its time limit")
                         return _original(command, cwd, env, *args, **kwargs)
 
@@ -12174,6 +12241,7 @@ def test_proofs_remove_private_repositories_on_all_exits(world: World, monkeypat
             if scene == "partial-setup":
                 assert "planted" in outcome, (proof, outcome)
             if scene == "timeout":
+                assert len(timed_launches) == 1, timed_launches
                 assert "the planted proof ran into its time limit" in outcome, (proof, outcome)
             for left in made[here:]:
                 assert not Path(left).exists(), (proof, scene, left)

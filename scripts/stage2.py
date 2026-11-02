@@ -5794,12 +5794,36 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     if alternates.exists() or alternates.is_symlink():
         raise Refused("the private repository contains objects/info/alternates")
     _git_output(destination, "remote", "remove", "origin")
-    for name, target in refs.items():
-        _git_output(destination, "update-ref", name, target)
     if _git_output(destination, "cat-file", "-t", checkout).strip() == "commit":
         head = checkout
-    _git_output(destination, "update-ref", "--no-deref", "HEAD", head)
+    # Detach HEAD in its own transaction before updating its former referent. Git
+    # otherwise refuses both names in one transaction, even with --no-deref.
+    _git_output(
+        destination,
+        "update-ref",
+        "--no-deref",
+        "--stdin",
+        stdin=(
+            f"start\nupdate HEAD {head}\nprepare\ncommit\nstart\n"
+            + "".join(f"update {name} {target}\n" for name, target in refs.items())
+            + "prepare\ncommit\n"
+        ),
+    )
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
+
+
+def _proof_reference_guard(root: Path, before: dict[str, str], test: str, key: str | None) -> str | None:
+    """Measure private refs before disposal, with one scrubbed verdict for both proof paths."""
+    try:
+        after = _ref_targets(root)
+    except Exception as error:
+        fault = f"the private ref listing failed ({error})"
+    else:
+        changed = sorted(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
+        if not changed:
+            return None
+        fault = "refs changed while the named test ran: " + ", ".join(changed)
+    return scrub(f"{test}: {fault}", key)
 
 
 def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -5831,6 +5855,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     refs_before: dict[str, str] | None = None
     tree_before: str | None = None
     private: Path | None = None
+    ref_fault = None
     try:
         tmp = Path(tempfile.mkdtemp(prefix="stage2-fixed-"))
         private = tmp / "tree"
@@ -5879,16 +5904,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
             # launch failure or a timeout exactly as on a finished run; the source's refs are not
             # an acceptance condition and are not read here.
             if refs_before is not None and private is not None:
-                try:
-                    refs_now = _ref_targets(private)
-                except Exception as error:
-                    named.append(f"the private ref listing failed ({error})")
-                else:
-                    changed = sorted(
-                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                    )
-                    if changed:
-                        named.append("refs changed while the fixed-code proof ran: " + ", ".join(changed))
+                ref_fault = _proof_reference_guard(private, refs_before, test, key)
             if tree_before is not None and private is not None:
                 try:
                     tree_now = worktree_tree(private)
@@ -5905,7 +5921,10 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     if cleanup is not None:
         removal = f"the private fixed-code proof repository could not be removed ({cleanup})"
         fault = f"{fault}; {removal}" if fault else removal
-    return scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    outcome = scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    if ref_fault:
+        outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
+    return outcome
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -5946,7 +5965,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     outcome = None
     cleanup = None
     refs_before: dict[str, str] | None = None
-    refs_changed: list[str] = []
+    ref_fault = None
     try:
         tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
         tree = tmp / "tree"
@@ -6056,20 +6075,12 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 # The private store's own names and targets, compared before the store is deleted: a
                 # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
                 # or reset here - the comparison is the whole verdict.
-                try:
-                    refs_now = _ref_targets(tree)
-                except Exception as error:
-                    refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
-                else:
-                    refs_changed = sorted(
-                        ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                    )
+                ref_fault = _proof_reference_guard(tree, refs_before, test, key)
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)
-    if refs_changed:
-        named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
-        outcome = f"{outcome}\n{named}" if outcome else named
+    if ref_fault:
+        outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
     if cleanup is not None:
         named = scrub(f"{test}: the red-first checkout could not be removed ({cleanup})", key)
         outcome = f"{outcome}\n{named}" if outcome else named

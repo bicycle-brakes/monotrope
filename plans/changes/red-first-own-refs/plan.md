@@ -58,7 +58,8 @@ unavailable, never green.
    operations cannot push back to the source. All setup is local, bounded by
    existing Git timeouts, and failures become scrubbed proof refusals.
 3. For baseline proof, check out the supplied baseline and replace `tests/`
-   with the attempt's tests as today, excluding caches. For fixed proof,
+   with the attempt's Git-visible `tests/` tree, including caches tracked by
+   Git. For fixed proof,
    capture `worktree_tree(root)` with its temporary index before cloning;
    materialize that exact tree in the private checkout: tracked files as
    present on disk rather than stale staged bytes, deletions, untracked
@@ -162,6 +163,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-01 21:17:58–22:35:01 UTC, 4622 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-02 09:32:10–10:13:03 UTC, 2454 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-02 10:13:12–10:33:47 UTC, 1235 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-02 17:13:50–17:34:49 UTC, 1259 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite clarification — 2026-11-02
 
