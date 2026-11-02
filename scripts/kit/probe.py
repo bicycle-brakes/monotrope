@@ -205,7 +205,7 @@ REIST_NICHT: dict[str, str] = {
 # while `model-endpoints.yaml` stays home. Their two endpoint cases go red in the
 # throwaway repo for the reason the seven before them carry: the kit carries the
 # definitions but no endpoint declaration of its own.
-DECKEL = 44  # raised on 2026-11-01 (42 -> 44); earlier: raised on 2026-10-16 (39 -> 42); raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+DECKEL = 45  # raised on 2026-11-03 (44 -> 45, the guard-test-environment gate test checks this repository's gate list); earlier: raised on 2026-11-01 (42 -> 44); raised on 2026-10-16 (39 -> 42); raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------
