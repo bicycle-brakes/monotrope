@@ -82,7 +82,11 @@ explicitly, do not delete them.
 
 1. For each row write its `Status` in the record: `taken — <test or
    criterion>`, `taken — not a test — <reason>` for a finding no test can
-   show, or `rejected — <reason>`.
+   show, `taken — guard test — <reason>` for a repair that lives only in
+   test code and must be proven by a planted fault (ADR 0023; say why no
+   baseline can be red), or `rejected — <reason>`. A guard row ends as
+   `fixed — guard test — tests/<path>::<function>`, with the mark
+   `yes — guard test — …` written only after both proof legs passed.
 2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
    <change>` gives them to Codex in one call; the runner runs `make verify`
    and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken

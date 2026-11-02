@@ -131,4 +131,8 @@ re-check is a fresh read-only Codex session. The model answers one fixed line pe
 <reason>` for a row taken as `taken — not a test`. A code row needs a test
 that is red first — it fails on the baseline's code — and the runner runs
 that proof itself, then writes each row's Status and ends in one checkpoint
-commit.
+commit. A row the orchestrator took as `taken — guard test — <reason>` is the
+one exception (ADR 0023): its test changes only test code, plants its real
+fault under `STAGE2_PLANT_FAULT`, and is proven red with the switch and green
+without it on the attempt's code; the answer is `<ID>: fixed — guard test —
+tests/<path>::<function>`. The first implementation never uses this form.

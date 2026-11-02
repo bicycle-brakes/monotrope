@@ -90,6 +90,7 @@ GRUENDE = (
 REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
+    "tests.test_ci::test_guard_environment_gate_goes_red_when_the_switch_is_present": "bestand-dieses-repos",
     "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "bestand-dieses-repos",
     "tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller": "bestand-dieses-repos",
     "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "bestand-dieses-repos",

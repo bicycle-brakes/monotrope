@@ -1561,6 +1561,26 @@ read-only Codex session, resuming neither the repair nor an earlier thread.
 The sandbox is the CLI's configured `workspace-write`; the tests show the
 configured call, not the CLI's confinement.
 
+**Guard test (ADR 0023).** A repair that lives only in test code has no
+baseline on which its test could be red, so ordinary red first cannot prove it.
+Only the orchestrator authorises the exception, by writing the row's Status
+`taken — guard test — <reason>`; the repair then answers `<ID>: fixed — guard
+test — tests/<path>::<function>`, and no other row may use that form. The
+named test must reference `STAGE2_PLANT_FAULT` and plant its real fault only
+under it. The runner proves the test twice on the attempt's own code: a
+qualifying red with `STAGE2_PLANT_FAULT=1`, then a clean green with the
+variable absent; the existing outcome, environment, runtime and integrity
+guards of red first apply to both runs. Only after both legs pass does it
+write `fixed — guard test — …` and the mark `yes — guard test — …` in the
+record's Broke-a-test cell. Phase 6 reads every added or changed guard test
+and records the real fault it plants and whether the test catches that fault
+without the switch; a guard whose failure is only conditional, with no real
+fault behind it, is a BLOCKER. The form applies to repairs alone: the first
+implementation and the criterion ledger keep their rules. Planting branches
+stay in the tests so the proof can be repeated, and the blocking gate
+`guard-test-environment` refuses any verification run, local or hosted,
+while the switch is present, whatever its value.
+
 ### When the same mechanism returns
 
 On 2026-10-27 three runner pull requests (#228, #250, #258) took 14 phase-6
