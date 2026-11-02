@@ -331,7 +331,11 @@ def test_secondary_or_uncertain_start_never_writes(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("failed_query", ["--show-toplevel", "--git-common-dir"])
-def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: str) -> None:
+@pytest.mark.parametrize(
+    "failure_output",
+    ["untrusted-output", "fatal: not a git repository (or any of the parent directories): .git"],
+)
+def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: str, failure_output: str) -> None:
     """A failed peer Git query leaves ownership unknown, even with stdout."""
     ns = _project(tmp_path)
     peer = tmp_path / "peer"
@@ -345,7 +349,11 @@ def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: 
     fake_git.write_text(
         "#!/bin/bash\n"
         'if [ "$3" = "$PEER_CWD" ] && [ "${!#}" = "$FAILED_QUERY" ]; then\n'
-        '  printf "untrusted-output\\n"\n'
+        '  if [ "$FAILURE_OUTPUT" = untrusted-output ]; then\n'
+        '    printf "%s\\n" "$FAILURE_OUTPUT"\n'
+        "  else\n"
+        '    printf "%s\\n" "$FAILURE_OUTPUT" >&2\n'
+        "  fi\n"
         "  exit 128\n"
         "fi\n"
         'exec "$REAL_GIT" "$@"\n'
@@ -356,6 +364,7 @@ def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: 
         "REAL_GIT": real_git,
         "PEER_CWD": str(peer),
         "FAILED_QUERY": failed_query,
+        "FAILURE_OUTPUT": failure_output,
     }
     scan = subprocess.run(
         ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
@@ -405,6 +414,47 @@ def test_live_peer_outside_git_keeps_strict_scan_successful(tmp_path: Path, peer
     assert result.returncode == 0, result.stderr
     assert _wrote(ns), "a peer outside any repository blocked writing reconciliation"
     assert "prime --hook-json" in _calls(ns)
+
+
+def test_live_peer_outside_git_at_filesystem_boundary(tmp_path: Path) -> None:
+    """Git's filesystem-boundary diagnostic also establishes a non-repository."""
+    ns = _project(tmp_path)
+    peer = tmp_path / "outside"
+    peer.mkdir()
+    _session(ns.home, pid=os.getpid(), sid="outside-session", cwd=peer)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_git = bin_dir / "git"
+    fake_git.write_text(
+        "#!/bin/bash\n"
+        'if [ "$3" = "$PEER_CWD" ]; then\n'
+        '  echo "fatal: not a git repository (or any parent up to mount point /fixture)" >&2\n'
+        '  echo "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)." >&2\n'
+        "  exit 128\n"
+        "fi\n"
+        'exec "$REAL_GIT" "$@"\n'
+    )
+    fake_git.chmod(0o755)
+    extra = {
+        "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        "REAL_GIT": real_git,
+        "PEER_CWD": str(peer),
+    }
+    scan = subprocess.run(
+        ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
+        env={**os.environ, **extra, "HOME": str(ns.home)},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert scan.returncode == 0, scan.stderr
+    assert scan.stdout.split("\t")[0] == "other"
+    result = _start(ns, extra=extra)
+    assert result.returncode == 0, result.stderr
+    assert _wrote(ns), "a non-repository at a filesystem boundary blocked reconciliation"
 
 
 def test_missing_jq_names_missing_tool(tmp_path: Path) -> None:

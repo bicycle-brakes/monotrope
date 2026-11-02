@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-02
 supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
@@ -170,6 +170,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-01
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-31 09:39:20–10:37:10 UTC, 3470 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -194,3 +198,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-01 18:35:53–19:43:57 UTC, 4084 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 19:44:07–20:24:26 UTC, 2419 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 20:24:45–21:01:36 UTC, 2211 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-01 21:12:02–22:34:27 UTC, 4944 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-01 22:34:36–22:53:45 UTC, 1149 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-01 22:53:58–23:52:12 UTC, 3493 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

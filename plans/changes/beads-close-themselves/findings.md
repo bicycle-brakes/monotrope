@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-02
 supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
@@ -542,8 +542,8 @@ Stage-2 call, 2026-11-01: review · endpoint openai-codex · model gpt-6.1-sol �
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | F6-1 | MAJOR | SPEC | Phase 6 | scripts/close_merged_beads.py:182–196 | A trailer containing `Closes-Bead: coding-harness-alpha<U+2028>coding-harness-beta` closes `coding-harness-alpha` instead of rejecting the malformed value. Git preserves U+2028 inside the logical value, but `splitlines()` truncates it into a valid identifier; reproduced with Git's trailer parser and `collect_declarations()`. Validate the entire logical value without treating Unicode separators as trailer boundaries. [Acceptance criterion 2] | Codex | fixed — tests/test_close_merged_beads.py::test_unicode_separators_in_trailer_values_never_close | yes — tests/test_close_merged_beads.py::test_unicode_separators_in_trailer_values_never_close |
-| F6-2 | MAJOR | SPEC | Phase 6 | tools/claude-code/hooks/session-scan.sh:85–91 | When a live peer session's worktree cannot be inspected by Git, strict mode reports that session as `other` and exits successfully. The startup hook consequently permits writing reconciliation although repository ownership remains unknown. Reproduced with failing peer Git queries: exit 0 and relation `other`. Strict mode must propagate this uncertainty so startup skips writing. [Acceptance criterion 11] | Codex | taken — Codex repair, narrowed by F6-3: strict mode exits non-zero only when Git fails on a peer working directory that exists and lies inside a Git repository; a peer whose directory is outside Git or gone stays `other`; keep tests/test_beads_start.py::test_uninspectable_live_peer_prevents_writing | — |
-| F6-3 | MAJOR | SPEC | Phase 6 repair check (orchestrator, 2026-11-01) | tools/claude-code/hooks/session-scan.sh:84–94 | The F6-2 repair (commit 2db9fe70) makes strict mode exit 1 for every live interactive peer whose working directory is not inside any Git repository, because `rev-parse` fails there too. A session started in the home directory or a removed worktree therefore stops the start hook's reconciliation for every repository. Reproduced 2026-11-01 with a live peer in a directory outside Git: repaired script rc=1, the script at 712c70db printed `other` with rc=0. The 46 targeted tests stay green; none covers this case. | Claude Opus 5.5 | taken — Codex repair: tell "not a Git repository" and a missing directory (relation `other`, exit 0) apart from any other Git failure on an existing repository (exit 1 in strict mode), with a test that a live peer outside Git keeps strict mode at exit 0 | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | tools/claude-code/hooks/session-scan.sh:85–91 | When a live peer session's worktree cannot be inspected by Git, strict mode reports that session as `other` and exits successfully. The startup hook consequently permits writing reconciliation although repository ownership remains unknown. Reproduced with failing peer Git queries: exit 0 and relation `other`. Strict mode must propagate this uncertainty so startup skips writing. [Acceptance criterion 11] | Codex | fixed — tests/test_beads_start.py::test_uninspectable_live_peer_prevents_writing (red against 2db9fe70^, green at HEAD; red first proven by hand by the orchestrator, because the WIP commit 036589b6 had already saved the fix into the runner's baseline) | — |
+| F6-3 | MAJOR | SPEC | Phase 6 repair check (orchestrator, 2026-11-01) | tools/claude-code/hooks/session-scan.sh:84–94 | The F6-2 repair (commit 2db9fe70) makes strict mode exit 1 for every live interactive peer whose working directory is not inside any Git repository, because `rev-parse` fails there too. A session started in the home directory or a removed worktree therefore stops the start hook's reconciliation for every repository. Reproduced 2026-11-01 with a live peer in a directory outside Git: repaired script rc=1, the script at 712c70db printed `other` with rc=0. The 46 targeted tests stay green; none covers this case. | Claude Opus 5.5 | fixed — tests/test_beads_start.py::test_live_peer_outside_git_keeps_strict_scan_successful (red against 2db9fe70, green at HEAD; red first proven by hand by the orchestrator, because the WIP commit 036589b6 had already saved the fix into the runner's baseline) | — |
 
 Phase 6 verdict: codex 01a1983f-2767-7d33-b628-11b287603937, 2026-11-01
 Reviewer session: codex 01a1983f-2767-7d33-b628-11b287603937 — a fresh session reviewed: no phase-2a session was recorded
@@ -899,3 +899,148 @@ Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-3-20261101T183543920122Z-854044fb.md
 > ````
+
+Stage-2 call, 2026-11-01: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 796 files, 3004 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_beads_start.py` +52 -2
+> - `tools/claude-code/hooks/session-scan.sh` +18 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-2: tests/test_beads_start.py::test_uninspectable_live_peer_prevents_writing: refs changed while the named test ran: refs/heads/feat/explorer-reviewer-agents, refs/remotes/origin/feat/explorer-reviewer-agents
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261101T211152887110Z-3f6792d8.md
+> ```
+
+Stage-2 call, 2026-11-01: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 796 files, 3006 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 61 lines of this gate left out …]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 99%]
+> ...........................                                              [100%]
+> =================================== FAILURES ===================================
+> ___________ test_failed_terminal_write_stops_the_stage_with_exit_one ___________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/beads-close-themselves/.venv/bin/python3
+>
+>     def test_failed_terminal_write_stops_the_stage_with_exit_one():
+>         h = Harness()
+>         m = module()
+>         calls = []
+>     
+>         def on_terminal(slot, _result):
+>             calls.append(slot.slot_id)
+>             if slot.slot_id == "s0":
+>                 error = OSError("disk full")
+>                 error.stage_stop_reason = "state-store-unwritable"
+>                 raise error
+>     
+>         slots = [
+>             make_slot("s0", order=(0,), script=sleeper(0.05)),
+>             make_slot("long", provider="claude", order=(0,), script=sleeper(30)),
+>             make_slot("s1", order=(1,)),
+>             make_slot("s2", order=(2,)),
+>         ]
+>         started = time.monotonic()
+>         result = m.dispatch(slots, gate=h.gate, launcher=h.launcher, on_terminal=on_terminal, per_provider_limit=1)
+>         assert time.monotonic() - started < 15  # the running child was stopped and reaped, not waited for
+>         assert result.exit_code == 1
+>         assert result.reason == "state-store-unwritable"
+>         assert "disk full" in result.detail
+>         got = by_id(result)
+>         assert got["s1"].outcome == "cancelled" and got["s2"].outcome == "cancelled"
+>         assert "s1" not in h.launched and "s2" not in h.launched
+>         assert got["long"].outcome == "cancelled" and got["long"].started
+> >       assert "start" in got["long"].stdout  # partial output kept
+> E       AssertionError: assert 'start' in ''
+> E        +  where '' = SlotResult(slot_id='long', identity={'run_id': 'run-1', 'input_state': 'abc', 'role': 'researcher', 'topic': 1, 'endpo...led', started=True, returncode=-15, stdout='', stderr='', gate_record={'leak': 'clean', 'for': 'long'}, allowance=30.0).stdout
+>
+> tests/test_stage2_research_dispatch.py:643: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=57053) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/beads-close-themselves/tests/test_stage2.py:16865: DeprecationWarning: This process (pid=57067) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_dispatch.py::test_failed_terminal_write_stops_the_stage_with_exit_one
+> 1 failed, 4401 passed, 17 skipped, 5 warnings in 884.39s (0:14:44)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 24824 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-2-20261101T211152887110Z-3f6792d8.md
+> ````
+
+Stage-2 call, 2026-11-01: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 796 files, 3007 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-3: tests/test_beads_start.py::test_live_peer_outside_git_keeps_strict_scan_successful: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-3-20261101T211152887110Z-3f6792d8.md
+> ```

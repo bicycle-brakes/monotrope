@@ -85,18 +85,30 @@ for f in "$sdir"/*.json; do
     outside_git=false
     if [ "$strict" = "--strict" ]; then
       # A removed working directory cannot belong to a current checkout.
-      # Otherwise only Git's explicit non-repository diagnostic establishes
-      # that the peer is unrelated; all other failures remain uncertain.
+      # A non-repository diagnostic is only safe without a Git marker in the
+      # ancestry: broken metadata can produce the same diagnostic in a repo.
       if [ ! -e "$ocwd" ]; then
         outside_git=true
         otop=""; top_rc=0
       else
         otop=$(LC_ALL=C git --no-optional-locks -C "$ocwd" rev-parse --show-toplevel 2>&1)
         top_rc=$?
-        if [ "$top_rc" -ne 0 ] &&
-          [ "$otop" = "fatal: not a git repository (or any of the parent directories): .git" ]; then
-          outside_git=true
-          otop=""; top_rc=0
+        if [ "$top_rc" -ne 0 ]; then
+          case "$otop" in
+            "fatal: not a git repository (or any of the parent directories): .git"|\
+            "fatal: not a git repository (or any parent up to mount point "*$'\n'"Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).")
+              ancestor=$(cd -- "$ocwd" 2>/dev/null && pwd -P) || exit 1
+              while :; do
+                # Unreadable ancestry cannot establish absence of metadata.
+                [ -r "$ancestor" ] && [ -x "$ancestor" ] || exit 1
+                if [ -e "$ancestor/.git" ] || [ -L "$ancestor/.git" ]; then break; fi
+                if [ "$ancestor" = / ]; then outside_git=true; break; fi
+                ancestor=${ancestor%/*}
+                ancestor=${ancestor:-/}
+              done
+              if [ "$outside_git" = true ]; then otop=""; top_rc=0; fi
+              ;;
+          esac
         fi
       fi
     else
