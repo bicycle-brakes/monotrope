@@ -512,3 +512,15 @@ Phase 6 verdict: codex 01a19d86-fcdb-7c51-9b08-7f19f4de2699, 2026-11-02
 Reviewer session: codex 01a19d86-fcdb-7c51-9b08-7f19f4de2699 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3071 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 830 files, 3072 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-02
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4588–4599 | Forced pathspec replay can include ignored, untracked files. If HEAD tracks `tests/fixture` as a file and the attempt replaces it with a directory containing an ignored `tests/fixture/local-only`, the real index still lists `tests/fixture`. Passing that directory to `git add -f` recursively stages its ignored children in the temporary index; the subsequent `git add -A` retains them. Both proofs therefore receive an ignored, untracked fixture that must be excluded. [Acceptance criteria 4 and 5] | Codex | open | — |
+| F-4 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5635–5640 | Reference snapshots discard symbolic targets. When an existing branch points at the private checkout's detached HEAD commit, a qualifying named test can run `git symbolic-ref HEAD refs/heads/<branch>` and leave HEAD attached. Every recorded name and resolved object ID remains identical, so both reference guards accept this persistent target change. The snapshot must distinguish the detached object target from the symbolic branch target. [Acceptance criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a19dc0-867b-7231-8246-ab25454a7543, 2026-11-02
+Reviewer session: codex 01a19dc0-867b-7231-8246-ab25454a7543 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
