@@ -176,7 +176,7 @@ fi
 
 # The report binds the verdict to a state of the world: which commit ran,
 # against which base, with which gate configuration.
-"$PYTHON" scripts/ci_gates.py --report || exit 2
+"$PYTHON" scripts/ci_gates.py --report --job "$JOB" || exit 2
 
 # Die Gate-Liste wird ZUERST geholt und ihr Fehlschlag ist fatal: ein Lauf
 # ueber null gemessene Gates darf nicht in einem gruenen Urteil enden
