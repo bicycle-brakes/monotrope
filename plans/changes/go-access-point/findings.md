@@ -1476,3 +1476,21 @@ Stage-2 call, 2026-11-02: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-02: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 802 files, 3011 commits, 12 rules.
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 802 files, 3016 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-access-point/spec.md` +2 -0
+> - `scripts/stage2_swarm.py` +3 -8
+> - `tests/test_stage2_go_access.py` +26 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L8-1: tests/test_stage2_go_access.py::test_research_preflight_refuses_explicit_null_bases: refs changed while the named test ran: refs/heads/fix/docs-job-report-header, refs/remotes/origin/fix/docs-job-report-header
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-access-point/stage2/attempts/go-access-point/attempt-1-20261102T064041418096Z-e05d18b3.md
+> ```
+
+Stage-2 call, 2026-11-02: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 802 files, 3023 commits, 12 rules.
