@@ -1919,21 +1919,20 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
             _report_gate(base, "drift-only", "drift", "block"),
         ]
 
-    def fake_git(base: Path, *, failing: bool) -> Path:
-        """A git on PATH ahead of the system's: known answers, or no answer at all."""
+    def fake_git(base: Path, *, answers: str = "all") -> Path:
+        """A git on PATH ahead of the system's: all known answers, HEAD only, or none."""
         bin_dir = base / "bin"
         bin_dir.mkdir(parents=True)
         shim = bin_dir / "git"
-        if failing:
-            body = "#!/bin/sh\nexit 1\n"
-        else:
-            body = (
-                "#!/bin/sh\n"
-                f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
+        body = "#!/bin/sh\n"
+        if answers in ("all", "head-only"):
+            body += f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
+        if answers == "all":
+            body += (
                 f'if [ "$1" = merge-base ] && [ "$2" = origin/main ] && [ "$3" = HEAD ]; '
                 f"then echo {known_base}; exit 0; fi\n"
-                "exit 1\n"
             )
+        body += "exit 1\n"
         shim.write_text(body, encoding="utf-8")
         shim.chmod(0o755)
         return bin_dir
@@ -1950,7 +1949,7 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
         tree = _runner_tree_files(base / "tree")
         _write_gate_file(tree, fixture(base))
         _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
-        done = _run_runner(tree, home, [fake_git(base, failing=False)], *args)
+        done = _run_runner(tree, home, [fake_git(base)], *args)
         assert done.returncode == 0, f"{label}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
         report = _runner_report(done.stdout)
         assert set(report) == {"job", "candidate", "base", "config_sha256", "gates_total", "gates_job"}, label
@@ -1973,12 +1972,24 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
     tree = _runner_tree_files(base / "tree")
     _write_gate_file(tree, fixture(base))
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
-    done = _run_runner(tree, home, [fake_git(base, failing=True)])
+    done = _run_runner(tree, home, [fake_git(base, answers="none")])
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     report = _runner_report(done.stdout)
     assert report["candidate"] is None and report["base"] is None, report
     assert report["job"] == "verify", report
     assert report["gates_job"] == memberships["verify"] and report["gates_total"] == 4, report
+
+    # Per reference: a git that knows HEAD but has no merge base (no origin/main)
+    # keeps the candidate and leaves only the base null.
+    base = tmp_path / "base-unavailable"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(tree, fixture(base))
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    done = _run_runner(tree, home, [fake_git(base, answers="head-only")], "--job", "docs")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    report = _runner_report(done.stdout)
+    assert report["candidate"] == known_head and report["base"] is None, report
+    assert report["job"] == "docs" and report["gates_job"] == memberships["docs"], report
 
 
 def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
