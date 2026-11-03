@@ -41,6 +41,24 @@ Claude Code session works the lanes and is the only tracker writer.
 | D | Time records as data (bead coding-harness-v6vk): re-check of F6-1 to F6-3; clean → pull request with auto-merge. Then the approved plan card of bead coding-harness-gxwg. |
 | E | Guard test (bead coding-harness-0ho): merge `main`, phase 6, decision pull request. Beside it the second drafts of beads coding-harness-8v2c.1 and coding-harness-788 and the first of coding-harness-uxa9, each up to the plan card. |
 
+## Backlog added (maintainer, 2026-11-03 about 16:10 UTC: "bitte erweitere den backlog für jede lane")
+
+Each lane serves its first item, then these in order. All are `bounded`
+changes: each explores through GLM 5.3 Flash and stops at the interview (an
+explore writes only under `plans/changes/`), except where a line says more.
+
+| Lane | Backlog 2 | Backlog 3 |
+|---|---|---|
+| A | Stopped attempts saved on a side ref by one command (bead coding-harness-c99h) | Archive the change folders of closed beads (bead coding-harness-cqun) |
+| B | Repair prompt: a raising fault is caught by its test (bead coding-harness-xrzf) | Runner puts back status fields after a repair (bead coding-harness-ljmi): explore only; implementation after lane C, for `scripts/stage2.py` |
+| C | Runner writes `compaction.enabled=false` into every Pi settings file (bead coding-harness-mwzv.2) | Contract tests read the pinned Pi's real data (bead coding-harness-z4oo) |
+| D | Session start checks the worktree environment (bead coding-harness-cjf9) | Machine facts at night-run start (bead coding-harness-yql7) |
+| E | The README states the runner's role and what the hooks do (maintainer, 2026-11-03; text pull request) | Plan card form readable at a glance (bead coding-harness-6xx) |
+
+Lane A's first item parks at 2026-11-03 16:00 UTC: the re-check found F6-7
+and F6-8, the fourth and fifth finding on reading Git's trailer output; they
+go to the 15:00 block, so lane A starts its backlog.
+
 ## Rules for this run
 
 1. **Questions park.** A lane that meets a question parks; questions collect
