@@ -1463,7 +1463,8 @@ def prepare(root: Path, change: str, runner) -> None:
             except stage2_go.DestinationRefused as error:
                 # The record refuses this model's destination: named in the
                 # report's failed map, never retried, never substituted.
-                failed[model] = str(error)
+                failure = str(error)
+                failed[model] = failure
                 stopped = False
             else:
                 failure = None

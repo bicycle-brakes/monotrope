@@ -292,3 +292,5 @@ L9-3 taken and repaired, L9-2 rejected).
 2026-11-03 14:20:54–14:41:40 UTC, 1245 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-11-03 15:42:08–16:47:19 UTC, 3911 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-03 16:47:28–17:10:57 UTC, 1409 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 19:04:58–20:19:00 UTC, 4441 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 20:19:08–21:37:55 UTC, 4727 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

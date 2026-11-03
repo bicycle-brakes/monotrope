@@ -464,6 +464,80 @@ def test_compatibility_probe_continues_after_a_refused_destination(world, monkey
     assert f"{good} · OK" in output
 
 
+def test_preparation_reports_a_first_probe_destination_refusal_and_continues(world, monkeypatch, capsys):
+    """A policy change after discovery refuses one probe without aborting preparation."""
+    from test_stage2_availability import enable, receipt
+
+    enable(world)
+    refused, valid = TEST_LADDER[:2]
+    calls = []
+    harness = Harness(world, monkeypatch)
+    probe_go = availability.probe_go
+
+    def move_record(entry, old, new):
+        entry["adresse"]["host"] = new
+        for record in entry["adresse"]["apis"].values():
+            record["basis"] = record["basis"].replace(old, new)
+
+    def changed_policy_probe(runner, root, change, model, *args, **kwargs):
+        calls.append(model)
+        if model == refused:
+            # Discovery assessed the old host; dispatch must read the changed record.
+            edit_entry(world, lambda e: move_record(e, "opencode.ai", "elsewhere.invalid"))
+            try:
+                return probe_go(runner, root, change, model, *args, **kwargs)
+            finally:
+                edit_entry(world, lambda e: move_record(e, "elsewhere.invalid", "opencode.ai"))
+        return probe_go(runner, root, change, model, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "free_diff", lambda _root: ("", ""))
+    monkeypatch.setattr(stage2, "require_pi", lambda: None)
+    monkeypatch.setattr(
+        stage2,
+        "discover_free",
+        lambda *_args, **_kwargs: {
+            "selected": [],
+            "overlay": list(TEST_LADDER),
+            "models_store": go_store(*(row(model) for model in TEST_LADDER)),
+        },
+    )
+    monkeypatch.setattr(availability, "probe_go", changed_policy_probe)
+    try:
+        result_code = world.run("prepare-loop")
+    except UnboundLocalError:
+        pytest.fail("preparation crashed instead of reporting the first probe's destination refusal")
+    assert result_code == 0
+    result = receipt(world)["state"]["availability"]
+    assert calls[0] == refused and calls.count(refused) == 1
+    assert valid in result["reachable"]
+    assert refused not in result["reachable"]
+    assert "not the admitted host" in result["failed"][refused]
+    assert refused in capsys.readouterr().out
+    assert len(harness.sent) == len(calls) - 1
+    assert not world.record().exists(), "preparation wrote review history"
+
+
+@pytest.mark.parametrize("fault", ["duplicate", "syntax"])
+def test_yaml_refusal_reports_location_without_source_values(world, monkeypatch, fault):
+    """Malformed record diagnostics must never echo credential-bearing YAML excerpts."""
+    secret = "https://private-user:private-password@opencode.ai/inference/go/v1"
+    text = GOOD_RECORD_TEXT
+    if fault == "duplicate":
+        text = text.replace("          quelle:", f"          basis: {secret}\n          quelle:")
+    else:
+        text += f"broken: [{secret}\n"
+    (world.root / "model-endpoints.yaml").write_text(text, encoding="utf-8")
+    harness = Harness(world, monkeypatch)
+    with pytest.raises(stage2.Refused) as error:
+        harness.reviewer(TEST_LADDER[0], go_store(row(TEST_LADDER[0])))()
+    diagnostic = str(error.value)
+    assert "model-endpoints.yaml" in diagnostic and "YAML" in diagnostic
+    assert "line" in diagnostic and "column" in diagnostic
+    assert secret not in diagnostic
+    assert "private-user" not in diagnostic and "private-password" not in diagnostic
+    assert not harness.sent
+
+
 # ---------------------------------------------------------------------------
 # Criterion 6: every send re-checks current policy
 # ---------------------------------------------------------------------------

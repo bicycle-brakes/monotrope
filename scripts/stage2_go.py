@@ -206,7 +206,11 @@ def load_address_policy(root: Path) -> AddressPolicy:
     try:
         data = yaml.load(text, Loader=_NoDuplicateLoader) or {}
     except yaml.YAMLError as error:
-        raise RecordUnusable(f"{path.name} is not readable YAML: {error}") from None
+        # YAML exceptions include source excerpts and sometimes raw values in
+        # their problem text. Only structural type and numeric location are safe.
+        mark = getattr(error, "problem_mark", None)
+        location = f" at line {mark.line + 1}, column {mark.column + 1}" if mark is not None else ""
+        raise RecordUnusable(f"{path.name} is not readable YAML: {type(error).__name__}{location}") from None
     entries = data.get("endpunkte") if isinstance(data, dict) else None
     if not isinstance(entries, list):
         raise RecordUnusable(f"{path.name} declares no endpoints list; the Go address record is unavailable")

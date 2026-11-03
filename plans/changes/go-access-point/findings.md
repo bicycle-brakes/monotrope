@@ -1524,8 +1524,8 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MINOR | SPEC | Phase 6 | scripts/stage2_availability.py:1463–1479 | If the address record changes after discovery and the first probe raises `DestinationRefused`, the handler leaves `failure` unassigned. The subsequent condition raises `UnboundLocalError`, aborting preparation before its refusal report or remaining probes. Reproduced offline by exercising this exception branch. Assign the failure reason in this handler. [Acceptance criteria 5, 6] | Codex | taken — MINOR on a crash in the refusal path: repaired without asking (standing rule 2026-10-06) |  |
-| P6-2 | MINOR | SPEC | Phase 6 | scripts/stage2_go.py:209 | YAML errors are interpolated with their raw source excerpts. An offline reproduction with duplicate `basis` keys and second value an opencode.ai URL carrying a user name and password before the host (the literal URL elided by the orchestrator for the leak check) exposed that complete credential-bearing URL in the refusal diagnostic. Report the record location and structural error without including raw YAML values. [Acceptance criterion 11] | Codex | taken — MINOR on security (a credential in a diagnostic): repaired without asking (standing rule 2026-10-06) |  |
+| P6-1 | MINOR | SPEC | Phase 6 | scripts/stage2_availability.py:1463–1479 | If the address record changes after discovery and the first probe raises `DestinationRefused`, the handler leaves `failure` unassigned. The subsequent condition raises `UnboundLocalError`, aborting preparation before its refusal report or remaining probes. Reproduced offline by exercising this exception branch. Assign the failure reason in this handler. [Acceptance criteria 5, 6] | Codex | fixed — tests/test_stage2_go_access.py::test_preparation_reports_a_first_probe_destination_refusal_and_continues |  |
+| P6-2 | MINOR | SPEC | Phase 6 | scripts/stage2_go.py:209 | YAML errors are interpolated with their raw source excerpts. An offline reproduction with duplicate `basis` keys and second value an opencode.ai URL carrying a user name and password before the host (the literal URL elided by the orchestrator for the leak check) exposed that complete credential-bearing URL in the refusal diagnostic. Report the record location and structural error without including raw YAML values. [Acceptance criterion 11] | Codex | fixed — tests/test_stage2_go_access.py::test_yaml_refusal_reports_location_without_source_values |  |
 
 Phase 6 verdict: codex 01a1a2bd-e2c7-78f2-8d1f-932a1d06b1cf, 2026-11-03
 Reviewer session: codex 01a1a2bd-e2c7-78f2-8d1f-932a1d06b1cf — a fresh session reviewed: no phase-2a session was recorded
@@ -1761,3 +1761,21 @@ Kept from the loop record:
 > The diff was cut: the change diff was cut at 2000 of 7013 lines. A clean answer over a cut diff does not end the loop; the rest of the change needs a round of its own.
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 872 files, 3195 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_availability.py` +2 -1
+> - `scripts/stage2_go.py` +5 -1
+> - `tests/test_stage2_go_access.py` +70 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - P6-1: tests/test_stage2_go_access.py::test_preparation_reports_a_first_probe_destination_refusal_and_continues: the call of `tests/test_stage2_go_access.py::test_preparation_reports_a_first_probe_destination_refusal_and_continues` failed with UnboundLocalError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-access-point/stage2/attempts/go-access-point/attempt-1-20261103T190449679913Z-c4b6adb0.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 872 files, 3201 commits, 12 rules.
