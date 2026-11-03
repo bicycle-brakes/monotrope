@@ -7,6 +7,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/adr-0016-docs-check/decisions.md`](changes/adr-0016-docs-check/decisions.md) | draft | done | 2026-11-03 | coding-harness-v9xx |
+| [`changes/adr-0016-docs-check/plan.md`](changes/adr-0016-docs-check/plan.md) | draft | done | 2026-11-03 | coding-harness-v9xx |
+| [`changes/adr-0016-docs-check/research.md`](changes/adr-0016-docs-check/research.md) | draft | done | 2026-11-03 | coding-harness-v9xx |
+| [`changes/adr-0016-docs-check/spec.md`](changes/adr-0016-docs-check/spec.md) | draft | done | 2026-11-03 | coding-harness-v9xx |
 | [`changes/adr-owning-change/decisions.md`](changes/adr-owning-change/decisions.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/design.md`](changes/adr-owning-change/design.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/findings.md`](changes/adr-owning-change/findings.md) | draft | none | 2026-10-13 | coding-harness-afa |
