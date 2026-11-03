@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-03
 supersedes: null
 superseded_by: null
 bead: coding-harness-4tr4
@@ -42,7 +42,11 @@ Q-4 and the provider-entry storage with orchestrator maintenance in Q-5.
 The existing draft `docs/adr/0024-one-access-policy-for-opencode-go.md`
 belongs to this change; its acceptance still requires the maintainer's
 merge. The recorded feature ADR answer is already "yes"; this draft does
-not change that answer.
+not change that answer. The proposal "no" shown to the maintainer when the
+answer was recorded (`decisions/answers/go-access-point/adr.yaml`,
+`shown.proposed`) was superseded by the Q-4 interview answer; the header's
+`adr_question.proposed: "yes"` records that later state, so the answer file
+and this header read as one trail.
 
 ## Problem
 

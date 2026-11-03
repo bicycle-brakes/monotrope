@@ -156,6 +156,10 @@ def select_research_catalog(
         if item.get("provider", provider) != provider:
             return "pi-malformed"
         base = item.get("baseUrl")
+        if "baseUrl" in item and not isinstance(base, str):
+            # An explicit null or non-string base is unreadable to the one
+            # policy (`stage2_go.assess`); it is never treated as absent.
+            return "pi-malformed"
         if base is None:
             # A row without a base resolves offline from the record for its
             # wire api; an unmapped api has no default and no origin to check.

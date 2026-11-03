@@ -429,6 +429,25 @@ def test_refused_rows_stay_refused(world, monkeypatch):
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
 
 
+def test_research_selector_skips_an_explicit_null_base(world):
+    """An explicit `"baseUrl": null` is unreadable to the one policy, never an absent base.
+
+    Fault: the selector reads null as absent and selects a row that
+    `stage2_go.assess` refuses at install or dispatch.
+    """
+    policy = stage2_go.load_address_policy(world.root)
+    result = swarm.select_research_catalog(
+        bridge_with(row("aa-free"), row("bb-free", baseUrl=None)),
+        selector_policy(),
+        [],
+        expected_version="test-pin",
+        address=policy,
+    )
+    assert result["selected"] == ["aa-free"]
+    reasons = {item["id"]: item["reason"] for item in result["candidates"]}
+    assert reasons["bb-free"] == "pi-malformed"
+
+
 def test_compatibility_probe_continues_after_a_refused_destination(world, monkeypatch, capsys):
     """A refused first paid member must not prevent the next valid member's send."""
     bad, good = TEST_LADDER[:2]
