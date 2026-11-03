@@ -13993,6 +13993,15 @@ def test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards()
     assert evidence == [bare] and len(stage2.parse_rows(rest)[0]) == 1
     evidence, rest = stage2.split_guard_evidence(f"Guard evidence: almost\n{rows(1)}")
     assert evidence == [] and "Guard evidence: almost" in rest, "a prefix-only line became evidence"
+    # A reviewer writes natural prose after the verdict word: "yes, the child assertion ...". A
+    # punctuation mark after yes or no must not turn a real evidence line into verdict text, which
+    # would make a valid phase-6 answer malformed (2026-11-03, the guard-test re-review).
+    for verdict in ("yes, the child assertion rejects it", "no; it only fails under the switch", "yes: confirmed"):
+        line = f"Guard evidence: tests/test_fix.py::test_fix — fault: value 2 becomes 3 — catches without switch: {verdict}"
+        evidence, rest = stage2.split_guard_evidence(f"{rows(1)}\n\n{line}\n")
+        assert evidence == [line] and len(stage2.parse_rows(rest)[0]) == 1, verdict
+    bare_no = "Guard evidence: tests/test_fix.py::test_fix — fault: x — catches without switch: no"
+    assert stage2.split_guard_evidence(bare_no)[0] == [], "a bare no without its reason became evidence"
 
 
 def test_guard_doctrine_keeps_repeatable_repair_only_proofs() -> None:

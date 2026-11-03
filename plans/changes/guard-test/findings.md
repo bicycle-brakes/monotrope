@@ -710,3 +710,29 @@ Stage-2 call, 2026-11-03: repair · attempt 3 · route stage-1 · endpoint claud
 > 1 failed, 33 passed in 18.65s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/guard-test/stage2/attempts/guard-test/attempt-3-20261103T065737997934Z-60b18bfd.md
 > ```
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3190 commits, 12 rules.
+
+## Rejected phase-6 answer — Codex, 2026-11-03
+
+The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict was recorded and nothing was released (Codex thread: 01a1a2ad-7338-7700-a8d5-b978c0d67da4). The answer, as it came:
+
+> | F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6343–6345 | A status of `taken — guard test — "quoted reason"` or `taken — guard test — 'quoted reason'` authorises planted proof. Executing `guard_authorised` returned `True` for both: it removes only backtick spans. The repair instructions explicitly exclude quoted reasons, so these rows must be refused before guard execution. [Criterion 2] |
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_answer_accepts_the_named_test_form — fault: its child GUARD_TEST replaces `value = 2` with `value = 3` in the source text being checked — catches without switch: yes, the child assertion also rejects source already containing `value = 3`; confirmed by executing the extracted test body.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — fault: its child guard replaces the checked source value 2 with 3; an additional inert variant deliberately plants nothing — catches without switch: yes, the child assertion rejects faulty source without the switch; the outer regression also requires refusal of the inert variant.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_proof_requires_clean_green_without_the_switch — fault: child variants replace source value 2 with 3, require the impossible value 99, or skip the clean execution — catches without switch: yes, the outer regression unconditionally checks refusal of failing/skipped clean executions and acceptance despite a caller-supplied switch.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_switch_must_appear_in_the_named_test — fault: none is planted in the selected child test; the switch appears only in its neighbour, deliberately testing refusal — catches without switch: yes, the outer assertions require rejection independently of the caller’s switch.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_form_keeps_other_repair_forms_and_environments_strict — fault: a caller environment contains `STAGE2_PLANT_FAULT=1`, which must not reach ordinary proof launches — catches without switch: yes, the test supplies that environment itself and checks every captured launch unconditionally.
+> 
+> Guard evidence: tests/test_stage2.py::test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards — fault: none; this is an unconditional instruction/parser regression, including a textual conditional-failure example — catches without switch: yes, missing instruction text or incorrect evidence parsing fails its assertions without consulting the switch.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_doctrine_keeps_repeatable_repair_only_proofs — fault: none; this is an unconditional contract-text regression — catches without switch: yes, missing authorisation, proof-leg or retention wording fails its assertions regardless of the environment.
+> 
+> Guard evidence: tests/test_stage2.py::test_guard_repairs_preserve_the_planting_branch_for_replay — fault: its child guard replaces the checked source value 2 with 3 — catches without switch: yes, the child rejects faulty source without the switch; the outer test independently checks retained source and repeatable two-leg proof.
+> 
+> Guard evidence: tests/test_ci.py::test_guard_environment_gate_goes_red_when_the_switch_is_present — fault: verification receives a forbidden planting variable, including values `1`, empty and `0` — catches without switch: yes, the test constructs those child environments itself and unconditionally requires nonzero exits and blocking gate wiring.

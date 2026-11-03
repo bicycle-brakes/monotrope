@@ -304,7 +304,7 @@ PHASE6_ANSWER_FORMAT = (
 GUARD_EVIDENCE_LINE = re.compile(
     r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
     r" — fault: (?P<fault>\S.+?)"
-    r" — catches without switch: (?P<catches>yes(?:\s+\S.*)?|no\s+\S.*)$"
+    r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
