@@ -13,6 +13,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/adr-owning-change/plan.md`](changes/adr-owning-change/plan.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/research.md`](changes/adr-owning-change/research.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/spec.md`](changes/adr-owning-change/spec.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/appetite-stop/research.md`](changes/appetite-stop/research.md) | draft | none | 2026-11-03 | coding-harness-uxa9 |
 | [`changes/architecture-reconcile/decisions.md`](changes/architecture-reconcile/decisions.md) | draft | none | 2026-10-31 | coding-harness-190 |
 | [`changes/architecture-reconcile/findings.md`](changes/architecture-reconcile/findings.md) | draft | none | 2026-10-31 | coding-harness-190 |
 | [`changes/architecture-reconcile/plan.md`](changes/architecture-reconcile/plan.md) | draft | none | 2026-10-31 | coding-harness-190 |
