@@ -1730,3 +1730,27 @@ Phase 6 verdict: codex 01a1a311-734b-79c3-b787-b8a27964bfaf, 2026-11-03
 Reviewer session: codex 01a1a311-734b-79c3-b787-b8a27964bfaf — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3207 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6359 | When a module defines `test_fix` twice, `_function_source` returns the first definition, although Python and pytest use the later definition. Reproduced with an unused first definition containing `STAGE2_PLANT_FAULT`, module-level planting that changes `value` from 2 to 3, and a final `test_fix` containing only `assert value == 2`: the source check finds the switch, clean execution passes, and planted execution raises `AssertionError`, although the selected test contains no switch reference. The source-presence gate must inspect the executed definition or refuse ambiguous definitions. This is new evidence involving overwritten definitions, independent of the repaired Unicode line-counting fault. [Criterion 6] | Codex | taken — structural (maintainer, 2026-11-03, second finding of one mechanism with F-2): the runner asks pytest to collect the named test and reads the source of the function pytest runs (`inspect.getsource` of the collected item's function), replacing its own source extraction; one regression test each for F-2 and F-3 |  |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_guard_answer_accepts_the_named_test_form — fault: the child replaces inspected source text `value = 2` with `value = 3` under `STAGE2_PLANT_FAULT=1` — catches without switch: yes, executing the extracted child against already-corrupted source raises AssertionError.
+> Guard evidence: tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — fault: the child corrupts inspected source value 2 into 3; an inert replacement separately exercises rejection of planted green — catches without switch: yes, the child assertion rejects already-corrupted source unconditionally.
+> Guard evidence: tests/test_stage2.py::test_guard_proof_requires_clean_green_without_the_switch — fault: the valid child corrupts inspected source value 2 into 3; negative controls fail or skip the clean leg — catches without switch: yes, the valid child rejects corrupted source; the outer test independently requires rejection of both negative controls.
+> Guard evidence: tests/test_stage2.py::test_guard_source_uses_python_lines_with_unicode_separator — fault: no switch-controlled fault is planted; source fixtures place a Unicode separator before neighbouring and decorated definitions — catches without switch: yes, unconditional source comparisons detect incorrect extraction.
+> Guard evidence: tests/test_stage2.py::test_guard_switch_must_appear_in_the_named_test — fault: none in the selected child; an unselected neighbour references the switch deliberately — catches without switch: no, the selected fixture plants no fault; the outer regression requires its rejection.
+> Guard evidence: tests/test_stage2.py::test_guard_form_keeps_other_repair_forms_and_environments_strict — fault: caller contamination with `STAGE2_PLANT_FAULT=1` could reach ordinary proof launches — catches without switch: yes, the test supplies contamination itself and checks every captured launch environment.
+> Guard evidence: tests/test_stage2.py::test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards — fault: no switch-controlled fault is planted; this checks instructions and parsing, including a deliberately meaningless conditional-failure description — catches without switch: no, this is an unconditional instruction/parser regression rather than a planted guard proof.
+> Guard evidence: tests/test_stage2.py::test_guard_doctrine_keeps_repeatable_repair_only_proofs — fault: no switch-controlled fault is planted; assertions check authorisation, both proof legs and branch-retention wording — catches without switch: no, this checks contract text rather than exercising a planted fault.
+> Guard evidence: tests/test_stage2.py::test_guard_repairs_preserve_the_planting_branch_for_replay — fault: the retained child replaces inspected source value 2 with 3 under `STAGE2_PLANT_FAULT=1` — catches without switch: yes, its unconditional assertion rejects already-corrupted source; replay additionally requires both proof legs.
+> Guard evidence: tests/test_ci.py::test_guard_environment_gate_goes_red_when_the_switch_is_present — fault: isolated verification environments contain the forbidden switch with values `1`, empty, `0` and a diagnostic marker — catches without switch: yes, the test constructs contaminated child environments independently and requires failing gate exits and blocking verification wiring.
+
+Phase 6 verdict: codex 01a1a358-a6d6-7d21-a93f-3179a2c2b06e, 2026-11-03
+Reviewer session: codex 01a1a358-a6d6-7d21-a93f-3179a2c2b06e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
