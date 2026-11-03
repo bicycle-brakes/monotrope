@@ -391,14 +391,11 @@ def test_uninspectable_live_peer_prevents_writing(tmp_path: Path, failed_query: 
     assert _wrote(ns), "an unrelated session prevented recovery after the failed query"
 
 
-@pytest.mark.parametrize("peer_state", ["outside-git", "removed"])
-def test_live_peer_outside_git_keeps_strict_scan_successful(tmp_path: Path, peer_state: str) -> None:
-    """A live peer outside Git or in a removed directory has relation other."""
+def test_live_peer_outside_git_keeps_strict_scan_successful(tmp_path: Path) -> None:
+    """An existing live peer directory outside Git has relation other."""
     ns = _project(tmp_path)
     peer = tmp_path / "unrelated-peer"
     peer.mkdir()
-    if peer_state == "removed":
-        peer.rmdir()
     _session(ns.home, pid=os.getpid(), sid="outside-session", cwd=peer)
     scan = subprocess.run(
         ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
@@ -413,6 +410,30 @@ def test_live_peer_outside_git_keeps_strict_scan_successful(tmp_path: Path, peer
     result = _start(ns)
     assert result.returncode == 0, result.stderr
     assert _wrote(ns), "a peer outside any repository blocked writing reconciliation"
+    assert "prime --hook-json" in _calls(ns)
+
+
+@pytest.mark.parametrize("location", ["same-checkout", "outside-git"])
+def test_deleted_live_peer_directory_prevents_writing(tmp_path: Path, location: str) -> None:
+    """Missing peer directories cannot establish safe writer ownership."""
+    ns = _project(tmp_path)
+    parent = ns.klon if location == "same-checkout" else tmp_path
+    peer = parent / "deleted-peer"
+    peer.mkdir()
+    _session(ns.home, pid=os.getpid(), sid="peer-session", cwd=peer)
+    peer.rmdir()
+    scan = subprocess.run(
+        ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon), "--strict"],
+        env={**os.environ, "HOME": str(ns.home), "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert scan.returncode != 0, "a deleted peer directory was classified as safely unrelated"
+    result = _start(ns)
+    assert result.returncode == 0, result.stderr
+    assert not _wrote(ns), "unknown peer ownership allowed writing reconciliation"
     assert "prime --hook-json" in _calls(ns)
 
 

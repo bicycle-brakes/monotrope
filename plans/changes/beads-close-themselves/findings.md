@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-02
+updated: 2026-11-03
 supersedes: null
 superseded_by: null
 bead: coding-harness-l1if
@@ -1051,8 +1051,27 @@ Stage-2 call, 2026-11-02: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-4 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:103–105,189 | A merged trailer containing `Closes-Bead: coding-harness-alpha<CR>coding-harness-beta` closes `coding-harness-alpha` instead of rejecting the malformed value. New evidence beyond F6-1: Git preserves the carriage return inside the logical value, but subprocess `text=True` converts it to LF before validation. Reproduced with Git's trailer parser and `collect_declarations()`, which returns the partial identifier without any malformed declaration. Preserve logical value boundaries through decoding. [Acceptance criterion 2] | Codex | taken — structural remedy accepted by the maintainer on 2026-11-02 (was parked as the second finding of the F6-1 mechanism): read Git's output as bytes and accept a declaration only when the whole raw value matches the bead-id pattern, so every separator, CR included, is refused in one place. Regression that must fail on the code before the repair: a Closes-Bead trailer whose value carries a carriage return closes no bead | — |
-| F6-5 | MAJOR | SPEC | Phase 6 re-check | tools/claude-code/hooks/session-scan.sh:90–92 | When a live peer's recorded working directory is a subsequently deleted subdirectory of this same checkout, strict scanning classifies it as `other` and exits 0. The startup hook consequently permits writing reconciliation despite another live session in the repository. Reproduced with a live peer PID and a missing path directly beneath the current worktree. A missing directory does not establish unrelated ownership; inspect surviving ancestors or skip writing when ownership remains uncertain. [Acceptance criterion 11] | Codex | taken — structural remedy accepted by the maintainer on 2026-11-02 (was parked as the third finding of the F6-2/F6-3 mechanism): fail closed — strict mode treats a live peer as unrelated only when an existing directory is outside every Git repository; any other case, a missing directory included, stops writing. Regression that must fail on the code before the repair: a live peer whose directory is a deleted subdirectory of this checkout stops the strict write | — |
+| F6-4 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:103–105,189 | A merged trailer containing `Closes-Bead: coding-harness-alpha<CR>coding-harness-beta` closes `coding-harness-alpha` instead of rejecting the malformed value. New evidence beyond F6-1: Git preserves the carriage return inside the logical value, but subprocess `text=True` converts it to LF before validation. Reproduced with Git's trailer parser and `collect_declarations()`, which returns the partial identifier without any malformed declaration. Preserve logical value boundaries through decoding. [Acceptance criterion 2] | Codex | fixed — tests/test_close_merged_beads.py::test_carriage_return_in_trailer_value_never_closes | — |
+| F6-5 | MAJOR | SPEC | Phase 6 re-check | tools/claude-code/hooks/session-scan.sh:90–92 | When a live peer's recorded working directory is a subsequently deleted subdirectory of this same checkout, strict scanning classifies it as `other` and exits 0. The startup hook consequently permits writing reconciliation despite another live session in the repository. Reproduced with a live peer PID and a missing path directly beneath the current worktree. A missing directory does not establish unrelated ownership; inspect surviving ancestors or skip writing when ownership remains uncertain. [Acceptance criterion 11] | Codex | fixed — tests/test_beads_start.py::test_deleted_live_peer_directory_prevents_writing | — |
 
 Phase 6 verdict: codex 01a19af2-8df8-7492-9e54-f0ccd2cb1894, 2026-11-02
 Reviewer session: codex 01a19af2-8df8-7492-9e54-f0ccd2cb1894 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-02: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 844 files, 3092 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/close_merged_beads.py` +24 -20
+> - `tests/test_beads_start.py` +26 -5
+> - `tests/test_close_merged_beads.py` +13 -0
+> - `tools/claude-code/hooks/session-scan.sh` +20 -24
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-4: tests/test_close_merged_beads.py::test_carriage_return_in_trailer_value_never_closes: refs changed while the named test ran: refs/heads/feat/guard-test, refs/remotes/origin/feat/guard-test
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261102T220322012165Z-cbf6f172.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 844 files, 3097 commits, 12 rules.

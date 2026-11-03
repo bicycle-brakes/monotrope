@@ -70,7 +70,7 @@ import bead_render  # noqa: E402 — the ONE access point to the tracker render 
 from check_bead_export import run as check_render_lines  # noqa: E402 — the same line check
 
 TRAILER_KEY = "Closes-Bead"
-BEAD_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+BEAD_ID = re.compile(rb"[A-Za-z0-9][A-Za-z0-9._-]*")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 # The PR number is read only where the commit message itself states it: a
 # GitHub merge-commit subject, or a squash subject's trailing "(#N)". Any other
@@ -94,22 +94,24 @@ class PreflightError(RuntimeError):
     """A precondition failed — nothing may be attempted."""
 
 
-def _git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
+def _git_bytes(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> bytes:
     try:
         erg = subprocess.run(
             ["git", *args],
             cwd=repo,
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PreflightError(f"git {args[0]} failed: {exc}") from None
     if erg.returncode != 0:
-        raise PreflightError(f"git {args[0]} failed: {(erg.stderr or erg.stdout).strip()}")
+        diagnostic = (erg.stderr or erg.stdout).decode("utf-8", errors="replace").strip()
+        raise PreflightError(f"git {args[0]} failed: {diagnostic}")
     return erg.stdout
+
+
+def _git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> str:
+    return _git_bytes(repo, *args, timeout=timeout).decode("utf-8", errors="replace")
 
 
 def resolve_checkout() -> tuple[Path, Path]:
@@ -175,26 +177,28 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
     malformed): bead id -> (declaring sha, subject), and the malformed values
     with their commits.
     """
-    out = _git(root, "log", f"--format={LOG_FORMAT}", pinned)
+    out = _git_bytes(root, "log", f"--format={LOG_FORMAT}", pinned)
     declarations: dict[str, tuple[str, str]] = {}
     malformed: list[tuple[str, str]] = []
-    prefix = f"{TRAILER_KEY}:"
-    for record in out.split("\x1e"):
-        fields = record.split("\x00")
+    prefix = f"{TRAILER_KEY}:".encode("ascii")
+    for record in out.split(b"\x1e"):
+        fields = record.split(b"\x00")
         if len(fields) < 3:
             continue
-        sha, subject, trailer_block = fields[0].strip(), fields[1], fields[2]
-        # Git separates logical trailers with LF. Unicode separators remain
-        # part of the value and must never turn a malformed value into an id.
-        for line in trailer_block.split("\n"):
+        sha = fields[0].strip().decode("ascii")
+        subject = fields[1].decode("utf-8", errors="replace")
+        # Only Git's LF separates logical trailers. Read bytes so universal
+        # newline decoding cannot turn a CR inside a value into a boundary.
+        for line in fields[2].split(b"\n"):
             if not line.lower().startswith(prefix.lower()):
                 continue
-            value = line[len(prefix) :].strip()
-            if any(separator in line for separator in ("\u2028", "\u2029", "\u0085")):
-                malformed.append((sha, line[len(prefix) :]))
-            elif not line.startswith(prefix):
-                malformed.append((sha, line))
-            elif BEAD_ID.fullmatch(value):
+            # Git emits one formatting space after the colon. Remove only
+            # that space; validate the entire raw value before decoding it.
+            raw_value = line[len(prefix) :].removeprefix(b" ")
+            value = raw_value.decode("utf-8", errors="replace")
+            if not line.startswith(prefix):
+                malformed.append((sha, line.decode("utf-8", errors="replace")))
+            elif BEAD_ID.fullmatch(raw_value):
                 declarations.setdefault(value, (sha, subject))
             else:
                 malformed.append((sha, value))

@@ -344,6 +344,19 @@ def test_unicode_separators_in_trailer_values_never_close(tmp_path: Path) -> Non
     assert result.stderr.count("malformed Closes-Bead value") == 6
 
 
+def test_carriage_return_in_trailer_value_never_closes(tmp_path: Path) -> None:
+    """A CR inside Git's logical value must not become a trailer boundary."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, f"malformed CR trailer\n\nCloses-Bead: {REAL_A}\r{REAL_B}")
+
+    result = _run_script(ns, _env(ns), "--write")
+    closed_ids = {line.split()[1] for line in _closes(ns)}
+    assert closed_ids == set(DECLARED), "a fragment of the CR-containing value was closed"
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert result.stderr.count("malformed Closes-Bead value") == 1
+    assert f"{REAL_A}\\r{REAL_B}" in result.stderr
+
+
 def test_duplicate_and_closed_beads_are_not_rewritten(tmp_path: Path) -> None:
     """Criterion 3: duplicates resolve newest-first; closed beads stay closed."""
     ns = _build(tmp_path)
