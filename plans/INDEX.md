@@ -294,6 +294,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/registry-block-last/decisions.md`](changes/registry-block-last/decisions.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/findings.md`](changes/registry-block-last/findings.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/plan.md`](changes/registry-block-last/plan.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/research.md`](changes/registry-block-last/research.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/spec.md`](changes/registry-block-last/spec.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
 | [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
