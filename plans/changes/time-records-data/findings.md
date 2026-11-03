@@ -336,3 +336,23 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-03: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3138 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3140 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/harness.py` +3 -1
+> - `scripts/time_records.py` +12 -7
+> - `tests/test_harness_time_log.py` +28 -0
+> - `tests/test_stage2.py` +21 -0
+> - `tests/test_time_records.py` +0 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: tests/test_stage2.py::test_runner_records_completed_attempt_when_utc_moves_backward: the call of `tests/test_stage2.py::test_runner_records_completed_attempt_when_utc_moves_backward[start0-True]` failed with ValueError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T114246016227Z-39cf6200.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 849 files, 3144 commits, 12 rules.
