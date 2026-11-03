@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-29
 created: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -1737,7 +1737,7 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6359 | When a module defines `test_fix` twice, `_function_source` returns the first definition, although Python and pytest use the later definition. Reproduced with an unused first definition containing `STAGE2_PLANT_FAULT`, module-level planting that changes `value` from 2 to 3, and a final `test_fix` containing only `assert value == 2`: the source check finds the switch, clean execution passes, and planted execution raises `AssertionError`, although the selected test contains no switch reference. The source-presence gate must inspect the executed definition or refuse ambiguous definitions. This is new evidence involving overwritten definitions, independent of the repaired Unicode line-counting fault. [Criterion 6] | Codex | taken — structural (maintainer, 2026-11-03, second finding of one mechanism with F-2): the runner asks pytest to collect the named test and reads the source of the function pytest runs (`inspect.getsource` of the collected item's function), replacing its own source extraction; one regression test each for F-2 and F-3 |  |
+| F-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6359 | When a module defines `test_fix` twice, `_function_source` returns the first definition, although Python and pytest use the later definition. Reproduced with an unused first definition containing `STAGE2_PLANT_FAULT`, module-level planting that changes `value` from 2 to 3, and a final `test_fix` containing only `assert value == 2`: the source check finds the switch, clean execution passes, and planted execution raises `AssertionError`, although the selected test contains no switch reference. The source-presence gate must inspect the executed definition or refuse ambiguous definitions. This is new evidence involving overwritten definitions, independent of the repaired Unicode line-counting fault. [Criterion 6] | Codex | fixed — tests/test_stage2.py::test_guard_source_reads_the_definition_pytest_collected |  |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1754,3 +1754,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a1a358-a6d6-7d21-a93f-3179a2c2b06e, 2026-11-03
 Reviewer session: codex 01a1a358-a6d6-7d21-a93f-3179a2c2b06e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3212 commits, 12 rules.

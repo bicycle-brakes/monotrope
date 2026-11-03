@@ -5986,6 +5986,33 @@ def _proof_reference_guard(
     return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
 
 
+GUARD_SOURCE_PROBE_SOURCE = '''
+
+class GuardSourceProbe:
+    """Read the functions pytest actually collected, including overwritten definitions."""
+
+    def pytest_collection_finish(self, session):
+        import inspect
+
+        fault = None
+        try:
+            if not session.items:
+                fault = "the guard source check collected no tests"
+            for item in session.items:
+                if "STAGE2_PLANT_FAULT" not in inspect.getsource(item.function):
+                    function = _SELECTOR.partition("::")[2]
+                    fault = (
+                        f"{_SELECTOR} names STAGE2_PLANT_FAULT nowhere in `{function}`; "
+                        "a guard proof plants nothing there"
+                    )
+                    break
+        except Exception:
+            fault = "the collected guard function's source could not be read"
+        with open(_REPORT + ".source", "w", encoding="utf-8") as stream:
+            json.dump({"token": _TOKEN, "selector": _SELECTOR, "fault": fault}, stream)
+'''
+
+
 def _attempt_tree_proof(
     root: Path, test: str, key: str | None, tools: dict[str, str] | None, *, planted: bool, leg: str
 ) -> str | None:
@@ -6012,7 +6039,8 @@ def _attempt_tree_proof(
         "import importlib.util, sys, pytest; "
         "spec = importlib.util.spec_from_file_location('stage2_fixed_probe', sys.argv[1]); "
         "probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe); "
-        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
+        "plugins = [probe] + ([probe.GuardSourceProbe()] if hasattr(probe, 'GuardSourceProbe') else []); "
+        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=plugins))"
     )
     token = os.urandom(16).hex()
     tmp = None
@@ -6029,7 +6057,7 @@ def _attempt_tree_proof(
         private = tmp / "tree"
         probe = tmp / "probe.py"
         report = tmp / "outcome.json"
-        probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+        probe.write_text(RED_PROBE_SOURCE + (GUARD_SOURCE_PROBE_SOURCE if planted else ""), encoding="utf-8")
         # The fixed tree is captured before the clone copies objects: the tree `worktree_tree`
         # writes is unreferenced, and the local object copy carries it; a tree the clone cannot
         # read refuses the proof instead of running older bytes.
@@ -6073,6 +6101,25 @@ def _attempt_tree_proof(
                 ) + (f"; {fault}" if fault else "")
         elif done.returncode != 0:
             fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
+        if planted:
+            # Collection is performed in the same private tree and invocation as the proof.
+            # inspect.getsource follows pytest's actual function, rather than guessing from ASTs.
+            try:
+                source = json.loads(report.with_suffix(".json.source").read_text(encoding="utf-8"))
+                if (
+                    not isinstance(source, dict)
+                    or source.get("token") != token
+                    or source.get("selector") != test
+                    or (source.get("fault") is not None and not isinstance(source["fault"], str))
+                    or "fault" not in source
+                ):
+                    raise ValueError("invalid guard source record")
+            except (OSError, ValueError):
+                source_fault = "the collected guard source record is missing or invalid"
+            else:
+                source_fault = source["fault"]
+            if source_fault:
+                fault = f"{fault}; {source_fault}" if fault else source_fault
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
     finally:
@@ -6345,26 +6392,6 @@ def guard_authorised(status: str) -> bool:
     return bool(reason.strip())
 
 
-def _function_source(body: str, function: str) -> str:
-    """The named test function's own source, decorators included, or "" when it cannot be isolated.
-
-    The guard switch is judged on the named function's text alone - a neighbour's
-    `STAGE2_PLANT_FAULT` reference plants nothing here (spec, criterion 6). The
-    `ast` walk finds the def wherever it stands: top level, in a class, `async`.
-    """
-    try:
-        tree = ast.parse(body)
-    except SyntaxError:
-        return ""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == function:
-            start = min([node.lineno, *(item.lineno for item in node.decorator_list)])
-            # AST lines follow Python newlines; Unicode separators inside strings
-            # are source characters, not extra lines (unlike str.splitlines).
-            return "\n".join(re.split(r"\r\n?|\n", body)[start - 1 : node.end_lineno])
-    return ""
-
-
 def only_scan_records_added(before: str, now: str) -> bool:
     """Whether `now` is `before` plus nothing but the runner's own skipped-scan records.
 
@@ -6503,10 +6530,6 @@ def check_repair_answer(
         body = _read_quietly(ctx.root / test.partition("::")[0])
         if not defines_test(body, function):
             problems.append(f"{ident}: {test} defines no function `def {function}(`")
-        elif guard and GUARD_SWITCH not in _function_source(body, function):
-            problems.append(
-                f"{ident}: {test} names {GUARD_SWITCH} nowhere in `{function}`; a guard proof plants nothing there"
-            )
     for place, rows_before, rows_now in (
         ("released", before[0], released_now),
         ("phase-6", before[1], phase6_now),

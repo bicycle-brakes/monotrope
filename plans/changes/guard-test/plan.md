@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -190,3 +190,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-03 — hand acceptance of the review-loop round-1 repair, on the maintainer's word: all three runner attempts failed on one plans-registry block (attempt 1 set the invalid status `in-review` on spec, design and plan for row L1-7; the block line was cut from the model's diagnostics, bead coding-harness-2g7y). The orchestrator kept attempt 3's tree (saved at refs/stage2/attempts/guard-test/orchestrator-saved-20261103, b036443a), repaired L1-7 with valid values (`implementation_status: partial`), regenerated the index; `make verify` green. No runner red-first proof per row; phase 6 reads every repaired row.
 2026-11-03 19:10:07–20:18:55 UTC, 4127 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-03 20:23:58–21:37:14 UTC, 4396 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 22:11:51–23:29:44 UTC, 4673 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

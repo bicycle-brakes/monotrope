@@ -13812,21 +13812,61 @@ def test_guard_proof_scrubs_failure_diagnostics(world: World, monkeypatch: pytes
     assert "tests/test_fix.py::test_fix" in outcome, outcome
 
 
-def test_guard_source_uses_python_lines_with_unicode_separator() -> None:
+def test_guard_source_uses_python_lines_with_unicode_separator(world: World) -> None:
     """Criterion 6: a string's U+2028 must neither import nor hide a switch reference."""
-    prefix = "separator = '\u2028'\n"
-    neighbour = "def test_other():\n    STAGE2_PLANT_FAULT = True\n"
-    selected = "def test_fix():\n    assert True\n"
-    assert stage2._function_source(prefix + neighbour + selected, "test_fix") == selected.rstrip("\n")
+    seed_tests(world)
+    path = world.root / "tests" / "test_fix.py"
+    prefix = "separator = '\u2028'\n" * 8
+    # Module-level planting supplies real red/green but cannot authorise the test's source.
+    outside = (
+        "import os\n"
+        "value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "def test_other():\n    STAGE2_PLANT_FAULT = True\n"
+        "def test_fix():\n    assert value == 2\n"
+    )
+    path.write_text(prefix + outside, encoding="utf-8")
+    outcome = stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    assert outcome is not None and "names STAGE2_PLANT_FAULT nowhere" in outcome, outcome
+    guarded = (
+        "import os\n"
+        "def test_fix():\n"
+        "    value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "    assert value == 2\n"
+    )
+    path.write_text(prefix + guarded, encoding="utf-8")
+    assert stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
 
-    guarded = "@decorate\nasync def test_fix():\n    STAGE2_PLANT_FAULT = True\n"
-    assert stage2._function_source(prefix + guarded, "test_fix") == guarded.rstrip("\n")
+
+def test_guard_source_reads_the_definition_pytest_collected(world: World) -> None:
+    """Criterion 6: an overwritten definition must not supply the executed test's switch."""
+    seed_tests(world)
+    body = (
+        "import os\n"
+        "def test_fix():\n    STAGE2_PLANT_FAULT = True\n"
+        "value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "def test_fix():\n    assert value == 2\n"
+    )
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(world, [guard_step(body)] * 3, make=[{"stdout": "green\n"}] * 3)
+    head = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1, "an unused first definition authorised the collected test"
+    assert git(world.root, "rev-parse", "HEAD") == head
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "names STAGE2_PLANT_FAULT nowhere in `test_fix`" in prompt, prompt
+    # The reverse order is valid: pytest runs the later, switch-bearing definition.
+    (world.root / "tests" / "test_fix.py").write_text(
+        "import os\n"
+        "def test_fix():\n    assert True\n"
+        "def test_fix():\n"
+        "    value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "    assert value == 2\n",
+        encoding="utf-8",
+    )
+    assert stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
 
 
 def test_guard_switch_must_appear_in_the_named_test(world: World) -> None:
     """Criterion 6. Planted fault: another function's switch reference satisfies the source check."""
-    assert "STAGE2_PLANT_FAULT" not in stage2._function_source(SWITCH_ELSEWHERE_TEST, "test_fix")
-    assert "STAGE2_PLANT_FAULT" in stage2._function_source(SWITCH_ELSEWHERE_TEST, "test_other_plants")
     seed_tests(world)
     world.write_record([("L1-1", GUARD_ROW, "no")])
     script_repair(
