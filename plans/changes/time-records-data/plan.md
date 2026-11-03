@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-03
 supersedes: null
 superseded_by: null
 bead: coding-harness-v6vk
@@ -80,7 +80,7 @@ Starts unless you say stop.
    doctrine test in `tests/test_stage2.py` in that same bootstrap step, then
    run the targeted checks and `make verify` again.
 8. Change `plans/changes/time-records-data/plan.md` as tests land: remove
-   `not yet written` from their ledger entries and let the runner record time.
+   from their ledger entries and let the runner record time.
    The runner manages `plans/changes/time-records-data/findings.md` and
    regenerates `plans/INDEX.md`; no hand edits or file deletions are planned.
 
@@ -104,18 +104,18 @@ fallback needs carrying forward: research records a successful Flash route.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_harness_time_log.py::test_time_log_appends_one_counted_record — success with zero or duplicate appended records
-- 2: not yet written tests/test_time_records.py::test_shared_format_preserves_runner_bytes_and_midnight — changed metadata, suffix or end date
-- 3: not yet written tests/test_time_records.py::test_explicit_seconds_are_authoritative — wall-clock subtraction replaces the supplied seconds
+- 1: tests/test_harness_time_log.py::test_time_log_appends_one_counted_record — success with zero or duplicate appended records
+- 2: tests/test_time_records.py::test_shared_format_preserves_runner_bytes_and_midnight — changed metadata, suffix or end date
+- 3: tests/test_time_records.py::test_explicit_seconds_are_authoritative — wall-clock subtraction replaces the supplied seconds
 - 3: tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — runner clocks or explicit duration change
-- 4: not yet written tests/test_harness_time_log.py::test_invalid_input_and_unsafe_destination_leave_bytes_unchanged — invalid fields or an unsafe destination receive a write
-- 4: not yet written tests/test_harness_time_log.py::test_publication_failure_preserves_plan — failure truncates the plan or returns success
-- 5: not yet written tests/test_time_records.py::test_shared_append_preserves_section_content — old prose disappears or a following section is changed
-- 6: not yet written tests/test_stage2.py::test_runner_time_persistence_uses_shared_writer — runner bypasses the common write service
+- 4: tests/test_harness_time_log.py::test_invalid_input_and_unsafe_destination_leave_bytes_unchanged — invalid fields or an unsafe destination receive a write
+- 4: tests/test_harness_time_log.py::test_publication_failure_preserves_plan — failure truncates the plan or returns success
+- 5: tests/test_time_records.py::test_shared_append_preserves_section_content — old prose disappears or a following section is changed
+- 6: tests/test_stage2.py::test_runner_time_persistence_uses_shared_writer — runner bypasses the common write service
 - 6: tests/test_stage2.py::test_runner_preserves_precall_time_on_final_verdict — model time replaces trusted history or completion duplicates a record
 - 6: tests/test_stage2.py::test_runner_early_refusal_recovers_time_destination_safely — recovery writes an alias target or loses a rejection
 - 6: tests/test_stage2.py::test_runner_time_write_failure_keeps_original_cause — failed logging hides the original failure or permits progress
-- 7: not yet written tests/test_run_report.py::test_report_counts_shared_cli_and_runner_records — the command's line is unread or counted with different seconds
+- 7: tests/test_run_report.py::test_report_counts_shared_cli_and_runner_records — the command's line is unread or counted with different seconds
 - 8: tests/test_run_report.py::test_time_records_require_whitelisted_measurement_forms — prose contributes seconds or unread visibility disappears
 - 9: not a test — phase-6 review checks the orchestrator's prompt update against criterion 9; manual insertion, guessed time or duplicate Stage-2 logging refutes it
 
@@ -148,4 +148,14 @@ No historical plans/specs, ADRs, new gates, endpoint/routing settings,
 appetite semantics. Keep recovery, credential checks and checkpoint order;
 record insertion is shared, recovery policy stays runner-owned.
 
+## Runner route — 2026-11-03
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+2026-11-03 — hand acceptance by the orchestrator, flagged for the maintainer's review: the three attempts (two GLM 5.3 Flash, one Sonnet 5.5) are saved on refs/stage2/attempts/time-records-data/orchestrator-saved-20261103 (bc486f94). The last tree failed only its cheap checks: one ruff finding (PTH105, `os.replace` in scripts/time_records.py, now `Path.replace`). The full `make verify` then showed one behaviour change of the shared writer: the runner's direct plan write used `write_bytes` instead of `write_text`, so a failing plan write no longer reached the runner's error path (tests/test_stage2.py::test_runner_terminal_failure_survives_failed_log_write, both cases); the direct publisher writes text again. No other line of the attempt was changed.
+
 ## Time used
+
+2026-11-02 23:57:37–2026-11-03 00:54:37 UTC, 3420 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-03 00:54:46–01:02:57 UTC, 491 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-03 01:03:05–01:03:58 UTC, 53 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

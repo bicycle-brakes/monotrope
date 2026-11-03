@@ -46,6 +46,7 @@ import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
+import time_records  # noqa: E402
 import verify_lock  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
@@ -10143,6 +10144,47 @@ def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, mo
         "2026-10-20 10:00:00–10:00:00 UTC, 0 s — repair · attempt 2 · route codex-repair · "
         "model m · rejected · measured by the runner"
     )
+
+
+def test_runner_time_persistence_uses_shared_writer(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 6. Planted fault: the runner keeps a private formatter or inserter beside the shared writer."""
+    FakeClock(monkeypatch, UTC_START)
+    observed: list[tuple[Path, str, str | None, str | None]] = []
+    real_write = time_records.write_entry
+
+    def spy(entry, plan, *, text=None, prior=None, publish=None):
+        observed.append((plan, entry, text, prior))
+        return real_write(entry, plan, text=text, prior=prior, publish=publish)
+
+    monkeypatch.setattr(time_records, "write_entry", spy)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "plans/changes/demo/plan.md": "# rewritten\n"}},
+            {"stdout": "second"},
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    first, second = runner_entries(world.plan)
+    # Both persistence paths went through the one shared writer, and only for the runner's own plan.
+    assert [row[0] for row in observed] == [world.plan, world.plan]
+    assert [row[1] for row in observed] == [first, second]
+    # The retry persists on the trusted pre-call text; the final verdict writes the plan it reads itself.
+    assert observed[0][2] is not None and observed[0][3] is None
+    assert observed[1][2] is None and observed[1][3] is not None
+    # The adapter and the shared formatter are one grammar: identical inputs render identical bytes.
+    adapter_line = stage2.time_entry("repair", 2, "codex-repair", "m", False, UTC_START, UTC_START, 0)
+    shared_line = time_records.format_entry(
+        UTC_START,
+        UTC_START,
+        0,
+        "repair",
+        2,
+        "codex-repair",
+        "m",
+        time_records.REJECTED,
+    )
+    assert adapter_line == shared_line
 
 
 def test_runner_keeps_rejected_time_across_input_restore(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
