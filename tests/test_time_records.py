@@ -144,8 +144,11 @@ def test_validation_refuses_malformed_fields() -> None:
         {**ok, "seconds": 1.5},
         {**ok, "attempt": 0},
         {**ok, "result": "maybe"},
-        {**ok, "end": START - dt.timedelta(seconds=1)},  # the end before the start
         {**ok, "verb": ""},
+        {**ok, "model": "glm x"},  # every line break the reader splits on
+        {**ok, "model": "glm x"},
+        {**ok, "model": "glm\x85x"},
+        {**ok, "route": "a\x0bb"},
         {**ok, "verb": "implement · extra"},
         {**ok, "route": "orchestrator\n"},
         {**ok, "model": "\tglm"},
@@ -160,6 +163,30 @@ def test_validation_refuses_malformed_fields() -> None:
     with pytest.raises(ValueError):
         time_records.parse_stamp("2026-10-31T10:00:00+01:00")
     assert time_records.parse_stamp("2026-10-31T10:00:00Z") == dt.datetime(2026, 10, 31, 10, 0, 0, tzinfo=dt.UTC)
+
+
+def test_backward_utc_still_formats_with_explicit_seconds() -> None:
+    """F6-1. Planted fault: the formatter rejects an end before the start, losing a completed attempt's entry."""
+    line = time_records.format_entry(
+        START, START - dt.timedelta(seconds=5), 42, "implement", 1, "flash", "m", "rejected"
+    )
+    record = time_records.parse_entry(line)
+    assert record is not None and record.seconds == 42
+
+
+def test_line_separator_in_metadata_is_refused_and_record_stays_one_line() -> None:
+    """F6-2. Planted fault: U+2028 inside the model passes and splits the record for the reader."""
+    with pytest.raises(ValueError):
+        time_records.format_entry(START, START, 60, "implement", 1, "orchestrator", "a b", "accepted")
+
+
+def test_crlf_plan_keeps_unrelated_bytes(tmp_path: Path) -> None:
+    """F6-3. Planted fault: reading with newline translation rewrites every CRLF ending as LF."""
+    plan = tmp_path / "plan.md"
+    original = b"# Plan\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Following\r\nkeep\r\n"
+    plan.write_bytes(original)
+    time_records.write_entry("NEW", plan)
+    assert plan.read_bytes() == (b"# Plan\r\n\r\n## Time used\r\n\r\nold prose\r\nNEW\r\n\r\n## Following\r\nkeep\r\n")
 
 
 def test_section_reader_names_the_exact_reason(tmp_path: Path) -> None:
