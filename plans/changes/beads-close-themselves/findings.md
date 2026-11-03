@@ -1082,7 +1082,7 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-6 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:180–194 | With Git configuration `trailer.separators` set to `=:`, Git parses valid `Closes-Bead: <id>` trailers but formats them as `Closes-Bead= <id>`. The collector accepts only the colon prefix and silently drops every declaration. Reproduced against merged commit `7051b9a3`: the default configuration finds its declaration; the configured run returns zero declarations and zero malformed items. A write run therefore leaves declared open beads unattempted while reporting success after publication. [Acceptance criterion 1] | Codex | taken — maintainer 2026-11-03, structural remedy: every Git call of the collector runs with a neutral configuration (GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM pointed at empty files, GIT_CONFIG_NOSYSTEM=1), so no user or system setting changes the parsed trailer text; regression: a configured `trailer.separators` still yields every declaration | — |
+| F6-6 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:180–194 | With Git configuration `trailer.separators` set to `=:`, Git parses valid `Closes-Bead: <id>` trailers but formats them as `Closes-Bead= <id>`. The collector accepts only the colon prefix and silently drops every declaration. Reproduced against merged commit `7051b9a3`: the default configuration finds its declaration; the configured run returns zero declarations and zero malformed items. A write run therefore leaves declared open beads unattempted while reporting success after publication. [Acceptance criterion 1] | Codex | fixed — tests/test_close_merged_beads.py::test_configured_trailer_separators_still_yield_every_declaration | — |
 
 Phase 6 verdict: codex 01a19ed2-7160-7ea3-b035-f6583fe7a476, 2026-11-03
 Reviewer session: codex 01a19ed2-7160-7ea3-b035-f6583fe7a476 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -1105,3 +1105,5 @@ Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 845 files, 3142 commits, 12 rules.
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3144 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs · leak check clean over 850 files, 3147 commits, 12 rules.

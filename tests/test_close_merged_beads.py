@@ -868,6 +868,18 @@ def test_wrapped_trailer_values_never_close_a_partial_identifier(tmp_path: Path)
     assert "dolt push" in _calls(ns)
 
 
+def test_configured_trailer_separators_still_yield_every_declaration(tmp_path: Path) -> None:
+    """F6-6: user or system Git configuration never changes the parsed trailer text."""
+    ns = _build(tmp_path)
+    config = tmp_path / "gitconfig"
+    config.write_text("[trailer]\n\tseparators = =:\n", encoding="utf-8")
+    env = _env(ns)
+    env["GIT_CONFIG_GLOBAL"] = str(config)
+    result = _run_script(ns, env, "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert sorted(line.split()[1] for line in _closes(ns)) == sorted(DECLARED)
+
+
 def test_utf8_output_survives_ascii_locale(tmp_path: Path) -> None:
     """Git, wrapper diagnostics and the summary work without locale UTF-8."""
     ns = _build(tmp_path)

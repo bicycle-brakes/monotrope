@@ -94,6 +94,19 @@ class PreflightError(RuntimeError):
     """A precondition failed — nothing may be attempted."""
 
 
+def _neutral_git_env() -> dict[str, str]:
+    """Environment for every Git call: no user or system configuration applies.
+
+    A setting such as ``trailer.separators`` changes how Git formats parsed
+    trailers, so a configured machine would silently lose declarations.
+    """
+    env = dict(os.environ)
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_CONFIG_SYSTEM"] = os.devnull
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return env
+
+
 def _git_bytes(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> bytes:
     try:
         erg = subprocess.run(
@@ -101,6 +114,7 @@ def _git_bytes(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> bytes:
             cwd=repo,
             capture_output=True,
             timeout=timeout,
+            env=_neutral_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PreflightError(f"git {args[0]} failed: {exc}") from None

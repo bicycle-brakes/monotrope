@@ -174,6 +174,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-03
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs.
+
 ## Time used
 
 2026-10-31 09:39:20–10:37:10 UTC, 3470 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -203,3 +207,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-01 22:53:58–23:52:12 UTC, 3493 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-02 22:03:36–23:51:36 UTC, 6480 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-02 23:51:45–2026-11-03 00:32:05 UTC, 2420 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 13:24:05–13:41:21 UTC, 1036 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
