@@ -181,15 +181,12 @@ def insert_entry(text: str, entry: str, *, prior: str | None = None) -> str:
 def publish_atomic(plan: Path, content: bytes) -> None:
     """Replace `plan` with `content`: temporary file, fsync, rename, directory fsync; the mode is kept.
 
+    The destination must already exist; a missing plan is never recreated.
     Failures before replacement leave the plan unchanged and remove the temporary
     file. After replacement, a directory failure raises `PublishedButNotSynced`:
     the record is already written and callers must not report it as unwritten.
     """
-    try:
-        mode = plan.stat().st_mode & 0o7777
-    except FileNotFoundError:
-        plan.write_bytes(content)  # nothing earlier to lose; the process umask applies as for any new file
-        return
+    mode = plan.stat().st_mode & 0o7777
     handle, name = tempfile.mkstemp(prefix=f".{plan.name}.", suffix=".tmp", dir=plan.parent)
     temporary = Path(name)
     try:

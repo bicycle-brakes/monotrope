@@ -251,3 +251,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > | R4 | MINOR | MAINT | scripts/harness.py, `time_log` (`--route`) | The command accepts any non-blank route with no relation to who calls it, so an interactive session following the prompt incompletely can pass e.g. `--route flash` and the report's fixed-format attempt rows will present an interactive span as a runner-model attempt; nothing at the command boundary warns or refuses, although the spec's `[DETAIL]` and `docs/WORKFLOW.md` both pin `route orchestrator` as the marker of a session-logged span.
 
 Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 844 files, 3116 commits, 12 rules.

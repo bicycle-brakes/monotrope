@@ -214,6 +214,26 @@ def test_publication_failure_preserves_plan(tmp_path: Path, monkeypatch: pytest.
     assert any("could not write the record" in row for row in out)
 
 
+def test_plan_removed_before_publication_is_not_recreated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4: a plan removed after validation is refused rather than recreated."""
+    root = make_repo(tmp_path)
+    plan = root / "plans" / "changes" / "demo" / "plan.md"
+    real_publish = time_records.publish_atomic
+
+    def remove_before_publish(destination: Path, content: bytes) -> None:
+        destination.unlink()
+        real_publish(destination, content)
+
+    monkeypatch.setattr(time_records, "publish_atomic", remove_before_publish)
+    code, out = run_log(root)
+
+    assert code == 2
+    assert not plan.exists()
+    assert list(plan.parent.iterdir()) == []
+    assert any("could not write the record" in row for row in out)
+    assert "Nothing was written." in out
+
+
 def test_dispatch_leaves_the_decide_adr_route_intact(tmp_path: Path) -> None:
     """The public CLI keeps its ADR behavior: time-log needs no provenance map, decide adr still refuses without one."""
     root = make_repo(tmp_path)
