@@ -275,6 +275,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ratchet-mutation-evidence/plan.md`](changes/ratchet-mutation-evidence/plan.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/ratchet-mutation-evidence/research.md`](changes/ratchet-mutation-evidence/research.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/ratchet-mutation-evidence/spec.md`](changes/ratchet-mutation-evidence/spec.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
+| [`changes/recheck-scope/research.md`](changes/recheck-scope/research.md) | draft | none | 2026-11-03 | coding-harness-har2 |
 | [`changes/red-first-install/decisions.md`](changes/red-first-install/decisions.md) | draft | none | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/findings.md`](changes/red-first-install/findings.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
