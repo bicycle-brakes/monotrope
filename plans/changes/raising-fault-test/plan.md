@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-03
 last_reviewed: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-xrzf
@@ -53,8 +53,8 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_implement_prompt_covers_a_fault_that_raises — missing or reversed guidance on the implement surface passes unnoticed
-- 2: not yet written tests/test_stage2.py::test_repair_prompts_cover_a_fault_that_raises — either repair variant loses the specific catch, assert or pytest.fail guidance
+- 1: tests/test_stage2.py::test_implement_prompt_covers_a_fault_that_raises — missing or reversed guidance on the implement surface passes unnoticed
+- 2: tests/test_stage2.py::test_repair_prompts_cover_a_fault_that_raises — either repair variant loses the specific catch, assert or pytest.fail guidance
 - 3: tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — qualifying assertion proof is refused
 - 3: tests/test_stage2.py::test_red_first_accepts_pytest_failed_call_outcomes — qualifying pytest failed-outcome proof is refused
 - 3: tests/test_stage2.py::test_red_first_refuses_non_assertion_call_failures — an unrelated exception qualifies
@@ -62,4 +62,10 @@ make verify
 - 3: tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes — a skipped or incomplete run qualifies
 - 3: tests/test_stage2.py::test_red_first_refuses_missing_or_invalid_evidence — missing or malformed proof qualifies
 
+## Runner route — 2026-11-03
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Flash route fails with unrecognized_model since 2026-11-03 (bead coding-harness-ygsw).
+
 ## Time used
+
+2026-11-03 22:22:25–23:28:57 UTC, 3991 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

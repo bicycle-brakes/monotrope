@@ -11348,6 +11348,68 @@ def test_repair_rejects_malformed_known_fixed_lines(world: World, bad: str, prob
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
 
+RAISING_FAULT_SENTENCE = (
+    "When the fault itself raises an exception, catch that specific exception in the regression test body "
+    "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
+)
+
+
+def raising_fault_guidance_gaps(text: str) -> list[str]:
+    """Name what the instruction text lacks about expressing a raising fault as a failed expectation."""
+    text = flat(text)
+    gaps = []
+    if "When the fault itself raises an exception" not in text:
+        gaps.append("raising fault case")
+    if "catch that specific exception in the regression test body" not in text:
+        gaps.append("specific exception caught in the test body")
+    if "`assert`" not in text:
+        gaps.append("assert form")
+    if "`pytest.fail`" not in text:
+        gaps.append("pytest.fail form")
+    if "fail with" not in text or "pass with" in text or "treat the uncaught" in text:
+        gaps.append("failure, not a pass")
+    return gaps
+
+
+def planted_raising_fault_variants() -> dict[str, str]:
+    sentence = RAISING_FAULT_SENTENCE
+    return {
+        "sentence removed": "",
+        "catch instruction removed": sentence.replace(
+            "catch that specific exception in the regression test body", "run"
+        ),
+        "assert removed": sentence.replace("`assert` or ", ""),
+        "pytest.fail removed": sentence.replace(" or `pytest.fail`", ""),
+        "reversed to passing": sentence.replace("fail with", "pass with"),
+    }
+
+
+def test_repair_prompts_cover_a_fault_that_raises() -> None:
+    """Criterion 2. Planted faults: sentence, specific-exception catch, assert, pytest.fail removed; reversal to passing."""
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(text), name
+    assert raising_fault_guidance_gaps(RAISING_FAULT_SENTENCE) == []
+    for instructions in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
+        assert raising_fault_guidance_gaps(instructions) == []
+        assert RAISING_FAULT_SENTENCE in flat(instructions)
+        for name, text in planted_raising_fault_variants().items():
+            mutated = flat(instructions).replace(RAISING_FAULT_SENTENCE, text)
+            assert raising_fault_guidance_gaps(mutated), name
+
+
+def test_implement_prompt_covers_a_fault_that_raises() -> None:
+    """Criterion 1. Planted faults: as for the repair prompts, applied to the implement prompt's own text."""
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(text), name
+    prompt = flat((REPO_ROOT / "prompts" / "04-implement.md").read_text(encoding="utf-8"))
+    if RAISING_FAULT_SENTENCE not in prompt:
+        # The prompt is a held path: the orchestrator adds the sentence in the bootstrap step and removes this skip.
+        pytest.skip("prompts/04-implement.md does not carry the sentence yet (orchestrator bootstrap)")
+    assert raising_fault_guidance_gaps(prompt) == []
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(prompt.replace(RAISING_FAULT_SENTENCE, text)), name
+
+
 def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> None:
     """Criterion 9. Planted fault: the prompt forbids all prose again, or the workflow omits the hand-repair rule."""
     answer = flat(stage2.REPAIR_ANSWER)
