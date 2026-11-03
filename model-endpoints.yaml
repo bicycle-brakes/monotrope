@@ -210,13 +210,13 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
-        gelesen: "2026-10-07"
-        valid_until: "2026-11-06"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        gelesen: "2026-11-03"
+        valid_until: "2026-12-03"
+        quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there); re-read 2026-11-03: 'MiMo-V2.6-Pro | Not used | 0 days', no end date stated, so gelesen plus 30 days (ADR 0022)"
         aufbewahrung: "0 days"
         training: "Not used"
         anfragen_5h: 3250
-        anfragen_gelesen: "2026-10-17"
+        anfragen_gelesen: "2026-11-03"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       longcat-2.0:
         gelesen: "2026-10-17"
