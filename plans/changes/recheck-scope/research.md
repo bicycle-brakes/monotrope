@@ -11,6 +11,7 @@ bead: coding-harness-har2
 owner: framework-architect
 provenance: human-written
 tags: [research]
+neighbours: []
 ---
 
 # recheck scope — Research
