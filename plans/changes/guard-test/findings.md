@@ -1712,7 +1712,7 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6362 | A literal U+2028 inside a string before the test definitions shifts source extraction: AST line numbers count physical Python lines, while `splitlines()` also splits that character. Reproduced with adjacent `test_other` and `test_fix` definitions: `_function_source` returns the neighbour’s `STAGE2_PLANT_FAULT` assignment as part of `test_fix`, although the selected function contains no reference. Conversely, a valid guard’s final switch-bearing line is omitted. The source-presence check therefore accepts another test’s reference or refuses a valid guard. [Criterion 6] | Codex | taken — reproduced fault in spec, standing rule 2026-11-03: extract the function's source with `ast.get_source_segment` (or split on newline characters only), with the U+2028 case as a test |  |
+| F-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6362 | A literal U+2028 inside a string before the test definitions shifts source extraction: AST line numbers count physical Python lines, while `splitlines()` also splits that character. Reproduced with adjacent `test_other` and `test_fix` definitions: `_function_source` returns the neighbour’s `STAGE2_PLANT_FAULT` assignment as part of `test_fix`, although the selected function contains no reference. Conversely, a valid guard’s final switch-bearing line is omitted. The source-presence check therefore accepts another test’s reference or refuses a valid guard. [Criterion 6] | Codex | fixed — tests/test_stage2.py::test_guard_source_uses_python_lines_with_unicode_separator |  |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1728,3 +1728,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a1a311-734b-79c3-b787-b8a27964bfaf, 2026-11-03
 Reviewer session: codex 01a1a311-734b-79c3-b787-b8a27964bfaf — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3204 commits, 12 rules.

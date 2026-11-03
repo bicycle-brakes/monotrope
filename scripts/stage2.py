@@ -6359,7 +6359,9 @@ def _function_source(body: str, function: str) -> str:
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == function:
             start = min([node.lineno, *(item.lineno for item in node.decorator_list)])
-            return "\n".join(body.splitlines()[start - 1 : node.end_lineno])
+            # AST lines follow Python newlines; Unicode separators inside strings
+            # are source characters, not extra lines (unlike str.splitlines).
+            return "\n".join(re.split(r"\r\n?|\n", body)[start - 1 : node.end_lineno])
     return ""
 
 

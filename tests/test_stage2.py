@@ -13812,6 +13812,17 @@ def test_guard_proof_scrubs_failure_diagnostics(world: World, monkeypatch: pytes
     assert "tests/test_fix.py::test_fix" in outcome, outcome
 
 
+def test_guard_source_uses_python_lines_with_unicode_separator() -> None:
+    """Criterion 6: a string's U+2028 must neither import nor hide a switch reference."""
+    prefix = "separator = '\u2028'\n"
+    neighbour = "def test_other():\n    STAGE2_PLANT_FAULT = True\n"
+    selected = "def test_fix():\n    assert True\n"
+    assert stage2._function_source(prefix + neighbour + selected, "test_fix") == selected.rstrip("\n")
+
+    guarded = "@decorate\nasync def test_fix():\n    STAGE2_PLANT_FAULT = True\n"
+    assert stage2._function_source(prefix + guarded, "test_fix") == guarded.rstrip("\n")
+
+
 def test_guard_switch_must_appear_in_the_named_test(world: World) -> None:
     """Criterion 6. Planted fault: another function's switch reference satisfies the source check."""
     assert "STAGE2_PLANT_FAULT" not in stage2._function_source(SWITCH_ELSEWHERE_TEST, "test_fix")
