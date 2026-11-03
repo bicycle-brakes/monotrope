@@ -5833,49 +5833,81 @@ def _private_repository(root: Path, destination: Path, checkout: str) -> None:
     _git_output(destination, "read-tree", "--reset", "-u", checkout)
 
 
-def _raw_ref_store(root: Path) -> dict[str, bytes]:
-    """Measure private reference files, including symbolic refs Git cannot resolve."""
+def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
+    """Measure logical private refs, refusing nonregular entries before Git reads them."""
     store = root / ".git"
-    refs = store / "refs"
+    names: set[str] = set()
 
-    def unreadable(error: OSError) -> None:
-        if isinstance(error, FileNotFoundError) and error.filename == str(refs):
-            return  # A removed refs directory is measured as removal of all its files.
-        raise error
+    def regular(path: Path) -> bool:
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISREG(mode):
+            raise Refused(f"the private reference entry is not a regular file: {path.relative_to(store)}")
+        return True
 
-    snapshot: dict[str, bytes] = {}
-    for name in ("HEAD", "packed-refs"):
-        # Absence is state too: tests can delete HEAD, and Git need not pack refs.
-        with contextlib.suppress(FileNotFoundError):
-            snapshot[name] = (store / name).read_bytes()
-    for directory, _, files in os.walk(refs, onerror=unreadable):
-        for name in files:
-            path = Path(directory) / name
-            snapshot[path.relative_to(store).as_posix()] = path.read_bytes()
+    def walk(directory: Path) -> None:
+        try:
+            mode = directory.lstat().st_mode
+        except FileNotFoundError:
+            return
+        if not stat.S_ISDIR(mode):
+            raise Refused(f"the private reference entry is not a directory: {directory.relative_to(store)}")
+        for path in directory.iterdir():
+            mode = path.lstat().st_mode
+            if stat.S_ISDIR(mode):
+                walk(path)
+            elif regular(path):
+                names.add(path.relative_to(store).as_posix())
+
+    walk(store / "refs")
+    if not regular(store / "HEAD"):
+        raise Refused("the private reference HEAD is missing")
+    names.add("HEAD")
+    packed = store / "packed-refs"
+    if regular(packed):
+        for line in packed.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith(("#", "^")):
+                continue
+            _, separator, name = line.partition(" ")
+            if not separator or not name.startswith("refs/"):
+                raise Refused("the private packed-refs listing is malformed")
+            names.add(name)
+    snapshot = {}
+    for name in sorted(names):
+        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow=(0, 1)).strip()
+        if symbolic:
+            snapshot[name] = ("symbolic", symbolic)
+        else:
+            target = _git_output(root, "rev-parse", "--verify", "-q", name).strip()
+            snapshot[name] = ("object", target)
     return snapshot
 
 
 def _proof_reference_guard(
-    root: Path, before: dict[str, str], test: str, key: str | None, raw_before: dict[str, bytes] | None
+    root: Path, before: dict[str, str], test: str, key: str | None, logical_before: dict[str, tuple[str, str]] | None
 ) -> str | None:
     """Measure private refs before disposal, with one scrubbed verdict for both proof paths."""
     changed: set[str] = set()
     faults = []
+    if logical_before is not None:
+        try:
+            logical_after = _proof_ref_targets(root)
+        except Exception as error:
+            # Do not let Git inspect an entry the safe walk has already refused.
+            return scrub(f"{test}: the private logical ref listing failed ({error})", key)
+        changed.update(
+            name
+            for name in logical_before.keys() | logical_after.keys()
+            if logical_before.get(name) != logical_after.get(name)
+        )
     try:
         after = _ref_targets(root)
     except Exception as error:
         faults.append(f"the private ref listing failed ({error})")
     else:
         changed.update(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
-    if raw_before is not None:
-        try:
-            raw_after = _raw_ref_store(root)
-        except Exception as error:
-            faults.append(f"the private raw ref listing failed ({error})")
-        else:
-            changed.update(
-                path for path in raw_before.keys() | raw_after.keys() if raw_before.get(path) != raw_after.get(path)
-            )
     if changed:
         faults.append("refs changed while the named test ran: " + ", ".join(sorted(changed)))
     return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
@@ -5908,7 +5940,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     cleanup = None
     named: list[str] = []
     refs_before: dict[str, str] | None = None
-    raw_refs_before: dict[str, bytes] | None = None
+    logical_refs_before: dict[str, tuple[str, str]] | None = None
     tree_before: str | None = None
     private: Path | None = None
     ref_fault = None
@@ -5923,8 +5955,8 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         # read refuses the proof instead of running older bytes.
         fixed_tree = worktree_tree(root)
         _private_repository(root, private, fixed_tree)
+        logical_refs_before = _proof_ref_targets(private)
         refs_before = _ref_targets(private)
-        raw_refs_before = _raw_ref_store(private)
         tree_before = worktree_tree(private)
         # One machine-wide admission around the timed proof; queue and memory waits consume
         # none of the proof's time limit (bead coding-harness-p6mu).
@@ -5961,7 +5993,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
             # launch failure or a timeout exactly as on a finished run; the source's refs are not
             # an acceptance condition and are not read here.
             if refs_before is not None and private is not None:
-                ref_fault = _proof_reference_guard(private, refs_before, test, key, raw_refs_before)
+                ref_fault = _proof_reference_guard(private, refs_before, test, key, logical_refs_before)
             if tree_before is not None and private is not None:
                 try:
                     tree_now = worktree_tree(private)
@@ -6022,7 +6054,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     outcome = None
     cleanup = None
     refs_before: dict[str, str] | None = None
-    raw_refs_before: dict[str, bytes] | None = None
+    logical_refs_before: dict[str, tuple[str, str]] | None = None
     ref_fault = None
     try:
         tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
@@ -6052,8 +6084,8 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
         if outcome is None:
             # A failed snapshot fails the attempt, because branch state could not be proven preserved.
             try:
+                logical_refs_before = _proof_ref_targets(tree)
                 refs_before = _ref_targets(tree)
-                raw_refs_before = _raw_ref_store(tree)
             except Refused as error:
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
@@ -6134,7 +6166,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                 # The private store's own names and targets, compared before the store is deleted: a
                 # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
                 # or reset here - the comparison is the whole verdict.
-                ref_fault = _proof_reference_guard(tree, refs_before, test, key, raw_refs_before)
+                ref_fault = _proof_reference_guard(tree, refs_before, test, key, logical_refs_before)
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)

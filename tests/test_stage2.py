@@ -12017,6 +12017,55 @@ def test_proofs_preserve_existing_symbolic_refs(world: World, monkeypatch: pytes
 
 
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_accept_packing_unchanged_refs(world: World, proof: str) -> None:
+    """F-8: moving loose refs into packed-refs changes no logical reference."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    git(world.root, "update-ref", "refs/heads/main", baseline)
+    selector = "tests/test_write.py::test_write"
+    (world.root / "tests" / "test_write.py").write_text(ref_writing_test(("pack-refs", "--all")), encoding="utf-8")
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, outcome
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_fifo_refs_promptly(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """F-9: a nonregular ref is named and cleaned up without reading a blocking FIFO."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    selector = "tests/test_write.py::test_write"
+    source = ref_writing_test().replace(
+        "def test_write():\n",
+        "def test_write():\n    import os\n    os.mkfifo('.git/refs/heads/probe')\n",
+    )
+    (world.root / "tests" / "test_write.py").write_text(source, encoding="utf-8")
+    original = stage2._private_repository
+    private = []
+
+    def preparing(root, destination, checkout):
+        original(root, destination, checkout)
+        private.append(destination)
+
+    monkeypatch.setattr(stage2, "_private_repository", preparing)
+    expired = []
+
+    def deadline(_signum, _frame):
+        expired.append(True)
+        raise TimeoutError("FIFO reference measurement blocked")
+
+    previous = signal.signal(signal.SIGALRM, deadline)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, 10)
+        outcome = run_proof(world, proof, selector, baseline)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+    assert not expired, "reference measurement blocked on a FIFO"
+    assert outcome is not None and "refs/heads/probe" in outcome and selector in outcome, outcome
+    assert private and not private[0].parent.exists()
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_refuse_dangling_symbolic_ref(world: World, proof: str) -> None:
     """F-7: an unresolved symbolic ref is absent from for-each-ref but still changes the store."""
     baseline = repair_world(world)
@@ -12041,7 +12090,7 @@ def test_proofs_refuse_dangling_symbolic_ref(world: World, proof: str) -> None:
 def test_proofs_refuse_raw_reference_file_changes(
     world: World, monkeypatch: pytest.MonkeyPatch, proof: str, path: str, operation: str
 ) -> None:
-    """Raw files protect unresolved refs and byte changes absent from the resolved reference map."""
+    """Logical changes to unresolved refs are refused; equivalent reference files are accepted."""
     baseline = repair_world(world)
     plant_proof(world, proof)
     original = stage2._private_repository
@@ -12055,6 +12104,10 @@ def test_proofs_refuse_raw_reference_file_changes(
     selector = "tests/test_write.py::test_write"
     source = ref_writing_test()
     mutation = "    ref.unlink()\n" if operation == "delete" else "    ref.write_bytes(ref.read_bytes() + b'\\n')\n"
+    if operation == "rewrite" and path == "packed-refs":
+        mutation = "    ref.write_bytes(ref.read_bytes().replace(b' sorted', b''))\n"
+    if operation == "rewrite" and path == "refs/heads/unresolved":
+        mutation = "    ref.write_text('ref: refs/heads/another-missing\\n')\n"
     (world.root / "tests" / "test_write.py").write_text(
         source.replace(
             "def test_write():\n",
@@ -12063,7 +12116,10 @@ def test_proofs_refuse_raw_reference_file_changes(
         encoding="utf-8",
     )
     outcome = run_proof(world, proof, selector, baseline)
-    assert outcome is not None and path in outcome and selector in outcome, outcome
+    if path == "packed-refs" or (operation == "rewrite" and path == "HEAD"):
+        assert outcome is None, outcome
+    else:
+        assert outcome is not None and path in outcome and selector in outcome, outcome
 
 
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
@@ -12071,10 +12127,10 @@ def test_proofs_refuse_raw_reference_file_changes(
 def test_proofs_refuse_raw_reference_measurement_failure(
     world: World, monkeypatch: pytest.MonkeyPatch, proof: str, point: int
 ) -> None:
-    """A failed raw snapshot before or after execution refuses and still removes the private store."""
+    """A failed logical snapshot before or after execution refuses and still removes the private store."""
     baseline = repair_world(world)
     selector = plant_proof(world, proof)
-    original = stage2._raw_ref_store
+    original = stage2._proof_ref_targets
     measured = []
 
     def failing(root):
@@ -12083,7 +12139,7 @@ def test_proofs_refuse_raw_reference_measurement_failure(
             raise OSError("planted raw reference measurement failure")
         return original(root)
 
-    monkeypatch.setattr(stage2, "_raw_ref_store", failing)
+    monkeypatch.setattr(stage2, "_proof_ref_targets", failing)
     outcome = run_proof(world, proof, selector, baseline)
     assert outcome is not None and "planted raw reference measurement failure" in outcome, outcome
     assert selector in outcome
