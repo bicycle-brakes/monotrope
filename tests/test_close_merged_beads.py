@@ -617,7 +617,9 @@ def test_log_failure_is_preflight_failure(tmp_path: Path) -> None:
     real_git = shutil.which("git")
     wrapper = bindir / "git"
     wrapper.write_text(
-        f'#!/bin/sh\nif [ "$1" = log ]; then echo "broken history" >&2; exit 2; fi\nexec "{real_git}" "$@"\n'
+        "#!/bin/sh\n"
+        'if [ "$1" = -c ] && [ "$3" = log ]; then echo "broken history" >&2; exit 2; fi\n'
+        f'exec "{real_git}" "$@"\n'
     )
     wrapper.chmod(0o755)
     env = _env(ns)
@@ -878,6 +880,47 @@ def test_configured_trailer_separators_still_yield_every_declaration(tmp_path: P
     result = _run_script(ns, env, "--write")
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert sorted(line.split()[1] for line in _closes(ns)) == sorted(DECLARED)
+
+
+def test_runtime_git_configuration_still_yields_every_declaration(tmp_path: Path) -> None:
+    """Runtime configuration cannot hide any merged completion declaration."""
+    for name, settings in (
+        (
+            "count",
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "trailer.separators",
+                "GIT_CONFIG_VALUE_0": "=:",
+            },
+        ),
+        ("parameters", {"GIT_CONFIG_PARAMETERS": "'trailer.separators'='=:'"}),
+        ("invalid-count", {"GIT_CONFIG_COUNT": "invalid"}),
+        ("invalid-parameters", {"GIT_CONFIG_PARAMETERS": "not quoted configuration"}),
+    ):
+        ns = _build(tmp_path, name=name)
+        # File configuration must also lose to the explicit command setting;
+        # invalid runtime configuration must be dropped before Git parses it.
+        _git(ns.klon, "config", "trailer.separators", "=:")
+        env = _env(ns)
+        env.update(settings)
+        result = _run_script(ns, env, "--write")
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert sorted(line.split()[1] for line in _closes(ns)) == sorted(DECLARED)
+
+
+def test_control_bytes_in_trailer_values_never_close_partial_identifiers(tmp_path: Path) -> None:
+    """Record and field separators in a logical value remain malformed values."""
+    ns = _build(tmp_path)
+    controls = ("\x1e", "\x1f", "\x01", "\x0b", "\x0c")
+    commits = []
+    for control in controls:
+        commits.append(_commit(ns.origin, f"malformed control trailer\n\nCloses-Bead: {REAL_A}{control}{REAL_B}"))
+    result = _run_script(ns, _env(ns), "--write")
+    assert {line.split()[1] for line in _closes(ns)} == set(DECLARED)
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert result.stderr.count("malformed Closes-Bead value") == len(controls)
+    for sha, control in zip(commits, controls, strict=True):
+        assert f"in {sha}: {REAL_A + control + REAL_B!r}" in result.stderr
 
 
 def test_utf8_output_survives_ascii_locale(tmp_path: Path) -> None:

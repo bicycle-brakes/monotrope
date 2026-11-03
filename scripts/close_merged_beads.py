@@ -78,10 +78,9 @@ FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 MERGE_PULL_REQUEST = re.compile(r"^Merge pull request #(\d+)\b")
 SQUASH_NUMBER = re.compile(r"\(#(\d+)\)$")
 
-# One record per commit, delimited by 0x1e, fields by NUL: sha, subject, and
-# the unfolded trailer lines Git parsed. Only exact ``Closes-Bead:`` keys close;
-# case variants are reported as malformed rather than silently ignored.
-LOG_FORMAT = "%H%x00%s%x00%(trailers:only=true,unfold=true)%x1e"
+# Read each commit separately, with NUL-framed subject and logical trailers.
+# Unlike control bytes such as 0x1e, NUL cannot occur in a commit message.
+COMMIT_FORMAT = "%s%x00%(trailers:only=true,unfold=true)%x00"
 
 GIT_TIMEOUT = 30.0
 FETCH_TIMEOUT = 60.0
@@ -100,7 +99,9 @@ def _neutral_git_env() -> dict[str, str]:
     A setting such as ``trailer.separators`` changes how Git formats parsed
     trailers, so a configured machine would silently lose declarations.
     """
-    env = dict(os.environ)
+    # Runtime configuration (COUNT/KEY_n/VALUE_n and PARAMETERS) overrides
+    # config files too. Drop the entire namespace before setting our own paths.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_CONFIG_")}
     env["GIT_CONFIG_GLOBAL"] = os.devnull
     env["GIT_CONFIG_SYSTEM"] = os.devnull
     env["GIT_CONFIG_NOSYSTEM"] = "1"
@@ -110,7 +111,7 @@ def _neutral_git_env() -> dict[str, str]:
 def _git_bytes(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> bytes:
     try:
         erg = subprocess.run(
-            ["git", *args],
+            ["git", "-c", "trailer.separators=:", *args],
             cwd=repo,
             capture_output=True,
             timeout=timeout,
@@ -191,19 +192,24 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
     malformed): bead id -> (declaring sha, subject), and the malformed values
     with their commits.
     """
-    out = _git_bytes(root, "log", f"--format={LOG_FORMAT}", pinned)
+    out = _git_bytes(root, "log", "-z", "--format=%H", pinned)
     declarations: dict[str, tuple[str, str]] = {}
     malformed: list[tuple[str, str]] = []
     prefix = f"{TRAILER_KEY}:".encode("ascii")
-    for record in out.split(b"\x1e"):
-        fields = record.split(b"\x00")
-        if len(fields) < 3:
+    for raw_sha in out.split(b"\x00"):
+        if not raw_sha:
             continue
-        sha = fields[0].strip().decode("ascii")
-        subject = fields[1].decode("utf-8", errors="replace")
+        sha = raw_sha.decode("ascii")
+        if not FULL_SHA.fullmatch(sha):
+            raise PreflightError("merged history returned an invalid commit SHA")
+        record = _git_bytes(root, "show", "--no-patch", f"--format={COMMIT_FORMAT}", sha)
+        fields = record.split(b"\x00")
+        if len(fields) != 3 or fields[2] != b"\n":
+            raise PreflightError(f"cannot read complete trailer fields for {sha}")
+        subject = fields[0].decode("utf-8", errors="replace")
         # Only Git's LF separates logical trailers. Read bytes so universal
         # newline decoding cannot turn a CR inside a value into a boundary.
-        for line in fields[2].split(b"\n"):
+        for line in fields[1].split(b"\n"):
             if not line.lower().startswith(prefix.lower()):
                 continue
             # Git emits one formatting space after the colon. Remove only
