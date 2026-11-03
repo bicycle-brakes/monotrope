@@ -29,8 +29,9 @@ ACCEPTED = "accepted"
 REJECTED = "rejected"
 RESULTS = (ACCEPTED, REJECTED)
 STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+LINE_SEPARATORS = frozenset("\n\r\v\f\x1c\x1d\x1e\x85  ")
 
-TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
+TIME_HEADING = re.compile(r"^## Time used[ \t]*\r?$", re.M)
 FOLLOWING_HEADING = re.compile(r"^## [^#]", re.M)
 RECORD = re.compile(
     r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}:\d{2})"
@@ -80,6 +81,9 @@ def _check_word(field: str, value: str) -> None:
         raise ValueError(f"{field} must not carry the `·` separator")
     if any(ord(character) < 32 or ord(character) == 127 for character in value):
         raise ValueError(f"{field} must not carry control characters")
+    # Every line break the reader's `splitlines` recognises would split the record into unread lines.
+    if len(value.splitlines()) != 1 or any(character in LINE_SEPARATORS for character in value):
+        raise ValueError(f"{field} must not carry a line separator")
 
 
 def format_entry(
@@ -100,8 +104,8 @@ def format_entry(
     """
     if not isinstance(start, datetime) or not isinstance(end, datetime):
         raise ValueError("start and end must be datetimes")
-    if end < start:
-        raise ValueError("end must not lie before start")
+    # No ordering check: a completed runner attempt keeps its entry when the wall clock moved
+    # backward; the caller that takes endpoints from a person (`time-log`) checks the order itself.
     if not isinstance(seconds, int) or isinstance(seconds, bool) or seconds < 0:
         raise ValueError("seconds must be a whole number of at least 0")
     if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 1:
@@ -173,9 +177,10 @@ def insert_entry(text: str, entry: str, *, prior: str | None = None) -> str:
         next_heading = FOLLOWING_HEADING.search(prior[previous.end() :])
         previous_end = previous.end() + next_heading.start() if next_heading else len(prior)
         body = prior[previous.end() : previous_end]
-    body = body.rstrip() or "\n"
+    eol = "\r\n" if "\r\n" in text[match.end() : end] else "\n"
+    body = body.rstrip() or eol
     tail = text[end:]
-    return text[: match.end()] + body + "\n" + entry + "\n" + (f"\n{tail}" if tail else "")
+    return text[: match.end()] + body + eol + entry + eol + (f"{eol}{tail}" if tail else "")
 
 
 def publish_atomic(plan: Path, content: bytes) -> None:
@@ -226,7 +231,7 @@ def write_entry(
     successful publish wrote, so a retry can keep them in its snapshot.
     """
     if text is None:
-        text = plan.read_text(encoding="utf-8")
+        text = plan.read_bytes().decode("utf-8")
     content = insert_entry(text, entry, prior=prior).encode("utf-8")
     (publish if publish is not None else publish_atomic)(plan, content)
     return content

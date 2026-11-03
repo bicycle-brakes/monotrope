@@ -144,7 +144,9 @@ def test_validation_refuses_malformed_fields() -> None:
         {**ok, "seconds": 1.5},
         {**ok, "attempt": 0},
         {**ok, "result": "maybe"},
-        {**ok, "end": START - dt.timedelta(seconds=1)},  # the end before the start
+        {**ok, "model": "glm x"},
+        {**ok, "verb": "a b"},
+        {**ok, "route": "a\x85b"},
         {**ok, "verb": ""},
         {**ok, "verb": "implement · extra"},
         {**ok, "route": "orchestrator\n"},
@@ -160,6 +162,18 @@ def test_validation_refuses_malformed_fields() -> None:
     with pytest.raises(ValueError):
         time_records.parse_stamp("2026-10-31T10:00:00+01:00")
     assert time_records.parse_stamp("2026-10-31T10:00:00Z") == dt.datetime(2026, 10, 31, 10, 0, 0, tzinfo=dt.UTC)
+
+
+def test_backward_clock_keeps_the_runner_entry_and_crlf_survives() -> None:
+    """F6-1 and F6-3. Planted fault: an end before the start raises, or CRLF bytes are rewritten."""
+    earlier = START - dt.timedelta(seconds=5)
+    line = time_records.format_entry(START, earlier, 30, "implement", 1, "flash", "m", "accepted")
+    parsed = time_records.parse_entry(line)
+    assert parsed is not None and parsed.seconds == 30
+    text = "---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Next\r\nkeep\r\n"
+    combined = time_records.insert_entry(text, line)
+    head = "---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n"
+    assert combined == head + line + "\r\n\r\n## Next\r\nkeep\r\n"
 
 
 def test_section_reader_names_the_exact_reason(tmp_path: Path) -> None:

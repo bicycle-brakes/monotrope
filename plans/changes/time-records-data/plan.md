@@ -163,6 +163,10 @@ coding-harness-ut8q). Rounds 1–3 were repaired or decided; round 4 was
 stopped by the orchestrator's time limit and left no rows. The maintainer
 also confirmed the orchestrator's hand acceptance recorded below.
 
+## Runner route — 2026-11-03
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs; second Sonnet run after a ValueError-shaped red-first proof (a regression test must fail by assertion, e.g. pytest.fail on the caught ValueError).
+
 ## Time used
 
 2026-11-02 23:57:37–2026-11-03 00:54:37 UTC, 3420 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -170,3 +174,5 @@ also confirmed the orchestrator's hand acceptance recorded below.
 2026-11-03 01:03:05–01:03:58 UTC, 53 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-03 02:28:54–02:45:54 UTC, 1020 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-03 03:01:25–03:17:23 UTC, 957 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 14:01:29–14:02:21 UTC, 53 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-03 — hand acceptance of the phase-6 repair (F6-1 to F6-3): the second Sonnet attempt (route stage-1, Codex at its usage limit) failed only because `TIME_HEADING` did not match a CRLF heading; the orchestrator added `\r?` to it. The two new tests are red on the baseline (one by ValueError, so no runner proof) and green after; `make verify` green. Earlier attempts saved at refs/stage2/attempts/time-records-data/orchestrator-saved-20261103b.

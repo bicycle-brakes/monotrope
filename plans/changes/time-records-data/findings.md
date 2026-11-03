@@ -270,9 +270,9 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:103; scripts/stage2.py:7349 | If UTC moves backward during a completed attempt, the new formatter raises `ValueError` despite a valid monotonic duration. The runner sets `logged = True` before formatting, so its exception handler skips recovery: no time entry is persisted and checkpointing aborts. The previous formatter recorded this case successfully. Completed attempts must retain their exactly-once measurement contract despite wall-clock adjustments. [AC 2, 3, 6] | Codex | taken — maintainer 2026-11-03: a completed attempt keeps its exactly-once time entry when UTC moves backward (AC 2, 3, 6) | — |
-| F6-2 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:76 | Metadata validation accepts embedded Unicode line separators such as U+2028. Reproduced with that character inside `--model`: `time-log` returns 0, but the report splits the resulting record into two unread lines and counts zero of its supplied 60 seconds. Reject every newline recognized by the reader before publication. [AC 1, 4, 7] | Codex | taken — maintainer 2026-11-03: reject every line separator the reader recognises, U+2028 included (AC 1, 4, 7) | — |
-| F6-3 | MINOR | SPEC | Phase 6 | scripts/harness.py:403 | Reading the plan with `read_text()` normalizes CRLF line endings before publication. An otherwise valid invocation therefore rewrites line endings throughout existing history and following sections; an in-memory command reproduction changed all ten existing CRLF endings to LF. Preserve unrelated plan bytes when appending the record and stamping `updated:`. [AC 5] | Codex | taken — maintainer 2026-11-03: appending the record and stamping updated: keep unrelated plan bytes, CRLF included (AC 5) | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:103; scripts/stage2.py:7349 | If UTC moves backward during a completed attempt, the new formatter raises `ValueError` despite a valid monotonic duration. The runner sets `logged = True` before formatting, so its exception handler skips recovery: no time entry is persisted and checkpointing aborts. The previous formatter recorded this case successfully. Completed attempts must retain their exactly-once measurement contract despite wall-clock adjustments. [AC 2, 3, 6] | Codex | fixed — tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:76 | Metadata validation accepts embedded Unicode line separators such as U+2028. Reproduced with that character inside `--model`: `time-log` returns 0, but the report splits the resulting record into two unread lines and counts zero of its supplied 60 seconds. Reject every newline recognized by the reader before publication. [AC 1, 4, 7] | Codex | fixed — tests/test_time_records.py::test_validation_refuses_malformed_fields — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
+| F6-3 | MINOR | SPEC | Phase 6 | scripts/harness.py:403 | Reading the plan with `read_text()` normalizes CRLF line endings before publication. An otherwise valid invocation therefore rewrites line endings throughout existing history and following sections; an in-memory command reproduction changed all ten existing CRLF endings to LF. Preserve unrelated plan bytes when appending the record and stamping `updated:`. [AC 5] | Codex | fixed — tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
 
 Phase 6 verdict: codex 01a1a129-e75b-7373-95ea-150009e4eb4d, 2026-11-03
 Reviewer session: codex 01a1a129-e75b-7373-95ea-150009e4eb4d — a fresh session reviewed: no phase-2a session was recorded
@@ -371,4 +371,59 @@ Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed `tests/test_time_records.py`.
 > - F6-1: tests/test_time_records.py::test_backward_utc_still_formats_with_explicit_seconds: the call of `tests/test_time_records.py::test_backward_utc_still_formats_with_explicit_seconds` failed with ValueError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T134123280895Z-aa0dccfb.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs; second Sonnet run after a ValueError-shaped red-first proof (a regression test must fail by assertion, e.g. pytest.fail on the caught ValueError) · leak check clean over 849 files, 3150 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/harness.py` +3 -1
+> - `scripts/time_records.py` +10 -5
+> - `tests/test_time_records.py` +15 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....F.............                                                      [100%]
+> =================================== FAILURES ===================================
+> _________ test_backward_clock_keeps_the_runner_entry_and_crlf_survives _________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/time-records-data/.venv/bin/python3
+>
+>     def test_backward_clock_keeps_the_runner_entry_and_crlf_survives() -> None:
+>         """F6-1 and F6-3. Planted fault: an end before the start raises, or CRLF bytes are rewritten."""
+>         earlier = START - dt.timedelta(seconds=5)
+>         line = time_records.format_entry(START, earlier, 30, "implement", 1, "flash", "m", "accepted")
+>         parsed = time_records.parse_entry(line)
+>         assert parsed is not None and parsed.seconds == 30
+>         text = "---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Next\r\nkeep\r\n"
+> >       combined = time_records.insert_entry(text, line)
+>
+> tests/test_time_records.py:174: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> text = '---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Next\r\nkeep\r\n'
+> entry = '2026-10-20 10:00:00–09:59:55 UTC, 30 s — implement · attempt 1 · route flash · model m · accepted · measured by the runner'
+>
+>     def insert_entry(text: str, entry: str, *, prior: str | None = None) -> str:
+>         """`text` with `entry` as the last line of the time section, before the next level-two heading.
+>     
+>         With `prior`, the section body comes from that trusted text instead - the
+>         runner's recovery keeps its earlier records even when a model rewrote the
+>         plan, while everything else still comes from `text`.
+>         """
+>         match = TIME_HEADING.search(text)
+>         if match is None:
+> >           raise TimeSectionError("the plan has no `## Time used` heading.")
+> E           time_records.TimeSectionError: the plan has no `## Time used` heading.
+>
+> scripts/time_records.py:169: TimeSectionError
+> =========================== short test summary info ============================
+> FAILED tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives
+> 1 failed, 18 passed in 8.57s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T140120132809Z-c9d53a6b.md
 > ```

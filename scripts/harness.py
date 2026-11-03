@@ -385,6 +385,8 @@ def time_log(root: Path, args: argparse.Namespace, *, out: Out, today: date) -> 
             ended = time_records.parse_stamp(args.end)
         except ValueError as exc:
             raise Refused(str(exc)) from exc
+        if ended < started:
+            raise Refused("end must not lie before start")
         try:
             entry = time_records.format_entry(
                 started,
@@ -400,7 +402,7 @@ def time_log(root: Path, args: argparse.Namespace, *, out: Out, today: date) -> 
             raise Refused(str(exc)) from exc
         plan = _time_log_plan(root, change)
         try:
-            text = plan.read_text(encoding="utf-8")
+            text = plan.read_bytes().decode("utf-8")  # bytes, not read_text: CRLF must survive
         except UnicodeDecodeError:
             raise Refused(f"plans/changes/{change}/plan.md is not valid UTF-8") from None
         except OSError as exc:
