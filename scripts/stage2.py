@@ -176,6 +176,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import time_records  # noqa: E402
 import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -4372,15 +4373,9 @@ def restore_baseline(
 def time_log(path: Path) -> str:
     """The bytes below `## Time used` and before the next level-two heading."""
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        raise Refused(f"{path} cannot be read.") from error
-    match = TIME_HEADING.search(text)
-    if match is None:
-        raise Refused(f"{path} has no `## Time used` heading.")
-    following = re.search(r"^## [^#]", text[match.end() :], re.M)
-    end = match.end() + following.start() if following else len(text)
-    return text[match.end() : end]
+        return time_records.section_text(path)
+    except time_records.TimeSectionError as error:
+        raise Refused(str(error)) from error
 
 
 def utc_now() -> dt.datetime:
@@ -4407,34 +4402,26 @@ def time_entry(
 
     The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
     its date when that differs from the start's, so a span across midnight reads unambiguously.
+    The shared writer owns the format; this adapter only names the outcome the runner's verdict gave.
     """
-    end_date = f"{ended:%Y-%m-%d} " if ended.date() != started.date() else ""
-    result = "accepted" if accepted else "rejected"
-    return (
-        f"{started:%Y-%m-%d} {started:%H:%M:%S}–{end_date}{ended:%H:%M:%S} UTC, {seconds} s — "
-        f"{verb} · attempt {attempt} · route {route} · model {model} · {result} · measured by the runner"
+    return time_records.format_entry(
+        started,
+        ended,
+        seconds,
+        verb,
+        attempt,
+        route,
+        model,
+        time_records.ACCEPTED if accepted else time_records.REJECTED,
     )
 
 
 def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
     """`text` with `entry` as the last line of the time section, before the next level-two heading."""
-    match = TIME_HEADING.search(text)
-    if match is None:
-        raise Refused("the plan has no `## Time used` heading.")
-    following = re.search(r"^## [^#]", text[match.end() :], re.M)
-    end = match.end() + following.start() if following else len(text)
-    body = text[match.end() : end]
-    if prior is not None:
-        # Time records are runner-owned: keep the pre-call section even when the model rewrites it.
-        previous = TIME_HEADING.search(prior)
-        if previous is None:
-            raise Refused("the pre-call plan has no `## Time used` heading.")
-        next_heading = re.search(r"^## [^#]", prior[previous.end() :], re.M)
-        previous_end = previous.end() + next_heading.start() if next_heading else len(prior)
-        body = prior[previous.end() : previous_end]
-    body = body.rstrip() or "\n"
-    tail = text[end:]
-    return text[: match.end()] + body + "\n" + entry + "\n" + (f"\n{tail}" if tail else "")
+    try:
+        return time_records.insert_entry(text, entry, prior=prior)
+    except time_records.TimeSectionError as error:
+        raise Refused(str(error)) from error
 
 
 def insert_before_time(path: Path, block: str) -> None:
@@ -6721,6 +6708,13 @@ def persist_time_entry(
     A restoration safety refusal is the explicit exception to all of this: the parent check runs
     before any write, retry or direct, and the refusal propagates unwritten instead of an entry.
     """
+
+    def restore(destination: Path, content: bytes) -> None:
+        restore_work_input(root, destination, content)
+
+    def direct(destination: Path, content: bytes) -> None:
+        destination.write_bytes(content)
+
     # The parent check stands before the first time write of either path: persistence must not act
     # through a parent outside the worktree, and must not be written after such a refusal.
     try:
@@ -6728,8 +6722,7 @@ def persist_time_entry(
         if retry:
             # Persist before restoring any other input: that restoration can fail before reaching
             # the plan. Keep the same trusted bytes in the retry snapshot for a successful restore.
-            content = with_time_entry(prior, entry).encode("utf-8")
-            restore_work_input(root, plan, content)
+            content = time_records.write_entry(entry, plan, text=prior, publish=restore)
             stamp_updated(plan)
             inputs_before[plan] = content
             return
@@ -6740,21 +6733,20 @@ def persist_time_entry(
                 raise Refused("refusing an aliased plan parent")
             if plan.is_symlink() or plan.stat().st_nlink > 1:
                 raise Refused("refusing an aliased or hard-linked plan")
-            text = with_time_entry(plan.read_text(encoding="utf-8"), entry, prior=prior)
-            plan.write_text(text, encoding="utf-8")
+            time_records.write_entry(entry, plan, prior=prior, publish=direct)
         except RestorationRefused:
             raise
-        except (Refused, OSError, UnicodeDecodeError, RuntimeError):
+        except (time_records.TimeSectionError, Refused, OSError, UnicodeDecodeError, RuntimeError):
             if accepted:
                 raise
             # A rejected attempt left the plan missing, unreadable or aliased: the trusted pre-call
             # plan takes the entry, aliases detached, parents repaired, never through a link.
-            restore_work_input(root, plan, with_time_entry(prior, entry).encode("utf-8"))
+            time_records.write_entry(entry, plan, text=prior, publish=restore)
         stamp_updated(plan)
     except RestorationRefused as error:
         preserve_attempt_failure(error, original)
         raise
-    except (Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
+    except (time_records.TimeSectionError, Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
         message = f"the runner could not write the attempt's time entry to {plan}: {logging_error}"
         if original is None:
             raise CallFailed(message) from logging_error

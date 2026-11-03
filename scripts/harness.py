@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""harness.py — the Coding Harness command. One verb today: `decide adr`.
+"""harness.py — the Coding Harness command. Two verbs: `decide adr` and `time-log`.
 
 `decide adr` puts the ADR question of every feature without an answer to the
 maintainer and writes the answers in the format the gate `adr-answers` reads
@@ -19,18 +19,31 @@ stages, commits, pushes, merges or signs anything itself.
 Who answers is named by the provenance map, looked for at `provenance.yaml`
 and then `decisions/provenance.yaml`; when both places hold one, it refuses.
 
+`time-log` appends one measured time span to an active change's plan, in the
+fixed record format the shared writer owns (`scripts/time_records.py`). The
+line keeps the runner's shape and marker — "measured by the runner" names the
+machine writer, and `route orchestrator` names an interactive session's own
+measured span, not an extra model call. The seconds are read off the caller's
+clock and are never derived from the timestamps. It reads no provenance map,
+asks no question, writes no commit message and needs no git; a refusal or a
+failed publication leaves the plan byte-unchanged.
+
 Usage:
     python3 scripts/harness.py decide adr
     python3 scripts/harness.py decide adr --change <name> --answer yes|no \\
         --reason "<one sentence>" --stated-in "<where the maintainer said it>"
-Exit: 0 = done (or nothing open), 1 = interrupted, nothing written,
-      2 = refused, nothing written.
+    python3 scripts/harness.py time-log <change> --start 2026-10-31T10:00:00Z \\
+        --end 2026-10-31T10:01:00Z --seconds 60 --verb implement --attempt 1 \\
+        --route orchestrator --model glm-5.3-flash --result accepted
+Exit: 0 = done (or nothing open; the record is written), 1 = interrupted,
+      nothing written, 2 = refused, nothing written.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import stat
 import subprocess
 import sys
 from collections.abc import Callable
@@ -39,6 +52,8 @@ from pathlib import Path
 from typing import Any
 
 import check_adr_answers as gate
+import check_frontmatter_current
+import time_records
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -319,6 +334,101 @@ def record_adr(
 
 
 # ---------------------------------------------------------------------------
+# time-log — one measured span into the plan
+# ---------------------------------------------------------------------------
+
+
+def _time_log_plan(root: Path, change: str) -> Path:
+    """The one destination `plans/changes/<change>/plan.md`, refused unless it is a plain file of one change."""
+    if (
+        not change
+        or change != change.strip()
+        or change in {".", "..", "archive"}
+        or change.startswith(".")
+        or "/" in change
+        or "\\" in change
+        or "\0" in change
+    ):
+        raise Refused(f"the change must be one plain folder name under plans/changes/, is {change!r}")
+    plan = root / "plans" / "changes" / change / "plan.md"
+    try:
+        mode = plan.lstat().st_mode
+    except FileNotFoundError:
+        raise Refused(f"plans/changes/{change}/plan.md is missing") from None
+    except OSError as exc:
+        raise Refused(f"cannot check plans/changes/{change}/plan.md ({exc.strerror or type(exc).__name__})") from exc
+    if not stat.S_ISREG(mode):
+        raise Refused(f"plans/changes/{change}/plan.md is not a regular file")
+    try:
+        # The suffix stays lexical: resolving the intended parent would follow the very
+        # alias this check refuses, and both sides would name the same target.
+        if plan.parent.resolve() != root.resolve() / "plans" / "changes" / change:
+            raise Refused(f"plans/changes/{change} is an aliased folder; refusing to write through it")
+        if plan.stat().st_nlink > 1:
+            raise Refused(f"plans/changes/{change}/plan.md is hard-linked; refusing to write through the link")
+    except OSError as exc:
+        raise Refused(f"cannot check plans/changes/{change} ({exc.strerror or type(exc).__name__})") from exc
+    return plan
+
+
+def time_log(root: Path, args: argparse.Namespace, *, out: Out, today: date) -> int:
+    """One measured span into the plan: validate everything, then publish once and stamp `updated:`.
+
+    The record is built by the shared writer from the caller's observed
+    measurements; every check stands before the one publication, so a refusal
+    anywhere leaves the plan's bytes as they were.
+    """
+    change = args.change
+    try:
+        try:
+            started = time_records.parse_stamp(args.start)
+            ended = time_records.parse_stamp(args.end)
+        except ValueError as exc:
+            raise Refused(str(exc)) from exc
+        try:
+            entry = time_records.format_entry(
+                started,
+                ended,
+                args.seconds,
+                args.activity,
+                args.attempt,
+                args.route,
+                args.model,
+                args.result,
+            )
+        except ValueError as exc:
+            raise Refused(str(exc)) from exc
+        plan = _time_log_plan(root, change)
+        try:
+            text = plan.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raise Refused(f"plans/changes/{change}/plan.md is not valid UTF-8") from None
+        except OSError as exc:
+            raise Refused(
+                f"plans/changes/{change}/plan.md cannot be read ({exc.strerror or type(exc).__name__})"
+            ) from exc
+        headings = time_records.TIME_HEADING.findall(text)
+        if len(headings) != 1:
+            raise Refused(
+                f"plans/changes/{change}/plan.md must carry exactly one `## Time used` heading, found {len(headings)}"
+            )
+
+        def publish(destination: Path, content: bytes) -> None:
+            stamped = check_frontmatter_current.stamped(content.decode("utf-8"), today)
+            time_records.publish_atomic(destination, stamped.encode("utf-8"))
+
+        time_records.write_entry(entry, plan, text=text, publish=publish)
+    except time_records.TimeSectionError as exc:
+        raise Refused(str(exc)) from exc
+    except OSError as exc:
+        raise Refused(
+            f"could not write the record to plans/changes/{change}/plan.md ({exc.strerror or type(exc).__name__})"
+        ) from exc
+    out(entry)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # the command line
 # ---------------------------------------------------------------------------
 
@@ -336,14 +446,39 @@ def parser() -> argparse.ArgumentParser:
     adr.add_argument("--reason", help="record: the maintainer's reason, one English sentence")
     adr.add_argument("--stated-in", help="record: where the maintainer stated it (a session, a comment)")
     adr.add_argument("--root", type=Path, default=REPO_ROOT, help="repository to work in (default: this one)")
+    log = verbs.add_parser(
+        "time-log", help="append one measured time span to an active change's plan", allow_abbrev=False
+    )
+    log.add_argument("change", help="the active change whose plan receives the record")
+    log.add_argument("--start", required=True, help="the span's start, UTC (YYYY-MM-DDTHH:MM:SSZ)")
+    log.add_argument("--end", required=True, help="the span's end, UTC (YYYY-MM-DDTHH:MM:SSZ)")
+    log.add_argument("--seconds", required=True, type=int, help="the measured duration in whole seconds")
+    log.add_argument(
+        "--verb",
+        dest="activity",
+        required=True,
+        help="the activity the span served (implement, repair, session, ...)",
+    )
+    log.add_argument("--attempt", required=True, type=int, help="that activity's span number, 1 or higher")
+    log.add_argument("--route", required=True, help="the route that worked; `orchestrator` marks an interactive span")
+    log.add_argument("--model", required=True, help="the model that worked")
+    log.add_argument(
+        "--result",
+        required=True,
+        choices=(time_records.ACCEPTED, time_records.REJECTED),
+        help="the activity's outcome",
+    )
+    log.add_argument("--root", type=Path, default=REPO_ROOT, help="repository to work in (default: this one)")
     return ap
 
 
 def main(argv: list[str] | None = None, *, ask: Ask = input, out: Out = print, today: date | None = None) -> int:
     args = parser().parse_args(argv)
     root: Path = args.root.resolve()
-    given: dict[str, Any] = {name: getattr(args, name) for name in RECORDING}
     try:
+        if args.verb == "time-log":
+            return time_log(root, args, out=out, today=today or date.today())
+        given: dict[str, Any] = {name: getattr(args, name) for name in RECORDING}
         if any(v is not None for v in given.values()):
             flags = {name: "--" + name.replace("_", "-") for name in RECORDING}
             absent = [flags[n] for n, v in given.items() if v is None or not str(v).strip()]
