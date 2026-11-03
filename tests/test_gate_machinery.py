@@ -584,3 +584,21 @@ def test_placement_rule_lives_in_one_predicate() -> None:
     assert ci_gates.misst_in({"placement": "hosted"}, "ci")
     assert ci_gates.misst_in({"placement": "writer"}, "lokal")
     assert not ci_gates.misst_in({"placement": "writer"}, "ci")
+
+
+def test_a_verdict_repeats_its_blocking_lines_after_the_noise() -> None:
+    """A tail of the report names what blocks, however many drift lines follow (bead coding-harness-2g7y)."""
+    import _verdict
+
+    verdict = _verdict.Verdict()
+    verdict.block("plans/changes/x/spec.md: status 'in-review' is none of ['accepted', 'draft', 'superseded']")
+    for number in range(300):
+        verdict.drift(f"bead {number} is closed, the artefact is not archived")
+    tail = verdict.render().splitlines()[-2:]
+    assert tail == [
+        "BLOCK (1), repeated last:",
+        "  - plans/changes/x/spec.md: status 'in-review' is none of ['accepted', 'draft', 'superseded']",
+    ]
+    only_blocks = _verdict.Verdict()
+    only_blocks.block("one block")
+    assert "repeated last" not in only_blocks.render()
