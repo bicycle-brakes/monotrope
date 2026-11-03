@@ -618,3 +618,14 @@ Phase 6 verdict: codex 01a19eb2-4a5e-7ba1-ba68-61a18b583778, 2026-11-03
 Reviewer session: codex 01a19eb2-4a5e-7ba1-ba68-61a18b583778 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 841 files, 3101 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 841 files, 3104 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-10 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5864–5867; scripts/stage2.py:5635 | A qualifying named test can run `git update-ref ORIG_HEAD HEAD` and leave a persistent reference change that both proofs accept. `_proof_ref_targets` enumerates `refs/` and HEAD only; `_ref_targets` likewise omits other root references. Creating ORIG_HEAD changes neither recorded snapshot nor the fixed checkout’s file tree, so neither guard refuses the proof. Root reference changes must also invalidate the proof. [Acceptance criterion 2] | Codex | parked — named limit in the pull request: re-check 3 of the three the maintainer allowed on 2026-11-02 ended here. Root references other than HEAD (ORIG_HEAD, FETCH_HEAD, MERGE_HEAD and the like) are outside both measurements; a named test that writes one is accepted. Proposed remedy for the maintainer: measure every root reference Git reports (`git for-each-ref --include-root-refs` where the pinned Git has it, else the files directly under `.git/` that `git rev-parse --verify -q` resolves), through the same logical name → kind and target map | — |
+
+Phase 6 verdict: codex 01a19ed2-d61c-7281-8945-fb8ba3f1a9ed, 2026-11-03
+Reviewer session: codex 01a19ed2-d61c-7281-8945-fb8ba3f1a9ed — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
