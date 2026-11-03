@@ -62,6 +62,56 @@ The orchestrating agent coordinates the workflow. The Python runner controls
 specific model calls and validates their outputs; it is not a complete
 autonomous workflow engine.
 
+### What the runner does
+
+The runner, `python3 scripts/stage2.py <verb> <change>`, is the only way a
+model other than the orchestrating agent touches a change. The agent decides
+*when* a phase runs; the runner decides *how* the call is made and whether its
+result is kept. Every call follows the same path:
+
+1. **Before the call:** it builds the phase instructions from `prompts/`,
+   checks the model and endpoint against `model-endpoints.yaml`, scans
+   everything it will send with the leak check, and writes an audit line. A
+   block stops the call, with no fallback.
+2. **The call:** the model works in the change's worktree, within its role:
+   reviewers read, drafters and implementers write.
+3. **After the call:** the runner checks the result itself — the documents
+   exist and validate, the repair's test failed before and passes after,
+   `make verify` is green — and only then commits. A failed attempt goes to the
+   next route with its diagnostics; a stopped one is saved on a side ref, so
+   the work is not silently lost.
+
+| Verb | Phase | What it starts |
+| --- | --- | --- |
+| `explore` | 1 | a research swarm (feature) or one fast model (small change) |
+| `draft` | 2, 3 | spec and plan, written by another vendor's model |
+| `spec-review` | 2a | a read-only review of the spec |
+| `implement` | 4 | the code and its tests |
+| `prepare-loop`, `review-loop` | 4b | the review swarms, round by round until clean |
+| `repair` | 4b, 6 | the fixes for the findings the agent took |
+| `review` | 6 | the independent review against the spec, in a fresh session |
+
+The runner never merges, never decides which finding is taken, and never
+asks the person anything; those stay with the agent and the maintainer.
+
+### What the hooks do
+
+Hooks are small scripts Claude Code starts on its own at fixed moments. They
+show and remind; none of them is a gate — CI is.
+
+| When | Hook | Does |
+| --- | --- | --- |
+| Session start | `tools/bd prime` (this repository, `.claude/settings.json`) | loads the tracker's working rules and the current state into the session |
+| Session start | `handover.sh start` (user level) | shows where the last session stopped and its next step, measured against the working tree now |
+| Session start, every prompt | `parallel-sessions.sh` (user level) | warns when another session works in the same checkout |
+| Every prompt, end of a turn | `recap.sh` (user level) | keeps a one-line recap and a safety-net note in case a session ends without a handover |
+| Always | `statusline.sh` (user level) | the status line: repository, branch, beads in progress, other sessions |
+
+The user-level hooks live, documented, in
+[`tools/claude-code/`](tools/claude-code/README.md) and are installed into
+`~/.claude` by `tools/claude-code/install.sh`. A stop hook that holds a turn
+end on a red tree is planned, not built (see [Not built yet](#not-built-yet)).
+
 ## A refused repair
 
 The check that matters most is the one that says no. When an agent repairs a
