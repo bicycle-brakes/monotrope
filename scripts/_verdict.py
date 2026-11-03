@@ -174,6 +174,12 @@ class Verdict:
                         f"{LEVEL_LABEL[f.ramp.target].strip()}, until: {f.ramp.condition}"
                     )
             out.append("")
+        blocks = self.at(Level.BLOCK)
+        if blocks and len(blocks) < len(self.findings):
+            # Readers that keep only the tail (the stage-2 runner's diagnostics) lose the top of a long
+            # report; the blocking messages stand last as well (bead coding-harness-2g7y).
+            out.append(f"{LEVEL_LABEL[Level.BLOCK]} ({len(blocks)}), repeated last:")
+            out.extend(f"  - {f.message}" for f in blocks)
         return "\n".join(out).rstrip()
 
 
