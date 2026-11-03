@@ -743,7 +743,7 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6346 | A status of `taken — guard test — "quoted reason"` authorises planted proof: calling `guard_authorised` with that exact input returns `True`. The function removes backtick spans but accepts a reason consisting entirely of quoted text. The repair instructions explicitly exclude quoted reasons; this row should be refused before any guard-proof run. The authorisation test covers backticks only. [Criterion 2; design, Interfaces] | Codex | taken — reproduced fault in spec, standing rule 2026-11-03 |  |
+| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:6346 | A status of `taken — guard test — "quoted reason"` authorises planted proof: calling `guard_authorised` with that exact input returns `True`. The function removes backtick spans but accepts a reason consisting entirely of quoted text. The repair instructions explicitly exclude quoted reasons; this row should be refused before any guard-proof run. The authorisation test covers backticks only. [Criterion 2; design, Interfaces] | Codex | fixed — tests/test_stage2.py::test_guard_answer_requires_explicit_row_authorisation |  |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1703,3 +1703,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-03: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3196 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 842 files, 3197 commits, 12 rules.

@@ -6340,7 +6340,7 @@ def guard_authorised(status: str) -> bool:
     reason opens the planted run; a quoted marker is a reviewer's or an attempt's
     words, and an ordinary or `not a test` row keeps its own route.
     """
-    unquoted = re.sub(r"`+[^`]*`+", "", status).strip().lower()
+    unquoted = re.sub(r"""`+[^`]*`+|"[^"]*"|'[^']*'""", "", status).strip().lower()
     reason = unquoted[len("taken — guard test — ") :] if unquoted.startswith("taken — guard test — ") else ""
     return bool(reason.strip())
 

@@ -13653,6 +13653,13 @@ def test_guard_answer_accepts_the_named_test_form(world: World) -> None:
         pytest.param("taken — not a test — no test can show it", "text-row", id="text-row"),
         pytest.param("taken — guard test", "without-a-reason", id="without-a-reason"),
         pytest.param("taken — guard test — `a quoted reason`", "quoted-reason", id="quoted-reason"),
+        pytest.param('taken — guard test — "quoted reason"', "double-quoted-reason", id="double-quoted-reason"),
+        pytest.param("taken — guard test — 'quoted reason'", "single-quoted-reason", id="single-quoted-reason"),
+        pytest.param(
+            "taken — guard test — \"quoted reason\" `another reason` 'last reason'",
+            "only-quoted-reasons",
+            id="only-quoted-reasons",
+        ),
         pytest.param("taken — guard test — ", "empty-reason", id="empty-reason"),
     ],
 )
