@@ -2862,13 +2862,14 @@ def _guard_gate_run(value: str | None) -> subprocess.CompletedProcess[str]:
 
 
 def test_guard_environment_gate_goes_red_when_the_switch_is_present() -> None:
-    """A set planting switch blocks verification locally and in hosted CI (spec, criterion 11).
+    """The presence gate rejects a set switch and has blocking CI wiring and local metadata.
 
     The switch `STAGE2_PLANT_FAULT` belongs to the repair runner's planted proof
     run alone; verification with it set would count planted faults as passing
     proof. Any present value fails the gate - empty and `0` included - and the
-    gate must stand in the one list for both verification paths: the local `make
-    verify` job and the generated hosted workflow, blocking on each.
+    gate must have blocking metadata for both verification paths. The generated
+    and committed hosted workflows carry it; this test does not execute the
+    local `make verify` path.
     """
     assert _guard_gate_run(None).returncode == 0, "the gate fails although the switch is absent"
     for value in ("1", "", "0", _GUARD_GATE_MARKER):

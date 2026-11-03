@@ -84,7 +84,9 @@ explicitly, do not delete them.
    criterion>`, `taken — not a test — <reason>` for a finding no test can
    show, `taken — guard test — <reason>` for a repair that lives only in
    test code and must be proven by a planted fault (ADR 0023; say why no
-   baseline can be red), or `rejected — <reason>`. A guard row ends as
+   baseline can be red), or `rejected — <reason>`. The guard reason must be
+   nonempty and unquoted; a reason only quoted or backticked is not
+   authorisation. A guard row ends as
    `fixed — guard test — tests/<path>::<function>`, with the mark
    `yes — guard test — …` written only after both proof legs passed.
 2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
@@ -93,7 +95,8 @@ explicitly, do not delete them.
    findings").
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's
    evidence: `yes` when its repair turned a test red that was green before it,
-   `no` when it did not; the next round starts only when `make verify` is
+   `no` when it did not, or `yes — guard test — tests/<path>::<function>`
+   after both guard proof legs pass; the next round starts only when `make verify` is
    green. After a repair the orchestrator made by hand, a targeted check
    stands in for it: the touched and linked test files, `ruff` and the
    gates the touched files feed; one full `make verify` runs on the final
