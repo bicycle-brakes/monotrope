@@ -154,6 +154,15 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 2026-11-03 — hand acceptance by the orchestrator, flagged for the maintainer's review: the three attempts (two GLM 5.3 Flash, one Sonnet 5.5) are saved on refs/stage2/attempts/time-records-data/orchestrator-saved-20261103 (bc486f94). The last tree failed only its cheap checks: one ruff finding (PTH105, `os.replace` in scripts/time_records.py, now `Path.replace`). The full `make verify` then showed one behaviour change of the shared writer: the runner's direct plan write used `write_bytes` instead of `write_text`, so a failing plan write no longer reached the runner's error path (tests/test_stage2.py::test_runner_terminal_failure_survives_failed_log_write, both cases); the direct publisher writes text again. No other line of the attempt was changed.
 
+## Review loop — named stop, 2026-11-03
+
+The maintainer ended the review loop on 2026-11-03 (about 07:10 UTC) with a
+named stop and sent the change to phase 6: every round saw its diff cut at
+2000 of 2035–2194 lines, so no round could end clean (bead
+coding-harness-ut8q). Rounds 1–3 were repaired or decided; round 4 was
+stopped by the orchestrator's time limit and left no rows. The maintainer
+also confirmed the orchestrator's hand acceptance recorded below.
+
 ## Time used
 
 2026-11-02 23:57:37–2026-11-03 00:54:37 UTC, 3420 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
