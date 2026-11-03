@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-8v2c.1
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, draft gap checks, 2026-11-03; prior exploration unchanged below"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -69,3 +71,34 @@ From what exists: `AGENTS.md` (the deliverable the night plan names — as propo
 - `plans/changes/research-swarm/spec.md` — the change behind `research-handoff` and the `research_items`/`research_neighbours` linkage the interview now carries.
 
 **Not read in this phase, stated as such:** the bead descriptions of `coding-harness-8v2c` (epic), `8v2c.1`, `04xk`, `e4zd`, `7izx` and `99v7` (tracker, no rendered copy here); `docs/research/2026-10-06-i-have-adhd-skill.md` (same epic cluster, content unverified); the upstream `mattpocock/skills` files themselves (known only through the two evaluation notes); `scripts/stage2.py` (routing internals) and `tools/claude-code/install.sh`; the repo-level `.claude/settings.json`.
+
+## Draft gap checks — 2026-11-03
+
+Read against `ef824324`, without changing the interview answers:
+
+- `decisions.md` explicitly fixes the class as `bounded` and Q-2 chooses an
+  addendum to the existing ADR 0018. Q-1–Q-5 are five maintainer-answered
+  records. Phase 2b excludes bounded changes, so no design or new numbered ADR
+  draft is due; the plan assigns the existing held ADR to the orchestrator.
+- The session-entry instructions are the `context` block in
+  `tools/claude-code/hooks/handover.sh`, emitted as SessionStart
+  `additionalContext` by `tools/claude-code/settings.json`. A channel reminder
+  needs only text there, not a new hook or a settings/installer change.
+- `tests/test_entry_points.py::test_instruction_file_is_under_200_lines`
+  enforces the AGENTS cap; `wc -l AGENTS.md` measured 200 lines on
+  2026-11-03. Reflow within the existing communication bullet must preserve
+  duties. `tests/test_check_question_context.py` already guards context and
+  verbatim plan-card presentation, and travels as `mechanismus` in
+  `scripts/kit/manifest.yaml`; extending it needs no new kit classification.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent
+  in this tree. The draft uses `templates/spec.md`, `prompts/03-plan.md` and
+  existing interview, research-handoff and criterion-ledger checks; registry
+  regeneration and full verification remain the runner's responsibility.
+- Tool availability is not measured for other harness sessions. The rule
+  chooses the native tool when available rather than declaring Codex or Pi
+  permanently without one. Actual chat transport remains unobserved (Q-3).
+- The latest handover read was
+  `docs/journal/handover/2026-11-02-tracker-cleanup-and-evaluations.md`;
+  its historical lane/session claims were not treated as current. Live PR
+  and external session registries were not read under this draft's
+  worktree-only boundary. No tracker write or git mutation is part of drafting.
