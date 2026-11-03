@@ -215,3 +215,39 @@ Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model longcat-2
 Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 844 files, 3111 commits, 12 rules.
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 844 files, 3113 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Loop attempt: 2026-11-03 — no round was written; the review-loop calls above consumed no stage; audit calls: 2
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+
+glm-5.3-flash was asked again with the format reminder: the first answer was malformed
+
+From glm-5.3-flash:
+
+glm-5.3-flash's first answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | R1 | MAJOR | SPEC | prompts/04-implement.md (the `appetite is a stop` block) | The change keeps the sentence `A break inside a session counts, and the record says so` directly above the command it introduces, but the command's fixed record has no slot for a break note and the new text moves the break's only mention to the session's status message, which does not survive `/clear`; the doctrine the change consolidated now asks the session to write an annotation the one fixed record cannot carry, so the two sentences contradict each other in the same paragraph. |
+> | R2 | MINOR | SPEC | prompts/04-implement.md (the time-log command template) | The template fixes the activity and the outcome as literals while the spec requires the record to carry the activity's actual result; nothing marks those two fields as caller-substituted the way the start, attempt and model fields are, so a session that follows the template verbatim records every span as an accepted session span regardless of what happened. |
+> | R3 | MINOR | MAINT | scripts/time_records.py (`publish_atomic`) | The docstring promises temporary file, fsync, rename and a directory fsync, but the branch taken when the destination is missing performs a plain non-atomic write with no durability step at all; a caller reaching the default publisher with a vanished destination silently receives weaker guarantees than the documented contract, while any failure after the write is reported as merely a synchronization warning. |
+> | R4 | MINOR | MAINT | scripts/harness.py (`time_log` heading check) | The requirement of exactly one time heading counts heading lines also inside code fences, so a plan that legitimately quotes the heading in an unindented fenced example is refused as if it carried a second time section, and the refusal names only the count, leaving the maintainer to guess that a fenced quote tripped it. |
+> | R5 | MINOR | SPEC | plans/changes/time-records-data/spec.md (neighbours header) | The change's own research enumerates the neighbours and states three active changes declare protected areas inside the module this change rewrites, yet the shipped spec carries an empty neighbours list, so the cross-change overlap the research says the spec phase must reconcile is nowhere visible in the header a maintainer of the neighbouring changes would read. |
+> | R6 | MINOR | MAINT | plans/changes/time-records-data/research.md (frontmatter) | The research text itself records that the class declaration and the neighbours header are owed in its frontmatter before a swarm run and are written only by the runner, but the shipped file still presents neither, so the artefact contradicts its own statement of what is owed. |
+
+From glm-5.3-flash:
+
+glm-5.3-flash's second answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | R1 | MAJOR | SPEC | prompts/04-implement.md, "The appetite is a stop" paragraph (the time-log command line) | The command the prompt hands to sessions is fixed as `--result accepted`, not a `<accepted\|rejected>` placeholder like every other field; a span that ends on a rejected or cut outcome (a stop, a failed verification before the stop, a parked span) is thereby instructed to record "accepted", so the plan's record can name an outcome the activity never had — spec criterion 2 and the spec's own `[DETAIL]` ("outcome names the actual activity result") are refuted by the instruction itself, and no test covers the rejected-session path.
+> | R2 | MINOR | MAINT | scripts/time_records.py, `publish_atomic` (the `FileNotFoundError` branch) | When the destination is found missing at publish time, the shared default writer falls back to a plain non-atomic `plan.write_bytes(content)` with no temporary file, no fsync and no directory sync, contradicting the module's own documented contract ("temporary file, fsync, rename, directory fsync"); an existing plan deleted between the caller's checks is silently recreated outside the safe path, while the in-tree callers only dodge this by pre-checking existence themselves.
+> | R3 | MINOR | MAINT | scripts/stage2.py, `REPAIR_FORMAT` (the Codex repair prompt, shell-capable) and `scripts/stage2.py`, `REPAIR_FORMAT_FILE_TOOLS` | The change gave interactive sessions a live machine command for time entries, and `prompts/04-implement.md` was updated to forbid calling it for runner-measured attempts ("A model running under the Stage-2 runner never calls it"); the embedded repair prompts the runner hands to Codex — the one Stage-2 role with a command tool — still carry only the old "write no entry under `## Time used`" sentence, so the only instruction those attempts see names the hand-write route and is silent about the new command, and the doctrine test (`test_runner_time_doctrine_preserves_interactive_measurement`) asserts nothing beyond the same hand-write clause.
+> | R4 | MINOR | MAINT | scripts/harness.py, `time_log` (`--route`) | The command accepts any non-blank route with no relation to who calls it, so an interactive session following the prompt incompletely can pass e.g. `--route flash` and the report's fixed-format attempt rows will present an interactive span as a runner-model attempt; nothing at the command boundary warns or refuses, although the spec's `[DETAIL]` and `docs/WORKFLOW.md` both pin `route orchestrator` as the marker of a session-logged span.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
