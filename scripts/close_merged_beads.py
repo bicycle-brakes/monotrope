@@ -214,8 +214,8 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
             raw_key = raw_key.rstrip(b" \t")
             if raw_key.lower() != key.lower():
                 continue
-            # Horizontal padding is syntax; CR and other control bytes are
-            # part of the value and must survive validation.
+            # Horizontal padding is syntax; embedded CR and other control
+            # bytes remain value data after line-ending normalization.
             raw_value = raw_value.strip(b" \t")
             value = raw_value.decode("utf-8", errors="replace")
             if raw_key != key:
@@ -230,13 +230,18 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
 def raw_trailers(message: bytes) -> list[bytes]:
     """Read the final trailer paragraph without consulting Git configuration.
 
-    Only LF separates lines; Unicode separators, CR and control bytes stay
-    inside values. A trailer block follows a blank line after the subject and
-    contains trailer lines and their indented continuations, never body prose.
+    Normalize CRLF to LF, leaving embedded CR and other control bytes inside
+    values. Git's patch boundary ends the message before trailer selection.
+    A trailer block follows a blank line after the subject and contains trailer
+    lines and their indented continuations, never body prose.
     Fold continuations before validating values so a first-line identifier
     cannot become a declaration on its own.
     """
-    lines = message.split(b"\n")
+    lines = message.replace(b"\r\n", b"\n").split(b"\n")
+    for index, line in enumerate(lines):
+        if line == b"---":
+            lines = lines[:index]
+            break
     while lines and not lines[-1].strip(b" \t"):
         lines.pop()
     start = len(lines)

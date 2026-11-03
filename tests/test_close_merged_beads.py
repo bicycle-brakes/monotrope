@@ -973,3 +973,27 @@ def test_raw_message_trailers_preserve_block_and_value_boundaries(tmp_path: Path
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A}
     assert any(f"declared by commit {declared}" in line for line in _closes(ns) if line.split()[1] == REAL_A)
+
+
+def test_patch_boundary_excludes_later_declarations(tmp_path: Path) -> None:
+    """Only the last paragraph before Git's patch boundary can declare closure."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, f"done\n\n---\n\nCloses-Bead: {REAL_B}\n")
+    declared = _commit(ns.origin, f"done\n\nCloses-Bead: {REAL_A}\n\n---\n\nCloses-Bead: {REAL_B}\n")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A}
+    assert any(f"declared by commit {declared}" in line for line in _closes(ns) if line.split()[1] == REAL_A)
+
+
+def test_crlf_trailers_close_declared_beads(tmp_path: Path) -> None:
+    """CRLF line endings are syntax, while embedded CR remains value data."""
+    ns = _build(tmp_path)
+    _git(ns.origin, "config", "commit.cleanup", "verbatim")
+    declared = _commit(ns.origin, f"done\r\n\r\nCloses-Bead: {REAL_A}\r\n")
+    raw = subprocess.run(["git", "cat-file", "commit", declared], cwd=ns.origin, capture_output=True, check=True).stdout
+    assert f"done\r\n\r\nCloses-Bead: {REAL_A}\r\n".encode() in raw
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A}
+    assert any(f"declared by commit {declared}" in line for line in _closes(ns) if line.split()[1] == REAL_A)
