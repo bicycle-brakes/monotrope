@@ -617,9 +617,7 @@ def test_log_failure_is_preflight_failure(tmp_path: Path) -> None:
     real_git = shutil.which("git")
     wrapper = bindir / "git"
     wrapper.write_text(
-        "#!/bin/sh\n"
-        'if [ "$1" = -c ] && [ "$3" = log ]; then echo "broken history" >&2; exit 2; fi\n'
-        f'exec "{real_git}" "$@"\n'
+        f'#!/bin/sh\nif [ "$1" = log ]; then echo "broken history" >&2; exit 2; fi\nexec "{real_git}" "$@"\n'
     )
     wrapper.chmod(0o755)
     env = _env(ns)
@@ -894,12 +892,9 @@ def test_runtime_git_configuration_still_yields_every_declaration(tmp_path: Path
             },
         ),
         ("parameters", {"GIT_CONFIG_PARAMETERS": "'trailer.separators'='=:'"}),
-        ("invalid-count", {"GIT_CONFIG_COUNT": "invalid"}),
-        ("invalid-parameters", {"GIT_CONFIG_PARAMETERS": "not quoted configuration"}),
     ):
         ns = _build(tmp_path, name=name)
-        # File configuration must also lose to the explicit command setting;
-        # invalid runtime configuration must be dropped before Git parses it.
+        # Trailer parsing ignores both local and runtime formatting settings.
         _git(ns.klon, "config", "trailer.separators", "=:")
         env = _env(ns)
         env.update(settings)
@@ -997,3 +992,39 @@ def test_crlf_trailers_close_declared_beads(tmp_path: Path) -> None:
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A}
     assert any(f"declared by commit {declared}" in line for line in _closes(ns) if line.split()[1] == REAL_A)
+
+
+def test_patch_file_boundary_excludes_later_declarations(tmp_path: Path) -> None:
+    """F6-12: Git's patch boundary also includes a filename after three dashes."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, f"done\n\n--- a/file\n+++ b/file\n\nCloses-Bead: {REAL_A}\n")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == set(DECLARED)
+
+
+def test_git_trailers_with_prose_and_comments_close(tmp_path: Path) -> None:
+    """F6-13: Git accepts prose beside a recognized trailer and trailing comments."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, f"done\n\nordinary text\nCloses-Bead: {REAL_A}\nSigned-off-by: Person <p@example.com>\n")
+    _git(ns.origin, "config", "commit.cleanup", "verbatim")
+    _commit(ns.origin, f"done\n\nCloses-Bead: {REAL_B}\n# comment\n")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A, REAL_B}
+
+
+def test_fetch_preserves_runtime_url_mapping(tmp_path: Path) -> None:
+    """F6-14: fetch uses ordinary Git connection settings, including runtime aliases."""
+    ns = _build(tmp_path)
+    _git(ns.klon, "remote", "set-url", "origin", "fixture-origin:repo")
+    env = _env(ns)
+    env.update(
+        GIT_SSH_COMMAND="false",
+        GIT_CONFIG_COUNT="1",
+        GIT_CONFIG_KEY_0=f"url.{ns.origin}.insteadOf",
+        GIT_CONFIG_VALUE_0="fixture-origin:repo",
+    )
+    result = _run_script(ns, env, "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == set(DECLARED)

@@ -10,7 +10,7 @@ someone remembering it (bead coding-harness-l1if, decision Q-1). Without
 What counts, exactly:
 
 - Only the trailer. A ``Closes-Bead:`` line is read from the trailing trailer
-  paragraph of the raw commit message, using fixed syntax. Git trailer aliases
+  paragraph of the raw commit message, parsed by Git in isolation. Git trailer aliases
   and formatting settings cannot change the declarations. A mention in the body, PR
   prose or any other spelling closes nothing; case variants in the trailer
   block are reported as malformed (decisions.md, "Only the trailer counts").
@@ -82,7 +82,6 @@ SQUASH_NUMBER = re.compile(r"\(#(\d+)\)$")
 # Read each commit separately, with NUL-framed subject and raw message.
 # Unlike control bytes such as 0x1e, NUL cannot occur in a commit message.
 COMMIT_FORMAT = "%s%x00%B%x00"
-TRAILER_LINE = re.compile(rb"[A-Za-z0-9-]+[ \t]*:")
 
 GIT_TIMEOUT = 30.0
 FETCH_TIMEOUT = 60.0
@@ -95,29 +94,13 @@ class PreflightError(RuntimeError):
     """A precondition failed — nothing may be attempted."""
 
 
-def _neutral_git_env() -> dict[str, str]:
-    """Environment for every Git call: no user or system configuration applies.
-
-    A setting such as ``trailer.separators`` changes how Git formats parsed
-    trailers, so a configured machine would silently lose declarations.
-    """
-    # Runtime configuration (COUNT/KEY_n/VALUE_n and PARAMETERS) overrides
-    # config files too. Drop the entire namespace before setting our own paths.
-    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_CONFIG_")}
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_CONFIG_SYSTEM"] = os.devnull
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    return env
-
-
 def _git_bytes(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> bytes:
     try:
         erg = subprocess.run(
-            ["git", "-c", "trailer.separators=:", *args],
+            ["git", *args],
             cwd=repo,
             capture_output=True,
             timeout=timeout,
-            env=_neutral_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PreflightError(f"git {args[0]} failed: {exc}") from None
@@ -228,36 +211,38 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
 
 
 def raw_trailers(message: bytes) -> list[bytes]:
-    """Read the final trailer paragraph without consulting Git configuration.
+    """Let Git select and unfold trailers without repository or user settings.
 
-    Normalize CRLF to LF, leaving embedded CR and other control bytes inside
-    values. Git's patch boundary ends the message before trailer selection.
-    A trailer block follows a blank line after the subject and contains trailer
-    lines and their indented continuations, never body prose.
-    Fold continuations before validating values so a first-line identifier
-    cannot become a declaration on its own.
+    Connection configuration belongs to the ordinary Git calls, not this
+    parser. Remove inherited Git overrides (including repository discovery and
+    runtime configuration); only explicit null config paths disable Git's
+    system/global files. The empty directory supplies neither local config nor
+    a discoverable repository, even when TMPDIR lives inside a checkout.
     """
-    lines = message.replace(b"\r\n", b"\n").split(b"\n")
-    for index, line in enumerate(lines):
-        if line == b"---":
-            lines = lines[:index]
-            break
-    while lines and not lines[-1].strip(b" \t"):
-        lines.pop()
-    start = len(lines)
-    while start and lines[start - 1].strip(b" \t"):
-        start -= 1
-    if start < 2:
-        return []  # The subject itself is never a completion declaration.
-    trailers: list[bytes] = []
-    for line in lines[start:]:
-        if line.startswith((b" ", b"\t")) and trailers:
-            trailers[-1] += b" " + line.lstrip(b" \t")
-        elif TRAILER_LINE.match(line):
-            trailers.append(line)
-        else:
-            return []
-    return trailers
+    with tempfile.TemporaryDirectory(prefix="close-merged-trailers-") as directory:
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        env.update(
+            GIT_CONFIG_SYSTEM=os.devnull,
+            GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_CEILING_DIRECTORIES=str(Path(directory).resolve().parent),
+        )
+        try:
+            result = subprocess.run(
+                ["git", "interpret-trailers", "--parse"],
+                input=message,
+                cwd=directory,
+                env=env,
+                capture_output=True,
+                timeout=GIT_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PreflightError(f"git interpret-trailers failed: {exc}") from None
+    if result.returncode:
+        diagnostic = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
+        raise PreflightError(f"git interpret-trailers failed: {diagnostic}")
+    # Only LF is framing. Other control bytes remain part of the value and
+    # must fail identifier validation rather than closing a partial identifier.
+    return [line for line in result.stdout.split(b"\n") if line]
 
 
 def explicit_pr(subject: str) -> str | None:
