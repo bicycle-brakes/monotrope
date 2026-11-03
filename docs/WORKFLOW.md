@@ -1641,7 +1641,19 @@ each learned on the night of 2026-10-29/30:
   `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
   round starts. One full `make verify` under the lock runs on the final head
   before phase 6 and before the pull request leaves draft; CI stays the full
-  gate. A runner repair keeps the runner's own `make verify`.
+  gate. A runner repair gets the same shape from the runner (bead
+  coding-harness-gxwg): after its format step and cheap checks, `repair` runs
+  the whole touched and linked test files, `ruff` on the touched Python files
+  and the local gates the touched kinds of file feed, outside the lock, and
+  checkpoints on green. Where that coverage cannot be determined safely - a
+  prompt, a shared test or execution configuration, an unclassified input, code
+  with no linked test, an unreadable link inventory - it runs the admitted full
+  `make verify` instead and says why in `findings.md` and the checkpoint
+  message. A targeted green is never worded as full verification: `review`
+  (phase 6) runs a fresh full `make verify` of the current head under the lock
+  before it calls the reviewer, on every invocation, a re-check included, and
+  refuses a dirty tree or a head that moved during the check. `implement` and
+  the draft keep their own post-run checks.
 
 ### Night runs
 

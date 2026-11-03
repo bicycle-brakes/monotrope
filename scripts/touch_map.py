@@ -10,7 +10,9 @@ Spec: plans/changes/archive/2026-10-06-touch-map/spec.md.
 
 Nothing is read from the working tree or the network. The script asks git for
 objects only (`rev-parse`, `merge-base`, `diff-tree`, `ls-tree`, `cat-file`), uses the
-standard library only, and gives the same bytes for the same two commits.
+standard library only, and gives the same bytes for the same two commits. The one reader of
+the working tree is `WorktreeSnapshot`, which the stage-2 runner uses to see the links of an
+uncommitted repair; the command line never uses it.
 
 The rules, in short:
 
@@ -53,10 +55,12 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import stat
 import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import NamedTuple
 
 # What this repository means by runner, test, code and prose.
@@ -389,6 +393,10 @@ class Snapshot:
             paths.append(path)
             if otype == "blob" and mode != "120000":
                 self._blobs[path] = oid
+        self._index(paths)
+
+    def _index(self, paths: list[str]) -> None:
+        """The name indexes the link rules read, built once from the revision's path list."""
         self.paths = sorted(paths)
         names = Counter(p.rsplit("/", 1)[-1] for p in self.paths)
         # Basename -> path, for the basenames that name one file and are long enough to mean it.
@@ -435,6 +443,50 @@ class Snapshot:
                     blobs[header[0].decode()] = data[pos : pos + size]
                     pos += size + 1
         return {p: read_code(p, blobs.get(self._blobs[p], b"").decode("utf-8", "replace")) for p in self.sources}
+
+
+class WorktreeSnapshot(Snapshot):
+    """The files of the working tree: tracked and non-ignored untracked paths, read from disk.
+
+    The adapter the stage-2 runner uses to see links an uncommitted repair creates; the command
+    line stays on committed objects. A path deleted on disk is absent; a link, or a file whose
+    real path leaves the worktree, is never read. A source that cannot be read raises
+    `CannotMeasure`, so a caller never mistakes an unreadable inventory for zero links.
+    """
+
+    def __init__(self, repo: str) -> None:
+        self.repo = repo
+        self.rev = "worktree"
+        self._blobs: dict[str, str] = {}  # path -> path, regular files only
+        self._read: dict[str, Source] | None = None
+        root = Path(repo).resolve()
+        listing = git(repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+        paths = []
+        for path in sorted({p for p in listing.split("\0") if p}):
+            full = root / path
+            try:
+                info = full.lstat()
+            except FileNotFoundError:
+                continue  # deleted in the working tree
+            except OSError as err:
+                raise CannotMeasure(f"cannot inspect {path}: {err.strerror or err}") from err
+            paths.append(path)
+            if stat.S_ISREG(info.st_mode):
+                if not full.resolve().is_relative_to(root):
+                    raise CannotMeasure(f"{path} resolves outside the worktree")
+                self._blobs[path] = path
+        self._index(paths)
+
+    def _load(self) -> dict[str, Source]:
+        out: dict[str, Source] = {}
+        root = Path(self.repo)
+        for path in self.sources:
+            try:
+                body = (root / path).read_bytes()
+            except OSError as err:
+                raise CannotMeasure(f"cannot read {path}: {err.strerror or err}") from err
+            out[path] = read_code(path, body.decode("utf-8", "replace"))
+        return out
 
 
 def _full_paths(snap: Snapshot, src: str) -> set[str]:

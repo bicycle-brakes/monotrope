@@ -143,3 +143,35 @@ Stage-2 call, 2026-10-31: draft · attempt 2 · route codex-repair · endpoint o
 > - `plans/INDEX.md`
 
 Stage-2 call, 2026-11-03: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 867 files, 3191 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash call failed 2026-11-03: claude-code unrecognized_model glm-5.3-flash · leak check clean over 867 files, 3198 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +13 -1
+> - `plans/changes/repair-targeted-check/spec.md` +1 -1
+> - `scripts/stage2.py` +423 -7
+> - `scripts/touch_map.py` +53 -1
+> - `tests/test_stage2.py` +549 -0
+> - `tests/test_touch_map.py` +36 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`, `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> scripts/stage2.py:5543:5: SIM102 Use a single `if` statement instead of nested `if` statements
+>      |
+> 5541 |               return [f"{TARGETED_LABEL}: {problem}"], []
+> 5542 |       python = root / PYTEST[0]
+> 5543 | /     if chosen.tests or chosen.gates:
+> 5544 | |         if not python.is_file():
+>      | |________________________________^ SIM102
+> 5545 |               return [
+> 5546 |                   protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
+>      |
+>      = help: Combine `if` statements using `and`
+>
+> Found 1 error.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```

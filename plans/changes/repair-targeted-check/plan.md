@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-03
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -161,18 +161,24 @@ it does not authorize unrelated test repairs or a weaker verification command.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_covered_repair_uses_targeted_verification — a narrow covered repair still calls make verify
-- 2: not yet written tests/test_stage2.py::test_targeted_repair_runs_whole_touched_and_linked_test_files — an unchanged failing sibling, indexed/untracked touch or retained retry edit is omitted
-- 2: not yet written tests/test_touch_map.py::test_worktree_links_include_new_content_and_preserve_committed_snapshot — current uncommitted links are missed or committed CLI output starts reading disk
-- 2: not yet written tests/test_stage2.py::test_targeted_repair_keeps_baseline_links_for_removed_paths — deleting or renaming code loses its surviving tests
-- 3: not yet written tests/test_stage2.py::test_targeted_repair_checks_touched_python_after_formatting — ruff misses a surviving touched file or runs before formatting
-- 4: not yet written tests/test_stage2.py::test_targeted_repair_selects_declared_gates_and_enforcement — derived document gates or a changed gate is missed, commands are copied, or blocking enforcement is lost
-- 5: not yet written tests/test_stage2.py::test_targeted_repair_falls_back_to_full_on_uncovered_inputs — a prompt, unknown kind, unsafe inventory or uncovered code receives targeted acceptance
-- 6: not yet written tests/test_stage2.py::test_targeted_commands_run_without_verify_admission — targeted commands acquire or inherit admission while full fallback fails to acquire it
-- 7: not yet written tests/test_stage2.py::test_targeted_failure_never_checkpoints_or_marks_fixed — red, launch failure or timeout reaches a checkpoint or fixed row instead of protected retry diagnostics
-- 8: not yet written tests/test_stage2.py::test_targeted_repair_preserves_preparation_and_answer_proofs — targeted green bypasses derived refresh, accepted/retry test targets, fixed-line validation or red-first proof
-- 9: not yet written tests/test_stage2.py::test_review_requires_fresh_full_verification_before_model_call — first review or re-check starts on stale/targeted green, a moved head/tree or failed full check
-- 10: not yet written tests/test_stage2.py::test_targeted_mode_is_repair_only — implement or draft inherits repair's reduced scope or loses admission
-- 11: not yet written tests/test_stage2.py::test_repair_records_verification_scope_and_outcome — success lacks scope evidence, fallback lacks a reason or targeted output claims full green
+- 1: tests/test_stage2.py::test_covered_repair_uses_targeted_verification — a narrow covered repair still calls make verify
+- 2: tests/test_stage2.py::test_targeted_repair_runs_whole_touched_and_linked_test_files — an unchanged failing sibling, indexed/untracked touch or retained retry edit is omitted
+- 2: tests/test_touch_map.py::test_worktree_links_include_new_content_and_preserve_committed_snapshot — current uncommitted links are missed or committed CLI output starts reading disk
+- 2: tests/test_stage2.py::test_targeted_repair_keeps_baseline_links_for_removed_paths — deleting or renaming code loses its surviving tests
+- 3: tests/test_stage2.py::test_targeted_repair_checks_touched_python_after_formatting — ruff misses a surviving touched file or runs before formatting
+- 4: tests/test_stage2.py::test_targeted_repair_selects_declared_gates_and_enforcement — derived document gates or a changed gate is missed, commands are copied, or blocking enforcement is lost
+- 5: tests/test_stage2.py::test_targeted_repair_falls_back_to_full_on_uncovered_inputs — a prompt, unknown kind, unsafe inventory or uncovered code receives targeted acceptance
+- 6: tests/test_stage2.py::test_targeted_commands_run_without_verify_admission — targeted commands acquire or inherit admission while full fallback fails to acquire it
+- 7: tests/test_stage2.py::test_targeted_failure_never_checkpoints_or_marks_fixed — red, launch failure or timeout reaches a checkpoint or fixed row instead of protected retry diagnostics
+- 8: tests/test_stage2.py::test_targeted_repair_preserves_preparation_and_answer_proofs — targeted green bypasses derived refresh, accepted/retry test targets, fixed-line validation or red-first proof
+- 9: tests/test_stage2.py::test_review_requires_fresh_full_verification_before_model_call — first review or re-check starts on stale/targeted green, a moved head/tree or failed full check
+- 10: tests/test_stage2.py::test_targeted_mode_is_repair_only — implement or draft inherits repair's reduced scope or loses admission
+- 11: tests/test_stage2.py::test_repair_records_verification_scope_and_outcome — success lacks scope evidence, fallback lacks a reason or targeted output claims full green
+
+## Runner route — 2026-11-03
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash call failed 2026-11-03: claude-code unrecognized_model glm-5.3-flash.
 
 ## Time used
+
+2026-11-03 19:19:09–19:43:12 UTC, 1443 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
