@@ -257,3 +257,9 @@ Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model hy3 · leak check clean over 844 files, 3117 commits, 12 rules.
 
 Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model hy3 · leak check clean over 844 files, 3117 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 844 files, 3118 commits, 12 rules.
+
+Loop attempt: 2026-11-03 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
