@@ -554,6 +554,9 @@ def test_the_session_binds_the_checked_model_without_reading_auth(session_world,
         "contextWindow",
         "maxTokens",
         "cost",
+        "compat",
+        "thinkingLevelMap",
+        "inputLimits",
     }, "the sidecar carries more than the allow-listed fields"
     # Unit level: the checked definition comes from the record for the shipped catalog's wire api.
     unit, _verdict = stage2_session.checked_session_model(w.tree, GO_BARE, stage2)
@@ -840,6 +843,48 @@ def test_session_lookup_reads_the_real_pinned_chat_catalog(world, monkeypatch):
     assert verdict.admitted
     assert binding["id"] == model
     assert binding["baseUrl"] == models[f"chat:{model}"]["baseUrl"]
+
+
+def test_session_sidecar_preserves_shipped_model_behavior(session_world):
+    """The launch sidecar keeps behavior fields from the shipped-catalog stand-in.
+
+    The private baseline proof has no installed Pi. Use its catalog seam with
+    representative shipped fields; real Pi registration is tested separately.
+    """
+    w = session_world
+    w.declare_go()
+    catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    data = json.loads(catalog.read_text(encoding="utf-8"))
+    behavior = {
+        "compat": {"maxTokensField": "max_tokens", "requiresReasoningContentOnAssistantMessages": True},
+        "thinkingLevelMap": {"off": None, "low": "low", "high": "high"},
+        "inputLimits": {"images": {"resize": {"maxWidth": 2000, "maxHeight": 2000}}},
+    }
+    data["openai-completions"][f"chat:{GO_BARE}"].update(behavior)
+    catalog.write_text(json.dumps(data), encoding="utf-8")
+    w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert w.run(model=GO_MODEL) == 0
+    sidecar = w.bindings[0]["extension"].parent / "checked-model.json"
+    binding = json.loads(sidecar.read_text(encoding="utf-8"))["model"]
+    for field, value in behavior.items():
+        assert binding.get(field) == value, f"the session stripped shipped {field}"
+
+
+def test_session_refuses_a_catalog_entry_api_mismatch_before_binding(session_world, capsys):
+    """An entry cannot override the wire API of the catalog section containing it."""
+    w = session_world
+    w.declare_go()
+    catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    data = json.loads(catalog.read_text(encoding="utf-8"))
+    data["openai-completions"][f"chat:{GO_BARE}"]["api"] = "openai-responses"
+    data["openai-completions"][f"chat:{GO_BARE}"]["baseUrl"] = RECORDED_BASE
+    catalog.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(stage2.Refused, match="catalog section"):
+        stage2_session.checked_session_model(w.tree, GO_BARE, stage2)
+    w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert w.run(model=GO_MODEL) == 2
+    assert "wire api" in capsys.readouterr().err.lower()
+    assert w.bindings == [] and w.calls("osascript") == []
 
 
 @pytest.mark.parametrize("family", ["reviewer", "probe", "seat", "session"])

@@ -363,6 +363,9 @@ CHECKED = {
         "input": ["text"],
         "contextWindow": 128000,
         "maxTokens": 4096,
+        "compat": {"maxTokensField": "max_tokens", "requiresReasoningContentOnAssistantMessages": True},
+        "thinkingLevelMap": {"low": "low", "high": "high"},
+        "inputLimits": {"images": {"resize": {"maxWidth": 2000, "maxHeight": 2000}}},
     },
 }
 

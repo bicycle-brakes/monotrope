@@ -1109,6 +1109,9 @@ def test_real_session_binding_holds_the_assessed_base(project: Path, tmp_path: P
             "name": "Contract Rung",
             "api": "openai-completions",
             "baseUrl": f"{standin.url}/checked",
+            "compat": {"maxTokensField": "max_tokens"},
+            "thinkingLevelMap": {"off": None, "low": "low", "high": "high"},
+            "inputLimits": {"images": {"resize": {"maxWidth": 2000, "maxHeight": 2000}}},
             "reasoning": False,
             "input": ["text"],
             "contextWindow": 123456,
@@ -1135,6 +1138,8 @@ def test_real_session_binding_holds_the_assessed_base(project: Path, tmp_path: P
         assert "/checked/chat/completions" in exchange.path, (
             f"the ambient base won over the checked binding: {exchange.path}"
         )
+        assert exchange.body.get("max_tokens") == model["maxTokens"], "the checked compat flag was lost"
+        assert "max_completion_tokens" not in exchange.body
     finally:
         standin.close()
 

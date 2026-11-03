@@ -285,6 +285,9 @@ MODEL_SIDECAR_FIELDS = (
     "contextWindow",
     "maxTokens",
     "cost",
+    "compat",
+    "thinkingLevelMap",
+    "inputLimits",
 )
 
 
@@ -375,7 +378,13 @@ def checked_session_model(root: Path, bare: str, runner) -> tuple[dict, stage2_g
             "the session binds no ambiguous model."
         )
     api, part = sections[0]
-    verdict = stage2_go.assess(policy, bare, {"api": api, **part[f"chat:{bare}"]})
+    definition = part[f"chat:{bare}"]
+    if not isinstance(definition, dict) or ("api" in definition and definition["api"] != api):
+        raise runner.Refused(
+            f"the pinned install's catalog section and entry disagree on the wire api for {bare}; "
+            "the session binds no inconsistent model."
+        )
+    verdict = stage2_go.assess(policy, bare, {**definition, "api": api})
     if not verdict.admitted:
         raise runner.Refused(verdict.problem)
     return {name: verdict.definition[name] for name in MODEL_SIDECAR_FIELDS if name in verdict.definition}, verdict

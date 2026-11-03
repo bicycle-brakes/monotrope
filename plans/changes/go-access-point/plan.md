@@ -280,3 +280,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage limit un
 2026-11-01 22:34:35–23:13:25 UTC, 2330 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 23:13:37–23:52:22 UTC, 2324 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-03 14:20:54–14:41:40 UTC, 1245 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-03 15:42:08–16:47:19 UTC, 3911 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 16:47:28–17:10:57 UTC, 1409 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
