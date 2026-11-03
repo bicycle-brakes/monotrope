@@ -478,15 +478,23 @@ def test_workflow_notice_records_supplied_commands() -> None:
     )
     absent, supplied = notice.split("Supplied since the last check:", 1)
     assert ".claude/commands/" not in absent
-    for piece in (".claude/commands/", "docs/governance/gate-catalog.md", "make change", "make index"):
+    for piece in (
+        ".claude/commands/",
+        "docs/governance/gate-catalog.md",
+        "make change",
+        "make index",
+        # The two read-only helpers, supplied by explorer-reviewer-agents (bead
+        # coding-harness-9ll); they stay on the supplied list beside the older pieces.
+        ".claude/agents/explorer.md",
+        "reviewer.md",
+    ):
         assert piece in supplied
     for piece in (
         "scripts/validate_change_artefacts.py",
-        ".claude/agents/explorer.md",
-        "reviewer.md",
         ".claude/hooks/session-stop/check-tests-green.sh",
     ):
         assert piece in absent
+    assert ".claude/agents/" not in absent, "a piece may not sit on both lists"
 
 
 @COMMAND_SKIP

@@ -4712,13 +4712,26 @@ def credential_message(exposed: list[Path]) -> str:
 def worktree_tree(root: Path) -> str:
     """The tree id of the worktree as git counts it, written through a temporary index.
 
-    The temporary index is seeded with `git read-tree HEAD`, not copied from the real one: a file
-    tracked although ignored stays in the snapshot, and the real index, the stash and the refs are
-    never touched (spec, criterion 10).
+    Seed a fresh index with the real index's path, mode and object entries, including newly
+    force-added ignored files, never inheriting flags that could hide changes. Then add current
+    contents without forcing ignored, untracked children of a replaced path into the tree.
+    The real index is only read; it, the stash and the refs are never
+    changed (spec, criterion 10).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
-        _git_output(root, "read-tree", "HEAD", env=env)
+        temporary_index = Path(tmp) / "index"
+        tracked = _git_bytes(root, "ls-files", "-s", "-z")
+        env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
+        _git_output(root, "read-tree", "--empty", env=env)
+        if tracked:
+            _git_bytes(
+                root,
+                "update-index",
+                "-z",
+                "--index-info",
+                env=env,
+                stdin=tracked,
+            )
         _git_output(root, "add", "-A", env=env)
         return _git_output(root, "write-tree", env=env).strip()
 
@@ -4999,7 +5012,9 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
-    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
+    """The bounded evidence of a red post-run check (`make verify`, or the draft's document check).
+
+    It renders the framed gates that blocked, else the run's tail.
 
     Read the active denylist at diagnostic emission time and raise Refused fail-closed if
     protection refuses, on every route including keyless routes (key=None). The complete
@@ -5754,9 +5769,13 @@ def red_first_python(root: Path) -> str:
 
 
 def _ref_targets(root: Path) -> dict[str, str]:
-    """Every ref of the repository, remote-tracking ones included, with the object it names."""
-    listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname)")
-    return {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+    """Every ref's object and symbolic target, including HEAD's detached state."""
+    listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
+    refs = {name: target.rstrip() for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+    head = _git_output(root, "rev-parse", "HEAD").strip()
+    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
+    refs["HEAD"] = f"{head} {symbolic or '(detached)'}"
+    return refs
 
 
 def _red_report_bytes(path: Path) -> bytes | None:
@@ -5889,13 +5908,159 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
     return None
 
 
+def _remove_private(path: Path) -> str | None:
+    """Remove one proof's private directory; a failure is named, never ignored.
+
+    The private repository and its store are the proof's own scratch: deleting them after the
+    measurement is normal cleanup, never permission to delete a source reference. A failed
+    removal is reported, so no successful proof stands on a leftover (spec, criterion 8).
+    """
+    try:
+        shutil.rmtree(path)
+    except OSError as error:
+        return f"{error.strerror or error} ({path})"
+    return None
+
+
+def _private_repository(root: Path, destination: Path, checkout: str) -> None:
+    """Create a proof's private repository at `destination`, its checkout materialized at `checkout`.
+
+    The clone carries the source's objects wholesale - unreferenced ones included - with no
+    hardlinks and no object alternates, so the proof runs against bytes of its own and a local
+    object copy carries the fixed tree `worktree_tree` wrote without a ref. Every source ref is
+    preserved under its own name first, so a ref the source already had stays a move in the
+    proof's store, not an accidental creation; the remote configuration goes, so an ordinary
+    Git operation in the proof has no path back to the source. HEAD is detached at `checkout`
+    when it names the baseline commit, or at the source's HEAD for a fixed-code tree id.
+    `checkout` is read into the index and the working tree, leaving a baseline clean against
+    its own commit. The source's refs, index and worktree are read here, never
+    written (spec, criteria 1 and 6).
+    """
+    # Snapshot before copying objects: later source refs may name objects the clone never saw.
+    refs = _ref_targets(root)
+    head = refs.pop("HEAD").split(" ", 1)[0]
+    _git_output(root, "clone", "--quiet", "--no-hardlinks", str(root), str(destination))
+    # An alternates file makes the clone depend on another object store. Refuse rather than
+    # silently discarding that dependency and assuming all required objects were copied.
+    alternates = destination / ".git" / "objects" / "info" / "alternates"
+    if alternates.exists() or alternates.is_symlink():
+        raise Refused("the private repository contains objects/info/alternates")
+    _git_output(destination, "remote", "remove", "origin")
+    if _git_output(destination, "cat-file", "-t", checkout).strip() == "commit":
+        head = checkout
+    # Detach HEAD in its own transaction before updating its former referent. Git
+    # otherwise refuses both names in one transaction, even with --no-deref.
+    _git_output(
+        destination,
+        "update-ref",
+        "--no-deref",
+        "--stdin",
+        stdin=(
+            f"start\nupdate HEAD {head}\nprepare\ncommit\nstart\n"
+            + "".join(f"update {name} {target}\n" for name, target in refs.items() if " " not in target)
+            + "prepare\ncommit\n"
+        ),
+    )
+    # Measurements retain both the resolved object and symbolic target. Restore
+    # symbolic refs by kind, using symbolic-ref for Git versions without symref-update.
+    for name, target in refs.items():
+        _, _, symbolic = target.partition(" ")
+        if symbolic:
+            _git_output(destination, "symbolic-ref", name, symbolic)
+    _git_output(destination, "read-tree", "--reset", "-u", checkout)
+
+
+def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
+    """Measure logical private refs, refusing nonregular entries before Git reads them."""
+    store = root / ".git"
+    names: set[str] = set()
+
+    def regular(path: Path) -> bool:
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISREG(mode):
+            raise Refused(f"the private reference entry is not a regular file: {path.relative_to(store)}")
+        return True
+
+    def walk(directory: Path) -> None:
+        try:
+            mode = directory.lstat().st_mode
+        except FileNotFoundError:
+            return
+        if not stat.S_ISDIR(mode):
+            raise Refused(f"the private reference entry is not a directory: {directory.relative_to(store)}")
+        for path in directory.iterdir():
+            mode = path.lstat().st_mode
+            if stat.S_ISDIR(mode):
+                walk(path)
+            elif regular(path):
+                names.add(path.relative_to(store).as_posix())
+
+    walk(store / "refs")
+    if not regular(store / "HEAD"):
+        raise Refused("the private reference HEAD is missing")
+    names.add("HEAD")
+    packed = store / "packed-refs"
+    if regular(packed):
+        for line in packed.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith(("#", "^")):
+                continue
+            _, separator, name = line.partition(" ")
+            if not separator or not name.startswith("refs/"):
+                raise Refused("the private packed-refs listing is malformed")
+            names.add(name)
+    snapshot = {}
+    for name in sorted(names):
+        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow=(0, 1)).strip()
+        if symbolic:
+            snapshot[name] = ("symbolic", symbolic)
+        else:
+            target = _git_output(root, "rev-parse", "--verify", "-q", name).strip()
+            snapshot[name] = ("object", target)
+    return snapshot
+
+
+def _proof_reference_guard(
+    root: Path, before: dict[str, str], test: str, key: str | None, logical_before: dict[str, tuple[str, str]] | None
+) -> str | None:
+    """Measure private refs before disposal, with one scrubbed verdict for both proof paths."""
+    changed: set[str] = set()
+    faults = []
+    if logical_before is not None:
+        try:
+            logical_after = _proof_ref_targets(root)
+        except Exception as error:
+            # Do not let Git inspect an entry the safe walk has already refused.
+            return scrub(f"{test}: the private logical ref listing failed ({error})", key)
+        changed.update(
+            name
+            for name in logical_before.keys() | logical_after.keys()
+            if logical_before.get(name) != logical_after.get(name)
+        )
+    try:
+        after = _ref_targets(root)
+    except Exception as error:
+        faults.append(f"the private ref listing failed ({error})")
+    else:
+        changed.update(ref for ref in before.keys() | after.keys() if before.get(ref) != after.get(ref))
+    if changed:
+        faults.append("refs changed while the named test ran: " + ", ".join(sorted(changed)))
+    return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
+
+
 def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
 
     A green suite can include a skipped or expected-failing named test. The same runner-owned probe
     used for red first must show passing setup, call and teardown for every selected case here.
-    Load the probe by its private absolute path, outside the attempt's tree. A proof that changes
-    the tree or any ref is refused, and no changed ref is deleted or reset.
+    The proof runs in a private repository of its own: the source worktree's current Git-visible
+    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
+    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
+    activity in the source cannot void the proof. A proof that changes its own tree or any of its
+    own refs is refused, with every changed reference named; nothing in the source is compared,
+    deleted or reset, and the private repository is removed on every exit.
     """
     tampered = tool_problem(root, tools)
     if tampered:
@@ -5907,56 +6072,99 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
     )
     token = os.urandom(16).hex()
+    tmp = None
+    fault = None
+    cleanup = None
+    named: list[str] = []
+    refs_before: dict[str, str] | None = None
+    logical_refs_before: dict[str, tuple[str, str]] | None = None
+    tree_before: str | None = None
+    private: Path | None = None
+    ref_fault = None
     try:
-        with tempfile.TemporaryDirectory(prefix="stage2-fixed-") as tmp:
-            probe = Path(tmp) / "probe.py"
-            report = Path(tmp) / "outcome.json"
-            probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
-            refs_before, tree_before = _ref_targets(root), worktree_tree(root)
-            # One machine-wide admission around the timed proof; queue and memory waits consume
-            # none of the proof's time limit (bead coding-harness-p6mu).
-            with verify_lock.hold_admission(["pytest", test]) as owned:
-                done = launch(
-                    [red_first_python(root), "-c", bootstrap, str(probe), test],
-                    root,
-                    verify_lock.inherit_env(
-                        runner_env(
-                            foreign_env(
-                                {
-                                    "STAGE2_RED_REPORT": str(report),
-                                    "STAGE2_RED_TOKEN": token,
-                                    "STAGE2_RED_SELECTOR": test,
-                                }
-                            ),
-                            root,
-                        )
-                    ),
-                    key,
-                    timeout=RED_FIRST_MINUTES * 60,
-                    limit="the fixed-code proof time limit",
-                    pass_fds=_lock_fds(owned),
-                )
-            fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
-            if done.returncode != 0:
-                fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
-            if _ref_targets(root) != refs_before:
-                fault = "refs changed while the fixed-code proof ran"
-            elif worktree_tree(root) != tree_before:
-                fault = "the worktree changed while the fixed-code proof ran"
+        tmp = Path(tempfile.mkdtemp(prefix="stage2-fixed-"))
+        private = tmp / "tree"
+        probe = tmp / "probe.py"
+        report = tmp / "outcome.json"
+        probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+        # The fixed tree is captured before the clone copies objects: the tree `worktree_tree`
+        # writes is unreferenced, and the local object copy carries it; a tree the clone cannot
+        # read refuses the proof instead of running older bytes.
+        fixed_tree = worktree_tree(root)
+        _private_repository(root, private, fixed_tree)
+        logical_refs_before = _proof_ref_targets(private)
+        refs_before = _ref_targets(private)
+        tree_before = worktree_tree(private)
+        # One machine-wide admission around the timed proof; queue and memory waits consume
+        # none of the proof's time limit (bead coding-harness-p6mu).
+        with verify_lock.hold_admission(["pytest", test]) as owned:
+            done = launch(
+                [red_first_python(root), "-c", bootstrap, str(probe), test],
+                private,
+                verify_lock.inherit_env(
+                    runner_env(
+                        foreign_env(
+                            {
+                                "STAGE2_RED_REPORT": str(report),
+                                "STAGE2_RED_TOKEN": token,
+                                "STAGE2_RED_SELECTOR": test,
+                            }
+                        ),
+                        root,
+                        tmp,
+                    )
+                ),
+                key,
+                timeout=RED_FIRST_MINUTES * 60,
+                limit="the fixed-code proof time limit",
+                pass_fds=_lock_fds(owned),
+            )
+        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
+        if done.returncode != 0:
+            fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
-    return scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    finally:
+        try:
+            # The private store's own names and targets are compared before it is deleted, on a
+            # launch failure or a timeout exactly as on a finished run; the source's refs are not
+            # an acceptance condition and are not read here.
+            if refs_before is not None and private is not None:
+                ref_fault = _proof_reference_guard(private, refs_before, test, key, logical_refs_before)
+            if tree_before is not None and private is not None:
+                try:
+                    tree_now = worktree_tree(private)
+                except Exception as error:
+                    named.append(f"the private tree could not be measured ({error})")
+                else:
+                    if tree_now != tree_before:
+                        named.append("the private checkout changed while the fixed-code proof ran")
+        finally:
+            if tmp is not None:
+                cleanup = _remove_private(tmp)
+    if named:
+        fault = f"{fault}; {'; '.join(named)}" if fault else "; ".join(named)
+    if cleanup is not None:
+        removal = f"the private fixed-code proof repository could not be removed ({cleanup})"
+        fault = f"{fault}; {removal}" if fault else removal
+    outcome = scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    if ref_fault:
+        outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
+    return outcome
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
-    """Run one named test against the baseline's code in a temporary git worktree; None when it was red.
+    """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
-    The worktree's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
+    The private checkout's `tests/` is the attempt's Git-visible tests, including tracked caches: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
-    call git honest. The interpreter must start pytest first: a `No module named pytest` startup failure
+    call git honest. The checkout is a clone with its own reference store (`_private_repository`), so
+    another session's branch, remote-tracking or saved-attempt reference moving in the source repository
+    while the proof runs cannot void it, and the source's refs, index and worktree are never written. The
+    interpreter must start pytest first: a `No module named pytest` startup failure
     exits 1 too, and reading it as red would accept a run in which the named test never ran (phase 6,
     F-1). Exit 1 alone proves nothing either: the runner-owned probe (`RED_PROBE_SOURCE`) travels into
-    the temporary checkout and records, in a private JSON report outside the copied tests, which cases
+    the private checkout and records, in a private JSON report outside the copied tests, which cases
     pytest selected and how every setup, call and teardown phase ended. The proof holds only when the
     report is this invocation's, the session finished as exit 1, at least one selected call of the
     requested test failed by an expectation the test itself states - an ordinary assertion or pytest's
@@ -5965,11 +6173,12 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     teardown passed and no skip, xfail, XPASS, collection error or nonqualifying failure stands among
     them - so a missing dependency failing its fixture refuses instead of certifying the repair (bead
     coding-harness-omp). Never is a
-    success inferred from terminal output or the exit code alone. Every ref's name and target is
-    compared before and after: a difference fails the proof with the refs named and nothing is deleted,
-    so another session's branch is never touched (phase 6, F-6 and F-7). The clean-up deletes the
-    temporary directory before it prunes, so a failed `git worktree remove` leaves no dead entry
-    behind, and a failed removal is named in the returned problem.
+    success inferred from terminal output or the exit code alone. Every ref of the private store is
+    compared before and after, and the comparison stands in `finally`, before the store is deleted: a
+    difference in a ref's name or target fails the proof with the refs named, and nothing is deleted or
+    reset - a test's write into its own store is interference, while a neighbour's branch in the source
+    is never this proof's business (phase 6, F-6 and F-7, over the private store). The clean-up removes
+    the private repository on every exit, and a failed removal is named in the returned problem.
     """
     tampered = tool_problem(root, tools)
     if tampered:
@@ -5978,30 +6187,29 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     file, _, function = test.partition("::")
     selector = f"{file}::{function}"
     token = os.urandom(16).hex()
-    tree = None
     tmp = None
     outcome = None
-    removal = None
-    added = False
+    cleanup = None
     refs_before: dict[str, str] | None = None
-    refs_changed: list[str] = []
+    logical_refs_before: dict[str, tuple[str, str]] | None = None
+    ref_fault = None
     try:
-        tmp = tempfile.mkdtemp(prefix="stage2-red-")
-        tree = Path(tmp) / "tree"
-        report = Path(tmp) / "red-outcome.json"
+        tmp = Path(tempfile.mkdtemp(prefix="stage2-red-"))
+        tree = tmp / "tree"
+        report = tmp / "red-outcome.json"
         try:
-            _git_output(root, "worktree", "add", "--detach", str(tree), baseline)
-        except Refused as error:
+            current = worktree_tree(root)
+            _private_repository(root, tree, baseline)
+        except (Refused, OSError) as error:
             outcome = f"{test}: the red-first checkout failed ({scrub(str(error), key)})"
-        else:
-            added = True
         if outcome is None:
             shutil.rmtree(tree / "tests", ignore_errors=True)
             try:
-                shutil.copytree(
-                    root / "tests", tree / "tests", ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache")
-                )
-            except OSError as error:
+                # Both proofs use worktree_tree's Git-visible snapshot, including tracked
+                # ignored fixtures. Restore the captured bytes, modes and symlinks from its
+                # objects in the private store, with no second filesystem copy/filter.
+                _git_output(tree, "restore", "--source", current, "--worktree", "--", "tests")
+            except (Refused, OSError) as error:
                 outcome = (
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
                 )
@@ -6011,10 +6219,10 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except OSError as error:
                 outcome = f"{test}: the red-first outcome probe could not be written ({scrub(str(error), key)})"
         if outcome is None:
-            # Branches are shared with the temporary checkout; a failed snapshot fails the attempt,
-            # because branch state could not be proven preserved.
+            # A failed snapshot fails the attempt, because branch state could not be proven preserved.
             try:
-                refs_before = _ref_targets(root)
+                logical_refs_before = _proof_ref_targets(tree)
+                refs_before = _ref_targets(tree)
             except Refused as error:
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
@@ -6025,7 +6233,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     started = launch(
                         [red_first_python(root), "-c", "import pytest"],
                         tree,
-                        verify_lock.inherit_env(runner_env(foreign_env({}), root, tree)),
+                        verify_lock.inherit_env(runner_env(foreign_env({}), root, tmp)),
                         key,
                         timeout=RED_FIRST_MINUTES * 60,
                         limit="the red-first time limit",
@@ -6067,7 +6275,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                                     }
                                 ),
                                 root,
-                                tree,
+                                tmp,
                             )
                         ),
                         key,
@@ -6087,48 +6295,22 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                     fault = _red_record_fault(_red_report_bytes(report), token, selector)
                     if fault is not None:
                         outcome = f"{test}: {scrub(fault, key)}"
+    except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
+        outcome = f"{test}: {scrub(str(error), key)}"
     finally:
-        if tree is not None:
-            try:
-                done = subprocess.run(
-                    [GIT, "-C", str(root), "worktree", "remove", "--force", str(tree)],
-                    capture_output=True,
-                    check=False,
-                    timeout=GIT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                done = None
-            if added and done is not None and done.returncode != 0:
-                removal = f"`git worktree remove` ended {done.returncode} on the red-first checkout"
-        if tmp is not None:
-            shutil.rmtree(tmp, ignore_errors=True)
-        if tree is not None:
-            # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                # A prune that hangs leaves an entry behind; the removal above already failed then.
-                subprocess.run(
-                    [GIT, "-C", str(root), "worktree", "prune"],
-                    capture_output=True,
-                    check=False,
-                    timeout=GIT_SECONDS,
-                )
-        if refs_before is not None:
-            # Nothing is deleted or reset here: another session may create a branch meanwhile, and only
-            # the comparison tells a change of the run from one of a neighbour. Any difference in a
-            # ref's name or target fails the proof with the refs named (phase 6, F-6 and F-7).
-            try:
-                refs_now = _ref_targets(root)
-            except Refused as error:
-                refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
-            else:
-                refs_changed = sorted(
-                    ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
-                )
-    if refs_changed:
-        named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
-        outcome = f"{outcome}\n{named}" if outcome else named
-    if removal is not None:
-        named = scrub(f"{test}: {removal}", key)
+        try:
+            if refs_before is not None:
+                # The private store's own names and targets, compared before the store is deleted: a
+                # launch failure and a timeout compare exactly as a finished run. Nothing is deleted
+                # or reset here - the comparison is the whole verdict.
+                ref_fault = _proof_reference_guard(tree, refs_before, test, key, logical_refs_before)
+        finally:
+            if tmp is not None:
+                cleanup = _remove_private(tmp)
+    if ref_fault:
+        outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
+    if cleanup is not None:
+        named = scrub(f"{test}: the red-first checkout could not be removed ({cleanup})", key)
         outcome = f"{outcome}\n{named}" if outcome else named
     return outcome
 
@@ -7587,15 +7769,23 @@ def card_problem(text: str) -> str | None:
     return None
 
 
+# The draft's post-run check is the verify job's existing document subset, selected through the
+# shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
+# bead coding-harness-77qj). Implement and repair keep the full `make verify`.
+DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
+DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
+
+
 def verify_draft(
     root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
 ) -> tuple[list[str], bool]:
     """A draft attempt's post-run checks: the problems, and whether the answer is owed.
 
-    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, `make verify` -
-    its exit code decides; the one missing answer it tolerates is the gate's own, asked for through
-    `check_adr_answers.TOLERATE_ENV`, never read from its output - the two
-    artefacts, the plan card and the `## Time used` heading.
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
+    `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
+    is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
+    the two artefacts, the plan card and the `## Time used` heading. The full suite stays with
+    implement, repair and the orchestrator.
     """
     owed = False
     if len(new_adrs) > 1:
@@ -7612,7 +7802,7 @@ def verify_draft(
                 "GIT_CONFIG_VALUE_0": "false",
                 # The one tolerance of a draft is the gate's own, set by this runner alone: with this
                 # variable `adr-answers` reports this change's missing answer and passes, so the
-                # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
+                # exit code of the document check decides and no output is read (spec, criterion 13; F-9, F-10).
                 check_adr_answers.TOLERATE_ENV: ctx.change,
             }
         ),
@@ -7624,9 +7814,9 @@ def verify_draft(
     try:
         # One machine-wide admission before the timed check: queue and memory waits consume no
         # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        with verify_lock.hold_admission(["make", "verify"]) as owned:
+        with verify_lock.hold_admission(DOCS_VERIFY) as owned:
             done = launch(
-                ["make", "verify"],
+                DOCS_VERIFY,
                 root,
                 verify_lock.inherit_env(env),
                 timeout=VERIFY_SECONDS,
@@ -7634,12 +7824,12 @@ def verify_draft(
                 pass_fds=_lock_fds(owned),
             )
     except (CallFailed, verify_lock.VerifyLockError) as error:
-        # A make that cannot start is as failed a post-run check as a red one: its diagnostics
-        # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
-        return [f"`make verify` could not run: {error}"], owed
+        # A document check that cannot start is as failed a post-run check as a red one: its
+        # diagnostics reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
+        return [f"`{DOCS_VERIFY_NAME}` could not run: {error}"], owed
     problems = []
     if done.returncode != 0:
-        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        problems.append(f"`{DOCS_VERIFY_NAME}` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     else:
         owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()
