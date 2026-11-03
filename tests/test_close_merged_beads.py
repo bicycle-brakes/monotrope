@@ -952,3 +952,24 @@ def test_utf8_output_survives_ascii_locale(tmp_path: Path) -> None:
     assert preflight.returncode == 1
     assert "preflight failed, nothing attempted" in preflight.stderr
     assert "Traceback" not in preflight.stderr
+
+
+def test_local_trailer_aliases_cannot_hide_merged_declarations(tmp_path: Path) -> None:
+    """F6-9: repository aliases cannot rename or transform raw declarations."""
+    ns = _build(tmp_path)
+    _git(ns.klon, "config", "trailer.Closes-Bead.key", "Other")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert sorted(line.split()[1] for line in _closes(ns)) == sorted(DECLARED)
+
+
+def test_raw_message_trailers_preserve_block_and_value_boundaries(tmp_path: Path) -> None:
+    """Fixed syntax accepts padding and peers, but never subjects or body prose."""
+    ns = _build(tmp_path)
+    _commit(ns.origin, f"Closes-Bead: {UNMERGED}")
+    _commit(ns.origin, f"body mention\n\nCloses-Bead: {UNMERGED}\nordinary prose")
+    declared = _commit(ns.origin, f"raw declaration\n\nReviewed-by: Test\nCloses-Bead \t: \t{REAL_A}\t")
+    result = _run_script(ns, _env(ns), "--write")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert {line.split()[1] for line in _closes(ns)} == {*DECLARED, REAL_A}
+    assert any(f"declared by commit {declared}" in line for line in _closes(ns) if line.split()[1] == REAL_A)

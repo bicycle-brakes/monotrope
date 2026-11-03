@@ -9,8 +9,9 @@ someone remembering it (bead coding-harness-l1if, decision Q-1). Without
 
 What counts, exactly:
 
-- Only the trailer. A ``Closes-Bead:`` line is read where Git reads trailers —
-  the trailing trailer block of a commit message. A mention in the body, PR
+- Only the trailer. A ``Closes-Bead:`` line is read from the trailing trailer
+  paragraph of the raw commit message, using fixed syntax. Git trailer aliases
+  and formatting settings cannot change the declarations. A mention in the body, PR
   prose or any other spelling closes nothing; case variants in the trailer
   block are reported as malformed (decisions.md, "Only the trailer counts").
 - Only merged history. Every commit reachable from origin's freshly fetched
@@ -78,9 +79,10 @@ FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 MERGE_PULL_REQUEST = re.compile(r"^Merge pull request #(\d+)\b")
 SQUASH_NUMBER = re.compile(r"\(#(\d+)\)$")
 
-# Read each commit separately, with NUL-framed subject and logical trailers.
+# Read each commit separately, with NUL-framed subject and raw message.
 # Unlike control bytes such as 0x1e, NUL cannot occur in a commit message.
-COMMIT_FORMAT = "%s%x00%(trailers:only=true,unfold=true)%x00"
+COMMIT_FORMAT = "%s%x00%B%x00"
+TRAILER_LINE = re.compile(rb"[A-Za-z0-9-]+[ \t]*:")
 
 GIT_TIMEOUT = 30.0
 FETCH_TIMEOUT = 60.0
@@ -195,34 +197,62 @@ def collect_declarations(root: Path, pinned: str) -> tuple[dict[str, tuple[str, 
     out = _git_bytes(root, "log", "-z", "--format=%H", pinned)
     declarations: dict[str, tuple[str, str]] = {}
     malformed: list[tuple[str, str]] = []
-    prefix = f"{TRAILER_KEY}:".encode("ascii")
+    key = TRAILER_KEY.encode("ascii")
     for raw_sha in out.split(b"\x00"):
         if not raw_sha:
             continue
         sha = raw_sha.decode("ascii")
         if not FULL_SHA.fullmatch(sha):
             raise PreflightError("merged history returned an invalid commit SHA")
-        record = _git_bytes(root, "show", "--no-patch", f"--format={COMMIT_FORMAT}", sha)
+        record = _git_bytes(root, "log", "-1", f"--format={COMMIT_FORMAT}", sha)
         fields = record.split(b"\x00")
         if len(fields) != 3 or fields[2] != b"\n":
             raise PreflightError(f"cannot read complete trailer fields for {sha}")
         subject = fields[0].decode("utf-8", errors="replace")
-        # Only Git's LF separates logical trailers. Read bytes so universal
-        # newline decoding cannot turn a CR inside a value into a boundary.
-        for line in fields[1].split(b"\n"):
-            if not line.lower().startswith(prefix.lower()):
+        for line in raw_trailers(fields[1]):
+            raw_key, _, raw_value = line.partition(b":")
+            raw_key = raw_key.rstrip(b" \t")
+            if raw_key.lower() != key.lower():
                 continue
-            # Git emits one formatting space after the colon. Remove only
-            # that space; validate the entire raw value before decoding it.
-            raw_value = line[len(prefix) :].removeprefix(b" ")
+            # Horizontal padding is syntax; CR and other control bytes are
+            # part of the value and must survive validation.
+            raw_value = raw_value.strip(b" \t")
             value = raw_value.decode("utf-8", errors="replace")
-            if not line.startswith(prefix):
+            if raw_key != key:
                 malformed.append((sha, line.decode("utf-8", errors="replace")))
             elif BEAD_ID.fullmatch(raw_value):
                 declarations.setdefault(value, (sha, subject))
             else:
                 malformed.append((sha, value))
     return declarations, malformed
+
+
+def raw_trailers(message: bytes) -> list[bytes]:
+    """Read the final trailer paragraph without consulting Git configuration.
+
+    Only LF separates lines; Unicode separators, CR and control bytes stay
+    inside values. A trailer block follows a blank line after the subject and
+    contains trailer lines and their indented continuations, never body prose.
+    Fold continuations before validating values so a first-line identifier
+    cannot become a declaration on its own.
+    """
+    lines = message.split(b"\n")
+    while lines and not lines[-1].strip(b" \t"):
+        lines.pop()
+    start = len(lines)
+    while start and lines[start - 1].strip(b" \t"):
+        start -= 1
+    if start < 2:
+        return []  # The subject itself is never a completion declaration.
+    trailers: list[bytes] = []
+    for line in lines[start:]:
+        if line.startswith((b" ", b"\t")) and trailers:
+            trailers[-1] += b" " + line.lstrip(b" \t")
+        elif TRAILER_LINE.match(line):
+            trailers.append(line)
+        else:
+            return []
+    return trailers
 
 
 def explicit_pr(subject: str) -> str | None:
