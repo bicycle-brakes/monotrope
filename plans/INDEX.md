@@ -374,6 +374,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stop-hook/research.md`](changes/stop-hook/research.md) | draft | none | 2026-11-03 | coding-harness-788 |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
