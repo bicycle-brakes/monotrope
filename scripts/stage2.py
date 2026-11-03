@@ -290,9 +290,17 @@ PHASE6_GUARD_INSTRUCTION = (
 )
 # A phase-6-specific answer instruction replaces, rather than contradicts, `ANSWER_FORMAT` for
 # this call only (spec, criterion 9).
-PHASE6_ANSWER_FORMAT = f"{ANSWER_FORMAT}\n{PHASE6_GUARD_EVIDENCE}"
+PHASE6_ANSWER_FORMAT = (
+    ANSWER_FORMAT.replace(
+        "no header and no other text", "no header; guard-evidence lines may stand beside the rows"
+    ).replace(
+        "When there is no finding, answer exactly: No finding.",
+        "When there is no finding, write `No finding.` as the verdict; guard evidence stands beside it.",
+    )
+    + f"\n{PHASE6_GUARD_EVIDENCE}"
+)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
-# evidence; it stays in the verdict text, where the findings grammar judges it.
+# evidence; phase 6 explicitly refuses malformed evidence even beside findings.
 GUARD_EVIDENCE_LINE = re.compile(
     r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
     r" — fault: (?P<fault>\S.+?)"
@@ -312,13 +320,14 @@ REPAIR_ANSWER = (
     "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
     "An ordinary code row needs a test that fails on the baseline's code, which the runner runs; a row\n"
     "taken as `taken — guard test — <reason>` is answered with the guard form instead, and the runner\n"
+    "requires a nonempty unquoted reason (a quoted or backticked reason is not authorisation) and\n"
     "proves its named test twice on the attempt's code - qualifying red with `STAGE2_PLANT_FAULT=1`,\n"
     "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
     "in the kept test so the proof can be repeated. Only a row taken as\n"
     "`taken — not a test — <reason>` may be answered `not a test`. Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
     "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
     "is booked in the row's own Status as\n"
-    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
     "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
     "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
@@ -548,7 +557,9 @@ RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
     "Write `Status` (`taken — <test or criterion>`, `taken — guard test — <reason>`, "
     "`taken — not a test — <reason>` or `rejected — <reason>`) for every row below.\n"
-    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release; "
+    "For a taken row also write `Broke a test` (`yes`, `no` or "
+    "`yes — guard test — tests/<path>::<function>` after both guard proof legs pass) "
+    "— before the next round or the release; "
     "a row the repair marked `fixed` needs the mark too."
 )
 
@@ -1115,8 +1126,8 @@ def split_guard_evidence(answer: str) -> tuple[list[str], str]:
     """Separate the phase-6 guard-evidence lines from the verdict text they stand beside.
 
     A line is evidence only in its whole stripped form; a line that merely begins
-    `Guard evidence:` stays in the verdict text, where the findings grammar judges
-    it. The evidence is carried on verbatim by the caller, which keeps the full
+    `Guard evidence:` stays in the verdict text, where phase 6 refuses it explicitly.
+    The evidence is carried on verbatim by the caller, which keeps the full
     answer in its block; only the verdict check reads the rest (spec, criterion 9).
     """
     evidence: list[str] = []
@@ -2990,6 +3001,7 @@ def review(root: Path, change: str) -> None:
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     _evidence, verdict_text = split_guard_evidence(answer)
+    malformed_evidence = any(line.strip().startswith("Guard evidence:") for line in verdict_text.splitlines())
     rows, _ = parse_rows(verdict_text)
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
     # boundary): six-cell findings, or exactly `No finding.`. Guard-evidence lines travel beside
@@ -2997,7 +3009,7 @@ def review(root: Path, change: str) -> None:
     # original answer, so the evidence stands verbatim before the verdict line. An empty, refused
     # or malformed answer records no verdict, releases nothing, and stands as rejected evidence
     # for the next attempt.
-    if not rows and verdict_text.strip() != "No finding.":
+    if malformed_evidence or (not rows and verdict_text.strip() != "No finding."):
         append(ctx.findings, rejected_review_block(answer, thread))
         raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(

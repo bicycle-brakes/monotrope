@@ -90,7 +90,6 @@ GRUENDE = (
 REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_guard_environment_gate_goes_red_when_the_switch_is_present": "bestand-dieses-repos",
     "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "bestand-dieses-repos",
     "tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller": "bestand-dieses-repos",
     "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "bestand-dieses-repos",
@@ -205,7 +204,7 @@ REIST_NICHT: dict[str, str] = {
 # while `model-endpoints.yaml` stays home. Their two endpoint cases go red in the
 # throwaway repo for the reason the seven before them carry: the kit carries the
 # definitions but no endpoint declaration of its own.
-DECKEL = 45  # raised on 2026-11-03 (44 -> 45, the guard-test-environment gate test checks this repository's gate list); earlier: raised on 2026-11-01 (42 -> 44); raised on 2026-10-16 (39 -> 42); raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+DECKEL = 44  # lowered on 2026-11-03 (45 -> 44): the guard gate script now travels and its exemption expired; earlier: raised on 2026-11-01 (42 -> 44); raised on 2026-10-16 (39 -> 42); raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

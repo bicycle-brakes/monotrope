@@ -11343,7 +11343,7 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
             "protected local evidence",
             "stage2/attempts/<change>/attempt-<n>-<token>.md",
             "written before any post-run check can stop the run",
-            "replace the finished row's `taken — …` with one of the two fixed statuses",
+            "replace the finished row's `taken — …` with one of the three fixed statuses",
             "set the loop row's `Broke a test` mark from the evidence",
             "if the row is not repaired yet, reword its reason so it names no fix",
             "; fixed by",
@@ -11355,8 +11355,9 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
     check_workflow(workflow_text)
     hand_rule = (
         "A hand\nrepair books itself in the row's Status alone: replace the finished row's\n"
-        "`taken — …` with one of the two fixed statuses and set the loop row's\n"
-        "`Broke a test` mark from the evidence. "
+        "`taken — …` with one of the three fixed statuses and set the loop row's\n"
+        "`Broke a test` mark from the evidence: `yes`, `no`, or\n"
+        "`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. "
     )
     assert hand_rule in workflow_text
     for broken in (
@@ -12716,7 +12717,10 @@ def test_guard_proof_requires_clean_green_without_the_switch(world: World, monke
     assert world.run("repair") == 1
     assert git(world.root, "rev-parse", "HEAD") == head, "a dirty clean leg reached a checkpoint"
     assert "clean guard proof: pytest ended 1 on the fixed code" in prompt_of(world.calls("codex")[1])
-    assert "yes — guard test" not in world.record().read_text(encoding="utf-8")
+    assert all(
+        not row[8].startswith("yes — guard test")
+        for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    )
 
     # With the switch set by the caller, the clean leg must still run without it: a clean leg that
     # inherited it would fire the fault and refuse this valid repair.
@@ -12843,8 +12847,10 @@ def test_guard_repairs_write_statuses_and_marks_only_after_complete_proof(world:
     assert world.run("repair") == 1
     assert git(world.root, "rev-parse", "HEAD") == head, "a failed guard leg reached a checkpoint"
     for where, text in (("record", world.record().read_text(encoding="utf-8")), ("findings", world.text())):
-        assert "yes — guard test" not in text, where
-        assert "fixed — guard test" not in text, where
+        proof_rows = stage2.record_rows(text) if where == "record" else sum(stage2.findings_rows(text), [])
+        assert proof_rows, where
+        assert all(not row[8].startswith("yes — guard test") for row in proof_rows), where
+        assert all(not row[7].startswith("fixed — guard test") for row in proof_rows), where
 
     reset_tree(world)
     world.write_record([("L1-1", GUARD_ROW, "no")])
@@ -12937,6 +12943,23 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     assert "Phase 6 verdict" not in world.text()
 
 
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        "Guard evidence: tests/test_fix.py::test_fix — fault: missing check — catches without switch: no",
+        "Guard evidence: malformed evidence",
+    ],
+)
+def test_phase6_refuses_malformed_guard_evidence_beside_findings(world: World, evidence: str) -> None:
+    """A finding row must not hide an invalid or reasonless guard-evidence line."""
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", f"{rows(1)}\n{evidence}")])
+    assert world.run("review") != 0, "malformed guard evidence passed beside a finding"
+    text = world.text()
+    assert "Phase 6 verdict" not in text
+    assert evidence in text, "the rejected answer lost its evidence"
+
+
 def test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows(world: World) -> None:
     """Criterion 9. Planted fault: the prompt allows sampling or exposes loop rows before the verdict."""
     seed_2a_session(world)
@@ -12945,7 +12968,8 @@ def test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows(wo
     prompt = world.calls("codex")[0]["argv"][-1]
     assert stage2.PHASE6_GUARD_INSTRUCTION in prompt
     assert stage2.PHASE6_GUARD_EVIDENCE in prompt
-    assert stage2.ANSWER_FORMAT in prompt
+    assert stage2.PHASE6_ANSWER_FORMAT in prompt
+    assert "answer exactly: No finding." not in prompt
     assert "every one, never a sample" in prompt
     assert "the test's source and the implementation diff" in prompt
     assert "withheld until your verdict stands" in prompt

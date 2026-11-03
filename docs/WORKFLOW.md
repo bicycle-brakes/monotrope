@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-02
+updated: 2026-11-03
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1517,8 +1517,9 @@ status (`fixed — …`) also fails when its id names no taken row, whatever
 the id's shape. Other prefixes (such as `ADR-0017:` or `UTF-8:`) remain
 report prose when their right side is not a fixed status. A hand
 repair books itself in the row's Status alone: replace the finished row's
-`taken — …` with one of the two fixed statuses and set the loop row's
-`Broke a test` mark from the evidence. A Status that still begins `taken`
+`taken — …` with one of the three fixed statuses and set the loop row's
+`Broke a test` mark from the evidence: `yes`, `no`, or
+`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. A Status that still begins `taken`
 while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
 `; repaired by …`) stops the repair before any call, and the row stands as it
 is. Backtick-quoted markers do not count; if the row is not repaired yet,
@@ -1564,7 +1565,8 @@ configured call, not the CLI's confinement.
 **Guard test (ADR 0023).** A repair that lives only in test code has no
 baseline on which its test could be red, so ordinary red first cannot prove it.
 Only the orchestrator authorises the exception, by writing the row's Status
-`taken — guard test — <reason>`; the repair then answers `<ID>: fixed — guard
+`taken — guard test — <reason>` with a nonempty unquoted reason. A reason
+that is only quoted or backticked is not authorisation. The repair then answers `<ID>: fixed — guard
 test — tests/<path>::<function>`, and no other row may use that form. The
 named test must reference `STAGE2_PLANT_FAULT` and plant its real fault only
 under it. The runner proves the test twice on the attempt's own code: a
@@ -1621,8 +1623,8 @@ When the orchestrator repairs a row itself instead of through `repair`
 each learned on the night of 2026-10-29/30:
 
 - **The loop record learns the repair.** The orchestrator sets the row's
-  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
-  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — guard
+  test — tests/<path>::<function>` or `fixed — not a test — <reason>`) and its `Broke a test` cell from the evidence, after a
   backup of `loop.md`. Otherwise the next round refuses with "taken rows are
   not repaired yet".
 - **A header or status edit regenerates the index.** After a hand edit of a
