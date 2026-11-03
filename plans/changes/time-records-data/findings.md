@@ -1,0 +1,442 @@
+---
+title: "Findings — time-records-data"
+category: findings
+status: draft
+implementation_status: none
+date: 2026-10-31
+created: 2026-10-31
+last_reviewed: 2026-10-31
+updated: 2026-11-03
+supersedes: null
+superseded_by: null
+bead: coding-harness-v6vk
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [findings, stage-2]
+---
+
+# Findings — time-records-data
+
+Stage-2 call, 2026-10-31: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 789 files, 2840 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 841 files, 3100 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +18 -1
+> - `plans/changes/time-records-data/plan.md` +8 -8
+> - `scripts/ci_gates.py` +7 -1
+> - `scripts/harness.py` +139 -4
+> - `scripts/kit/manifest.yaml` +9 -0
+> - `scripts/run_report.py` +25 -28
+> - `scripts/stage2.py` +30 -39
+> - `scripts/time_records.py` +227 -0
+> - `tests/test_harness_time_log.py` +223 -0
+> - `tests/test_run_report.py` +59 -0
+> - `tests/test_stage2.py` +42 -0
+> - `tests/test_time_records.py` +197 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> tests/test_harness_time_log.py:67:14: ARG001 Unused function argument: `root`
+>    |
+> 67 | def run_args(root: Path, argv: list[str]) -> tuple[int, list[str]]:
+>    |              ^^^^ ARG001
+> 68 |     """One in-process run; an argparse refusal exits, and its exit code is the verdict."""
+> 69 |     out: list[str] = []
+>    |
+>
+> Found 1 error.
+> ```
+
+Stage-2 call, 2026-11-03: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 844 files, 3106 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/time-records-data/plan.md` +8 -8
+> - `tests/test_harness_time_log.py` +15 -15
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         assert code == 2 and plan.read_text(encoding="utf-8") == "# Plan\n\nnothing here\n"
+>         doubled = PLAN + "\n## Time used\n\nmore\n"
+>         plan.write_text(doubled, encoding="utf-8")
+>         code, _ = run_args(argv_for(root))
+>         assert code == 2 and plan.read_text(encoding="utf-8") == doubled
+>         reset()
+>         # A symlinked plan never receives the write; the link and its target survive untouched.
+>         plan.unlink()
+>         plan.symlink_to(outside)
+>         code, _ = run_args(argv_for(root))
+>         assert code == 2 and outside.read_bytes() == b"untouched\n" and plan.is_symlink()
+>         reset()
+>         # A hard-linked plan never receives the write through its link.
+>         plan.unlink()
+>         os.link(outside, plan)
+>         code, _ = run_args(argv_for(root))
+>         assert code == 2 and outside.read_bytes() == b"untouched\n"
+>         reset()
+>         # An aliased change folder never receives the write through the link.
+>         shutil.rmtree(plan.parent)
+>         plan.parent.symlink_to(outside_dir, target_is_directory=True)
+> >       (outside_dir / "plan.md").write_bytes(healthy)
+>
+> tests/test_harness_time_log.py:185: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1036: in write_bytes
+>     with self.open(mode='wb') as f:
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-199/popen-gw0/test_invalid_input_and_unsafe_0/outside-change/plan.md')
+> mode = 'wb', buffering = -1, encoding = None, errors = None, newline = None
+>
+>     def open(self, mode='r', buffering=-1, encoding=None,
+>              errors=None, newline=None):
+>         """
+>         Open the file pointed to by this path and return a file object, as
+>         the built-in open() function does.
+>         """
+>         if "b" not in mode:
+>             encoding = io.text_encoding(encoding)
+> >       return io.open(self, mode, buffering, encoding, errors, newline)
+> E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-199/popen-gw0/test_invalid_input_and_unsafe_0/outside-change/plan.md'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1013: FileNotFoundError
+> ----------------------------- Captured stderr call -----------------------------
+> usage: harness.py time-log [-h] --start START --end END --seconds SECONDS
+>                            --verb ACTIVITY --attempt ATTEMPT --route ROUTE
+>                            --model MODEL --result {accepted,rejected}
+>                            [--root ROOT]
+>                            change
+> harness.py time-log: error: argument --result: invalid choice: 'maybe' (choose from accepted, rejected)
+> usage: harness.py time-log [-h] --start START --end END --seconds SECONDS
+>                            --verb ACTIVITY --attempt ATTEMPT --route ROUTE
+>                            --model MODEL --result {accepted,rejected}
+>                            [--root ROOT]
+>                            change
+> harness.py time-log: error: the following arguments are required: --seconds
+> usage: harness.py time-log [-h] --start START --end END --seconds SECONDS
+>                            --verb ACTIVITY --attempt ATTEMPT --route ROUTE
+>                            --model MODEL --result {accepted,rejected}
+>                            [--root ROOT]
+>                            change
+> harness.py time-log: error: the following arguments are required: --model
+> usage: harness.py time-log [-h] --start START --end END --seconds SECONDS
+>                            --verb ACTIVITY --attempt ATTEMPT --route ROUTE
+>                            --model MODEL --result {accepted,rejected}
+>                            [--root ROOT]
+>                            change
+> harness.py time-log: error: the following arguments are required: --start
+> usage: harness.py time-log [-h] --start START --end END --seconds SECONDS
+>                            --verb ACTIVITY --attempt ATTEMPT --route ROUTE
+>                            --model MODEL --result {accepted,rejected}
+>                            [--root ROOT]
+>                            change
+> harness.py time-log: error: the following arguments are required: --result
+> =========================== short test summary info ============================
+> FAILED tests/test_harness_time_log.py::test_time_log_appends_one_counted_record
+> FAILED tests/test_time_records.py::test_atomic_publish_leaves_the_plan_on_failure
+> FAILED tests/test_harness_time_log.py::test_invalid_input_and_unsafe_destination_leave_bytes_unchanged
+> 3 failed, 18 passed in 9.73s
+> ```
+
+Stage-2 call, 2026-11-03: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 844 files, 3106 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/time_records.py` +1 -1
+> - `tests/test_harness_time_log.py` +2 -1
+> - `tests/test_time_records.py` +1 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> scripts/time_records.py:196:9: PTH105 `os.replace()` should be replaced by `Path.replace()`
+>     |
+> 194 |             os.fsync(out.fileno())
+> 195 |         temporary.chmod(mode)
+> 196 |         os.replace(temporary, plan)
+>     |         ^^^^^^^^^^ PTH105
+> 197 |     except BaseException:
+> 198 |         temporary.unlink(missing_ok=True)
+>     |
+>
+> Found 1 error.
+> ```
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 844 files, 3111 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 844 files, 3113 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Loop attempt: 2026-11-03 — no round was written; the review-loop calls above consumed no stage; audit calls: 2
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+
+glm-5.3-flash was asked again with the format reminder: the first answer was malformed
+
+From glm-5.3-flash:
+
+glm-5.3-flash's first answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | R1 | MAJOR | SPEC | prompts/04-implement.md (the `appetite is a stop` block) | The change keeps the sentence `A break inside a session counts, and the record says so` directly above the command it introduces, but the command's fixed record has no slot for a break note and the new text moves the break's only mention to the session's status message, which does not survive `/clear`; the doctrine the change consolidated now asks the session to write an annotation the one fixed record cannot carry, so the two sentences contradict each other in the same paragraph. |
+> | R2 | MINOR | SPEC | prompts/04-implement.md (the time-log command template) | The template fixes the activity and the outcome as literals while the spec requires the record to carry the activity's actual result; nothing marks those two fields as caller-substituted the way the start, attempt and model fields are, so a session that follows the template verbatim records every span as an accepted session span regardless of what happened. |
+> | R3 | MINOR | MAINT | scripts/time_records.py (`publish_atomic`) | The docstring promises temporary file, fsync, rename and a directory fsync, but the branch taken when the destination is missing performs a plain non-atomic write with no durability step at all; a caller reaching the default publisher with a vanished destination silently receives weaker guarantees than the documented contract, while any failure after the write is reported as merely a synchronization warning. |
+> | R4 | MINOR | MAINT | scripts/harness.py (`time_log` heading check) | The requirement of exactly one time heading counts heading lines also inside code fences, so a plan that legitimately quotes the heading in an unindented fenced example is refused as if it carried a second time section, and the refusal names only the count, leaving the maintainer to guess that a fenced quote tripped it. |
+> | R5 | MINOR | SPEC | plans/changes/time-records-data/spec.md (neighbours header) | The change's own research enumerates the neighbours and states three active changes declare protected areas inside the module this change rewrites, yet the shipped spec carries an empty neighbours list, so the cross-change overlap the research says the spec phase must reconcile is nowhere visible in the header a maintainer of the neighbouring changes would read. |
+> | R6 | MINOR | MAINT | plans/changes/time-records-data/research.md (frontmatter) | The research text itself records that the class declaration and the neighbours header are owed in its frontmatter before a swarm run and are written only by the runner, but the shipped file still presents neither, so the artefact contradicts its own statement of what is owed. |
+
+From glm-5.3-flash:
+
+glm-5.3-flash's second answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> | R1 | MAJOR | SPEC | prompts/04-implement.md, "The appetite is a stop" paragraph (the time-log command line) | The command the prompt hands to sessions is fixed as `--result accepted`, not a `<accepted\|rejected>` placeholder like every other field; a span that ends on a rejected or cut outcome (a stop, a failed verification before the stop, a parked span) is thereby instructed to record "accepted", so the plan's record can name an outcome the activity never had — spec criterion 2 and the spec's own `[DETAIL]` ("outcome names the actual activity result") are refuted by the instruction itself, and no test covers the rejected-session path.
+> | R2 | MINOR | MAINT | scripts/time_records.py, `publish_atomic` (the `FileNotFoundError` branch) | When the destination is found missing at publish time, the shared default writer falls back to a plain non-atomic `plan.write_bytes(content)` with no temporary file, no fsync and no directory sync, contradicting the module's own documented contract ("temporary file, fsync, rename, directory fsync"); an existing plan deleted between the caller's checks is silently recreated outside the safe path, while the in-tree callers only dodge this by pre-checking existence themselves.
+> | R3 | MINOR | MAINT | scripts/stage2.py, `REPAIR_FORMAT` (the Codex repair prompt, shell-capable) and `scripts/stage2.py`, `REPAIR_FORMAT_FILE_TOOLS` | The change gave interactive sessions a live machine command for time entries, and `prompts/04-implement.md` was updated to forbid calling it for runner-measured attempts ("A model running under the Stage-2 runner never calls it"); the embedded repair prompts the runner hands to Codex — the one Stage-2 role with a command tool — still carry only the old "write no entry under `## Time used`" sentence, so the only instruction those attempts see names the hand-write route and is silent about the new command, and the doctrine test (`test_runner_time_doctrine_preserves_interactive_measurement`) asserts nothing beyond the same hand-write clause.
+> | R4 | MINOR | MAINT | scripts/harness.py, `time_log` (`--route`) | The command accepts any non-blank route with no relation to who calls it, so an interactive session following the prompt incompletely can pass e.g. `--route flash` and the report's fixed-format attempt rows will present an interactive span as a runner-model attempt; nothing at the command boundary warns or refuses, although the spec's `[DETAIL]` and `docs/WORKFLOW.md` both pin `route orchestrator` as the marker of a session-logged span.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 844 files, 3114 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 844 files, 3116 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model hy3 · leak check clean over 844 files, 3117 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model hy3 · leak check clean over 844 files, 3117 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 844 files, 3118 commits, 12 rules.
+
+Loop attempt: 2026-11-03 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3137 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:103; scripts/stage2.py:7349 | If UTC moves backward during a completed attempt, the new formatter raises `ValueError` despite a valid monotonic duration. The runner sets `logged = True` before formatting, so its exception handler skips recovery: no time entry is persisted and checkpointing aborts. The previous formatter recorded this case successfully. Completed attempts must retain their exactly-once measurement contract despite wall-clock adjustments. [AC 2, 3, 6] | Codex | fixed — tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | scripts/time_records.py:76 | Metadata validation accepts embedded Unicode line separators such as U+2028. Reproduced with that character inside `--model`: `time-log` returns 0, but the report splits the resulting record into two unread lines and counts zero of its supplied 60 seconds. Reject every newline recognized by the reader before publication. [AC 1, 4, 7] | Codex | fixed — tests/test_time_records.py::test_validation_refuses_malformed_fields — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
+| F6-3 | MINOR | SPEC | Phase 6 | scripts/harness.py:403 | Reading the plan with `read_text()` normalizes CRLF line endings before publication. An otherwise valid invocation therefore rewrites line endings throughout existing history and following sections; an in-memory command reproduction changed all ten existing CRLF endings to LF. Preserve unrelated plan bytes when appending the record and stamping `updated:`. [AC 5] | Codex | fixed — tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives — orchestrator hand acceptance 2026-11-03 of the second Sonnet attempt plus a CRLF heading fix; red on the baseline by hand (one leg a ValueError, not an assertion), no runner proof | — |
+
+Phase 6 verdict: codex 01a1a129-e75b-7373-95ea-150009e4eb4d, 2026-11-03
+Reviewer session: codex 01a1a129-e75b-7373-95ea-150009e4eb4d — a fresh session reviewed: no phase-2a session was recorded
+
+## Phase 4b — loop rows, released 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
+|---|---|---|---|---|---|---|---|---|---|
+| L1-1 | MAJOR | SPEC | free-swarm r1 | docs/WORKFLOW.md:901-905 and prompts/04-implement.md:47-54,84 | The workflow now states that every span an interactive session logs comes from `python3 scripts/harness.py time-log` (route `orchestrator`), but the implementation prompt still tells a session to append hand-written `<date> <start>–<end>, <span>` lines and its appetite answer under `## Time used`; a session that follows the prompt therefore still produces prose the report counts only as `unread lines`, so the one-format promise and the spec's DoD (workflow and prompt moved together) do not hold. Plan step 7 assigns the prompt edit to the orchestrator after acceptance, so the two texts contradict each other until that edit lands, and this loop reviews a diff where it has not landed. | deepseek-v4.1-flash | rejected — plan step 7 gives this edit to the orchestrator outside model attempts; done by hand in 5eb38120 (prompts/04-implement.md now names `harness.py time-log`); phase 6 checks it against criterion 9 |  | disagree — The orchestrator already replaced handwritten span instructions in commit 5eb38120; appetite notes intentionally remain prose. |
+| L1-2 | MINOR | MAINT | free-swarm r1 | scripts/time_records.py:177-204 vs scripts/stage2.py:1108-1131; scripts/time_records.py:36 vs scripts/stage2.py:3776 | The new module says it is the one writer and that no caller keeps a second grammar, but its atomic publisher is a near byte-for-byte copy of `stage2.write_atomic`, and the `## Time used` heading pattern is still defined separately in both modules. A later fix to one publisher (mode handling, temp cleanup, failure ordering) or to the heading form will not reach the other, and no test compares the two copies. | deepseek-v4.1-flash | rejected — accepted limit, named in the pull request: the duplicated atomic publisher is maintenance, not a contract the spec states; folding it into one helper touches scripts/stage2.py beyond this change |  | disagree — Publisher duplication demonstrates no concrete failure or conflicting grammar; consolidating unrelated atomic publishers is outside the promised contract. |
+| L1-3 | MINOR | MAINT | free-swarm r1 | scripts/time_records.py:200-204 with scripts/harness.py:423-427 | `publish_atomic` replaces the plan first and only then opens and fsyncs the directory; if that final open/fsync fails, the exception propagates after the record is already published. `time-log` then turns it into `refused: …` followed by `Nothing was written.`, although the plan now contains the new line, so a caller that retries on the refusal appends a second record. The documented "refusal never alters the destination" guarantee covers only failures before the rename. | deepseek-v4.1-flash | fixed — tests/test_harness_time_log.py::test_directory_sync_failure_reports_published_record | yes — tests/test_harness_time_log.py::test_directory_sync_failure_reports_published_record | agree |
+| L1-4 | MINOR | SPEC | free-swarm r1 | docs/WORKFLOW.md:512-514 vs scripts/run_report.py:150,209-216 | The new sentence says everything below the heading that is not a record "stays unread and visible as `unread lines: N`", but `read_time` silently skips every line matching `FURNITURE` (`### …`, fences) without counting it. A sub-heading or fenced note inside `## Time used` therefore appears neither in the subtotal nor in the unread count, so the stated visibility contract is wider than the reader's behaviour. | deepseek-v4.1-flash | fixed — not a test — Documented skipped blank lines, headings and fence markers. | no — not a test | agree |
+| L1-5 | MINOR | MAINT | free-swarm r1 | plans/changes/time-records-data/research.md:20-27,33 | The research file still carries the untouched skeleton — "this file is empty until it has run" — and the note "The frontmatter says `provenance: human-written`" above the completed exploration, while its own frontmatter declares `ai-drafted-reviewed` with `produced_by`/`review`; it also keeps the runner's "Here is the research, ready to append" preamble. A reader is told the file is empty and its provenance claim is wrong, so the record contradicts itself. | deepseek-v4.1-flash | fixed — not a test — Removed stale skeleton instructions and runner preface. | no — not a test | agree |
+| L1-6 | MAJOR | SPEC | spec criterion 9, plan step 7 | prompts/04-implement.md — untouched by this diff; contrast the docs/WORKFLOW.md paragraph added here | The interactive-session instructions were never brought along: prompts/04-implement.md, the text an interactive session actually follows, still directs hand-written span lines under `## Time used`, while docs/WORKFLOW.md now tells sessions to run `python3 scripts/harness.py time-log`. Criterion 9's own refuter — the instructions still require hand-written duration lines — is true of this tree, so interactive spans logged the old way stay unread prose in the report, the failure this change exists to end. The plan schedules this edit as an orchestrator-only bootstrap (step 7) that no model repair may make, but until it lands the two documents contradict each other. | mimo-v2.6-flash | rejected — the same as L1-1: plan step 7, done by the orchestrator in 5eb38120 |  | disagree — Commit 5eb38120 already brought the implementation prompt into agreement with criterion 9. |
+| L1-7 | MINOR | MAINT | plan step 1, spec [DETAIL] on one shared parser and inserter | scripts/time_records.py (TIME_HEADING, FOLLOWING_HEADING) vs the surviving scripts/stage2.py TIME_HEADING and insert_before_time | The record grammar moved into scripts/time_records.py but the section grammar did not move with it: time_records now owns `TIME_HEADING` and `FOLLOWING_HEADING`, while scripts/stage2.py keeps its own `TIME_HEADING` definition (no hunk in the diff removes or re-points it) and its own heading searches outside the converted time_log/with_time_entry pair, such as insert_before_time. Two copies of the `## Time used` boundary pattern can drift apart — precisely the second-grammar failure the shared writer was introduced to remove — and no test keeps the two definitions identical. | mimo-v2.6-flash | fixed — not a test — Stage2 now uses time_records.TIME_HEADING. | no — not a test | disagree — Identical heading constants demonstrate hypothetical drift, not a concrete failure; the reviewed tree also shares TIME_HEADING. |
+| L1-8 | MINOR | MAINT | plan step 2 (validate everything; refusal returns 2 with bounded context), spec criterion 4 destination rules | scripts/harness.py time_log()'s publish closure — check_frontmatter_current.stamped | Every publication runs the plan's bytes through check_frontmatter_current.stamped, which stamps the `updated:` frontmatter field, but the destination requirements the command enforces are readable UTF-8 and exactly one `## Time used` heading — spec criterion 4 lists no frontmatter condition. Every test of the command uses a plan that already carries `updated:`, so a destination that meets the stated requirements yet has no frontmatter or no `updated:` line is an untested edge: the suite cannot show that such a plan receives its record, or is refused with the promised bounded exit 2 and "Nothing was written.", rather than failing with an unhandled exception (exit 1). | mimo-v2.6-flash | fixed — tests/test_harness_time_log.py::test_time_log_accepts_plan_without_updated_field | yes — tests/test_harness_time_log.py::test_time_log_accepts_plan_without_updated_field | disagree — No failing input is demonstrated: stamped already handles absent frontmatter and missing updated fields; current tests explicitly cover those destinations. |
+| L2-1 | MAJOR | SPEC | plans/changes/time-records-data/spec.md `[DETAIL]` ("the activity's actual outcome") against prompts/04-implement.md | prompts/04-implement.md, appetite block, the time-log command line | The command template handed to interactive sessions hardcodes `--result accepted` as a literal while start, attempt, model and route are placeholders; spec criterion 2 and its `[DETAIL]` require the record to carry the activity's actual outcome, so a session span that ends on a rejected verification, a stop or a parked cut is instructed to be recorded as accepted — the fixed line can then name an outcome the activity never had, and no test covers a session span with `--result rejected` through the prompt's own template. | glm-5.3-flash | rejected — the orchestrator's own plan-step-7 text, which repair attempts may not edit: fixed by hand in 6fcc23cb (`--result <accepted \| rejected>` with the rule for rejected spans) |  | agree |
+| L2-2 | MAJOR | SPEC | spec criterion 9 and prompts/04-implement.md's retained sentence | prompts/04-implement.md, the retained sentence above the new command | The change keeps "A break inside a session counts, and the record says so" in force above the newly introduced command, but the one fixed record it now mandates has no slot naming a break, and the replacement text moves the break's only durable mention to the session's status message, which does not survive `/clear` and never reaches `plan.md`; the change promises the record says so and delivers a format that cannot, and nothing in the spec's non-goals covers the break field, so the two sentences in the same paragraph contradict each other untested. | glm-5.3-flash | rejected — same text as L2-1: fixed by hand in 6fcc23cb (the break is named in the status message; the fixed record has no break field) |  | agree |
+| L2-3 | MINOR | MAINT | scripts/time_records.py docstring vs. its own code | scripts/time_records.py, `publish_atomic` | The docstring promises temporary file, fsync, rename and directory fsync, but the `except FileNotFoundError` branch taken when the destination is missing at publish time performs a plain `plan.write_bytes(content)` with no atomicity, no fsync and no directory sync; a plan deleted between the caller's checks and the publication (raced during `harness time-log`, or any future default-publisher caller) is silently recreated on a semantics-weaker path, and no test demonstrates or forbids this branch's behavior. | glm-5.3-flash | fixed — tests/test_harness_time_log.py::test_plan_removed_before_publication_is_not_recreated | yes — tests/test_harness_time_log.py::test_plan_removed_before_publication_is_not_recreated | agree |
+| L2-4 | MINOR | MAINT | the change's own doctrine (docs/WORKFLOW.md, spec `[DETAIL]`: route orchestrator marks interactive input) | scripts/harness.py, `time-log --route` | The command boundary accepts any non-blank route with no relation to who calls it, so an interactive session that follows the instructions incompletely can pass e.g. `--route flash` and the report then presents its span as a runner-model attempt row; the fixed format's only origin marker is the route, nothing at the entry point checks or rejects a claim to the runner's identity, and no test covers the refusal — as written the record can misattribute work with no machine check. | glm-5.3-flash | rejected — accepted limit named in the pull request: binding a route to its caller is a new guarantee the spec does not state (the route is a declared value, criterion 1) |  | disagree — The command records caller-supplied metadata; authenticating the caller or reserving route values is not a specified requirement. |
+| L2-5 | MINOR | MAINT | shared reader vs. the change's own CLI check | scripts/harness.py, `time_log` heading count vs. `time_records.section_text`/`insert_entry` | The CLI requires exactly one `## Time used` heading found by `findall` over the whole file, counting occurrences inside unindented code fences, while the shared reader and inserter always use the first matching heading and skip fence furniture; a plan that legitimately quotes the heading in a fenced example is refused as if it carried a second time section, one writer/reader precondition the runner itself does not share, and the refusal names only the count, giving the maintainer no path to the fenced culprit. | glm-5.3-flash | rejected — accepted limit named in the pull request: a quoted `## Time used` inside a code fence refuses the plan with a count; the refusal is safe (nothing written) and no plan in the tree carries such a fence |  | disagree — The plan explicitly requires exactly one matching time heading; Markdown-aware recognition of fenced examples is not promised. |
+| L3-1 | MINOR | MAINT | time-records-data | scripts/harness.py `time_log` (TIME_HEADING.findall) vs scripts/time_records.py `section_text`/`insert_entry` (re.search) | The write refuses any plan whose text contains more than one `## Time used` line — including a quoted example inside a fenced block — because it counts every match, while the reader and inserter only ever use the first match; the writer and reader therefore disagree on what is a valid plan, so a plan the report reads fine is refused by the command. | hy3 | rejected — the same finding as L2-5 without new evidence (a fenced quote of the heading refuses the plan safely); accepted limit named in the pull request |  | disagree — The CLI intentionally validates destinations more strictly than the historical reader; accepting duplicate heading matches is not required. |
+| L3-2 | MINOR | MAINT | time-records-data | prompts/04-implement.md ("The appetite is a stop") | The change dropped the statement that a counted break is recorded, leaving only the summed seconds and the session's status message as the break's witness; the same paragraph states a chat does not survive `/clear`, so the only durable trace of an included break is a larger duration, and a maintainer reading the fixed record cannot tell a span included a break. | hy3 | rejected — accepted limit named in the pull request: the fixed record has no break field by the spec's format (criterion 2); the break is inside the measured seconds and said in the status message (L2-2) |  | disagree — The agreed fixed format has no break field; counted breaks remain included in measured seconds, as the revised prompt states. |
+| L3-3 | MINOR | MAINT | time-records-data | scripts/run_report.py (import block) | `run_report` imports `time_records` unconditionally while its `stage2` import is wrapped in `try/except SystemExit` that degrades to "runner time reader unavailable"; an import-time error in the new shared module would crash the report instead of degrading the way the stage2 case does. | hy3 | rejected — no failing case: `time_records` imports only the standard library and travels with the harness command; an import-time error there fails the whole suite before any report runs, and degrading would hide it |  | disagree — No actual import failure is identified; handling the runner’s deliberate SystemExit does not establish a requirement to suppress arbitrary module import errors. |
+
+Rounds run: 3
+
+Record digest: sha256:3087b97d012f4a3723879a049ddc32bebbf9ae04a75b69cd6f69fc65929f2db3
+
+Record identity: sha256:cba7f19c74f1527c2ffb584db860755490dce8f11174e9db909c41bc29f046b1
+
+Cut rounds: 1, 2, 3
+
+Loop state: {"availability": {"checked_at": "2026-11-03T01:41:12+00:00", "failed": {"cat-jam-free": "pi call failed: exit 1: 400: {\"type\":\"server_error\",\"message\":\"Upstream request failed: Model is unavailable.\"}", "longcat-2.5-preview-free": "pi call failed: exit 1: 400: {\"type\":\"server_error\",\"message\":\"Upstream request failed: Model is unavailable.\"}", "mimo-v2.5": "pi call failed: exit 1: 410: {\"type\":\"ModelDeprecated\",\"message\":\"Model mimo-v2.5 has been deprecated. Use mimo-v2.6-flash instead.\"}", "mimo-v2.5-pro": "pi call failed: exit 1: 410: {\"type\":\"ModelDeprecated\",\"message\":\"Model mimo-v2.5-pro has been deprecated. Use mimo-v2.6-pro instead.\"}"}, "reachable": ["deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0", "glm-5.3-flash", "hy3", "mimo-v2.6-pro", "hy4-preview", "kimi-k2.7-code", "deepseek-v4-pro", "glm-5.2", "glm-5.3", "kimi-k3"], "skipped": {"gemini-4-argon-contributor": "not admitted; data terms have not been read", "grok-4.6": "not admitted; data terms have not been read", "minimax-m2.7": "not admitted; data terms have not been read", "muse-spark-1.2-contributor": "not admitted; data terms have not been read", "muse-spark-1.3-contributor": "not admitted; data terms have not been read", "space-bunny": "not admitted; data terms have not been read"}, "slow": {}, "terms_skipped": ["qwen3.8-flash (the model qwen3.8-flash was skipped on 2026-10-17: wire API not measured)", "gpt-6-luna (the model gpt-6-luna was skipped on 2026-10-17: wire API not measured)", "claude-haiku-5-5 (the model claude-haiku-5-5 was skipped on 2026-10-17: wire API not measured)", "minimax-m3 (the model minimax-m3 was skipped on 2026-10-17: wire API not measured)", "qwen3.7-plus (the model qwen3.7-plus was skipped on 2026-10-22: wire API not measured)", "qwen3.8-max (the model qwen3.8-max was skipped on 2026-10-22: wire API not measured)", "grok-4.7 (the model grok-4.7 was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint))", "gpt-5.6-luna (the model gpt-5.6-luna was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint))", "gemini-4-argon (the model gemini-4-argon was skipped on 2026-10-30: wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor)", "kimi-k3.1-pro (the model kimi-k3.1-pro was skipped on 2026-10-30: not in the live Go catalog (2026-10-30))", "minimax-m3.1-flash (the model minimax-m3.1-flash was skipped on 2026-10-30: not in the live Go catalog (2026-10-30))", "step-5-preview (the model step-5-preview was skipped on 2026-10-30: not in the live Go catalog (2026-10-30); the catalog lists step-5-preview-free)", "beam-free (the model beam-free was skipped on 2026-10-30: not in the live Go catalog (2026-10-30))"], "terms_warnings": ["the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left)"]}, "consumed": ["flash", "rung:glm-5.3-flash", "rung:hy3"], "free": {"billing": "not measured: pi.dev is a live catalog, not a billing statement", "catalog": [{"model": "big-pickle", "provider": "opencode"}, {"model": "cat-jam-free", "provider": "opencode"}, {"model": "claude-fable-5", "provider": "opencode"}, {"model": "claude-fable-5-1", "provider": "opencode"}, {"model": "claude-haiku-4-5", "provider": "opencode"}, {"model": "claude-haiku-5-5", "provider": "opencode"}, {"model": "claude-opus-4-5", "provider": "opencode"}, {"model": "claude-opus-4-6", "provider": "opencode"}, {"model": "claude-opus-4-7", "provider": "opencode"}, {"model": "claude-opus-4-8", "provider": "opencode"}, {"model": "claude-opus-5", "provider": "opencode"}, {"model": "claude-opus-5-5", "provider": "opencode"}, {"model": "claude-sonnet-4", "provider": "opencode"}, {"model": "claude-sonnet-4-5", "provider": "opencode"}, {"model": "claude-sonnet-4-6", "provider": "opencode"}, {"model": "claude-sonnet-5", "provider": "opencode"}, {"model": "claude-sonnet-5-5", "provider": "opencode"}, {"model": "deepseek-v4-flash", "provider": "opencode"}, {"model": "deepseek-v4-flash-vision-exp", "provider": "opencode"}, {"model": "deepseek-v4-pro", "provider": "opencode"}, {"model": "deepseek-v4.1-flash", "provider": "opencode"}, {"model": "deepseek-v4.1-flash-free", "provider": "opencode"}, {"model": "exo-free", "provider": "opencode"}, {"model": "gemini-3-flash", "provider": "opencode"}, {"model": "gemini-3.1-pro", "provider": "opencode"}, {"model": "gemini-3.5-flash", "provider": "opencode"}, {"model": "gemini-3.5-flash-lite", "provider": "opencode"}, {"model": "gemini-3.6-flash", "provider": "opencode"}, {"model": "gemini-3.7-flash", "provider": "opencode"}, {"model": "gemini-3.8-flash", "provider": "opencode"}, {"model": "gemini-4-argon", "provider": "opencode"}, {"model": "glm-5", "provider": "opencode"}, {"model": "glm-5.1", "provider": "opencode"}, {"model": "glm-5.2", "provider": "opencode"}, {"model": "glm-5.3", "provider": "opencode"}, {"model": "glm-5.3-flash", "provider": "opencode"}, {"model": "gpt-5", "provider": "opencode"}, {"model": "gpt-5-codex", "provider": "opencode"}, {"model": "gpt-5-nano", "provider": "opencode"}, {"model": "gpt-5.1", "provider": "opencode"}, {"model": "gpt-5.1-codex", "provider": "opencode"}, {"model": "gpt-5.1-codex-max", "provider": "opencode"}, {"model": "gpt-5.1-codex-mini", "provider": "opencode"}, {"model": "gpt-5.2", "provider": "opencode"}, {"model": "gpt-5.2-codex", "provider": "opencode"}, {"model": "gpt-5.3-codex", "provider": "opencode"}, {"model": "gpt-5.4", "provider": "opencode"}, {"model": "gpt-5.4-mini", "provider": "opencode"}, {"model": "gpt-5.4-nano", "provider": "opencode"}, {"model": "gpt-5.4-pro", "provider": "opencode"}, {"model": "gpt-5.5", "provider": "opencode"}, {"model": "gpt-5.5-pro", "provider": "opencode"}, {"model": "gpt-5.6-luna", "provider": "opencode"}, {"model": "gpt-5.6-sol", "provider": "opencode"}, {"model": "gpt-5.6-terra", "provider": "opencode"}, {"model": "gpt-6-astra", "provider": "opencode"}, {"model": "gpt-6-luna", "provider": "opencode"}, {"model": "gpt-6-sol", "provider": "opencode"}, {"model": "gpt-6.1-sol", "provider": "opencode"}, {"model": "grok-4.5", "provider": "opencode"}, {"model": "grok-4.6", "provider": "opencode"}, {"model": "grok-4.7", "provider": "opencode"}, {"model": "grok-build-0.1", "provider": "opencode"}, {"model": "kimi-k2.5", "provider": "opencode"}, {"model": "kimi-k2.6", "provider": "opencode"}, {"model": "kimi-k2.7-code", "provider": "opencode"}, {"model": "kimi-k3", "provider": "opencode"}, {"model": "ling-3.0-flash-fin-free", "provider": "opencode"}, {"model": "ling-3.1-flash-free", "provider": "opencode"}, {"model": "longcat-2.5-preview-free", "provider": "opencode"}, {"model": "mimo-v2.6-flash-free", "provider": "opencode"}, {"model": "minimax-m2.5", "provider": "opencode"}, {"model": "minimax-m2.7", "provider": "opencode"}, {"model": "minimax-m3", "provider": "opencode"}, {"model": "mistral-large-4", "provider": "opencode"}, {"model": "muse-spark-1.2", "provider": "opencode"}, {"model": "muse-spark-1.3", "provider": "opencode"}, {"model": "muse-spark-1.3-contributor-free", "provider": "opencode"}, {"model": "nemotron-3-ultra-free", "provider": "opencode"}, {"model": "nemotron-3.5-lightning-free", "provider": "opencode"}, {"model": "qwen3.5-plus", "provider": "opencode"}, {"model": "qwen3.6-plus", "provider": "opencode"}, {"model": "qwen3.8-flash", "provider": "opencode"}, {"model": "qwen3.8-max", "provider": "opencode"}, {"model": "space-bunny-free", "provider": "opencode"}, {"model": "step-5-preview-free", "provider": "opencode"}, {"model": "cat-jam-free", "provider": "opencode-go"}, {"model": "claude-haiku-5-5", "provider": "opencode-go"}, {"model": "deepseek-v4-flash", "provider": "opencode-go"}, {"model": "deepseek-v4-flash-vision-exp", "provider": "opencode-go"}, {"model": "deepseek-v4-pro", "provider": "opencode-go"}, {"model": "deepseek-v4.1-flash", "provider": "opencode-go"}, {"model": "gemini-4-argon-contributor", "provider": "opencode-go"}, {"model": "glm-5.2", "provider": "opencode-go"}, {"model": "glm-5.3", "provider": "opencode-go"}, {"model": "glm-5.3-flash", "provider": "opencode-go"}, {"model": "gpt-5.6-luna", "provider": "opencode-go"}, {"model": "gpt-6-luna", "provider": "opencode-go"}, {"model": "grok-4.6", "provider": "opencode-go"}, {"model": "grok-4.7", "provider": "opencode-go"}, {"model": "hy3", "provider": "opencode-go"}, {"model": "hy4-preview", "provider": "opencode-go"}, {"model": "kimi-k2.7-code", "provider": "opencode-go"}, {"model": "kimi-k3", "provider": "opencode-go"}, {"model": "longcat-2.0", "provider": "opencode-go"}, {"model": "longcat-2.5-preview-free", "provider": "opencode-go"}, {"model": "mimo-v2.5", "provider": "opencode-go"}, {"model": "mimo-v2.5-pro", "provider": "opencode-go"}, {"model": "mimo-v2.6-flash", "provider": "opencode-go"}, {"model": "mimo-v2.6-pro", "provider": "opencode-go"}, {"model": "minimax-m2.7", "provider": "opencode-go"}, {"model": "minimax-m3", "provider": "opencode-go"}, {"model": "muse-spark-1.2-contributor", "provider": "opencode-go"}, {"model": "muse-spark-1.3-contributor", "provider": "opencode-go"}, {"model": "qwen3.7-plus", "provider": "opencode-go"}, {"model": "qwen3.8-flash", "provider": "opencode-go"}, {"model": "qwen3.8-max", "provider": "opencode-go"}, {"model": "space-bunny", "provider": "opencode-go"}, {"model": "step-5-preview-free", "provider": "opencode-go"}], "checked_at": "2026-11-03T01:38:03+00:00", "dropped": {}, "models_store": {"opencode-go": {"checkedAt": 1793669882586, "etag": "W/\"65e1c3b71054c3b1741fe4cb46560dbf\"", "lastModified": 1792068066000, "models": [{"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 262144, "cost": {"cacheRead": 0, "cacheWrite": 0, "input": 0, "output": 0}, "id": "cat-jam-free", "input": ["text"], "maxTokens": 131072, "name": "Cat Jam Free", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": "medium", "minimal": null, "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "compat": {"forceAdaptiveThinking": true, "supportsTemperature": false}, "contextWindow": 1000000, "cost": {"cacheRead": 0.01, "cacheWrite": 0.125, "input": 0.1, "output": 0.5, "tiers": [{"cacheRead": 0.05, "cacheWrite": 0.625, "input": 0.5, "inputTokensAbove": 100000, "output": 2.5}]}, "id": "claude-haiku-5-5", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 128000, "name": "Claude Haiku 5.5", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"max": "max", "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "requiresReasoningContentOnAssistantMessages": true, "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true, "thinkingFormat": "deepseek"}, "contextWindow": 1000000, "cost": {"cacheRead": 0.022, "cacheWrite": 0, "input": 0.66, "output": 1.98}, "id": "deepseek-v4-pro", "input": ["text"], "maxTokens": 384000, "name": "DeepSeek V4 Pro (New)", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": null, "max": "max", "medium": null, "minimal": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "requiresReasoningContentOnAssistantMessages": true, "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true, "thinkingFormat": "deepseek"}, "contextWindow": 1000000, "cost": {"cacheRead": 0.003, "cacheWrite": 0, "input": 0.15, "output": 0.6}, "id": "deepseek-v4.1-flash", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 384000, "name": "DeepSeek V4.1 Flash", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": null, "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "google-generative-ai", "baseUrl": "https://opencode.ai/inference/go/v1", "contextWindow": 1048576, "cost": {"cacheRead": 0.2, "cacheWrite": 0, "input": 4, "output": 20}, "id": "gemini-4-argon-contributor", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 65536, "name": "Gemini 4 Argon Contributor", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.26, "cacheWrite": 0, "input": 1.4, "output": 4.4}, "id": "glm-5.2", "input": ["text"], "maxTokens": 131072, "name": "GLM-5.2", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": null, "max": "max", "medium": null, "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.26, "cacheWrite": 0, "input": 1.4, "output": 4.4}, "id": "glm-5.3", "input": ["text"], "maxTokens": 131072, "name": "GLM-5.3", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": null, "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.03, "cacheWrite": 0, "input": 0.15, "output": 0.5}, "id": "glm-5.3-flash", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "GLM-5.3-Flash", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": null, "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession", "supportsAdditionalTools": true, "supportsMidConvoSystemMessages": true}, "contextWindow": 1050000, "cost": {"cacheRead": 0.02, "cacheWrite": 0.25, "input": 0.2, "output": 1.2, "tiers": [{"cacheRead": 0.04, "cacheWrite": 0.5, "input": 0.4, "inputTokensAbove": 272000, "output": 1.8}]}, "id": "gpt-5.6-luna", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 128000, "name": "GPT-5.6 Luna", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": "medium", "minimal": null, "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession", "supportsAdditionalTools": true, "supportsMidConvoSystemMessages": true}, "contextWindow": 1050000, "cost": {"cacheRead": 0.01, "cacheWrite": 0.125, "input": 0.1, "output": 0.5, "tiers": [{"cacheRead": 0.02, "cacheWrite": 0.25, "input": 0.2, "inputTokensAbove": 272000, "output": 0.75}]}, "id": "gpt-6-luna", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 128000, "name": "GPT-6 Luna", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": "medium", "minimal": null, "off": "none", "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession"}, "contextWindow": 500000, "cost": {"cacheRead": 0.5, "cacheWrite": 0, "input": 2, "output": 6, "tiers": [{"cacheRead": 1, "cacheWrite": 0, "input": 4, "inputTokensAbove": 200000, "output": 12}]}, "id": "grok-4.6", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 500000, "name": "Grok 4.6", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": null, "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession"}, "contextWindow": 500000, "cost": {"cacheRead": 0.5, "cacheWrite": 0, "input": 2, "output": 6, "tiers": [{"cacheRead": 1, "cacheWrite": 0, "input": 4, "inputTokensAbove": 200000, "output": 12}]}, "id": "grok-4.7", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 500000, "name": "Grok 4.7", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": null, "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 256000, "cost": {"cacheRead": 0.035, "cacheWrite": 0, "input": 0.14, "output": 0.58}, "id": "hy3", "input": ["text"], "maxTokens": 128000, "name": "Hy3", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": null, "minimal": null, "off": "none", "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1024000, "cost": {"cacheRead": 0.042, "cacheWrite": 0, "input": 0.834, "output": 2.501}, "id": "hy4-preview", "input": ["text"], "maxTokens": 64000, "name": "Hy4 preview", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": null, "max": null, "medium": null, "minimal": null, "off": "none", "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 262144, "cost": {"cacheRead": 0.19, "cacheWrite": 0, "input": 0.95, "output": 4}, "id": "kimi-k2.7-code", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 262144, "name": "Kimi K2.7 Code", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsMidConvoSystemMessages": true, "supportsMidConvoToolAdditions": true, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1048576, "cost": {"cacheRead": 0.3, "cacheWrite": 0, "input": 3, "output": 15}, "id": "kimi-k3", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "Kimi K3", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": null, "low": null, "max": "max", "medium": null, "minimal": null, "off": null, "xhigh": null}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.006, "cacheWrite": 0, "input": 0.3, "output": 1.2}, "id": "longcat-2.0", "input": ["text"], "maxTokens": 131072, "name": "LongCat-2.0", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0, "cacheWrite": 0, "input": 0, "output": 0}, "id": "longcat-2.5-preview-free", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "LongCat 2.5 Preview Free", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.0028, "cacheWrite": 0, "input": 0.14, "output": 0.28}, "id": "mimo-v2.5", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 128000, "name": "MiMo V2.5", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1048576, "cost": {"cacheRead": 0.003625, "cacheWrite": 0, "input": 0.435, "output": 0.87}, "id": "mimo-v2.5-pro", "input": ["text"], "maxTokens": 128000, "name": "MiMo V2.5 Pro", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1048576, "cost": {"cacheRead": 0.0028, "cacheWrite": 0, "input": 0.14, "output": 0.28}, "id": "mimo-v2.6-flash", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "MiMo-V2.6-Flash", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1048576, "cost": {"cacheRead": 0.003625, "cacheWrite": 0, "input": 0.435, "output": 0.87}, "id": "mimo-v2.6-pro", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "MiMo-V2.6-Pro", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "contextWindow": 204800, "cost": {"cacheRead": 0.06, "cacheWrite": 0.375, "input": 0.3, "output": 1.2}, "id": "minimax-m2.7", "input": ["text"], "maxTokens": 131072, "name": "MiniMax-M2.7", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "contextWindow": 1000000, "cost": {"cacheRead": 0.06, "cacheWrite": 0, "input": 0.3, "output": 1.2, "tiers": [{"cacheRead": 0.12, "cacheWrite": 0, "input": 0.6, "inputTokensAbove": 512000, "output": 2.4}]}, "id": "minimax-m3", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "MiniMax-M3", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession"}, "contextWindow": 1048576, "cost": {"cacheRead": 0.002, "cacheWrite": 0, "input": 0.1, "output": 0.2}, "id": "muse-spark-1.2-contributor", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "Muse Spark 1.2 Contributor", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": "minimal", "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-responses", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"sessionAffinityFormat": "openai-nosession"}, "contextWindow": 1048576, "cost": {"cacheRead": 0.002, "cacheWrite": 0, "input": 0.1, "output": 0.2}, "id": "muse-spark-1.3-contributor", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "Muse Spark 1.3 Contributor", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": "minimal", "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "contextWindow": 1000000, "cost": {"cacheRead": 0.04, "cacheWrite": 0.5, "input": 0.4, "output": 1.6, "tiers": [{"cacheRead": 0.12, "cacheWrite": 1.5, "input": 1.2, "inputTokensAbove": 256000, "output": 4.8}]}, "id": "qwen3.7-plus", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 65536, "name": "Qwen3.7 Plus", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "compat": {"allowEmptySignature": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0.016, "cacheWrite": 0.2, "input": 0.15, "output": 0.47}, "id": "qwen3.8-flash", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "Qwen3.8 Flash", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "anthropic-messages", "baseUrl": "https://opencode.ai/inference/go", "contextWindow": 1000000, "cost": {"cacheRead": 0.25, "cacheWrite": 2.5, "input": 2, "output": 6}, "id": "qwen3.8-max", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 131072, "name": "Qwen3.8 Max", "provider": "opencode-go", "reasoning": true, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1048576, "cost": {"cacheRead": 0.03, "cacheWrite": 0, "input": 0.15, "output": 0.6}, "id": "space-bunny", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 524288, "name": "Space Bunny", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": "max", "medium": "medium", "minimal": null, "off": null, "xhigh": "xhigh"}, "type": "chat"}, {"api": "openai-completions", "baseUrl": "https://opencode.ai/inference/go/v1", "compat": {"maxTokensField": "max_tokens", "supportsDeveloperRole": false, "supportsStore": false, "supportsStrictMode": true}, "contextWindow": 1000000, "cost": {"cacheRead": 0, "cacheWrite": 0, "input": 0, "output": 0}, "id": "step-5-preview-free", "input": ["text", "image"], "inputLimits": {"images": {"resize": {"jpegQuality": 80, "maxBytes": 4718592, "maxHeight": 2000, "maxWidth": 2000}}}, "maxTokens": 65536, "name": "Step 5 Preview Free", "provider": "opencode-go", "reasoning": true, "thinkingLevelMap": {"high": "high", "low": "low", "max": null, "medium": "medium", "minimal": null, "off": null, "xhigh": null}, "type": "chat"}]}}, "overlay": ["cat-jam-free", "claude-haiku-5-5", "deepseek-v4-pro", "deepseek-v4.1-flash", "gemini-4-argon-contributor", "glm-5.2", "glm-5.3", "glm-5.3-flash", "gpt-5.6-luna", "gpt-6-luna", "grok-4.6", "grok-4.7", "hy3", "hy4-preview", "kimi-k2.7-code", "kimi-k3", "longcat-2.0", "longcat-2.5-preview-free", "mimo-v2.5", "mimo-v2.5-pro", "mimo-v2.6-flash", "mimo-v2.6-pro", "minimax-m2.7", "minimax-m3", "muse-spark-1.2-contributor", "muse-spark-1.3-contributor", "qwen3.7-plus", "qwen3.8-flash", "qwen3.8-max", "space-bunny", "step-5-preview-free"], "pi_version": "1.2.0", "rule": {"exclude": [{"date": "2026-10-17", "id": "step-5-preview-free", "reason": "In the freshly fetched opencode-go overlay, but every call fails with \"Upstream request failed: Model is unavailable\" (loop round 1 and the runner's probe, both 2026-10-17); excluding it saves a call that fails every time until the model is served."}], "hinweis": "Class admission instead of individual declarations: every id this run's forced live catalog refresh finds under the provider, matching the suffix or an include, reviews the implementation diff with no tools (ADR 0021, decision 3). The retention and training terms of these ids are NOT read; this acceptance covers the diff-only review purpose alone \u2014 no paid model, no Zen id and no interactive session runs on it.", "id_suffix": "-free", "include": [], "input": "implementation-diff", "provider": "opencode-go"}, "selected": [], "source": "pi.dev"}, "paid": {"flash": ["deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0"], "ladder": ["deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0", "glm-5.3-flash", "hy3", "mimo-v2.6-pro", "hy4-preview", "kimi-k2.7-code", "deepseek-v4-pro", "glm-5.2", "glm-5.3", "kimi-k3"], "rungs": ["glm-5.3-flash", "hy3", "mimo-v2.6-pro", "hy4-preview", "kimi-k2.7-code", "deepseek-v4-pro", "glm-5.2", "glm-5.3", "kimi-k3"]}}
+
+Kept from the loop record:
+
+> Notice: paid models skipped: qwen3.8-flash (the model qwen3.8-flash was skipped on 2026-10-17: wire API not measured); gpt-6-luna (the model gpt-6-luna was skipped on 2026-10-17: wire API not measured); claude-haiku-5-5 (the model claude-haiku-5-5 was skipped on 2026-10-17: wire API not measured); minimax-m3 (the model minimax-m3 was skipped on 2026-10-17: wire API not measured); qwen3.7-plus (the model qwen3.7-plus was skipped on 2026-10-22: wire API not measured); qwen3.8-max (the model qwen3.8-max was skipped on 2026-10-22: wire API not measured); grok-4.7 (the model grok-4.7 was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint)); gpt-5.6-luna (the model gpt-5.6-luna was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint)); gemini-4-argon (the model gemini-4-argon was skipped on 2026-10-30: wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor); kimi-k3.1-pro (the model kimi-k3.1-pro was skipped on 2026-10-30: not in the live Go catalog (2026-10-30)); minimax-m3.1-flash (the model minimax-m3.1-flash was skipped on 2026-10-30: not in the live Go catalog (2026-10-30)); step-5-preview (the model step-5-preview was skipped on 2026-10-30: not in the live Go catalog (2026-10-30); the catalog lists step-5-preview-free); beam-free (the model beam-free was skipped on 2026-10-30: not in the live Go catalog (2026-10-30)).
+> Notice: in the live catalog without a terms reading: gemini-4-argon-contributor, grok-4.6, minimax-m2.7, muse-spark-1.2-contributor, muse-spark-1.3-contributor, space-bunny.
+> Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+> longcat-2.0 was asked again with the format reminder: the first answer was malformed
+> longcat-2.0 failed: /Users/mikypiky/coding-harness/.claude/worktrees/time-records-data/tools/pi/pi was stopped by the round time limit of 45 minutes (514 seconds were left for this call); the round time limit expired; no replacement starts
+> The diff was cut: the change diff was cut at 2000 of 2035 lines. A clean answer over a cut diff does not end the loop; the rest of the change needs a round of its own.
+> From longcat-2.0:
+> longcat-2.0's first answer, which was not in the required format:
+> The answer was not only six-cell rows; what is not one is kept below as it came.
+> 
+> Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+> The diff was cut: the change diff was cut at 2000 of 2167 lines. A clean answer over a cut diff does not end the loop; the rest of the change needs a round of its own.
+> Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (3 days left).
+> hy3 was asked again with the format reminder: the first answer was malformed
+> The diff was cut: the change diff was cut at 2000 of 2194 lines. A clean answer over a cut diff does not end the loop; the rest of the change needs a round of its own.
+> From hy3:
+> hy3's first answer, which was not in the required format:
+> The answer was not only six-cell rows; what is not one is kept below as it came.
+> 
+> | F1 | MINOR | MAINT | scripts/harness.py | time_log — `TIME_HEADING.findall(text)` matches a `## Time used` line even inside an unindented fenced code block, so a plan that legitimately quotes the heading in an example is refused as if it carried a second time section; the refusal message names only the count, leaving the maintainer to guess that a fenced quote tripped it. |
+> | F2 | MINOR | MAINT | scripts/harness.py | time-log `--route` accepts any non-blank value with no relation to who calls it, so an interactive span can be logged with a runner-style route and the report's fixed-format rows present it as a runner-model attempt, although docs/WORKFLOW.md and the spec pin `route orchestrator` as the marker of a session span. |
+> | F3 | MINOR | SPEC | plans/changes/time-records-data/spec.md | the frontmatter `neighbours: []` is empty while research.md enumerates the overlapping active changes (run-report, runner-time-line, runner-time-line-exits, attempt-diagnostics, codex-drafts); a maintainer of those changes reads no declared overlap in the header they would consult. |
+
+<!-- End of released loop record -->
+
+Stage-2 call, 2026-11-03: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3138 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3140 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/harness.py` +3 -1
+> - `scripts/time_records.py` +12 -7
+> - `tests/test_harness_time_log.py` +28 -0
+> - `tests/test_stage2.py` +21 -0
+> - `tests/test_time_records.py` +0 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-1: tests/test_stage2.py::test_runner_records_completed_attempt_when_utc_moves_backward: the call of `tests/test_stage2.py::test_runner_records_completed_attempt_when_utc_moves_backward[start0-True]` failed with ValueError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T114246016227Z-39cf6200.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 849 files, 3144 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs · leak check clean over 849 files, 3149 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/harness.py` +3 -1
+> - `scripts/time_records.py` +9 -7
+> - `tests/test_time_records.py` +30 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_time_records.py`.
+> - F6-1: tests/test_time_records.py::test_backward_utc_still_formats_with_explicit_seconds: the call of `tests/test_time_records.py::test_backward_utc_still_formats_with_explicit_seconds` failed with ValueError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T134123280895Z-aa0dccfb.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs; second Sonnet run after a ValueError-shaped red-first proof (a regression test must fail by assertion, e.g. pytest.fail on the caught ValueError) · leak check clean over 849 files, 3150 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/harness.py` +3 -1
+> - `scripts/time_records.py` +10 -5
+> - `tests/test_time_records.py` +15 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....F.............                                                      [100%]
+> =================================== FAILURES ===================================
+> _________ test_backward_clock_keeps_the_runner_entry_and_crlf_survives _________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/time-records-data/.venv/bin/python3
+>
+>     def test_backward_clock_keeps_the_runner_entry_and_crlf_survives() -> None:
+>         """F6-1 and F6-3. Planted fault: an end before the start raises, or CRLF bytes are rewritten."""
+>         earlier = START - dt.timedelta(seconds=5)
+>         line = time_records.format_entry(START, earlier, 30, "implement", 1, "flash", "m", "accepted")
+>         parsed = time_records.parse_entry(line)
+>         assert parsed is not None and parsed.seconds == 30
+>         text = "---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Next\r\nkeep\r\n"
+> >       combined = time_records.insert_entry(text, line)
+>
+> tests/test_time_records.py:174: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> text = '---\r\nupdated: 2000-01-01\r\n---\r\n\r\n## Time used\r\n\r\nold prose\r\n\r\n## Next\r\nkeep\r\n'
+> entry = '2026-10-20 10:00:00–09:59:55 UTC, 30 s — implement · attempt 1 · route flash · model m · accepted · measured by the runner'
+>
+>     def insert_entry(text: str, entry: str, *, prior: str | None = None) -> str:
+>         """`text` with `entry` as the last line of the time section, before the next level-two heading.
+>     
+>         With `prior`, the section body comes from that trusted text instead - the
+>         runner's recovery keeps its earlier records even when a model rewrote the
+>         plan, while everything else still comes from `text`.
+>         """
+>         match = TIME_HEADING.search(text)
+>         if match is None:
+> >           raise TimeSectionError("the plan has no `## Time used` heading.")
+> E           time_records.TimeSectionError: the plan has no `## Time used` heading.
+>
+> scripts/time_records.py:169: TimeSectionError
+> =========================== short test summary info ============================
+> FAILED tests/test_time_records.py::test_backward_clock_keeps_the_runner_entry_and_crlf_survives
+> 1 failed, 18 passed in 8.57s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/time-records-data/stage2/attempts/time-records-data/attempt-1-20261103T140120132809Z-c9d53a6b.md
+> ```
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 849 files, 3156 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+
+Phase 6 verdict: codex 01a1a20e-d5fa-7430-ad1f-50f3c91afd66, 2026-11-03
+Reviewer session: codex 01a1a20e-d5fa-7430-ad1f-50f3c91afd66 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

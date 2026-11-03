@@ -299,6 +299,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/registry-block-last/decisions.md`](changes/registry-block-last/decisions.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/findings.md`](changes/registry-block-last/findings.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/plan.md`](changes/registry-block-last/plan.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/research.md`](changes/registry-block-last/research.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
+| [`changes/registry-block-last/spec.md`](changes/registry-block-last/spec.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
 | [`changes/repair-fixed-line-format/decisions.md`](changes/repair-fixed-line-format/decisions.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/findings.md`](changes/repair-fixed-line-format/findings.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
 | [`changes/repair-fixed-line-format/plan.md`](changes/repair-fixed-line-format/plan.md) | draft | partial | 2026-10-26 | coding-harness-hgvp |
@@ -410,6 +415,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/test-key-runtime/research.md`](changes/test-key-runtime/research.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-key-runtime/spec.md`](changes/test-key-runtime/spec.md) | draft | partial | 2026-10-26 | coding-harness-05op |
 | [`changes/test-strength-rows/research.md`](changes/test-strength-rows/research.md) | draft | none | 2026-10-14 | coding-harness-y17 |
+| [`changes/time-records-data/decisions.md`](changes/time-records-data/decisions.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/time-records-data/findings.md`](changes/time-records-data/findings.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/time-records-data/plan.md`](changes/time-records-data/plan.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/time-records-data/research.md`](changes/time-records-data/research.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/time-records-data/spec.md`](changes/time-records-data/spec.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/tolerate-derived-leftovers/decisions.md`](changes/tolerate-derived-leftovers/decisions.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/tolerate-derived-leftovers/findings.md`](changes/tolerate-derived-leftovers/findings.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/tolerate-derived-leftovers/plan.md`](changes/tolerate-derived-leftovers/plan.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
