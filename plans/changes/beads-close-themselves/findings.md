@@ -1107,3 +1107,15 @@ Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3144 commits, 12 rules.
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs · leak check clean over 850 files, 3147 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3156 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-7 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:97–107 | Git configuration supplied through `GIT_CONFIG_COUNT` survives the configuration reset. With `GIT_CONFIG_KEY_0=trailer.separators` and `GIT_CONFIG_VALUE_0==:`, reviewing merged commit `7051b9a3` returns zero declarations and zero malformed items instead of 22 declarations. A write run consequently skips declared closures and can report success. This is new evidence beyond F6-6: runtime configuration remains effective after the global/system configuration repair. [Acceptance criterion 1] | Codex | open | — |
+| F6-8 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:198–218 | A trailer containing `Closes-Bead: coding-harness-alpha<U+001E>coding-harness-beta` becomes a valid declaration for `coding-harness-alpha`. Git preserves U+001E inside the value, but splitting records on that same byte truncates it before validation. Reproduced with Git’s trailer parser and the collector: the partial identifier is accepted without a malformed-item report. This adds new evidence beyond F6-1/F6-4: the record delimiter still splits malformed logical values. [Acceptance criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1a20e-d5fa-70b1-990e-1c46197dfd84, 2026-11-03
+Reviewer session: codex 01a1a20e-d5fa-70b1-990e-1c46197dfd84 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
