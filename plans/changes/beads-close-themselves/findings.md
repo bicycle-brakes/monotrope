@@ -1086,3 +1086,20 @@ Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a19ed2-7160-7ea3-b035-f6583fe7a476, 2026-11-03
 Reviewer session: codex 01a19ed2-7160-7ea3-b035-f6583fe7a476 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 845 files, 3137 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/close_merged_beads.py` +5 -0
+> - `tests/test_close_merged_beads.py` +27 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-6: tests/test_close_merged_beads.py::test_user_and_system_trailer_configuration_cannot_hide_declarations: refs changed while the named test ran: refs/heads/feat/stop-hook, refs/stage2/attempts/stop-hook/draft-attempt-1-20261103T114817027514Z, refs/stage2/attempts/stop-hook/draft-attempt-2-20261103T114836354243Z
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/beads-close-themselves/stage2/attempts/beads-close-themselves/attempt-1-20261103T112716764989Z-f08b1ba1.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 845 files, 3142 commits, 12 rules.
