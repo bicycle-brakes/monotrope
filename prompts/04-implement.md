@@ -48,11 +48,17 @@ only in the code is no longer a deviation on the next reading — it is the plan
 is the sum of the spans of the sessions that worked under this prompt on this
 change. Read `date` when a session starts or work resumes, between steps, before
 each commit and when it ends (at its stop, resumption line or "done:" line);
-never estimate it or recall it. A break inside a session counts, and the record
-says so; the time between two sessions does not. A stop ends the span; work that
-resumes starts a new one, even in the same chat. A session appends `<date>
-<start>–<end>, <span>[, break counted]` under `## Time used` in `plan.md` when a
-span ends — a chat does not survive `/clear`. When a reading shows the time used
+never estimate it or recall it. A break inside a session counts, and the session's
+status message says so; the time between two sessions does not. A stop ends the span; work that
+resumes starts a new one, even in the same chat. When a span ends the session
+records it with `python3 scripts/harness.py time-log <change> --start
+<YYYY-MM-DDTHH:MM:SSZ> --end <YYYY-MM-DDTHH:MM:SSZ> --seconds <n> --verb session
+--attempt <n> --route orchestrator --model <model> --result <accepted|rejected>`
+(the outcome the span actually had: `rejected` when it ended red, at a stop or a cut; the same
+fixed record the runner writes, from the clock readings, never a guess) — a chat
+does not survive `/clear`; a counted break is in the seconds and the session's
+status message names it. A model running under the Stage-2 runner never calls
+it: the runner logs its attempts itself. When a reading shows the time used
 has reached the appetite, stop once, in the labels above and in this order.
 The first stop is a checkpoint, not a question, by day and at night
 (maintainer, 2026-10-30: the limits must not be so hard that the maintainer is

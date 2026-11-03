@@ -1,0 +1,178 @@
+---
+title: "Plan — time-records-data"
+status: draft
+implementation_status: none
+date: 2026-10-31
+last_reviewed: 2026-10-31
+updated: 2026-11-03
+supersedes: null
+superseded_by: null
+bead: coding-harness-v6vk
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-31"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [plan, time-accounting]
+---
+
+# Plan — time-records-data
+
+```text
+For you:     Runner and orchestrator time reaches the report through one fixed-format writer.
+Done when:   Both callers produce counted records, old prose stays visibly unread, runner recovery tests pass, and make verify is green.
+Appetite:    3 hours of phase 4, repairs included; a stop, not an estimate.
+Not now:     Historical migration, a separate time store, prose parsing or appetite-policy changes.
+Pre-mortem:  suppose it failed: most likely because consolidation bypasses the runner's safe recovery path.
+Starts unless you say stop.
+```
+
+## Files and steps
+
+1. Create `scripts/time_records.py`: own the record type, fixed formatter,
+   parser, section extraction and insertion, and common write operation;
+   preserve runner bytes and explicit seconds, including midnight formatting.
+   A write accepts trusted prior section text and a persistence callback so
+   runner recovery can keep its existing safe restore without duplicating
+   record construction or insertion. Keep this module independent of stage2.
+2. Change `scripts/harness.py`: add `time-log` and dispatch it before the ADR
+   branch, without reading provenance, asking questions, writing an answer
+   commit message or requiring git. Accept a positional active-change name,
+   `--start` and `--end` UTC timestamps (`YYYY-MM-DDTHH:MM:SSZ`), `--seconds`
+   nonnegative integer, `--verb`, `--attempt` positive integer, `--route`,
+   `--model`, `--result accepted|rejected`, and existing-style `--root`.
+   Require all fields; reject blank, control-character or `·`-bearing text,
+   invalid dates and end-before-start, but do not derive duration from dates.
+   Resolve only `plans/changes/<single-name>/plan.md`; reject traversal,
+   archive selection, symlinked parents/file and hard-linked plans before
+   reading or writing. Require readable UTF-8 and one time heading; validate
+   everything before the shared write, publish safely, stamp `updated:`,
+   print the resulting line, return 0; refusal/write failure returns 2 with
+   bounded context. No partial overwrite on a failed publication.
+3. Change `scripts/stage2.py`: preserve public helper signatures and Refused
+   behavior as thin adapters to the shared module; keep clocks, successful-call
+   boundary, persistence/recovery policy and retry snapshots where they are.
+   Route normal, retry and exceptional time persistence through the common
+   writer with the existing safe-restore callback; do not start a CLI subprocess.
+4. Change `scripts/run_report.py`: replace the local runner regex with the
+   shared parser, preserving TimeRecord-facing behavior, optional bullet
+   handling, attempt display, unread counts, totals and appetite warnings.
+   Keep the existing stage2 time-section adapter and unrelated readers intact.
+5. Create `tests/test_time_records.py` for the shared format, validation and
+   section boundaries; create `tests/test_harness_time_log.py` for CLI
+   round-trips, refusal without writes and path/publication failures; change
+   `tests/test_stage2.py` to prove the shared writer is used without losing
+   existing completion/recovery guarantees; change `tests/test_run_report.py`
+   to consume command output alongside runner records and unread prose.
+6. Change `docs/WORKFLOW.md`: document the shared writer, retained marker,
+   explicit measured seconds, `route orchestrator`, and no overlapping spans;
+   retain the report's snapshot-only and unread-source contract.
+   Change `scripts/ci_gates.py` to declare the new module as a tested library,
+   not a gate, and update the harness entry's description; change
+   `scripts/kit/manifest.yaml` to classify the shared module and its two new
+   test files as `mechanismus`, because the existing harness command travels
+   in the kit probe and must retain its import dependency. Keep the module
+   and CLI tests independent of the non-travelling stage2/run-report modules.
+7. **Orchestrator bootstrap after the accepted attempt:** change only the
+   relevant text in held `prompts/04-implement.md` to replace manual span
+   insertion with the command below, retaining clock readings, counted breaks,
+   appetite notes and the prohibition on model-written Stage-2 time entries.
+   The implement/repair attempt must not edit this path. Adjust the existing
+   doctrine test in `tests/test_stage2.py` in that same bootstrap step, then
+   run the targeted checks and `make verify` again.
+8. Change `plans/changes/time-records-data/plan.md` as tests land: remove
+   from their ledger entries and let the runner record time.
+   The runner manages `plans/changes/time-records-data/findings.md` and
+   regenerates `plans/INDEX.md`; no hand edits or file deletions are planned.
+
+## Command and measurement contract
+
+The runner keeps using monotonic elapsed seconds and UTC endpoints. An
+interactive session reads its clock at span boundaries and supplies the
+observed elapsed whole seconds; the writer never estimates them. For example,
+with measured readings substituted for these demonstration values:
+
+```sh
+python3 scripts/harness.py time-log time-records-data --start 2026-10-31T10:00:00Z --end 2026-10-31T10:01:00Z --seconds 60 --verb implement --attempt 1 --route orchestrator --model gpt-6.1-sol --result accepted
+```
+
+This emits the existing runner line with `route orchestrator`; the final
+marker names the common machine writer, not an extra model invocation.
+The attempt field numbers that activity's spans; outcome names the actual
+activity result. Do not log the same interval again while a runner measures
+it. Stop/extension prose remains unread and unchanged. No Stage-1 exploration
+fallback needs carrying forward: research records a successful Flash route.
+
+## Criterion ledger
+
+- 1: tests/test_harness_time_log.py::test_time_log_appends_one_counted_record — success with zero or duplicate appended records
+- 2: tests/test_time_records.py::test_shared_format_preserves_runner_bytes_and_midnight — changed metadata, suffix or end date
+- 3: tests/test_time_records.py::test_explicit_seconds_are_authoritative — wall-clock subtraction replaces the supplied seconds
+- 3: tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — runner clocks or explicit duration change
+- 4: tests/test_harness_time_log.py::test_invalid_input_and_unsafe_destination_leave_bytes_unchanged — invalid fields or an unsafe destination receive a write
+- 4: tests/test_harness_time_log.py::test_publication_failure_preserves_plan — failure truncates the plan or returns success
+- 5: tests/test_time_records.py::test_shared_append_preserves_section_content — old prose disappears or a following section is changed
+- 6: tests/test_stage2.py::test_runner_time_persistence_uses_shared_writer — runner bypasses the common write service
+- 6: tests/test_stage2.py::test_runner_preserves_precall_time_on_final_verdict — model time replaces trusted history or completion duplicates a record
+- 6: tests/test_stage2.py::test_runner_early_refusal_recovers_time_destination_safely — recovery writes an alias target or loses a rejection
+- 6: tests/test_stage2.py::test_runner_time_write_failure_keeps_original_cause — failed logging hides the original failure or permits progress
+- 7: tests/test_run_report.py::test_report_counts_shared_cli_and_runner_records — the command's line is unread or counted with different seconds
+- 8: tests/test_run_report.py::test_time_records_require_whitelisted_measurement_forms — prose contributes seconds or unread visibility disappears
+- 9: not a test — phase-6 review checks the orchestrator's prompt update against criterion 9; manual insertion, guessed time or duplicate Stage-2 logging refutes it
+
+## Verification
+
+Run format/ruff checks on changed Python files and the ledger tests first;
+exercise accepted, rejected, retry and early-refusal runner paths using the
+existing deterministic World/FakeClock fixtures. Parameterize invalid fields,
+midnight/zero-second spans, missing heading, following section, unreadable
+plan and alias destinations. Prove public CLI dispatch leaves ADR behavior
+unchanged. Verification commands, verbatim:
+
+```sh
+.venv/bin/python -m pytest tests/test_time_records.py tests/test_harness_time_log.py tests/test_harness_decide_adr.py tests/test_run_report.py tests/test_stage2.py
+.venv/bin/python -m pytest tests/test_ci.py tests/test_kit.py
+python3 scripts/check_interview_minimums.py --change time-records-data
+python3 scripts/check_criterion_ledger.py
+make verify
+```
+
+The prompt names `scripts/validate_change_artefacts.py --check`, but that
+script is absent at draft baseline `275efefd` (2026-10-31); do not create a
+substitute gate. The runner owns complete verification and the draft commit.
+
+## Do not touch
+
+No historical plans/specs, ADRs, new gates, endpoint/routing settings,
+`decisions/`, provenance map, configuration directories, `AGENTS.md`,
+`README.md`, `templates/`, `scripts/stage2_runs.py`, Makefile recipe or
+appetite semantics. Keep recovery, credential checks and checkpoint order;
+record insertion is shared, recovery policy stays runner-owned.
+
+## Runner route — 2026-11-03
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+2026-11-03 — hand acceptance by the orchestrator, flagged for the maintainer's review: the three attempts (two GLM 5.3 Flash, one Sonnet 5.5) are saved on refs/stage2/attempts/time-records-data/orchestrator-saved-20261103 (bc486f94). The last tree failed only its cheap checks: one ruff finding (PTH105, `os.replace` in scripts/time_records.py, now `Path.replace`). The full `make verify` then showed one behaviour change of the shared writer: the runner's direct plan write used `write_bytes` instead of `write_text`, so a failing plan write no longer reached the runner's error path (tests/test_stage2.py::test_runner_terminal_failure_survives_failed_log_write, both cases); the direct publisher writes text again. No other line of the attempt was changed.
+
+## Review loop — named stop, 2026-11-03
+
+The maintainer ended the review loop on 2026-11-03 (about 07:10 UTC) with a
+named stop and sent the change to phase 6: every round saw its diff cut at
+2000 of 2035–2194 lines, so no round could end clean (bead
+coding-harness-ut8q). Rounds 1–3 were repaired or decided; round 4 was
+stopped by the orchestrator's time limit and left no rows. The maintainer
+also confirmed the orchestrator's hand acceptance recorded below.
+
+## Runner route — 2026-11-03
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs; second Sonnet run after a ValueError-shaped red-first proof (a regression test must fail by assertion, e.g. pytest.fail on the caught ValueError).
+
+## Time used
+
+2026-11-02 23:57:37–2026-11-03 00:54:37 UTC, 3420 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-03 00:54:46–01:02:57 UTC, 491 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-03 01:03:05–01:03:58 UTC, 53 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-03 02:28:54–02:45:54 UTC, 1020 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 03:01:25–03:17:23 UTC, 957 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 14:01:29–14:02:21 UTC, 53 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-03 — hand acceptance of the phase-6 repair (F6-1 to F6-3): the second Sonnet attempt (route stage-1, Codex at its usage limit) failed only because `TIME_HEADING` did not match a CRLF heading; the orchestrator added `\r?` to it. The two new tests are red on the baseline (one by ValueError, so no runner proof) and green after; `make verify` green. Earlier attempts saved at refs/stage2/attempts/time-records-data/orchestrator-saved-20261103b.

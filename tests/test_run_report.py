@@ -18,8 +18,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import harness  # noqa: E402
 import run_report  # noqa: E402
 import stage2  # noqa: E402
+import time_records  # noqa: E402
 
 PS_ARGV = ("ps", "-axo", "pid,etime,command")
 MEMINFO_QUIET = "MemTotal:  1000000 kB\nMemAvailable:  610000 kB\n"
@@ -755,6 +757,63 @@ def test_time_records_require_whitelisted_measurement_forms(tmp_path: Path) -> N
     assert f"unread lines: {len(invalid)}" in out
     assert "incomplete" in out
     assert "at or over half the appetite" not in out
+
+
+def test_report_counts_shared_cli_and_runner_records(tmp_path: Path) -> None:
+    """Criterion 7. Planted fault: the command's line is unread, or counted with different seconds."""
+    older = runner_line(seconds=600)
+    folder = make_change(
+        tmp_path, "alpha", plan=plan_text(time_body=f"{older}\nprose the orchestrator wrote\n"), findings=""
+    )
+    code = harness.main(
+        [
+            "time-log",
+            "alpha",
+            "--start",
+            "2026-10-31T10:00:00Z",
+            "--end",
+            "2026-10-31T10:01:00Z",
+            "--seconds",
+            "60",
+            "--verb",
+            "session",
+            "--attempt",
+            "2",
+            "--route",
+            "orchestrator",
+            "--model",
+            "glm-5.3-flash",
+            "--result",
+            "accepted",
+            "--root",
+            str(tmp_path),
+        ],
+        out=lambda _row: None,
+        today=datetime(2026, 10, 31).date(),
+    )
+    assert code == 0
+    # The report counts both callers' records through one grammar: 600 runner + 60 command seconds.
+    reading, reason = run_report.read_time(folder / "plan.md")
+    assert reason == "" and reading.section_read
+    assert reading.seconds == 660 and reading.unread == 1
+    assert [row.route for row in reading.attempts] == ["flash", "orchestrator"]
+    # What the command wrote parses to exactly the record the writer built - no second grammar.
+    text = (folder / "plan.md").read_text(encoding="utf-8")
+    (line,) = [row for row in text.splitlines() if "route orchestrator" in row]
+    parsed = run_report.parse_time_line(line)
+    assert parsed is not None and parsed.seconds == 60
+    assert time_records.parse_entry(line) == time_records.Record(
+        seconds=60,
+        verb="session",
+        attempt=2,
+        route="orchestrator",
+        model="glm-5.3-flash",
+        result="accepted",
+    )
+    out = "\n".join(run_report.change_block(folder, "alpha"))
+    assert "attempt: session · attempt 2 · route orchestrator · model glm-5.3-flash · accepted" in out
+    assert "time recorded: 660 s" in out
+    assert "unread lines: 1" in out
 
 
 def test_session_calls_keep_explicit_fields_and_dispatch_state() -> None:
