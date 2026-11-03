@@ -254,6 +254,16 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage limit until 2026-11-04 08:07; maintainer 2026-11-03: Sonnet repairs.
 
+## Review loop — named stop, 2026-11-03
+
+The maintainer ended the review loop on 2026-11-03 (about 16:30 UTC) with a
+named stop after the round-9 repair (d0aeeff6) and sent the change to phase 6
+and its ADR 0024 decision pull request: on 2026-11-03 OpenCode Go moved its
+path from /zen/go/v1 to /inference/go/v1, and `main` refuses every Go model
+until this change merges, so the research swarm and the review loops of other
+changes stand still. Round 9 ran with one member (kimi-k3, 3 rows: L9-1 and
+L9-3 taken and repaired, L9-2 rejected).
+
 ## Time used
 
 2026-10-31 17:02:22–18:45:11 UTC, 6169 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
