@@ -1148,3 +1148,16 @@ Phase 6 verdict: codex 01a1a311-7276-7602-a3ec-80f4209bb066, 2026-11-03
 Reviewer session: codex 01a1a311-7276-7602-a3ec-80f4209bb066 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3203 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3209 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-03
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-12 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:240–244 | A merged message `done\n\n--- a/file\n+++ b/file\n\nCloses-Bead: coding-harness-alpha\n` closes the bead although Git recognises no trailer. New evidence beyond F6-10: Git also recognises patch boundaries beginning with `--- `, while the repair checks only an exact `---` line. Reproduced through the collector and mocked write path: closure is attempted and the run returns 0. [Acceptance criterion 2] | Codex | taken — structural (maintainer, 2026-11-03): Git's own trailer parser in a config-free process replaces the script's pattern (see F6-13) |  |
+| F6-13 | MAJOR | SPEC | Phase 6 re-check | scripts/close_merged_beads.py:252–259 | Valid Git trailers are silently discarded when their paragraph contains ordinary text followed by `Closes-Bead: coding-harness-alpha` and `Signed-off-by: Person <p@example.com>`. Git parses both trailers, but the replacement parser rejects the paragraph. A trailing `# comment` causes the same omission. Reproduced through the collector and mocked write path: no closure is attempted and publication returns success. [Acceptance criterion 1] | Codex | taken — structural (maintainer, 2026-11-03, after F6-10 to F6-13 showed the own pattern diverging from Git): parse each message with `git interpret-trailers --parse` on stdin, run outside any repository with no system, global or local configuration and no GIT_CONFIG_* variables; one regression test each for F6-6 to F6-13 |  |
+| F6-14 | MAJOR | MAINT | Phase 6 re-check | scripts/close_merged_beads.py:98–120,152–159 | Configuration neutralisation also removes connection settings from the fetch. For an origin using an `insteadOf` URL mapping supplied through runtime configuration, normal Git resolves the configured destination, while the reconciler retains the unresolved URL and attempts a different transport or host. Reproduced without network access using `ls-remote --get-url`: `example:repo` resolves to `file:///synthetic-origin/repo` normally but remains `example:repo` through `_git_bytes`. Global credential helpers and SSH settings are likewise suppressed, breaking reconciliation in checkouts whose ordinary fetch depends on them. | Codex | taken — structural (maintainer, 2026-11-03): only the trailer parsing runs config-free; the fetch keeps the repository's normal Git configuration |  |
+
+Phase 6 verdict: codex 01a1a359-693b-7872-a0a9-d1029604fab8, 2026-11-03
+Reviewer session: codex 01a1a359-693b-7872-a0a9-d1029604fab8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
