@@ -47,6 +47,10 @@ class TimeSectionError(Exception):
     """The time section cannot be found or read; the message is the caller-facing reason."""
 
 
+class PublishedButNotSynced(OSError):
+    """The replacement succeeded, but directory durability could not be confirmed."""
+
+
 @dataclass(frozen=True)
 class Record:
     """One readable record: the explicitly measured seconds and the metadata the fixed line carries."""
@@ -177,8 +181,9 @@ def insert_entry(text: str, entry: str, *, prior: str | None = None) -> str:
 def publish_atomic(plan: Path, content: bytes) -> None:
     """Replace `plan` with `content`: temporary file, fsync, rename, directory fsync; the mode is kept.
 
-    A failed publication leaves the plan's bytes as they were and removes the
-    temporary file - a refused command never truncates its destination.
+    Failures before replacement leave the plan unchanged and remove the temporary
+    file. After replacement, a directory failure raises `PublishedButNotSynced`:
+    the record is already written and callers must not report it as unwritten.
     """
     try:
         mode = plan.stat().st_mode & 0o7777
@@ -197,11 +202,14 @@ def publish_atomic(plan: Path, content: bytes) -> None:
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
-    directory = os.open(plan.parent, os.O_RDONLY)
     try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
+        directory = os.open(plan.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError as error:
+        raise PublishedButNotSynced(error.strerror or str(error)) from error
 
 
 def write_entry(

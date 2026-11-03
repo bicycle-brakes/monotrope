@@ -510,8 +510,9 @@ writer, not an extra model invocation; a span an interactive session logs
 itself carries `route orchestrator`. The seconds are the explicitly measured
 duration the caller supplies — never a difference computed from the
 timestamps — and a span across midnight carries its end date. The reader
-counts records only through the shared parser; everything else below the
-heading stays unread and visible as `unread lines: N`.
+counts records only through the shared parser. Blank lines, headings and code
+fence markers are skipped; other non-record lines below the heading stay
+unread and visible as `unread lines: N`.
 
 It is a snapshot to read before a verify-bearing step, **not a gate** — it
 never enters `make verify`. It warns, and only warns: when the recorded time

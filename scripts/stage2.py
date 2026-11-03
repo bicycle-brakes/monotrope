@@ -3773,7 +3773,7 @@ def change_diff(root: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
+TIME_HEADING = time_records.TIME_HEADING
 WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 

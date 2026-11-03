@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import sys
 from datetime import date
 from pathlib import Path
@@ -222,3 +223,54 @@ def test_dispatch_leaves_the_decide_adr_route_intact(tmp_path: Path) -> None:
     code = harness.main(["decide", "adr", "--root", str(root)], out=decide_out.append, today=TODAY)
     assert code == 2
     assert any("no provenance map" in row for row in decide_out)
+
+
+@pytest.mark.parametrize("failure", ["open", "fsync"])
+def test_directory_sync_failure_reports_published_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """A failure after replacement warns about durability, never claims no write."""
+    root = make_repo(tmp_path)
+    plan = root / "plans" / "changes" / "demo" / "plan.md"
+    real_open = os.open
+    real_fsync = os.fsync
+
+    def failing_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if failure == "open" and path == plan.parent:
+            raise OSError("directory open failed")
+        return real_open(path, flags, *args, **kwargs)
+
+    def failing_fsync(descriptor: int) -> None:
+        if failure == "fsync" and stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError("directory fsync failed")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(time_records.os, "open", failing_open)
+    monkeypatch.setattr(time_records.os, "fsync", failing_fsync)
+    code, out = run_log(root)
+    assert code == 0
+    assert "Nothing was written." not in out
+    assert not any(row.startswith("refused:") for row in out)
+    assert any(row.startswith("warning:") and "written" in row for row in out)
+    records = [line for line in plan.read_text().splitlines() if time_records.parse_entry(line)]
+    assert len(records) == 1
+    assert records[0] in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# Plan\n\n## Time used\n",
+        "---\n---\n\n## Time used\n",
+        "---\ntitle: Plan\n---\n\n## Time used\n",
+    ],
+)
+def test_time_log_accepts_plan_without_updated_field(tmp_path: Path, text: str) -> None:
+    """Only an existing updated date is stamped; absent frontmatter needs no repair."""
+    root = make_repo(tmp_path)
+    plan = root / "plans" / "changes" / "demo" / "plan.md"
+    plan.write_text(text)
+    code, out = run_log(root)
+    assert code == 0
+    (entry,) = [line for line in out if line.endswith(time_records.MARKER)]
+    assert plan.read_text() == time_records.insert_entry(text, entry)

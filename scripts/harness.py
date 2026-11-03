@@ -414,8 +414,16 @@ def time_log(root: Path, args: argparse.Namespace, *, out: Out, today: date) -> 
             )
 
         def publish(destination: Path, content: bytes) -> None:
-            stamped = check_frontmatter_current.stamped(content.decode("utf-8"), today)
-            time_records.publish_atomic(destination, stamped.encode("utf-8"))
+            text = content.decode("utf-8")
+            if check_frontmatter_current.read_updated(text) not in (
+                check_frontmatter_current.NO_FRONTMATTER,
+                check_frontmatter_current.MISSING,
+            ):
+                text = check_frontmatter_current.stamped(text, today)
+            try:
+                time_records.publish_atomic(destination, text.encode("utf-8"))
+            except time_records.PublishedButNotSynced as exc:
+                out(f"warning: record written; directory synchronization failed ({exc})")
 
         time_records.write_entry(entry, plan, text=text, publish=publish)
     except time_records.TimeSectionError as exc:
