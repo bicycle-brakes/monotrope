@@ -350,6 +350,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-verdict-validated/plan.md`](changes/review-verdict-validated/plan.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/research.md`](changes/review-verdict-validated/research.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/review-verdict-validated/spec.md`](changes/review-verdict-validated/spec.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/rivet-deep-dive/research.md`](changes/rivet-deep-dive/research.md) | draft | none | 2026-11-03 | coding-harness-myuc |
 | [`changes/run-report/decisions.md`](changes/run-report/decisions.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
 | [`changes/run-report/findings.md`](changes/run-report/findings.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
 | [`changes/run-report/plan.md`](changes/run-report/plan.md) | draft | none | 2026-10-28 | coding-harness-o2yc |
