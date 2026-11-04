@@ -158,6 +158,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/draft-gates-only/plan.md`](changes/draft-gates-only/plan.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
 | [`changes/draft-gates-only/research.md`](changes/draft-gates-only/research.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
 | [`changes/draft-gates-only/spec.md`](changes/draft-gates-only/spec.md) | draft | partial | 2026-10-31 | coding-harness-77qj |
+| [`changes/explore-provenance/research.md`](changes/explore-provenance/research.md) | draft | none | 2026-11-04 | coding-harness-g19n |
 | [`changes/explore-role/decisions.md`](changes/explore-role/decisions.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/explore-role/findings.md`](changes/explore-role/findings.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/explore-role/plan.md`](changes/explore-role/plan.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
