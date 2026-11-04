@@ -1163,3 +1163,14 @@ Phase 6 verdict: codex 01a1a359-693b-7872-a0a9-d1029604fab8, 2026-11-03
 Reviewer session: codex 01a1a359-693b-7872-a0a9-d1029604fab8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3212 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 850 files, 3224 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-04
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-15 | MAJOR | SPEC | Phase 6 re-check | tools/claude-code/hooks/session-scan.sh:68–72 | When a live peer has a recorded process start time but `ps` fails, the empty result is treated as a start-time mismatch and the peer is skipped. Strict scanning can consequently return success without reporting another session in the same repository, allowing startup to invoke writing reconciliation. Reproduced with the unchanged filtering block and a failing `ps` stub. An unreadable process identity must make strict scanning fail so startup skips writing. [Acceptance criterion 11] | Codex | taken — reproduced fault in spec, standing rule 2026-11-03: a failed `ps` reading counts as a live peer (fail closed), never as a start-time mismatch; a test with a failing ps |  |
+
+Phase 6 verdict: codex 01a1a545-61fa-7622-aa10-e4adc5505203, 2026-11-04
+Reviewer session: codex 01a1a545-61fa-7622-aa10-e4adc5505203 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
