@@ -501,6 +501,19 @@ invocations, `make verify`, `scripts/verify_all.sh`) and memory figures
 `MemTotal`, `Zswap`). The direct form is `python3 scripts/run_report.py
 [--change NAME]`; the default root is the checkout the script lives in.
 
+The measured rows have one writer, `scripts/time_records.py` (bead
+coding-harness-v6vk): the runner's persistence, the `harness.py time-log`
+command and this reader share the one fixed format — `<start>–<end> UTC,
+<seconds> s — <verb> · attempt <n> · route <r> · model <m> · accepted|rejected
+· measured by the runner`. The retained marker names the shared machine
+writer, not an extra model invocation; a span an interactive session logs
+itself carries `route orchestrator`. The seconds are the explicitly measured
+duration the caller supplies — never a difference computed from the
+timestamps — and a span across midnight carries its end date. The reader
+counts records only through the shared parser. Blank lines, headings and code
+fence markers are skipped; other non-record lines below the heading stay
+unread and visible as `unread lines: N`.
+
 It is a snapshot to read before a verify-bearing step, **not a gate** — it
 never enters `make verify`. It warns, and only warns: when the recorded time
 has reached half the card's appetite (rejected attempts count; the boundary is
@@ -810,6 +823,19 @@ after two failed post-run checks, through the runner's `repair` verb — since t
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
+**One address record for OpenCode Go** (go-access-point, ADR 0024): every
+runner-controlled Go launch — a review-loop member, a probe, a research seat,
+an interactive session — reads its admitted address from the `adresse` record
+on the `opencode-go` entry of `model-endpoints.yaml` and follows one policy. A
+model that names another path on the recorded host runs on with a printed
+notice; any other destination (a foreign host or subdomain, plain HTTP, a
+non-default port, credentials, query or fragment in the URL) is refused before
+any model request — at selection, at activation, and again immediately before
+every send. The record holds no credentials and no model permissions, each
+base carries its documentation source and its reading date, and its
+maintenance route is an agent edit of the held entry through the orchestrator:
+no separate approval per documented same-host path move, and no catalog
+refresh ever writes the record by itself.
 **No Fable:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
@@ -885,7 +911,12 @@ on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
 model, runs `make verify`, measures each completed attempt itself — a line
 below `## Time used`, marked "measured by the runner", written for a rejected
-attempt as well as an accepted one — and makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+attempt as well as an accepted one — and makes the local checkpoint commit.
+The runner's line and every span an interactive session logs itself
+(`python3 scripts/harness.py time-log <change> …`, route `orchestrator`)
+come from one shared writer, `scripts/time_records.py`, whose seconds are the
+explicitly measured duration; an interactive session never writes a runner
+attempt's line and never logs an interval the runner is measuring. An explicit `--stage2-off [REASON]` uses
 §3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the

@@ -197,6 +197,16 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
+    "stage2_go.py": (
+        "Library of scripts/stage2.py, stage2_swarm.py, stage2_availability.py and stage2_session.py, never an "
+        "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
+        "tests/test_stage2_go_access.py runs it against synthetic address records"
+    ),
+    "time_records.py": (
+        "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "
+        "scripts/harness.py time-log and scripts/stage2.py persist through it and the run report reads "
+        "through it; tests/test_time_records.py runs it"
+    ),
     "verify_lock.py": (
         "Helper of the runner, never a gate of its own: the machine-wide verification admission "
         "(flock queue, free-memory check) that verify_all.sh execs as `-m scripts.verify_lock` and "
@@ -205,7 +215,8 @@ OHNE_AUFRUFER: dict[str, str] = {
     ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
-        "answer with it; tests/test_harness_decide_adr.py runs it"
+        "answer with it, or logs one measured time span into a change's plan (time-log); "
+        "tests/test_harness_decide_adr.py and tests/test_harness_time_log.py run it"
     ),
     "merge_guard.py": (
         "Library — the one list of ask rules that stop an agent before it merges; "

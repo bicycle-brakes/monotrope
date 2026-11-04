@@ -127,6 +127,9 @@ rules:
   - prefix: scripts/harness.py
     rolle: mechanismus
     reason: "the command the gate's finding names"
+  - prefix: scripts/time_records.py
+    rolle: mechanismus
+    reason: "the one writer, parser and inserter of the fixed time records; the harness command imports it, so it travels with the command"
   - prefix: scripts/leakcheck.py
     rolle: mechanismus
     reason: "the barrier before a foreign endpoint: scans the change, the tree and the history against a denylist each machine keeps outside the repository"
@@ -210,6 +213,12 @@ rules:
   - prefix: tests/test_harness_decide_adr.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
+  - prefix: tests/test_harness_time_log.py
+    rolle: mechanismus
+    reason: "imports only travelling modules and builds its own repositories; holds in the probe copy"
+  - prefix: tests/test_time_records.py
+    rolle: mechanismus
+    reason: "imports only travelling modules and builds its own plans; holds in the probe copy"
   - prefix: tests/test_leakcheck.py
     rolle: mechanismus
     reason: "builds its own repositories and denylists; holds in the probe copy"
