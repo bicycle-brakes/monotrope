@@ -399,7 +399,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/swarm-time-limits/decisions.md`](changes/swarm-time-limits/decisions.md) | draft | none | 2026-11-04 | coding-harness-ht1b |
+| [`changes/swarm-time-limits/findings.md`](changes/swarm-time-limits/findings.md) | draft | none | 2026-11-04 | coding-harness-ht1b |
+| [`changes/swarm-time-limits/plan.md`](changes/swarm-time-limits/plan.md) | draft | none | 2026-11-04 | coding-harness-ht1b |
 | [`changes/swarm-time-limits/research.md`](changes/swarm-time-limits/research.md) | draft | none | 2026-11-04 | coding-harness-ht1b |
+| [`changes/swarm-time-limits/spec.md`](changes/swarm-time-limits/spec.md) | draft | none | 2026-11-04 | coding-harness-ht1b |
 | [`changes/terms-expiry/decisions.md`](changes/terms-expiry/decisions.md) | draft | none | 2026-10-26 | coding-harness-abra |
 | [`changes/terms-expiry/design.md`](changes/terms-expiry/design.md) | draft | none | 2026-10-26 | coding-harness-abra |
 | [`changes/terms-expiry/findings.md`](changes/terms-expiry/findings.md) | draft | none | 2026-10-26 | coding-harness-abra |
