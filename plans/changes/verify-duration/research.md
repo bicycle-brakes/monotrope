@@ -9,20 +9,17 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-1um6
 owner: framework-architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-11-04"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # verify duration — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
+The runner's exploration is preserved below; the draft-stage gap checks are
+an addendum, not a replacement of the exploration.
 
 Stage-2 call, 2026-11-04: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 882 files, 3240 commits, 12 rules.
 
@@ -93,3 +90,21 @@ All read and confirmed to exist: `plans/changes/verify-machine-lock/spec.md` · 
 ---
 
 Nothing was designed or recommended above; the interview question about the bead's exact goal is the one open item the maintainer needs to answer.
+
+## Draft-stage gap checks — 2026-11-04
+
+Read at `4d57b1c0`: `decisions.md` now settles the goal in three maintainer
+answers: persistent per-gate measurements, local history with machine context,
+and at least five baseline runs plus a warning-budget proposal.
+
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` do not exist
+  in this worktree; the plan form is specified in `prompts/03-plan.md`.
+- `scripts/verify_lock.py` measures queue wait for logging, but its ownership
+  record exposes only pid, token, command and start; `_memory_gate()` waits
+  separately. Measurement context must cover both and survive CLI supervision
+  and inherited `hold_admission` entries without changing admission behavior.
+- `tests/test_ci.py::_runner_tree_files` copies the runner, gate reader and
+  admission module explicitly. Any new runtime helper must join these fixtures.
+- `scripts/kit/manifest.yaml` ships the runner, lock and their existing tests;
+  its fallback rules leave unlisted scripts and tests behind. A new runtime
+  helper and its tests therefore need explicit mechanism entries.
