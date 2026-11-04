@@ -3,15 +3,13 @@
 Scans every active ``plans/changes/<name>/research.md`` — never the archive — for a header that still
 declares ``provenance: human-written`` while the body carries published model research: a Stage-2 call
 line or a research-swarm/v2 envelope. The bootstrap correction of the affected files is the
-orchestrator's step 7 of the plan, so the test stays skipped until that ran.
+orchestrator's step 7 of the plan (done 2026-11-04); the test guards that no active file falls back.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLANS = REPO_ROOT / "plans" / "changes"
@@ -22,7 +20,6 @@ def active_research_files() -> list[Path]:
     return sorted(path for path in PLANS.glob("*/research.md") if archive not in path.parents)
 
 
-@pytest.mark.skip(reason="bootstrap: the correction of the affected active research is the orchestrator's step 7")
 def test_active_model_research_has_no_false_human_provenance() -> None:
     affected = []
     for path in active_research_files():
