@@ -66,6 +66,7 @@ GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
 MINUTES = {"finders": 10.0, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
 RUN_MINUTES = 150.0
 SWARM_PUBLISHER = "stage2-research-swarm"  # produced_by.name of a publication the whole swarm wrote
+BRIEF_DAY = "0000-00-00"  # the fixed day the private brief's corrected header carries, so it never varies by run
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -412,7 +413,13 @@ class Run:
     def build_brief(self) -> str:
         """The private brief: frozen research (without earlier runner blocks), decisions and spec, bead id only."""
         research = self.research_bytes.decode("utf-8", errors="replace")
-        research = _without_updated(BLOCK.sub("", research).encode()).decode().rstrip()
+        # The runner's own publication corrects the provenance header and removes the skeleton notices; the brief
+        # is built from the research as that correction leaves it, with a fixed day, so a resumed run after an
+        # incomplete publication hashes the same prompts and reuses its successful seats (spec criterion 8).
+        corrected = self.runner.research_publication(
+            BLOCK.sub("", research).encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY
+        )
+        research = _without_updated(corrected).decode(errors="replace").rstrip()
         parts = [f"# Private brief for the change {self.change}", f"Bead: {self.ctx.bead}", "## research.md", research]
         for name in ("decisions.md", "spec.md"):
             text = self.text_of(name)

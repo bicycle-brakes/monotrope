@@ -338,3 +338,5 @@ Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance
 > 2 failed, 7 passed, 1 skipped in 18.36s
 > ```
+
+Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason second Sonnet attempt, 2026-11-04: test_corrected_skeleton_publication_keeps_swarm_resume and test_swarm_publication_corrects_research_provenance are red because a resume after the corrected publication reruns every finder and seat; trace where the resume compares research.md (stage2_research_snapshot.changed_against_stored and the caller that records publication= in stored_binding) and make the stored binding carry the prepared corrected bytes before the write · leak check clean over 893 files, 3275 commits, 12 rules.
