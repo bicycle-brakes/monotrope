@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-ht1b
@@ -363,3 +363,47 @@ Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claud
 Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model hy3 · leak check clean over 880 files, 3258 commits, 12 rules.
 
 Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 880 files, 3260 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 880 files, 3267 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 880 files, 3268 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_limits.py` +0 -7
+> - `tests/test_stage2_research_limits.py` +18 -3
+> - `tests/test_stage2_swarm.py` +36 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-2: tests/test_stage2_swarm.py::test_required_slots_precede_free_and_reserve_judge_time: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-1-20261104T171216266322Z-b8209ea9.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 880 files, 3270 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-2-20261104T171216266322Z-b8209ea9.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 880 files, 3272 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-2: tests/test_stage2_swarm.py::test_required_slots_precede_free_and_reserve_judge_time: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-3-20261104T171216266322Z-b8209ea9.md
+> ```

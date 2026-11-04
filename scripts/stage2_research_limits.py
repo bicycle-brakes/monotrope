@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import dataclasses
 import math
-import re
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
@@ -67,12 +66,6 @@ class Limits:
 
 def _number(path: Path, value: object, name: str) -> float:
     """One allowance in minutes: a positive finite number, never a bool, text, null or container."""
-    # PyYAML resolves some scientific notation (such as 1e308) as text. Give
-    # numeric overflow its useful diagnosis without accepting numeric strings.
-    if isinstance(value, str) and re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)[eE][+-]?[0-9]+", value):
-        candidate = float(value)
-        if not math.isfinite(candidate) or not math.isfinite(candidate * 60.0):
-            raise LimitsError(f"{path}: {name} ({value!r}) is beyond the representable range in seconds")
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise LimitsError(f"{path}: {name} must be a number of minutes, found {value!r}")
     try:

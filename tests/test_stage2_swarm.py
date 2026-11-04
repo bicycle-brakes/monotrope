@@ -1247,16 +1247,20 @@ def test_concurrent_slots_keep_distinct_audits_and_outcomes(sworld: SwarmWorld) 
     assert peak <= 4 and len(go) > 4, f"Go calls overlapped {peak} at a time"
 
 
+@pytest.mark.parametrize("judge_minutes", [None, 5.0])
 def test_required_slots_precede_free_and_reserve_judge_time(
-    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, judge_minutes: float | None
 ) -> None:
     # Criterion 19. Planted fault: topic work consumes the judge reserve, or unlaunched slots lack outcomes.
+    if judge_minutes is not None:
+        write_limits(sworld.root, judge=judge_minutes)
+    limits = stage2_research_limits.load(sworld.root)
     offset = [0.0]
     real_history = stage2_research_run.build_research_history
 
     def late(*args, **kwargs):
-        run = stage2_research_limits.load(sworld.root).run_minutes
-        offset[0] += (run - 10.0) * 60.0  # 10 minutes remain, less than the configured judge reserve
+        # Leave half the configured reserve, even when the judge has less than ten minutes.
+        offset[0] += (limits.run_minutes - limits.role_minutes["judge"] / 2.0) * 60.0
         return real_history(*args, **kwargs)
 
     monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
@@ -3306,16 +3310,40 @@ def test_deadline_before_open_refuses_by_name(sworld: SwarmWorld) -> None:
         pytest.fail(f"deadline inspection must refuse by name, not raise AttributeError: {error}")
 
 
-def test_launch_bound_accepts_configuration_only_edits(sworld: SwarmWorld) -> None:
-    # Planted fault: the swarm test pins initial values rather than checking dispatched settings.
+def test_launch_bound_accepts_configuration_only_edits(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Planted fault: a configuration-only edit leaves the finder allowance or run deadline unchanged.
     write_limits(sworld.root, run_minutes=240.0, finders=25.0)
-    test_amended_graph_and_deadlines_bound_every_launch(sworld)
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 1000.0)
+    seen = dispatch_spy(monkeypatch)
+    sworld.complete()
+    assert sworld.run() == 0
+    finders = stage_entry(seen, "finders")
+    assert set(finders["allowances"].values()) == {25.0 * 60.0}
+    assert {entry["deadline"] for entry in seen} == {1000.0 + 240.0 * 60.0}
 
 
 def test_resume_deadline_accepts_another_roster(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Planted fault: a deadline test assumes a literal number of reusable slots.
+    # Planted fault: resuming a roster with free seats loses reuse or retains the spent deadline.
     sworld.selection = selection_for(free=FREE)
-    test_resumed_run_uses_a_fresh_configured_deadline(sworld, monkeypatch)
+    limits = stage2_research_limits.load(sworld.root)
+    now = [1000.0]
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: now[0])
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    free_slots = {slot["slot_id"] for slot in first["slots"] if not slot["required"]}
+    assert free_slots, "the scenario must include the additional free roster"
+    now[0] += limits.run_seconds + 60.0
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 0
+    assert [entry["stage"] for entry in seen] == ["judge"]
+    assert seen[0]["deadline"] == now[0] + limits.run_seconds
+    second = manifest_of(sworld)
+    reused = {slot["slot_id"] for slot in second["slots"] if slot["reused_from"] == first["run_id"]}
+    assert reused == {slot["slot_id"] for slot in first["slots"] if slot["stage"] != "judge"}
+    assert free_slots <= reused, "successful free slots are reused with the required seats"
 
 
 @pytest.mark.parametrize("failure", [RecursionError, MemoryError])

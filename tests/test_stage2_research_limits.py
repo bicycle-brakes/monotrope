@@ -173,15 +173,30 @@ def test_valid_limits_accept_fractional_minutes(tmp_path: Path) -> None:
     assert limits.role_minutes == {"finders": 0.5, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
 
 
-@pytest.mark.parametrize("value", ["1e308", "1e+308", "1e999", "1.0e999", "1.0e+999"])
+@pytest.mark.parametrize("value", ["1.0e+308", "1.0e+999"])
 @pytest.mark.parametrize("field", ["run_minutes: 160.0", "finders: 20.0"])
 def test_scientific_overflow_reports_range(tmp_path: Path, value: str, field: str) -> None:
-    # Plant scientific overflow that PyYAML may otherwise resolve as text.
+    # Plant numeric YAML floats whose value or seconds conversion overflows.
     write(tmp_path, BASE.replace(field, f"{field.split(':')[0]}: {value}"))
     expect_refusal(tmp_path, "representable range")
 
 
-@pytest.mark.parametrize("value", ["'16e1'", '"16e1"', "!!str 16e1", "16e1"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "'16e1'",
+        '"16e1"',
+        "!!str 16e1",
+        "16e1",
+        '"1.0e308"',
+        "'1.0e+999'",
+        "!!str 1.0e+308",
+        "1e308",
+        "1e+308",
+        "1e999",
+        "1.0e999",
+    ],
+)
 def test_quoted_scientific_numbers_remain_strings(tmp_path: Path, value: str) -> None:
     write(tmp_path, BASE.replace("run_minutes: 160.0", f"run_minutes: {value}"))
     expect_refusal(tmp_path, "must be a number")
