@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock change index report help
+.PHONY: verify test staleness gates leakcheck venv lock change index report close-merged help
 
 verify:
 	bash scripts/verify_all.sh
@@ -75,6 +75,35 @@ index:
 report:
 	@export CHANGE; python3 scripts/run_report.py
 
+# Closes beads whose work merged (bead coding-harness-l1if): the reconciler
+# reads Closes-Bead trailers from a freshly fetched origin/main and closes what
+# they declare through the pinned tools/bd — reporting only, unless ARGS=--write.
+# Only command-line ARGS is accepted. Capture its raw value without expanding
+# make functions, then validate the exact bytes in the shell as environment data.
+# Anchor this target to this Makefile, even when invoked with -f elsewhere.
+# Make lists split on whitespace: refuse ambiguous inputs before using a path.
+override CLOSE_MERGED_MAKEFILE := $(abspath $(firstword $(MAKEFILE_LIST)))
+export CLOSE_MERGED_MAKEFILE
+ifeq ($(origin ARGS),command line)
+override CLOSE_MERGED_ARGS := $(value ARGS)
+else
+override CLOSE_MERGED_ARGS :=
+endif
+export CLOSE_MERGED_ARGS
+unexport ARGS
+
+close-merged:
+	@if [ "$(words $(MAKEFILE_LIST))" -ne 1 ]; then \
+	  echo 'close-merged: expected exactly one Makefile path without whitespace; invoke this Makefile directly' >&2; \
+	  exit 2; \
+	fi
+	@cd "$$(dirname "$$CLOSE_MERGED_MAKEFILE")" && \
+	case "$$CLOSE_MERGED_ARGS" in \
+	  "") python3 scripts/close_merged_beads.py ;; \
+	  --write) python3 scripts/close_merged_beads.py --write ;; \
+	  *) echo 'close-merged: ARGS must be empty or --write' >&2; exit 2 ;; \
+	esac
+
 help:
 	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
 	@echo 'make test                               the test suite, by hand'
@@ -87,4 +116,6 @@ help:
 	@echo '                                        create plans/changes/<name>/ linked to an existing bead'
 	@echo 'make index                              regenerate plans/INDEX.md from the registry'
 	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
+	@echo 'make close-merged [ARGS=--write]        close beads a merged Closes-Bead trailer declared (report without ARGS)'
+	@echo '                                        reporting also fails on unresolved declarations (nonzero exit)'
 	@echo 'make help                               this list'

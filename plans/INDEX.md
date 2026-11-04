@@ -113,6 +113,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/plan.md`](changes/attempt-diagnostics/plan.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/beads-close-themselves/decisions.md`](changes/beads-close-themselves/decisions.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
+| [`changes/beads-close-themselves/findings.md`](changes/beads-close-themselves/findings.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
+| [`changes/beads-close-themselves/plan.md`](changes/beads-close-themselves/plan.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
+| [`changes/beads-close-themselves/research.md`](changes/beads-close-themselves/research.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
+| [`changes/beads-close-themselves/spec.md`](changes/beads-close-themselves/spec.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/ci-minutes/decisions.md`](changes/ci-minutes/decisions.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/findings.md`](changes/ci-minutes/findings.md) | draft | none | 2026-10-13 | coding-harness-cac |
@@ -280,6 +285,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/research.md`](changes/provenance-location/research.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/spec.md`](changes/provenance-location/spec.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
+| [`changes/raising-fault-test/decisions.md`](changes/raising-fault-test/decisions.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
+| [`changes/raising-fault-test/findings.md`](changes/raising-fault-test/findings.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
+| [`changes/raising-fault-test/plan.md`](changes/raising-fault-test/plan.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
+| [`changes/raising-fault-test/research.md`](changes/raising-fault-test/research.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
+| [`changes/raising-fault-test/spec.md`](changes/raising-fault-test/spec.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
 | [`changes/ratchet-mutation-evidence/decisions.md`](changes/ratchet-mutation-evidence/decisions.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/ratchet-mutation-evidence/findings.md`](changes/ratchet-mutation-evidence/findings.md) | draft | partial | 2026-10-25 | coding-harness-a05 |
 | [`changes/ratchet-mutation-evidence/plan.md`](changes/ratchet-mutation-evidence/plan.md) | draft | partial | 2026-10-25 | coding-harness-a05 |

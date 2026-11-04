@@ -310,6 +310,10 @@ GUARD_EVIDENCE_LINE = re.compile(
     r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
+RAISING_FAULT_SENTENCE = (
+    "When the fault itself raises an exception, catch that specific exception in the regression test body "
+    "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
+)
 REPAIR_ANSWER = (
     "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>`,\n"
     "`<ID>: fixed — guard test — tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`.\n"
@@ -327,7 +331,7 @@ REPAIR_ANSWER = (
     "proves its named test twice on the attempt's code - qualifying red with `STAGE2_PLANT_FAULT=1`,\n"
     "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
     "in the kept test so the proof can be repeated. Only a row taken as\n"
-    "`taken — not a test — <reason>` may be answered `not a test`. Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
+    f"`taken — not a test — <reason>` may be answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
     "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
     "is booked in the row's own Status as\n"
     "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
