@@ -146,7 +146,7 @@ context: |
   Today: a feature change explores through the research swarm (ADR 0020).
   Repository change: phase 1 ran through GLM 5.3 Flash and a Claude Haiku 5.5 sub-agent instead (research.md).
   Architecture change: none.
-answer: "the maintainer's exception of 2026-10-31" (recorded in prose at the head of this file); re-confirmed in the conversation on 2026-11-04: "A: ja, nachtragen (Recommended)".
+answer: "A: ja, nachtragen (Recommended)" — on 2026-11-04 the maintainer confirmed the exception of 2026-10-31 that the head of this file records in prose.
 answered_by: maintainer
 status: answered
 research_swarm_exception: {granted: true, reason: "the research swarm was blocked by the Go address fault this change repairs (2026-10-31)"}

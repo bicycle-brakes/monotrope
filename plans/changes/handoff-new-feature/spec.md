@@ -1,7 +1,7 @@
 ---
 title: "Spec — handoff-new-feature"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
 updated: 2026-11-04
@@ -124,7 +124,7 @@ Research: `research.md`. Decision: `decisions.md#Q-1`.
 
 The runner, shared inventory derivation, gate catalogue, CI placement,
 prompts, templates, model configuration and existing ADRs remain unchanged.
-Other change folders remain untouched. Only the orchestrator may edit the
+Other change folders remain untouched, except one orchestrator record the maintainer authorised: the structured exception Q-6 in `plans/changes/go-access-point/decisions.md` (`decisions.md#Q-2`). Only the orchestrator may edit the
 human-decided adoption record; no model attempt receives that edit.
 
 ## Definition of Done
@@ -133,7 +133,8 @@ human-decided adoption record; no model attempt receives that edit.
   bypass, the legacy boundary and invalid exceptions; `make verify` is green.
 - Updated together: `scripts/check_research_handoff.py`,
   `tests/test_research_handoff.py`, `tests/test_this_repository_adoption.py`,
-  `decisions/adoption.yaml`, `docs/WORKFLOW.md`, and this change's artifacts;
+  `decisions/adoption.yaml`, `docs/WORKFLOW.md`, this change's artifacts and the
+  orchestrator's Q-6 record in `plans/changes/go-access-point/decisions.md`;
   the derived `plans/INDEX.md` is regenerated. No ADR is changed.
 - The pull request file list shows protected areas and non-goals respected.
 - The pull request closes the missing-research bypass task and its last
