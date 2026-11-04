@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-in27
 owner: framework-architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04; exploration attributed below"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -85,3 +87,42 @@ Depending on the surface, from what exists today:
 **Suggested `neighbours:` for the header:** `plans/changes/handover-at-95/research.md` (active change in the same area, research only, bead coding-harness-l9s). No living spec covers this area; `plans/specs/implementation-verification/spec.md` is unrelated by title, contents unread.
 
 **Note for the runner:** the skeleton's frontmatter still says `provenance: human-written`; per the skeleton's own note and `provenance.yaml` (class `ai-drafted-reviewed`, `review_required: true`), filling it with this model output means setting `ai-drafted-reviewed` with `produced_by:` and `review:` blocks. The key open question for the interview: what exactly is the feature of `coding-harness-in27` — the bead description in the tracker is the only place that says.
+
+## Drafting gap check — 2026-11-04
+
+This addendum supersedes the exploration's unresolved intent and suggested
+neighbour, not its historical observations. The interview identifies a bounded
+repair to the research-handoff gate (`decisions.md#Q-1`), not a session-handover
+feature. The session-handover change suggested above is therefore not a neighbour.
+The header now declares model authorship; the earlier skeleton instructions
+and explorer's closing note describe their earlier state.
+
+Read in this worktree at `a98c09c1`, 2026-11-04; no tracker or model call:
+
+- `scripts/check_research_handoff.py::check_change` returns a green exemption
+  immediately for missing research or for no v2 records. Neither return reads
+  the spec's class, creation date or interview. Complete-run checks already
+  enforce inventory, human item closure, neighbour parity and criterion bases;
+  malformed evidence raises `CannotMeasure`, and exit 3 precedes findings.
+- `tests/test_research_handoff.py` builds offline temporary trees, exercises
+  real `gate.main` and CLI calls, and explicitly preserves legacy exemptions.
+  Its incomplete-run and pending tests distinguish the pre-spec boundary.
+- `scripts/adoption.py::adopted_on` is the strict per-repository adoption-date
+  reader. `decisions/adoption.yaml` currently has no research-handoff date.
+  Its provenance is human-decided. The gate reader and its tests travel with
+  the kit; the date record stays in its repository (`scripts/kit/manifest.yaml`).
+- Read-only Git history identifies the research-swarm merge as pull request
+  #158, commit `79a74f75d1e9ab7892388d643c4feea0d3ffeea2`,
+  2026-10-26T19:01:06+01:00. Day-granular adoption follows the existing interview
+  gate convention; using research's original date avoids dating creation by
+  a later spec or review.
+- The Go-access-point feature has an explicit maintainer exception in its
+  interview's introductory prose, dated 2026-10-31, but no structured grant
+  record. A new structured-exception rule will require separate authorized
+  normalization there; this repair cannot invent that record.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` do not exist
+  in this tree. The available interview and criterion-ledger gates check their
+  own contracts; `scripts/plans_registry.py` also checks a rendered index.
+  The latest journal handover was read. Current PR state could not be read
+  because GitHub was unreachable. The external session registry was not read
+  under the instruction to stay inside this worktree and its Git directory.
