@@ -5390,12 +5390,14 @@ def must_run_refs(plan: bytes) -> str:
 
 
 MUST_RUN_DELEGATED = (
-    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before full "
+    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before post-run "
     "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
     "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
-    "ledger test fails the attempt before `make verify`. Execute nothing yourself - delegation to the "
+    "ledger test fails the attempt before post-run verification. The runner then runs the targeted check for repair "
+    "or full `make verify` for implement; repair uses full fallback when targeted coverage is unsafe, "
+    "and a fresh full `make verify` runs before phase 6. Execute nothing yourself - delegation to the "
     "runner is the contract, and no extra tool is yours."
 )
 MUST_RUN_COMMANDS = (
@@ -5403,7 +5405,9 @@ MUST_RUN_COMMANDS = (
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
     "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
-    "checks and full `make verify` after the call. Findings.md is the runner's audit file: an edit "
+    "checks after the call, then the targeted check for repair or full `make verify` for implement; "
+    "repair uses full fallback when targeted coverage is unsafe, and a fresh full `make verify` runs "
+    "before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )
 
@@ -8110,7 +8114,8 @@ def card_problem(text: str) -> str | None:
 
 # The draft's post-run check is the verify job's existing document subset, selected through the
 # shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
-# bead coding-harness-77qj). Implement and repair keep the full `make verify`.
+# bead coding-harness-77qj). Implement keeps full `make verify`; repair takes the targeted check,
+# with the full suite as its fallback and before phase 6.
 DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
 DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
 
@@ -8123,8 +8128,8 @@ def verify_draft(
     The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
     `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
     is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
-    the two artefacts, the plan card and the `## Time used` heading. The full suite stays with
-    implement, repair and the orchestrator.
+    the two artefacts, the plan card and the `## Time used` heading. Implement keeps full `make verify`;
+    repair takes the targeted check, with the full suite as its fallback and before phase 6.
     """
     owed = False
     if len(new_adrs) > 1:

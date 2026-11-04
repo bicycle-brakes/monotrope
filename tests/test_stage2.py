@@ -8695,6 +8695,30 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
     assert record["L1-4"] == "fixed — tests/test_fix.py::test_fix"
 
 
+@pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS"])
+def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
+    """Neither tool route may promise unconditional full verification after a repair."""
+    text = getattr(stage2, block)
+    assert "before full verification" not in text
+    assert "checks and full `make verify` after the call" not in text
+    assert "targeted check for repair" in text
+    assert "full `make verify` for implement" in text
+    assert "full fallback" in text
+    assert "before phase 6" in text
+
+
+def test_draft_verification_documentation_describes_targeted_repairs() -> None:
+    """The adjacent comment and docstring must preserve the repair/full-check boundary."""
+    source = inspect.getsource(stage2)
+    comment = source[source.index("# The draft's post-run check") : source.index("DOCS_VERIFY =")]
+    for text in (comment, inspect.getdoc(stage2.verify_draft)):
+        words = " ".join(text.replace("#", "").split())
+        assert "repair takes the targeted check" in words
+        assert "full suite as its fallback and before phase 6" in words
+        assert "Implement and repair keep the full" not in words
+        assert "implement, repair and the orchestrator" not in words
+
+
 def test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request(world: World) -> None:
     """Criterion 2. Planted fault: the plan left out, or the read request standing before the rows."""
     baseline = repair_world(world)
