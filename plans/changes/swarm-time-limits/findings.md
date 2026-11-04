@@ -359,3 +359,7 @@ Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-4: tests/test_stage2_swarm.py::test_resume_deadline_accepts_another_roster: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-3-20261104T140011907480Z-72468082.md
 > ```
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model hy3 · leak check clean over 880 files, 3258 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 880 files, 3260 commits, 12 rules.
