@@ -322,6 +322,9 @@ rules:
   - prefix: .github/workflows/ci.yml
     rolle: mechanismus
     reason: "die EINE Gate-Liste. ci_gates.py liest sie; ohne sie hat der Ablauf keinen Erzwinger"
+  - prefix: research-swarm-limits.yaml
+    rolle: mechanismus
+    reason: "the research swarm's per-role and run time limits that scripts/stage2_research_limits.py reads and checks; travels with the runner (bead coding-harness-ht1b)"
 
   # --- Bestand ---------------------------------------------------------------
   - prefix: model-endpoints.yaml

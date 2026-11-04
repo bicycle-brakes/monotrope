@@ -108,18 +108,18 @@ follow `prompts/03-plan.md`. Explore ran through Stage 2, GLM 5.3 Flash via
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_research_limits.py::test_checked_in_limits_have_decided_values — a configured role/run value or minute conversion differs from the interview.
-- 2: not yet written tests/test_stage2_swarm.py::test_research_limits_are_captured_once_per_invocation — a mid-run edit changes that run or the next invocation ignores it.
-- 2: not yet written tests/test_stage2_research_limits.py::test_each_root_reads_its_current_limits — another root or a prior read supplies stale values after a valid edit.
-- 3: not yet written tests/test_stage2_research_limits.py::test_limits_reject_unusable_documents — missing, unreadable, malformed, ambiguous or incomplete data produces usable settings.
-- 3: not yet written tests/test_stage2_research_limits.py::test_limits_reject_implausible_values — non-numeric, non-positive, non-finite, overflowing or impossible budgets are accepted.
-- 3: not yet written tests/test_stage2_swarm.py::test_invalid_limits_refuse_before_research_launch — explore launches a participant, exits other than 2, or omits the path and reason.
-- 4: not yet written tests/test_stage2_research_limits.py::test_valid_limits_accept_fractional_minutes — valid fractional minutes are refused or converted incorrectly.
-- 4: not yet written tests/test_stage2_swarm.py::test_configured_limits_reach_every_research_stage — any dispatched role uses a constant, wrong role or wrong units.
-- 5: not yet written tests/test_stage2_swarm.py::test_configured_run_limit_controls_deadline — stages receive different deadlines or retain 150 minutes instead of the configured monotonic total.
-- 5: not yet written tests/test_stage2_swarm.py::test_resumed_run_uses_a_fresh_configured_deadline — the resumed invocation inherits the old spent deadline or loses its configured allowance.
+- 1: tests/test_stage2_research_limits.py::test_checked_in_limits_have_decided_values — a configured role/run value or minute conversion differs from the interview.
+- 2: tests/test_stage2_swarm.py::test_research_limits_are_captured_once_per_invocation — a mid-run edit changes that run or the next invocation ignores it.
+- 2: tests/test_stage2_research_limits.py::test_each_root_reads_its_current_limits — another root or a prior read supplies stale values after a valid edit.
+- 3: tests/test_stage2_research_limits.py::test_limits_reject_unusable_documents — missing, unreadable, malformed, ambiguous or incomplete data produces usable settings.
+- 3: tests/test_stage2_research_limits.py::test_limits_reject_implausible_values — non-numeric, non-positive, non-finite, overflowing or impossible budgets are accepted.
+- 3: tests/test_stage2_swarm.py::test_invalid_limits_refuse_before_research_launch — explore launches a participant, exits other than 2, or omits the path and reason.
+- 4: tests/test_stage2_research_limits.py::test_valid_limits_accept_fractional_minutes — valid fractional minutes are refused or converted incorrectly.
+- 4: tests/test_stage2_swarm.py::test_configured_limits_reach_every_research_stage — any dispatched role uses a constant, wrong role or wrong units.
+- 5: tests/test_stage2_swarm.py::test_configured_run_limit_controls_deadline — stages receive different deadlines or retain 150 minutes instead of the configured monotonic total.
+- 5: tests/test_stage2_swarm.py::test_resumed_run_uses_a_fresh_configured_deadline — the resumed invocation inherits the old spent deadline or loses its configured allowance.
 - 5: tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent — an exhausted run starts a participant or omits not-started outcomes.
-- 6: not yet written tests/test_stage2_swarm.py::test_research_judge_reserve_uses_configured_limit — a pre-judge stage reserves another value or the judge reserves its allowance twice.
+- 6: tests/test_stage2_swarm.py::test_research_judge_reserve_uses_configured_limit — a pre-judge stage reserves another value or the judge reserves its allowance twice.
 - 6: tests/test_stage2_research_dispatch.py::test_child_allowance_is_lesser_of_role_and_remaining_before_reserve — a child receives more than its role or unreserved remainder.
 - 6: tests/test_stage2_research_dispatch.py::test_no_launch_inside_reserve_and_free_not_started_is_not_incomplete — a slot launches inside the reserve or a missing free slot incorrectly fails the run.
 - 6: tests/test_stage2_swarm.py::test_required_slots_precede_free_and_reserve_judge_time — required topics consume the reserved time or unlaunched slots lose their outcomes.
@@ -145,4 +145,12 @@ appetite with unmet criteria recorded; never weaken a criterion to pass.
 it cannot be reported green. The runner handles index generation and
 tracker-dependent gates, which this draft does not mutate.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-04 11:36:56–12:18:41 UTC, 2504 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 12:18:50–12:28:23 UTC, 573 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 12:28:32–12:48:37 UTC, 1205 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

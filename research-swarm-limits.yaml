@@ -1,0 +1,15 @@
+# The time limits of the phase-1 research swarm, read once per invocation by
+# scripts/stage2_research_limits.py before any research participant starts.
+# Every value is a number of minutes. `run_minutes` bounds one whole
+# invocation; each `role_minutes` value bounds one participant of its stage.
+# The next invocation applies an edit of this file; the running one keeps the
+# values it read at its start. A missing, unknown or implausible value refuses
+# the invocation with exit 2: every role must stay at or below the run, and
+# the judge strictly below it.
+run_minutes: 160
+role_minutes:
+  finders: 20
+  merge: 10
+  sentence: 5
+  topics: 10
+  judge: 15

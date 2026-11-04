@@ -15,6 +15,10 @@ the status are buffered and appended once, by the runner, at the end (or abort) 
 Seat identities come from the run's frozen selection (`stage2_availability.research_roles`) and the
 declaration, never from a hardcoded tuple. Opus roles run with an empty tool list and see only their
 own packet. The run never probes, refreshes the catalog, retries or swaps a seat.
+
+The whole-run allowance and the role allowances come from `research-swarm-limits.yaml` at the worktree
+root, read once per invocation by `stage2_research_limits.load`; an unreadable or implausible file
+refuses the invocation before anything starts.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from pathlib import Path, PurePosixPath
 import research_handoff
 import stage2_availability
 import stage2_go
+import stage2_research_limits
 import stage2_research_map
 import stage2_swarm
 from stage2_research_dispatch import GateVerdict, Slot, dispatch
@@ -63,8 +68,6 @@ def free_slot_id(stage: str, topic: int, model: str) -> str:
 
 
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
-MINUTES = {"finders": 10.0, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
-RUN_MINUTES = 150.0
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -327,7 +330,7 @@ class Run:
 
     @property
     def deadline(self) -> float:
-        return self.began + RUN_MINUTES * 60.0
+        return self.began + self.limits.run_seconds
 
     def read_data(self) -> dict:
         data = stage2_availability.read_declaration(self.root)
@@ -342,6 +345,10 @@ class Run:
 
     def open(self) -> None:
         runner = self.runner
+        try:
+            self.limits = stage2_research_limits.load(self.root)
+        except stage2_research_limits.LimitsError as error:
+            raise runner.Refused(f"the research swarm time limits are unusable: {error}") from error
         self.data = self.read_data()
         try:
             self.roles = stage2_availability.research_roles(self.selection, self.data)
@@ -860,7 +867,7 @@ class Run:
                 provider="go" if e["endpoint"] == GO else "claude",
                 required=e["required"],
                 order=e["order"],
-                role_allowance=MINUTES[stage] * 60.0,
+                role_allowance=self.limits.role_seconds(stage),
                 identity={k: e[k] for k in ("stage", "topic", "seat", "endpoint", "model", "role")},
                 prompt=e["prompt"],
             )
@@ -928,7 +935,7 @@ class Run:
                 return False
             return True
 
-        records = self.run_stage("finders", entries, valid, reserve=MINUTES["judge"] * 60.0)
+        records = self.run_stage("finders", entries, valid, reserve=self.limits.role_seconds("judge"))
         for record in records:
             if record["outcome"] == "ok" and not valid(None, record):
                 self.invalidate(record, "the finder answer is not the four-list locator object")
@@ -964,7 +971,7 @@ class Run:
                 return False
             return True
 
-        (record,) = self.run_stage("merge", [entry], valid, reserve=MINUTES["judge"] * 60.0)
+        (record,) = self.run_stage("merge", [entry], valid, reserve=self.limits.role_seconds("judge"))
         self.require_ok([record], "the map merge")
         try:
             self.map = self.map_merge(record)
@@ -988,7 +995,9 @@ class Run:
         def problems(record) -> list[str]:
             return public_sentence_problems(record["stdout"], self.change, self.ctx.bead, tracked)
 
-        (record,) = self.run_stage("sentence", [entry], lambda _e, r: not problems(r), reserve=MINUTES["judge"] * 60.0)
+        (record,) = self.run_stage(
+            "sentence", [entry], lambda _e, r: not problems(r), reserve=self.limits.role_seconds("judge")
+        )
         self.require_ok([record], "the public sentence call")
         found = problems(record)
         if found:
@@ -1092,7 +1101,7 @@ class Run:
                 return False
             return True
 
-        records = self.run_stage("topics", entries, valid, reserve=MINUTES["judge"] * 60.0)
+        records = self.run_stage("topics", entries, valid, reserve=self.limits.role_seconds("judge"))
         for entry, record in zip(entries, records, strict=True):
             report = None
             if record["outcome"] == "ok":

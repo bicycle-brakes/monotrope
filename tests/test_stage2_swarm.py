@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_availability  # noqa: E402
+import stage2_research_limits  # noqa: E402
 import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
@@ -426,6 +427,7 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
     shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
+    shutil.copy(REPO_ROOT / "research-swarm-limits.yaml", root / "research-swarm-limits.yaml")
     # A consumed synthetic selection needs admitted synthetic terms too: the
     # real declaration may skip a fixture member, and its dates must not age
     # these dispatcher tests into refusals. The seats run on shared builder
@@ -1253,7 +1255,8 @@ def test_required_slots_precede_free_and_reserve_judge_time(
     real_history = stage2_research_run.build_research_history
 
     def late(*args, **kwargs):
-        offset[0] += 140 * 60.0  # 10 minutes remain, less than the 15-minute judge reserve
+        run = stage2_research_limits.load(sworld.root).run_minutes
+        offset[0] += (run - 10.0) * 60.0  # 10 minutes remain, less than the configured judge reserve
         return real_history(*args, **kwargs)
 
     monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
@@ -1561,14 +1564,10 @@ def test_judge_gets_resolved_excerpts_with_bounded_truncation(sworld: SwarmWorld
 
 def test_amended_graph_and_deadlines_bound_every_launch(sworld: SwarmWorld) -> None:
     # Criterion 19. Planted fault: an extra invocation or retry occurs, or the role limits drift.
-    assert stage2_research_run.MINUTES == {
-        "finders": 10.0,
-        "merge": 10.0,
-        "sentence": 5.0,
-        "topics": 10.0,
-        "judge": 15.0,
-    }
-    assert stage2_research_run.RUN_MINUTES == 150.0
+    limits = stage2_research_limits.load(sworld.root)
+    assert limits.run_minutes == 160.0 and limits.role_minutes["finders"] == 20.0, (
+        "the worktree's checked-in file, not a code constant, governs the run"
+    )
     sworld.selection = selection_for(free=FREE)
     sworld.complete(**{"repository:2:mimo-v2.6-pro": [{"exit": 1}]})
     assert sworld.run() == 1
@@ -1895,9 +1894,7 @@ def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
 
 @pytest.mark.parametrize("kind", ["repository", "online"])
 @pytest.mark.parametrize("fault", ["nonzero", "empty", "timeout"])
-def test_failed_pi_calls_preserve_partial_evidence(
-    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, kind: str, fault: str
-) -> None:
+def test_failed_pi_calls_preserve_partial_evidence(sworld: SwarmWorld, kind: str, fault: str) -> None:
     # Criteria 18, 21. Planted fault: a failed call loses its partial output or receipts, or reports a clean run.
     receipts = [RECEIPT]
     step = {
@@ -1906,7 +1903,7 @@ def test_failed_pi_calls_preserve_partial_evidence(
         "timeout": {"stdout": "PARTIAL-TEXT", "sleep": 30, "receipts": receipts},
     }[fault]
     if fault == "timeout":
-        monkeypatch.setitem(stage2_research_run.MINUTES, "topics", 0.03)
+        write_limits(sworld.root, topics=0.03)
     key = f"{kind}:1:deepseek-v4.1-flash" if kind == "repository" else f"{kind}:9:deepseek-v4.1-flash"
     sworld.complete(**{key: [step]})
     assert sworld.run() == 1
@@ -1973,7 +1970,7 @@ def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monke
 
     def late(*args, **kwargs):
         state = real(*args, **kwargs)
-        offset[0] += 151 * 60.0
+        offset[0] += (stage2_research_limits.load(sworld.root).run_minutes + 1.0) * 60.0
         return state
 
     monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
@@ -1983,6 +1980,205 @@ def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monke
     assert sworld.calls() == []
     text = sworld.research.read_text(encoding="utf-8")
     assert text.count("not-started-deadline") >= 3
+
+
+# ---------------------------------------------------------------------------
+# Checked-in time limits (bead coding-harness-ht1b)
+# ---------------------------------------------------------------------------
+
+
+JUDGE_EQUALS_RUN = (
+    "run_minutes: 160\nrole_minutes:\n  finders: 20\n  merge: 10\n  sentence: 5\n  topics: 10\n  judge: 160\n"
+)
+
+
+def write_limits(root: Path, run_minutes: float | None = None, **roles: float) -> None:
+    """Edit the worktree's checked-in limits file: a new run allowance and any number of role allowances."""
+    path = root / stage2_research_limits.FILE_NAME
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if run_minutes is not None:
+        data["run_minutes"] = run_minutes
+    data["role_minutes"].update(roles)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+def plant_limits(root: Path, document: str | bytes) -> None:
+    """Overwrite the worktree's limits file with raw content; bytes plant a file no reader can decode."""
+    path = root / stage2_research_limits.FILE_NAME
+    if isinstance(document, bytes):
+        path.write_bytes(document)
+    else:
+        path.write_text(document, encoding="utf-8")
+
+
+def dispatch_spy(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    """Record every dispatch the run module performs: the stage, each slot's role allowance and deadline."""
+    real = stage2_research_run.dispatch
+    seen: list[dict] = []
+
+    def spy(slots: list, **kwargs):
+        seen.append(
+            {
+                "stage": slots[0].identity["stage"],
+                "allowances": {slot.slot_id: slot.role_allowance for slot in slots},
+                "free": [slot.slot_id for slot in slots if not slot.required],
+                "deadline": kwargs["deadline"],
+                "reserve": kwargs["reserve"],
+                "clock": kwargs["clock"],
+            }
+        )
+        return real(slots, **kwargs)
+
+    monkeypatch.setattr(stage2_research_run, "dispatch", spy)
+    return seen
+
+
+def stage_entry(seen: list[dict], stage: str) -> dict:
+    found = [entry for entry in seen if entry["stage"] == stage]
+    assert found, f"no dispatch of the {stage} stage was observed"
+    return found[0]
+
+
+def test_configured_limits_reach_every_research_stage(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 4. Planted fault: a dispatched stage keeps a hard-coded allowance, receives another
+    # role's value or reads the configured minutes as seconds.
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 1000.0)
+    write_limits(sworld.root, run_minutes=200.5, finders=7.5, merge=11.25, sentence=13.5, topics=17.75, judge=19.5)
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 0
+    deadline = 1000.0 + 200.5 * 60.0
+    expected = {"finders": 450.0, "merge": 675.0, "sentence": 810.0, "topics": 1065.0, "judge": 1170.0}
+    assert [entry["stage"] for entry in seen] == ["finders", "merge", "sentence", "topics", "judge"]
+    for entry in seen:
+        assert entry["deadline"] == deadline, "every stage shares the one monotonic run deadline"
+        assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else expected["judge"])
+        assert all(value == expected[entry["stage"]] for value in entry["allowances"].values())
+    assert len(stage_entry(seen, "topics")["free"]) == 3 * len(FREE), "the free seats ride the topics stage"
+
+
+def test_research_limits_are_captured_once_per_invocation(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 2. Planted fault: a mid-run edit changes the running invocation's allowances, or
+    # the next invocation ignores a valid edit of the file.
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 1000.0)
+    real_history = stage2_research_run.build_research_history
+    edited = [False]
+
+    def edit_between_stages(*args, **kwargs):
+        if not edited[0]:
+            edited[0] = True
+            write_limits(
+                sworld.root,
+                run_minutes=300.0,
+                finders=99.0,
+                merge=99.0,
+                sentence=99.0,
+                topics=99.0,
+                judge=99.0,
+            )
+        return real_history(*args, **kwargs)
+
+    monkeypatch.setattr(stage2_research_run, "build_research_history", edit_between_stages)
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 1, "the mid-run edit of a tracked file ends the run incomplete"
+    assert "the frozen input state changed" in sworld.research.read_text(encoding="utf-8")
+    captured = {"finders": 1200.0, "merge": 600.0, "sentence": 300.0, "topics": 600.0, "judge": 900.0}
+    assert [entry["stage"] for entry in seen] == ["finders", "merge", "sentence", "topics", "judge"]
+    for entry in seen:
+        assert entry["deadline"] == 1000.0 + 160.0 * 60.0, "the captured run allowance outlives the edit"
+        assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else captured["judge"])
+        assert all(value == captured[entry["stage"]] for value in entry["allowances"].values()), (
+            "the running invocation keeps the values it read at its start"
+        )
+    sworld.rewind()
+    sworld.complete()
+    del seen[:]
+    assert sworld.run() == 0, "the next invocation applies the valid edit"
+    finders = stage_entry(seen, "finders")
+    assert finders["allowances"] and all(value == 99.0 * 60.0 for value in finders["allowances"].values())
+    judge = stage_entry(seen, "judge")
+    assert judge["reserve"] == 0.0
+    assert all(value == 99.0 * 60.0 for value in judge["allowances"].values())
+    assert judge["deadline"] == 1000.0 + 300.0 * 60.0
+
+
+def test_configured_run_limit_controls_deadline(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 5. Planted fault: the deadline keeps the former 150-minute total, reads wall time
+    # or resets between the stages.
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 500.0)
+    write_limits(sworld.root, run_minutes=222.0)
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 0
+    assert [entry["stage"] for entry in seen] == ["finders", "merge", "sentence", "topics", "judge"]
+    for entry in seen:
+        assert entry["deadline"] == 500.0 + 222.0 * 60.0
+
+
+def test_research_judge_reserve_uses_configured_limit(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 6. Planted fault: a pre-judge stage reserves the former fixed 15 minutes, or the
+    # judge's own stage reserves its allowance a second time.
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 500.0)
+    write_limits(sworld.root, judge=23.0)
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 0
+    expected = {"finders": 1200.0, "merge": 600.0, "sentence": 300.0, "topics": 600.0, "judge": 23.0 * 60.0}
+    for entry in seen:
+        assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else expected["judge"])
+        assert all(value == expected[entry["stage"]] for value in entry["allowances"].values())
+
+
+def test_resumed_run_uses_a_fresh_configured_deadline(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 5. Planted fault: the resumed invocation inherits the first run's spent deadline
+    # and starts nothing, or loses its own configured allowance.
+    limits = stage2_research_limits.load(sworld.root)
+    offset = [0.0]
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    offset[0] += (limits.run_minutes + 10.0) * 60.0  # far past the first run's spent deadline
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    seen = dispatch_spy(monkeypatch)
+    assert sworld.run() == 0
+    assert [entry["stage"] for entry in seen] == ["judge"], "only the failed stage launches again"
+    fresh = seen[0]
+    remainder = fresh["deadline"] - fresh["clock"]()
+    assert limits.run_seconds - 60.0 < remainder <= limits.run_seconds, "a fresh allowance, not the spent one"
+    second = manifest_of(sworld)
+    reused = [slot for slot in second["slots"] if slot["reused_from"]]
+    assert len(reused) == 38 and all(slot["reused_from"] == first["run_id"] for slot in reused)
+    assert second["resume"]["source_run"] == first["run_id"]
+
+
+@pytest.mark.parametrize(
+    ("document", "fault"),
+    [
+        pytest.param(None, "cannot be read", id="missing"),
+        pytest.param(b"\xff\xfe limits\n", "not valid UTF-8", id="utf-8"),
+        pytest.param("run_minutes: [160\n", "not valid YAML", id="yaml"),
+        pytest.param("run_minutes: 160\n", "missing role_minutes", id="incomplete"),
+        pytest.param(JUDGE_EQUALS_RUN, "strictly below", id="judge-equals-run"),
+    ],
+)
+def test_invalid_limits_refuse_before_research_launch(
+    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str], document: str | bytes | None, fault: str
+) -> None:
+    # Criterion 3. Planted fault: an unusable file starts a participant, crashes the runner or
+    # refuses without naming the file and the fault.
+    path = sworld.root / stage2_research_limits.FILE_NAME
+    if document is None:
+        path.unlink()
+    else:
+        plant_limits(sworld.root, document)
+    assert sworld.run() == 2
+    assert sworld.calls() == [], "no research participant starts"
+    err = capsys.readouterr().err
+    assert "refused:" in err and "research-swarm-limits.yaml" in err and fault in err
 
 
 # ---------------------------------------------------------------------------
@@ -2759,11 +2955,11 @@ def test_a_staged_run_whose_record_was_published_is_not_resurrected(
     assert "no stored run" in json.dumps(manifest_of(sworld)["resume"])
 
 
-def test_a_receipt_without_output_survives_a_complete_run(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_receipt_without_output_survives_a_complete_run(sworld: SwarmWorld) -> None:
     # Criteria 18 (phase-6 F-29, design Data model - Slot). Planted fault: a free researcher that retrieved a
     # page and then timed out with empty output loses its receipt when the run still completes.
     sworld.selection = selection_for(free=FREE)
-    monkeypatch.setitem(stage2_research_run.MINUTES, "topics", 0.03)
+    write_limits(sworld.root, topics=0.03)
     sworld.complete(**{"online:9:alpha-free": [{"stdout": "", "sleep": 30, "receipts": [RECEIPT]}]})
     assert sworld.run() == 0
     text = sworld.research.read_text(encoding="utf-8")
