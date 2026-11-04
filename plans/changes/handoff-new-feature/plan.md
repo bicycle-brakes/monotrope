@@ -136,4 +136,12 @@ blocks. The same applies to any additional dependency found during phase 4.
 The outer session shows the card unchanged before implementation. This
 draft stops after writing and checking artifacts; it does not start phase 4.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-04 16:42:05–18:07:03 UTC, 5097 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 18:07:13–18:27:55 UTC, 1242 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 18:28:11–18:28:36 UTC, 25 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

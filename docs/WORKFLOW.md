@@ -1025,8 +1025,30 @@ Tests and phase-6 review must catch that shared failure. It holds the
 maintainer's answers to it: every item closed by a maintainer-answered record
 that links it (`research_items`), `neighbours:` of the spec equal to the given
 or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
-answered records. It reads no tracker, history or network and runs at both
-placements.
+answered records.
+
+At the spec boundary the gate also decides who owes a complete
+`research-swarm/v2` run. A change whose start day lies after the repository's
+adoption day for this gate (`decisions/adoption.yaml`, read per repository
+through `scripts/adoption.py`; the adoption day itself counts as old stock) and
+whose spec declares `feature` or `architectural` fails without one, unless
+exactly one interview record carries
+`research_swarm_exception: {granted: true, reason: "…"}` on a
+maintainer-answered record with an actual answer and context — the field
+records a grant, it never grants one, and it waives only the missing run: the
+inventory, answer, neighbour and basis checks of every complete run stay in
+force. The start day is the `research.md` frontmatter `date`, or the spec's
+`date` when research is absent; an existing research file with no readable day
+is never dated from the spec or the filesystem, and review dates and archive
+names do not date creation. A `bounded` change or `spike` is exempt by class
+without an adoption comparison, and a change started on or before the adoption
+day is a dated legacy exemption (a missing historical class is permitted
+there); before `spec.md` exists, missing evidence stays a pending note, never
+a legacy exemption. Evidence the gate cannot read or decide — an unreadable
+adoption or start day, an invalid or conflicting class, a malformed or
+duplicated exception record — is not measured: exit 3, ahead of any finding.
+The gate reads no tracker, history or network, measures live and archived
+changes alike, and exits 0 (nothing found), 1 (findings) or 3 (not measured).
 
 ### The runner is the only way
 

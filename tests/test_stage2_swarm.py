@@ -67,7 +67,7 @@ def test_a_unicode_line_separator_inside_a_receipt_keeps_the_receipt(separator: 
 
 
 SEED = (
-    "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\nneighbours: []\n---\n\n"
+    "---\ntitle: Research\ndate: 2026-10-15\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\nneighbours: []\n---\n\n"
     "# Research\n\nseed fact\n"
 )
 
@@ -421,6 +421,12 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     (folder / "research.md").write_text(SEED, encoding="utf-8")
     (folder / "spec.md").write_text("---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8")
     (folder / "plan.md").write_text("---\ntitle: Plan\nbead: demo-1\n---\n\n# Plan\n", encoding="utf-8")
+    # The gate reads the repository's adoption record; this temporary repository is dated before it.
+    decisions = root / "decisions"
+    decisions.mkdir()
+    (decisions / "adoption.yaml").write_text(
+        "schema_version: 1\nadopted:\n  research-handoff: 2026-10-26\n", encoding="utf-8"
+    )
     (root / "AGENTS.md").write_text("# Agent rules\n\nStay inside the repository.\n", encoding="utf-8")
     (root / "src").mkdir()
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")

@@ -10,8 +10,10 @@ inventory itself, through the same pure function the runner uses (`scripts/resea
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -30,6 +32,24 @@ SEATS = ("opencode-go:a", "opencode-go:b", "claude-code-plan:c")
 P = "plans/changes/other/spec.md"
 Q = "plans/changes/third/spec.md"
 NEW = "plans/changes/fresh/spec.md"
+
+# The spec boundary (bead coding-harness-in27): new feature and architectural specs need a complete
+# research-swarm/v2 run or a granted exception; the adoption day separates them from the old stock.
+ADOPTED = date(2026, 10, 26)
+NEW_DAY = "2026-11-01"
+OLD_DAY = "2026-10-20"
+ADOPTION_BODY = f"schema_version: 1\nadopted:\n  research-handoff: {ADOPTED.isoformat()}\n"
+GRANT = 'research_swarm_exception: {granted: true, reason: "the swarm is skipped for this docs-only repair"}'
+
+
+def write_adoption(root: Path, body: str | None) -> None:
+    """Give the temporary repository its own human-decided adoption record."""
+    target = root / "decisions" / "adoption.yaml"
+    if body is None:
+        target.unlink(missing_ok=True)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
 
 
 def fenced(info: str, value: object) -> str:
@@ -147,9 +167,11 @@ def run_text(
 
 def q_record(number: int, *, items: tuple[str, ...] = (), claims: tuple[str, ...] = (), keep=None, drop=None,
              add=None, answered_by: str = "maintainer", status: str = "answered", answer: str = "yes",
-             context: bool = True, extra: str = "") -> str:  # fmt: skip
+             context: bool = True, extra: str = "", exception: str | None = None) -> str:  # fmt: skip
     lines = [f"## Q-{number} · record {number}", "", "asked: 2026-10-19", f'answer: "{answer}"']
     lines += [f"answered_by: {answered_by}", f"status: {status}"]
+    if exception is not None:
+        lines.append(exception)
     if items:
         lines.append(f"research_items: [{', '.join(items)}]")
     if claims:
@@ -162,8 +184,18 @@ def q_record(number: int, *, items: tuple[str, ...] = (), claims: tuple[str, ...
     return "\n".join(lines) + extra + "\n"
 
 
-def spec_text(neighbours: list[str] | None = (), basis: tuple[str, ...] = ("`decisions.md#Q-1`",)) -> str:
-    header = "---\ntitle: Spec\nclass: feature\n"
+def spec_text(
+    neighbours: list[str] | None = (),
+    basis: tuple[str, ...] = ("`decisions.md#Q-1`",),
+    *,
+    klass: str | None = "feature",
+    day: str | None = NEW_DAY,
+) -> str:
+    header = "---\ntitle: Spec\n"
+    if day is not None:
+        header += f"date: {day}\n"
+    if klass is not None:
+        header += f"class: {klass}\n"
     if neighbours is not None:
         header += f"neighbours: [{', '.join(neighbours)}]\n"
     header += "---\n\n## Acceptance criteria\n\n"
@@ -178,11 +210,28 @@ class World:
         self.root = root
         self.folder = root / "plans" / "changes" / "demo"
         self.folder.mkdir(parents=True)
+        write_adoption(root, ADOPTION_BODY)
 
-    def write(self, runs: list[str], records: list[str] | None = None, spec: str | None = "default") -> World:
-        (self.folder / "research.md").write_text(
-            "---\ntitle: Research\n---\n\n# Research\n\n" + "\n".join(runs), encoding="utf-8"
-        )
+    def write(
+        self,
+        runs: list[str],
+        records: list[str] | None = None,
+        spec: str | None = "default",
+        *,
+        research: bool = True,
+        research_day: str | None = NEW_DAY,
+        research_klass: str | None = None,
+    ) -> World:
+        research_file = self.folder / "research.md"
+        if research:
+            front = "---\ntitle: Research\n"
+            if research_day is not None:
+                front += f"date: {research_day}\n"
+            if research_klass is not None:
+                front += f"class: {research_klass}\n"
+            research_file.write_text(front + "---\n\n# Research\n\n" + "\n".join(runs), encoding="utf-8")
+        else:
+            research_file.unlink(missing_ok=True)
         items = (f"{RUN1}/H-1",)
         recs = [q_record(1, items=items)] if records is None else records
         (self.folder / "decisions.md").write_text("# Decisions\n\n" + "\n".join(recs), encoding="utf-8")
@@ -290,8 +339,10 @@ def test_live_archive_and_legacy_handoff_scope(
     # fails, or an exemption is not reported.
     legacy = world.root / "plans" / "changes" / "legacy"
     legacy.mkdir(parents=True)
-    (legacy / "research.md").write_text("# Research\n\nplain old notes\n", encoding="utf-8")
-    (legacy / "spec.md").write_text("---\ntitle: Old\n---\n", encoding="utf-8")
+    (legacy / "research.md").write_text(
+        "---\ntitle: Research\ndate: 2026-10-01\n---\n\n# Research\n\nplain old notes\n", encoding="utf-8"
+    )
+    (legacy / "spec.md").write_text("---\ntitle: Old\ndate: 2026-10-01\n---\n", encoding="utf-8")
     world.write([run_text(RUN1)])
     code, out = world.check(capsys)
     assert code == 0 and "legacy" in out and "exempt" in out
@@ -1068,3 +1119,234 @@ def test_a_malformed_claim_beside_a_valid_one_fails_the_handoff(world, capsys, l
     world.write([run_text(RUN1)], spec=spec_text(basis=(f"`{good}` and `{bad}`",)))
     code, output = world.check(capsys)
     assert code == 1 and bad in output
+
+
+# ---------------------------------------------------------------------------
+# The spec boundary (bead coding-harness-in27): who owes a complete run
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("klass", ["feature", "architectural"])
+@pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
+def test_new_swarm_class_without_complete_research_is_red(
+    world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
+) -> None:
+    # Criterion 1 (bead coding-harness-in27). Planted fault: the applicability check collapses back into the
+    # old early return, so a new feature or architectural spec passes without a complete run as "legacy".
+    if evidence == "incomplete":
+        run = run_text(RUN1, status="incomplete - stopped", klass=klass)
+        world.write([run], records=[], spec=spec_text(klass=klass))
+    else:
+        world.write([], spec=spec_text(klass=klass), research=evidence == "plain")
+    code, out = world.check(capsys)
+    assert code == 1, (evidence, klass, out)
+    assert "demo" in out and "no complete" in out
+    assert "legacy" not in out
+
+
+def test_legacy_exemption_uses_start_day(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 2 (bead coding-harness-in27). Planted fault: the exemption keys on the later spec date or a
+    # review date, the adoption day itself counts as new stock, or the archive loses or grants the exemption.
+    for day, expected in (("2026-10-25", 0), (ADOPTED.isoformat(), 0), ("2026-10-27", 1)):
+        world.write([], spec=spec_text(day=day), research=False)
+        code, out = world.check(capsys)
+        assert code == expected, (day, out)
+        assert ADOPTED.isoformat() in out and day in out
+        assert ("legacy" in out) == (expected == 0)
+    # an exploration begun before adoption keeps its start day under the later spec date
+    world.write([], spec=spec_text(day="2026-11-05"), research_day=OLD_DAY)
+    code, out = world.check(capsys)
+    assert code == 0 and OLD_DAY in out, out
+    # a review date does not date creation
+    dated = spec_text(day=OLD_DAY).replace("class: feature\n", "class: feature\nlast_reviewed: 2026-11-04\n")
+    world.write([], spec=dated, research=False)
+    code, out = world.check(capsys)
+    assert code == 0 and OLD_DAY in out, out
+    # a research date is never read from the spec: the later spec day does not rescue a new research file
+    world.write([], spec=spec_text(day=OLD_DAY))
+    code, out = world.check(capsys)
+    assert code == 1 and NEW_DAY in out, out
+    # the archive keeps the dated verdicts
+    kept = world.root / "plans" / "changes" / "archive" / f"{OLD_DAY}-kept"
+    kept.mkdir(parents=True)
+    (kept / "spec.md").write_text(spec_text(day=OLD_DAY), encoding="utf-8")
+    code, out = world.check(capsys, "--change", "kept")
+    assert code == 0 and "legacy" in out, out
+    moved = world.root / "plans" / "changes" / "archive" / f"{NEW_DAY}-moved"
+    moved.mkdir(parents=True)
+    seed = f"---\ntitle: Research\ndate: {NEW_DAY}\n---\n\n# Research\n\n"
+    (moved / "research.md").write_text(seed, encoding="utf-8")
+    (moved / "spec.md").write_text(spec_text(day=OLD_DAY), encoding="utf-8")
+    code, out = world.check(capsys, "--change", "moved")
+    assert code == 1 and NEW_DAY in out, out
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_non_swarm_classes_are_exempt_by_class(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+    klass: str,
+) -> None:
+    # Criterion 3 (bead coding-harness-in27). Planted fault: either exempt class owes a swarm because it is
+    # new, or its class exemption is reported as a legacy exemption.
+    world.write([], spec=spec_text(klass=klass), research_klass=klass)
+    code, out = world.check(capsys)
+    assert code == 0, out
+    assert klass in out and "legacy" not in out
+    write_adoption(world.root, None)
+    world.write([], spec=spec_text(klass=klass), research_klass=klass)
+    assert world.check(capsys)[0] == 0, "a bounded change or spike needs no adoption comparison"
+    world.write([], spec=spec_text(klass=klass), research=False)
+    code, out = world.check(capsys)
+    assert code == 0 and "legacy" not in out
+
+
+def test_only_a_reasoned_maintainer_exception_waives_missing_research(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 4 (bead coding-harness-in27). Planted fault: an agent answer, an open status, a missing
+    # context, a blank answer, a false or reasonless grant still waives the swarm, or the valid grant hides
+    # its question or reason in the output.
+
+    def case(**kwargs):
+        field = kwargs.pop("field", GRANT)
+        kwargs.setdefault("answer", "the swarm is skipped")
+        record = q_record(1, exception=field, **kwargs)
+        world.write([], records=[record], spec=spec_text(), research=False)
+        return world.check(capsys)
+
+    code, out = case()
+    assert code == 0, out
+    assert "Q-1" in out and "the swarm is skipped for this docs-only repair" in out
+    for kwargs in (
+        {"answered_by": "agent"},
+        {"status": "open"},
+        {"context": False},
+        {"answer": ""},
+        {"field": 'research_swarm_exception: {granted: false, reason: "no"}'},
+        {"field": 'research_swarm_exception: {reason: "only a reason"}'},
+        {"field": 'research_swarm_exception: {granted: true, reason: "   "}'},
+    ):
+        code, out = case(**kwargs)
+        assert code == 1 and "no complete" in out, (kwargs, out)
+
+
+def test_ambiguous_applicability_or_exception_is_not_measured(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Criterion 5 (bead coding-harness-in27). Planted fault: missing or malformed adoption and start dates,
+    # invalid or conflicting classes, a duplicated exception field or a second exception record pass or crash
+    # instead of exiting 3; a second change's finding masks the unmeasured verdict.
+    world.write([], spec=spec_text(), research=False)
+    write_adoption(world.root, None)
+    code, out = world.check(capsys)
+    assert code == 3 and "adoption.yaml" in out, out
+    quoted = ADOPTION_BODY.replace("research-handoff: 2026-10-26", 'research-handoff: "2026-10-26"')
+    write_adoption(world.root, quoted)
+    code, out = world.check(capsys)
+    assert code == 3 and "adoption.yaml" in out, out
+    write_adoption(world.root, ADOPTION_BODY)
+    world.write([], spec=spec_text(), research_day=None)
+    code, out = world.check(capsys)
+    assert code == 3 and "start date" in out, out
+    world.write([], spec=spec_text(day=None), research=False)
+    code, out = world.check(capsys)
+    assert code == 3 and "start date" in out, out
+    world.write([], spec=spec_text(klass="doc"))
+    code, out = world.check(capsys)
+    assert code == 3 and "class" in out, out
+    world.write([], spec=spec_text(klass="feature"), research_klass="spike")
+    code, out = world.check(capsys)
+    assert code == 3 and "class" in out, out
+    record = q_record(1, items=(f"{RUN1}/H-1",), exception=GRANT, extra=f"\n{GRANT}")
+    world.write([run_text(RUN1)], records=[record])
+    code, out = world.check(capsys)
+    assert code == 3 and "research_swarm_exception" in out, out
+    twice = [q_record(1, exception=GRANT), q_record(2, exception=GRANT)]
+    world.write([run_text(RUN1)], records=twice)
+    code, out = world.check(capsys)
+    assert code == 3 and "Q-1" in out and "Q-2" in out, out
+    world.write([], spec=spec_text())
+    broken = world.root / "plans" / "changes" / "broken"
+    broken.mkdir()
+    seed = f"---\ntitle: Research\ndate: {NEW_DAY}\n---\n\n# Research\n\n" + run_text(RUN1, inventory="corrupt")
+    (broken / "research.md").write_text(seed, encoding="utf-8")
+    (broken / "spec.md").write_text(spec_text(), encoding="utf-8")
+    code, out = world.check(capsys)
+    assert code == 3 and "broken" in out, out
+
+
+def test_exception_never_hides_existing_research_failures(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Criterion 6 (bead coding-harness-in27). Planted fault: the granted exception returns before the complete
+    # run's checks, so a waiver hides an open item, a lost inventory item, malformed evidence, a lost
+    # neighbour or an invalid criterion basis.
+    grant = q_record(1, items=(item_of(RUN1, 1),), exception=GRANT)
+    world.write([run_text(RUN1, given=(Q,))], records=[grant], spec=spec_text(neighbours=[Q]))
+    assert world.check(capsys)[0] == 0, "the same tree without faults is green"
+    world.write([run_text(RUN1)], records=[q_record(1, exception=GRANT)])
+    code, out = world.check(capsys)
+    assert code == 1 and f"{RUN1}/H-1" in out, out
+    world.write([run_text(RUN1, inventory="drop")], records=[grant])
+    code, out = world.check(capsys)
+    assert code == 1 and "inventory" in out, out
+    world.write([run_text(RUN1, inventory="corrupt")], records=[grant])
+    assert world.check(capsys)[0] == 3
+    world.write([run_text(RUN1, given=(Q,))], records=[grant], spec=spec_text(neighbours=[]))
+    code, out = world.check(capsys)
+    assert code == 1 and Q in out, out
+    plain = spec_text(neighbours=[], basis=("see the research",))
+    world.write([run_text(RUN1)], records=[grant], spec=plain)
+    code, out = world.check(capsys)
+    assert code == 1, out
+
+
+@pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
+def test_missing_research_before_spec_is_pending(
+    world: World, capsys: pytest.CaptureFixture[str], evidence: str
+) -> None:
+    # Criterion 7 (bead coding-harness-in27). Planted fault: the pre-spec notes become a legacy exemption or
+    # a missing-run failure, or malformed evidence passes because drafting has not begun.
+    if evidence == "incomplete":
+        world.write([run_text(RUN1, status="incomplete - stopped")], records=[], spec=None)
+    elif evidence == "plain":
+        world.write([], records=[], spec=None)
+    else:
+        world.write([], records=[], spec=None, research=False)
+    code, out = world.check(capsys)
+    assert code == 0, (evidence, out)
+    assert "legacy" not in out and "no complete" not in out
+    if evidence in ("absent", "plain"):
+        assert "pending" in out
+    world.write([run_text(RUN1, inventory="corrupt")], records=[], spec=None)
+    assert world.check(capsys)[0] == 3, "malformed records do not pass because drafting has not begun"
+
+
+def test_applicability_and_exceptions_hold_in_live_archive_and_cli(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 8 (bead coding-harness-in27). Planted fault: selection or archival skips the new check, or a
+    # passing fixture depends on state outside its temporary tree.
+    older = world.root / "plans" / "changes" / "older"
+    older.mkdir()
+    seed = f"---\ntitle: Research\ndate: {OLD_DAY}\n---\n\n# Research\n\nplain notes\n"
+    (older / "research.md").write_text(seed, encoding="utf-8")
+    (older / "spec.md").write_text(spec_text(day=OLD_DAY), encoding="utf-8")
+    world.write([], spec=spec_text())  # demo: a new feature without a complete run
+    code, out = world.check(capsys)
+    assert code == 1 and "demo" in out and "no complete" in out
+    assert world.check(capsys, "--change", "older")[0] == 0
+    assert world.check(capsys, "--change", "demo")[0] == 1
+    archive = world.root / "plans" / "changes" / "archive" / f"{NEW_DAY}-demo"
+    shutil.copytree(world.folder, archive)
+    shutil.rmtree(world.folder)
+    code, out = world.check(capsys, "--change", "demo")
+    assert code == 1 and "2026-11-01-demo" in out, out
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(world.root), "--change", "demo"],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert done.returncode == 1 and "no complete" in done.stdout

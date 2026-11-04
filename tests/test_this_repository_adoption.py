@@ -22,3 +22,7 @@ def test_this_repository_adopted_the_gate_on_2026_10_08() -> None:
 
 def test_this_repository_adopted_question_context_on_2026_10_15() -> None:
     assert adoption.adopted_on(REPO_ROOT, "question-context") == date(2026, 10, 15)
+
+
+def test_this_repository_adopted_research_handoff_on_2026_10_26() -> None:
+    assert adoption.adopted_on(REPO_ROOT, "research-handoff") == date(2026, 10, 26)

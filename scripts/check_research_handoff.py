@@ -20,10 +20,17 @@ handoff of every *complete* run to the maintainer's answers:
 - bases: every acceptance criterion's `*Basis:*` names supported claims of complete runs and/or
   answered Q-records of the change (`decisions.md#Q-<id>`).
 
-Before `spec.md` exists, valid pending items are listed and the gate exits 0. Evidence that cannot
-be read or is ambiguous (malformed records, duplicate global ids, links to nothing, one field
-twice, a path in two directive lists or incompatible answered records) is not measured: exit 3,
-which takes precedence over findings. A change without any v2 run is a reported legacy exemption.
+Before `spec.md` exists, valid pending items are listed and the gate exits 0. At the spec boundary the
+gate decides who owes a complete run: a `feature` or `architectural` change whose start day lies after
+the repository's adoption day for this gate (`decisions/adoption.yaml`, read per repository) fails
+without one, unless exactly one interview record grants a reasoned `research_swarm_exception`. The
+start day is the `research.md` frontmatter `date`, or the spec's `date` when research is absent; an
+existing research file with no readable day is never dated from the spec or the filesystem. A change
+started on or before the adoption day is a dated legacy exemption, and a `bounded` change or `spike`
+is exempt by class. Evidence that cannot be read or is ambiguous (malformed records, duplicate global
+ids, links to nothing, one field twice, a path in two directive lists, incompatible answered records,
+an unreadable adoption or start day, an invalid or conflicting class, more than one exception record)
+is not measured: exit 3, which takes precedence over findings.
 
 Usage:
     python3 scripts/check_research_handoff.py                  # this repository, live and archive
@@ -38,18 +45,23 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path, PurePosixPath
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import adoption  # noqa: E402 - the per-repository adoption-day reader
 import research_handoff  # noqa: E402 - the one derivation the runner shares
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 CHANGES_DIR = "plans/changes"
 ARCHIVE = "archive"
+GATE = "research-handoff"
+CLASSES = ("feature", "architectural", "bounded", "spike")
 
 KINDS = ("manifest", "map", "history", "report", "partial", "reconciliation", "inventory")
 _OPEN = re.compile(r"^<!-- research-swarm/v2 run ([0-9a-f]+) -->$")
@@ -441,9 +453,24 @@ class QRecord:
     keep: list[str] = field(default_factory=list)
     drop: list[str] = field(default_factory=list)
     add: list[str] = field(default_factory=list)
+    exception: dict | None = None
 
     def directive_paths(self) -> set[str]:
         return {*self.keep, *self.drop, *self.add}
+
+    def grants_research_exception(self) -> bool:
+        """A grant is the structured field with a non-blank reason, on a maintainer-answered record with context.
+
+        The field records a grant; it never grants one: a missing or false `granted`, a blank reason or a
+        record without the human answer and its context waives nothing.
+        """
+        grant = self.exception
+        if grant is None or grant.get("granted") is not True:
+            return False
+        reason = grant.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            return False
+        return self.answered and self.context
 
 
 def _fenced_flags(lines: list[str]) -> list[bool]:
@@ -487,6 +514,37 @@ def _string_list(value: object, where: str) -> list[str]:
     return list(value)
 
 
+def _exception_field(body: list[str], found: dict[str, int], label: str, ident: str) -> dict | None:
+    """The record's `research_swarm_exception` mapping, strictly typed; None when the record carries none.
+
+    The grant is recorded in exactly two keys, `granted` (boolean) and `reason` (text). Anything else —
+    another key, a non-mapping, a non-boolean grant, a non-text reason, the field twice (caught by the
+    duplicate-field scan), the key twice inside the mapping — is ambiguous and not measured (exit 3).
+    A missing or false grant is merely no exemption, not an error.
+    """
+    if "research_swarm_exception" not in found:
+        return None
+    try:
+        loaded = _yaml_load(_snippet(body, found["research_swarm_exception"]))
+    except yaml.YAMLError as error:
+        raise CannotMeasure(f"{label} {ident}: research_swarm_exception is not readable ({error})") from error
+    content = loaded.get("research_swarm_exception") if isinstance(loaded, dict) else None
+    if not isinstance(content, dict):
+        raise CannotMeasure(f"{label} {ident}: research_swarm_exception must be a mapping of granted and reason")
+    unknown = sorted(set(content) - {"granted", "reason"})
+    if unknown:
+        raise CannotMeasure(f"{label} {ident}: research_swarm_exception holds the unknown key {unknown[0]!r}")
+    if "granted" in content and type(content["granted"]) is not bool:
+        raise CannotMeasure(
+            f"{label} {ident}: research_swarm_exception grants with {content['granted']!r}, which is no boolean"
+        )
+    if "reason" in content and not isinstance(content["reason"], str):
+        raise CannotMeasure(
+            f"{label} {ident}: research_swarm_exception reasons with {content['reason']!r}, which is no text"
+        )
+    return content
+
+
 def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
     """Read unique Q identities and their structured research links; repeats are ambiguous."""
     lines = _lines(text)
@@ -516,11 +574,12 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                     raise CannotMeasure(f"{label} {ident}: the field {name} stands twice")
                 found.setdefault(name, number)
 
-        def value(name: str, body: list[str] = body, found: dict[str, int] = found, ident: str = ident) -> str:
+        def loaded(name: str, body: list[str] = body, found: dict[str, int] = found, ident: str = ident) -> object:
+            """The field's parsed YAML value, or None when the field is absent or empty."""
             if name not in found:
-                return ""
+                return None
+            snippet = _snippet(body, found[name])
             if name == "answer":
-                snippet = _snippet(body, found[name])
                 # Historical prose has a complete quoted answer followed by an
                 # em-dash explanation or parenthesised attribution. Recognise
                 # that one-line spelling before parsing; YAML errors never
@@ -531,11 +590,22 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                 )
                 if prose:
                     snippet = "answer: " + prose.group(1)
-                try:
-                    loaded = _yaml_load(snippet)
-                except yaml.YAMLError as error:
-                    raise CannotMeasure(f"{label} {ident}: answer is not readable ({error})") from error
-                content = loaded.get(name) if isinstance(loaded, dict) else None
+            try:
+                result = _yaml_load(snippet)
+            except yaml.YAMLError as error:
+                raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
+            return result.get(name) if isinstance(result, dict) else None
+
+        def value(
+            name: str,
+            body: list[str] = body,
+            found: dict[str, int] = found,
+            loaded: Callable[[str], object] = loaded,
+        ) -> str:
+            if name not in found:
+                return ""
+            if name == "answer":
+                content = loaded(name)
                 if isinstance(content, list | dict) and not content:
                     return ""
                 return "" if content is None else str(content).strip()
@@ -552,16 +622,24 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                     break
             return " ".join(tail).strip()
 
+        exception = _exception_field(body, found, label, ident)
+        if exception is not None:
+            # A grant never rests on a stringified value: answer and context must be text before the
+            # parser can flatten a boolean or a collection into an authorisation.
+            for name in ("answer", "context"):
+                raw = loaded(name)
+                if raw is not None and not isinstance(raw, str):
+                    raise CannotMeasure(f"{label} {ident}: an exception record's {name} is no text value")
         answered = value("status") == "answered" and value("answered_by") == "maintainer" and bool(value("answer"))
-        record = QRecord(ident, answered, bool(value("context")))
+        record = QRecord(ident, answered, bool(value("context")), exception=exception)
         for name in ("research_items", "research_claims", "research_neighbours"):
             if name not in found:
                 continue
             try:
-                loaded = _yaml_load(_snippet(body, found[name]))
+                parsed = _yaml_load(_snippet(body, found[name]))
             except yaml.YAMLError as error:
                 raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
-            content = loaded.get(name) if isinstance(loaded, dict) else None
+            content = parsed.get(name) if isinstance(parsed, dict) else None
             where = f"{label} {ident}: {name}"
             if name == "research_items":
                 record.items = _string_list(content, where)
@@ -574,6 +652,9 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                 record.drop = _string_list(content.get("drop"), where + ".drop")
                 record.add = _string_list(content.get("add"), where + ".add")
         records[ident] = record
+    carriers = [record.ident for record in records.values() if record.exception is not None]
+    if len(carriers) > 1:
+        raise CannotMeasure(f"{label}: {carriers[0]} and {carriers[1]} both record a research_swarm_exception")
     return records
 
 
@@ -670,14 +751,14 @@ def _items_of(runs: list[ParsedRun]) -> dict[str, Item]:
     return items
 
 
-def _header(spec_text: str) -> dict:
-    matched = re.match(r"\A﻿?---\r?\n(.*?)^---[ \t]*\r?$", spec_text, re.S | re.M)
+def _header(text: str, where: str = "spec.md") -> dict:
+    matched = re.match(r"\A﻿?---\r?\n(.*?)^---[ \t]*\r?$", text, re.S | re.M)
     if not matched:
         return {}
     try:
         loaded = _yaml_load(matched.group(1))
     except yaml.YAMLError as error:
-        raise CannotMeasure(f"spec.md: the header is not readable ({error})") from error
+        raise CannotMeasure(f"{where}: the header is not readable ({error})") from error
     return loaded if isinstance(loaded, dict) else {}
 
 
@@ -744,19 +825,110 @@ class Outcome:
     notes: list[str] = field(default_factory=list)
 
 
-def check_change(folder: Path, label: str) -> Outcome:
+def _decisions(folder: Path, label: str) -> dict[str, QRecord]:
+    """The change's Q-records; an unreadable file is not measured."""
+    decisions = folder / "decisions.md"
+    try:
+        return parse_decisions(decisions.read_text(encoding="utf-8"), label) if decisions.is_file() else {}
+    except (OSError, UnicodeDecodeError) as error:
+        raise CannotMeasure(f"{label}: decisions.md cannot be read ({error})") from error
+
+
+def _adopted(root: Path) -> date:
+    """The repository's adoption day for this gate; an unreadable record is not measured."""
+    try:
+        return adoption.adopted_on(root, GATE)
+    except adoption.NotRecorded as error:
+        raise CannotMeasure(str(error)) from None
+
+
+def _legacy_note(label: str, start: date, adopted: date) -> str:
+    return (
+        f"{label}: exempt - legacy (change start {start.isoformat()}, gate adopted {adopted.isoformat()}): "
+        "no complete research-swarm/v2 run required"
+    )
+
+
+def _missing_complete_run(
+    out: Outcome, label: str, folder: Path, root: Path, records: dict[str, QRecord], research_text: str | None
+) -> Outcome:
+    """The spec boundary: which spec-bearing change without a complete run owes one.
+
+    The start day decides - `research.md` frontmatter `date`, else the spec's `date`. A `bounded` change
+    or `spike` is exempt by class without an adoption comparison; old stock (start on or before the
+    adoption day) is a dated legacy exemption, with the class missing permitted. A new `feature` or
+    `architectural` change needs a granted exception or the run.
+    """
+    try:
+        spec_body = (folder / "spec.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise CannotMeasure(f"{label}: spec.md cannot be read ({error})") from error
+    header = _header(spec_body)
+    research_header = _header(research_text, "research.md") if research_text is not None else {}
+    spec_class = header.get("class")
+    research_class = research_header.get("class")
+    for source, klass in (("research.md", research_class), ("spec.md", spec_class)):
+        if klass is not None and (not isinstance(klass, str) or klass not in CLASSES):
+            raise CannotMeasure(f"{label}: {source} declares class {klass!r}, which is none of {', '.join(CLASSES)}")
+    if spec_class is not None and research_class is not None and research_class != spec_class:
+        raise CannotMeasure(f"{label}: research.md declares class {research_class!r} and spec.md {spec_class!r}")
+    if research_text is not None:
+        start = research_header.get("date")
+        if type(start) is not date:
+            raise CannotMeasure(
+                f"{label}: research.md names no readable start date; the spec's date never dates an existing research file"
+            )
+    else:
+        start = header.get("date")
+        if type(start) is not date:
+            raise CannotMeasure(f"{label}: spec.md names no readable start date")
+    if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
+        out.notes.append(
+            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
+        )
+        return out
+    adopted = _adopted(root)
+    if start <= adopted:
+        out.notes.append(_legacy_note(label, start, adopted))
+        return out
+    if spec_class is None:
+        raise CannotMeasure(
+            f"{label}: spec.md declares no class; a change started after {adopted.isoformat()} must declare "
+            f"one of {', '.join(CLASSES)}"
+        )
+    grants = [record for record in records.values() if record.exception is not None]
+    if grants and grants[0].grants_research_exception():
+        reason = grants[0].exception["reason"].strip()  # type: ignore[union-attr] - grants_research_exception checked it
+        out.notes.append(f"{label}: exempt - the research swarm is waived by {grants[0].ident} (granted: {reason})")
+        return out
+    out.findings.append(
+        f"{label}: the spec exists but no complete research-swarm/v2 run exists - required for a new "
+        f"{spec_class} change (start {start.isoformat()}, after {adopted.isoformat()}); run the swarm or "
+        "record a granted interview exception"
+    )
+    return out
+
+
+def check_change(folder: Path, label: str, root: Path) -> Outcome:
     out = Outcome()
     research = folder / "research.md"
+    spec = folder / "spec.md"
+    spec_exists = spec.is_file()
     if not research.is_file():
-        out.notes.append(f"{label}: exempt - no research.md, so no v2 evidence")
-        return out
+        if not spec_exists:
+            out.notes.append(f"{label}: pending - no research.md, so no v2 evidence yet")
+            return out
+        return _missing_complete_run(out, label, folder, root, _decisions(folder, label), None)
     try:
-        runs = parse_text(research.read_text(encoding="utf-8"), label)
+        research_text = research.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise CannotMeasure(f"{label}: research.md cannot be read ({error})") from error
+    runs = parse_text(research_text, label)
     if not runs:
-        out.notes.append(f"{label}: exempt - legacy, no research-swarm/v2 evidence")
-        return out
+        if not spec_exists:
+            out.notes.append(f"{label}: pending - no research-swarm/v2 evidence yet")
+            return out
+        return _missing_complete_run(out, label, folder, root, _decisions(folder, label), research_text)
     ids = [run.run_id for run in runs]
     if len(set(ids)) != len(ids):
         raise CannotMeasure(f"{label}: a run id appears twice")
@@ -802,11 +974,7 @@ def check_change(folder: Path, label: str) -> Outcome:
     complete = [run for run in runs if run.complete]
     out.notes.append(f"{label}: {len(runs)} v2 run(s), {len(complete)} complete")
 
-    decisions = folder / "decisions.md"
-    try:
-        records = parse_decisions(decisions.read_text(encoding="utf-8"), label) if decisions.is_file() else {}
-    except (OSError, UnicodeDecodeError) as error:
-        raise CannotMeasure(f"{label}: decisions.md cannot be read ({error})") from error
+    records = _decisions(folder, label)
     items = _items_of(complete)
     all_claims = {c["id"] for run in runs for report in run.reports for c in report["claims"]}
     for record in records.values():
@@ -836,8 +1004,6 @@ def check_change(folder: Path, label: str) -> Outcome:
             if not neighbour_form(path):
                 out.findings.append(f"{label} {record.ident}: {path!r} has none of the three permitted spec forms")
 
-    spec = folder / "spec.md"
-    spec_exists = spec.is_file()
     # coverage: the persisted inventory against the independent derivation
     for run in complete:
         assert run.derived is not None
@@ -880,8 +1046,7 @@ def check_change(folder: Path, label: str) -> Outcome:
     if not spec_exists:
         return out
     if not complete:
-        out.findings.append(f"{label}: the spec exists but no complete v2 run exists")
-        return out
+        return _missing_complete_run(out, label, folder, root, records, research_text)
     try:
         spec_text = spec.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -993,7 +1158,7 @@ def run(root: Path, only: str | None, out=print) -> int:
         return 3
     for label, folder in folders:
         try:
-            outcome = check_change(folder, label)
+            outcome = check_change(folder, label, root)
         except CannotMeasure as error:
             unmeasured.append(str(error))
             continue
