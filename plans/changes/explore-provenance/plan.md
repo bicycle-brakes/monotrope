@@ -1,7 +1,7 @@
 ---
 title: "Plan — explore-provenance"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
 updated: 2026-11-04
@@ -167,3 +167,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: second Sonnet att
 2026-11-04 18:28:30–19:13:16 UTC, 2687 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-04 19:13:50–19:52:12 UTC, 2301 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-04 19:53:44–20:54:30 UTC, 3645 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+
+## Appetite overrun — 2026-11-04
+
+Phase 4 took 14,960 s (about 4.2 h) against the 2-hour appetite: five implement attempts (two GLM 5.3 Flash, three Sonnet 5.5), measured above. The orchestrator did not stop at the limit; it reported the overrun after review-loop round 1, and the maintainer set a further 1.5 h for repairs (loop rows L1-4, L1-7, L1-9).
