@@ -68,8 +68,16 @@ for f in "$sdir"/*.json; do
   kill -0 "$opid" 2>/dev/null || continue
   if [ -n "$ostart" ]; then
     # The registry stores the start time in UTC and English; ps localises both.
-    live=$(TZ=UTC LC_ALL=C ps -o lstart= -p "$opid" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')
-    [ "$live" != "$(printf '%s' "$ostart" | tr -s ' ')" ] && continue
+    live=$(TZ=UTC LC_ALL=C ps -o lstart= -p "$opid" 2>/dev/null)
+    ps_rc=$?
+    live=$(printf '%s' "$live" | tr -s ' ' | sed 's/^ //; s/ $//')
+    if [ "$ps_rc" -ne 0 ] || [ -z "$live" ]; then
+      # An unreadable identity is not proof of PID reuse. Startup must skip
+      # writing; display scans conservatively retain the known-live peer.
+      [ "$strict" = "--strict" ] && exit 1
+    elif [ "$live" != "$(printf '%s' "$ostart" | tr -s ' ')" ]; then
+      continue
+    fi
   fi
   label=${oname:-$(basename "$ocwd")}
   # Das Zeilenformat ist tab-separiert: Tabs und Zeilenenden im Namen wuerden

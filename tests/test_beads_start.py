@@ -330,6 +330,53 @@ def test_secondary_or_uncertain_start_never_writes(tmp_path: Path) -> None:
     assert "übersprungen" in erg.stderr
 
 
+@pytest.mark.parametrize("ps_rc, ps_output", [(1, ""), (1, "untrusted start"), (0, "")])
+def test_unreadable_peer_process_identity_prevents_writing(tmp_path: Path, ps_rc: int, ps_output: str) -> None:
+    """A live PID with unreadable start time cannot establish sole ownership."""
+    ns = _project(tmp_path)
+    _session(ns.home, pid=os.getpid(), sid="peer-session", cwd=ns.klon)
+    record = ns.home / ".claude" / "sessions" / f"{os.getpid()}.json"
+    peer = json.loads(record.read_text())
+    peer["procStart"] = "Mon Nov  2 10:00:00 2026"
+    record.write_text(json.dumps(peer))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_ps = bin_dir / "ps"
+    fake_ps.write_text('#!/bin/bash\nprintf "%s\\n" "$PS_OUTPUT"\nexit "$PS_RC"\n')
+    fake_ps.chmod(0o755)
+    extra = {
+        "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        "PS_OUTPUT": ps_output,
+        "PS_RC": str(ps_rc),
+    }
+    command = ["bash", str(ns.hooks_dir / "session-scan.sh"), "sess-a", str(ns.klon)]
+    env = {**os.environ, **extra, "HOME": str(ns.home)}
+    scan = subprocess.run(command + ["--strict"], env=env, capture_output=True, text=True, timeout=30)
+    assert scan.returncode != 0, "strict scanning hid an unreadable live peer identity"
+    result = _start(ns, extra=extra)
+    assert result.returncode == 0, result.stderr
+    assert not _wrote(ns), "an unreadable process identity allowed reconciliation"
+    assert "prime --hook-json" in _calls(ns)
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "PRIME-KONTEXT" in context and "Scan fehlgeschlagen" in context
+
+    # Display scans retain the live peer even when its identity cannot be read.
+    display = subprocess.run(command, env=env, capture_output=True, text=True, timeout=30)
+    assert display.returncode == 0, display.stderr
+    assert display.stdout.split("\t")[0] == "clash"
+
+    # A successfully read different start time still proves PID reuse.
+    reused = subprocess.run(
+        command + ["--strict"],
+        env={**env, "PS_RC": "0", "PS_OUTPUT": "Tue Nov 3 10:00:00 2026"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert reused.returncode == 0, reused.stderr
+    assert reused.stdout == ""
+
+
 @pytest.mark.parametrize("failed_query", ["--show-toplevel", "--git-common-dir"])
 @pytest.mark.parametrize(
     "failure_output",
