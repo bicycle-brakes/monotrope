@@ -139,4 +139,9 @@ that is red first — it fails on the baseline's code — and the runner runs
 that proof itself, then writes each row's Status and ends in one checkpoint
 commit. When the fault itself raises an exception, catch that specific
 exception in the regression test body and fail with `assert` or
-`pytest.fail` so the baseline failure states the test's expectation.
+`pytest.fail` so the baseline failure states the test's expectation. A row the
+orchestrator took as `taken — guard test — <reason>` is the
+one exception (ADR 0023): its test changes only test code, plants its real
+fault under `STAGE2_PLANT_FAULT`, and is proven red with the switch and green
+without it on the attempt's code; the answer is `<ID>: fixed — guard test —
+tests/<path>::<function>`. The first implementation never uses this form.

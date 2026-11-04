@@ -273,14 +273,51 @@ ANSWER_FORMAT = (
 FORMAT_REMINDER = (
     "Your previous answer was not in the required format, so it could not be read as findings; answer once more."
 )
+# Phase 6 alone records guard evidence beside its verdict (spec, criterion 9; ADR 0023): the
+# six-cell findings format stands unchanged, and every guard test the change adds or changes
+# gets one line of its own, separated from the verdict before the verdict is checked.
+PHASE6_GUARD_EVIDENCE = (
+    "Beside the findings or beside `No finding.`, record one evidence line for every guard test this "
+    "change adds or changes - a test whose source names `STAGE2_PLANT_FAULT`:\n"
+    "`Guard evidence: tests/<path>::<function> — fault: <description> — catches without switch: "
+    "<yes|no and reason>`.\n"
+    "An evidence line is not a finding row and never replaces one; findings keep their six cells."
+)
+PHASE6_GUARD_INSTRUCTION = (
+    "Read every guard test the change adds or changes from the test's source and the implementation "
+    "diff - every one, never a sample. Name the real fault the test plants under `STAGE2_PLANT_FAULT=1` "
+    "in the fault description, and answer `yes`, or `no` with the reason, on whether the test would "
+    "still catch that fault without the switch. The loop rows are withheld until your verdict stands, "
+    "so no evidence may come from them. A test that only fails conditionally on the switch, planting "
+    "no real fault in what it exercises, is a BLOCKER finding, however green its two runner runs are."
+)
+# A phase-6-specific answer instruction replaces, rather than contradicts, `ANSWER_FORMAT` for
+# this call only (spec, criterion 9).
+PHASE6_ANSWER_FORMAT = (
+    ANSWER_FORMAT.replace(
+        "no header and no other text", "no header; guard-evidence lines may stand beside the rows"
+    ).replace(
+        "When there is no finding, answer exactly: No finding.",
+        "When there is no finding, write `No finding.` as the verdict; guard evidence stands beside it.",
+    )
+    + f"\n{PHASE6_GUARD_EVIDENCE}"
+)
+# One evidence line's whole form. A line that merely begins `Guard evidence:` is not
+# evidence; phase 6 explicitly refuses malformed evidence even beside findings.
+GUARD_EVIDENCE_LINE = re.compile(
+    r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
+    r" — fault: (?P<fault>\S.+?)"
+    r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
+)
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 RAISING_FAULT_SENTENCE = (
     "When the fault itself raises an exception, catch that specific exception in the regression test body "
     "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
 )
 REPAIR_ANSWER = (
-    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
-    "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
+    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>`,\n"
+    "`<ID>: fixed — guard test — tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`.\n"
+    "Headings, fences and report prose around the fixed lines are\n"
     "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
     "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
     "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
@@ -288,12 +325,16 @@ REPAIR_ANSWER = (
     "taken row, whatever the id's shape. A taken row takes exactly one distinct fixed line: a repeated\n"
     "identical line counts once, and two different fixed lines for one row fail the attempt, so give\n"
     "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
-    "A code row needs a test that fails on the\n"
-    "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
-    f"answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
+    "An ordinary code row needs a test that fails on the baseline's code, which the runner runs; a row\n"
+    "taken as `taken — guard test — <reason>` is answered with the guard form instead, and the runner\n"
+    "requires a nonempty unquoted reason (a quoted or backticked reason is not authorisation) and\n"
+    "proves its named test twice on the attempt's code - qualifying red with `STAGE2_PLANT_FAULT=1`,\n"
+    "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
+    "in the kept test so the proof can be repeated. Only a row taken as\n"
+    f"`taken — not a test — <reason>` may be answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
     "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
     "is booked in the row's own Status as\n"
-    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
     "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
     "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
@@ -432,6 +473,10 @@ FROM_LINE = re.compile(r"From [A-Za-z0-9][A-Za-z0-9._:/-]*:")
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
 # ledger's gate does (`check_criterion_ledger.py`).
 FIXED_TEST = re.compile(r"^tests/(?P<file>[^|\s]+\.py)::(?P<function>test_\w+)$")
+# The switch a guard test plants its fault under (ADR 0023): the runner adds it
+# to the planted launch's own environment alone, after the caller's environment
+# is filtered away, and the verification gate refuses its presence anywhere else.
+GUARD_SWITCH = "STAGE2_PLANT_FAULT"
 # A red-first pytest run that has not ended after this many minutes is stopped (spec, criterion 18).
 RED_FIRST_MINUTES = 10
 # The runner-owned probe of a red-first run: written into the temporary checkout as a file and
@@ -517,9 +562,11 @@ def pytest_sessionfinish(session, exitstatus):
 
 RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
-    "Write `Status` (`taken — <test or criterion>`, `taken — not a test — <reason>` or "
-    "`rejected — <reason>`) for every row below.\n"
-    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release; "
+    "Write `Status` (`taken — <test or criterion>`, `taken — guard test — <reason>`, "
+    "`taken — not a test — <reason>` or `rejected — <reason>`) for every row below.\n"
+    "For a taken row also write `Broke a test` (`yes`, `no` or "
+    "`yes — guard test — tests/<path>::<function>` after both guard proof legs pass) "
+    "— before the next round or the release; "
     "a row the repair marked `fixed` needs the mark too."
 )
 
@@ -1082,6 +1129,21 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
     return rows, "\n".join(rest)
 
 
+def split_guard_evidence(answer: str) -> tuple[list[str], str]:
+    """Separate the phase-6 guard-evidence lines from the verdict text they stand beside.
+
+    A line is evidence only in its whole stripped form; a line that merely begins
+    `Guard evidence:` stays in the verdict text, where phase 6 refuses it explicitly.
+    The evidence is carried on verbatim by the caller, which keeps the full
+    answer in its block; only the verdict check reads the rest (spec, criterion 9).
+    """
+    evidence: list[str] = []
+    rest: list[str] = []
+    for line in answer.splitlines():
+        (evidence if GUARD_EVIDENCE_LINE.fullmatch(line.strip()) else rest).append(line.strip())
+    return evidence, "\n".join(rest)
+
+
 def render_table(columns: list[str], rows: list[list[str]]) -> str:
     """A Markdown table; an unescaped `|` in a cell is escaped, so a cell never moves the columns (DL-B-7)."""
     lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
@@ -1478,13 +1540,13 @@ def begin_work_call(
     )
 
 
-def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "", answer_format: str = ANSWER_FORMAT) -> str:
     """The phase prompt in full, the change's name, the answer format, and the read request last."""
     body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
     parts = [body.rstrip(), f"---\n\nChange under review: {change} (plans/changes/{change}/)."]
     if extra:
         parts.append(extra)
-    parts += [ANSWER_FORMAT, READ_REQUEST]
+    parts += [answer_format, READ_REQUEST]
     return "\n\n".join(parts)
 
 
@@ -3075,14 +3137,25 @@ def review(root: Path, change: str) -> None:
         # An earlier phase-6 block makes this a fresh read-only session: no 2a thread, no earlier
         # verdict thread, never the repair's (ADR 0017). The first review keeps ADR 0016's rule.
         recorded = None
-    prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
+    prompt = phase_prompt(
+        root,
+        "06-review.md",
+        change,
+        "\n\n".join(["Write only your verdict now.", PHASE6_GUARD_INSTRUCTION]),
+        answer_format=PHASE6_ANSWER_FORMAT,
+    )
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
-    rows, _ = parse_rows(answer)
+    _evidence, verdict_text = split_guard_evidence(answer)
+    malformed_evidence = any(line.strip().startswith("Guard evidence:") for line in verdict_text.splitlines())
+    rows, _ = parse_rows(verdict_text)
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
-    # boundary): six-cell findings, or exactly `No finding.`. An empty, refused or malformed answer
-    # records no verdict, releases nothing, and stands as rejected evidence for the next attempt.
-    if not rows and answer.strip() != "No finding.":
+    # boundary): six-cell findings, or exactly `No finding.`. Guard-evidence lines travel beside
+    # them and never instead of them (spec, criterion 9); `answer_block` below keeps the full
+    # original answer, so the evidence stands verbatim before the verdict line. An empty, refused
+    # or malformed answer records no verdict, releases nothing, and stands as rejected evidence
+    # for the next attempt.
+    if malformed_evidence or (not rows and verdict_text.strip() != "No finding."):
         append(ctx.findings, rejected_review_block(answer, thread))
         raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(
@@ -6045,26 +6118,61 @@ def _proof_reference_guard(
     return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
 
 
-def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
-    """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
+GUARD_SOURCE_PROBE_SOURCE = '''
 
-    A green suite can include a skipped or expected-failing named test. The same runner-owned probe
-    used for red first must show passing setup, call and teardown for every selected case here.
+class GuardSourceProbe:
+    """Read the functions pytest actually collected, including overwritten definitions."""
+
+    def pytest_collection_finish(self, session):
+        import inspect
+
+        fault = None
+        try:
+            if not session.items:
+                fault = "the guard source check collected no tests"
+            for item in session.items:
+                if "STAGE2_PLANT_FAULT" not in inspect.getsource(item.function):
+                    function = _SELECTOR.partition("::")[2]
+                    fault = (
+                        f"{_SELECTOR} names STAGE2_PLANT_FAULT nowhere in `{function}`; "
+                        "a guard proof plants nothing there"
+                    )
+                    break
+        except Exception:
+            fault = "the collected guard function's source could not be read"
+        with open(_REPORT + ".source", "w", encoding="utf-8") as stream:
+            json.dump({"token": _TOKEN, "selector": _SELECTOR, "fault": fault}, stream)
+'''
+
+
+def _attempt_tree_proof(
+    root: Path, test: str, key: str | None, tools: dict[str, str] | None, *, planted: bool, leg: str
+) -> str | None:
+    """Run the named test on the attempt's tree under the runner-owned probe; None when the leg proves.
+
+    This is the one execution the fixed-code proof and the guard proof share (ADR 0023): the tool
+    snapshot, the environment filtering, the pinned interpreter, the admission lock, the time limit,
+    the tree and ref snapshots and the scrubbed diagnostics are the same. The clean legs expect exit
+    0 and every selected case passing; the planted leg alone adds `STAGE2_PLANT_FAULT=1` to its own
+    environment after the caller's is filtered away - a caller's value supplies neither launch - and
+    expects the qualifying red the red-first classifier states. Each call carries its own token,
+    report and time limit; `leg` names the proof in every refusal.
+
     The proof runs in a private repository of its own: the source worktree's current Git-visible
-    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
-    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
-    activity in the source cannot void the proof. A proof that changes its own tree or any of its
-    own refs is refused, with every changed reference named; nothing in the source is compared,
-    deleted or reset, and the private repository is removed on every exit.
+    tree is materialized in the checkout, so the attempt's bytes are what runs, and another
+    session's Git activity in the source cannot void the proof. A proof that changes its own tree
+    or any of its own refs is refused, with every changed reference named; nothing in the source
+    is compared, deleted or reset, and the private repository is removed on every exit.
     """
     tampered = tool_problem(root, tools)
     if tampered:
-        return f"{test}: fixed-code proof: {tampered}"
+        return f"{test}: {leg}: {tampered}"
     bootstrap = (
         "import importlib.util, sys, pytest; "
         "spec = importlib.util.spec_from_file_location('stage2_fixed_probe', sys.argv[1]); "
         "probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe); "
-        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
+        "plugins = [probe] + ([probe.GuardSourceProbe()] if hasattr(probe, 'GuardSourceProbe') else []); "
+        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=plugins))"
     )
     token = os.urandom(16).hex()
     tmp = None
@@ -6081,7 +6189,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         private = tmp / "tree"
         probe = tmp / "probe.py"
         report = tmp / "outcome.json"
-        probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+        probe.write_text(RED_PROBE_SOURCE + (GUARD_SOURCE_PROBE_SOURCE if planted else ""), encoding="utf-8")
         # The fixed tree is captured before the clone copies objects: the tree `worktree_tree`
         # writes is unreferenced, and the local object copy carries it; a tree the clone cannot
         # read refuses the proof instead of running older bytes.
@@ -6093,30 +6201,57 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         # One machine-wide admission around the timed proof; queue and memory waits consume
         # none of the proof's time limit (bead coding-harness-p6mu).
         with verify_lock.hold_admission(["pytest", test]) as owned:
+            own = {
+                "STAGE2_RED_REPORT": str(report),
+                "STAGE2_RED_TOKEN": token,
+                "STAGE2_RED_SELECTOR": test,
+            }
+            if planted:
+                own[GUARD_SWITCH] = "1"
             done = launch(
                 [red_first_python(root), "-c", bootstrap, str(probe), test],
                 private,
                 verify_lock.inherit_env(
                     runner_env(
-                        foreign_env(
-                            {
-                                "STAGE2_RED_REPORT": str(report),
-                                "STAGE2_RED_TOKEN": token,
-                                "STAGE2_RED_SELECTOR": test,
-                            }
-                        ),
+                        foreign_env(own),
                         root,
                         tmp,
                     )
                 ),
                 key,
                 timeout=RED_FIRST_MINUTES * 60,
-                limit="the fixed-code proof time limit",
+                limit=f"the {leg} time limit",
                 pass_fds=_lock_fds(owned),
             )
-        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
-        if done.returncode != 0:
+        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=not planted)
+        if planted:
+            if done.returncode != 1:
+                fault = (
+                    "pytest ended "
+                    f"{done.returncode} on the planted run; a guard proof needs exit 1 with an "
+                    "assertion failure or pytest's own failed outcome"
+                ) + (f"; {fault}" if fault else "")
+        elif done.returncode != 0:
             fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
+        if planted:
+            # Collection is performed in the same private tree and invocation as the proof.
+            # inspect.getsource follows pytest's actual function, rather than guessing from ASTs.
+            try:
+                source = json.loads(report.with_suffix(".json.source").read_text(encoding="utf-8"))
+                if (
+                    not isinstance(source, dict)
+                    or source.get("token") != token
+                    or source.get("selector") != test
+                    or (source.get("fault") is not None and not isinstance(source["fault"], str))
+                    or "fault" not in source
+                ):
+                    raise ValueError("invalid guard source record")
+            except (OSError, ValueError):
+                source_fault = "the collected guard source record is missing or invalid"
+            else:
+                source_fault = source["fault"]
+            if source_fault:
+                fault = f"{fault}; {source_fault}" if fault else source_fault
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
     finally:
@@ -6133,19 +6268,50 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
                     named.append(f"the private tree could not be measured ({error})")
                 else:
                     if tree_now != tree_before:
-                        named.append("the private checkout changed while the fixed-code proof ran")
+                        named.append(f"the private checkout changed while the {leg} ran")
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)
     if named:
         fault = f"{fault}; {'; '.join(named)}" if fault else "; ".join(named)
     if cleanup is not None:
-        removal = f"the private fixed-code proof repository could not be removed ({cleanup})"
+        removal = f"the private {leg} repository could not be removed ({cleanup})"
         fault = f"{fault}; {removal}" if fault else removal
-    outcome = scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    outcome = scrub(f"{test}: {leg}: {fault}", key) if fault else None
     if ref_fault:
         outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
     return outcome
+
+
+def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
+    """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
+
+    A green suite can include a skipped or expected-failing named test. The same runner-owned probe
+    used for red first must show passing setup, call and teardown for every selected case here.
+    The proof runs in a private repository of its own: the source worktree's current Git-visible
+    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
+    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
+    activity in the source cannot void the proof. A proof that changes its own tree or any of its
+    own refs is refused, with every changed reference named; nothing in the source is compared,
+    deleted or reset, and the private repository is removed on every exit.
+    """
+    return _attempt_tree_proof(root, test, key, tools, planted=False, leg="fixed-code proof")
+
+
+def guard_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
+    """Prove an authorised guard repair on the attempt's code: planted red, then clean green (ADR 0023).
+
+    The planted leg runs the named test with `STAGE2_PLANT_FAULT=1` and needs the qualifying red of
+    the red-first classifier - the fault the test plants under the switch is the only failure it may
+    show. The clean leg then reruns the same test without the switch and needs every case passing; a
+    caller's value of the switch supplies neither launch. Each leg carries its own token, report and
+    time limit; the tool, tree and ref safeguards of the fixed-code proof hold on both. The guard
+    marks are written only after both legs prove (spec, criteria 3, 4 and 7).
+    """
+    planted = _attempt_tree_proof(root, test, key, tools, planted=True, leg="planted guard proof")
+    if planted is not None:
+        return planted
+    return _attempt_tree_proof(root, test, key, tools, planted=False, leg="clean guard proof")
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -6310,12 +6476,22 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     return outcome
 
 
+def _test_ref_problem(ref: str) -> str | None:
+    """Why a fixed line's tail is no provable test reference, or None when it is one."""
+    if (test := FIXED_TEST.fullmatch(ref)) and Path(test.group("file")).name.startswith("test_"):
+        if any(segment in (".", "..") for segment in ref.partition("::")[0].split("/")):
+            return f"`{ref}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
+        return None
+    return f"`{ref}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
+
+
 def fixed_status(ident: str, rest: str) -> str:
     """The Status one fixed line gives, or the problem sentence that holds for it."""
     match = re.fullmatch(r"fixed — (.+)", rest)
     if match is None:
         return (
-            f"{ident}: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
+            f"{ident}: the line is neither `<ID>: fixed — tests/<path>::<function>`, "
+            "`<ID>: fixed — guard test — tests/<path>::<function>` nor "
             "`<ID>: fixed — not a test — <reason>`"
         )
     body = match.group(1).strip()
@@ -6326,11 +6502,26 @@ def fixed_status(ident: str, rest: str) -> str:
         # Escaped once, whatever the fixed line spelled: a `\|` the format asked for is unfolded first,
         # so a reason written the way REPAIR_FORMAT asks never lands with a second backslash.
         return "fixed — not a test — " + reason.replace("\\|", "|").replace("|", "\\|")
-    if (test := FIXED_TEST.fullmatch(body)) and Path(test.group("file")).name.startswith("test_"):
-        if any(segment in (".", "..") for segment in body.partition("::")[0].split("/")):
-            return f"{ident}: `{body}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
-        return f"fixed — {body}"
-    return f"{ident}: `{body}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
+    if body == "guard test" or body.startswith("guard test — "):
+        ref = body.partition("—")[2].strip()
+        if not ref:
+            return f"{ident}: `fixed — guard test` without the named test"
+        problem = _test_ref_problem(ref)
+        return f"fixed — guard test — {ref}" if problem is None else f"{ident}: {problem}"
+    problem = _test_ref_problem(body)
+    return f"fixed — {body}" if problem is None else f"{ident}: {problem}"
+
+
+def guard_authorised(status: str) -> bool:
+    """Whether a row's own Status authorises the guard proof (spec, criterion 2).
+
+    Only the complete unquoted form `taken — guard test — <reason>` with a nonempty
+    reason opens the planted run; a quoted marker is a reviewer's or an attempt's
+    words, and an ordinary or `not a test` row keeps its own route.
+    """
+    unquoted = re.sub(r"""`+[^`]*`+|"[^"]*"|'[^']*'""", "", status).strip().lower()
+    reason = unquoted[len("taken — guard test — ") :] if unquoted.startswith("taken — guard test — ") else ""
+    return bool(reason.strip())
 
 
 def only_scan_records_added(before: str, now: str) -> bool:
@@ -6380,7 +6571,11 @@ def check_repair_answer(
     outside the taken rows' Status before this check (spec, criterion 8), and the comparison stays as
     the guard that the restore held, so such an edit is never checkpointed (phase 6, F-3; review row L3-2). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
-    may be refreshed by the runner. Only when no problem stands do the red-first runs start, one pytest run
+    may be refreshed by the runner. A row the orchestrator took as `taken — guard test — <reason>`
+    with a nonempty reason may be answered `fixed — guard test — tests/<path>::<function>`; its named
+    test must define `STAGE2_PLANT_FAULT` in its own source, and the runner proves it planted red and
+    clean green on the attempt's code instead of the baseline route (spec, criteria 2, 3 and 6). Only
+    when no problem stands do the red-first runs start, one pytest run
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
@@ -6454,12 +6649,19 @@ def check_repair_answer(
                 problems.append(
                     f"{ident}: answered `not a test`, but the row is a code row; it needs a test that was red first"
                 )
-        else:
-            test = fix[len("fixed — ") :]
-            function = test.partition("::")[2]
-            body = _read_quietly(ctx.root / test.partition("::")[0])
-            if not defines_test(body, function):
-                problems.append(f"{ident}: {test} defines no function `def {function}(`")
+            continue
+        guard = fix.startswith("fixed — guard test — ")
+        if guard and not guard_authorised(row[7]):
+            problems.append(
+                f"{ident}: answered `guard test`, but the row does not authorise it; only "
+                "`taken — guard test — <reason>` with a nonempty reason opens the planted proof"
+            )
+            continue
+        test = fix[len("fixed — guard test — ") :] if guard else fix[len("fixed — ") :]
+        function = test.partition("::")[2]
+        body = _read_quietly(ctx.root / test.partition("::")[0])
+        if not defines_test(body, function):
+            problems.append(f"{ident}: {test} defines no function `def {function}(`")
     for place, rows_before, rows_now in (
         ("released", before[0], released_now),
         ("phase-6", before[1], phase6_now),
@@ -6476,7 +6678,17 @@ def check_repair_answer(
     marks: dict[str, str] = {}
     for _place, row in taken:
         fix = fixes[row[0]]
-        if fix.startswith("fixed — tests/"):
+        if fix.startswith("fixed — guard test — tests/"):
+            anchor = fix[len("fixed — guard test — ") :]
+            outcome = guard_test_proof(ctx.root, anchor, key, tools)
+            if outcome is not None:
+                problems.append(f"{row[0]}: {outcome}")
+                continue
+            # Both legs proved - planted red under the runner's own switch, clean green without it,
+            # both on this attempt's code: the mark states exactly what was shown, distinct from an
+            # ordinary repair's baseline mark (spec, criterion 7; ADR 0023).
+            marks[row[0]] = f"yes — guard test — {anchor}"
+        elif fix.startswith("fixed — tests/"):
             anchor = fix[len("fixed — ") :]
             outcome = red_first(ctx.root, baseline, anchor, key, tools)
             if outcome is None:

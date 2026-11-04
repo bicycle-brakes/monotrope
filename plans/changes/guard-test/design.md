@@ -2,9 +2,9 @@
 title: "Design — guard-test"
 category: design
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-03
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-29
 last_reviewed: 2026-10-29
 supersedes: null
