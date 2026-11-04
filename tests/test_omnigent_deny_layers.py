@@ -16,6 +16,7 @@ import fnmatch
 import json
 import os
 import pty
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,9 @@ SCRIPT = REPO / "scripts" / "omnigent_policy.py"
 INSTALLER = REPO / "tools" / "omnigent" / "install.sh"
 SETTINGS = REPO / ".claude" / "settings.json"
 SESSION_START_HOOK = '"$CLAUDE_PROJECT_DIR"/tools/bd prime --hook-json'
+# The reconcile-then-prime wrapper that takes the direct prime's place at
+# session start (bead coding-harness-l1if); the wiring is the held-file step.
+START_HOOK_COMMAND = 'bash "$CLAUDE_PROJECT_DIR/tools/claude-code/hooks/beads-start.sh"'
 PROTECTED = next(iter(op.PROTECTED_PATHS))  # "/.omnigent/config.yaml"
 POLICIES = (op.WRITING_POLICY, op.ASKED_POLICY, op.PATHS_POLICY)  # the three policies the list renders
 
@@ -262,9 +266,24 @@ def test_write_keeps_foreign_ask_rules_and_replaces_owned_ones(tmp_path: Path) -
     assert op.check(tmp_path) == []
 
 
-def test_settings_keep_the_session_start_hook() -> None:
+def test_start_hook_wires_reconciliation_before_prime() -> None:
+    """The SessionStart hook runs the reconcile-then-prime wrapper, not the
+    direct prime (bead coding-harness-l1if, criterion 10).
+
+    The settings timeout must outlast the wrapper's own bounds (reconcile, scan
+    and prime defaults read from the hook), or the harness kills the wrapper
+    mid-reconciliation.
+    """
     hooks = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]["SessionStart"]
-    assert [h["command"] for group in hooks for h in group["hooks"]] == [SESSION_START_HOOK]
+    entries = [h for group in hooks for h in group["hooks"]]
+    commands = [h["command"] for h in entries]
+    assert commands == [START_HOOK_COMMAND], f"the SessionStart hook must run the wrapper: {commands}"
+    hook = (REPO / "tools" / "claude-code" / "hooks" / "beads-start.sh").read_text(encoding="utf-8")
+    bounds = sum(int(v) for v in re.findall(r"^[A-Z_]+_TIMEOUT=\$\{BEADS_START_[A-Z_]+:-(\d+)\}", hook, re.M))
+    assert bounds > 0, "the hook's own time bounds were not found"
+    assert all(isinstance(h.get("timeout"), int) and h["timeout"] > bounds for h in entries), (
+        f"the wrapper needs a timeout above its own bounds ({bounds} s) covering reconciliation and prime"
+    )
 
 
 def test_write_keeps_hooks_and_foreign_rules_and_is_idempotent(tmp_path: Path) -> None:
