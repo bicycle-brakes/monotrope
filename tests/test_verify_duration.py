@@ -105,7 +105,7 @@ def test_monotonic_execution_excludes_admission_wait(
         "--start",
         "7.0",
         "--end",
-        "9.5",
+        "16.5",
         "--status",
         "0",
         "--enforcement",

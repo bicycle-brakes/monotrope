@@ -2192,13 +2192,13 @@ def test_duration_storage_failure_warns_without_changing_verdict(tmp_path: Path)
     enforcement, a hidden warning, or an append written through a substituted
     history symlink to its victim.
     """
-    for scenario, _ending, verdict, banner in (
+    for scenario, ending, verdict, banner in (
         ("green", "true", 0, "VERIFY GREEN"),
         ("red", "exit 1", 1, "VERIFY RED"),
     ):
         base = tmp_path / scenario
         marker = base / "gate-ran"
-        tree = _runner_tree(base, f"touch {marker}")
+        tree = _runner_tree(base, f"touch {marker}; {ending}")
         _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
         victim = base / "victim.jsonl"
         victim.write_text("do not write through me\n", encoding="utf-8")

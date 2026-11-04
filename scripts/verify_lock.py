@@ -786,7 +786,7 @@ def inherit_env(env: dict[str, str]) -> dict[str, str]:
     if context.admission_id is not None and context.reused is False:
         env[ADMISSION_ID_ENV] = context.admission_id
         if context.wait_seconds is not None:
-            env[ADMISSION_WAIT_ENV] = f"{context.wait_seconds:.6f}"
+            env[ADMISSION_WAIT_ENV] = repr(context.wait_seconds)
     else:
         env.pop(ADMISSION_ID_ENV, None)
         env.pop(ADMISSION_WAIT_ENV, None)
@@ -861,7 +861,7 @@ def _spawn_child(
         env[TOKEN_ENV] = admission.token
         env[ADMISSION_ID_ENV] = admission.admission_id
         if admission.wait_seconds is not None:
-            env[ADMISSION_WAIT_ENV] = f"{admission.wait_seconds:.6f}"
+            env[ADMISSION_WAIT_ENV] = repr(admission.wait_seconds)
     else:
         # A nested supervision inherits only the marker: the fresh context of
         # an ancestor's admission must not pass itself off as this child's own.

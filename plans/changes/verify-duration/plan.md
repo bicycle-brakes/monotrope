@@ -118,17 +118,17 @@ belongs to the runner, outside this draft's writable scope. No files are deleted
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_runner_reports_each_gate_duration_and_raw_result — advisory failure has no time or is reported passed.
-- 2: not yet written tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — a clock jump or queued delay changes execution seconds.
-- 3: not yet written tests/test_verify_duration.py::test_history_appends_distinct_runs_and_marks_incomplete — a later or nested run overwrites earlier evidence or missing end becomes complete.
-- 3: not yet written tests/test_ci.py::test_runner_list_does_not_record_or_duplicate_runs — listing or admission re-exec creates an extra run.
-- 4: not yet written tests/test_verify_duration.py::test_records_bind_results_to_revision_and_configuration — dirty state, job, placement, gate hash or exit status is lost.
-- 5: not yet written tests/test_verify_duration.py::test_machine_context_preserves_unknowns_and_worker_override — unknown memory becomes zero or worker override is guessed away.
-- 5: not yet written tests/test_verify_lock.py::test_admission_measurement_survives_cli_and_inherited_context — memory wait is omitted or inherited context loses its identity.
-- 6: not yet written tests/test_verify_duration.py::test_reader_selects_runs_and_diagnoses_truncated_history — truncated history crashes or fabricates successful completion.
-- 7: not yet written tests/test_ci.py::test_duration_storage_failure_warns_without_changing_verdict — failed append hides a warning or changes gate execution/result.
-- 7: not yet written tests/test_verify_duration.py::test_history_rejects_substituted_destinations — writing through a symlink changes its target.
-- 8: not yet written tests/test_ci.py::test_timing_preserves_job_selection_enforcement_and_nested_admission — selection, later gate execution, worker forwarding or inherited lock behavior changes.
+- 1: tests/test_ci.py::test_runner_reports_each_gate_duration_and_raw_result — advisory failure has no time or is reported passed.
+- 2: tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — a clock jump or queued delay changes execution seconds.
+- 3: tests/test_verify_duration.py::test_history_appends_distinct_runs_and_marks_incomplete — a later or nested run overwrites earlier evidence or missing end becomes complete.
+- 3: tests/test_ci.py::test_runner_list_does_not_record_or_duplicate_runs — listing or admission re-exec creates an extra run.
+- 4: tests/test_verify_duration.py::test_records_bind_results_to_revision_and_configuration — dirty state, job, placement, gate hash or exit status is lost.
+- 5: tests/test_verify_duration.py::test_machine_context_preserves_unknowns_and_worker_override — unknown memory becomes zero or worker override is guessed away.
+- 5: tests/test_verify_lock.py::test_admission_measurement_survives_cli_and_inherited_context — memory wait is omitted or inherited context loses its identity.
+- 6: tests/test_verify_duration.py::test_reader_selects_runs_and_diagnoses_truncated_history — truncated history crashes or fabricates successful completion.
+- 7: tests/test_ci.py::test_duration_storage_failure_warns_without_changing_verdict — failed append hides a warning or changes gate execution/result.
+- 7: tests/test_verify_duration.py::test_history_rejects_substituted_destinations — writing through a symlink changes its target.
+- 8: tests/test_ci.py::test_timing_preserves_job_selection_enforcement_and_nested_admission — selection, later gate execution, worker forwarding or inherited lock behavior changes.
 - 9: not a test — phase-6 review checks the research note against five persisted complete green same-revision runs and retained pytest evidence; fewer runs, mixed configuration or missing slow-test data refutes it.
 - 10: not a test — phase-6 review checks the proposed threshold's calculation against measured execution durations and confirms the PR changes no budget, timeout or gate; an unsupported or enforced threshold refutes it.
 
@@ -144,8 +144,13 @@ authoritative gate command. Raw history and console logs stay outside Git.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two GLM 5.3 Flash attempts failed their post-run checks on 2026-11-04 (tests red).
+
 ## Time used
 
 2026-11-04 11:40:16–12:48:35 UTC, 4098 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 12:48:43–12:51:47 UTC, 183 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 12:51:55–12:52:33 UTC, 38 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-04 12:54:08–13:34:48 UTC, 2441 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
