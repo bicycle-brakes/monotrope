@@ -28,8 +28,9 @@ hunks, no tools, no repository access, and nothing else in its prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6
 verdict.
 **Gate:** rounds until a clean round, bounded by the declared ladder; the
-repair brake and the maintainer stop stand above it; `make verify` green after
-each repair.
+repair brake and the maintainer stop stand above it; the repair's targeted
+check green after each repair (the full `make verify` for shared
+infrastructure), and one full `make verify` on the final head before phase 6.
 
 ## For the reviewer
 
@@ -90,7 +91,8 @@ explicitly, do not delete them.
    findings").
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's
    evidence: `yes` when its repair turned a test red that was green before it,
-   `no` when it did not; the next round starts only when `make verify` is
+   `no` when it did not; the next round starts only when the repair's
+   check (targeted, or the full `make verify` for shared infrastructure) is
    green. After a repair the orchestrator made by hand, a targeted check
    stands in for it: the touched and linked test files, `ruff` and the
    gates the touched files feed; one full `make verify` runs on the final
