@@ -1,0 +1,14 @@
+schema_version: 1
+change: go-access-point
+question: adr
+answer: 'yes'
+reason: The Go address rule decides where a change's content may be sent, so it stands
+  as a boundary rule beside ADR 0020.
+shown:
+  proposed: 'no'
+  proposal_reason: The three answered records in decisions.md already carry the whole
+    policy, and an ADR edit would raise this change's interview debt to five answers
+    of which three exist; the maintainer can still answer yes through the decide-adr
+    procedure.
+answered_by: framework-architect
+answered_at: 2026-10-31
