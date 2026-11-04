@@ -441,6 +441,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-absolute-python/plan.md`](changes/verify-absolute-python/plan.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/research.md`](changes/verify-absolute-python/research.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`changes/verify-absolute-python/spec.md`](changes/verify-absolute-python/spec.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-duration/research.md`](changes/verify-duration/research.md) | draft | none | 2026-11-04 | coding-harness-1um6 |
 | [`changes/verify-machine-lock/decisions.md`](changes/verify-machine-lock/decisions.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
 | [`changes/verify-machine-lock/findings.md`](changes/verify-machine-lock/findings.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
 | [`changes/verify-machine-lock/plan.md`](changes/verify-machine-lock/plan.md) | draft | none | 2026-10-28 | coding-harness-p6mu |
