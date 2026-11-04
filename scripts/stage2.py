@@ -3873,9 +3873,6 @@ CHEAP_LABEL = "Runner cheap checks before `make verify`"
 TARGETED_LABEL = "Runner targeted checks"
 SCOPE_LABEL = "Runner verification scope"
 SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
-# The mode `repair` asks of its post-run check, on every route. Read when the verb runs, so a test of
-# the attempt loop that does not concern the targeted selector can pin the full check.
-REPAIR_VERIFY_MODE = "targeted"
 # Inputs whose change makes the full check necessary, whatever else the repair touched.
 SHARED_INFRASTRUCTURE = ("scripts/ci_gates.py", "scripts/verify_all.sh")
 
@@ -5019,7 +5016,12 @@ def _one_line(path: str) -> str:
 
 
 def format_step(
-    root: Path, env: dict[str, str], key: str | None = None, tools: dict[str, str] | None = None
+    root: Path,
+    env: dict[str, str],
+    key: str | None = None,
+    tools: dict[str, str] | None = None,
+    *,
+    inherit_admission: bool = True,
 ) -> str | None:
     """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
 
@@ -5058,10 +5060,9 @@ def format_step(
             done = launch(
                 [RUFF, *command, *targets],
                 root,
-                # Ruff is a local child of the verification: it gets the same verify environment
-                # the timed check gets, shared state root and floor included (bead
-                # coding-harness-p6mu); never the raw runner env.
-                verify_lock.inherit_env(env),
+                # Full verification carries its admission; targeted preparation uses its
+                # already stripped environment, even when this process has an active admission.
+                verify_lock.inherit_env(env) if inherit_admission else dict(env),
                 key,
                 timeout=TOOL_SECONDS,
                 limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
@@ -5526,6 +5527,43 @@ def fallback_text(reason: str, result: str) -> str:
     return f"full `make verify` ran (result: {result}) because the targeted coverage was not safe: {reason}"
 
 
+def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
+    """Apply verify_all.sh's CPU/memory worker default without entering its admission."""
+    env = dict(env)
+    if env.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
+        return env
+    readings: list[int] = []
+    cores: int | None = None
+    memory: int | None = None
+    try:
+        if sys.platform == "darwin":
+            values = []
+            for name in ("hw.logicalcpu", "hw.memsize"):
+                done = launch(["/usr/sbin/sysctl", "-n", name], root, env, timeout=TOOL_SECONDS)
+                raw = done.stdout.strip() if done.returncode == 0 else ""
+                values.append(int(raw) if raw.isascii() and raw.isdecimal() and len(raw) <= 18 else None)
+            cores, memory = values
+        elif sys.platform.startswith("linux"):
+            cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+            for line in Path("/proc/meminfo").read_text().splitlines():
+                if line.startswith("MemTotal:"):
+                    raw = line.split()[1]
+                    if raw.isascii() and raw.isdecimal() and len(raw) <= 15:
+                        memory = int(raw) * 1024
+                    break
+    except (OSError, ValueError, CallFailed):
+        pass  # Unavailable readings are ignored, as in the full runner.
+    if cores and cores > 0:
+        readings.append(max(1, cores // 2))
+    if memory and memory > 0:
+        readings.append(max(1, memory // 2147483648))
+    if readings:
+        env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(min(readings))
+    else:
+        env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
+    return env
+
+
 def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
     """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
 
@@ -5547,12 +5585,13 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     if chosen.tests:
         identity = "`" + " ".join(PYTEST) + "`"
         try:
-            done = launch([*PYTEST, *chosen.tests], root, env, key, timeout=TOOL_SECONDS, limit=limit)
-        except StepTimedOut as error:
-            shown = ", ".join(chosen.tests[:TAIL_LINES])
-            return [
-                protect_diagnostics(f"{TARGETED_LABEL}: {identity} did not finish: {error}\ntest files: {shown}", key)
-            ], []
+            done = launch(
+                [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
+            )
+        except StepTimedOut:
+            # Whole linked files can outgrow the tool limit. The caller drops its intent-to-add
+            # entries before falling back to the admitted full check and its longer bound.
+            raise
         except CallFailed as error:
             return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
         if done.returncode:
@@ -5646,7 +5685,7 @@ def _targeted_body(
         ]
 
     try:
-        line = format_step(root, env, key, tools)
+        line = format_step(root, env, key, tools, inherit_admission=False)
         if formatted is not None and line is not None:
             formatted.append(line)
     except (OSError, RuntimeError, ValueError) as error:
@@ -5673,18 +5712,28 @@ def _targeted_body(
     problems = []
     notes: list[str] = []
     intended: list[bytes] = []
+    timed_out: StepTimedOut | None = None
     try:
         try:
             intended = intend_new_files(root, env)
         except (Refused, OSError) as error:
             problems.append(f"the attempt's new files could not be added intent-to-add before the checks: {error}")
         else:
-            problems, notes = run_targeted(root, env, key, chosen)
+            try:
+                problems, notes = run_targeted(root, env, key, chosen)
+            except StepTimedOut as error:
+                timed_out = error
     finally:
         try:
             drop_intended(root, intended, env)
         except (Refused, OSError) as error:
             problems.append(f"the attempt's intent-to-add entries could not be removed after the checks: {error}")
+    if timed_out is not None and not problems:
+        reason = protect_diagnostics(f"targeted pytest exceeded its time bound: {timed_out}", key)
+        problems = full_verify(root, env, key)
+        if scope is not None:
+            scope.append(fallback_text(reason, "red" if problems else "green"))
+        return problems
     if scope is not None:
         scope.append(scope_text(chosen, "red" if problems else "green", notes))
     return problems
@@ -8386,7 +8435,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
         retain_answer=True,
-        verify_mode=REPAIR_VERIFY_MODE,
+        verify_mode="targeted",
     )
 
 

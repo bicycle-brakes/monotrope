@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -24,8 +24,10 @@ Runner repairs pass targeted post-run checks, followed by full verification
 before phase 6 (bead `coding-harness-gxwg` — shorten runner repair cycles).
 Research: `research.md`. Authority and scope: `decisions.md`, including its
 reasoned interview skip and three draft details.
-This remains a proposed, unimplemented change against `9eae5d26`
-(2026-10-31); the earlier draft's failed check is not implementation evidence.
+This change is partly implemented: the targeted repair verification and the
+full check before phase 6 are in the tree (baseline `9eae5d26`, 2026-10-31),
+and the held instructions and workflow text still follow after the accepted
+attempt. The earlier draft's failed check is not implementation evidence.
 
 ## Problem
 

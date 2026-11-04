@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -174,4 +174,157 @@ Stage-2 call, 2026-11-03: implement · attempt 1 · route stage-1 · endpoint cl
 >
 > Found 1 error.
 > No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 867 files, 3204 commits, 12 rules.
+
+Stage-2 call, 2026-11-03: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3209 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-targeted-check/spec.md` +4 -2
+> - `scripts/stage2.py` +66 -17
+> - `tests/test_stage2.py` +96 -33
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_model_endpoints.py`, `tests/test_pi_contract.py`, `tests/test_pr_sync.py`, `tests/test_run_report.py`, `tests/test_stage2.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_fail_fast.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_runs.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_terms_fixtures.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> test files: tests/test_model_endpoints.py, tests/test_pi_contract.py, tests/test_pr_sync.py, tests/test_run_report.py, tests/test_stage2.py, tests/test_stage2_availability.py, tests/test_stage2_declaration.py, tests/test_stage2_fail_fast.py, tests/test_stage2_repository_pathlock.py, tests/test_stage2_research_availability.py, tests/test_stage2_research_deep_review.py, tests/test_stage2_runs.py, tests/test_stage2_session.py, tests/test_stage2_swarm.py, tests/test_stage2_terms_expiry.py, tests/tes [… 19 characters left out …]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-1-20261103T213822269221Z-80352260.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3211 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-targeted-check/spec.md` +4 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_model_endpoints.py`, `tests/test_pi_contract.py`, `tests/test_pr_sync.py`, `tests/test_run_report.py`, `tests/test_stage2.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_fail_fast.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_runs.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_terms_fixtures.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> test files: tests/test_model_endpoints.py, tests/test_pi_contract.py, tests/test_pr_sync.py, tests/test_run_report.py, tests/test_stage2.py, tests/test_stage2_availability.py, tests/test_stage2_declaration.py, tests/test_stage2_fail_fast.py, tests/test_stage2_repository_pathlock.py, tests/test_stage2_research_availability.py, tests/test_stage2_research_deep_review.py, tests/test_stage2_runs.py, tests/test_stage2_session.py, tests/test_stage2_swarm.py, tests/test_stage2_terms_expiry.py, tests/tes [… 19 characters left out …]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-2-20261103T213822269221Z-80352260.md
+> ```
+
+Stage-2 call, 2026-11-03: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 867 files, 3214 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-targeted-check/spec.md` +4 -2
+> - `tests/test_stage2.py` +19 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2.py`.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_model_endpoints.py`, `tests/test_pi_contract.py`, `tests/test_pr_sync.py`, `tests/test_run_report.py`, `tests/test_stage2.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_fail_fast.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_runs.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_terms_fixtures.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` did not finish: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> test files: tests/test_model_endpoints.py, tests/test_pi_contract.py, tests/test_pr_sync.py, tests/test_run_report.py, tests/test_stage2.py, tests/test_stage2_availability.py, tests/test_stage2_declaration.py, tests/test_stage2_fail_fast.py, tests/test_stage2_repository_pathlock.py, tests/test_stage2_research_availability.py, tests/test_stage2_research_deep_review.py, tests/test_stage2_runs.py, tests/test_stage2_session.py, tests/test_stage2_swarm.py, tests/test_stage2_terms_expiry.py, tests/tes [… 19 characters left out …]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-3-20261103T213822269221Z-80352260.md
 > ```

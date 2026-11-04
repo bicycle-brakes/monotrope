@@ -65,19 +65,6 @@ def isolated_launch_cancellation(monkeypatch):
 REAL_FULL_GATE = stage2.require_fresh_full_verification
 
 
-@pytest.fixture(autouse=True)
-def pinned_full_verification(monkeypatch):
-    """Tests of the attempt loop, the answers and the recoveries keep the full post-run check.
-
-    A repair's targeted check and phase 6's fresh full check change which commands run after a model
-    call, which is not what those tests measure: the repair keeps the full `make verify` and `review`
-    starts no check of its own. The tests of the targeted selector and of the phase-6 boundary below
-    switch the real ones back on (`targeted_mode`, `REAL_FULL_GATE`).
-    """
-    monkeypatch.setattr(stage2, "REPAIR_VERIFY_MODE", "full")
-    monkeypatch.setattr(stage2, "require_fresh_full_verification", lambda *_args, **_kwargs: None)
-
-
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
 KEY = "sk-" + "zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"  # joined at run time: never key-shaped in a diff or prompt
@@ -616,7 +603,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # `bash` stands in for the draft's document check: `verify_draft` launches
     # `bash scripts/verify_all.sh --job docs`, so the stand-in records the check under its program
     # name and reads its scripted output and status from the scenario's `docs` key.
-    for name in ("bash", "codex", "claude", "pi", "make", "pin-pi"):
+    for name in ("bash", "sh", "codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
         program.write_text(
             STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
@@ -2838,7 +2825,7 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
         code, name = world.run("draft"), "codex"
     elif verb == "repair":
         repair_world(world)
-        script_repair(world, [repair_step(), repair_step()], make=[bad, green])
+        script_repair(world, [repair_step(), repair_step()], full_check=True, make=[bad, green])
         code, name = world.run("repair"), "codex"
     else:
         first = {
@@ -3197,6 +3184,7 @@ def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
     script_repair(
         world,
         [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        full_check=True,
         make=[{"stdout": LEAK, "exit": 1}],
     )
     assert world.run("repair") == 2
@@ -3214,6 +3202,7 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     script_repair(
         world,
         [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        full_check=True,
         make=[{"stdout": "must not run"}],
     )
     original_launch = stage2.launch
@@ -3922,7 +3911,11 @@ def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) ->
     world.write_record([("L2-1", "taken — test_b", "no")])
     step = {
         "stdout": "L2-1: fixed — tests/test_other.py::test_other",
-        "plant": {"src/other.py": "value = 2\n", "tests/test_other.py": OTHER_TEST},
+        "plant": {
+            "src/other.py": "value = 2\n",
+            "tests/test_other.py": OTHER_TEST,
+            "verification-scope.txt": "requires full verification\n",
+        },
         "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
     }
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
@@ -6707,7 +6700,8 @@ def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: 
         in text
     )
     assert "after a repair" not in text and "fixed —" not in text
-    assert world.calls("claude") == [] and world.calls("make") == []
+    assert world.calls("claude") == []
+    assert [call["argv"] for call in world.calls("make")] == [["verify"], ["verify"]]
 
 
 def test_the_first_phase6_review_still_resumes_the_recorded_2a_session(world: World) -> None:
@@ -6924,7 +6918,7 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
-    assert len(world.calls()) == 2 and not world.record().exists()
+    assert len(world.calls()) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
     world.write_record([("L1-1", "", "")])
@@ -6936,12 +6930,12 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     # The call log is cleared before `script`, which counts the calls already logged.
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
-    assert world.run("review") == 1 and len(world.calls()) == 1
+    assert world.run("review") == 1 and len(world.calls()) == 2
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
-    assert world.run("review") == 1 and len(world.calls()) == 2
+    assert world.run("review") == 1 and len(world.calls()) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
 
@@ -8580,8 +8574,12 @@ def codex_step(step: dict, number: int = 1) -> dict:
     return codex_ok(f"TR{number}", step.get("stdout", ""), **rest)
 
 
-def script_repair(world: World, steps: list[dict], **more: object) -> None:
-    """Attempts 1 and 2 of a repair are Codex, attempt 3 is Sonnet (ADR 0017); `steps` follow that order."""
+def script_repair(world: World, steps: list[dict], *, full_check: bool = False, **more: object) -> None:
+    """Script repairs; full-check scenarios plant an unsupported input to exercise real fallback."""
+    if full_check:
+        steps = copy.deepcopy(steps)
+        for step in steps:
+            step.setdefault("plant", {})["verification-scope.txt"] = "requires full verification\n"
     scripted: dict[str, object] = {"codex": [codex_step(s, n) for n, s in enumerate(steps[:2], 1)], **more}
     if steps[2:]:
         scripted["claude"] = steps[2:]
@@ -8873,6 +8871,7 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     script_repair(
         world,
         [{"stdout": "still looking"}, repair_step()],
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -8935,6 +8934,7 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": f"post-run-check-{n}\n", "exit": 1} for n in range(1, deleted_attempt + 1)]
         + [{"stdout": "green\n"}],
     )
@@ -9037,6 +9037,7 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     script_repair(
         world,
         [repair_step() for _ in range(failed_attempts)] + [repair_step()],
+        full_check=True,
         make=[*reds, {"stdout": "green\n"}],
     )
     real_codex, real_begin = stage2.run_codex, stage2.begin_work_call
@@ -9208,6 +9209,7 @@ def test_repair_prompts_keep_the_initial_input_snapshot(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": f"snapshot-diagnostic-{n}\n", "exit": 1} for n in range(1, edited_attempt + 1)]
         + [{"stdout": "green\n"}],
     )
@@ -9243,6 +9245,7 @@ def test_two_failed_codex_repairs_fall_back_to_sonnet(world: World) -> None:
     script_repair(
         world,
         [{"stdout": "still looking"}, {"stdout": "still stuck"}, repair_step(), {"stdout": "must not run"}],
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -9463,6 +9466,7 @@ def test_a_repair_retry_cannot_remove_earlier_attempt_evidence(
     script_repair(
         world,
         [repair_step()] * 3,
+        full_check=True,
         make=[
             {"stdout": f"DIAGNOSTIC-ATTEMPT-{number}\n", "exit": 1} if number < attempt else {"stdout": "green\n"}
             for number in range(1, 4)
@@ -9581,6 +9585,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}] * (attempt - 1) + [{"stdout": "green\n"}],
     )
     real_codex, real_claude, real_checkpoint = stage2.run_codex, stage2.run_work_model, stage2.checkpoint
@@ -10900,6 +10905,7 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
             {"stdout": "attempt one", "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}},
             repair_step(),
         ],
+        full_check=True,
         make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -10908,7 +10914,9 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
     assert "`make verify` exited 1" in prompt
     assert "attempt 2 · route codex-repair" in world.text()
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
-    assert len(quote_blocks(world.text())) == 1, "the failed attempt left no block"
+    failed = [block for block in quote_blocks(world.text()) if block[0].startswith("Attempt ")]
+    assert len(failed) == 1, "the failed attempt left no block"
+    assert failed[0][0] == "Attempt 1 (codex) failed its post-run checks."
 
 
 @pytest.mark.parametrize(
@@ -11570,14 +11578,14 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
 def test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt(world: World) -> None:
     """Phase 6, F-1. Planted fault: an interpreter whose pytest never starts, exit 1, read as red first.
 
-    The stand-in plays both python3 callers of an attempt: the runner's cheap pytest over the
-    selected tests first (green), then the red-first probe, whose exit 1 must fail the attempt
+    The stand-in plays the python3 callers of an attempt: the runner's cheap pytest and whole-file
+    targeted pytest first (both green), then the red-first probe, whose exit 1 must fail the attempt
     before any named test is trusted - and before anything is checkpointed.
     """
     repair_world(world)
     probe = {"exit": 1, "stderr": "No module named pytest"}
     head = git(world.root, "rev-parse", "HEAD")
-    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3, python3=[{}, probe] * 3)
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3, python3=[{}, {}, probe] * 3)
     assert world.run("repair") == 1
     prompt = prompt_of(world.calls("codex")[1])
     assert "L1-1: tests/test_fix.py::test_fix: the red-first interpreter cannot start pytest (exit 1)" in prompt
@@ -20047,8 +20055,7 @@ class LocalCommands:
 
 
 def targeted_mode(monkeypatch: pytest.MonkeyPatch) -> LocalCommands:
-    """Switch a repair to its real, targeted post-run check and record the local commands it starts."""
-    monkeypatch.setattr(stage2, "REPAIR_VERIFY_MODE", "targeted")
+    """Record local commands while keeping the repair's production dispatch unchanged."""
     return LocalCommands(monkeypatch)
 
 
@@ -20107,6 +20114,21 @@ def gate_command(world: World, gate: dict) -> list[str]:
 def loop_status(world: World) -> str:
     rows_ = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     return rows_["L1-1"]
+
+
+def test_standard_world_preserves_repair_and_review_dispatch(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary World tests exercise both production boundaries, without a full-mode test switch."""
+    assert stage2.require_fresh_full_verification is REAL_FULL_GATE
+    repair_world(world)
+    commands = LocalCommands(monkeypatch)
+    # Plant the old module-wide fixture's switch: it must no longer change repair dispatch.
+    monkeypatch.setattr(stage2, "REPAIR_VERIFY_MODE", "full", raising=False)
+    assert world.run("repair") == 0
+    assert commands.of("make") == [], "a test-only switch hid the targeted repair boundary"
+    assert commands.of("gate"), "the real targeted gate dispatch did not run"
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    assert world.run("review") == 0
+    assert len(commands.of("make")) == 1, "ordinary review tests did not measure the fresh full check"
 
 
 def test_covered_repair_uses_targeted_verification(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -20306,7 +20328,13 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
 
     monkeypatch.setattr(verify_lock, "hold_admission", spy)
     commands = targeted_mode(monkeypatch)
-    assert world.run("repair") == 0
+    # A real outer admission is active in this state root, as when make verify starts the runner.
+    # inherit_env can recover it even though the targeted body stripped its explicit environment.
+    with real_hold(["outer", "verify"]), monkeypatch.context() as inherited:
+        admission = verify_lock.inherit_env(dict(os.environ))
+        for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV):
+            inherited.setenv(name, admission[name])
+        assert world.run("repair") == 0
     assert commands.records
     for record in commands.records:
         assert verify_lock.LOCK_ENV not in record["env"] and verify_lock.TOKEN_ENV not in record["env"], record["kind"]
@@ -20319,6 +20347,58 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     assert entered == [["make", "verify"]], "the full check did not acquire its admission"
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+
+
+@pytest.mark.parametrize("full_result", ["green", "red", "timeout", "launch-error"])
+def test_targeted_pytest_timeout_falls_back_to_full(
+    world: World, monkeypatch: pytest.MonkeyPatch, full_result: str
+) -> None:
+    """A whole-file timeout owes a fresh admitted full check; only its green can checkpoint."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["pytest"] = lambda _command: (
+        stage2.StepTimedOut("whole linked test file exceeded five minutes")
+        if len(commands.of("pytest")) % 2 == 0
+        else None
+    )
+    if full_result == "red":
+        commands.outcomes["make"] = (1, "full check red\n")
+    elif full_result == "timeout":
+        commands.outcomes["make"] = stage2.StepTimedOut("full check timed out")
+    elif full_result == "launch-error":
+        commands.outcomes["make"] = stage2.CallFailed("full check could not start")
+    code = world.run("repair")
+    assert commands.of("make"), "a whole-file timeout must fall back to full verification"
+    for record in commands.of("make"):
+        assert record["pass_fds"] and verify_lock.LOCK_ENV in record["env"]
+        assert record["timeout"] == stage2.VERIFY_SECONDS
+    assert commands.of("gate") == [], "targeted gates continued after the timeout"
+    if full_result == "green":
+        assert code == 0 and git(world.root, "rev-parse", "HEAD") != baseline
+        assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
+        assert "full `make verify` ran (result: green)" in world.text()
+        assert "targeted pytest exceeded its time bound" in world.text()
+    else:
+        assert code == 1 and git(world.root, "rev-parse", "HEAD") == baseline
+        assert loop_status(world) == "taken — test_a"
+
+
+def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L1-3. Planted fault: the targeted pytest keeps xdist's raw `auto` of every core."""
+    readings = {"hw.logicalcpu": "16\n", "hw.memsize": str(8 * 2147483648) + "\n"}
+
+    def fake_launch(command, *_args, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=readings[command[-1]], stderr="")
+
+    monkeypatch.setattr(stage2, "launch", fake_launch)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    env = stage2.targeted_pytest_env(tmp_path, {"PATH": "/usr/bin"})
+    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "8", "the smaller of half the cores and the memory bound"
+    readings["hw.memsize"] = str(3 * 2147483648) + "\n"
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3"
+    chosen = stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
+    assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
 
 
 @pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])
@@ -20335,8 +20415,8 @@ def test_targeted_failure_never_checkpoints_or_marks_fixed(
     if failure == "red-pytest":
         commands.outcomes["pytest"] = lambda _command: RED_PYTEST if even() else None
     elif failure == "timeout":
-        commands.outcomes["pytest"] = lambda _command: (
-            stage2.StepTimedOut("python3 was stopped by the runner's tool limit after 5 minutes") if even() else None
+        commands.outcomes["gate"] = lambda _command: stage2.StepTimedOut(
+            "gate was stopped by the runner's tool limit after 5 minutes"
         )
     elif failure == "launch-error":
         commands.outcomes["pytest"] = lambda _command: (
@@ -20422,8 +20502,8 @@ def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPa
     assert commands.of("gate") == []
     # `repair` alone asks for the targeted mode, and by default it does.
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
-    assert re.search(r'^REPAIR_VERIFY_MODE = "targeted"$', source, re.M)
-    assert source.count("verify_mode=REPAIR_VERIFY_MODE") == 1
+    assert "REPAIR_VERIFY_MODE" not in source
+    assert source.count('verify_mode="targeted"') == 1
 
 
 @pytest.mark.parametrize("mode", ["targeted", "fallback"])

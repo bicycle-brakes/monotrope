@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-03
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -179,6 +179,13 @@ it does not authorize unrelated test repairs or a weaker verification command.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash call failed 2026-11-03: claude-code unrecognized_model glm-5.3-flash.
 
+## Runner route — 2026-11-03
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-03 19:19:09–19:43:12 UTC, 1443 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-03 21:38:31–21:59:11 UTC, 1240 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 21:59:20–22:12:23 UTC, 782 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 22:12:34–22:22:00 UTC, 566 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
