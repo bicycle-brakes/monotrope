@@ -62,6 +62,9 @@ entry by itself grants no permission to call its model.
 4. When the existing offline Pi installation, real-runtime and research-catalog contract suites run against 1.5.0, their behavioral guarantees continue to pass as mandatory checks.
    *Refuted by:* a failing, skipped or weakened contract for local-install enforcement, tool/configuration isolation, credential handling, session policy, provider exchange, refreshed-definition activation, fresh catalog acquisition or redirect refusal; native Go address expectations may reflect the recorded new shipped base without weakening those guarantees.
    *Basis:* `decisions.md#Q-1`; `research.md`, “Tests that hold the catalog today”.
+5. When the forced catalog refresh lists an id that the `opencode-go` entry declares as paid in `modelle` and that also matches the `free_stage` rule (suffix or include), the free selection leaves it out, and `prepare-loop` proceeds with the remaining free candidates instead of refusing.
+   *Refuted by:* a free selection that contains a declared paid id, or a preparation that stops with "is a paid model; the free class does not admit it" for such an id.
+   *Basis:* `decisions.md#Q-2`; measured 2026-11-04: with Pi 1.5.0, `prepare-loop pi-catalog-move` refused `beam-free`.
 
 ## Non-goals
 

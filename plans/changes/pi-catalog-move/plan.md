@@ -61,6 +61,14 @@ form and report the absent validator rather than claiming it passed.
    reference in the read-boundary paragraph version-neutral and stamp its
    `updated` date. Preserve the dated boundary finding, its accepted limitation
    and historical version measurements; do not claim a new sandbox finding.
+4a. In `scripts/stage2.py`, make the free selection (`select_free` or its
+   callers, wherever the selected list is formed for the review loop and the
+   research swarm) drop every id the `opencode-go` entry declares in
+   `modelle`; change no other admission check. In
+   `tests/test_stage2_availability.py`, add
+   `test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free`: a
+   catalog with a `-free` id that `modelle` also lists selects it nowhere and
+   the preparation does not refuse (spec criterion 5).
 5. Run the commands below. Investigate failures without weakening or skipping
    contracts. A runtime change outside the named files, a failed 1.5.0
    contract needing broader repair, or the two-hour stop returns evidence to
@@ -115,6 +123,7 @@ make verify
 - 4: tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect — the new manifest pin cannot follow its admitted version hop
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect — a forbidden target receives a request
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids — cached models replace the fresh catalog
+- 5: not yet written tests/test_stage2_availability.py::test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free — a declared paid id with the free suffix is selected free or stops the preparation
 
 ## Runner route — 2026-11-04
 
