@@ -2,8 +2,9 @@
 """stage2.py - the one way this repository starts a foreign model.
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
-content: the review loop (4b) runs on OpenCode Go through Pi at
-`https://opencode.ai/zen/go/v1/chat/completions` until a round is clean - a
+content: the review loop (4b) runs on OpenCode Go through Pi, at the one
+address the `model-endpoints.yaml` record admits (`stage2_go`), until a round
+is clean - a
 discovered free-model swarm first, the declared Flash swarm next, then one
 declared paid model per round (ADR 0021); Codex drafts the spec, the design
 and the plan (2, 2b and 3; GLM 5.3 after two failed Codex attempts) and
@@ -176,6 +177,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import verify_lock  # noqa: E402
 
@@ -1620,6 +1622,31 @@ def retain_terms_warnings(warnings: list[str]) -> list[str]:
     return evidence
 
 
+_address_notice_evidence: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "address_notice_evidence", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_address_notices() -> Iterator[list[str]]:
+    """Collect a round's notices across concurrent members, retries and replacements."""
+    notices: list[str] = []
+    token = _address_notice_evidence.set(notices)
+    try:
+        yield notices
+    finally:
+        _address_notice_evidence.reset(token)
+
+
+def retain_address_notices(notices: list[str]) -> list[str]:
+    """Keep assessed, path-only diagnostics for the operation's durable evidence."""
+    evidence = _address_notice_evidence.get()
+    if evidence is None:
+        return notices
+    evidence.extend(notice for notice in notices if notice not in evidence)
+    return evidence
+
+
 def terms_warnings(entry: dict) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
@@ -1641,13 +1668,36 @@ def terms_warnings(entry: dict) -> list[str]:
     return warnings
 
 
-def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, **kwargs):
+def dispatch_go(
+    root: Path, model: str, send: Callable, *args, admission=None, destination=None, configuration=None, **kwargs
+):
     """The final shared Go send boundary, independent of tools, retries and saved admission.
 
     Only a caller's checked discovered-free admission can replace paid terms.
     A declared paid record always keeps its terms check, even with that callback.
     All command construction and leak scans precede this function.
+
+    `destination` is the caller's checked effective definition. The boundary
+    re-assesses it against the address policy read fresh from the held
+    declaration (criterion 6): an earlier selection, a saved overlay, a
+    receipt, a resumed round, a replacement or a retry never dispatches a
+    destination the current record refuses. A same-host path move is announced
+    here once more; a foreign destination is refused before the send. The
+    caller supplies the models.json or checked-model.json that its launch
+    consumes; its selected API and explicit base must match the assessment.
     """
+    if destination is None:
+        raise Refused(f"the launch of {model} carries no checked destination; no model request starts.")
+    try:
+        policy = stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise Refused(f"the Go address record is unusable: {error}") from None
+    verdict = stage2_go.assess(policy, model, destination)
+    if verdict.notice:
+        retain_address_notices([verdict.notice])
+        print(f"Address notice: {verdict.notice}")
+    if verdict.problem:
+        raise Refused(verdict.problem)
     entry = endpoint_entry(root)
     paid = model in (entry.get("modelle") or []) or model in (entry.get("modelle_terms") or {})
     if paid or admission is None:
@@ -1660,6 +1710,27 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, *
         problem = admission(root, model)
     if problem:
         raise Refused(problem)
+    # Check the artifact Pi actually consumes, not just the caller's earlier assessment.
+    # Never echo its contents: a mismatched URL can carry credentials.
+    try:
+        if configuration is None:
+            raise ValueError("missing configuration")
+        content = json.loads(Path(configuration).read_text(encoding="utf-8"))
+        if Path(configuration).name == "checked-model.json":
+            actual = content.get("model") if content.get("provider") == OPENCODE else None
+        else:
+            actual = stage2_go.definition_of(content.get("providers"), OPENCODE, model)
+        if not isinstance(actual, dict) or actual.get("id") != model:
+            raise ValueError("missing or ambiguous model")
+        if any(actual.get(field) != verdict.definition.get(field) for field in ("api", "baseUrl")):
+            raise ValueError("destination mismatch")
+        checked = stage2_go.assess(policy, model, actual)
+        if not checked.admitted:
+            raise ValueError("refused destination")
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, AttributeError):
+        raise Refused(
+            f"the sending configuration of {model} does not match its checked destination; no request starts."
+        ) from None
     return send(*args, **kwargs)
 
 
@@ -1993,23 +2064,31 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
 # The catalog fields a model definition may carry into Pi's active configuration (RS-3-3 of the
 # research-swarm review): `samplingParams` is merged into the request body and could name another
 # model than `--model` and the audit line; `headers`, `compat` and every other field are dropped.
-# `baseUrl` crosses as it came: checking it against a declared address is the open DL-B-8.
+# `baseUrl` crosses assessed (DL-B-8, closed by go-access-point): the one address record in
+# `model-endpoints.yaml` (`stage2_go`) admits it — a different path on the admitted host runs on
+# with a notice, any other destination is dropped here and refused before any model request.
 OVERLAY_FIELDS = ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
 
 
-def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
-    """Activate fetched definitions through Pi's explicit model configuration; return the fields dropped per id.
+def activate_overlay(
+    agent: Path, store: dict, policy: stage2_go.AddressPolicy
+) -> tuple[dict[str, list[str]], list[str]]:
+    """Activate fetched definitions through Pi's explicit model configuration.
 
-    Pi 1.2.0 restores its remote cache only for server dates newer than its
-    shipped catalog. A successful fresh retrieval need not carry such a date.
-    Keep models-store.json as retrieval evidence and use models.json's model
-    definitions to activate that exact catalog independently of cache age.
-    Only the fields of `OVERLAY_FIELDS` cross, never provider auth
+    Returns the fields dropped per id and the address notices of same-host
+    path moves. Pi 1.2.0 restores its remote cache only for server dates newer
+    than its shipped catalog. A successful fresh retrieval need not carry such
+    a date. Keep models-store.json as retrieval evidence and use models.json's
+    model definitions to activate that exact catalog independently of cache
+    age. Only the fields of `OVERLAY_FIELDS` cross, never provider auth
     configuration, request-body parameters or headers; the fetched store is
-    never mutated (the retrieval evidence and persisted run snapshot).
+    never mutated (the retrieval evidence and persisted run snapshot). An
+    `opencode-go` definition whose destination the address policy refuses is
+    dropped and named — it never reaches Pi's active configuration.
     """
     providers = {}
     dropped: dict[str, list[str]] = {}
+    notices: list[str] = []
     for provider, entry in store.items():
         models = []
         for position, definition in enumerate(entry.get("models", []), 1):
@@ -2017,6 +2096,14 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
             if not isinstance(definition, dict):
                 dropped[label] = ["not a model object"]
                 continue
+            if provider == stage2_go.PROVIDER:
+                verdict = stage2_go.assess(policy, str(definition.get("id") or label), definition)
+                if not verdict.admitted:
+                    dropped[str(definition.get("id") or label)] = [verdict.problem]
+                    continue
+                if verdict.notice:
+                    notices.append(verdict.notice)
+                definition = verdict.definition
             model = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
             # A `provider` equal to the store's key says nothing the key does not: it crosses unnamed;
             # any other value would route the definition elsewhere and is dropped.
@@ -2040,16 +2127,26 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
         if models:
             providers[provider] = {"models": models}
     (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
-    return dropped
+    return dropped, notices
 
 
-def check_overlay(agent: Path, home: Path, model: str | None = None) -> None:
+def check_overlay(agent: Path, home: Path, model: str | None = None, *, policy: stage2_go.AddressPolicy) -> None:
     """Refuse before any call if pinned Pi rejects or broadens the filtered configuration.
 
     Pi can report a configuration error yet resolve a model from its unfiltered remote cache.
     Exercise its real offline resolver, without credentials, and check both the error and the
-    resolved definitions. The fetched store stays untouched as evidence.
+    resolved definitions. Before Pi sees the file, its `opencode-go` rows are
+    assessed against the address policy once more: the activated configuration
+    carries checked bases alone. The fetched store stays untouched as evidence.
     """
+    activated = json.loads((agent / "models.json").read_text(encoding="utf-8"))
+    for definition in (activated.get("providers") or {}).get(stage2_go.PROVIDER, {}).get("models", []):
+        verdict = stage2_go.assess(policy, str(definition.get("id")), definition)
+        if not verdict.admitted:
+            raise Refused(
+                f"the activated configuration of {definition.get('id')} fails the address policy: "
+                f"{verdict.problem}; no listing or reviewer starts."
+            )
     runtime = REPO_ROOT / "tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js"
     script = r"""
 import { readFileSync } from 'node:fs';
@@ -2136,6 +2233,12 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     what OpenCode Go actually bills for the call.
     """
     rule = free_rule(root)
+    # The one address record, read fresh before anything is activated: without
+    # it the free stage fails closed, and no literal origin stands in (Q-1).
+    try:
+        policy = stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise Refused(f"the Go address record is unusable: {error}") from None
     key = reviewer_key()
     with tempfile.TemporaryDirectory(prefix="stage2-free-") as tmp:
         scratch = Path(tmp)
@@ -2161,10 +2264,12 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 "from a stale cache."
             )
         store = overlay_store(agent, rule["provider"])
-        stripped = activate_overlay(agent, store)
+        stripped, notices = activate_overlay(agent, store, policy)
         if stripped:
             listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
             print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
+        for notice in notices:
+            print(f"Address notice: {notice}", file=sys.stderr)
         fresh = {
             str(model["id"])
             for model in store.get(rule["provider"], {}).get("models", [])
@@ -2191,9 +2296,9 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 for provider, entry in store.items()
             }
             (listing_agent / "models-store.json").write_text(json.dumps(safe_store), encoding="utf-8")
-            activate_overlay(listing_agent, safe_store)
+            activate_overlay(listing_agent, safe_store, policy)
             env = {**env, "PI_CODING_AGENT_DIR": str(listing_agent)}
-        check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home)
+        check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home, policy=policy)
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -2209,6 +2314,15 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     dropped = free_drops(
         root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
     )
+    # Only assessed definitions become selectable: a fresh catalog row whose
+    # destination the record refuses is named as a drop and never reaches a
+    # launch, however the rule filters (criterion 5).
+    for definition in store.get(rule["provider"], {}).get("models", []):
+        if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
+            continue
+        verdict = stage2_go.assess(policy, definition["id"], definition)
+        if not verdict.admitted:
+            dropped.setdefault(definition["id"], verdict.problem)
     selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
     if dropped:
         print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
@@ -2222,6 +2336,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         "catalog": catalog,
         "selected": selected,
         "dropped": dropped,
+        "notices": notices,
         "overlay": sorted(fresh),
         "models_store": store,
         "billing": "not measured: pi.dev is a live catalog, not a billing statement",
@@ -2566,14 +2681,34 @@ def run_reviewer(
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        # The launch resolves and assesses its model offline, against the one
+        # address record read fresh from the held declaration. Without the
+        # run's refreshed definitions there is no checked destination, and no
+        # unchecked launch stands in for one (criterion 2).
+        try:
+            policy = stage2_go.load_address_policy(ctx.root)
+        except stage2_go.RecordUnusable as error:
+            raise Refused(f"the Go address record is unusable: {error}") from None
         store = getattr(ctx, "models_store", None)
-        if store is not None:
-            (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
-            activate_overlay(agent, store)
+        if store is None:
+            raise Refused(
+                f"no refreshed provider definitions accompany the reviewer call for {model}; "
+                "its destination cannot be assessed and the call does not start."
+            )
+        (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+        _dropped, notices = activate_overlay(agent, store, policy)
+        retain_address_notices(notices)
+        for notice in notices:
+            print(f"Address notice: {notice}", file=sys.stderr)
         home = scratch / "home"
         home.mkdir()
-        if store is not None:
-            check_overlay(agent, home, model)
+        check_overlay(agent, home, model, policy=policy)
+        row = stage2_go.definition_of(store, stage2_go.PROVIDER, model)
+        if row is None:
+            raise Refused(f"the refreshed definitions of {model} are missing or duplicated; no reviewer starts.")
+        assessment = stage2_go.assess(policy, model, row)
+        if not assessment.admitted:
+            raise Refused(assessment.problem)
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [
@@ -2622,6 +2757,8 @@ def run_reviewer(
             env,
             secrets,
             admission=getattr(ctx, "go_admission", None),
+            destination=assessment.definition,
+            configuration=agent / "models.json",
             timeout=seconds,
             limit=limit,
             **({"deadline": deadline} if deadline is not None else {}),
@@ -8139,6 +8276,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 ) from None
 
 
+@capture_address_notices()
 def _review_round(
     root: Path,
     change: str,
@@ -8193,6 +8331,11 @@ def _review_round(
                 notes.append(f"Notice: {state['free']['skipped']}.")
             if state["free"].get("dropped"):
                 notes.append(f"Notice: free ids dropped: {dropped_notice(state['free']['dropped'])}.")
+            for notice in state["free"].get("notices") or []:
+                # A same-host path move observed at discovery stays in the
+                # round's notes: the move is evidence, not a transient line.
+                notes.append(f"Notice: {notice}.")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
             skipped = skipped_models(root)
             if skipped:
                 notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
@@ -8389,6 +8532,8 @@ def _review_round(
             note = f"Notice: {warning}."
             if note not in notes:
                 notes.append(note)
+        for notice in retain_address_notices([]):
+            notes.append(f"Address notice: {notice}")
         parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
         for member, block in reviewer_blocks:
             # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.
@@ -8401,6 +8546,10 @@ def _review_round(
         state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
         write_round(change, "\n\n".join(parts), state, root)
     except BaseException:
+        for notice in retain_address_notices([]):
+            note = f"Address notice: {notice}"
+            if note not in notes:
+                notes.append(note)
         if audited:
             # The calls above wrote no round: say so in findings.md, so their audit lines read as an
             # attempt that consumed nothing and not as a lost record (DL-A-6 of the deep review).
@@ -8436,17 +8585,18 @@ def probe(root: Path, change: str) -> None:
     """The compatibility probe: every discovered free member and every eligible paid model, once each.
 
     Declared special run of phase 4 (the Definition of Done): the calls measure
-    whether OpenCode Go's chat-completions address
-    (`https://opencode.ai/zen/go/v1/chat/completions`, the one Pi's built-in
-    provider calls) accepts the ids. The pinned Pi is checked once before the
-    first call; the free members come from a forced live refresh and its
-    listing, and each free call runs through the free path - no tools, the
-    implementation diff as its only content - while every paid call keeps the
-    read tools. No record is written; each id and the answer's first line are
-    printed for the pull request body, and skipped paid models are named. A
-    failed member is reported without stopping later checks; the final summary
-    lists answered and failed members and any failure makes the probe exit
-    nonzero (spec, criterion 14). No second address, no substituted model.
+    whether the ids are accepted at the address the one record admits
+    (`model-endpoints.yaml`'s `opencode-go` `adresse`, through `stage2_go`): a
+    different path on the recorded host runs on with a notice, a foreign
+    destination is refused before its call. The pinned Pi is checked once
+    before the first call; the free members come from a forced live refresh
+    and its listing, and each free call runs through the free path - no tools,
+    the implementation diff as its only content - while every paid call keeps
+    the read tools. No record is written; each id and the answer's first line
+    are printed for the pull request body, and skipped paid models are named.
+    A failed member is reported without stopping later checks; the final
+    summary lists answered and failed members and any failure makes the probe
+    exit nonzero (spec, criterion 14). No second address, no substituted model.
     """
     folder_of(root, change)
     key = reviewer_key()
@@ -8465,12 +8615,12 @@ def probe(root: Path, change: str) -> None:
     failed: list[str] = []
 
     def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
-        # Declaration and leak checks stay outside this handler: only a model
-        # call failure permits continuing, never a failed admission check.
+        # Declaration and leak checks stay outside this handler. A member's
+        # refused destination, like a failed call, must not skip valid peers.
         ctx.models_store = discovery.get("models_store")
         try:
             answer = run_reviewer(ctx, model, prompt, key, free=free)
-        except CallFailed as error:
+        except (CallFailed, Refused) as error:
             print(f"probe: {model} failed: {scrub(str(error), key)}")
             failed.append(model)
             return
