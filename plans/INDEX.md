@@ -264,6 +264,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/pi-catalog-move/research.md`](changes/pi-catalog-move/research.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-redirect/decisions.md`](changes/pi-catalog-redirect/decisions.md) | draft | none | 2026-10-30 | coding-harness-j2wb |
 | [`changes/pi-catalog-redirect/findings.md`](changes/pi-catalog-redirect/findings.md) | draft | none | 2026-10-30 | coding-harness-j2wb |
 | [`changes/pi-catalog-redirect/plan.md`](changes/pi-catalog-redirect/plan.md) | draft | partial | 2026-10-30 | coding-harness-j2wb |
