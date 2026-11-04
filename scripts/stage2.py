@@ -5604,8 +5604,11 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     notes: list[str] = []
     gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
     for gate in chosen.gates:
-        # `python3` in the list means the locked interpreter, as verify_all.sh resolves it.
-        command = str(gate["command"]).replace("python3", shlex.quote(str(python)), 1)
+        command = str(gate["command"])
+        tokens = shlex.split(command)
+        # Only the program token denotes the interpreter; arguments remain literal.
+        if tokens and tokens[0] == "python3":
+            command = shlex.join([str(python), *tokens[1:]])
         identity = f"gate `{gate['id']}` ({gate['enforcement']})"
         blocking = gate["enforcement"] == "block"
         try:

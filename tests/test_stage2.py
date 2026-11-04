@@ -20108,7 +20108,11 @@ def docs_gates() -> list[dict]:
 def gate_command(world: World, gate: dict) -> list[str]:
     """The shell command the targeted check runs for a gate: its declared command through the locked interpreter."""
     python = world.root / stage2.PYTEST[0]
-    return ["sh", "-c", str(gate["command"]).replace("python3", shlex.quote(str(python)), 1)]
+    command = str(gate["command"])
+    tokens = shlex.split(command)
+    if tokens and tokens[0] == "python3":
+        command = shlex.join([str(python), *tokens[1:]])
+    return ["sh", "-c", command]
 
 
 def loop_status(world: World) -> str:

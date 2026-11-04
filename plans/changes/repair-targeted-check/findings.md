@@ -335,3 +335,10 @@ Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: targeted pytest exceeded its time bound: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model hy3 · leak check clean over 867 files, 3236 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3237 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
