@@ -64,14 +64,20 @@ def test_a_failed_clear_binds_the_bytes_actually_appended(sworld: SwarmWorld, mo
 def test_publication_keeps_earlier_research_bytes_and_their_resume(sworld: SwarmWorld) -> None:
     # Criteria 17, 53 (RS-1-8). Planted fault: the append rewrites CRLF and lone CR bytes of earlier research to
     # LF, which changes the human research and breaks the stored binding of an incomplete run.
+    import stage2_research_run
+
     seed = sworld.research.read_bytes().replace(b"\n", b"\r\n") + b"A lone\rcarriage return.\r\n"
     sworld.research.write_bytes(seed)
     sworld.commit()
     sworld.complete(judge=[{"exit": 1}])
     assert sworld.run() == 1
     after = sworld.research.read_bytes()
+    prepared = stage2.research_publication(seed, producer=stage2_research_run.SWARM_PUBLISHER, day=stage2.today())
     stamp = re.compile(rb"updated: [0-9-]{10}")
-    assert stamp.sub(b"updated", after).startswith(stamp.sub(b"updated", seed)), "earlier bytes stay as they were"
+    stamped_after = stamp.sub(b"updated", after)
+    stamped_prepared = stamp.sub(b"updated", prepared)
+    assert stamped_after.startswith(stamped_prepared), "earlier bytes stay, apart from the correction's header"
+    assert b"A lone\rcarriage return.\r\n" in after, "the lone CR of the earlier research is kept"
     (sworld.bin / "calls.jsonl").unlink()
     sworld.complete()
     assert sworld.run() == 0
@@ -112,6 +118,139 @@ def test_append_replaces_research_in_one_atomic_step(tmp_path: Path, monkeypatch
     assert result.endswith(b"# Earlier research\r\n\n## New block\n\nText.\n")
     assert b"updated: 2020-01-01" not in result and b"updated: " in result
     assert research.stat().st_mode & 0o777 == 0o640, "the file keeps its mode"
+
+
+def test_research_publication_preserves_unrelated_bytes() -> None:
+    # Criterion 5 (bead coding-harness-g19n). Planted fault: the publication rebuilds the header through a YAML
+    # dump or the whole file through universal-newline text mode, so unrelated fields, authored prose and the
+    # file's CRLF and lone-CR line endings change.
+    source = (
+        "---\r\n"
+        'title: "Research — demo"\r\n'
+        "status: draft\r\n"
+        "implementation_status: none\r\n"
+        "date: 2026-10-01\r\n"
+        "last_reviewed: 2026-10-01\r\n"
+        "updated: 2026-10-01\r\n"
+        "supersedes: null\r\n"
+        "superseded_by: null\r\n"
+        "bead: demo-1\r\n"
+        "owner: framework-architect\r\n"
+        "class: bounded\r\n"
+        "provenance: human-written\r\n"
+        "review:\r\n"
+        "  status: approved\r\n"
+        '  approved_by: "A. Reviewer"\r\n'
+        '  approved_at: "2026-10-02"\r\n'
+        "tags: [research]\r\n"
+        "---\r\n"
+        "\r\n"
+        "# demo — Research\r\n"
+        "\r\n"
+        "Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this\r\n"
+        "file is empty until it has run.\r\n"
+        "\r\n"
+        "> **Bring the provenance up to date.** The frontmatter says\r\n"
+        "> `provenance: human-written` — that holds for this skeleton. Whoever fills it\r\n"
+        "> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and\r\n"
+        "> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,\r\n"
+        "> `review_required: true`).\r\n"
+        "\r\n"
+        "Stage-2 call, 2026-10-14: explore · attempt 1 · route flash.\r\n"
+        "\r\n"
+        "## Human notes\r\n"
+        "\r\n"
+        "Kept. The skeleton once said: Phase 1 per\r\n"
+        "[`prompts/01-explore.md`](../../../prompts/01-explore.md); this file is empty\r\n"
+        "until it has run.\r\n"
+        "A lone\rcarriage return stays.\r\n"
+    )
+    result = stage2.research_publication(source.encode("utf-8"), producer="claude-code", day="2026-11-04")
+    text = result.decode("utf-8")
+    header, body = text.split("---", 2)[1:]
+    assert "provenance: ai-drafted-reviewed\r\n" in header
+    assert 'produced_by: {kind: llm-session, name: claude-code, version: "2026-11-04"}\r\n' in header
+    assert "review: {status: pending, approved_by: null, approved_at: null}\r\n" in header
+    assert header.count("review:") == 1 and "A. Reviewer" not in header, "the old approval survives"
+    assert "updated: 2026-11-04\r\n" in header
+    for line in (
+        'title: "Research — demo"',
+        "status: draft",
+        "implementation_status: none",
+        "date: 2026-10-01",
+        "last_reviewed: 2026-10-01",
+        "supersedes: null",
+        "superseded_by: null",
+        "bead: demo-1",
+        "class: bounded",
+        "owner: framework-architect",
+        "tags: [research]",
+    ):
+        assert line + "\r\n" in header, f"an unrelated header field changed: {line}"
+    assert header.rstrip().endswith("tags: [research]"), "the corrected fields stay inside the header"
+    opening, notes = body.split("## Human notes", 1)
+    assert "Phase 1 per" not in opening and "Bring the provenance" not in opening, "a notice survives"
+    assert "human-written" not in opening and "Stage-2 call, 2026-10-14" in opening
+    assert "Phase 1 per" in notes, "the authored quote below the first section heading went"
+    assert "A lone\rcarriage return stays.\r\n" in notes, "the lone CR of the body changed"
+
+
+def test_research_publication_is_one_atomic_replacement(tmp_path: Path, monkeypatch) -> None:
+    # Criterion 6 (bead coding-harness-g19n). Planted fault: the publication corrects the header in one write
+    # and appends the record in a second, so a failure between them leaves a header corrected without its
+    # publication, and a failed replacement truncates the earlier research.
+    research = tmp_path / "research.md"
+    original = b"---\ntitle: R\nupdated: 2020-01-01\nprovenance: human-written\n---\n\n# R\n"
+    research.write_bytes(original)
+    research.chmod(0o640)
+
+    def fail(*_args, **_kwargs):
+        raise OSError(28, "No space left on device")
+
+    prepared = stage2.research_publication(original, producer="pi", day=stage2.today())
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "replace", fail)
+        with pytest.raises(OSError):
+            stage2.publish_research(research, prepared, "## Record")
+    assert research.read_bytes() == original, "a failed publication leaves the file untouched"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["research.md"], "no temporary file is left behind"
+
+    writes: list[bytes] = []
+    real_replace = os.replace
+
+    def spy(source, target):
+        writes.append(Path(source).read_bytes())
+        real_replace(source, target)
+
+    monkeypatch.setattr(os, "replace", spy)
+    stage2.publish_research(research, prepared, "## Record")
+    result = research.read_bytes()
+    assert len(writes) == 1 and writes[0] == result, "correction and record land in one replacement"
+    assert result.startswith(prepared) and result.endswith(b"# R\n\n## Record\n")
+    assert b"provenance: ai-drafted-reviewed" in result and b"human-written" not in result
+    assert research.stat().st_mode & 0o777 == 0o640, "the file keeps its mode"
+
+
+def test_corrected_skeleton_publication_keeps_swarm_resume(sworld: SwarmWorld) -> None:
+    # Criterion 8 (bead coding-harness-g19n). Planted fault: the runner's own correction of an incomplete
+    # publication counts as foreign research drift, so a resumed run repeats every successful seat.
+    sworld.research.write_text(swarm.swarm_skeleton(), encoding="utf-8")
+    sworld.commit()
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"exit": 2}]})
+    assert sworld.run() == 1
+    incomplete = sworld.research.read_text(encoding="utf-8")
+    first = manifest_of(sworld)
+    assert "incomplete" in status_line(incomplete), "the incomplete record itself was published"
+    assert "file is empty until it has run" not in incomplete, "the publication left the skeleton notice in"
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0
+    resume = manifest_of(sworld)["resume"]
+    assert resume["usable"] is True and resume["source_run"] == first["run_id"], resume
+    launched = [call["kind"] for call in sworld.calls()]
+    assert launched == ["repository", "judge"], "only the failed seat and the judge run again"
+    complete = sworld.research.read_text(encoding="utf-8")
+    assert complete.startswith(incomplete), "the resumed publication changed the bytes it appended to"
 
 
 # ---------------------------------------------------------------------------

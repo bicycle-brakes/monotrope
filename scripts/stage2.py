@@ -1199,6 +1199,139 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(directory)
 
 
+RESEARCH_TITLE = re.compile(r"(?m)^#[^\n]*\n")
+RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
+
+
+def _header_field_span(key: str) -> re.Pattern[str]:
+    """A complete header field span: the inline mapping on the key's line plus any indented block lines."""
+    return re.compile(rf"(?m)^{re.escape(key)}:[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*")
+
+
+def skeleton_notices() -> list[str]:
+    """The two generated opening notices of a research skeleton, derived from the template itself.
+
+    They are read from `scripts/new_change.py` at call time, so the removal patterns cannot drift from
+    what the skeleton actually writes. The template's first line is the title heading and stays.
+    """
+    import new_change
+
+    body = new_change.BODY_TEMPLATE.split("\n", 1)[1].strip("\n")
+    return [part.strip("\n") for part in re.split(r"\n[ \t]*\n+", body) if part.strip()]
+
+
+def _notice_pattern(notice: str) -> re.Pattern[str]:
+    """A notice as a byte-tolerant pattern: its lines joined, with the blank line(s) around it."""
+    lines = [re.escape(line) for line in notice.split("\n")]
+    return re.compile(r"(?:\r?\n)?" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
+
+
+def _without_skeleton_opening(text: str, body_start: int) -> str:
+    """The body's opening region without its generated notices; everything below the first section stays.
+
+    The region reaches from the title heading to the first section boundary (a `##` heading, the audit
+    call line or a swarm envelope); only notices inside it are removed, and only when one matched does
+    an all-blank leftover collapse.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    if title is None:
+        return text
+    region_start = title.end()
+    boundary = RESEARCH_OPENING_END.search(text, region_start)
+    region_end = boundary.start() if boundary else len(text)
+    region = text[region_start:region_end]
+    removed = False
+    for notice in skeleton_notices():
+        region, count = _notice_pattern(notice).subn("", region, count=1)
+        removed = removed or count > 0
+    if removed and not region.strip():
+        # Nothing authored is left: keep the one blank line between the title and what follows.
+        region = ("\r\n" if "\r\n" in text[region_start:region_end] else "\n") if boundary else ""
+    return text[:region_start] + region + text[region_end:]
+
+
+def research_publication(existing: bytes, *, producer: str, day: str) -> bytes:
+    """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
+
+    The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
+    a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
+    missing field is inserted before `tags:` or at the header's end — and the generated opening
+    paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
+    prose, audit lines, envelopes and the file's line-ending style. Bytes that are not UTF-8 or have
+    no header come back unchanged; nothing here owns them.
+    """
+    try:
+        text = existing.decode("utf-8")
+    except UnicodeDecodeError:
+        return existing
+    header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    if header is None:
+        return existing
+    start, end = header.span(1)
+    block = text[start:end]
+    eol = "\r\n" if "\r\n" in block else "\n"
+    fields = {
+        "provenance": "provenance: ai-drafted-reviewed",
+        "produced_by": f'produced_by: {{kind: llm-session, name: {producer}, version: "{day}"}}',
+        "review": "review: {status: pending, approved_by: null, approved_at: null}",
+        "updated": f"updated: {day}",
+    }
+    edits: list[tuple[int, int, str]] = []
+    inserted: list[str] = []
+    for key, replacement in fields.items():
+        matches = list(_header_field_span(key).finditer(block))
+        if not matches:
+            inserted.append(replacement)
+            continue
+        first = matches[0]
+        edits.append((first.start(), first.end(), replacement))
+        for extra in matches[1:]:
+            drop_end = extra.end()
+            follow = block[drop_end : drop_end + 2]
+            if follow == "\r\n":
+                drop_end += 2
+            elif follow[:1] in ("\n", "\r"):
+                drop_end += 1
+            edits.append((extra.start(), drop_end, ""))
+    edits.sort(key=lambda edit: edit[0])
+    pieces: list[str] = []
+    position = 0
+    for edit_start, edit_end, replacement in edits:
+        pieces.append(block[position:edit_start])
+        pieces.append(replacement)
+        position = edit_end
+    pieces.append(block[position:])
+    corrected = "".join(pieces)
+    if inserted:
+        tags = re.search(r"(?m)^tags:[^\r\n]*", corrected)
+        if tags is not None:
+            tags_at = tags.start()
+            corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
+        else:
+            corrected = eol.join([corrected, *inserted])
+    shifted = text[:start] + corrected + text[end:]
+    return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
+
+
+def publish_research(path: Path, prepared: bytes, text: str) -> None:
+    """Write the prepared research bytes with the publication's record appended, in one atomic replacement.
+
+    The prepared bytes already carry the corrected header and the removed skeleton notices; this adds the
+    runner's own record after them, stamps `updated:` like any research append and replaces the file once
+    through `write_atomic`. A failure before or during the replacement leaves the previous bytes intact.
+    """
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
+    joined = prepared + separator + addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+    write_atomic(path, stamped)
+
+
 def stamp_updated(path: Path) -> None:
     """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
 
@@ -7015,7 +7148,14 @@ def explore(
         tail = "\n".join(answer.strip().splitlines()[-40:])
         print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
+    # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
+    # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
+    prepared = research_publication(ctx.research.read_bytes(), producer=producer_for(endpoint), day=today())
+    publish_research(
+        ctx.research,
+        prepared,
+        f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}",
+    )
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 

@@ -65,6 +65,7 @@ def free_slot_id(stage: str, topic: int, model: str) -> str:
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
 MINUTES = {"finders": 10.0, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
 RUN_MINUTES = 150.0
+SWARM_PUBLISHER = "stage2-research-swarm"  # produced_by.name of a publication the whole swarm wrote
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -1304,26 +1305,36 @@ class Run:
         )
 
     def publish(self, status: str, *, clear: bool = False) -> str:
-        """Append the buffered record once, with the status, and return the status line.
+        """Publish the buffered record once, with the status, and return the status line.
 
-        A failed binding write (F-20, criterion 57) does not lose the record: it is appended once, with the
-        status rewritten to incomplete and the reason ``state-store-unwritable``; ``self.store_failure``
-        carries the status the run must end with.
+        The research bytes are first prepared as a model publication (truthful provenance, no skeleton
+        notices); the stored binding and the actual atomic replacement both use these same prepared bytes,
+        so a resumed run accepts exactly what was published. A failed binding write (F-20, criterion 57)
+        does not lose the record: it is published once, with the status rewritten to incomplete and the
+        reason ``state-store-unwritable``; ``self.store_failure`` carries the status the run must end with.
 
-        With ``clear`` the stored runs are moved aside after the binding write and before the append (F-30): a
-        failure to do so ends the run incomplete with the same reason, in the record itself. They are deleted
-        once the append succeeded, and restored when it raised (F-28), so a failed publication keeps every
-        result reusable.
+        With ``clear`` the stored runs are moved aside after the binding write and before the publication
+        (F-30): a failure to do so ends the run incomplete with the same reason, in the record itself. They
+        are deleted once the publication succeeded, and restored when it raised (F-28), so a failed
+        publication keeps every result reusable.
         """
         assert self.store is not None and self.run_id is not None
-        existing = self.ctx.research.read_bytes()
+        prepared = self.runner.research_publication(
+            self.ctx.research.read_bytes(), producer=SWARM_PUBLISHER, day=self.runner.today()
+        )
 
         def bind(text: str) -> None:
-            tail = (
-                (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
-            )
+            addition = text.rstrip().encode() + b"\n"
+            separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
             self.store.set_append(
-                self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
+                self.run_id,
+                stored_binding(
+                    self.manifest,
+                    self.research_rel,
+                    self.research_bytes,
+                    append=separator + addition,
+                    publication=prepared,
+                ),
             )
 
         text = self.compose(status)
@@ -1346,7 +1357,7 @@ class Run:
                 with contextlib.suppress(ResearchSnapshotError, StoreWriteError):
                     bind(text)
         try:
-            self.runner.append(self.ctx.research, text)
+            self.runner.publish_research(self.ctx.research, prepared, text)
         except BaseException:
             self.store.restore_clear(staging)
             raise

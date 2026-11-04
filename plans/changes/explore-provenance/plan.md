@@ -133,19 +133,27 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — Flash or Haiku leaves the human-written declaration
-- 1: not yet written tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — complete or incomplete swarm records retain false provenance
-- 2: not yet written tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — the endpoint's producing program or publication date is wrong
-- 2: not yet written tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — a mixed swarm is attributed to one model or has no producer date
-- 3: not yet written tests/test_stage2.py::test_explore_resets_review_without_changing_lifecycle — old approval survives publication or lifecycle fields change
-- 3: not yet written tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — published swarm research claims approval
-- 4: not yet written tests/test_stage2.py::test_explore_removes_only_opening_skeleton_text — either notice survives or authored prose is removed
-- 4: not yet written tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — either generated opening notice survives swarm publication
-- 5: not yet written tests/test_stage2_research_deep_review.py::test_research_publication_preserves_unrelated_bytes — a non-owned header/body span or its line endings change
-- 6: not yet written tests/test_stage2_research_deep_review.py::test_research_publication_is_one_atomic_replacement — failed replacement changes bytes or success needs two replacements
-- 7: not yet written tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance — an affected active research file remains after bootstrap
+- 1: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — Flash or Haiku leaves the human-written declaration
+- 1: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — complete or incomplete swarm records retain false provenance
+- 2: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — the endpoint's producing program or publication date is wrong
+- 2: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — a mixed swarm is attributed to one model or has no producer date
+- 3: tests/test_stage2.py::test_explore_resets_review_without_changing_lifecycle — old approval survives publication or lifecycle fields change
+- 3: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — published swarm research claims approval
+- 4: tests/test_stage2.py::test_explore_removes_only_opening_skeleton_text — either notice survives or authored prose is removed
+- 4: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — either generated opening notice survives swarm publication
+- 5: tests/test_stage2_research_deep_review.py::test_research_publication_preserves_unrelated_bytes — a non-owned header/body span or its line endings change
+- 6: tests/test_stage2_research_deep_review.py::test_research_publication_is_one_atomic_replacement — failed replacement changes bytes or success needs two replacements
+- 7: tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance — an affected active research file remains after bootstrap
 - 7: not a test — orchestrator reviews the two backfill diffs against their historical audit lines and unchanged body bytes; phase-6 review rejects invented attribution or archive edits
-- 8: not yet written tests/test_stage2_research_deep_review.py::test_corrected_skeleton_publication_keeps_swarm_resume — successful seats rerun after a corrected incomplete publication
-- 8: not yet written tests/test_stage2_research_store.py::test_binding_accepts_only_exact_research_provenance_publication — foreign edits pass, corrected publication cannot resume, or the pre-publication crash state stops matching
+- 8: tests/test_stage2_research_deep_review.py::test_corrected_skeleton_publication_keeps_swarm_resume — successful seats rerun after a corrected incomplete publication
+- 8: tests/test_stage2_research_store.py::test_binding_accepts_only_exact_research_provenance_publication — foreign edits pass, corrected publication cannot resume, or the pre-publication crash state stops matching
+
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-11-04 16:42:41–18:07:04 UTC, 5063 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 18:07:14–18:28:19 UTC, 1264 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 18:28:30–19:13:16 UTC, 2687 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
