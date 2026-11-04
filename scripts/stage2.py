@@ -272,6 +272,10 @@ FORMAT_REMINDER = (
     "Your previous answer was not in the required format, so it could not be read as findings; answer once more."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
+RAISING_FAULT_SENTENCE = (
+    "When the fault itself raises an exception, catch that specific exception in the regression test body "
+    "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
+)
 REPAIR_ANSWER = (
     "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
     "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
@@ -284,9 +288,7 @@ REPAIR_ANSWER = (
     "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
     "A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
-    "answered `not a test`. When the fault itself raises an exception, catch that specific exception in the\n"
-    "regression test body and fail with `assert` or `pytest.fail` so the baseline failure states the test's\n"
-    "expectation. Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
+    f"answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
     "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
     "is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"

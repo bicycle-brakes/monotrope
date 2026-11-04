@@ -62,3 +62,22 @@ Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 867 files, 3227 commits, 12 rules.
 
 Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 867 files, 3228 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3229 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/raising-fault-test/plan.md` +1 -1
+> - `plans/changes/raising-fault-test/research.md` +3 -1
+> - `tests/test_stage2.py` +32 -13
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-3: tests/test_stage2.py::test_implement_prompt_covers_a_fault_that_raises: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-4: tests/test_stage2.py::test_repair_prompts_cover_a_fault_that_raises: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/raising-fault-test/stage2/attempts/raising-fault-test/attempt-1-20261104T073912034365Z-e068e689.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3233 commits, 12 rules.

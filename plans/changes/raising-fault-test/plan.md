@@ -30,7 +30,7 @@ Starts unless you say stop.
 
 1. Attempt: in `scripts/stage2.py`, add the sentence below beside the baseline-test requirement in shared `REPAIR_ANSWER`; change no proof logic.
 2. Attempt: in `tests/test_stage2.py`, add `test_repair_prompts_cover_a_fault_that_raises`, checking both `REPAIR_FORMAT` variants with whitespace normalized. Factor a small test-local checker for the guidance; prove it rejects removal of the sentence, the specific-exception instruction, either failure form, and a reversal to passing. Name these planted faults in the docstring and measure the test red before the instruction insertion, then green.
-3. Orchestrator bootstrap, after the accepted attempt: in held `prompts/04-implement.md`, add the same sentence next to the repair paragraph's red-first rule. In `tests/test_stage2.py`, add `test_implement_prompt_covers_a_fault_that_raises`, using the same checker and planted omissions against the real prompt. The attempt must not edit this held prompt or add a test that requires its pending edit to pass.
+3. Attempt: define `test_implement_prompt_covers_a_fault_that_raises` in `tests/test_stage2.py` with the same checker and planted omissions against the real prompt, skipped until bootstrap. Orchestrator bootstrap, after the accepted attempt: in held `prompts/04-implement.md`, add the same sentence next to the repair paragraph's red-first rule, then remove the existing test's skip. Do not add a second definition of the test. The attempt must not edit this held prompt or require its pending edit to pass.
 4. Orchestrator: run the commands below after the bootstrap edit; measure the implement-prompt test red with the sentence removed in a temporary text copy and green with it present. Keep both test names stable and remove each ledger's `not yet written` marker when its test is defined.
 
 Sentence for both locations:
@@ -69,3 +69,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Flash route fails
 ## Time used
 
 2026-11-03 22:22:25–23:28:57 UTC, 3991 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-04 07:39:20–08:20:35 UTC, 2474 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-04 08:20:43–08:41:21 UTC, 1237 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

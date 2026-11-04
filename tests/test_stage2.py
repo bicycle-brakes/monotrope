@@ -11348,10 +11348,10 @@ def test_repair_rejects_malformed_known_fixed_lines(world: World, bad: str, prob
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
 
-RAISING_FAULT_SENTENCE = (
-    "When the fault itself raises an exception, catch that specific exception in the regression test body "
-    "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
-)
+def raising_fault_sentence() -> str:
+    """Read the operative wording from the runner, tolerating source reflow."""
+    assert hasattr(stage2, "RAISING_FAULT_SENTENCE"), "the runner must own the raising-fault sentence constant"
+    return flat(stage2.RAISING_FAULT_SENTENCE)
 
 
 def raising_fault_guidance_gaps(text: str) -> list[str]:
@@ -11366,13 +11366,22 @@ def raising_fault_guidance_gaps(text: str) -> list[str]:
         gaps.append("assert form")
     if "`pytest.fail`" not in text:
         gaps.append("pytest.fail form")
-    if "fail with" not in text or "pass with" in text or "treat the uncaught" in text:
+    # Refuse instructions to leave the application crash unhandled or use its
+    # traceback as proof, even if the correct guidance is still present nearby.
+    uncaught_proof = re.search(
+        r"(?:leave|keep|let|allow|treat|accept)\b[^.;]*\b(?:uncaught|unhandled)\b"
+        r"|(?:traceback|uncaught exception|unhandled exception)\b[^.;]*"
+        r"\b(?:proves?|proof|sufficient|qualifies)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if "fail with" not in text or "pass with" in text or uncaught_proof:
         gaps.append("failure, not a pass")
     return gaps
 
 
 def planted_raising_fault_variants() -> dict[str, str]:
-    sentence = RAISING_FAULT_SENTENCE
+    sentence = raising_fault_sentence()
     return {
         "sentence removed": "",
         "catch instruction removed": sentence.replace(
@@ -11381,19 +11390,28 @@ def planted_raising_fault_variants() -> dict[str, str]:
         "assert removed": sentence.replace("`assert` or ", ""),
         "pytest.fail removed": sentence.replace(" or `pytest.fail`", ""),
         "reversed to passing": sentence.replace("fail with", "pass with"),
+        "uncaught traceback as proof": sentence
+        + " Leave the fault's exception uncaught; the traceback alone proves the regression.",
+        "unhandled crash accepted": sentence + " Accept an unhandled exception as sufficient baseline proof.",
+        "traceback qualifies": sentence + " The traceback qualifies as proof of the regression.",
     }
 
 
-def test_repair_prompts_cover_a_fault_that_raises() -> None:
-    """Criterion 2. Planted faults: sentence, specific-exception catch, assert, pytest.fail removed; reversal to passing."""
+def test_repair_prompts_cover_a_fault_that_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2. Planted faults: sentence, specific-exception catch, assert, pytest.fail removed; passing or uncaught-crash proof."""
+    sentence = raising_fault_sentence()
+    # Reflow the runner's source wording: whitespace must not redefine the guard.
+    monkeypatch.setattr(stage2, "RAISING_FAULT_SENTENCE", stage2.RAISING_FAULT_SENTENCE.replace(" ", "\n  "))
+    assert raising_fault_sentence() == sentence
     for name, text in planted_raising_fault_variants().items():
         assert raising_fault_guidance_gaps(text), name
-    assert raising_fault_guidance_gaps(RAISING_FAULT_SENTENCE) == []
+    sentence = raising_fault_sentence()
+    assert raising_fault_guidance_gaps(sentence) == []
     for instructions in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
         assert raising_fault_guidance_gaps(instructions) == []
-        assert RAISING_FAULT_SENTENCE in flat(instructions)
+        assert sentence in flat(instructions)
         for name, text in planted_raising_fault_variants().items():
-            mutated = flat(instructions).replace(RAISING_FAULT_SENTENCE, text)
+            mutated = flat(instructions).replace(sentence, text)
             assert raising_fault_guidance_gaps(mutated), name
 
 
@@ -11402,10 +11420,11 @@ def test_implement_prompt_covers_a_fault_that_raises() -> None:
     for name, text in planted_raising_fault_variants().items():
         assert raising_fault_guidance_gaps(text), name
     prompt = flat((REPO_ROOT / "prompts" / "04-implement.md").read_text(encoding="utf-8"))
-    assert RAISING_FAULT_SENTENCE in prompt, "prompts/04-implement.md lost the raising-fault sentence"
+    sentence = raising_fault_sentence()
+    assert sentence in prompt, "prompts/04-implement.md lost the raising-fault sentence"
     assert raising_fault_guidance_gaps(prompt) == []
     for name, text in planted_raising_fault_variants().items():
-        assert raising_fault_guidance_gaps(prompt.replace(RAISING_FAULT_SENTENCE, text)), name
+        assert raising_fault_guidance_gaps(prompt.replace(sentence, text)), name
 
 
 def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> None:
