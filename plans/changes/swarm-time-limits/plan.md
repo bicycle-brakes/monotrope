@@ -160,6 +160,13 @@ fixed those by hand in the two files named in step 8 and recorded a full
 rows L1-1 to L1-11) edit docs, the limits loader, the run's constructor and
 tests; their gate is the runner's own `make verify` after the repair.
 
+Review loop, 2026-11-04/05 (the rows live outside the repository until the
+phase-6 verdict, then in `findings.md`): round 1 eleven rows, repaired and
+accepted by hand (2e2ba948); round 2 four rows, L2-4 repaired by the runner
+(63a53261); round 3 four rows, three repaired and accepted by hand after the
+midnight date-stamp rollover (7aac74ea); round 4 three rows. Each hand
+acceptance followed a full `make verify` and is named in its commit.
+
 ## Runner route — 2026-11-04
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.

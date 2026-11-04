@@ -407,3 +407,5 @@ Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claud
 > - L3-2: tests/test_stage2_swarm.py::test_required_slots_precede_free_and_reserve_judge_time: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-3-20261104T171216266322Z-b8209ea9.md
 > ```
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 880 files, 3292 commits, 12 rules.
