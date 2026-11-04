@@ -113,9 +113,12 @@ them:
 ```
 
 The second header is for released rows. The Status words of a stage-2 row are
-`taken — <reason>`, `taken — not a test — <reason>`, `fixed —
-tests/<path>::<function>`, `fixed — not a test — <reason>` and `rejected —
-<reason>`; a loop row also reads `taken — <test or criterion>`. Lines:
+`taken — <reason>`, `taken — not a test — <reason>`, `taken — guard test —
+<reason>`, `fixed — tests/<path>::<function>`, `fixed — not a test —
+<reason>`, `fixed — guard test — tests/<path>::<function>` and `rejected —
+<reason>`; a loop row also reads `taken — <test or criterion>`. A guard repair
+marks Broke a test `yes — guard test — tests/<path>::<function>` in the record,
+without a new column (ADR 0023). Lines:
 
 ```text
 Reviewer session: codex <id>
