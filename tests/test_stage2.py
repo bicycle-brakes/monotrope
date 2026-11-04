@@ -20353,6 +20353,41 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
 
 
+@pytest.mark.parametrize("selection", ["touched", "linked"])
+@pytest.mark.parametrize("full_result", [0, 1])
+def test_targeted_stage2_test_file_requires_full_verification(
+    world: World, monkeypatch: pytest.MonkeyPatch, selection: str, full_result: int
+) -> None:
+    """Row L4-1: selecting the large stage2 test file must use admitted full verification before any timeout."""
+    seed_tests(world)
+    large_test = world.root / "tests" / "test_stage2.py"
+    large_test.write_text("def test_link():\n    assert 'scripts/helper.py'\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "stage2 test file linked to helper")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target = large_test if selection == "touched" else world.root / "scripts" / "helper.py"
+    target.write_text(target.read_text(encoding="utf-8") + "\n# repaired\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is not None and "tests/test_stage2.py" in chosen.fallback
+    assert chosen.tests == []
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["make"] = (full_result, "full verification result\n")
+    scope: list[str] = []
+    problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope)
+    assert bool(problems) == bool(full_result), problems
+    (make,) = commands.of("make")
+    assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert commands.of("gate") == []
+    assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
+    assert any(
+        "full `make verify` ran" in line
+        and "tests/test_stage2.py" in line
+        and f"result: {'red' if full_result else 'green'}" in line
+        for line in scope
+    ), scope
+
+
 def test_targeted_pytest_timeout_rejects_without_full_fallback(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """A required targeted timeout rejects even when a full check would be green."""
     baseline = repair_world(world)

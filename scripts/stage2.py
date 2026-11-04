@@ -5493,6 +5493,11 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
         if not linked.get(posix):
             return full(f"`{posix}` has no linked test")
     tests = sorted(set(touched_tests).union(*(linked.get(posix, set()) for posix in touched)))
+    # Maintainer's option A (2026-11-04): until bead coding-harness-vg9 splits this
+    # file, its whole-file run needs the admitted full check's budget. Select that
+    # route before execution; a targeted timeout must still reject the attempt.
+    if "tests/test_stage2.py" in tests:
+        return full("the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it")
     try:
         covered = set(format_targets(root, env))
         listed = ci_gates.gates()

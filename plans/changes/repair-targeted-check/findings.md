@@ -346,3 +346,8 @@ Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 867 files, 3245 commits, 12 rules.
 
 Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3247 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3256 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
