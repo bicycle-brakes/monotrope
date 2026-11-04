@@ -245,3 +245,96 @@ Stage-2 call, 2026-11-04: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance
 > 3 failed, 10 passed, 1 skipped in 26.74s
 > ```
+
+Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed both attempts (ruff, then six red tests), 2026-11-04; continues from the kept attempt · leak check clean over 893 files, 3274 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_swarm.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 25 files, 2 commits, 1 rules, 1 prompt texts
+> swarm: eleven reconciled topics appended to plans/changes/demo/research.md · run f758ddbeec92783f31fb51d5758b07c7
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research run 35456e0b206672e1857f4a8ad6f99d90 is incomplete: incomplete - the judge failed: judge (failed); no later stage starts.
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_deep_review.py::test_corrected_skeleton_publication_keeps_swarm_resume
+> FAILED tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance
+> 2 failed, 7 passed, 1 skipped in 18.36s
+> ```
