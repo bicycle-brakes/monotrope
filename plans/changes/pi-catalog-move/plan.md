@@ -79,10 +79,10 @@ form and report the absent validator rather than claiming it passed.
    becomes available. The runner writes attempt and verification evidence to
    `plans/changes/pi-catalog-move/findings.md` and measured time below.
 
-No deletions. Leave `research.md` and `decisions.md` unchanged. Leave
+No deletions. Leave `research.md` unchanged; `decisions.md` changes only by the orchestrator's recorded answers (Q-2, 2026-11-04). Leave
 `tests/test_pi_install.py`'s synthetic 1.2.0 fixture alone; it measures arbitrary
 exact-pin behavior, not the production pin. Also leave
-`tests/test_stage2_research_catalog.py`, `scripts/`, the wrapper/installer,
+`tests/test_stage2_research_catalog.py`, `scripts/` (except the free-selection exclusion of step 4a, decisions.md#Q-2), the wrapper/installer,
 Node declaration, model admissions and address record, other change folders,
 ADRs, governance, agent configuration, templates, prompts and CI untouched.
 No held path needs an orchestrator bootstrap edit. The runner alone regenerates

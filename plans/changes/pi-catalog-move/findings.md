@@ -466,3 +466,14 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-04: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 891 files, 3278 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 891 files, 3281 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-04
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-2 | BLOCKER | SPEC | phase-6 | plans/changes/pi-catalog-move/plan.md:64-71,82-87 | [DIVERGENT] For a refreshed catalog containing declared-paid `beam-free`, plan step 4a requires changing `scripts/stage2.py` to exclude it from free selection, but the subsequent scope restriction still requires leaving all of `scripts/` untouched. The revised spec permits this change; the plan retains incompatible implementation instructions. This remaining plan restriction is additional evidence beyond the earlier finding about the spec. [Acceptance criterion 5] | Codex | fixed — orchestrator plan amendment: the closing limits paragraph names the step-4a exception in scripts/ and the recorded Q-2 in decisions.md; every other restriction in spec and plan re-read for the same gap (2026-11-04) | — |
+
+Phase 6 verdict: codex 01a1a87f-f097-78b0-960a-99b740fc91cd, 2026-11-04
+Reviewer session: codex 01a1a87f-f097-78b0-960a-99b740fc91cd — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
