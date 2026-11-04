@@ -103,8 +103,13 @@ follow `prompts/03-plan.md`. Explore ran through Stage 2, GLM 5.3 Flash via
    stay intact. Review both texts against the new configuration contract.
 8. Update this `plan.md` to turn implemented ledger entries into test entries
    and record phase-4 evidence/time. The runner owns this change's
-   `findings.md`, generated `plans/INDEX.md`, verification and commit. No
-   other implementation file is added, changed or deleted.
+   `findings.md`, generated `plans/INDEX.md`, verification and commit. Two
+   further files were not foreseen and the orchestrator accepted them by hand
+   at `2a50c714` because the gates demanded them: `scripts/ci_gates.py` (a
+   new `OHNE_AUFRUFER` entry declaring that `scripts/stage2_research_limits.py`
+   has no caller outside its importer) and `scripts/kit/manifest.yaml` (a
+   role rule for `research-swarm-limits.yaml`). No other implementation
+   file is added, changed or deleted.
 
 ## Criterion ledger
 
@@ -145,12 +150,29 @@ appetite with unmet criteria recorded; never weaken a criterion to pass.
 it cannot be reported green. The runner handles index generation and
 tracker-dependent gates, which this draft does not mutate.
 
+## Verification record
+
+Attempts 1 to 3 ended red (ruff, a pytest cheap check, then three gate tests:
+`test_every_tracked_file_has_a_role`, `test_the_role_check_goes_red_when_a_rule_is_removed`
+and `test_every_script_has_a_caller_or_a_declared_reason`). The orchestrator
+fixed those by hand in the two files named in step 8 and recorded a full
+`make verify` green on `2a50c714` (2026-11-04). Later repair rounds (review
+rows L1-1 to L1-11) edit docs, the limits loader, the run's constructor and
+tests; their gate is the runner's own `make verify` after the repair.
+
 ## Runner route — 2026-11-04
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-11-04
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
 
 2026-11-04 11:36:56–12:18:41 UTC, 2504 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 12:18:50–12:28:23 UTC, 573 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 12:28:32–12:48:37 UTC, 1205 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-04 14:00:20–14:30:02 UTC, 1781 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-04 14:30:10–14:51:48 UTC, 1298 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-04 14:51:57–15:15:13 UTC, 1396 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

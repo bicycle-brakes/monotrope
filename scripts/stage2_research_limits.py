@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import yaml
 
@@ -48,7 +50,10 @@ class Limits:
     """One invocation's captured allowances in minutes, with their seconds conversions."""
 
     run_minutes: float
-    role_minutes: dict[str, float]
+    role_minutes: Mapping[str, float]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "role_minutes", MappingProxyType(dict(self.role_minutes)))
 
     @property
     def run_seconds(self) -> float:
@@ -79,14 +84,20 @@ def load(root: Path) -> Limits:
     path = Path(root) / FILE_NAME
     try:
         raw = path.read_bytes()
+    except (RecursionError, MemoryError) as error:
+        raise LimitsError(f"{path}: resource exhaustion reading the limits file ({type(error).__name__})") from error
     except OSError as error:
         raise LimitsError(f"{path}: the limits file cannot be read ({error})") from error
     try:
         text = raw.decode("utf-8")
+    except (RecursionError, MemoryError) as error:
+        raise LimitsError(f"{path}: resource exhaustion decoding the limits file ({type(error).__name__})") from error
     except UnicodeDecodeError as error:
         raise LimitsError(f"{path}: the limits file is not valid UTF-8 ({error})") from error
     try:
         document = yaml.load(text, Loader=_UniqueKeyLoader)
+    except (RecursionError, MemoryError) as error:
+        raise LimitsError(f"{path}: resource exhaustion parsing the limits file ({type(error).__name__})") from error
     except LimitsError as error:
         raise LimitsError(f"{path}: {error}") from error
     except yaml.YAMLError as error:

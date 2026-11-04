@@ -321,6 +321,7 @@ class Run:
         self.security: str | None = None
         self.stop = threading.Event()
         self.began = CLOCK()
+        self.limits: stage2_research_limits.Limits | None = None
         self.lock = threading.Lock()
 
     # -- small helpers ---------------------------------------------------------------------------
@@ -330,6 +331,8 @@ class Run:
 
     @property
     def deadline(self) -> float:
+        if self.limits is None:
+            raise self.runner.Refused("the research swarm time limits are not yet loaded; call open first")
         return self.began + self.limits.run_seconds
 
     def read_data(self) -> dict:

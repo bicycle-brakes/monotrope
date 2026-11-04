@@ -171,3 +171,40 @@ def test_valid_limits_accept_fractional_minutes(tmp_path: Path) -> None:
     assert limits.run_seconds == pytest.approx(9630.0)
     assert limits.role_seconds("finders") == pytest.approx(30.0)
     assert limits.role_minutes == {"finders": 0.5, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
+
+
+def test_captured_role_limits_are_immutable(tmp_path: Path) -> None:
+    # Planted fault: a caller mutates the captured judge reserve after loading.
+    write(tmp_path, BASE)
+    limits = stage2_research_limits.load(tmp_path)
+    with pytest.raises(TypeError):
+        limits.role_minutes["judge"] = 1.0
+    assert limits.role_seconds("judge") == 900.0
+    supplied = {"judge": 15.0}
+    direct = stage2_research_limits.Limits(160.0, supplied)
+    supplied["judge"] = 1.0
+    assert direct.role_seconds("judge") == 900.0
+
+
+@pytest.mark.parametrize("failure", [RecursionError, MemoryError])
+@pytest.mark.parametrize("phase", ["read", "decode", "parse"])
+def test_resource_errors_are_named_refusals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure, phase: str
+) -> None:
+    # Planted fault: resource exhaustion escapes the loader instead of naming its input.
+    write(tmp_path, BASE)
+
+    def fail(*_args, **_kwargs):
+        raise failure("planted resource exhaustion")
+
+    if phase == "read":
+        monkeypatch.setattr(Path, "read_bytes", fail)
+    elif phase == "decode":
+
+        class Undecodable(bytes):
+            decode = fail
+
+        monkeypatch.setattr(Path, "read_bytes", lambda _self: Undecodable())
+    else:
+        monkeypatch.setattr(stage2_research_limits.yaml, "load", fail)
+    expect_refusal(tmp_path, "resource exhaustion")

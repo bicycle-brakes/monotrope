@@ -1565,12 +1565,15 @@ def test_judge_gets_resolved_excerpts_with_bounded_truncation(sworld: SwarmWorld
 def test_amended_graph_and_deadlines_bound_every_launch(sworld: SwarmWorld) -> None:
     # Criterion 19. Planted fault: an extra invocation or retry occurs, or the role limits drift.
     limits = stage2_research_limits.load(sworld.root)
-    assert limits.run_minutes == 160.0 and limits.role_minutes["finders"] == 20.0, (
-        "the worktree's checked-in file, not a code constant, governs the run"
-    )
     sworld.selection = selection_for(free=FREE)
     sworld.complete(**{"repository:2:mimo-v2.6-pro": [{"exit": 1}]})
-    assert sworld.run() == 1
+    with pytest.MonkeyPatch.context() as patch:
+        seen = dispatch_spy(patch)
+        assert sworld.run() == 1
+    assert seen
+    for entry in seen:
+        assert all(value == limits.role_seconds(entry["stage"]) for value in entry["allowances"].values())
+        assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else limits.role_seconds("judge"))
     prompts = [(c["kind"], c["topic"], c["model"]) for c in sworld.calls()]
     assert len(prompts) == len(set(prompts)), "a failing slot is neither retried nor repeated"
     assert len(prompts) <= 39 + 3 * len(FREE)
@@ -2062,6 +2065,7 @@ def test_research_limits_are_captured_once_per_invocation(sworld: SwarmWorld, mo
     # Criterion 2. Planted fault: a mid-run edit changes the running invocation's allowances, or
     # the next invocation ignores a valid edit of the file.
     monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: 1000.0)
+    limits = stage2_research_limits.load(sworld.root)
     real_history = stage2_research_run.build_research_history
     edited = [False]
 
@@ -2084,10 +2088,10 @@ def test_research_limits_are_captured_once_per_invocation(sworld: SwarmWorld, mo
     seen = dispatch_spy(monkeypatch)
     assert sworld.run() == 1, "the mid-run edit of a tracked file ends the run incomplete"
     assert "the frozen input state changed" in sworld.research.read_text(encoding="utf-8")
-    captured = {"finders": 1200.0, "merge": 600.0, "sentence": 300.0, "topics": 600.0, "judge": 900.0}
+    captured = {role: limits.role_seconds(role) for role in stage2_research_limits.ROLES}
     assert [entry["stage"] for entry in seen] == ["finders", "merge", "sentence", "topics", "judge"]
     for entry in seen:
-        assert entry["deadline"] == 1000.0 + 160.0 * 60.0, "the captured run allowance outlives the edit"
+        assert entry["deadline"] == 1000.0 + limits.run_seconds, "the captured run allowance outlives the edit"
         assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else captured["judge"])
         assert all(value == captured[entry["stage"]] for value in entry["allowances"].values()), (
             "the running invocation keeps the values it read at its start"
@@ -2125,7 +2129,8 @@ def test_research_judge_reserve_uses_configured_limit(sworld: SwarmWorld, monkey
     sworld.complete()
     seen = dispatch_spy(monkeypatch)
     assert sworld.run() == 0
-    expected = {"finders": 1200.0, "merge": 600.0, "sentence": 300.0, "topics": 600.0, "judge": 23.0 * 60.0}
+    limits = stage2_research_limits.load(sworld.root)
+    expected = {role: limits.role_seconds(role) for role in stage2_research_limits.ROLES}
     for entry in seen:
         assert entry["reserve"] == (0.0 if entry["stage"] == "judge" else expected["judge"])
         assert all(value == expected[entry["stage"]] for value in entry["allowances"].values())
@@ -2151,7 +2156,10 @@ def test_resumed_run_uses_a_fresh_configured_deadline(sworld: SwarmWorld, monkey
     assert limits.run_seconds - 60.0 < remainder <= limits.run_seconds, "a fresh allowance, not the spent one"
     second = manifest_of(sworld)
     reused = [slot for slot in second["slots"] if slot["reused_from"]]
-    assert len(reused) == 38 and all(slot["reused_from"] == first["run_id"] for slot in reused)
+    expected_reused = {slot["slot_id"] for slot in first["slots"] if slot["stage"] != "judge"}
+    assert expected_reused
+    assert {slot["slot_id"] for slot in reused} == expected_reused
+    assert all(slot["reused_from"] == first["run_id"] for slot in reused)
     assert second["resume"]["source_run"] == first["run_id"]
 
 
@@ -3286,3 +3294,49 @@ def test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence(sworld: 
         stage2.declared_class(sworld.root, "demo", None)
     except stage2.Refused as error:
         assert "unterminated" not in str(error)
+
+
+def test_deadline_before_open_refuses_by_name(sworld: SwarmWorld) -> None:
+    # Planted fault: inspecting a not-yet-open run dereferences an absent attribute.
+    run = stage2_research_run.Run(sworld.root, "demo", stage2, "feature", selection_for())
+    try:
+        with pytest.raises(stage2.Refused, match="time limits.*not.*loaded"):
+            _ = run.deadline
+    except AttributeError as error:
+        pytest.fail(f"deadline inspection must refuse by name, not raise AttributeError: {error}")
+
+
+def test_launch_bound_accepts_configuration_only_edits(sworld: SwarmWorld) -> None:
+    # Planted fault: the swarm test pins initial values rather than checking dispatched settings.
+    write_limits(sworld.root, run_minutes=240.0, finders=25.0)
+    test_amended_graph_and_deadlines_bound_every_launch(sworld)
+
+
+def test_resume_deadline_accepts_another_roster(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Planted fault: a deadline test assumes a literal number of reusable slots.
+    sworld.selection = selection_for(free=FREE)
+    test_resumed_run_uses_a_fresh_configured_deadline(sworld, monkeypatch)
+
+
+@pytest.mark.parametrize("failure", [RecursionError, MemoryError])
+def test_limits_resource_errors_refuse_before_launch(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure
+) -> None:
+    # Planted fault: parser resource exhaustion escapes explore's exit-2 refusal.
+    original = yaml.load
+
+    def exhaust_limits_parser(*args, **kwargs):
+        if kwargs.get("Loader") is stage2_research_limits._UniqueKeyLoader:
+            raise failure("planted parser exhaustion")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(yaml, "load", exhaust_limits_parser)
+    try:
+        result = sworld.run()
+    except (RecursionError, MemoryError) as error:
+        pytest.fail(f"limits resource exhaustion must refuse by name: {type(error).__name__}")
+    assert result == 2
+    assert sworld.calls() == []
+    error = capsys.readouterr().err
+    assert "refused:" in error and "research-swarm-limits.yaml" in error
+    assert "resource exhaustion" in error and failure.__name__ in error

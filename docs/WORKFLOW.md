@@ -985,8 +985,10 @@ whole-run allowance (initially 160 minutes) — with no retry and no debate. The
 allowances live in `research-swarm-limits.yaml` at the worktree root:
 `run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
 `sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
-file once at its start, so the next invocation applies an edit while the
-running one keeps its captured values; a missing, unknown or implausible value
+file once at its start. An edit during a run does not change its captured
+allowances, but the frozen-input drift check ends that invocation incomplete
+with exit 1; the next invocation applies the edited configuration. A missing,
+unknown or implausible value
 — every role at or below the run, the judge strictly below it — refuses the
 invocation with exit 2 before any participant starts
 (`scripts/stage2_research_limits.py`). A failed

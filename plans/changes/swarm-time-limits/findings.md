@@ -263,3 +263,99 @@ Stage-2 call, 2026-11-04: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 880 files, 3248 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 880 files, 3249 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 880 files, 3251 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 880 files, 3253 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 880 files, 3254 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +4 -2
+> - `plans/changes/swarm-time-limits/plan.md` +18 -4
+> - `plans/changes/swarm-time-limits/research.md` +3 -14
+> - `scripts/stage2_research_limits.py` +12 -1
+> - `scripts/stage2_research_run.py` +3 -0
+> - `tests/test_stage2_research_limits.py` +37 -0
+> - `tests/test_stage2_swarm.py` +55 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-3: tests/test_stage2_swarm.py::test_launch_bound_accepts_configuration_only_edits: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-4: tests/test_stage2_swarm.py::test_resume_deadline_accepts_another_roster: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-5: tests/test_stage2_swarm.py::test_deadline_before_open_refuses_by_name: the call of `tests/test_stage2_swarm.py::test_deadline_before_open_refuses_by_name` failed with AttributeError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - L1-11: tests/test_stage2_swarm.py::test_limits_resource_errors_refuse_before_launch: the call of `tests/test_stage2_swarm.py::test_limits_resource_errors_refuse_before_launch[RecursionError]` failed with RecursionError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-1-20261104T140011907480Z-72468082.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 880 files, 3254 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/swarm-time-limits/plan.md` +16 -3
+> - `tests/test_stage2_swarm.py` +10 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-3: no fixed line
+> - L1-4: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-2-20261104T140011907480Z-72468082.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 880 files, 3255 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/swarm-time-limits/plan.md` +17 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-3: tests/test_stage2_swarm.py::test_launch_bound_accepts_configuration_only_edits: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-4: tests/test_stage2_swarm.py::test_resume_deadline_accepts_another_roster: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-time-limits/stage2/attempts/swarm-time-limits/attempt-3-20261104T140011907480Z-72468082.md
+> ```
