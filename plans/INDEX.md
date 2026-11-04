@@ -207,9 +207,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/haiku-5-5/spec.md`](changes/haiku-5-5/spec.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/handoff-new-feature/decisions.md`](changes/handoff-new-feature/decisions.md) | draft | none | 2026-11-04 | coding-harness-in27 |
 | [`changes/handoff-new-feature/findings.md`](changes/handoff-new-feature/findings.md) | draft | none | 2026-11-04 | coding-harness-in27 |
-| [`changes/handoff-new-feature/plan.md`](changes/handoff-new-feature/plan.md) | draft | partial | 2026-11-04 | coding-harness-in27 |
+| [`changes/handoff-new-feature/plan.md`](changes/handoff-new-feature/plan.md) | draft | none | 2026-11-04 | coding-harness-in27 |
 | [`changes/handoff-new-feature/research.md`](changes/handoff-new-feature/research.md) | draft | none | 2026-11-04 | coding-harness-in27 |
-| [`changes/handoff-new-feature/spec.md`](changes/handoff-new-feature/spec.md) | draft | partial | 2026-11-04 | coding-harness-in27 |
+| [`changes/handoff-new-feature/spec.md`](changes/handoff-new-feature/spec.md) | draft | none | 2026-11-04 | coding-harness-in27 |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |

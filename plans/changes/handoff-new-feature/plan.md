@@ -103,17 +103,17 @@ regeneration and full verification belong to the outer runner or phase 4.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_research_handoff.py::test_new_swarm_class_without_complete_research_is_red — a spec with absent, plain or only incomplete research is exempted; replacing the applicability check with the old early return must turn this test red.
-- 2: not yet written tests/test_research_handoff.py::test_legacy_exemption_uses_start_day — later spec/review dates or archiving lose the pre-adoption exemption; day-before/day-of/day-after fixtures expose the boundary.
-- 2: not yet written tests/test_this_repository_adoption.py::test_this_repository_adopted_research_handoff_on_2026_10_26 — the repository's adoption date is absent or differs from the merge day.
-- 3: not yet written tests/test_research_handoff.py::test_non_swarm_classes_are_exempt_by_class — either exempt class requires a swarm or is reported as legacy.
-- 4: not yet written tests/test_research_handoff.py::test_only_a_reasoned_maintainer_exception_waives_missing_research — removing human authorization, actual answer, context, grant or reason still gives success; the valid grant omits its question or reason in output.
-- 5: not yet written tests/test_research_handoff.py::test_ambiguous_applicability_or_exception_is_not_measured — missing/invalid adoption or start dates, invalid/conflicting classes, duplicate fields or multiple exception records pass or crash instead of exiting 3; a second finding must not mask exit 3.
-- 6: not yet written tests/test_research_handoff.py::test_exception_never_hides_existing_research_failures — a granted exception suppresses malformed evidence, missing inventory/answers, bad neighbours or bad bases.
+- 1: tests/test_research_handoff.py::test_new_swarm_class_without_complete_research_is_red — a spec with absent, plain or only incomplete research is exempted; replacing the applicability check with the old early return must turn this test red.
+- 2: tests/test_research_handoff.py::test_legacy_exemption_uses_start_day — later spec/review dates or archiving lose the pre-adoption exemption; day-before/day-of/day-after fixtures expose the boundary.
+- 2: tests/test_this_repository_adoption.py::test_this_repository_adopted_research_handoff_on_2026_10_26 — the repository's adoption date is absent or differs from the merge day.
+- 3: tests/test_research_handoff.py::test_non_swarm_classes_are_exempt_by_class — either exempt class requires a swarm or is reported as legacy.
+- 4: tests/test_research_handoff.py::test_only_a_reasoned_maintainer_exception_waives_missing_research — removing human authorization, actual answer, context, grant or reason still gives success; the valid grant omits its question or reason in output.
+- 5: tests/test_research_handoff.py::test_ambiguous_applicability_or_exception_is_not_measured — missing/invalid adoption or start dates, invalid/conflicting classes, duplicate fields or multiple exception records pass or crash instead of exiting 3; a second finding must not mask exit 3.
+- 6: tests/test_research_handoff.py::test_exception_never_hides_existing_research_failures — a granted exception suppresses malformed evidence, missing inventory/answers, bad neighbours or bad bases.
 - 6: tests/test_research_handoff.py::test_only_complete_runs_supply_handoff_and_prior_obligations_survive — incomplete claims supply a basis or a rerun erases prior complete-run obligations.
-- 7: not yet written tests/test_research_handoff.py::test_missing_research_before_spec_is_pending — no spec with absent/plain/incomplete research becomes a legacy exemption or a missing-run failure; malformed evidence exits 0.
+- 7: tests/test_research_handoff.py::test_missing_research_before_spec_is_pending — no spec with absent/plain/incomplete research becomes a legacy exemption or a missing-run failure; malformed evidence exits 0.
 - 7: tests/test_research_handoff.py::test_pending_handoff_is_green_only_before_spec — valid pending complete-run items block before spec or pass after spec.
-- 8: not yet written tests/test_research_handoff.py::test_applicability_and_exceptions_hold_in_live_archive_and_cli — selection or archival skips the new check; temporary offline fixtures use external state.
+- 8: tests/test_research_handoff.py::test_applicability_and_exceptions_hold_in_live_archive_and_cli — selection or archival skips the new check; temporary offline fixtures use external state.
 
 ## Boundaries and route
 
@@ -140,8 +140,13 @@ draft stops after writing and checking artifacts; it does not start phase 4.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed both attempts (ruff, then a test TypeError and a broken adoption test), 2026-11-04; continues from the kept attempt.
+
 ## Time used
 
 2026-11-04 16:42:05–18:07:03 UTC, 5097 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 18:07:13–18:27:55 UTC, 1242 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 18:28:11–18:28:36 UTC, 25 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-04 18:30:01–18:30:48 UTC, 47 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

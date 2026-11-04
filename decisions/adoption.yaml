@@ -4,4 +4,5 @@ schema_version: 1
 adopted:
   interview-minimums: 2026-10-08
   question-context: 2026-10-15
+  research-handoff: 2026-10-26
   criterion-ledger: 2026-10-29

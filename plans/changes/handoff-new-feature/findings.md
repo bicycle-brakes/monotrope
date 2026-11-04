@@ -213,3 +213,61 @@ Stage-2 call, 2026-11-04: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_this_repository_adoption.py::test_this_repository_adopted_research_handoff_on_2026_10_26
 > 1 failed, 19 passed in 1.44s
 > ```
+
+Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed both attempts (ruff, then a test TypeError and a broken adoption test), 2026-11-04; continues from the kept attempt · leak check clean over 892 files, 3271 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/handoff-new-feature/plan.md` +9 -9
+>
+> Diagnostics:
+> ```text
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ................F..                                                      [100%]
+> =================================== FAILURES ===================================
+> _________ test_this_repository_adopted_research_handoff_on_2026_10_26 __________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/handoff-new-feature/.venv/bin/python3
+>
+>     def test_this_repository_adopted_research_handoff_on_2026_10_26() -> None:
+> >       assert adoption.adopted_on(REPO_ROOT, "research-handoff") == date(2026, 10, 26)
+>
+> tests/test_this_repository_adoption.py:28: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> root = PosixPath('/Users/mikypiky/coding-harness/.claude/worktrees/handoff-new-feature')
+> gate = 'research-handoff'
+>
+>     def adopted_on(root: Path, gate: str) -> date:
+>         """The day `root` adopted `gate`, or NotRecorded."""
+>         path = root / RECORD
+>         try:
+>             text = path.read_bytes().decode("utf-8")
+>         except FileNotFoundError:
+>             raise NotRecorded(f"{RECORD} does not exist — {_remedy(gate)}") from None
+>         except (OSError, UnicodeDecodeError) as exc:
+>             raise NotRecorded(f"{RECORD} cannot be read ({exc}) — {_remedy(gate)}") from None
+>         try:
+>             data = check_adr_answers.strict_load(text)
+>         except (yaml.YAMLError, ValueError) as exc:  # ValueError: an impossible date such as 2026-02-30
+>             raise NotRecorded(f"{RECORD} is not valid YAML ({' '.join(str(exc).split())}) — {_remedy(gate)}") from None
+>         if not isinstance(data, dict):
+>             raise NotRecorded(f"{RECORD} is not a YAML mapping — {_remedy(gate)}")
+>         version = data.get("schema_version")
+>         if not (type(version) is int and version == 1):
+>             raise NotRecorded(f"{RECORD} lacks `schema_version: 1` (it holds {version!r}) — {_remedy(gate)}")
+>         adopted = data.get("adopted")
+>         if not isinstance(adopted, dict):
+>             raise NotRecorded(f"{RECORD} has no `adopted:` mapping — {_remedy(gate)}")
+>         if gate not in adopted:
+> >           raise NotRecorded(f"{RECORD} holds no day for {gate} — {_remedy(gate)}")
+> E           adoption.NotRecorded: decisions/adoption.yaml holds no day for research-handoff — decisions/adoption.yaml needs `schema_version: 1` and, under `adopted:`, the line `  research-handoff: YYYY-MM-DD` (unquoted)
+>
+> scripts/adoption.py:63: NotRecorded
+> =========================== short test summary info ============================
+> FAILED tests/test_this_repository_adoption.py::test_this_repository_adopted_research_handoff_on_2026_10_26
+> 1 failed, 18 passed in 3.43s
+> ```
