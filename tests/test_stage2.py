@@ -11402,9 +11402,7 @@ def test_implement_prompt_covers_a_fault_that_raises() -> None:
     for name, text in planted_raising_fault_variants().items():
         assert raising_fault_guidance_gaps(text), name
     prompt = flat((REPO_ROOT / "prompts" / "04-implement.md").read_text(encoding="utf-8"))
-    if RAISING_FAULT_SENTENCE not in prompt:
-        # The prompt is a held path: the orchestrator adds the sentence in the bootstrap step and removes this skip.
-        pytest.skip("prompts/04-implement.md does not carry the sentence yet (orchestrator bootstrap)")
+    assert RAISING_FAULT_SENTENCE in prompt, "prompts/04-implement.md lost the raising-fault sentence"
     assert raising_fault_guidance_gaps(prompt) == []
     for name, text in planted_raising_fault_variants().items():
         assert raising_fault_guidance_gaps(prompt.replace(RAISING_FAULT_SENTENCE, text)), name

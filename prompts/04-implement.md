@@ -137,4 +137,6 @@ re-check is a fresh read-only Codex session. The model answers one fixed line pe
 <reason>` for a row taken as `taken — not a test`. A code row needs a test
 that is red first — it fails on the baseline's code — and the runner runs
 that proof itself, then writes each row's Status and ends in one checkpoint
-commit.
+commit. When the fault itself raises an exception, catch that specific
+exception in the regression test body and fail with `assert` or
+`pytest.fail` so the baseline failure states the test's expectation.
