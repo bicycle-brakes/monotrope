@@ -82,7 +82,10 @@ Phase 2b does not run for this `bounded` version move; no design or ADR is due.
 ## Protected areas
 
 - `model-endpoints.yaml`, `scripts/` and other change folders: admission,
-  address policy, catalog acquisition and runtime behavior remain their own work.
+  address policy, catalog acquisition and runtime behavior remain their own work —
+  with one exception decided in `decisions.md#Q-2`: the free selection in
+  `scripts/stage2.py` drops every id the `opencode-go` entry declares as paid
+  (criterion 5), with its test in `tests/test_stage2_availability.py`.
 - `tools/pi/.node-version`, `tools/pi/install.sh` and `tools/pi/pi`: keep the
   declared Node major, lifecycle-script denial and local-only execution contract.
 - `docs/adr/`, `decisions/`, `provenance.yaml`, agent configuration, prompts,
@@ -92,11 +95,12 @@ Phase 2b does not run for this `bounded` version move; no design or ADR is due.
 
 ## Definition of Done
 
-- Criteria 1–4 have evidence against the installed 1.5.0, with `make verify`
+- Criteria 1–5 have evidence against the installed 1.5.0, with `make verify`
   green; the pull request names the tested commit and install/contract results.
 - Moved in the same pull request: `tools/pi/package.json`, its npm-generated
-  `package-lock.json`, `tests/test_pi_contract.py`, and the current pin wording
-  in `docs/WORKFLOW.md`; no model declaration or ADR changes.
+  `package-lock.json`, `tests/test_pi_contract.py`, the current pin wording
+  in `docs/WORKFLOW.md`, and the free-selection exclusion of criterion 5 in
+  `scripts/stage2.py` with its test; no model declaration or ADR changes.
 - The pull request's file list shows the protected areas untouched and the
   non-goals unbuilt; generated `plans/INDEX.md` is the runner's responsibility.
 - The pull request closes the pinned-catalog upgrade task
