@@ -1,10 +1,10 @@
 ---
 title: "Plan — verify-duration"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-1um6
@@ -140,7 +140,7 @@ belongs to the runner, outside this draft's writable scope. No files are deleted
 The temporary pytest option obtains slow-test evidence without editing the
 authoritative gate command. Raw history and console logs stay outside Git.
 
-## Runner route — 2026-11-04
+## Runner route — 2026-11-04 (superseded by the following route)
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
@@ -154,3 +154,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two GLM 5.3 Flash
 2026-11-04 12:48:43–12:51:47 UTC, 183 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 12:51:55–12:52:33 UTC, 38 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-04 12:54:08–13:34:48 UTC, 2441 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-04 15:30:16–17:29:26 UTC, 7149 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-04 17:29:42–23:47:36 UTC, 22672 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-1um6
@@ -312,3 +312,70 @@ Stage-2 call, 2026-11-04: implement · attempt 3 · route stage-1 · endpoint cl
 > ```
 
 Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two GLM 5.3 Flash attempts failed their post-run checks on 2026-11-04 (tests red) · leak check clean over 888 files, 3247 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 888 files, 3254 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 888 files, 3257 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +10 -0
+> - `plans/INDEX.md` +4 -4
+> - `plans/changes/verify-duration/decisions.md` +1 -1
+> - `plans/changes/verify-duration/plan.md` +4 -2
+> - `plans/changes/verify-duration/research.md` +1 -1
+> - `plans/changes/verify-duration/spec.md` +1 -1
+> - `scripts/verify_duration.py` +24 -6
+> - `tests/test_ci.py` +28 -5
+> - `tests/test_verify_duration.py` +81 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-2: tests/test_verify_duration.py::test_reader_refuses_substituted_history: the call of `tests/test_verify_duration.py::test_reader_refuses_substituted_history[fifo]` failed with TimeoutExpired, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - L1-4: tests/test_ci.py::test_timing_preserves_job_selection_enforcement_and_nested_admission: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-8: tests/test_verify_duration.py::test_append_io_failure_is_named_refusal: the call of `tests/test_verify_duration.py::test_append_io_failure_is_named_refusal[lock]` failed with OSError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - L1-10: tests/test_ci.py::test_timing_preserves_job_selection_enforcement_and_nested_admission: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-duration/stage2/attempts/verify-duration/attempt-1-20261104T152956372948Z-0bc96a9d.md
+> ```
+
+Stage-2 call, 2026-11-04: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 888 files, 3269 commits, 12 rules.

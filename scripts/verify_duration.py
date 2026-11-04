@@ -105,7 +105,7 @@ def _git(arguments: list[str]) -> str | None:
         return None
     if done.returncode != 0:
         return None
-    return done.stdout.strip() or None
+    return done.stdout.strip()
 
 
 def _gate_file_digest() -> str | None:
@@ -155,9 +155,10 @@ def _open_history() -> int:
         raise StorageUnusable(
             f"the history file {path} is not a private regular file; refusing substituted history"
         ) from error
-    if not stat.S_ISREG(os.fstat(fd).st_mode):
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         os.close(fd)
-        raise StorageUnusable(f"the history file {path} is not a regular file; refusing substituted history")
+        raise StorageUnusable(f"the history file {path} is not an unaliased regular file; refusing substituted history")
     return fd
 
 
@@ -168,9 +169,13 @@ def append_event(event: dict) -> None:
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         try:
-            os.write(fd, line.encode("utf-8"))
+            data = line.encode("utf-8")
+            if os.write(fd, data) != len(data):
+                raise StorageUnusable("the history write was incomplete; refusing to claim a complete event")
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError as error:
+        raise StorageUnusable(f"the history lock or write failed ({error}); refusing to record event") from error
     finally:
         os.close(fd)
 
@@ -276,11 +281,21 @@ def _read_events() -> tuple[list[dict], list[str]]:
     """
     path = history_path()
     try:
-        text = path.read_text(encoding="utf-8")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise StorageUnusable(f"the history file {path} is not an unaliased regular file; refusing history")
+            with os.fdopen(fd, encoding="utf-8", closefd=False) as stream:
+                text = stream.read()
+        finally:
+            os.close(fd)
     except FileNotFoundError:
         raise HistoryMissing(f"no history at {path}; nothing has been recorded yet") from None
     except OSError as error:
-        raise HistoryMissing(f"the history file {path} cannot be read ({error.strerror or error})") from None
+        raise StorageUnusable(
+            f"the history file {path} cannot be read safely ({error.strerror or error}); refusing history"
+        ) from error
     events: list[dict] = []
     findings: list[str] = []
     for number, line in enumerate(text.split("\n"), start=1):
@@ -293,6 +308,9 @@ def _read_events() -> tuple[list[dict], list[str]]:
             continue
         if not isinstance(event, dict) or event.get("event") not in EVENTS or not isinstance(event.get("run_id"), str):
             findings.append(f"line {number}: not a version-1 verify-duration event")
+            continue
+        if type(event.get("v")) is not int or event["v"] != EVENT_VERSION:
+            findings.append(f"line {number}: unsupported event version {event.get('v')!r}; expected {EVENT_VERSION}")
             continue
         events.append(event)
     return events, findings

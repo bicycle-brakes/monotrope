@@ -9,10 +9,12 @@ this test red.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -454,3 +456,88 @@ def test_history_rejects_substituted_destinations(
     assert code == 2 and "not a usable directory" in err, err
     assert (target / "sentinel.txt").read_text(encoding="utf-8") == "do not touch"
     assert not (target / verify_duration.HISTORY_NAME).exists(), "the aliased state root was written through"
+
+
+@pytest.mark.parametrize("porcelain,returncode,dirty", [("", 0, False), (" M x", 0, True), ("", 1, None)])
+def test_real_git_helper_preserves_clean_answer(tmp_path, monkeypatch, capsys, porcelain, returncode, dirty):
+    """Exercise the real helper: a successful empty status is a clean tree."""
+
+    def answer(arguments, **_kwargs):
+        return subprocess.CompletedProcess(arguments, returncode, porcelain if "status" in arguments else "a" * 40, "")
+
+    monkeypatch.setattr(verify_duration.subprocess, "run", answer)
+    assert _run(capsys, "start")[0] == 0
+    assert _history(tmp_path / "state")[-1]["dirty"] is dirty
+
+
+@pytest.mark.parametrize("kind", ["symlink", "fifo"])
+def test_reader_refuses_substituted_history(tmp_path, kind):
+    """A reader neither follows a symlink nor blocks waiting for a FIFO writer."""
+    path = verify_duration.history_path()
+    path.parent.mkdir(parents=True)
+    if kind == "symlink":
+        victim = tmp_path / "foreign"
+        victim.write_text('{"v":1,"event":"run_start","run_id":"foreign"}\n')
+        path.symlink_to(victim)
+    else:
+        os.mkfifo(path)
+    try:
+        done = subprocess.run(
+            [sys.executable, "-m", "scripts.verify_duration", "report"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("the history reader blocked on a substituted destination")
+    assert done.returncode == 2, done
+    assert "refusing" in done.stderr and "foreign" not in done.stdout
+
+
+@pytest.mark.parametrize("version", [None, 0, 2, "1", True])
+def test_reader_refuses_unsupported_event_version(capsys, version):
+    """An incompatible end cannot turn a valid start into a completed run."""
+    path = verify_duration.history_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"v": 1, "event": "run_start", "run_id": "one"})
+        + "\n"
+        + json.dumps({"v": version, "event": "run_end", "run_id": "one", "verdict": "green"})
+        + "\n"
+    )
+    code, out, _ = _run(capsys, "report")
+    assert code == 0 and "incomplete" in out and "green" not in out
+    assert "line 2" in out and "version" in out and repr(version) in out
+
+
+@pytest.mark.parametrize("fault", ["lock", "write", "short-write"])
+def test_append_io_failure_is_named_refusal(monkeypatch, capsys, fault):
+    """Lock, disk-full and incomplete writes use the CLI refusal, never a traceback."""
+
+    def fail(*_args):
+        raise OSError(errno.ENOSPC, "injected storage failure")
+
+    if fault == "lock":
+        monkeypatch.setattr(verify_duration.fcntl, "flock", fail)
+    elif fault == "write":
+        monkeypatch.setattr(verify_duration.os, "write", fail)
+    else:
+        monkeypatch.setattr(verify_duration.os, "write", lambda _fd, data: len(data) - 1)
+    try:
+        code, _, err = _run(capsys, "start")
+    except OSError as error:
+        pytest.fail(f"storage failure escaped the CLI refusal handler: {error}")
+    assert code == 2 and "refusing" in err and "Traceback" not in err
+
+
+def test_writer_refuses_hard_linked_history(tmp_path, capsys):
+    """An existing history with another name is an alias, never an append target."""
+    path = verify_duration.history_path()
+    path.parent.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    victim.write_text("unchanged\n")
+    os.link(victim, path)
+    code, _, err = _run(capsys, "start")
+    assert code == 2 and "refusing" in err
+    assert victim.read_text() == "unchanged\n"

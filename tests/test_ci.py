@@ -2220,6 +2220,34 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     dropped after a failure, a forwarded worker override rewritten, or a
     nested run queueing behind its own ancestor or inventing a fresh wait.
     """
+    # Check the classification boundary itself as well as the copied runners
+    # below: deleting or inverting it must fail even when no gates need a wait.
+    source = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
+    boundary = re.search(r"^duration_admission_context\(\) \{\n.*?^\}", source, re.MULTILINE | re.DOTALL)
+    assert boundary is not None, "the runner must expose its admission-context boundary"
+    for parent, expected in [("42", "own-id:12.5"), ("43", "unset:unset")]:
+        probe = subprocess.run(
+            [
+                "bash",
+                "-c",
+                boundary.group(0)
+                + '\nduration_admission_context "$1"\n'
+                + 'printf "%s:%s" "${HARNESS_VERIFY_ADMISSION_ID-unset}" "${HARNESS_VERIFY_ADMISSION_WAIT-unset}"',
+                "probe",
+                parent,
+            ],
+            env={
+                **os.environ,
+                verify_lock.LOCK_ENV: "42",
+                verify_lock.ADMISSION_ID_ENV: "own-id",
+                verify_lock.ADMISSION_WAIT_ENV: "12.5",
+            },
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        assert probe.returncode == 0 and probe.stdout == expected, probe
+
     home = tmp_path / "home"
     order = tmp_path / "sel-order.txt"
 
@@ -2257,6 +2285,9 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     starts = [e for e in events if e["event"] == "run_start"]
     assert len(starts) == 1 and starts[0]["job"] == "docs" and starts[0]["placement"] == "local"
     assert starts[0]["workers"] == "3", f"the forwarded worker override was not recorded verbatim: {starts[0]}"
+    assert isinstance(starts[0]["admission_id"], str) and starts[0]["admission_id"]
+    assert starts[0]["admission_wait_seconds"] >= 0
+    assert starts[0]["admission_reused"] is False, starts[0]
     gate_rows = sorted((e["gate"], e["exit"], e["enforcement"]) for e in events if e["event"] == "gate")
     assert gate_rows == [("docs-adv", 1, "advisory"), ("docs-pass", 0, "block")], gate_rows
     ends = [e for e in events if e["event"] == "run_end"]
@@ -2291,11 +2322,31 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     nested_tree = _runner_tree(base, "true")
     _interpreter_wrapper(nested_tree / ".venv" / "bin" / "python3", "venv", base / "log")
     with _held_holder(base / "state", pid=os.getpid()):
-        done = _run_runner(
-            nested_tree,
-            home,
-            [],
-            extra_env={verify_lock.LOCK_ENV: str(os.getpid()), verify_lock.TOKEN_ENV: HOLDER_TOKEN},
+        # Keep an intermediate parent alive: the runner is a descendant, not
+        # the holder's directly admitted child (Bash must not tail-exec it).
+        done = subprocess.run(
+            [
+                "/bin/bash",
+                "-c",
+                'bash "$1"; result=$?; exit "$result"',
+                "nested",
+                str(nested_tree / "scripts" / "verify_all.sh"),
+            ],
+            cwd=nested_tree,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=_runner_env(
+                nested_tree,
+                home,
+                [],
+                {
+                    verify_lock.LOCK_ENV: str(os.getpid()),
+                    verify_lock.TOKEN_ENV: HOLDER_TOKEN,
+                    verify_lock.ADMISSION_ID_ENV: "ancestor-admission",
+                    verify_lock.ADMISSION_WAIT_ENV: "123.5",
+                },
+            ),
         )
     assert done.returncode == 0, f"nested: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     events = _tree_history(nested_tree)

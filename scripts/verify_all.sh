@@ -168,6 +168,13 @@ fi
 # ancestor already holds — re-enter the unchanged gate loop directly; the
 # module is invoked as `-m scripts.verify_lock`, and the supervisor below
 # execs this script again with the original arguments.
+# Keep this boundary callable so both parent relationships can be checked directly.
+duration_admission_context() {
+    if [ "$1" != "${HARNESS_VERIFY_LOCK_HELD:-}" ]; then
+        unset HARNESS_VERIFY_ADMISSION_ID HARNESS_VERIFY_ADMISSION_WAIT 2>/dev/null || :
+    fi
+}
+
 if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
     # A valid marker means this run nests in an admission an ancestor holds.
     # One shape is the exception: when our parent IS the supervisor that holds
@@ -177,9 +184,7 @@ if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
     # here, so its helpers resolve the shared wait from the validated
     # ownership record and mark it reused instead of passing the ancestor's
     # admission off as their own (bead coding-harness-1um6).
-    if [ "$PPID" != "${HARNESS_VERIFY_LOCK_HELD:-}" ]; then
-        unset HARNESS_VERIFY_ADMISSION_ID HARNESS_VERIFY_ADMISSION_WAIT 2>/dev/null || :
-    fi
+    duration_admission_context "$PPID"
 else
     exec "$PYTHON" -m scripts.verify_lock -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi

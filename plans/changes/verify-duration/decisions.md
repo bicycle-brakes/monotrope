@@ -2,7 +2,7 @@
 title: "Decisions — verify-duration"
 category: decisions
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
