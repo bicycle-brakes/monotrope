@@ -379,3 +379,5 @@ Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-11-04: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 888 files, 3269 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 888 files, 3293 commits, 12 rules.
