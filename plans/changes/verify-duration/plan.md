@@ -140,4 +140,12 @@ belongs to the runner, outside this draft's writable scope. No files are deleted
 The temporary pytest option obtains slow-test evidence without editing the
 authoritative gate command. Raw history and console logs stay outside Git.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-04 11:40:16–12:48:35 UTC, 4098 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 12:48:43–12:51:47 UTC, 183 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 12:51:55–12:52:33 UTC, 38 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

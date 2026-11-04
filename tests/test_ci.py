@@ -40,6 +40,7 @@ RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
+import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 from ci_gates import gates, misst_in  # noqa: E402
 from mutation_evidence import evidence, pruefling  # noqa: E402
@@ -1255,13 +1256,15 @@ def test_runner_holds_no_command_list_of_its_own() -> None:
     """`verify_all.sh` must not know the check commands itself.
 
     This is pinned negatively: the script must contain no call of the checked
-    scripts — with exactly one exception, the call of `ci_gates.py`, through
-    which it obtains the list.
+    scripts — with exactly two exceptions, the call of `ci_gates.py`, through
+    which it obtains the list, and the measurement helper `verify_duration.py`,
+    which holds no gate command and reads no gate list; it only takes
+    monotonic readings around what the runner already executes.
     """
     text = RUNNER.read_text(encoding="utf-8")
     aufrufe = set(re.findall(r"scripts/([a-z_]+\.py)", text))
-    assert aufrufe <= {"ci_gates.py"}, (
-        f"verify_all.sh calls scripts directly: {sorted(aufrufe - {'ci_gates.py'})}. "
+    assert aufrufe <= {"ci_gates.py", "verify_duration.py"}, (
+        f"verify_all.sh calls scripts directly: {sorted(aufrufe - {'ci_gates.py', 'verify_duration.py'})}. "
         "That way it holds a second list — exactly the drift it is written against."
     )
 
@@ -1288,12 +1291,13 @@ def test_runner_reports_what_it_cannot_run() -> None:
 
 
 def _runner_tree_files(tree: Path) -> Path:
-    """The copied runner, its gate reader and its admission module — no gates yet."""
+    """The copied runner, its gate reader, its admission module and its duration helper — no gates yet."""
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
     shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
     shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_lock.py", tree / "scripts" / "verify_lock.py")
+    shutil.copy(REPO_ROOT / "scripts" / "verify_duration.py", tree / "scripts" / "verify_duration.py")
     return tree
 
 
@@ -2074,6 +2078,232 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
         assert _runner_report(done.stdout)["job"] == "docs", f"{label}: the report did not name the docs selection"
         if label == "nonblocking-failures":
             assert "rot, aber nur advisory" in done.stdout and "rot, aber nur report" in done.stdout, done.stdout
+
+
+# --------------------------------------------------------------------------
+# 2d · Measured durations (bead coding-harness-1um6)
+#
+# The copied runner also carries `scripts/verify_duration.py`: it takes
+# monotonic readings around the gates the runner already executes and appends
+# one JSON line per event to the tree's own state root. `_tree_history` reads
+# exactly what the run recorded, so the assertions measure the history and
+# never the console alone.
+# --------------------------------------------------------------------------
+
+
+def _tree_history(tree: Path) -> list[dict]:
+    """The duration history of one runner tree, as its run recorded it."""
+    path = tree.parent / "state" / "coding-harness" / verify_duration.HISTORY_NAME
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> None:
+    """Criterion 1: a finished gate shows its measured seconds beside its verdict.
+
+    Fault this pins: an advisory failure reported without a duration or
+    labelled passed, an unexecuted gate presented as measured, or a gate record
+    losing its raw exit status in history.
+    """
+    base = tmp_path / "durations"
+    order = base / "order.txt"
+    tree = _runner_tree_files(base / "tree")
+
+    def gate(gid: str, enforcement: str, ending: str) -> dict:
+        return {
+            "id": gid,
+            "title": f"The {gid} gate",
+            "command": f'echo {gid} >> "{order}"; {ending}',
+            "job": "verify",
+            "enforcement": enforcement,
+            "floor": True,
+            "placement": "both",
+            "reason": "a duration seed for the runner tree",
+        }
+
+    _write_gate_file(
+        tree,
+        [
+            gate("alpha", "block", "true"),
+            gate("beta", "advisory", "exit 1"),
+            gate("gamma", "block", "exit 1"),
+            gate("delta", "block", "true"),
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    done = _run_runner(tree, tmp_path / "home", [])
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "VERIFY RED" in done.stdout, done.stdout
+    assert "── [beta] rot, aber nur advisory" in done.stdout, done.stdout
+    assert "── [gamma] RED (block)" in done.stdout, done.stdout
+    # Every executed gate — passing, advisory-failing and blocking-failing
+    # alike — shows its measured seconds beside its verdict.
+    for gid in ("alpha", "beta", "gamma", "delta"):
+        assert re.search(rf"── \[{gid}\] [0-9]+\.[0-9]+s", done.stdout), done.stdout
+    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\ndelta\n"
+
+    events = _tree_history(tree)
+    starts = [e for e in events if e["event"] == "run_start"]
+    assert len(starts) == 1 and starts[0]["job"] == "verify" and starts[0]["placement"] == "local"
+    run_id = starts[0]["run_id"]
+    gate_events = [e for e in events if e["event"] == "gate"]
+    assert len(gate_events) == 4, gate_events
+    gate_rows = {e["gate"]: e for e in gate_events}
+    assert set(gate_rows) == {"alpha", "beta", "gamma", "delta"}, gate_rows
+    assert all(row["run_id"] == run_id for row in gate_rows.values())
+    assert gate_rows["beta"]["exit"] == 1 and gate_rows["beta"]["enforcement"] == "advisory", gate_rows["beta"]
+    assert gate_rows["gamma"]["exit"] == 1
+    assert all(isinstance(row["seconds"], int | float) and row["seconds"] >= 0 for row in gate_rows.values())
+    ends = [e for e in events if e["event"] == "run_end"]
+    assert len(ends) == 1 and ends[0]["run_id"] == run_id and ends[0]["verdict"] == "red"
+
+
+def test_runner_list_does_not_record_or_duplicate_runs(tmp_path: Path) -> None:
+    """Criterion 3: `--list` records nothing, and the supervisor's re-exec starts exactly one run.
+
+    Fault this pins: a listing-only invocation appending a run to history, or
+    the admission re-exec creating a second identity so the history holds
+    duplicate starts for one run.
+    """
+    base = tmp_path / "listing"
+    tree = _runner_tree(base, "true")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    history = tree.parent / "state" / "coding-harness" / verify_duration.HISTORY_NAME
+
+    done = _run_runner(tree, tmp_path / "home", [], "--list")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "probe" in done.stdout, done.stdout
+    assert not history.exists(), "a listing-only invocation recorded a run"
+
+    done = _run_runner(tree, tmp_path / "home", [])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    events = _tree_history(tree)
+    starts = [e for e in events if e["event"] == "run_start"]
+    gates = [e for e in events if e["event"] == "gate"]
+    ends = [e for e in events if e["event"] == "run_end"]
+    assert len(starts) == 1 and len(gates) == 1 and len(ends) == 1, events
+    assert starts[0]["run_id"] == gates[0]["run_id"] == ends[0]["run_id"]
+    assert ends[0]["verdict"] == "green"
+
+
+def test_duration_storage_failure_warns_without_changing_verdict(tmp_path: Path) -> None:
+    """Criterion 7: unusable measurement storage warns, and gates and verdicts continue unchanged.
+
+    Fault this pins: a failed append suppressing a gate or changing its
+    enforcement, a hidden warning, or an append written through a substituted
+    history symlink to its victim.
+    """
+    for scenario, _ending, verdict, banner in (
+        ("green", "true", 0, "VERIFY GREEN"),
+        ("red", "exit 1", 1, "VERIFY RED"),
+    ):
+        base = tmp_path / scenario
+        marker = base / "gate-ran"
+        tree = _runner_tree(base, f"touch {marker}")
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        victim = base / "victim.jsonl"
+        victim.write_text("do not write through me\n", encoding="utf-8")
+        root = tree.parent / "state" / "coding-harness"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / verify_duration.HISTORY_NAME).symlink_to(victim)
+        done = _run_runner(tree, tmp_path / "home", [])
+        assert done.returncode == verdict, f"{scenario}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        assert banner in done.stdout, f"{scenario}: {done.stdout}"
+        assert marker.exists(), f"{scenario}: the gate did not run although only measurement storage was broken"
+        assert "measurement storage unusable" in done.stderr, f"{scenario}: {done.stderr}"
+        assert victim.read_text(encoding="utf-8") == "do not write through me\n", scenario
+
+
+def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_path: Path) -> None:
+    """Criterion 8: timing changes no selection, no enforcement, no worker forwarding, no admission.
+
+    Fault this pins: a docs selection running verify gates, a later gate
+    dropped after a failure, a forwarded worker override rewritten, or a
+    nested run queueing behind its own ancestor or inventing a fresh wait.
+    """
+    home = tmp_path / "home"
+    order = tmp_path / "sel-order.txt"
+
+    def subset_gate(base: Path, gid: str, enforcement: str, *, docs: bool, ending: str = "true") -> dict:
+        return _report_gate(
+            base,
+            gid,
+            "verify",
+            enforcement,
+            subsets=["docs"] if docs else None,
+            command=f"echo {gid} >> {order}; touch {base / f'{gid}.ran'}; {ending}",
+        )
+
+    # (A) A docs selection with a forwarded worker override: only the docs
+    # subset runs, the advisory failure speaks up without blocking, and the
+    # record carries the worker setting verbatim.
+    base = tmp_path / "selection"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
+            subset_gate(base, "docs-pass", "block", docs=True),
+            subset_gate(base, "docs-adv", "advisory", docs=True, ending="exit 1"),
+            subset_gate(base, "verify-fail", "block", docs=False, ending="exit 1"),
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    done = _run_runner(tree, home, [], "--job", "docs", extra_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": "3"})
+    assert done.returncode == 0, f"selection: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "VERIFY GREEN" in done.stdout and "rot, aber nur advisory" in done.stdout, done.stdout
+    assert order.read_text(encoding="utf-8") == "docs-pass\ndocs-adv\n", order.read_text(encoding="utf-8")
+    assert (base / "docs-pass.ran").exists() and (base / "docs-adv.ran").exists()
+    assert not (base / "verify-fail.ran").exists(), "an unselected gate executed under the docs selection"
+    events = _tree_history(tree)
+    starts = [e for e in events if e["event"] == "run_start"]
+    assert len(starts) == 1 and starts[0]["job"] == "docs" and starts[0]["placement"] == "local"
+    assert starts[0]["workers"] == "3", f"the forwarded worker override was not recorded verbatim: {starts[0]}"
+    gate_rows = sorted((e["gate"], e["exit"], e["enforcement"]) for e in events if e["event"] == "gate")
+    assert gate_rows == [("docs-adv", 1, "advisory"), ("docs-pass", 0, "block")], gate_rows
+    ends = [e for e in events if e["event"] == "run_end"]
+    assert len(ends) == 1 and ends[0]["verdict"] == "green"
+
+    # (B) A blocking failure under the same timing: the run is red and the
+    # gate after it still runs.
+    order.unlink()
+    base = tmp_path / "blocking"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
+            subset_gate(base, "docs-a", "block", docs=True),
+            subset_gate(base, "docs-b", "block", docs=True, ending="exit 1"),
+            subset_gate(base, "docs-c", "block", docs=True),
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    done = _run_runner(tree, home, [], "--job", "docs")
+    assert done.returncode == 1, f"blocking: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "VERIFY RED" in done.stdout and "RED (block)" in done.stdout, done.stdout
+    assert order.read_text(encoding="utf-8") == "docs-a\ndocs-b\ndocs-c\n", "a failure stopped the later gates"
+    ends = [e for e in _tree_history(tree) if e["event"] == "run_end"]
+    assert len(ends) == 1 and ends[0]["verdict"] == "red"
+
+    # (C) A nested run reuses its ancestor's admission: it finishes without
+    # queueing behind the held lock, and its record marks the wait reused.
+    # The fixture holder predates the context fields, so the id and the wait
+    # read as the unknowns they are — never as a fresh measurement.
+    base = tmp_path / "nested"
+    nested_tree = _runner_tree(base, "true")
+    _interpreter_wrapper(nested_tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    with _held_holder(base / "state", pid=os.getpid()):
+        done = _run_runner(
+            nested_tree,
+            home,
+            [],
+            extra_env={verify_lock.LOCK_ENV: str(os.getpid()), verify_lock.TOKEN_ENV: HOLDER_TOKEN},
+        )
+    assert done.returncode == 0, f"nested: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    events = _tree_history(nested_tree)
+    starts = [e for e in events if e["event"] == "run_start"]
+    assert len(starts) == 1, events
+    assert starts[0]["admission_reused"] is True, starts[0]
+    assert starts[0]["admission_id"] is None and starts[0]["admission_wait_seconds"] is None, starts[0]
+    assert len([e for e in events if e["event"] == "run_end"]) == 1
 
 
 def test_no_second_verification_workflow() -> None:

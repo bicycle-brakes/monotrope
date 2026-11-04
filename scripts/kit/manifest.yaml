@@ -88,6 +88,9 @@ rules:
   - prefix: scripts/verify_lock.py
     rolle: mechanismus
     reason: "die rechnerweite Zulassung des Laufs (Warteschlange, freier Speicher), die verify_all.sh ausfuehrt; ohne sie ist der exportierte Lauf nicht betretbar (bead coding-harness-p6mu)"
+  - prefix: scripts/verify_duration.py
+    rolle: mechanismus
+    reason: "the runner's measured durations: appended under the shared state root and read by its small reader; a dependency of the exported verify_all.sh (bead coding-harness-1um6)"
   - prefix: scripts/check_docs.py
     rolle: mechanismus
     reason: "Frontmatter-, Link- und Anchor-Pruefung fuer die Dokumentation (bead bo0)"
@@ -228,6 +231,9 @@ rules:
   - prefix: tests/test_verify_lock.py
     rolle: mechanismus
     reason: "die Zulassung reist mit dem Lauf, den sie umstellt; ihre Faelle bauen eigene State-Roots und beruehren den echten Rechner-Schloss nicht (bead coding-harness-p6mu)"
+  - prefix: tests/test_verify_duration.py
+    rolle: mechanismus
+    reason: "holds the measurement helper beside the runner it travels with; its cases build their own state roots and controlled clocks (bead coding-harness-1um6)"
   - prefix: tests/test_feedback_channel.py
     rolle: mechanismus
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
