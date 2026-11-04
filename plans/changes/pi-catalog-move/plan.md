@@ -123,7 +123,7 @@ make verify
 - 4: tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect — the new manifest pin cannot follow its admitted version hop
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect — a forbidden target receives a request
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids — cached models replace the fresh catalog
-- 5: not yet written tests/test_stage2_availability.py::test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free — a declared paid id with the free suffix is selected free or stops the preparation
+- 5: tests/test_stage2_availability.py::test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free — a declared paid id with the free suffix is selected free or stops the preparation
 
 ## Runner route — 2026-11-04
 
@@ -134,3 +134,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-04 15:30:25–16:19:50 UTC, 2965 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 16:20:05–16:41:23 UTC, 1278 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 16:41:35–16:42:27 UTC, 53 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-04 18:29:45–19:13:52 UTC, 2647 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 19:14:05–20:32:45 UTC, 4719 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

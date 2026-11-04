@@ -719,9 +719,14 @@ console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? n
     )
     # Discovery reads the exclusions of the declaration (DL-B-2) and drops every id when it cannot.
     # The real entry's copy carries the synthetic record: the held file has none until the
-    # orchestrator's bootstrap, and a test never waits on it (plan step 8).
+    # orchestrator's bootstrap, and a test never waits on it (plan step 8). The copy also drops the
+    # candidate from `modelle`: the free stage leaves declared paid ids unselected (pi-catalog-move,
+    # criterion 5), and this scratch world needs its one id selectable to prove the replaced
+    # definition still activates. The declared-paid behavior itself is contract-tested in
+    # tests/test_stage2_availability.py, not here.
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
     entry = next(item for item in data["endpunkte"] if item.get("name") == "opencode-go")
+    entry["modelle"] = [model for model in entry.get("modelle") or [] if model != model_id]
     entry["adresse"] = {
         "host": "opencode.ai",
         "apis": {

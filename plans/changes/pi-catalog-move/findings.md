@@ -301,3 +301,100 @@ Stage-2 call, 2026-11-04: implement · attempt 3 · route stage-1 · endpoint cl
 > ERROR tests/test_pi_contract.py::test_real_opencode_provider_contracts - Fail...
 > 19 failed, 10 passed, 11 errors in 8.66s
 > ```
+
+Stage-2 call, 2026-11-04: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 891 files, 3270 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/pi-catalog-move/plan.md` +1 -1
+> - `scripts/stage2.py` +6 -2
+> - `tests/test_stage2_availability.py` +31 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             if refresh.returncode != 0:
+>                 raise Refused(
+>                     f"`{PI_WRAPPER} update --models` ended {refresh.returncode}; the free stage is not filled "
+>                     "from a stale cache."
+>                 )
+>             store = overlay_store(agent, rule["provider"])
+>             stripped, notices = activate_overlay(agent, store, policy)
+>             if stripped:
+>                 listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
+>                 print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
+>             for notice in notices:
+>                 print(f"Address notice: {notice}", file=sys.stderr)
+>             fresh = {
+>                 str(model["id"])
+>                 for model in store.get(rule["provider"], {}).get("models", [])
+>                 if isinstance(model, dict) and model.get("id")
+>             }
+>             invalid = {model for model in fresh if not MODEL_ID.fullmatch(model)}
+>             if invalid:
+>                 # Pi restores its remote cache before listing. Use a separate, validated cache for
+>                 # that command; the fetched store and the snapshot remain unchanged as evidence.
+>                 listing_agent = scratch / "listing-agent"
+>                 listing_agent.mkdir()
+>                 (listing_agent / "settings.json").write_bytes((agent / "settings.json").read_bytes())
+>                 safe_store = {
+>                     provider: {
+>                         **entry,
+>                         "models": [
+>                             model
+>                             for model in entry.get("models", [])
+>                             if isinstance(model, dict)
+>                             and isinstance(model.get("id"), str)
+>                             and MODEL_ID.fullmatch(model["id"])
+>                         ],
+>                     }
+>                     for provider, entry in store.items()
+>                 }
+>                 (listing_agent / "models-store.json").write_text(json.dumps(safe_store), encoding="utf-8")
+>                 activate_overlay(listing_agent, safe_store, policy)
+>                 env = {**env, "PI_CODING_AGENT_DIR": str(listing_agent)}
+>             check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home, policy=policy)
+>             try:
+>                 listing = launch(
+>                     [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
+>                 )
+>             except CallFailed as error:
+>                 raise Refused(
+>                     f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
+>                 ) from None
+>         if listing.returncode != 0:
+>             raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
+>         catalog = parse_catalog(listing.stdout or "")
+>         # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
+>         dropped = free_drops(
+>             root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
+>         )
+>         # Only assessed definitions become selectable: a fresh catalog row whose
+>         # destination the record refuses is named as a drop and never reaches a
+>         # launch, however the rule filters (criterion 5).
+>         for definition in store.get(rule["provider"], {}).get("models", []):
+>             if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
+>                 continue
+>             verdict = stage2_go.assess(policy, definition["id"], definition)
+>             if not verdict.admitted:
+>                 dropped.setdefault(definition["id"], verdict.problem)
+>         selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
+>         if dropped:
+>             print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
+>         if not selected and not allow_empty:
+> >           raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
+> E           stage2.Refused: the live catalog holds no free model for the configured rule; the free stage is not entered.
+>
+> scripts/stage2.py:2334: Refused
+> ----------------------------- Captured stderr call -----------------------------
+> Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move
+> review-loop: free ids dropped: deepseek-v4.1-flash (a paid model; the free class does not admit it)
+> =========================== short test summary info ============================
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-0]
+> FAILED tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-946684800000]
+> 2 failed, 39 passed in 35.11s
+> ```
+
+Stage-2 call, 2026-11-04: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 891 files, 3274 commits, 12 rules.

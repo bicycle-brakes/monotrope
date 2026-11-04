@@ -1985,9 +1985,11 @@ def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> 
     """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7).
 
     A candidate is an id of the rule's provider that its suffix or include would select. An id outside
-    `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names: the maintainer's exclusion
-    leaves that id out, not the whole stage.
+    `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names or one the entry declares paid
+    in `modelle`: a shipped catalog id can carry the free suffix and still be a paid model, and the
+    declaration leaves that id out, not the whole stage (bead coding-harness-vku6).
     """
+    paid = {str(item) for item in endpoint_entry(root).get("modelle") or []}
     suffix = rule.get("id_suffix", "")
     includes = {str(record["id"]) for record in rule.get("include") or []}
     excludes = {str(record["id"]) for record in rule.get("exclude") or []}
@@ -2000,6 +2002,8 @@ def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> 
             continue
         if not MODEL_ID.fullmatch(model):
             dropped[model] = "not a plain model id"
+        elif model in paid:
+            dropped[model] = "a paid model; the free class does not admit it"
         elif problem := excluded_problem(root, model):
             dropped[model] = problem
     return dropped
