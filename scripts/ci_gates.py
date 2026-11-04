@@ -197,6 +197,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
+    "stage2_go.py": (
+        "Library of scripts/stage2.py, stage2_swarm.py, stage2_availability.py and stage2_session.py, never an "
+        "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
+        "tests/test_stage2_go_access.py runs it against synthetic address records"
+    ),
     "time_records.py": (
         "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "
         "scripts/harness.py time-log and scripts/stage2.py persist through it and the run report reads "
