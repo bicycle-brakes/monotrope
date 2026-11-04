@@ -102,11 +102,11 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_pi_contract.py::test_real_catalog_move_uses_locked_pi_1_5_0 — a different or floating pin, mismatched lock or different running version passes
+- 1: tests/test_pi_contract.py::test_real_catalog_move_uses_locked_pi_1_5_0 — a different or floating pin, mismatched lock or different running version passes
 - 1: tests/test_pi_install.py::test_install_obeys_lock_integrity_and_disables_scripts — broken lock/integrity or a lifecycle script is accepted
 - 1: tests/test_pi_install.py::test_wrapper_refuses_unusable_local_pi — a mismatched or missing local install starts
-- 2: not yet written tests/test_pi_contract.py::test_real_catalog_move_contains_new_go_models — a required shipped id is absent or has another API/base
-- 3: not yet written tests/test_pi_contract.py::test_real_catalog_move_keeps_messages_catalog_base — a required Messages entry is missing or has another API/base
+- 2: tests/test_pi_contract.py::test_real_catalog_move_contains_new_go_models — a required shipped id is absent or has another API/base
+- 3: tests/test_pi_contract.py::test_real_catalog_move_keeps_messages_catalog_base — a required Messages entry is missing or has another API/base
 - 4: tests/test_pi_contract.py::test_real_opencode_provider_contracts — an admitted rung loses its measured API, Go/Zen base or synthetic-key exchange
 - 4: tests/test_pi_contract.py::test_real_reviewer_tool_contract — the installed reviewer loses the allowed tools or accepts an undeclared tool
 - 4: tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps — ambient configuration or extensions are activated
@@ -116,4 +116,12 @@ make verify
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect — a forbidden target receives a request
 - 4: tests/test_stage2_research_catalog.py::test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids — cached models replace the fresh catalog
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-04 15:30:25–16:19:50 UTC, 2965 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 16:20:05–16:41:23 UTC, 1278 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-04 16:41:35–16:42:27 UTC, 53 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

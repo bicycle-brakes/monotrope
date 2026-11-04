@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-03
+updated: 2026-11-04
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1431,7 +1431,7 @@ replacement (R-8).
 
 **The read boundary is a request today, not a mechanism (R-5, accepted in
 writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
-the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+the pinned Pi has no sandbox, and `read` resolves absolute paths without
 containment, so nothing keeps a member out of a sibling checkout — house rule 6
 (the customer instance out of bounds) has no mechanism on this path. The
 maintainer's answer to Q-3 of the night interview: document it here, and enforce

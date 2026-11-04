@@ -58,6 +58,14 @@ GO_MOVED = "https://opencode.ai/inference/go/v1"
 # The move notice names paths only, never the authority (criterion 11).
 GO_MOVED_PATH = "/inference/go/v1"
 ZEN_NATIVE = "https://opencode.ai/zen/v1"
+# Pi 1.5.0 ships Zen at this base (read from the installed catalog, 2026-11-04); the runner never
+# selects Zen (scripts/stage2.py, the free rule), the synthetic ZEN_NATIVE stays the fixtures' start.
+ZEN_SHIPPED = "https://opencode.ai/inference/openai/v1"
+# The shipped 1.5.0 catalog addresses (spec criteria 2-3, decisions.md Q-1): the moved Go
+# endpoints the installed package must carry by itself - no live store, no overlay supplies them.
+GO_SHIPPED = "https://opencode.ai/inference/go/openai/v1"
+GO_SHIPPED_MESSAGES = "https://opencode.ai/inference/go/anthropic"
+PI_MOVED_PIN = "1.5.0"
 
 
 def declare_contract_models(root: Path) -> None:
@@ -520,6 +528,123 @@ def native_base_urls(provider: str, api: str) -> set[str]:
     if not isinstance(section, dict) or not section:
         pytest.fail(f"the installed Pi's {provider} catalog holds no {api} models; the wire API moved")
     return {model.get("baseUrl") for model in section.values() if isinstance(model, dict)}
+
+
+# ---------------------------------------------------------------------------
+# The catalog move: the locked 1.5.0 install and its shipped Go addresses
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_catalog_move_uses_locked_pi_1_5_0() -> None:
+    """Ledger 1: manifest, lock graph, lock entry and running wrapper agree on exactly Pi 1.5.0.
+
+    Every point is anchored to the literal version, so a floating pin, a lock the manifest
+    outgrew, a stale install or a wrapper reporting another version fails this contract
+    instead of passing the move.
+    """
+    pin = _manifest_pin()
+    assert pin == PI_MOVED_PIN, f"tools/pi/package.json pins {pin!r}, not the moved {PI_MOVED_PIN}"
+    lock_path = REPO_ROOT / "tools" / "pi" / "package-lock.json"
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        pytest.fail(f"tools/pi/package-lock.json cannot be read: {error}")
+    packages = lock.get("packages", {})
+    root_pin = packages.get("", {}).get("dependencies", {}).get(PKG)
+    assert root_pin == PI_MOVED_PIN, (
+        f"the lock's root graph pins {root_pin!r}, not the moved {PI_MOVED_PIN}; regenerate the lock with npm"
+    )
+    entry = packages.get(f"node_modules/{PKG}", {})
+    assert entry.get("version") == PI_MOVED_PIN, (
+        f"the lock's installed-package entry holds {entry.get('version')!r}, not the moved {PI_MOVED_PIN}"
+    )
+    resolved = entry.get("resolved")
+    assert isinstance(resolved, str) and resolved.endswith(f"pi-coding-agent-{PI_MOVED_PIN}.tgz"), (
+        f"the lock resolves {resolved!r}, not the {PI_MOVED_PIN} tarball"
+    )
+    installed_manifest = REPO_ROOT / "tools" / "pi" / "node_modules" / PKG / "package.json"
+    try:
+        installed = json.loads(installed_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        pytest.fail(f"the installed Pi's package.json cannot be read: {error}; run bash tools/pi/install.sh")
+    assert installed.get("version") == PI_MOVED_PIN, (
+        f"the installed Pi is {installed.get('version')!r}, not the moved {PI_MOVED_PIN}; run bash tools/pi/install.sh"
+    )
+    with tempfile.TemporaryDirectory(prefix="pi-contract-pin-") as tmp:
+        env = {
+            **contract_environment(),
+            "HOME": tmp,
+            "PI_CODING_AGENT_DIR": tmp,
+        }
+        try:
+            done = subprocess.run(
+                [str(stage2.PI_WRAPPER), "--version"],
+                cwd=tmp,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=120,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            pytest.fail(f"the pinned Pi {PI_MOVED_PIN} could not be checked ({error}); run bash tools/pi/install.sh")
+    assert done.returncode == 0 and done.stdout.strip() == PI_MOVED_PIN, (
+        f"tools/pi/pi --version printed {done.stdout.strip()!r} and ended {done.returncode}, "
+        f"not the moved {PI_MOVED_PIN}: {done.stderr.strip()[:400]}; run bash tools/pi/install.sh"
+    )
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_catalog_move_contains_new_go_models() -> None:
+    """Ledger 2: the shipped opencode-go catalog carries the 2026-11-04 Go models on the moved base.
+
+    The evidence is the installed package's own data file - no live store, no overlay, no
+    refresh; a catalog entry alone grants no permission to call its model (spec criterion 2).
+    """
+    catalog = {
+        model["id"]: model
+        for model in provider_data("opencode-go").get("openai-completions", {}).values()
+        if isinstance(model, dict)
+    }
+    for model_id in ("kimi-k3.1-pro", "minimax-m3.1-flash", "step-5-preview"):
+        model = catalog.get(model_id)
+        assert model is not None, (
+            f"{model_id}: absent from the installed Pi's shipped opencode-go catalog (openai-completions)"
+        )
+        assert model.get("api") == "openai-completions", (
+            f"{model_id}: the shipped catalog files it under {model.get('api')!r}, not openai-completions"
+        )
+        assert model.get("baseUrl") == GO_SHIPPED, (
+            f"{model_id}: the shipped base is {model.get('baseUrl')!r}, not {GO_SHIPPED}"
+        )
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_catalog_move_keeps_messages_catalog_base() -> None:
+    """Ledger 3: the shipped opencode-go Messages entries carry anthropic-messages on the moved base.
+
+    Catalog evidence for the separate Messages follow-up - no wire exchange is measured or
+    admitted here (spec criterion 3).
+    """
+    catalog = {
+        model["id"]: model
+        for model in provider_data("opencode-go").get("anthropic-messages", {}).values()
+        if isinstance(model, dict)
+    }
+    for model_id in ("qwen3.8-flash", "qwen3.8-max", "qwen3.7-plus", "minimax-m3"):
+        model = catalog.get(model_id)
+        assert model is not None, (
+            f"{model_id}: absent from the installed Pi's shipped opencode-go catalog (anthropic-messages)"
+        )
+        assert model.get("api") == "anthropic-messages", (
+            f"{model_id}: the shipped catalog files it under {model.get('api')!r}, not anthropic-messages"
+        )
+        assert model.get("baseUrl") == GO_SHIPPED_MESSAGES, (
+            f"{model_id}: the shipped base is {model.get('baseUrl')!r}, not {GO_SHIPPED_MESSAGES}"
+        )
 
 
 @pytest.mark.usefixtures("installed_pi")
@@ -1176,19 +1301,21 @@ def test_real_model_listing_is_a_provider_table(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("installed_pi")
 def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     """Criterion 11: the native addresses hold in the installed sources, and each provider's request carries only the synthetic key."""
-    # the chat-completions wire API is the one the runner's requests take (`/chat/completions`)
-    assert native_base_urls("opencode-go", "openai-completions") == {GO_NATIVE}, (
-        "the installed opencode-go catalog lost its native address"
+    # the chat-completions wire API is the one the runner's requests take (`/chat/completions`);
+    # the shipped 1.5.0 catalog carries its own Go base (GO_SHIPPED, spec criteria 2-3), while the
+    # synthetic GO_NATIVE record above keeps its own starting point for the loopback fixtures
+    assert native_base_urls("opencode-go", "openai-completions") == {GO_SHIPPED}, (
+        f"the installed opencode-go catalog's native base is not the shipped {GO_SHIPPED}"
     )
-    assert native_base_urls("opencode", "openai-completions") == {ZEN_NATIVE}, (
-        "the installed opencode (Zen) catalog lost its native address"
+    assert native_base_urls("opencode", "openai-completions") == {ZEN_SHIPPED}, (
+        f"the installed opencode (Zen) catalog's native base is not the shipped {ZEN_SHIPPED}"
     )
     catalog = {model["id"]: model for model in provider_data("opencode-go")["openai-completions"].values()}
     # Every admitted rung must use the measured wire API, including ids carried
     # under another API in Pi's shipped catalog. Missing ids fail closed too.
     for rung in stage2.ladder(REPO_ROOT):
         assert rung in catalog, f"{rung}: wire API not measured as openai-completions"
-        assert catalog[rung]["baseUrl"] == GO_NATIVE
+        assert catalog[rung]["baseUrl"] == GO_SHIPPED
     scratch = scratch_of(tmp_path)
     for provider, model in (("opencode-go", "contract-go-model"), ("opencode", "contract-zen-model")):
         standin = StandIn([{"content": "ok"}])
