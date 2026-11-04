@@ -144,9 +144,14 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed both attempts (ruff, then a test TypeError and a broken adoption test), 2026-11-04; continues from the kept attempt.
 
+## Runner route — 2026-11-04
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed both attempts, 2026-11-04; after the orchestrator's adoption bootstrap the full make verify is red because the checker reads older changes' prose decisions answers as YAML (adr-owning-change Q-5, attempt-diagnostics Q-1): an exempt or legacy change must not need a readable answer.
+
 ## Time used
 
 2026-11-04 16:42:05–18:07:03 UTC, 5097 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 18:07:13–18:27:55 UTC, 1242 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-04 18:28:11–18:28:36 UTC, 25 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-04 18:30:01–18:30:48 UTC, 47 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-04 19:13:37–20:12:54 UTC, 3558 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

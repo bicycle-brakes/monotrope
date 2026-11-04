@@ -1027,6 +1027,25 @@ that links it (`research_items`), `neighbours:` of the spec equal to the given
 or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
 answered records.
 
+At the spec boundary the gate also decides who owes a complete run (bead
+coding-harness-in27). A `feature` or `architectural` change whose start day is
+after the repository's adoption day for the gate (`decisions/adoption.yaml`,
+`research-handoff`, day precision: the adoption day itself is old stock) fails
+with "no complete research-swarm/v2 run" when it has a spec and none exists,
+whether `research.md` is absent, plain or holds only incomplete runs. The start
+day is the `research.md` frontmatter `date`, or the spec's `date` when research
+is absent; an existing research file without a readable day is not measured
+(exit 3), never dated from the spec. Older changes report a dated legacy
+exemption; a `bounded` change or `spike` reports a class exemption. Exempt
+changes need no readable `decisions.md` answer. Before `spec.md` exists a missing
+run is only pending. A maintainer waives the missing run with exactly one interview
+record carrying `research_swarm_exception: {granted: true, reason: "…"}`, a
+non-blank reason, `answered_by: maintainer`, `status: answered`, an actual answer
+and context; the output names the question and reason. The waiver covers only the
+missing run: malformed evidence and every complete run's obligations still apply.
+An unreadable adoption or start day, an invalid or conflicting class, a malformed
+or repeated exception field or more than one exception record exit 3.
+
 At the spec boundary the gate also decides who owes a complete
 `research-swarm/v2` run. A change whose start day lies after the repository's
 adoption day for this gate (`decisions/adoption.yaml`, read per repository

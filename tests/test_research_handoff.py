@@ -1166,6 +1166,13 @@ def test_legacy_exemption_uses_start_day(world: World, capsys: pytest.CaptureFix
     world.write([], spec=spec_text(day=OLD_DAY))
     code, out = world.check(capsys)
     assert code == 1 and NEW_DAY in out, out
+    # an exempt change needs no readable answer: older prose answers are not YAML
+    prose = "# Decisions\n\n## Q-1 · old\n\nanswer: [keep\nanswered_by: maintainer\nstatus: answered\n"
+    for exempt in (spec_text(day=OLD_DAY), spec_text(klass="bounded")):
+        world.write([], spec=exempt, research=False)
+        (world.folder / "decisions.md").write_text(prose, encoding="utf-8")
+        code, out = world.check(capsys)
+        assert code == 0, out
     # the archive keeps the dated verdicts
     kept = world.root / "plans" / "changes" / "archive" / f"{OLD_DAY}-kept"
     kept.mkdir(parents=True)

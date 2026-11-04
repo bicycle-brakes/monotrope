@@ -271,3 +271,122 @@ Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_this_repository_adoption.py::test_this_repository_adopted_research_handoff_on_2026_10_26
 > 1 failed, 18 passed in 3.43s
 > ```
+
+Stage-2 call, 2026-11-04: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash failed both attempts, 2026-11-04; after the orchestrator's adoption bootstrap the full make verify is red because the checker reads older changes' prose decisions answers as YAML (adr-owning-change Q-5, attempt-diagnostics Q-1): an exempt or legacy change must not need a readable answer · leak check clean over 892 files, 3273 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +19 -0
+> - `scripts/check_research_handoff.py` +12 -6
+> - `tests/test_research_handoff.py` +8 -1
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed `tests/test_research_handoff.py`.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [research-handoff] $ lauf_cmd
+> [… 42 lines of this gate left out …]
+> ratchet-mutation-evidence: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> red-first-install: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> red-first-own-refs: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> red-first-pytest-failed: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> registry-block-last: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> repair-fixed-line-format: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> repair-fixed-lines: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> repair-restore-status: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> research-currency: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> research-swarm: exempt - legacy (change start 2026-10-14, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> restore-symlink-parent: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> review-loop-deep-a: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> review-loop-deep-b: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> review-release-lock: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> review-verdict-validated: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> run-report: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> runner-time-line: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> runner-time-line-exits: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> sol-effort: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> stage2-format: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> stage2-repair: exempt - legacy (change start 2026-10-12, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> stage2-session: exempt - legacy (change start 2026-10-07, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> swarm-test-speed: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> terms-expiry: exempt - legacy (change start 2026-10-25, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> terms-test-fixtures: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> test-key-runtime: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> test-strength-rows: pending - no research-swarm/v2 evidence yet
+> time-records-data: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> tolerate-derived-leftovers: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> venv-pycache: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> verify-absolute-python: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> verify-machine-lock: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> verify-stages-new-files: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> verify-worker-cap: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> workflow-promises: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-09-20-2ee-triage: pending - no research-swarm/v2 evidence yet
+> archive/2026-09-21-reproducible-bead-export: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-09-23-gate-placement: pending - no research-swarm/v2 evidence yet
+> archive/2026-09-23-tracker-access-point: pending - no research-swarm/v2 evidence yet
+> archive/2026-09-29-frontmatter-current: exempt - legacy (change start 2026-09-29, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-09-29-omnigent-deny-layers: exempt - legacy (change start 2026-09-29, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-09-30-adhd-frame: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-09-30-stage-2-codex-glm: exempt - legacy (change start 2026-09-30, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-09-30-template-bundle: exempt - legacy (change start 2026-09-30, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-05-project-lock: exempt - legacy (change start 2026-10-05, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-05-rb-m6-one-account: exempt - legacy (change start 2026-10-05, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-06-touch-map: exempt - legacy (change start 2026-10-06, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-07-stage2-flash-runner: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-10-07-stage2-mimo: exempt - legacy (change start 2026-10-07, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-08-interview-minimums: exempt - legacy (change start 2026-10-08, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-08-rb-g7-merge-freshness: exempt - legacy (change start 2026-10-08, gate adopted 2026-10-26): no complete research-swarm/v2 run required
+> archive/2026-10-08-runner-derived-files: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-10-08-runner-red-gate: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-10-08-stage2-runs-count: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> archive/2026-10-08-touch-map-comments: exempt - a bounded change needs no complete research-swarm/v2 run (class exemption)
+> research-handoff: go-access-point: the spec exists but no complete research-swarm/v2 run exists - required for a new feature change (start 2026-10-31, after 2026-10-26); run the swarm or record a granted interview exception
+> research-handoff: 1 finding(s)
+> ── [research-handoff] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 30970 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````

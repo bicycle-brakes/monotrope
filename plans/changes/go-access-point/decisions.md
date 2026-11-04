@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-4tr4
@@ -136,6 +136,24 @@ request for every path move, we decided that the record lives on the
 session maintains its path, to achieve one source for the Go address with the
 runner's hold left whole, accepting that a runner attempt can never correct
 the record and that an orchestrator step owns every edit of it. — 2026-10-31
+
+## Q-6 · Phase 1 without the research swarm
+
+asked: 2026-10-31
+context: |
+  Topic: whether this feature change may explore without the research swarm.
+  Intention: on 2026-10-31 the research swarm refused every Go model because of the address fault this change repairs, so it could not research its own repair.
+  Today: a feature change explores through the research swarm (ADR 0020).
+  Repository change: phase 1 ran through GLM 5.3 Flash and a Claude Haiku 5.5 sub-agent instead (research.md).
+  Architecture change: none.
+answer: "the maintainer's exception of 2026-10-31" (recorded in prose at the head of this file); re-confirmed in the conversation on 2026-11-04: "A: ja, nachtragen (Recommended)".
+answered_by: maintainer
+status: answered
+research_swarm_exception: {granted: true, reason: "the research swarm was blocked by the Go address fault this change repairs (2026-10-31)"}
+
+In the context of a research swarm that refused every Go model because of the address fault this change repairs, facing a feature change that could not research its own repair through the swarm, we decided to explore through GLM 5.3 Flash and a Claude Haiku 5.5 sub-agent instead, to achieve a research basis without waiting for the repair itself, accepting research without the swarm's independent maps. — 2026-10-31
+
+This record was added on 2026-11-04 when the research-handoff gate began to require a granted exception in a structured field (bead coding-harness-in27); it records the grant of 2026-10-31, it does not grant a new one.
 
 ## Details for the draft
 

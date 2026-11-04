@@ -850,14 +850,20 @@ def _legacy_note(label: str, start: date, adopted: date) -> str:
 
 
 def _missing_complete_run(
-    out: Outcome, label: str, folder: Path, root: Path, records: dict[str, QRecord], research_text: str | None
+    out: Outcome,
+    label: str,
+    folder: Path,
+    root: Path,
+    load_records: Callable[[], dict[str, QRecord]],
+    research_text: str | None,
 ) -> Outcome:
     """The spec boundary: which spec-bearing change without a complete run owes one.
 
     The start day decides - `research.md` frontmatter `date`, else the spec's `date`. A `bounded` change
     or `spike` is exempt by class without an adoption comparison; old stock (start on or before the
     adoption day) is a dated legacy exemption, with the class missing permitted. A new `feature` or
-    `architectural` change needs a granted exception or the run.
+    `architectural` change needs a granted exception or the run. The interview records are read only
+    there: an exempt or legacy change needs no readable answer (older prose answers are not YAML).
     """
     try:
         spec_body = (folder / "spec.md").read_text(encoding="utf-8")
@@ -896,7 +902,7 @@ def _missing_complete_run(
             f"{label}: spec.md declares no class; a change started after {adopted.isoformat()} must declare "
             f"one of {', '.join(CLASSES)}"
         )
-    grants = [record for record in records.values() if record.exception is not None]
+    grants = [record for record in load_records().values() if record.exception is not None]
     if grants and grants[0].grants_research_exception():
         reason = grants[0].exception["reason"].strip()  # type: ignore[union-attr] - grants_research_exception checked it
         out.notes.append(f"{label}: exempt - the research swarm is waived by {grants[0].ident} (granted: {reason})")
@@ -918,7 +924,7 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
         if not spec_exists:
             out.notes.append(f"{label}: pending - no research.md, so no v2 evidence yet")
             return out
-        return _missing_complete_run(out, label, folder, root, _decisions(folder, label), None)
+        return _missing_complete_run(out, label, folder, root, lambda: _decisions(folder, label), None)
     try:
         research_text = research.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -928,7 +934,7 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
         if not spec_exists:
             out.notes.append(f"{label}: pending - no research-swarm/v2 evidence yet")
             return out
-        return _missing_complete_run(out, label, folder, root, _decisions(folder, label), research_text)
+        return _missing_complete_run(out, label, folder, root, lambda: _decisions(folder, label), research_text)
     ids = [run.run_id for run in runs]
     if len(set(ids)) != len(ids):
         raise CannotMeasure(f"{label}: a run id appears twice")
@@ -1046,7 +1052,7 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
     if not spec_exists:
         return out
     if not complete:
-        return _missing_complete_run(out, label, folder, root, records, research_text)
+        return _missing_complete_run(out, label, folder, root, lambda: records, research_text)
     try:
         spec_text = spec.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
