@@ -335,7 +335,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-store-home/decisions.md`](changes/research-store-home/decisions.md) | draft | none | 2026-11-04 | coding-harness-nxdy |
+| [`changes/research-store-home/findings.md`](changes/research-store-home/findings.md) | draft | none | 2026-11-04 | coding-harness-nxdy |
+| [`changes/research-store-home/plan.md`](changes/research-store-home/plan.md) | draft | none | 2026-11-05 | coding-harness-nxdy |
 | [`changes/research-store-home/research.md`](changes/research-store-home/research.md) | draft | none | 2026-11-04 | coding-harness-nxdy |
+| [`changes/research-store-home/spec.md`](changes/research-store-home/spec.md) | draft | none | 2026-11-05 | coding-harness-nxdy |
 | [`changes/research-swarm/decisions.md`](changes/research-swarm/decisions.md) | draft | none | 2026-10-14 | coding-harness-icw |
 | [`changes/research-swarm/design.md`](changes/research-swarm/design.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/findings.md`](changes/research-swarm/findings.md) | draft | none | 2026-10-17 | coding-harness-icw |
