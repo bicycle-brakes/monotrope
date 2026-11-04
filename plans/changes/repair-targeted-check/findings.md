@@ -358,3 +358,10 @@ Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 867 files, 3272 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3272 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure

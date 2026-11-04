@@ -20456,6 +20456,39 @@ def test_targeted_repair_verification_stack_requires_full_check(
     assert any(path in line and "shared execution infrastructure" in line for line in scope)
 
 
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("tests/test_repo_settings.py", {"ruleset"}),
+        ("pytest.py", {"pytest", "ruleset"}),
+        ("ruff/__main__.py", {"ruff-check", "ruff-format"}),
+        ("ruff/__init__.py", {"ruff-check", "ruff-format"}),
+        ("tests/test_unrelated.py", set()),
+    ],
+)
+def test_targeted_gate_selection_handles_module_commands(world: World, path: str, expected: set[str]) -> None:
+    """Row L6-1: the real gate list selects module entrypoints and env-prefixed pytest file arguments."""
+    seed_tests(world)
+    target = world.root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    (world.root / "tests" / "test_module_link.py").write_text(
+        f"def test_module_link():\n    assert {path!r}\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked module gate input")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    module_gates = {"pytest", "ruff-check", "ruff-format", "ruleset"}
+    selected = {gate["id"] for gate in chosen.gates}
+    assert selected & module_gates == expected
+    declared = {gate["id"]: gate for gate in ci_gates.gates()}
+    for gate in chosen.gates:
+        assert gate == declared[gate["id"]], "selection must preserve the declared command and enforcement"
+
+
 @pytest.mark.parametrize("path, selects_probe", [("probe.py", False), ("scripts/kit/probe.py", True)])
 def test_targeted_gate_selection_matches_command_entrypoint(world: World, path: str, selects_probe: bool) -> None:
     """An existing root probe is not the kit probe's command entrypoint."""

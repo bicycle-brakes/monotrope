@@ -5428,6 +5428,33 @@ def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[st
     return {os.fsdecode(name) for name in names if name}
 
 
+def _gate_entrypoints(command: list[str]) -> set[str]:
+    """Repository paths invoked by a gate, including Python modules and explicit test targets."""
+    words = list(command)
+    while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+        words.pop(0)
+    if not words:
+        return set()
+    if words[0] != "python3":
+        return {words[0]}
+    args = words[1:]
+    entrypoints: set[str] = set()
+    if len(args) >= 2 and args[0] == "-m":
+        module = args[1].replace(".", "/")
+        entrypoints.update((f"{module}.py", f"{module}/__main__.py", f"{module}/__init__.py"))
+        args = args[2:]
+    elif args:
+        entrypoints.add(args[0])
+        args = args[1:]
+    # Keep exact file paths: directory arguments must not select the whole pytest/ruff
+    # gate for every repair underneath them, nor may a basename match a different file.
+    for arg in args:
+        path = arg.split("::", 1)[0]
+        if not arg.startswith("-") and path.endswith(".py"):
+            entrypoints.add(path)
+    return entrypoints
+
+
 def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
     """What a targeted check of a repair covers, or why only the full check may stand in (bead coding-harness-gxwg).
 
@@ -5518,9 +5545,11 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
             command = shlex.split(str(gate["command"]))
         except ValueError as error:
             return full(f"gate `{gate['id']}` has an unreadable command ({error})")
-        # The declared Python script is the entrypoint; arguments and suffixes of its path are not.
-        entrypoint = command[1] if len(command) > 1 and command[0] == "python3" else command[0] if command else None
-        if "docs" in gate["subsets"] or (membership and gate["id"] == "leerprobe") or entrypoint in touched_set:
+        if (
+            "docs" in gate["subsets"]
+            or (membership and gate["id"] == "leerprobe")
+            or _gate_entrypoints(command) & touched_set
+        ):
             gates.append(gate)
     return Targeted(tests, sorted(set(python) - covered), gates)
 
