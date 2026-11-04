@@ -328,3 +328,10 @@ Stage-2 call, 2026-11-03: repair · attempt 3 · route stage-1 · endpoint claud
 > test files: tests/test_model_endpoints.py, tests/test_pi_contract.py, tests/test_pr_sync.py, tests/test_run_report.py, tests/test_stage2.py, tests/test_stage2_availability.py, tests/test_stage2_declaration.py, tests/test_stage2_fail_fast.py, tests/test_stage2_repository_pathlock.py, tests/test_stage2_research_availability.py, tests/test_stage2_research_deep_review.py, tests/test_stage2_runs.py, tests/test_stage2_session.py, tests/test_stage2_swarm.py, tests/test_stage2_terms_expiry.py, tests/tes [… 19 characters left out …]
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-3-20261103T213822269221Z-80352260.md
 > ```
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 867 files, 3227 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3228 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: targeted pytest exceeded its time bound: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes

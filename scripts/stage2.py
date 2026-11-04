@@ -3874,7 +3874,14 @@ TARGETED_LABEL = "Runner targeted checks"
 SCOPE_LABEL = "Runner verification scope"
 SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
 # Inputs whose change makes the full check necessary, whatever else the repair touched.
-SHARED_INFRASTRUCTURE = ("scripts/ci_gates.py", "scripts/verify_all.sh")
+SHARED_INFRASTRUCTURE = (
+    "scripts/ci_gates.py",
+    "scripts/verify_all.sh",
+    "scripts/stage2.py",
+    "scripts/verify_lock.py",
+    "scripts/touch_map.py",
+    "scripts/leakcheck.py",
+)
 
 # An attempt's edits to its own findings.md are put back before any post-run check reads model-written
 # state, so the edit alone never spends the attempt (spec, criterion 8). The rejected note joins the
@@ -5498,11 +5505,13 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
             continue
         # The document subset always stands: a repair rewrites derived plan, findings and index text.
         # A changed entrypoint selects its own gate, and a path that appeared or vanished the kit probe.
-        if (
-            "docs" in gate["subsets"]
-            or (membership and gate["id"] == "leerprobe")
-            or any(posix in str(gate["command"]) for posix in touched)
-        ):
+        try:
+            command = shlex.split(str(gate["command"]))
+        except ValueError as error:
+            return full(f"gate `{gate['id']}` has an unreadable command ({error})")
+        # The declared Python script is the entrypoint; arguments and suffixes of its path are not.
+        entrypoint = command[1] if len(command) > 1 and command[0] == "python3" else command[0] if command else None
+        if "docs" in gate["subsets"] or (membership and gate["id"] == "leerprobe") or entrypoint in touched_set:
             gates.append(gate)
     return Targeted(tests, sorted(set(python) - covered), gates)
 
@@ -5588,11 +5597,7 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
             done = launch(
                 [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
             )
-        except StepTimedOut:
-            # Whole linked files can outgrow the tool limit. The caller drops its intent-to-add
-            # entries before falling back to the admitted full check and its longer bound.
-            raise
-        except CallFailed as error:
+        except (StepTimedOut, CallFailed) as error:
             return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
         if done.returncode:
             return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
@@ -5712,7 +5717,6 @@ def _targeted_body(
     problems = []
     notes: list[str] = []
     intended: list[bytes] = []
-    timed_out: StepTimedOut | None = None
     try:
         try:
             intended = intend_new_files(root, env)
@@ -5722,18 +5726,14 @@ def _targeted_body(
             try:
                 problems, notes = run_targeted(root, env, key, chosen)
             except StepTimedOut as error:
-                timed_out = error
+                problems.append(
+                    protect_diagnostics(f"{TARGETED_LABEL}: targeted check exceeded its time bound: {error}", key)
+                )
     finally:
         try:
             drop_intended(root, intended, env)
         except (Refused, OSError) as error:
             problems.append(f"the attempt's intent-to-add entries could not be removed after the checks: {error}")
-    if timed_out is not None and not problems:
-        reason = protect_diagnostics(f"targeted pytest exceeded its time bound: {timed_out}", key)
-        problems = full_verify(root, env, key)
-        if scope is not None:
-            scope.append(fallback_text(reason, "red" if problems else "green"))
-        return problems
     if scope is not None:
         scope.append(scope_text(chosen, "red" if problems else "green", notes))
     return problems

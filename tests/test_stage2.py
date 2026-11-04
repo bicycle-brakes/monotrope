@@ -20349,11 +20349,8 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
 
 
-@pytest.mark.parametrize("full_result", ["green", "red", "timeout", "launch-error"])
-def test_targeted_pytest_timeout_falls_back_to_full(
-    world: World, monkeypatch: pytest.MonkeyPatch, full_result: str
-) -> None:
-    """A whole-file timeout owes a fresh admitted full check; only its green can checkpoint."""
+def test_targeted_pytest_timeout_rejects_without_full_fallback(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A required targeted timeout rejects even when a full check would be green."""
     baseline = repair_world(world)
     script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}])
     commands = targeted_mode(monkeypatch)
@@ -20362,26 +20359,57 @@ def test_targeted_pytest_timeout_falls_back_to_full(
         if len(commands.of("pytest")) % 2 == 0
         else None
     )
-    if full_result == "red":
-        commands.outcomes["make"] = (1, "full check red\n")
-    elif full_result == "timeout":
-        commands.outcomes["make"] = stage2.StepTimedOut("full check timed out")
-    elif full_result == "launch-error":
-        commands.outcomes["make"] = stage2.CallFailed("full check could not start")
-    code = world.run("repair")
-    assert commands.of("make"), "a whole-file timeout must fall back to full verification"
-    for record in commands.of("make"):
-        assert record["pass_fds"] and verify_lock.LOCK_ENV in record["env"]
-        assert record["timeout"] == stage2.VERIFY_SECONDS
+    assert world.run("repair") == 1
+    assert commands.of("make") == [], "a targeted timeout must fail instead of falling back"
     assert commands.of("gate") == [], "targeted gates continued after the timeout"
-    if full_result == "green":
-        assert code == 0 and git(world.root, "rev-parse", "HEAD") != baseline
-        assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
-        assert "full `make verify` ran (result: green)" in world.text()
-        assert "targeted pytest exceeded its time bound" in world.text()
-    else:
-        assert code == 1 and git(world.root, "rev-parse", "HEAD") == baseline
-        assert loop_status(world) == "taken — test_a"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert loop_status(world) == "taken — test_a"
+    assert "whole linked test file exceeded five minutes" in world.text()
+    assert "targeted verification, not the full `make verify`; result: red" in world.text()
+
+
+@pytest.mark.parametrize(
+    "path", ["scripts/stage2.py", "scripts/verify_lock.py", "scripts/touch_map.py", "scripts/leakcheck.py"]
+)
+def test_targeted_repair_verification_stack_requires_full_check(
+    world: World, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """A linked test must not allow shared verification infrastructure onto the targeted path."""
+    seed_tests(world)
+    target = world.root / path
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    linked = world.root / "tests" / "test_stack.py"
+    linked.write_text(f"def test_stack():\n    assert {path!r}\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked verification infrastructure")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    commands = targeted_mode(monkeypatch)
+    scope = []
+    assert stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope) == []
+    assert len(commands.of("make")) == 1, "shared infrastructure requires full verification"
+    assert commands.of("make")[0]["pass_fds"]
+    assert commands.of("gate") == []
+    assert any(path in line and "shared execution infrastructure" in line for line in scope)
+
+
+@pytest.mark.parametrize("path, selects_probe", [("probe.py", False), ("scripts/kit/probe.py", True)])
+def test_targeted_gate_selection_matches_command_entrypoint(world: World, path: str, selects_probe: bool) -> None:
+    """An existing root probe is not the kit probe's command entrypoint."""
+    seed_tests(world)
+    target = world.root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    (world.root / "tests" / "test_probe_link.py").write_text(
+        f"def test_probe_link():\n    assert {path!r}\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked existing probe")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    assert ("leerprobe" in {gate["id"] for gate in chosen.gates}) is selects_probe
 
 
 def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
