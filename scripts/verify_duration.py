@@ -334,6 +334,15 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
             findings.append(f"line with {kind} for unknown run {run_id} — its start row is missing or malformed")
         elif kind == GATE:
             runs[run_id]["gates"].append(event)
+        elif (
+            type(event.get("seconds")) not in (int, float)
+            or event["seconds"] < 0
+            or (isinstance(event["seconds"], float) and not math.isfinite(event["seconds"]))
+            or event.get("verdict") not in ("green", "red")
+        ):
+            findings.append(
+                f"invalid completion for run {run_id}: expected finite non-negative seconds and a green or red verdict"
+            )
         elif runs[run_id]["end"] is None:
             runs[run_id]["end"] = event
         else:
@@ -380,7 +389,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             )
     for finding in findings:
         print(f"history note: {finding}")
-    return 0
+    return 1 if grouping else 0
 
 
 def _shown(value: object, unknown: str = "unknown") -> str:

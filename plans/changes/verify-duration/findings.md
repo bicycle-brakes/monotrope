@@ -388,7 +388,7 @@ Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_duration.py:309–349 | A version-1 `run_end` with `verdict: green` and missing, negative or NaN `seconds` is accepted as completion. Reproduced through the parser and report command: the reader prints green, emits no history diagnostic and exits 0. Validate completion fields and keep malformed completions incomplete. [Acceptance criterion 6] | Codex | taken — reproduced: a green run_end with missing, negative or non-finite seconds stays incomplete, with a history diagnostic and a non-zero report | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_duration.py:309–349 | A version-1 `run_end` with `verdict: green` and missing, negative or NaN `seconds` is accepted as completion. Reproduced through the parser and report command: the reader prints green, emits no history diagnostic and exits 0. Validate completion fields and keep malformed completions incomplete. [Acceptance criterion 6] | Codex | fixed — tests/test_verify_duration.py::test_reader_rejects_malformed_completion | — |
 | F6-2 | MAJOR | SPEC | Phase 6 | docs/research/2026-11-04-verify-duration-baseline.md:31–85 | The delivered baseline explicitly lacks actual pytest worker counts and supplies twelve aggregated slow-test medians instead of each run’s thirty reported durations. Thus the five runs lack required comparison evidence despite implementation being marked done. Record actual worker counts and the thirty reported durations for each qualifying run. [Acceptance criterion 9; Definition of Done] | Codex | fixed — orchestrator: the note carries each run's 30 slowest durations as an appendix; the actual worker count is named open by the maintainer's decision (2026-11-05, follow-up bead coding-harness-xay1) | — |
 
 Phase 6 verdict: codex 01a1aa8c-5939-7d90-a908-cead68e352a9, 2026-11-05
@@ -490,3 +490,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-05: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 889 files, 3305 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 889 files, 3307 commits, 12 rules.

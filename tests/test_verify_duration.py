@@ -317,6 +317,65 @@ def test_machine_context_preserves_unknowns_and_worker_override(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "completion",
+    [
+        {"verdict": "green"},
+        {"verdict": "green", "seconds": -1},
+        {"verdict": "green", "seconds": float("nan")},
+        {"verdict": "green", "seconds": float("inf")},
+        {"verdict": "green", "seconds": float("-inf")},
+        {"verdict": "green", "seconds": None},
+        {"verdict": "green", "seconds": True},
+        {"verdict": "green", "seconds": "1"},
+        {"seconds": 1},
+        {"verdict": "unknown", "seconds": 1},
+    ],
+)
+def test_reader_rejects_malformed_completion(
+    completion: dict, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid completion fields cannot turn an interrupted run into a green run."""
+    root = tmp_path / "state" / "coding-harness"
+    root.mkdir(parents=True)
+    start = {"v": 1, "event": "run_start", "run_id": "broken-end"}
+    end = {"v": 1, "event": "run_end", "run_id": "broken-end", **completion}
+    path = root / verify_duration.HISTORY_NAME
+    original = "\n".join(json.dumps(event) for event in (start, end)) + "\n"
+    path.write_text(original, encoding="utf-8")
+
+    events, parsing = verify_duration._read_events()
+    runs, grouping = verify_duration._runs(events)
+    assert runs["broken-end"]["end"] is None
+    assert parsing or grouping
+    for selection in ((), ("--run", "broken-end")):
+        code, out, _ = _run(capsys, "report", *selection)
+        assert code != 0
+        assert "incomplete" in out and "history note:" in out
+        assert "verdict green" not in out and "verdict: green" not in out
+    assert path.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize("verdict", ["green", "red"])
+@pytest.mark.parametrize("seconds", [0, 1.5])
+def test_reader_accepts_valid_completion(
+    verdict: str, seconds: float, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Zero and positive durations remain valid for both completion outcomes."""
+    root = tmp_path / "state" / "coding-harness"
+    root.mkdir(parents=True)
+    events = [
+        {"v": 1, "event": "run_start", "run_id": "valid-end"},
+        {"v": 1, "event": "run_end", "run_id": "valid-end", "seconds": seconds, "verdict": verdict},
+    ]
+    (root / verify_duration.HISTORY_NAME).write_text("\n".join(map(json.dumps, events)) + "\n", encoding="utf-8")
+    for selection in ((), ("--run", "valid-end")):
+        code, out, _ = _run(capsys, "report", *selection)
+        assert code == 0
+        assert verdict in out and f"{seconds:.3f}s" in out
+        assert "incomplete" not in out and "history note:" not in out
+
+
 def test_reader_selects_runs_and_diagnoses_truncated_history(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
