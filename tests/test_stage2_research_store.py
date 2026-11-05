@@ -558,6 +558,46 @@ def test_binding_accepts_only_exact_research_provenance_publication(store, repo)
     assert not source.usable and plan.reused == {}
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        {},
+        [],
+        {"base64": "!", "day": "2026-11-05"},
+        {"base64": "", "day": "invalid"},
+        {"base64": "", "day": "2026-11-05"},
+    ],
+    ids=["missing-fields", "wrong-type", "invalid-base64", "invalid-day", "digest-mismatch"],
+)
+@pytest.mark.parametrize("published", [False, True], ids=["before-publication", "after-publication"])
+def test_malformed_publication_reports_binding_drift_without_reuse(store, repo, record, published):
+    snap = snapshot()
+    tail = b"\nRunner research\n"
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        prepared = frozen + b"Corrected prefix\n"
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-05"
+        )
+    stored["research_publication"] = record
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding=stored)
+    if published:
+        (repo / RESEARCH).write_bytes(prepared + tail)
+    with freeze(repo) as current:
+        try:
+            drift = changed(current, stored)
+        except snap.ResearchSnapshotError as error:
+            pytest.fail(f"Malformed publication must report research binding drift instead of aborting: {error}")
+    assert drift == [RESEARCH]
+    source, plan = resume(store, repo, [k])
+    assert not source.usable
+    assert source.reasons == ["binding changed: " + RESEARCH]
+    assert plan.reused == {}
+    assert plan.not_reused == [("s1", "source run unusable")]
+    assert plan.to_launch == [k]
+
+
 def make_source(store, repo, *, results, binding=None):
     """A stored run with finished results; returns (run id, freeze for the next run)."""
     with freeze(repo) as first:

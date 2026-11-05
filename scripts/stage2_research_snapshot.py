@@ -286,7 +286,6 @@ def changed_against_stored(manifest, research_path, research_bytes, stored):
         normalised = stored["research_normalised_sha256"]
         append = stored.get("append")
         publication = stored.get("research_publication_normalised_sha256")
-        stored_publication(stored)
     except (KeyError, TypeError) as error:
         raise ResearchSnapshotError("malformed stored binding") from error
     if research != research_path:
@@ -297,6 +296,11 @@ def changed_against_stored(manifest, research_path, research_bytes, stored):
         for path in set(current) | set(stored_paths)
         if path != research and current.get(path) != stored_paths.get(path)
     }
+    try:
+        stored_publication(stored)
+    except ResearchSnapshotError:
+        # A corrupt publication cannot authorize reuse, even before its append was written.
+        changed.add(research)
     # The append was recorded but never written, or there was none: the frozen bytes themselves.
     holds = _sha256(_without_updated(research_bytes)) == normalised
     if not holds and append is not None and 0 < append["length"] <= len(research_bytes):
