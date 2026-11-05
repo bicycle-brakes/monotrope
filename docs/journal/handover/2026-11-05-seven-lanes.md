@@ -131,3 +131,12 @@ coding-harness-n4g5, coding-harness-alq2, coding-harness-068j.
   background mode; appetite checked at every lane status; check a merge's exit
   before committing (merge markers were pushed once, 31d35400, fixed in
   3c4d83eb).
+
+## Addendum — 2026-11-05, ending the session with jobs running
+
+The six runner jobs are children of this Claude Code session; ending the
+session most likely stops them mid-attempt (not measured). If a worktree then
+shows uncommitted changes and its findings.md has no closing line for the last
+attempt, discard the partial attempt (`git checkout -- . && git clean -fd`
+inside that worktree only, after reading `git status`) and start the same
+verb again; every earlier step is committed and pushed.
