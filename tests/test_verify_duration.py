@@ -317,6 +317,86 @@ def test_machine_context_preserves_unknowns_and_worker_override(
 # ---------------------------------------------------------------------------
 
 
+def _valid_records(run_id: str) -> list[dict]:
+    """Complete version-1 records, including explicit unknown machine context."""
+    common = {"v": 1, "run_id": run_id, "utc": "2026-11-04T10:00:00+00:00"}
+    return [
+        {
+            **common,
+            "event": "run_start",
+            "repository": "/repo",
+            "commit": None,
+            "dirty": None,
+            "config_sha256": None,
+            "job": "verify",
+            "placement": "local",
+            "memory_pct": None,
+            "workers": None,
+            "admission_id": None,
+            "admission_wait_seconds": None,
+            "admission_reused": None,
+        },
+        {**common, "event": "gate", "gate": "pytest", "seconds": 0, "exit": 0, "enforcement": "block"},
+        {**common, "event": "run_end", "seconds": 1.5, "verdict": "green"},
+    ]
+
+
+@pytest.mark.parametrize("kind", ["run_start", "gate", "run_end"])
+def test_reader_validates_all_record_types(capsys, kind):
+    """Every required field and range is checked; later green ends cannot erase a bad record."""
+    records = _valid_records("validated")
+    index = [record["event"] for record in records].index(kind)
+    valid = records[index]
+    mutations = [
+        {key: value for key, value in valid.items() if key != field}
+        for field in valid
+        if field not in ("event", "run_id", "v")
+    ]
+    mutations += [{**valid, "utc": value} for value in (None, "yesterday", "2026-11-04", 1)]
+    if kind in ("gate", "run_end"):
+        mutations += [
+            {**valid, "seconds": value} for value in (-1, float("nan"), float("inf"), float("-inf"), True, "1", None)
+        ]
+    if kind == "gate":
+        mutations += [{**valid, "exit": value} for value in (True, 0.5, "0", None)]
+        mutations += [{**valid, "enforcement": "unknown"}, {**valid, "gate": ""}]
+    if kind == "run_end":
+        mutations += [{**valid, "verdict": "unknown"}]
+    if kind == "run_start":
+        for field, values in {
+            "memory_pct": (-1, 101, float("nan"), True, "50"),
+            "admission_wait_seconds": (-1, float("inf"), True, "1"),
+            "dirty": (0, "false"),
+            "admission_reused": (0, "false"),
+            "repository": (None, ""),
+            "job": (None, ""),
+            "placement": (None, ""),
+            "commit": (1, ""),
+            "config_sha256": (1, ""),
+            "workers": (1, ""),
+            "admission_id": (1, ""),
+        }.items():
+            mutations += [{**valid, field: value} for value in values]
+    path = verify_duration.history_path()
+    path.parent.mkdir(parents=True)
+    # A valid control proves explicit nulls and zero seconds/exits remain accepted.
+    path.write_text("\n".join(map(json.dumps, records)) + "\n")
+    assert _run(capsys, "report")[0] == 0
+    for malformed in mutations:
+        changed = [dict(record) for record in records]
+        changed[index] = malformed
+        # Even a later valid record of the same type must not repair persisted history.
+        changed.append(valid)
+        original = "\n".join(map(json.dumps, changed)) + "\n"
+        path.write_text(original)
+        for selection in ((), ("--run", "validated")):
+            code, out, _ = _run(capsys, "report", *selection)
+            assert code != 0, malformed
+            assert "incomplete" in out and "history note:" in out, malformed
+            assert "verdict green" not in out and "verdict: green" not in out, malformed
+        assert path.read_text() == original
+
+
 @pytest.mark.parametrize(
     "completion",
     [
@@ -338,8 +418,9 @@ def test_reader_rejects_malformed_completion(
     """Invalid completion fields cannot turn an interrupted run into a green run."""
     root = tmp_path / "state" / "coding-harness"
     root.mkdir(parents=True)
-    start = {"v": 1, "event": "run_start", "run_id": "broken-end"}
-    end = {"v": 1, "event": "run_end", "run_id": "broken-end", **completion}
+    start = _valid_records("broken-end")[0]
+    end = {key: value for key, value in _valid_records("broken-end")[2].items() if key not in ("seconds", "verdict")}
+    end.update(completion)
     path = root / verify_duration.HISTORY_NAME
     original = "\n".join(json.dumps(event) for event in (start, end)) + "\n"
     path.write_text(original, encoding="utf-8")
@@ -365,8 +446,8 @@ def test_reader_accepts_valid_completion(
     root = tmp_path / "state" / "coding-harness"
     root.mkdir(parents=True)
     events = [
-        {"v": 1, "event": "run_start", "run_id": "valid-end"},
-        {"v": 1, "event": "run_end", "run_id": "valid-end", "seconds": seconds, "verdict": verdict},
+        _valid_records("valid-end")[0],
+        {**_valid_records("valid-end")[2], "seconds": seconds, "verdict": verdict},
     ]
     (root / verify_duration.HISTORY_NAME).write_text("\n".join(map(json.dumps, events)) + "\n", encoding="utf-8")
     for selection in ((), ("--run", "valid-end")):
@@ -423,7 +504,7 @@ def test_reader_selects_runs_and_diagnoses_truncated_history(
                 "v": 1,
                 "event": "gate",
                 "run_id": "run-one",
-                "utc": "x",
+                "utc": "2026-11-04T10:01:00+00:00",
                 "gate": "probe",
                 "seconds": 1.5,
                 "exit": 0,
@@ -560,7 +641,7 @@ def test_reader_refuses_unsupported_event_version(capsys, version):
     path = verify_duration.history_path()
     path.parent.mkdir(parents=True)
     path.write_text(
-        json.dumps({"v": 1, "event": "run_start", "run_id": "one"})
+        json.dumps(_valid_records("one")[0])
         + "\n"
         + json.dumps({"v": version, "event": "run_end", "run_id": "one", "verdict": "green"})
         + "\n"

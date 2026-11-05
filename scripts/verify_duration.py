@@ -316,14 +316,70 @@ def _read_events() -> tuple[list[dict], list[str]]:
     return events, findings
 
 
+def _record_error(event: dict) -> str | None:
+    """Validate the required fields of each version-1 record, including explicit unknowns."""
+
+    def text(value: object) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def seconds(value: object) -> bool:
+        return type(value) in (int, float) and value >= 0 and (not isinstance(value, float) or math.isfinite(value))
+
+    def timestamp(value: object) -> bool:
+        if not isinstance(value, str):
+            return False
+        try:
+            parsed = datetime.datetime.fromisoformat(value)
+            return parsed.tzinfo is not None and parsed.utcoffset() == datetime.timedelta(0)
+        except ValueError:
+            return False
+
+    fields = {"run_id": text, "utc": timestamp}
+    kind = event["event"]
+    if kind == RUN_START:
+        fields.update(
+            {
+                "repository": text,
+                "job": text,
+                "placement": text,
+                "commit": lambda v: v is None or text(v),
+                "config_sha256": lambda v: v is None or text(v),
+                "dirty": lambda v: v is None or type(v) is bool,
+                "workers": lambda v: v is None or text(v),
+                "admission_id": lambda v: v is None or text(v),
+                "admission_reused": lambda v: v is None or type(v) is bool,
+                "admission_wait_seconds": lambda v: v is None or seconds(v),
+                "memory_pct": lambda v: v is None or (seconds(v) and v <= 100),
+            }
+        )
+    elif kind == GATE:
+        fields.update(
+            {
+                "gate": text,
+                "seconds": seconds,
+                "exit": lambda v: type(v) is int,
+                "enforcement": lambda v: v in ("block", "advisory", "report"),
+            }
+        )
+    else:
+        fields.update({"seconds": seconds, "verdict": lambda v: v in ("green", "red")})
+    invalid = [name for name, check in fields.items() if name not in event or not check(event[name])]
+    return f"invalid {kind} fields: {', '.join(invalid)}" if invalid else None
+
+
 def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
     """Group the events by run identity in file order; gate and end rows without a start are diagnosed."""
     runs: dict[str, dict] = {}
     findings: list[str] = []
     order: list[str] = []
+    invalid_runs: set[str] = set()
     for event in events:
         run_id = event["run_id"]
         kind = event["event"]
+        error = _record_error(event)
+        if error:
+            findings.append(f"{error} for run {run_id}")
+            invalid_runs.add(run_id)
         if kind == RUN_START:
             if run_id in runs:
                 findings.append(f"a second start for run {run_id}")
@@ -332,21 +388,17 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
             order.append(run_id)
         elif run_id not in runs:
             findings.append(f"line with {kind} for unknown run {run_id} — its start row is missing or malformed")
+        elif error:
+            continue
         elif kind == GATE:
             runs[run_id]["gates"].append(event)
-        elif (
-            type(event.get("seconds")) not in (int, float)
-            or event["seconds"] < 0
-            or (isinstance(event["seconds"], float) and not math.isfinite(event["seconds"]))
-            or event.get("verdict") not in ("green", "red")
-        ):
-            findings.append(
-                f"invalid completion for run {run_id}: expected finite non-negative seconds and a green or red verdict"
-            )
         elif runs[run_id]["end"] is None:
             runs[run_id]["end"] = event
         else:
             findings.append(f"a second end for run {run_id}")
+    for run_id in invalid_runs:
+        if run_id in runs:
+            runs[run_id]["end"] = None
     return {run_id: runs[run_id] for run_id in order}, findings
 
 

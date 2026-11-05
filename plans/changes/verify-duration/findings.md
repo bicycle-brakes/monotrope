@@ -499,7 +499,9 @@ Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-3 | MAJOR | SPEC | Phase 6 | scripts/verify_duration.py:335–336 | A version-1 gate row with `seconds: -1`, followed by a valid green completion, is accepted without validation. Reproduced: the reader prints `pytest -1.000s`, reports the run green, emits no diagnostic and exits 0. Malformed gate measurements must prevent the run from being presented as successfully complete. [Acceptance criterion 6] | Codex | taken — maintainer 2026-11-05 (second finding of the record-validation mechanism after F6-1, option A): one validation per record type (run_start, gate, run_end) with required fields and ranges — seconds finite and at least 0, exit code an integer, readable timestamps; any deviation leaves the run incomplete with a history diagnostic; one test over all three types | — |
+| F6-3 | MAJOR | SPEC | Phase 6 | scripts/verify_duration.py:335–336 | A version-1 gate row with `seconds: -1`, followed by a valid green completion, is accepted without validation. Reproduced: the reader prints `pytest -1.000s`, reports the run green, emits no diagnostic and exits 0. Malformed gate measurements must prevent the run from being presented as successfully complete. [Acceptance criterion 6] | Codex | fixed — tests/test_verify_duration.py::test_reader_validates_all_record_types | — |
 
 Phase 6 verdict: codex 01a1ab03-c3b0-7cb3-827c-f8238a900c1d, 2026-11-05
 Reviewer session: codex 01a1ab03-c3b0-7cb3-827c-f8238a900c1d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 889 files, 3317 commits, 12 rules.
