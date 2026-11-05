@@ -3832,10 +3832,11 @@ def release(root: Path, change: str) -> list[list[str]]:
 def remove_loop_record(directory: Path) -> None:
     """Delete the review loop's record, never the phase-1 research files beside it (deep review RS-2-1).
 
-    The change's record directory also holds the research state store (`research/`, with the lock a running
-    research run holds) and research preparation's receipt and probe audits (`research-*`). Deleting those
-    would lose the reusable results of an interrupted run and let a second run take a fresh lock while the
-    first still holds the old one. The directory goes only when nothing else is left in it.
+    The research state store and its lock live independently under STAGE2_RESEARCH_STATE or the
+    platform's per-user default. The `research/` skip protects only a store left here by older runs;
+    deleting it could lose reusable results and let a second run take a fresh lock while the first
+    still holds the old one. Research preparation's receipt and probe audits (`research-*`) also
+    stay here. The directory goes only when nothing else is left in it.
     """
     for entry in directory.iterdir():
         if entry.name == "research" or entry.name.startswith("research-"):

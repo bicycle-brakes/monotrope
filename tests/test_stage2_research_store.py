@@ -321,13 +321,16 @@ def test_research_override_is_read_at_call_time(state_home, tmp_path, monkeypatc
     assert m.research_dir("demo", REPO_ROOT) == moved / suffix, "the shared state root never wins"
 
 
-def test_research_default_is_stable_per_user_and_outside_home(tmp_path, monkeypatch):
+@pytest.mark.parametrize("platform,shared", [("darwin", "/Users/Shared"), ("linux", "/var/tmp")])
+@pytest.mark.parametrize("uid", [1234, 5678])
+def test_research_default_is_stable_per_user_and_outside_home(tmp_path, monkeypatch, platform, shared, uid):
     # Criterion 2. Planted fault: the default follows HOME, XDG_STATE_HOME or the working directory,
     # or names the wrong platform directory or another user's id.
     m = module()
     monkeypatch.delenv(m.RESEARCH_STATE_VARIABLE, raising=False)
-    shared = Path("/Users/Shared") if sys.platform == "darwin" else Path("/var/tmp")
-    expected = shared / f"coding-harness-research-{os.getuid()}"
+    monkeypatch.setattr(m.sys, "platform", platform)
+    monkeypatch.setattr(m.os, "getuid", lambda: uid)
+    expected = Path(shared) / f"coding-harness-research-{uid}"
     assert m.default_research_base() == expected
     home = tmp_path / "home"
     home.mkdir()
@@ -426,6 +429,45 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
     with pytest.raises(m.StoreWriteError):
         m.Store(store.directory).start_run(CHANGE, "r", BINDING)
     store.directory.chmod(0o700)
+
+
+@pytest.mark.parametrize("unsafe", ["new", "base-mode", "parent-mode", "base-link", "parent-link", "foreign-base"])
+def test_store_secures_the_base_and_parent_directories(tmp_path, monkeypatch, unsafe):
+    m = module()
+    base = tmp_path / "new-parent" / "base"
+    monkeypatch.delenv(m.RESEARCH_STATE_VARIABLE, raising=False)
+    monkeypatch.setattr(m, "default_research_base", lambda: base)
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    if unsafe != "new":
+        base.mkdir(parents=True, mode=0o700)
+        target = base if unsafe.startswith("base-") or unsafe == "foreign-base" else base / "coding-harness"
+        if target != base:
+            target.mkdir(mode=0o700)
+        if unsafe.endswith("mode"):
+            target.chmod(0o777)
+        elif unsafe.endswith("link"):
+            target.rmdir()
+            elsewhere = tmp_path / "elsewhere"
+            elsewhere.mkdir(mode=0o700)
+            target.symlink_to(elsewhere, target_is_directory=True)
+        else:
+            uid = os.getuid()
+            monkeypatch.setattr(m.os, "getuid", lambda: uid + 1)
+        try:
+            with pytest.raises(m.StoreWriteError, match="state store"):
+                store.acquire_lock()
+        finally:
+            store.release_lock()
+        assert not (store.directory / ".lock").exists(), "an unsafe base or parent must never get a lock"
+        return
+    try:
+        store.acquire_lock()
+        for directory in [store.directory, *store.directory.parents]:
+            if directory == tmp_path:
+                break
+            assert stat.S_IMODE(directory.lstat().st_mode) == 0o700, "every created directory must be owner-only"
+    finally:
+        store.release_lock()
 
 
 def test_store_refuses_a_symlinked_directory(state_home, tmp_path):

@@ -375,6 +375,13 @@ def test_every_research_pi_launch_is_offline(tmp_path: Path, tools: str) -> None
 # ---------------------------------------------------------------------------
 
 
+def test_release_docstring_names_the_independent_store_and_legacy_skip() -> None:
+    guidance = stage2.remove_loop_record.__doc__
+    assert "STAGE2_RESEARCH_STATE" in guidance, "release guidance must name the independent research store setting"
+    assert "default" in guidance, "release guidance must also account for the platform default"
+    assert "older runs" in guidance, "the research/ skip protects a legacy store, not the current default"
+
+
 def test_releasing_the_loop_keeps_the_research_store_and_its_lock(tmp_path: Path, monkeypatch) -> None:
     # Criterion 9 (RS-2-1). Planted fault: `release-loop` deletes the research state store, or lets a second
     # holder take the lock a run still holds. Loop state (XDG) and store state (the dedicated variable) are
@@ -385,6 +392,9 @@ def test_releasing_the_loop_keeps_the_research_store_and_its_lock(tmp_path: Path
     root.mkdir()
     directory = stage2.record_dir("demo", root)
     directory.mkdir(parents=True)
+    legacy = directory / "research"
+    legacy.mkdir(mode=0o700)
+    (legacy / "run.json").write_bytes(b"legacy reusable research\n")
     store = stage2_research_store.Store(stage2_research_store.research_dir("demo", root))
     store.acquire_lock()
     try:
@@ -395,6 +405,7 @@ def test_releasing_the_loop_keeps_the_research_store_and_its_lock(tmp_path: Path
         (directory / "research-probe-1.json").write_text("{}", encoding="utf-8")
         kept = sorted(p.name for p in directory.iterdir() if p.name.startswith("research-"))
         stage2.remove_loop_record(directory)
+        assert (legacy / "run.json").read_bytes() == b"legacy reusable research\n", "legacy stores survive release"
         assert not (directory / "loop.md").exists() and not (directory / "availability.json").exists()
         left = sorted(p.name for p in directory.iterdir() if p.name.startswith("research-"))
         assert left == kept, "the research receipt and probe audit survive the release"
@@ -405,6 +416,7 @@ def test_releasing_the_loop_keeps_the_research_store_and_its_lock(tmp_path: Path
     finally:
         store.release_lock()
     stage2.remove_loop_record(directory)
+    assert (legacy / "run.json").read_bytes() == b"legacy reusable research\n"
     assert directory.exists(), "the kept research receipt and probe audit hold the directory"
     empty = stage2.record_dir("other", root)
     empty.mkdir(parents=True)

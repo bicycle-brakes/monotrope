@@ -2932,7 +2932,7 @@ def test_default_research_store_starts_without_moving_xdg(sworld: SwarmWorld, mo
     assert sworld.run() == 0, "an ordinary run needs no moved HOME or XDG variable"
     assert sworld.calls(), "models start"
     assert (default_base / "coding-harness" / "stage2").is_dir(), "the selected default base held the store"
-    assert not (Path(os.environ["HOME"]) / "coding-harness").exists(), "nothing followed HOME"
+    assert not (Path(os.environ["HOME"]) / ".local/state/coding-harness").exists(), "nothing followed HOME"
     record = stage2.record_dir("demo", sworld.root)
     expected_record = Path(xdg) / "coding-harness" / "stage2" / stage2.record_key("demo", sworld.root)
     assert record == expected_record, "XDG still places the loop record"
@@ -2976,7 +2976,9 @@ def test_research_store_setting_never_reaches_model_launch_inputs(
     sworld.complete()
     assert sworld.run() == 0
     store = str(stage2_research_store.research_dir("demo", sworld.root))
-    for call in sworld.calls():
+    calls = sworld.calls()
+    assert calls, "at least one model must launch before checking its inputs"
+    for call in calls:
         blob = json.dumps({k: call[k] for k in ("prompt", "argv", "env", "cwd")})
         assert "STAGE2_RESEARCH_STATE" not in blob
         assert str(base) not in blob and store not in blob

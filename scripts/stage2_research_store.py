@@ -207,16 +207,44 @@ class Store:
                 raise StoreWriteError(f"the state store must stay outside {other}")
 
     def _ensure(self):
-        """Create the owner-only directory, or refuse a link, a foreign owner or loose modes."""
+        """Secure the base and store ancestry before creating records or taking a lock.
+
+        Shared platform parents (such as /var/tmp) may be writable by others; the per-user
+        base and everything beneath it must not be. Newly created ancestors are private too.
+        """
+        base = self.directory
+        if base.parent.parent.name == "stage2" and base.parent.parent.parent.name == "coding-harness":
+            base = base.parents[3]
+
+        def check(directory, *, private=False):
+            info = directory.lstat()
+            forbidden = 0o077 if private else 0o022
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & forbidden:
+                raise StoreWriteError(
+                    f"unsafe state store directory {directory}: a link, not ours or unsafe permissions"
+                )
+
+        def create(directory):
+            try:
+                directory.lstat()
+            except FileNotFoundError:
+                create(directory.parent)
+                with contextlib.suppress(FileExistsError):
+                    directory.mkdir(mode=0o700)
+                check(directory)
+
         try:
-            self.directory.parent.mkdir(parents=True, exist_ok=True)
-            with contextlib.suppress(FileExistsError):
-                self.directory.mkdir(mode=0o700)
-            info = self.directory.lstat()
+            create(base)
+            check(base)
+            current = base
+            for part in self.directory.relative_to(base).parts:
+                current = current / part
+                with contextlib.suppress(FileExistsError):
+                    current.mkdir(mode=0o700)
+                check(current)
+            check(self.directory, private=True)
         except OSError as error:
             raise StoreWriteError(f"cannot create the state store: {error}") from error
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
-            raise StoreWriteError("the state store is a link, not ours or not owner-only")
 
     # -- the lock ---------------------------------------------------------------------------
 
