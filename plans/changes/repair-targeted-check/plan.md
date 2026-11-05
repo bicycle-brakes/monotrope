@@ -132,7 +132,10 @@ this draft does not implement, commit or launch another model.
 - Orchestrator only: `prompts/04b-review-loop.md` — align repair-cycle instructions and the full check before phase 6.
 
 No deletions or new modules are planned. Do not touch gate definitions,
-generated CI, machine-admission internals, other changes' specs/ledgers,
+generated CI, machine-admission internals, other changes' specs/ledgers (one
+necessary exception, 2026-11-05: draft-gates-only's criterion-6 ledger row now names
+the test renamed for loop row L7-2, so the criterion-ledger gate stays green; that
+change's spec criterion 6 is noted on its bead coding-harness-77qj),
 living implementation-verification spec, ADRs, tracker data, model endpoints,
 other held paths or permissions. The existing fail-fast contract's full-check
 rule remains for implement; the current change explicitly narrows repair.

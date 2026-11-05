@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -144,7 +144,8 @@ and the existing local gates applicable to the touched file kinds.
   and tracker data: their definitions and authority remain unchanged.
 - Held instructions are edited only by the orchestrator after the accepted
   implementation attempt; this draft changes no held path.
-- Other changes' historical artifacts and ledgers retain their evidence;
+- Other changes' historical artifacts and ledgers retain their evidence (one
+  exception: draft-gates-only's criterion-6 ledger row follows the renamed test, plan boundaries);
   the repair-only exception is documented in the current workflow instead.
 
 ## Definition of Done

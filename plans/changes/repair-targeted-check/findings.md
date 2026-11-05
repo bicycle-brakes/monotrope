@@ -408,3 +408,5 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 867 files, 3313 commits, 12 rules.
