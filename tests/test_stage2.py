@@ -14587,6 +14587,18 @@ def test_the_drafting_prompts_name_the_draft_verb() -> None:
         assert "python3 scripts/stage2.py draft <change>" not in planted, name
 
 
+def repair_verification_gate_problems(gate: str) -> list[str]:
+    """Pin both repair routes and the final full check in a phase-table gate cell."""
+    return [
+        f"the 4b gate lacks '{needle}'"
+        for needle in (
+            "a targeted check after each runner repair and each orchestrator hand repair",
+            "the full `make verify` before phase 6",
+        )
+        if needle not in flat(gate)
+    ]
+
+
 def phase_table_problems(workflow: str) -> list[str]:
     """The `4b` row of the phase table: between 4 and 5, with artefact, gate and prompt."""
     lines = section(workflow, "## 2 · ").splitlines()
@@ -14602,8 +14614,9 @@ def phase_table_problems(workflow: str) -> list[str]:
         return [f"the 4b row has {len(cells)} cells, not 5"]
     if "findings.md" not in cells[2] or "release-loop" not in cells[2]:
         found.append("the 4b artefact is not the loop rows in findings.md after release-loop")
-    if "until a clean round" not in cells[3] or "make verify" not in cells[3]:
-        found.append("the 4b gate is not rounds until a clean round with make verify after each repair")
+    if "until a clean round" not in cells[3]:
+        found.append("the 4b gate does not require rounds until a clean round")
+    found.extend(repair_verification_gate_problems(cells[3]))
     if "free swarm" not in cells[3] or "Flash swarm" not in cells[3] or "ladder" not in cells[3]:
         found.append("the 4b gate does not name the two swarms and the ladder bound")
     if "04b-review-loop.md" not in cells[4] or not (PROMPTS / "04b-review-loop.md").is_file():
@@ -14621,6 +14634,67 @@ def test_the_phase_table_has_the_review_loop() -> None:
     assert phase_table_problems(text.replace("Flash swarm", "second model", 1))
     assert phase_table_problems(text.replace("(`release-loop`)", "", 1))
     assert phase_table_problems(text.replace("04b-review-loop.md", "04c-review-loop.md"))
+
+
+def repair_verification_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    found = phase_table_problems(workflow)
+    rows = [line for line in agents.splitlines() if line.startswith("| 4b |")]
+    if len(rows) != 1:
+        found.append("AGENTS.md must have exactly one 4b row")
+    else:
+        cells = [cell.strip() for cell in rows[0].strip().strip("|").split("|")]
+        if len(cells) != 4:
+            found.append("AGENTS.md's 4b row must have four cells")
+        else:
+            found.extend(repair_verification_gate_problems(cells[3]))
+    fixing = flat(section(workflow, "### Repairing taken findings"))
+    for needle in (
+        "the repair's targeted check",
+        "full `make verify` on fallback",
+        "a fresh full `make verify` before phase 6",
+    ):
+        if needle not in fixing:
+            found.append(f"the repair subsection lacks '{needle}'")
+    return found
+
+
+def test_repair_verification_doctrine_requires_targeted_and_final_full_checks() -> None:
+    """Repair-targeted-check: planted omissions and the old gate must fail in each location."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert repair_verification_doctrine_problems(workflow, agents) == []
+    for name, text in (("workflow", workflow), ("agents", agents)):
+        row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
+        for needle in (
+            "a targeted check after each runner repair and each orchestrator hand repair",
+            "the full `make verify` before phase 6",
+        ):
+            assert needle in row
+            planted = text.replace(row, row.replace(needle, "", 1), 1)
+            pair = (planted, agents) if name == "workflow" else (workflow, planted)
+            assert repair_verification_doctrine_problems(*pair), (name, needle)
+        old_gate = "`make verify` green after each runner repair; a targeted check after an orchestrator hand repair"
+        current_gate = (
+            "a targeted check after each runner repair and each orchestrator hand repair, "
+            "the full `make verify` before phase 6"
+        )
+        assert current_gate in row
+        planted = text.replace(row, row.replace(current_gate, old_gate, 1), 1)
+        pair = (planted, agents) if name == "workflow" else (workflow, planted)
+        assert repair_verification_doctrine_problems(*pair), name
+    fixing = section(workflow, "### Repairing taken findings")
+    for needle in (
+        "the repair's targeted check",
+        "full `make verify` on fallback",
+        "a fresh full `make verify` before phase 6",
+    ):
+        # Normalize this subsection only: another section cannot satisfy its requirements.
+        assert needle in flat(fixing)
+        pattern = r"\s+".join(map(re.escape, needle.split()))
+        omitted = re.sub(pattern, "", fixing, count=1)
+        assert omitted != fixing
+        planted = workflow.replace(fixing, omitted, 1)
+        assert repair_verification_doctrine_problems(planted, agents), needle
 
 
 EVIDENCE_TEXTS = {

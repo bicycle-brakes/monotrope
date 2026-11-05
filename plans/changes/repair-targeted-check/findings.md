@@ -403,3 +403,8 @@ Loop attempt: 2026-11-05 — no round was written; the review-loop calls above c
 Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (1 day left).
 
 Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 867 files, 3301 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3308 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
