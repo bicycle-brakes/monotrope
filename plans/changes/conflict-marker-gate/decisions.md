@@ -21,6 +21,7 @@ tags: [decisions, gate, merge]
 
 Class: bounded (bead coding-harness-i76l).
 
-## Interview — reasoned skip
+## SKIP · interview
 
-The maintainer answered "Ja" on 2026-11-05 to this item as the orchestrator proposed it: a blocking gate that fails on merge-conflict markers in tracked text files (`git diff --check` and a scan for lines that start with `<<<<<<<`, `=======` or `>>>>>>>`, fixtures excepted by name), and a small helper for merging main into a change branch that stops with the conflicted paths instead of continuing. Trigger the same day: a merge of origin/main into spike/verify-duration conflicted on docs/WORKFLOW.md and the next command committed and pushed the markers (31d35400). The scope is settled; any further choice (for example which paths count as fixtures) is a [DETAIL] the draft decides with its reason.
+status: skipped
+reason: The maintainer answered "Ja" on 2026-11-05 to this item as the orchestrator proposed it: a blocking gate that fails on merge-conflict markers in tracked text files (`git diff --check` and a scan for lines that start with `<<<<<<<`, `=======` or `>>>>>>>`, fixtures excepted by name), and a small helper for merging main into a change branch that stops with the conflicted paths instead of continuing. Trigger the same day: a merge of origin/main into spike/verify-duration conflicted on docs/WORKFLOW.md and the next command committed and pushed the markers (31d35400). The scope is settled; any further choice (for example which paths count as fixtures) is a [DETAIL] the draft decides with its reason.
