@@ -301,16 +301,22 @@ REPAIR_ANSWER = (
     "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
     "the attempt's diagnostics, where a rejected answer can be read again."
 )
+REPAIR_VERIFICATION = (
+    "The runner runs the targeted check for repair, using full `make verify` as fallback when targeted "
+    "coverage is unsafe, and makes the one commit. A fresh full `make verify` runs before phase 6. "
+)
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
     "Repair only the taken rows below. You may run tests and `make verify`; write no entry under\n"
     "`## Time used` in `plan.md`, the runner measures the attempt and writes it. Do not commit and run no\n"
-    "git command that changes the repository: the runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+    "git command that changes the repository. " + REPAIR_VERIFICATION + REPAIR_ANSWER
 )
 # The Sonnet attempt keeps the file-tools sentence it always had.
 REPAIR_FORMAT_FILE_TOOLS = (
     "Repair only the taken rows below, with the available file tools; you cannot run commands. Write no\n"
-    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. " + REPAIR_ANSWER
+    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. "
+    + REPAIR_VERIFICATION
+    + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -3894,8 +3900,10 @@ RUFF_COMMANDS = (
     ("check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache"),
     ("format", "--force-exclude", "--no-cache"),
 )
-FORMAT_LABEL = "Runner format before `make verify`"
-FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
+FORMAT_LABEL = "Runner format before post-run verification"
+FORMAT_COMMIT_HEADING = (
+    "Runner format before post-run verification (ruff check --fix with safe fixes only, then ruff format):"
+)
 
 # After the safe formatting the runner runs an attempt's cheap checks, before derived preparation and
 # `make verify` (bead coding-harness-5tyh): read-only ruff lint and format checks over the changed
@@ -3907,7 +3915,7 @@ FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix wi
 RUFF_CHECK = ("check", "--force-exclude", "--no-cache")
 RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
 PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
-CHEAP_LABEL = "Runner cheap checks before `make verify`"
+CHEAP_LABEL = "Runner cheap checks before post-run verification"
 
 # A repair's post-run verification is targeted when its coverage can be determined safely (bead
 # coding-harness-gxwg): the whole touched and linked test files, ruff over the touched Python files

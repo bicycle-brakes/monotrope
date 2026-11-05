@@ -532,7 +532,132 @@ Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-2 | BLOCKER | MAINT | Phase 6 | scripts/stage2.py:305–308, 5448–5455, 8430–8436 | [DIVERGENT] A covered Codex repair receives contradictory verification guarantees: `REPAIR_FORMAT` promises that the runner runs full `make verify`, while `MUST_RUN_COMMANDS` promises targeted verification for repair. Executing the extracted `repair_prompt()` confirmed both statements occur in the same prompt. The runner actually selects targeted verification for this case; its instructions must consistently state that scope and reserve full verification for fallback and phase 6. [Plan step 2: align embedded repair instructions] | Codex | taken — reproduced fault inside the spec (repaired without asking): REPAIR_FORMAT and every other runner string a repair attempt receives state the targeted check with the full make verify as fallback and before phase 6; the repair searches scripts/stage2.py for every remaining statement of full verification after a repair and aligns it (same mechanism as rows L5-2, L5-4; bead coding-harness-n4g5 measures the copies) | — |
+| F6-2 | BLOCKER | MAINT | Phase 6 | scripts/stage2.py:305–308, 5448–5455, 8430–8436 | [DIVERGENT] A covered Codex repair receives contradictory verification guarantees: `REPAIR_FORMAT` promises that the runner runs full `make verify`, while `MUST_RUN_COMMANDS` promises targeted verification for repair. Executing the extracted `repair_prompt()` confirmed both statements occur in the same prompt. The runner actually selects targeted verification for this case; its instructions must consistently state that scope and reserve full verification for fallback and phase 6. [Plan step 2: align embedded repair instructions] | Codex | fixed — tests/test_stage2.py::test_repair_prompt_consistently_describes_targeted_verification | — |
 
 Phase 6 verdict: codex 01a1abfa-b431-7181-a841-64e278ff2fb4, 2026-11-05
 Reviewer session: codex 01a1abfa-b431-7181-a841-64e278ff2fb4 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3338 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +13 -5
+> - `tests/test_stage2.py` +37 -4
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 119 lines of this gate left out …]
+>
+>     @pytest.mark.parametrize("half", ["lint", "format"])
+>     def test_red_ruff_skips_full_verification(world: World, half: str) -> None:
+>         """Ledger 1. Planted fault: a red cheap ruff still starts `make verify`, or the attempt is accepted."""
+>         red_check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused\n", "exit": 1}
+>         red_format = {"stdout": "would reformat scripts/a.py\n", "exit": 1}
+>         # One attempt consumes four ruff steps: the format step's check and format, then the cheap
+>         # lint and format check. The red stands at the cheap position, never at the format step's.
+>         steps = [{}, {}, red_check, {}] if half == "lint" else [{}, {}, {}, red_format]
+>         venv_ruff(world)
+>         baseline = git(world.root, "rev-parse", "HEAD")
+>         world.script(
+>             claude=[formatted_attempt(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+>             ruff=steps * 3,
+>             make=[{"stdout": "green\n"}],
+>         )
+>         assert world.run("implement") == 1
+>         assert world.calls("make") == [], "a red cheap ruff still started `make verify`"
+>         assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+> >       assert CHEAP in world.text()
+> E       assert 'Runner cheap checks before `make verify`' in '---\ntitle: "Findings — demo"\ncategory: findings\nstatus: draft\nimplementation_status: none\ndate: 2026-11-05\ncrea... checks before post-run verification: `.venv/bin/ruff format --check` exited 1\n> would reformat scripts/a.py\n> ```\n'
+> E        +  where '---\ntitle: "Findings — demo"\ncategory: findings\nstatus: draft\nimplementation_status: none\ndate: 2026-11-05\ncrea... checks before post-run verification: `.venv/bin/ruff format --check` exited 1\n> would reformat scripts/a.py\n> ```\n' = text()
+> E        +    where text = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1116/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1116/popen-gw3/test_red_ruff_skips_full_verif1/state')).text
+>
+> tests/test_stage2_fail_fast.py:73: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 31 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 31 files, 2 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: implementation post-run checks failed after the allowed attempts; why each attempt failed and the files it changed: plans/changes/demo/findings.md
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=63275) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/repair-targeted-check/tests/test_stage2.py:18388: DeprecationWarning: This process (pid=63278) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_fail_fast.py::test_red_ruff_skips_full_verification[lint]
+> FAILED tests/test_stage2_fail_fast.py::test_red_ruff_skips_full_verification[format]
+> 2 failed, 4634 passed, 17 skipped, 5 warnings in 850.84s (0:14:10)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 27235 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-1-20261105T143258289487Z-b3820f6a.md
+> ````
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3340 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure

@@ -5248,7 +5248,7 @@ def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world
         make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    first = "- Runner format before `make verify`: ruff changed `scripts/a.py`."
+    first = "- Runner format before post-run verification: ruff changed `scripts/a.py`."
     entry = quote_blocks(world.text())[0]
     assert entry[entry.index("```text") + 1] == first
     assert prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")[0] == first
@@ -5280,7 +5280,7 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
     assert world.run("implement") == 0
     assert git(world.root, "log", "-1", "--format=%B") == (
         "feat(demo): implement accepted plan\n\n"
-        "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):\n"
+        "Runner format before post-run verification (ruff check --fix with safe fixes only, then ruff format):\n"
         "- Attempt 1 (flash): ruff changed `scripts/b.py`.\n"
         "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
     )
@@ -5328,7 +5328,7 @@ def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: st
     assert len(world.calls("claude")) == 3 and world.calls("make") == []
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     text = world.text()
-    assert "Runner cheap checks before `make verify`" in text
+    assert "Runner cheap checks before post-run verification" in text
     expected = {
         "no-ruff": "no ruff at `.venv/bin/ruff`",
         "not-executable": "could not be run",
@@ -5357,7 +5357,7 @@ def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str
     text = world.text()
     line = next(line for line in text.splitlines() if "not run —" in line)
     assert "no ruff at" in line or "could not be started" in line
-    assert "Runner cheap checks before `make verify`" in text
+    assert "Runner cheap checks before post-run verification" in text
     assert "no ruff at" in text or "could not be run" in text
 
 
@@ -8754,6 +8754,39 @@ def test_must_run_instructions_distinguish_repair_and_implement_verification(blo
     assert "full `make verify` for implement" in text
     assert "full fallback" in text
     assert "before phase 6" in text
+
+
+@pytest.mark.parametrize("endpoint", [stage2.CODEX, stage2.SONNET])
+def test_repair_prompt_consistently_describes_targeted_verification(
+    world: World, monkeypatch: pytest.MonkeyPatch, endpoint: tuple[str, str, str | None]
+) -> None:
+    """F6-2: the assembled repair prompt must not contradict its must-run checks."""
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo")
+
+    def check_prompt() -> None:
+        prompt = stage2.repair_prompt(ctx, "baseline", [], [], endpoint=endpoint)
+        instructions = prompt.split("## Accepted spec", 1)[0]
+        block = instructions.split("Repair only the taken rows below", 1)[1].split("Answer with one fixed line", 1)[0]
+        assert "the runner runs `make verify` and makes the one commit" not in instructions
+        assert "targeted check" in block
+        assert "full `make verify`" in block and "fallback" in block
+        assert "before phase 6" in block
+        assert "targeted check for repair" in instructions
+
+    check_prompt()
+    # Plant the original promise beside the otherwise-correct must-run instructions.
+    name = "REPAIR_FORMAT" if endpoint == stage2.CODEX else "REPAIR_FORMAT_FILE_TOOLS"
+    monkeypatch.setattr(
+        stage2,
+        name,
+        getattr(stage2, name).replace(
+            "Repair only the taken rows below",
+            "Repair only the taken rows below: the runner runs `make verify` and makes the one commit.",
+            1,
+        ),
+    )
+    with pytest.raises(AssertionError):
+        check_prompt()
 
 
 def test_draft_verification_documentation_describes_targeted_repairs() -> None:

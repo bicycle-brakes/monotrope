@@ -202,3 +202,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-05 07:42:44–09:20:53 UTC, 5889 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 10:12:39–11:02:24 UTC, 2986 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 12:17:47–13:32:58 UTC, 4510 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-05 14:33:06–15:17:10 UTC, 2644 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-05 15:17:18–16:19:28 UTC, 3729 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
