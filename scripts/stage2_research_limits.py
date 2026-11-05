@@ -31,11 +31,13 @@ class LimitsError(ValueError):
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
-    """A safe loader that refuses a repeated key instead of letting the last one silently win."""
+    """A safe loader that refuses merge keys and repeated keys explicitly."""
 
     def construct_mapping(self, node, deep: bool = False):
         seen: set = set()
         for key_node, _value_node in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                raise LimitsError("YAML merge keys (<<) are not allowed")
             key = self.construct_object(key_node, deep=deep)
             if not isinstance(key, str):
                 raise LimitsError(f"mapping key {key!r} is not a name")

@@ -126,6 +126,23 @@ def test_limits_reject_unusable_documents(tmp_path: Path, text: str | bytes | No
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        BASE.replace("  finders: 20.0", "  <<: {finders: 19.0}\n  finders: 20.0"),
+        BASE.replace("  finders: 20.0", "  <<: {finders: 20.0}"),
+        BASE.replace("run_minutes: 160.0", "<<: {run_minutes: 159.0}\nrun_minutes: 160.0"),
+        BASE.replace("run_minutes: 160.0", "<<: {run_minutes: 160.0}"),
+        BASE.replace("  finders: 20.0", "  <<: [{finders: 19.0}, {finders: 18.0}]\n  finders: 20.0"),
+    ],
+    ids=["role-override", "role-only", "root-override", "root-only", "merge-sequence"],
+)
+def test_limits_reject_yaml_merge_keys(tmp_path: Path, text: str) -> None:
+    # Plant merges, including silent explicit overrides, at both schema levels.
+    write(tmp_path, text)
+    expect_refusal(tmp_path, "YAML merge keys (<<) are not allowed")
+
+
+@pytest.mark.parametrize(
     ("text", "fault"),
     [
         pytest.param(BASE.replace("run_minutes: 160.0", "run_minutes: true"), "must be a number", id="bool"),

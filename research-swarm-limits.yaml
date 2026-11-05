@@ -8,8 +8,8 @@
 # the judge strictly below it.
 run_minutes: 160
 role_minutes:
-  finders: 20
-  merge: 10
-  sentence: 5
-  topics: 10
-  judge: 15
+  finders: 20  # Each source finder.
+  merge: 10  # The source-map merger.
+  sentence: 5  # The public topic author.
+  topics: 10  # Each of the eleven topic researchers.
+  judge: 15  # The final reconciliation judge.

@@ -409,3 +409,5 @@ Stage-2 call, 2026-11-04: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 880 files, 3292 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 880 files, 3296 commits, 12 rules.
