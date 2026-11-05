@@ -88,6 +88,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
     ),
+    "close_merged_beads.py": (
+        "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
+        "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "
@@ -180,6 +184,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Pure cancellable stage-dispatch library, not a CLI gate; the amended swarm runner will consume it. "
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
+    ),
+    "stage2_research_limits.py": (
+        "Library of scripts/stage2_research_run.py, never an entry point of its own: loads and checks the "
+        "research swarm's time limits from research-swarm-limits.yaml (bead coding-harness-ht1b); "
+        "tests/test_stage2_research_limits.py runs it"
     ),
     "stage2_research_run.py": (
         "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "

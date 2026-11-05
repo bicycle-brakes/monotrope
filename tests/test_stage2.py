@@ -39,6 +39,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import check_criterion_ledger  # noqa: E402
 import check_decision_continuity  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
@@ -11368,20 +11369,25 @@ def test_repair_answer_evidence_failure_stops_safely(world: World) -> None:
     [
         pytest.param(
             "custom: done",
-            "custom: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
-            "`<ID>: fixed — not a test — <reason>`",
+            "custom: the line is neither `<ID>: fixed — tests/<path>::<function>`, "
+            "`<ID>: fixed — guard test — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`",
             id="free-text-no-fixed-status",
         ),
         pytest.param(
             "L1-1: done",
-            "L1-1: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
-            "`<ID>: fixed — not a test — <reason>`",
+            "L1-1: the line is neither `<ID>: fixed — tests/<path>::<function>`, "
+            "`<ID>: fixed — guard test — tests/<path>::<function>` nor `<ID>: fixed — not a test — <reason>`",
             id="no-fixed-status",
         ),
         pytest.param(
             "L1-1: fixed — not a test",
             "L1-1: `fixed — not a test` without a reason",
             id="reason-missing",
+        ),
+        pytest.param(
+            "L1-1: fixed — guard test",
+            "L1-1: `fixed — guard test` without the named test",
+            id="guard-without-a-test",
         ),
     ],
 )
@@ -11401,6 +11407,85 @@ def test_repair_rejects_malformed_known_fixed_lines(world: World, bad: str, prob
     assert "no fixed line" not in prompt
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+
+
+def raising_fault_sentence() -> str:
+    """Read the operative wording from the runner, tolerating source reflow."""
+    assert hasattr(stage2, "RAISING_FAULT_SENTENCE"), "the runner must own the raising-fault sentence constant"
+    return flat(stage2.RAISING_FAULT_SENTENCE)
+
+
+def raising_fault_guidance_gaps(text: str) -> list[str]:
+    """Name what the instruction text lacks about expressing a raising fault as a failed expectation."""
+    text = flat(text)
+    gaps = []
+    if "When the fault itself raises an exception" not in text:
+        gaps.append("raising fault case")
+    if "catch that specific exception in the regression test body" not in text:
+        gaps.append("specific exception caught in the test body")
+    if "`assert`" not in text:
+        gaps.append("assert form")
+    if "`pytest.fail`" not in text:
+        gaps.append("pytest.fail form")
+    # Refuse instructions to leave the application crash unhandled or use its
+    # traceback as proof, even if the correct guidance is still present nearby.
+    uncaught_proof = re.search(
+        r"(?:leave|keep|let|allow|treat|accept)\b[^.;]*\b(?:uncaught|unhandled)\b"
+        r"|(?:traceback|uncaught exception|unhandled exception)\b[^.;]*"
+        r"\b(?:proves?|proof|sufficient|qualifies)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if "fail with" not in text or "pass with" in text or uncaught_proof:
+        gaps.append("failure, not a pass")
+    return gaps
+
+
+def planted_raising_fault_variants() -> dict[str, str]:
+    sentence = raising_fault_sentence()
+    return {
+        "sentence removed": "",
+        "catch instruction removed": sentence.replace(
+            "catch that specific exception in the regression test body", "run"
+        ),
+        "assert removed": sentence.replace("`assert` or ", ""),
+        "pytest.fail removed": sentence.replace(" or `pytest.fail`", ""),
+        "reversed to passing": sentence.replace("fail with", "pass with"),
+        "uncaught traceback as proof": sentence
+        + " Leave the fault's exception uncaught; the traceback alone proves the regression.",
+        "unhandled crash accepted": sentence + " Accept an unhandled exception as sufficient baseline proof.",
+        "traceback qualifies": sentence + " The traceback qualifies as proof of the regression.",
+    }
+
+
+def test_repair_prompts_cover_a_fault_that_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2. Planted faults: sentence, specific-exception catch, assert, pytest.fail removed; passing or uncaught-crash proof."""
+    sentence = raising_fault_sentence()
+    # Reflow the runner's source wording: whitespace must not redefine the guard.
+    monkeypatch.setattr(stage2, "RAISING_FAULT_SENTENCE", stage2.RAISING_FAULT_SENTENCE.replace(" ", "\n  "))
+    assert raising_fault_sentence() == sentence
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(text), name
+    sentence = raising_fault_sentence()
+    assert raising_fault_guidance_gaps(sentence) == []
+    for instructions in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
+        assert raising_fault_guidance_gaps(instructions) == []
+        assert sentence in flat(instructions)
+        for name, text in planted_raising_fault_variants().items():
+            mutated = flat(instructions).replace(sentence, text)
+            assert raising_fault_guidance_gaps(mutated), name
+
+
+def test_implement_prompt_covers_a_fault_that_raises() -> None:
+    """Criterion 1. Planted faults: as for the repair prompts, applied to the implement prompt's own text."""
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(text), name
+    prompt = flat((REPO_ROOT / "prompts" / "04-implement.md").read_text(encoding="utf-8"))
+    sentence = raising_fault_sentence()
+    assert sentence in prompt, "prompts/04-implement.md lost the raising-fault sentence"
+    assert raising_fault_guidance_gaps(prompt) == []
+    for name, text in planted_raising_fault_variants().items():
+        assert raising_fault_guidance_gaps(prompt.replace(sentence, text)), name
 
 
 def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> None:
@@ -11436,7 +11521,7 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
             "protected local evidence",
             "stage2/attempts/<change>/attempt-<n>-<token>.md",
             "written before any post-run check can stop the run",
-            "replace the finished row's `taken — …` with one of the two fixed statuses",
+            "replace the finished row's `taken — …` with one of the three fixed statuses",
             "set the loop row's `Broke a test` mark from the evidence",
             "if the row is not repaired yet, reword its reason so it names no fix",
             "; fixed by",
@@ -11448,8 +11533,9 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
     check_workflow(workflow_text)
     hand_rule = (
         "A hand\nrepair books itself in the row's Status alone: replace the finished row's\n"
-        "`taken — …` with one of the two fixed statuses and set the loop row's\n"
-        "`Broke a test` mark from the evidence. "
+        "`taken — …` with one of the three fixed statuses and set the loop row's\n"
+        "`Broke a test` mark from the evidence: `yes`, `no`, or\n"
+        "`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. "
     )
     assert hand_rule in workflow_text
     for broken in (
@@ -13610,6 +13696,589 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
         render_row(phase6_cells("F-2", "rejected — covered", "phase rejection")),
     ):
         assert untouched in lines, untouched
+
+
+# ---------------------------------------------------------------------------
+# The guard proof of test-only repairs (spec criteria 1-12, ADR 0023)
+# ---------------------------------------------------------------------------
+
+
+# A guard test plants its real fault only under the runner's switch: the planted
+# run replaces the fixed value and goes red on an assertion, the clean run passes.
+GUARD_TEST = (
+    "import os\n"
+    "from pathlib import Path\n\n\n"
+    "def test_fix():\n"
+    "    value = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text(encoding='utf-8')\n"
+    "    if os.environ.get('STAGE2_PLANT_FAULT') == '1':\n"
+    "        value = value.replace('value = 2', 'value = 3')\n"
+    "    assert 'value = 2' in value\n"
+)
+
+# The fault fires under the switch, but the clean run fails too: the planted red
+# alone proves nothing, the clean green is missing.
+GUARD_DIRTY = GUARD_TEST.replace("assert 'value = 2' in value", "assert 'value = 99' in value")
+
+# The clean run skips: a skipped clean leg is no clean green.
+GUARD_SKIPPING = (
+    "import os\n"
+    "import pytest\n"
+    "from pathlib import Path\n\n\n"
+    "def test_fix():\n"
+    "    if not os.environ.get('STAGE2_PLANT_FAULT'):\n"
+    "        pytest.skip('the clean run skips')\n"
+    "    value = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text(encoding='utf-8')\n"
+    "    value = value.replace('value = 2', 'value = 3')\n"
+    "    assert 'value = 2' in value\n"
+)
+
+# The fault fires in the setup, not in a call: a crashed setup is no qualifying red.
+GUARD_SETUP_CRASH = (
+    "import os\n"
+    "import pytest\n\n\n"
+    "@pytest.fixture\n"
+    "def planted():\n"
+    "    if os.environ.get('STAGE2_PLANT_FAULT') == '1':\n"
+    "        raise RuntimeError('the planted setup failure')\n\n\n"
+    "def test_fix(planted):\n"
+    "    assert True\n"
+)
+
+# The planted run's failure is an expected one: xfail is no qualifying red.
+GUARD_XFAIL = (
+    "import os\n"
+    "import pytest\n"
+    "from pathlib import Path\n\n\n"
+    "@pytest.mark.xfail\n"
+    "def test_fix():\n"
+    "    value = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text(encoding='utf-8')\n"
+    "    if os.environ.get('STAGE2_PLANT_FAULT') == '1':\n"
+    "        value = value.replace('value = 2', 'value = 3')\n"
+    "    assert 'value = 2' in value\n"
+)
+
+# The planted run changes the tree it proofs: a mutation the attempt did not make.
+GUARD_MUTATING = GUARD_TEST.replace(
+    "def test_fix():\n",
+    "def test_fix():\n"
+    "    (Path(__file__).resolve().parent.parent / 'src' / 'guard_mutated.txt')"
+    ".write_text('mutated', encoding='utf-8')\n",
+)
+
+# The switch stands in another function of the same file: a neighbour's reference
+# plants nothing in the named test.
+SWITCH_ELSEWHERE_TEST = (
+    "import os\n"
+    "from pathlib import Path\n\n\n"
+    "def test_other_plants():\n"
+    "    assert os.environ.get('STAGE2_PLANT_FAULT') is None\n\n\n"
+    "def test_fix():\n"
+    "    value = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text(encoding='utf-8')\n"
+    "    assert 'value = 2' in value\n"
+)
+
+GUARD_ROW = "taken — guard test — a test-only repair whose test plants its own fault"
+GUARD_ANSWER = "L1-1: fixed — guard test — tests/test_fix.py::test_fix"
+GUARD_PLANT = {"src/app.py": "value = 2\n", "tests/test_fix.py": GUARD_TEST}
+GUARD_EVIDENCE_TEXT = (
+    "Guard evidence: tests/test_fix.py::test_fix — fault: the planted replace turns the fixed "
+    "value = 2 into value = 3 — catches without switch: yes"
+)
+
+
+def guard_world(world: World) -> str:
+    """A repair world whose one row is authorised as a guard test, scripted for its guard proof."""
+    repair_world(world, ("L1-1", GUARD_ROW, "no"))
+    script_repair(
+        world,
+        [repair_step(stdout=GUARD_ANSWER, plant=dict(GUARD_PLANT))],
+        make=[{"stdout": "green\n"}],
+    )
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def reset_tree(world: World) -> None:
+    """Put the tree back to its committed state: a failed repair leaves the attempt's files for the next run's refusal."""
+    git(world.root, "reset", "--hard", "--quiet", "HEAD")
+    git(world.root, "clean", "-fdq")
+
+
+def guard_step(source: str, **more: object) -> dict:
+    """A repair step that answers the guard form and plants `source` as the named guard test."""
+    return repair_step(
+        **{"stdout": GUARD_ANSWER, "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": source}, **more}
+    )
+
+
+def test_guard_answer_accepts_the_named_test_form(world: World) -> None:
+    """Criterion 1. Planted fault: the canonical guard answer is rejected as an unknown fixed form."""
+    guard_world(world)
+    assert world.run("repair") == 0
+    assert len(repair_calls(world)) == 1, "a valid guard repair was retried"
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — guard test — tests/test_fix.py::test_fix"
+    assert record["L1-1"][8] == "yes — guard test — tests/test_fix.py::test_fix"
+    committed = git(world.root, "show", "HEAD:tests/test_fix.py")
+    assert "STAGE2_PLANT_FAULT" in committed, "the kept test lost its planting branch"
+
+
+@pytest.mark.parametrize(
+    ("status", "why"),
+    [
+        pytest.param("taken — test_a", "ordinary-row", id="ordinary-row"),
+        pytest.param("taken — not a test — no test can show it", "text-row", id="text-row"),
+        pytest.param("taken — guard test", "without-a-reason", id="without-a-reason"),
+        pytest.param("taken — guard test — `a quoted reason`", "quoted-reason", id="quoted-reason"),
+        pytest.param('taken — guard test — "quoted reason"', "double-quoted-reason", id="double-quoted-reason"),
+        pytest.param("taken — guard test — 'quoted reason'", "single-quoted-reason", id="single-quoted-reason"),
+        pytest.param(
+            "taken — guard test — \"quoted reason\" `another reason` 'last reason'",
+            "only-quoted-reasons",
+            id="only-quoted-reasons",
+        ),
+        pytest.param("taken — guard test — ", "empty-reason", id="empty-reason"),
+    ],
+)
+def test_guard_answer_requires_explicit_row_authorisation(
+    world: World, monkeypatch: pytest.MonkeyPatch, status: str, why: str
+) -> None:
+    """Criterion 2. Planted fault: an unmarked, text, quoted or reasonless row runs the guard proof."""
+    seed_tests(world)
+    world.write_record([("L1-1", status, "no")])
+    monkeypatch.setattr(stage2, "guard_test_proof", lambda *_a, **_k: pytest.fail(f"proof ran for {why}"))
+    script_repair(world, [guard_step(GUARD_TEST), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "does not authorise it" in prompt, (why, prompt)
+    assert "guard proof ran" not in prompt, why
+
+
+def test_guard_proof_uses_attempt_code_and_planted_switch(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 3. Planted fault: correct baseline code is used, or a green planted run is accepted."""
+    guard_world(world)
+    real_launch = stage2.launch
+    proofs: list[tuple[str, dict[str, str]]] = []
+
+    def spy(command: list[str], cwd: Path, env: dict[str, str], key: str | None = None, **kwargs: object):
+        if len(command) > 1 and command[1] == "-c":
+            proofs.append((str(cwd), dict(env)))
+        return real_launch(command, cwd, env, key, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", spy)
+    assert world.run("repair") == 0
+    legs = [(cwd, env) for cwd, env in proofs if env.get("STAGE2_RED_SELECTOR") == "tests/test_fix.py::test_fix"]
+    assert len(legs) == 2, "the guard proof did not run its two legs on the named test"
+    # Each leg runs in a private repository of its own that materializes the attempt's tree (the
+    # red-first-own-refs change), never in the source worktree itself.
+    trees = [Path(cwd) for cwd, _ in legs]
+    assert all(tree.name == "tree" and tree.parent.name.startswith("stage2-fixed-") for tree in trees), trees
+    assert len(set(trees)) == 2 and str(world.root) not in {str(tree) for tree in trees}, trees
+    planted = [env for _, env in legs if env.get("STAGE2_PLANT_FAULT") == "1"]
+    clean = [env for _, env in legs if "STAGE2_PLANT_FAULT" not in env]
+    assert len(planted) == 1 and len(clean) == 1, "the switch did not stay on the planted leg alone"
+    # A planted run that stays green proves nothing: the refusal names the planted leg.
+    inert = GUARD_TEST.replace("'value = 2', 'value = 3'", "'no such line', 'value = 3'")
+    reset_tree(world)
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(world, [guard_step(inert)] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    leg, planted_green = "planted guard proof", "pytest ended 0 on the planted run"
+    retries = [prompt_of(call) for call in world.calls("codex")[1:]]
+    assert any(leg in prompt and planted_green in prompt for prompt in retries), retries
+
+
+def test_guard_proof_requires_clean_green_without_the_switch(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4. Planted fault: a dirty or skipped clean leg receives the mark, or inherits the switch."""
+    repair_world(world, ("L1-1", GUARD_ROW, "no"))
+    script_repair(world, [guard_step(GUARD_DIRTY)] * 3, make=[{"stdout": "green\n"}] * 3)
+    head = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == head, "a dirty clean leg reached a checkpoint"
+    assert "clean guard proof: pytest ended 1 on the fixed code" in prompt_of(world.calls("codex")[1])
+    assert all(
+        not row[8].startswith("yes — guard test")
+        for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    )
+
+    # With the switch set by the caller, the clean leg must still run without it: a clean leg that
+    # inherited it would fire the fault and refuse this valid repair.
+    monkeypatch.setenv("STAGE2_PLANT_FAULT", "1")
+    reset_tree(world)
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(world, [guard_step(GUARD_TEST)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][8] == "yes — guard test — tests/test_fix.py::test_fix"
+
+    # A skipped clean leg is no clean green either.
+    reset_tree(world)
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(world, [guard_step(GUARD_SKIPPING)] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    prompt = prompt_of(world.calls("codex")[4])
+    assert "clean guard proof" in prompt and "was skipped" in prompt, prompt
+
+
+@pytest.mark.parametrize(
+    ("kind", "needle"),
+    [
+        pytest.param("missing-record", "the outcome record is missing", id="record-absent"),
+        pytest.param("malformed-record", "the outcome record is not readable JSON", id="record-malformed"),
+        pytest.param("schema-record", "the outcome record has schema 2, not 1", id="record-stale-schema"),
+        pytest.param("setup-crash", "ended failed; red first needs passing setup and teardown", id="setup-crash"),
+        pytest.param("expected-fail", "the session ended 0, not as a failing run", id="expected-fail"),
+        pytest.param(
+            "tree-mutation", "the private checkout changed while the planted guard proof ran", id="tree-mutation"
+        ),
+        pytest.param("timeout", "was stopped by the planted guard proof time limit", id="time-limit"),
+        pytest.param("changed-tools", "planted guard proof: ", id="changed-tools"),
+    ],
+)
+def test_guard_proof_preserves_outcome_and_execution_guards(
+    world: World, monkeypatch: pytest.MonkeyPatch, kind: str, needle: str
+) -> None:
+    """Criterion 5. Planted fault: invalid evidence, a crashed setup, an expected fail, a tree or tool
+    mutation or a time limit passes either guard leg."""
+    seed_tests(world)
+    (world.root / "src").mkdir(exist_ok=True)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    source = {
+        "setup-crash": GUARD_SETUP_CRASH,
+        "expected-fail": GUARD_XFAIL,
+        "tree-mutation": GUARD_MUTATING,
+    }.get(kind, GUARD_TEST)
+    (world.root / "tests" / "test_fix.py").write_text(source, encoding="utf-8")
+    records = {"missing-record": None, "malformed-record": b"not json", "schema-record": b'{"schema": 2}'}
+    if kind in records:
+        patched = records[kind]
+        monkeypatch.setattr(stage2, "_red_report_bytes", lambda _path: patched)
+    elif kind == "timeout":
+        real_launch = stage2.launch
+
+        def stopping(command: list[str], cwd: Path, env: dict[str, str], key: str | None = None, **kwargs: object):
+            if len(command) > 1 and command[1] == "-c":
+                raise stage2.StepTimedOut(f"{command[0]} was stopped by the planted guard proof time limit")
+            return real_launch(command, cwd, env, key, **kwargs)
+
+        monkeypatch.setattr(stage2, "launch", stopping)
+    tools = {} if kind == "changed-tools" else None
+    outcome = stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None, tools)
+    assert outcome is not None, f"{kind} was accepted as guard proof"
+    assert needle in outcome, (kind, outcome)
+
+
+def test_guard_proof_scrubs_failure_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. Planted fault: a guard refusal exposes the outcome record's unscrubbed diagnostic."""
+    seed_tests(world)
+    (world.root / "src").mkdir(exist_ok=True)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    (world.root / "tests" / "test_fix.py").write_text(GUARD_TEST, encoding="utf-8")
+    original = stage2._red_report_bytes
+    secret = KEY
+
+    def foreign(path: Path) -> bytes | None:
+        record = original(path)
+        assert record is not None, "the guard run left no outcome record"
+        return json.dumps({**json.loads(record), "selector": f"tests/elsewhere.py::test_{secret}"}).encode("utf-8")
+
+    monkeypatch.setattr(stage2, "_red_report_bytes", foreign)
+    outcome = stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", secret)
+    assert outcome is not None, outcome
+    assert secret not in outcome and "[credential]" in outcome, outcome
+    assert "tests/test_fix.py::test_fix" in outcome, outcome
+
+
+def test_guard_source_uses_python_lines_with_unicode_separator(world: World) -> None:
+    """Criterion 6: a string's U+2028 must neither import nor hide a switch reference."""
+    seed_tests(world)
+    path = world.root / "tests" / "test_fix.py"
+    prefix = "separator = '\u2028'\n" * 8
+    # Module-level planting supplies real red/green but cannot authorise the test's source.
+    outside = (
+        "import os\n"
+        "value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "def test_other():\n    STAGE2_PLANT_FAULT = True\n"
+        "def test_fix():\n    assert value == 2\n"
+    )
+    path.write_text(prefix + outside, encoding="utf-8")
+    outcome = stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    assert outcome is not None and "names STAGE2_PLANT_FAULT nowhere" in outcome, outcome
+    guarded = (
+        "import os\n"
+        "def test_fix():\n"
+        "    value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "    assert value == 2\n"
+    )
+    path.write_text(prefix + guarded, encoding="utf-8")
+    assert stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
+
+
+def test_guard_source_reads_the_definition_pytest_collected(world: World) -> None:
+    """Criterion 6: an overwritten definition must not supply the executed test's switch."""
+    seed_tests(world)
+    body = (
+        "import os\n"
+        "def test_fix():\n    STAGE2_PLANT_FAULT = True\n"
+        "value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "def test_fix():\n    assert value == 2\n"
+    )
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(world, [guard_step(body)] * 3, make=[{"stdout": "green\n"}] * 3)
+    head = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1, "an unused first definition authorised the collected test"
+    assert git(world.root, "rev-parse", "HEAD") == head
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "names STAGE2_PLANT_FAULT nowhere in `test_fix`" in prompt, prompt
+    # The reverse order is valid: pytest runs the later, switch-bearing definition.
+    (world.root / "tests" / "test_fix.py").write_text(
+        "import os\n"
+        "def test_fix():\n    assert True\n"
+        "def test_fix():\n"
+        "    value = 3 if os.environ.get('STAGE2_PLANT_FAULT') == '1' else 2\n"
+        "    assert value == 2\n",
+        encoding="utf-8",
+    )
+    assert stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None) is None
+
+
+def test_guard_switch_must_appear_in_the_named_test(world: World) -> None:
+    """Criterion 6. Planted fault: another function's switch reference satisfies the source check."""
+    seed_tests(world)
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(
+        world,
+        [guard_step(SWITCH_ELSEWHERE_TEST), repair_step()],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "names STAGE2_PLANT_FAULT nowhere in `test_fix`; a guard proof plants nothing there" in prompt, prompt
+
+
+def test_guard_repairs_write_statuses_and_marks_only_after_complete_proof(world: World) -> None:
+    """Criterion 7. Planted fault: a failed leg writes a mark, or a proven repair loses its guard form."""
+    repair_world(
+        world,
+        ("L1-1", GUARD_ROW, "no"),
+    )
+    world.write_findings(
+        VERDICT,
+        released_block([released_cells("L1-2", GUARD_ROW, "no", "released finding")]),
+        phase6_block([phase6_cells("F-1", GUARD_ROW, "phase finding")]),
+    )
+    answer = "\n".join(
+        [
+            GUARD_ANSWER,
+            "L1-2: fixed — guard test — tests/test_fix.py::test_fix",
+            "F-1: fixed — guard test — tests/test_fix.py::test_fix",
+        ]
+    )
+    script_repair(world, [guard_step(GUARD_DIRTY, stdout=answer)] * 3, make=[{"stdout": "green\n"}] * 3)
+    head = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == head, "a failed guard leg reached a checkpoint"
+    for where, text in (("record", world.record().read_text(encoding="utf-8")), ("findings", world.text())):
+        proof_rows = stage2.record_rows(text) if where == "record" else sum(stage2.findings_rows(text), [])
+        assert proof_rows, where
+        assert all(not row[8].startswith("yes — guard test") for row in proof_rows), where
+        assert all(not row[7].startswith("fixed — guard test") for row in proof_rows), where
+
+    reset_tree(world)
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    world.write_findings(
+        VERDICT,
+        released_block([released_cells("L1-2", GUARD_ROW, "no", "released finding")]),
+        phase6_block([phase6_cells("F-1", GUARD_ROW, "phase finding")]),
+    )
+    script_repair(world, [guard_step(GUARD_TEST, stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — guard test — tests/test_fix.py::test_fix"
+    assert record["L1-1"][8] == "yes — guard test — tests/test_fix.py::test_fix"
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    rows = {row[0]: row for row in [*released_now, *phase6_now]}
+    for ident in ("L1-2", "F-1"):
+        assert rows[ident][7] == "fixed — guard test — tests/test_fix.py::test_fix", ident
+        # The proof mark lives where ordinary marks live (spec, criterion 7, "in its existing
+        # location"): the private record. A findings row keeps its Broke-a-test cell untouched.
+        assert "guard test" not in rows[ident][8], ident
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert "fixed — guard test — tests/test_fix.py::test_fix" in committed
+
+
+def test_guard_form_keeps_other_repair_forms_and_environments_strict(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 8. Planted fault: a caller switch reaches an ordinary proof, or authorisation loosens."""
+    repair_world(world)
+    real_launch = stage2.launch
+    envs: list[dict[str, str]] = []
+
+    def spy(command: list[str], cwd: Path, env: dict[str, str], key: str | None = None, **kwargs: object):
+        envs.append(dict(env))
+        return real_launch(command, cwd, env, key, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", spy)
+    monkeypatch.setenv("STAGE2_PLANT_FAULT", "1")
+    assert world.run("repair") == 0
+    assert envs, "the ordinary proof never launched"
+    assert all("STAGE2_PLANT_FAULT" not in env for env in envs), "the caller's switch reached a runner launch"
+    assert not stage2.guard_authorised("taken — test_a")
+    assert not stage2.guard_authorised("taken — not a test — a reason")
+    assert stage2.guard_authorised(GUARD_ROW)
+    # An authorised guard row may not slip out through the text form.
+    world.write_record([("L1-1", GUARD_ROW, "no")])
+    script_repair(
+        world,
+        [repair_step(stdout="L1-1: fixed — not a test — the row says guard")] * 3,
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    head = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert "answered `not a test`, but the row is a code row" in prompt_of(world.calls("codex")[-1])
+
+
+def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: World) -> None:
+    """Criterion 9. Planted fault: evidence lost or refused, evidence alone becomes a verdict, or
+    unrelated malformed prose passes."""
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", f"{rows(1)}\n{GUARD_EVIDENCE_TEXT}"), codex_ok("T1", "X1: agree")])
+    assert world.run("review") == 0
+    text = world.text()
+    assert text.index(GUARD_EVIDENCE_TEXT) < text.index("Phase 6 verdict: codex T1")
+    assert "| X1 |" in text, "a finding row beside the evidence was lost"
+
+    world.findings.unlink()
+    (world.bin / "calls.jsonl").unlink()
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T2", f"No finding.\n{GUARD_EVIDENCE_TEXT}")])
+    assert world.run("review") == 0, "evidence beside `No finding.` was refused"
+    text = world.text()
+    assert GUARD_EVIDENCE_TEXT in text and "No finding." in text
+    assert "Phase 6 verdict: codex T2" in text
+
+    world.findings.unlink()
+    (world.bin / "calls.jsonl").unlink()
+    world.script(codex=[codex_ok("T3", GUARD_EVIDENCE_TEXT)])
+    assert world.run("review") != 0, "evidence alone became a verdict"
+    text = world.text()
+    assert "Phase 6 verdict" not in text
+    assert GUARD_EVIDENCE_TEXT in text, "the rejected answer lost the evidence"
+
+    world.findings.unlink()
+    (world.bin / "calls.jsonl").unlink()
+    malformed = "Guard evidence: tests/test_fix.py::test_fix — fault: x — catches without switch: maybe"
+    world.script(codex=[codex_ok("T4", malformed)])
+    assert world.run("review") != 0, "a malformed evidence line passed as a verdict"
+    assert "Phase 6 verdict" not in world.text()
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        "Guard evidence: tests/test_fix.py::test_fix — fault: missing check — catches without switch: no",
+        "Guard evidence: malformed evidence",
+    ],
+)
+def test_phase6_refuses_malformed_guard_evidence_beside_findings(world: World, evidence: str) -> None:
+    """A finding row must not hide an invalid or reasonless guard-evidence line."""
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", f"{rows(1)}\n{evidence}")])
+    assert world.run("review") != 0, "malformed guard evidence passed beside a finding"
+    text = world.text()
+    assert "Phase 6 verdict" not in text
+    assert evidence in text, "the rejected answer lost its evidence"
+
+
+def test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows(world: World) -> None:
+    """Criterion 9. Planted fault: the prompt allows sampling or exposes loop rows before the verdict."""
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "X1: agree")])
+    assert world.run("review") == 0
+    prompt = world.calls("codex")[0]["argv"][-1]
+    assert stage2.PHASE6_GUARD_INSTRUCTION in prompt
+    assert stage2.PHASE6_GUARD_EVIDENCE in prompt
+    assert stage2.PHASE6_ANSWER_FORMAT in prompt
+    assert "answer exactly: No finding." not in prompt
+    assert "every one, never a sample" in prompt
+    assert "the test's source and the implementation diff" in prompt
+    assert "withheld until your verdict stands" in prompt
+    assert "- X1 [" not in prompt and "Status: taken" not in prompt, "loop rows reached the reviewer"
+    assert prompt.rstrip().endswith(stage2.READ_REQUEST)
+
+
+def test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards() -> None:
+    """Criterion 10. Planted fault: the prompt omits mandatory semantic evidence or the
+    conditional-failure BLOCKER."""
+    for demanded in ("every guard test", "the real fault", "STAGE2_PLANT_FAULT=1", "BLOCKER", "never a sample"):
+        assert demanded in stage2.PHASE6_GUARD_INSTRUCTION, demanded
+    assert "fault:" in stage2.PHASE6_GUARD_EVIDENCE and "catches without switch:" in stage2.PHASE6_GUARD_EVIDENCE
+    # The transport keeps a bare conditional-failure description as evidence prose, where the
+    # findings grammar and the instruction's BLOCKER rule judge it; the runner itself never
+    # turns it into a proof.
+    bare = (
+        "Guard evidence: tests/test_fix.py::test_fix — fault: if the switch is set, assert False "
+        "— catches without switch: yes"
+    )
+    evidence, rest = stage2.split_guard_evidence(bare)
+    assert evidence == [bare] and rest == ""
+    evidence, rest = stage2.split_guard_evidence(f"{rows(1)}\n{bare}")
+    assert evidence == [bare] and len(stage2.parse_rows(rest)[0]) == 1
+    evidence, rest = stage2.split_guard_evidence(f"Guard evidence: almost\n{rows(1)}")
+    assert evidence == [] and "Guard evidence: almost" in rest, "a prefix-only line became evidence"
+    # A reviewer writes natural prose after the verdict word: "yes, the child assertion ...". A
+    # punctuation mark after yes or no must not turn a real evidence line into verdict text, which
+    # would make a valid phase-6 answer malformed (2026-11-03, the guard-test re-review).
+    for verdict in ("yes, the child assertion rejects it", "no; it only fails under the switch", "yes: confirmed"):
+        line = f"Guard evidence: tests/test_fix.py::test_fix — fault: value 2 becomes 3 — catches without switch: {verdict}"
+        evidence, rest = stage2.split_guard_evidence(f"{rows(1)}\n\n{line}\n")
+        assert evidence == [line] and len(stage2.parse_rows(rest)[0]) == 1, verdict
+    bare_no = "Guard evidence: tests/test_fix.py::test_fix — fault: x — catches without switch: no"
+    assert stage2.split_guard_evidence(bare_no)[0] == [], "a bare no without its reason became evidence"
+
+
+def test_guard_doctrine_keeps_repeatable_repair_only_proofs() -> None:
+    """Criterion 12. Planted fault: the doctrine drops the guard form, its authorisation, or a proof leg."""
+    assert "`<ID>: fixed — guard test — tests/<path>::<function>`" in stage2.REPAIR_ANSWER
+    assert "`taken — guard test — <reason>`" in stage2.REPAIR_ANSWER
+    assert "qualifying red with `STAGE2_PLANT_FAULT=1`" in stage2.REPAIR_ANSWER
+    assert "clean green without the switch" in stage2.REPAIR_ANSWER
+    assert "the planting branch stays" in stage2.REPAIR_ANSWER
+    assert "An ordinary code row needs a test that fails on the baseline's code" in stage2.REPAIR_ANSWER
+    assert "`taken — guard test — <reason>`" in stage2.RECORD_INTRO
+    # Both repair formats embed the same answer unaltered.
+    for carried in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
+        assert "`<ID>: fixed — guard test — tests/<path>::<function>`" in carried
+        assert "guard test" in carried
+
+
+def test_guard_repairs_preserve_the_planting_branch_for_replay(world: World) -> None:
+    """Criterion 12. Planted fault: a proven repair removes its branch, or the kept test cannot replay."""
+    guard_world(world)
+    assert world.run("repair") == 0
+    committed = git(world.root, "show", "HEAD:tests/test_fix.py")
+    assert "STAGE2_PLANT_FAULT" in committed, "the kept test lost its planting branch"
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — guard test — tests/test_fix.py::test_fix"
+    replay = stage2.guard_test_proof(world.root, "tests/test_fix.py::test_fix", None)
+    assert replay is None, "the retained test cannot repeat its two-run proof"
+
+
+def test_guard_status_does_not_extend_the_criterion_ledger() -> None:
+    """Criterion 12. Planted fault: a guard repair status parses as a criterion-ledger entry."""
+    for line in (
+        "- 3: fixed — guard test — tests/test_fix.py::test_fix",
+        "- 3: yes — guard test — tests/test_fix.py::test_fix",
+        "- 3: taken — guard test — a reason",
+    ):
+        assert check_criterion_ledger.parse_entry(line) is None, line
+    for line in (
+        "- 3: tests/test_fix.py::test_fix",
+        "- 3: not yet written tests/test_fix.py::test_fix",
+        "- 3: not a test — phase 6 reads every guard test a change adds",
+    ):
+        assert check_criterion_ledger.parse_entry(line) is not None, line
 
 
 def test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_commit(world: World) -> None:
