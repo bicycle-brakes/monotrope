@@ -29,7 +29,8 @@ existing research file with no readable day is never dated from the spec or the 
 started on or before the adoption day is a dated legacy exemption, and a `bounded` change or `spike`
 is exempt by class. Evidence that cannot be read or is ambiguous (malformed records, duplicate global
 ids, links to nothing, one field twice, a path in two directive lists, incompatible answered records,
-an unreadable adoption or start day, an invalid or conflicting class, more than one exception record)
+an unreadable required adoption or start day, an invalid or conflicting class, or ambiguous exception
+fields on a change that owes a missing run)
 is not measured: exit 3, which takes precedence over findings.
 
 Usage:
@@ -545,8 +546,8 @@ def _exception_field(body: list[str], found: dict[str, int], label: str, ident: 
     return content
 
 
-def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
-    """Read unique Q identities and their structured research links; repeats are ambiguous."""
+def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> dict[str, QRecord]:
+    """Read research links; inspect exception fields only when a missing run is owed."""
     lines = _lines(text)
     fenced = _fenced_flags(lines)
     heads = [
@@ -570,6 +571,8 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
             field_match = _FIELD.match(line)
             if field_match and not flags[number]:
                 name = field_match.group(1)
+                if name == "research_swarm_exception" and not read_exception:
+                    continue
                 if name in found and name.startswith(("research_", "answer", "status", "answered_by", "context")):
                     raise CannotMeasure(f"{label} {ident}: the field {name} stands twice")
                 found.setdefault(name, number)
@@ -825,11 +828,15 @@ class Outcome:
     notes: list[str] = field(default_factory=list)
 
 
-def _decisions(folder: Path, label: str) -> dict[str, QRecord]:
+def _decisions(folder: Path, label: str, *, read_exception: bool = False) -> dict[str, QRecord]:
     """The change's Q-records; an unreadable file is not measured."""
     decisions = folder / "decisions.md"
     try:
-        return parse_decisions(decisions.read_text(encoding="utf-8"), label) if decisions.is_file() else {}
+        return (
+            parse_decisions(decisions.read_text(encoding="utf-8"), label, read_exception=read_exception)
+            if decisions.is_file()
+            else {}
+        )
     except (OSError, UnicodeDecodeError) as error:
         raise CannotMeasure(f"{label}: decisions.md cannot be read ({error})") from error
 
@@ -856,22 +863,33 @@ def _missing_complete_run(
     root: Path,
     load_records: Callable[[], dict[str, QRecord]],
     research_text: str | None,
+    *,
+    complete: bool = False,
 ) -> Outcome:
     """The spec boundary: which spec-bearing change without a complete run owes one.
 
-    The start day decides - `research.md` frontmatter `date`, else the spec's `date`. A `bounded` change
-    or `spike` is exempt by class without an adoption comparison; old stock (start on or before the
-    adoption day) is a dated legacy exemption, with the class missing permitted. A new `feature` or
-    `architectural` change needs a granted exception or the run. The interview records are read only
-    there: an exempt or legacy change needs no readable answer (older prose answers are not YAML).
+    A `bounded` change or `spike` is exempt before reading research metadata. A complete run already
+    meets the obligation; its handoff checks run separately. Otherwise the start day decides:
+    `research.md` frontmatter `date`, else the spec's `date`. Old stock (start on or before adoption)
+    is a dated legacy exemption, with the class missing permitted. Only a new `feature` or
+    `architectural` change missing a complete run reads interview exception records here.
     """
     try:
         spec_body = (folder / "spec.md").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise CannotMeasure(f"{label}: spec.md cannot be read ({error})") from error
     header = _header(spec_body)
-    research_header = _header(research_text, "research.md") if research_text is not None else {}
     spec_class = header.get("class")
+    if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
+        out.notes.append(
+            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
+        )
+        return out
+    # Complete-run obligations are checked separately; applicability needs neither
+    # a research header nor exception records once the required run exists.
+    if complete:
+        return out
+    research_header = _header(research_text, "research.md") if research_text is not None else {}
     research_class = research_header.get("class")
     for source, klass in (("research.md", research_class), ("spec.md", spec_class)):
         if klass is not None and (not isinstance(klass, str) or klass not in CLASSES):
@@ -888,11 +906,6 @@ def _missing_complete_run(
         start = header.get("date")
         if type(start) is not date:
             raise CannotMeasure(f"{label}: spec.md names no readable start date")
-    if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
-        out.notes.append(
-            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
-        )
-        return out
     adopted = _adopted(root)
     if start <= adopted:
         out.notes.append(_legacy_note(label, start, adopted))
@@ -924,7 +937,9 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
         if not spec_exists:
             out.notes.append(f"{label}: pending - no research.md, so no v2 evidence yet")
             return out
-        return _missing_complete_run(out, label, folder, root, lambda: _decisions(folder, label), None)
+        return _missing_complete_run(
+            out, label, folder, root, lambda: _decisions(folder, label, read_exception=True), None
+        )
     try:
         research_text = research.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -934,7 +949,9 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
         if not spec_exists:
             out.notes.append(f"{label}: pending - no research-swarm/v2 evidence yet")
             return out
-        return _missing_complete_run(out, label, folder, root, lambda: _decisions(folder, label), research_text)
+        return _missing_complete_run(
+            out, label, folder, root, lambda: _decisions(folder, label, read_exception=True), research_text
+        )
     ids = [run.run_id for run in runs]
     if len(set(ids)) != len(ids):
         raise CannotMeasure(f"{label}: a run id appears twice")
@@ -985,12 +1002,12 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
     def load_records() -> dict[str, QRecord]:
         nonlocal records
         if records is None:
-            records = _decisions(folder, label)
+            records = _decisions(folder, label, read_exception=not complete)
         return records
 
-    if not complete and spec_exists:
-        _missing_complete_run(out, label, folder, root, load_records, research_text)
-        if records is None:
+    if spec_exists:
+        _missing_complete_run(out, label, folder, root, load_records, research_text, complete=bool(complete))
+        if not complete and records is None:
             # Class and legacy exemptions need no interview evidence. Run validation above still applies.
             return out
     records = load_records()

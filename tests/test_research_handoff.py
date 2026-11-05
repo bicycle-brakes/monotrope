@@ -1267,11 +1267,11 @@ def test_ambiguous_applicability_or_exception_is_not_measured(
     code, out = world.check(capsys)
     assert code == 3 and "class" in out, out
     record = q_record(1, items=(f"{RUN1}/H-1",), exception=GRANT, extra=f"\n{GRANT}")
-    world.write([run_text(RUN1)], records=[record])
+    world.write([], records=[record], research=False)
     code, out = world.check(capsys)
     assert code == 3 and "research_swarm_exception" in out, out
     twice = [q_record(1, exception=GRANT), q_record(2, exception=GRANT)]
-    world.write([run_text(RUN1)], records=twice)
+    world.write([], records=twice, research=False)
     code, out = world.check(capsys)
     assert code == 3 and "Q-1" in out and "Q-2" in out, out
     world.write([], spec=spec_text())
@@ -1380,6 +1380,67 @@ def test_exempt_incomplete_runs_need_no_readable_interview(world: World, capsys,
         research_day=day,
     )
     assert world.check(capsys)[0] == 3
+
+
+@pytest.mark.parametrize("state", ["bounded", "spike", "legacy", "complete"])
+def test_exempt_applicability_never_reads_exception_or_unneeded_header(world: World, monkeypatch, state) -> None:
+    # L2-1/L2-2: applicability must stop before exception I/O and before an
+    # unnecessary research header; complete-run obligations remain a separate check.
+    klass = state if state in ("bounded", "spike") else "feature"
+    world.write([], spec=spec_text(klass=klass, day=OLD_DAY), research=False)
+    research = None if state == "legacy" else "---\ntitle: Undated research\n---\n"
+    original_header = gate._header
+
+    def needed_header(text, *args):
+        assert text != research, "an exempt state must not parse the research header"
+        return original_header(text, *args)
+
+    def unexpected_decisions():
+        pytest.fail("an exempt applicability state must not read decisions.md")
+
+    monkeypatch.setattr(gate, "_header", needed_header)
+    outcome = gate._missing_complete_run(
+        gate.Outcome(),
+        "demo",
+        world.folder,
+        world.root,
+        unexpected_decisions,
+        research,
+        complete=state == "complete",
+    )
+    assert not outcome.findings
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_class_exemption_needs_no_research_start_day(world: World, capsys, klass) -> None:
+    # L2-2: planting an undated research skeleton must not demand its date.
+    world.write([], spec=spec_text(klass=klass, day=None), research_day=None)
+    (world.folder / "decisions.md").write_bytes(b"\xff")
+    write_adoption(world.root, None)
+    code, output = world.check(capsys)
+    assert code == 0 and "class exemption" in output, output
+
+
+@pytest.mark.parametrize("fault", ["duplicate-field", "two-records", "answer", "context"])
+def test_complete_run_does_not_read_exception_fields(world: World, capsys, fault) -> None:
+    # L2-1: exception ambiguity is irrelevant when a complete run already exists.
+    # Keep a real research obligation, so skipping all interview checks cannot pass.
+    closing = q_record(1, items=(f"{RUN1}/H-1",))
+    extra = q_record(2, exception=GRANT)
+    if fault == "duplicate-field":
+        extra += f"\n{GRANT}\n"
+    elif fault == "two-records":
+        extra += q_record(3, exception=GRANT)
+    elif fault == "answer":
+        extra = extra.replace('answer: "yes"', "answer: true")
+    else:
+        extra = extra.replace("context: |\n  Topic: demo.", "context: [demo]")
+    world.write([run_text(RUN1)], records=[closing, extra], research_day=None)
+    code, output = world.check(capsys)
+    assert code == 0, output
+    world.write([run_text(RUN1)], records=[extra], research_day=None)
+    code, output = world.check(capsys)
+    assert code == 1 and f"{RUN1}/H-1" in output, output
 
 
 @pytest.mark.parametrize(

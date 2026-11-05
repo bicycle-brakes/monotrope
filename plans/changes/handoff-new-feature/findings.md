@@ -430,3 +430,20 @@ Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 892 files, 3284 commits, 12 rules.
 
 Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3286 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 892 files, 3301 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3301 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - L2-1: no fixed line
+> - L2-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/handoff-new-feature/stage2/attempts/handoff-new-feature/attempt-1-20261105T070949784801Z-32622ef3.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 892 files, 3305 commits, 12 rules.
