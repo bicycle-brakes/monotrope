@@ -510,7 +510,9 @@ def test_binding_accepts_only_exact_research_provenance_publication(store, repo)
     tail = b"\n<!-- research-swarm/v2 run 1 -->\n"
     with freeze(repo) as first:
         frozen = first.sources()[RESEARCH]
-        stored = snap.stored_binding(first.manifest(), RESEARCH, frozen, append=tail, publication=prepared)
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-04"
+        )
     # before the publication was written, the frozen bytes alone still match (the pre-publication crash)
     (repo / RESEARCH).write_bytes(frozen)
     with freeze(repo) as same:
@@ -888,3 +890,24 @@ def test_a_reused_result_keeps_the_run_that_launched_it(store, repo):
     assert record["launched_in"] == first
     assert record["reused_from"] == {"run_id": source.run_id} and source.run_id != first
     assert record["started"] == "2026-10-18T10:00:00Z"
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_digest_only_publication_reports_binding_drift_without_reuse(store, repo, published):
+    snap = snapshot()
+    tail = b"\nRunner research\n"
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        prepared = frozen + b"Corrected prefix\n"
+        stored = snap.stored_binding(first.manifest(), RESEARCH, frozen, append=tail, publication=prepared)
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding=stored)
+    if published:
+        (repo / RESEARCH).write_bytes(prepared + tail)
+    with freeze(repo) as current:
+        assert changed(current, stored) == [RESEARCH], "A publication without its day must invalidate reuse"
+    source, plan = resume(store, repo, [k])
+    assert not source.usable
+    assert source.reasons == ["binding changed: " + RESEARCH]
+    assert plan.reused == {}
+    assert plan.to_launch == [k]

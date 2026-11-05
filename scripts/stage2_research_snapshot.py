@@ -258,6 +258,8 @@ def stored_publication(binding):
     """Read the exact planned publication and its day, if a new-format binding records them."""
     record = binding.get("research_publication")
     if record is None:
+        if "research_publication_normalised_sha256" in binding:
+            raise ResearchSnapshotError("stored publication has no exact bytes and publication day")
         return None
     try:
         data = base64.b64decode(record["base64"], validate=True)

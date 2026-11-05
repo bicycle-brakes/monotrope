@@ -1199,7 +1199,7 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(directory)
 
 
-RESEARCH_TITLE = re.compile(r"(?m)^#[^\n]*\n")
+RESEARCH_TITLE = re.compile(r"(?m)^#[ \t][^\n]*\n")
 RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
 
 
@@ -1226,6 +1226,19 @@ def _notice_pattern(notice: str) -> re.Pattern[str]:
     return re.compile(r"(?:\r?\n)?" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
 
 
+def research_opening_notices(text: str, body_start: int) -> list[str]:
+    """Generated notices still present before the research's first section or runner audit.
+
+    The active-file census shares the publisher's exact notice patterns, so authored mentions
+    below the opening cannot be mistaken for an unfilled skeleton.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    start = title.end() if title else body_start
+    boundary = RESEARCH_OPENING_END.search(text, start)
+    opening = text[start : boundary.start() if boundary else len(text)]
+    return [notice for notice in skeleton_notices() if _notice_pattern(notice).search(opening)]
+
+
 def _without_skeleton_opening(text: str, body_start: int) -> str:
     """The body's opening region without its generated notices; everything below the first section stays.
 
@@ -1234,14 +1247,14 @@ def _without_skeleton_opening(text: str, body_start: int) -> str:
     an all-blank leftover collapse.
     """
     title = RESEARCH_TITLE.search(text, body_start)
-    if title is None:
-        return text
+    if title is None or text[body_start : title.start()].strip():
+        raise Refused("research publication requires an opening title heading after the frontmatter")
     region_start = title.end()
     boundary = RESEARCH_OPENING_END.search(text, region_start)
     region_end = boundary.start() if boundary else len(text)
     region = text[region_start:region_end]
     removed = False
-    for notice in skeleton_notices():
+    for notice in research_opening_notices(text, body_start):
         region, count = _notice_pattern(notice).subn("", region, count=1)
         removed = removed or count > 0
     if removed and not region.strip():
@@ -1257,16 +1270,16 @@ def research_publication(existing: bytes, *, producer: str, day: str) -> bytes:
     a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
     missing field is inserted before `tags:` or at the header's end — and the generated opening
     paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
-    prose, audit lines, envelopes and the file's line-ending style. Bytes that are not UTF-8 or have
-    no header come back unchanged; nothing here owns them.
+    prose, audit lines, envelopes and the file's line-ending style. Undecodable bytes, missing
+    frontmatter and a missing title heading are refused before publication.
     """
     try:
         text = existing.decode("utf-8")
-    except UnicodeDecodeError:
-        return existing
+    except UnicodeDecodeError as error:
+        raise Refused("research publication refused: research is not UTF-8") from error
     header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
     if header is None:
-        return existing
+        raise Refused("research publication requires frontmatter")
     start, end = header.span(1)
     block = text[start:end]
     eol = "\r\n" if "\r\n" in block else "\n"

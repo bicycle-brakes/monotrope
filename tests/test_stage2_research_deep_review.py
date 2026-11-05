@@ -739,3 +739,27 @@ def test_a_store_in_the_common_git_dir_or_main_checkout_is_refused(tmp_path: Pat
         with pytest.raises(stage2_research_store.StoreWriteError):
             store.assert_outside(*bounds)
     stage2_research_store.Store(tmp_path / "elsewhere").assert_outside(*bounds)
+
+
+@pytest.mark.parametrize(
+    ("source", "reason"),
+    [
+        (b"---\nprovenance: human-written\n---\n# Research\n\xff", "not UTF-8"),
+        (b"# Research\nfile is empty until it has run.\n", "frontmatter"),
+        (b"---\nprovenance: human-written\n---\nfile is empty until it has run.\n", "title heading"),
+        (b"---\nprovenance: human-written\n---\n## Runner exploration\n", "title heading"),
+        (b"---\nprovenance: human-written\n---\nfile is empty until it has run.\n# Later title\n", "title heading"),
+    ],
+)
+def test_invalid_research_publication_is_refused_without_writing(tmp_path, source, reason):
+    path = tmp_path / "research.md"
+    path.write_bytes(source)
+    refused = False
+    try:
+        prepared = stage2.research_publication(path.read_bytes(), producer="claude-code", day="2026-11-05")
+        stage2.publish_research(path, prepared, "## Runner exploration — 2026-11-05\nAccepted answer")
+    except stage2.Refused as error:
+        refused = True
+        assert reason in str(error)
+    assert refused, "Publication must refuse research whose provenance and opening cannot be corrected"
+    assert path.read_bytes() == source, "Refused publication must preserve the original file"
