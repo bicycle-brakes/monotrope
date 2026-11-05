@@ -1313,26 +1313,23 @@ def research_publication(existing: bytes, *, producer: str, day: str) -> bytes:
     return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
 
 
-def publish_research(path: Path, prepared: bytes, text: str, *, stamp: bool = True) -> None:
+def publish_research(path: Path, prepared: bytes, text: str) -> None:
     """Write the prepared research bytes with the publication's record appended, in one atomic replacement.
 
     The prepared bytes already carry the corrected header and the removed skeleton notices; this adds the
     runner's own record after them, stamps `updated:` like any research append and replaces the file once
-    through `write_atomic`. With ``stamp=False`` the swarm retains its stored publication bytes and day
-    on resume. A failure before or during the replacement leaves the previous bytes intact.
+    through `write_atomic`. A resumed swarm retains its stored producer day while `updated:` records
+    this publication's day. A failure before or during the replacement leaves the previous bytes intact.
     """
     addition = text.rstrip().encode("utf-8") + b"\n"
     separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
     joined = prepared + separator + addition
-    if not stamp:
-        write_atomic(path, joined)
-        return
     try:
         decoded = joined.decode("utf-8")
     except UnicodeDecodeError:
         stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
     else:
-        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.fromisoformat(today())).encode("utf-8")
     write_atomic(path, stamped)
 
 

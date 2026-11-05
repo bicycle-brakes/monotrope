@@ -291,7 +291,7 @@ def test_publication_uses_frozen_research_despite_prepublication_edit(sworld: Sw
 
 @pytest.mark.parametrize("published", [True, False])
 def test_resume_reuses_publication_bytes_and_day(sworld: SwarmWorld, monkeypatch, published) -> None:
-    # L1-9: the second day must not rewrite the earlier publication's producer or prefix.
+    # L1-9/L2-1: resume retains the first producer day and prefix, but stamps updated on publication.
     sworld.research.write_text(swarm.swarm_skeleton(), encoding="utf-8")
     sworld.commit()
     monkeypatch.setattr(stage2, "today", lambda: "2026-11-04")
@@ -321,7 +321,14 @@ def test_resume_reuses_publication_bytes_and_day(sworld: SwarmWorld, monkeypatch
     sworld.complete()
     (sworld.bin / "calls.jsonl").unlink()
     assert sworld.run() == 0
-    assert sworld.research.read_bytes().startswith(first), "resume must reuse the exact publication bytes and day"
+    resumed = sworld.research.read_bytes()
+    assert b"updated: 2026-11-05\n" in resumed, "resume must stamp updated on its own publication day"
+
+    def mask(data):
+        return re.sub(rb"(?m)^updated: [^\r\n]*", b"updated: <stamp>", data)
+
+    assert mask(resumed).startswith(mask(first)), "resume must preserve the prefix apart from updated"
+    assert b'version: "2026-11-04"' in resumed, "the first publication's producer day must stay"
     assert manifest_of(sworld)["resume"]["usable"] is True
     assert [call["kind"] for call in sworld.calls()] == ["judge"]
 

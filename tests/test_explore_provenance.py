@@ -9,6 +9,7 @@ orchestrator's step 7 of the plan (done 2026-11-04); the test guards that no act
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -27,15 +28,30 @@ def test_active_model_research_has_no_false_human_provenance() -> None:
     affected = []
     for path in active_research_files():
         text = path.read_text(encoding="utf-8")
-        _, header, body = text.split("---", 2)
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        frontmatter = re.match(r"\A\ufeff?---\n(.*?)\n---(?:\n|$)", text, re.S)
+        if frontmatter is None:
+            affected.append(f"{relative}: unreadable header (no frontmatter)")
+            continue
+        try:
+            header = yaml.safe_load(frontmatter.group(1))
+        except yaml.YAMLError:
+            affected.append(f"{relative}: unreadable header (malformed YAML)")
+            continue
+        if not isinstance(header, Mapping):
+            affected.append(f"{relative}: unreadable header (not a mapping)")
+            continue
+        body = text[frontmatter.end() :]
         # Quoted examples and fenced code are not runner publication evidence.
         visible = re.sub(r"(?ms)^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$", "", body)
         published = re.search(r"(?m)^## Runner exploration — \d{4}-\d{2}-\d{2}\s*\n\s*\S", visible) or re.search(
             r"(?ms)^<!-- research-swarm/v2 run [0-9a-f]+ -->\n.+?^<!-- /research-swarm/v2 -->[ \t]*$", visible
         )
-        if published and yaml.safe_load(header).get("provenance") == "human-written":
-            affected.append(path.relative_to(REPO_ROOT).as_posix())
-    assert affected == [], f"active research declares human-written over published model research: {affected}"
+        if published and header.get("provenance") == "human-written":
+            affected.append(relative)
+    assert affected == [], (
+        f"active research has unreadable headers or declares human-written over published model research: {affected}"
+    )
 
 
 @pytest.mark.parametrize("provenance", ["human-written", "'human-written'", '"human-written"'])
@@ -64,4 +80,25 @@ def test_census_requires_publication_and_reads_scalar_spellings(tmp_path, monkey
         with pytest.raises(AssertionError, match="demo/research.md"):
             test_active_model_research_has_no_false_human_provenance()
     else:
+        test_active_model_research_has_no_false_human_provenance()
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("# Research\nNo header.\n", "no frontmatter"),
+        ("---\nprovenance: [\n---\n# Research\n", "malformed YAML"),
+        ("---\n- provenance\n---\n# Research\n", "not a mapping"),
+        ("---\nnull\n---\n# Research\n", "not a mapping"),
+    ],
+)
+def test_census_names_unreadable_headers(tmp_path, monkeypatch, text, reason):
+    import sys
+
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    (folder / "research.md").write_text(text, encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    with pytest.raises(AssertionError, match=rf"demo/research.md: unreadable header \({reason}\)"):
         test_active_model_research_has_no_false_human_provenance()

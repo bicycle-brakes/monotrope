@@ -1356,8 +1356,8 @@ class Run:
 
         The research bytes are first prepared as a model publication (truthful provenance, no skeleton
         notices); the stored binding and the actual atomic replacement both use these same prepared bytes,
-        so a resumed run accepts exactly what was published. A failed binding write (F-20, criterion 57)
-        does not lose the record: it is published once, with the status rewritten to incomplete and the
+        apart from the current updated stamp, which the binding normalizes on resume.
+        A failed binding write (F-20, criterion 57) does not lose the record: it is published once, with the status rewritten to incomplete and the
         reason ``state-store-unwritable``; ``self.store_failure`` carries the status the run must end with.
 
         With ``clear`` the stored runs are moved aside after the binding write and before the publication
@@ -1403,7 +1403,7 @@ class Run:
                 with contextlib.suppress(ResearchSnapshotError, StoreWriteError):
                     bind(text)
         try:
-            self.runner.publish_research(self.ctx.research, prepared, text, stamp=False)
+            self.runner.publish_research(self.ctx.research, prepared, text)
         except BaseException:
             self.store.restore_clear(staging)
             raise
