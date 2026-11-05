@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-04
+updated: 2026-11-05
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -483,6 +483,16 @@ the next one. The queue and memory waits consume no runner step limit and no
 pytest proof's execution timeout; the configured limits still bind the
 executing check. Hosted CI is untouched: its gate steps never enter the
 runner's shell path, and nothing disables admission because CI is set.
+
+Verification durations are appended locally to `verify-duration.jsonl` in
+that shared state directory. Each run records gate and execution durations,
+outcomes, revision, configuration and machine context; admission wait is
+reported separately, with inherited waits marked as reused. Read summaries
+with `python3 -m scripts.verify_duration report`, or inspect one run with
+`python3 -m scripts.verify_duration report --run <run-id>`. Interrupted runs
+remain incomplete, and malformed rows are diagnosed. Unusable measurement
+storage warns without changing gate execution or verdicts; raw history stays
+outside Git.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
