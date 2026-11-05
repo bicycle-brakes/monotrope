@@ -522,6 +522,37 @@ def test_availability_names_a_dropped_free_id_as_skipped(world: World) -> None:
     assert state["free"]["selected"] == ["acme-v1-free"]
 
 
+def test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free(world: World) -> None:
+    """Criterion 5 of pi-catalog-move (bead coding-harness-vku6): the free rule never selects a paid id.
+
+    Planted fault: the fresh catalog carries `beam-free`, whose `-free` suffix the rule would select
+    and whose id the endpoint also declares paid in `modelle`. Without the drop the probe refuses the
+    whole preparation ("is a paid model"); with it the id is named as skipped and the remaining free
+    candidate carries the free stage.
+    """
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle"] = [*entry["modelle"], "beam-free"]
+    path.write_text(yaml.safe_dump(data))
+    world.script(
+        pi_catalog="provider model context input output\n"
+        "opencode-go beam-free 128000 0 0\n"
+        "opencode-go acme-v1-free 128000 0 0\n",
+        pi=[{"stdout": "OK"}] * 5,
+    )
+    assert world.run("prepare-loop") == 0, "the preparation refused instead of dropping the declared paid id"
+    state = receipt(world)["state"]
+    assert state["free"]["selected"] == ["acme-v1-free"], "the declared paid id stayed in the free selection"
+    assert "paid model" in state["availability"]["skipped"]["beam-free"], (
+        "the declared paid id left the free stage without a named reason"
+    )
+    probed = {call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in world.reviews()}
+    assert "beam-free" not in probed, "a declared paid id was probed as a free candidate"
+    assert "acme-v1-free" in probed, "the remaining free candidate was never probed"
+
+
 def test_availability_report_escapes_control_characters_in_skipped_ids(world: World, capsys) -> None:
     """F6-6: keep rejected catalog evidence raw, but never print its terminal controls."""
     enable(world)

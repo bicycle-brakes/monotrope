@@ -94,6 +94,9 @@ rules:
   - prefix: scripts/check_frontmatter_current.py
     rolle: mechanismus
     reason: "the check behind the gate frontmatter-current — the gate file travels, so its script does (bead coding-harness-qd7)"
+  - prefix: scripts/check_guard_test_environment.py
+    rolle: mechanismus
+    reason: "the guard-test-environment gate travels, so its presence-check script must travel with it"
   - prefix: scripts/check_research_currency.py
     rolle: mechanismus
     reason: "the list behind the gate research-currency — the gate file travels, so its script does; without docs/research/ it says not measured (bead coding-harness-pu9)"

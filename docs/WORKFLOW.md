@@ -1442,7 +1442,7 @@ replacement (R-8).
 
 **The read boundary is a request today, not a mechanism (R-5, accepted in
 writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
-the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+the pinned Pi has no sandbox, and `read` resolves absolute paths without
 containment, so nothing keeps a member out of a sibling checkout — house rule 6
 (the customer instance out of bounds) has no mechanism on this path. The
 maintainer's answer to Q-3 of the night interview: document it here, and enforce
@@ -1559,8 +1559,9 @@ status (`fixed — …`) also fails when its id names no taken row, whatever
 the id's shape. Other prefixes (such as `ADR-0017:` or `UTF-8:`) remain
 report prose when their right side is not a fixed status. A hand
 repair books itself in the row's Status alone: replace the finished row's
-`taken — …` with one of the two fixed statuses and set the loop row's
-`Broke a test` mark from the evidence. A Status that still begins `taken`
+`taken — …` with one of the three fixed statuses and set the loop row's
+`Broke a test` mark from the evidence: `yes`, `no`, or
+`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. A Status that still begins `taken`
 while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
 `; repaired by …`) stops the repair before any call, and the row stands as it
 is. Backtick-quoted markers do not count; if the row is not repaired yet,
@@ -1603,6 +1604,27 @@ read-only Codex session, resuming neither the repair nor an earlier thread.
 The sandbox is the CLI's configured `workspace-write`; the tests show the
 configured call, not the CLI's confinement.
 
+**Guard test (ADR 0023).** A repair that lives only in test code has no
+baseline on which its test could be red, so ordinary red first cannot prove it.
+Only the orchestrator authorises the exception, by writing the row's Status
+`taken — guard test — <reason>` with a nonempty unquoted reason. A reason
+that is only quoted or backticked is not authorisation. The repair then answers `<ID>: fixed — guard
+test — tests/<path>::<function>`, and no other row may use that form. The
+named test must reference `STAGE2_PLANT_FAULT` and plant its real fault only
+under it. The runner proves the test twice on the attempt's own code: a
+qualifying red with `STAGE2_PLANT_FAULT=1`, then a clean green with the
+variable absent; the existing outcome, environment, runtime and integrity
+guards of red first apply to both runs. Only after both legs pass does it
+write `fixed — guard test — …` and the mark `yes — guard test — …` in the
+record's Broke-a-test cell. Phase 6 reads every added or changed guard test
+and records the real fault it plants and whether the test catches that fault
+without the switch; a guard whose failure is only conditional, with no real
+fault behind it, is a BLOCKER. The form applies to repairs alone: the first
+implementation and the criterion ledger keep their rules. Planting branches
+stay in the tests so the proof can be repeated, and the blocking gate
+`guard-test-environment` refuses any verification run, local or hosted,
+while the switch is present, whatever its value.
+
 ### When the same mechanism returns
 
 On 2026-10-27 three runner pull requests (#228, #250, #258) took 14 phase-6
@@ -1643,8 +1665,8 @@ When the orchestrator repairs a row itself instead of through `repair`
 each learned on the night of 2026-10-29/30:
 
 - **The loop record learns the repair.** The orchestrator sets the row's
-  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
-  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — guard
+  test — tests/<path>::<function>` or `fixed — not a test — <reason>`) and its `Broke a test` cell from the evidence, after a
   backup of `loop.md`. Otherwise the next round refuses with "taken rows are
   not repaired yet".
 - **A header or status edit regenerates the index.** After a hand edit of a

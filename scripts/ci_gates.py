@@ -88,6 +88,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
     ),
+    "close_merged_beads.py": (
+        "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
+        "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "
