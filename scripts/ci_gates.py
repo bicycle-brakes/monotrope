@@ -185,6 +185,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
     ),
+    "stage2_research_limits.py": (
+        "Library of scripts/stage2_research_run.py, never an entry point of its own: loads and checks the "
+        "research swarm's time limits from research-swarm-limits.yaml (bead coding-harness-ht1b); "
+        "tests/test_stage2_research_limits.py runs it"
+    ),
     "stage2_research_run.py": (
         "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "
         "phase-1 research run - frozen inputs, finder trio, map merge, public sentence, history, eleven topics "

@@ -979,8 +979,19 @@ Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
 content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
-the first live free call). Deadlines are monotonic — the judge keeps a reserved
-15 minutes inside a 150-minute run — with no retry and no debate. A failed
+the first live free call). Deadlines are monotonic — the judge keeps its
+configured allowance reserved (initially 15 minutes) inside the configured
+whole-run allowance (initially 160 minutes) — with no retry and no debate. The
+allowances live in `research-swarm-limits.yaml` at the worktree root:
+`run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
+`sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
+file once at its start. An edit during a run does not change its captured
+allowances, but the frozen-input drift check ends that invocation incomplete
+with exit 1; the next invocation applies the edited configuration. A missing,
+unknown or implausible value
+— every role at or below the run, the judge strictly below it — refuses the
+invocation with exit 2 before any participant starts
+(`scripts/stage2_research_limits.py`). A failed
 participant preserves its partial evidence; an incomplete run exits 1, a
 declaration or leak refusal records the blocked slot, exits 2 and makes no
 further call. Only the runner writes `research.md`: one buffered append at the
