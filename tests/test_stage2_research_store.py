@@ -408,7 +408,7 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
     run = begin(store)
     store.write_launch(run, "s1", key("s1"))
     store.write_result(run, "s1", terminal(key("s1")))
-    for path in [store.directory, store.directory / run]:
+    for path in [*list(store.directory.parents)[:4], store.directory, store.directory / run]:
         assert stat.S_IMODE(path.stat().st_mode) == 0o700
     for path in (store.directory / run).iterdir():
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -429,6 +429,33 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
     with pytest.raises(m.StoreWriteError):
         m.Store(store.directory).start_run(CHANGE, "r", BINDING)
     store.directory.chmod(0o700)
+
+
+@pytest.mark.parametrize("depth", range(5), ids=["base", "harness", "stage2", "change", "research"])
+@pytest.mark.parametrize("mode", [0o700, 0o755, 0o740, 0o704, 0o710, 0o701, 0o720, 0o702])
+def test_store_refuses_group_or_other_access_at_every_store_level(state_home, depth, mode):
+    m = module()
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    directories = [state_home]
+    for part in store.directory.relative_to(state_home).parts:
+        directories.append(directories[-1] / part)
+    for directory in directories:
+        directory.mkdir(mode=0o700)
+    target = directories[depth]
+    target.chmod(mode)
+
+    try:
+        if mode == 0o700:
+            store.acquire_lock()
+            assert (store.directory / ".lock").is_file(), "private existing directories must remain usable"
+        else:
+            with pytest.raises(m.StoreWriteError, match="unsafe state store directory"):
+                store.acquire_lock()
+            assert not (store.directory / ".lock").exists(), "refuse public ancestry before creating the lock"
+        assert stat.S_IMODE(target.stat().st_mode) == mode, "refuse unsafe modes without silently changing them"
+    finally:
+        store.release_lock()
+        target.chmod(0o700)
 
 
 @pytest.mark.parametrize("unsafe", ["new", "base-mode", "parent-mode", "base-link", "parent-link", "foreign-base"])

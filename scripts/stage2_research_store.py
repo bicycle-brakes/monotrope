@@ -210,16 +210,16 @@ class Store:
         """Secure the base and store ancestry before creating records or taking a lock.
 
         Shared platform parents (such as /var/tmp) may be writable by others; the per-user
-        base and everything beneath it must not be. Newly created ancestors are private too.
+        base and everything beneath it must allow only owner access. Newly created ancestors
+        are private too; existing public directories are refused without changing their modes.
         """
         base = self.directory
         if base.parent.parent.name == "stage2" and base.parent.parent.parent.name == "coding-harness":
             base = base.parents[3]
 
-        def check(directory, *, private=False):
+        def check(directory):
             info = directory.lstat()
-            forbidden = 0o077 if private else 0o022
-            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & forbidden:
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
                 raise StoreWriteError(
                     f"unsafe state store directory {directory}: a link, not ours or unsafe permissions"
                 )
@@ -242,7 +242,6 @@ class Store:
                 with contextlib.suppress(FileExistsError):
                     current.mkdir(mode=0o700)
                 check(current)
-            check(self.directory, private=True)
         except OSError as error:
             raise StoreWriteError(f"cannot create the state store: {error}") from error
 
