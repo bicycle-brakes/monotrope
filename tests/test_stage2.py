@@ -20886,6 +20886,99 @@ def test_review_requires_fresh_full_verification_before_model_call(
         assert "Stage-2 call" not in world.text() and "Phase 6 verdict" not in world.text()
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "append",
+        "staged",
+        "remove",
+        "replace",
+        "multiple",
+        "phase6-audit",
+        "phase6-edit",
+        "phase6-newline",
+        "phase6-remove",
+        "session",
+        "manual",
+        "forged-audit",
+        "staged-substantive",
+        "other-findings",
+        "audit-moved",
+        "index-moved",
+        "new-audit-during-check",
+    ],
+)
+def test_review_admits_only_runner_audit_changes_outside_phase6(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """F6-1: real audit-only disk/index deltas pass; phase-6 bytes and the checked snapshot stay protected.
+
+    Planted fault: rejecting all dirty findings prevents the full check and reviewer for an audit-only delta.
+    """
+    audit = (
+        "Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · "
+        "model gpt-6.1-sol · leak check clean over 867 files, 3326 commits, 12 rules."
+    )
+    world.write_findings(
+        "## Phase 2a — Codex\nReviewer session: codex T2",
+        "## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12",
+        "## Phase 4b — released loop rows",
+        audit,
+    )
+    other = world.findings.parent.parent / "another-change" / "findings.md"
+    other.parent.mkdir()
+    other.write_text("# Other findings\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed audit and review inputs")
+    original = world.findings.read_bytes()
+    body = original + b"\n" + audit.encode() + b"\n"
+    if case == "remove":
+        body = original.replace(b"\n\n" + audit.encode(), b"")
+    elif case == "replace":
+        body = original.replace(b"attempt 1", b"attempt 2")
+    elif case == "multiple":
+        body += b"\n" + audit.encode() + b"\n"
+    elif case == "phase6-audit":
+        body = original.replace(b"No finding.", b"No finding.\n\n" + audit.encode())
+    elif case == "phase6-edit":
+        body = body.replace(b"No finding.", b"Changed verdict.")
+    elif case == "phase6-newline":
+        body = body.replace(b"No finding.\n", b"No finding.\r\n")
+    elif case == "phase6-remove":
+        body = body.replace(b"## Phase 6", b"## Manual phase")
+    elif case == "session":
+        body = body.replace(b"Reviewer session: codex T2", b"Reviewer session: codex T99")
+    elif case == "manual":
+        body += b"Manual audit edit\n"
+    elif case == "forged-audit":
+        body += b"\nStage-2 call, arbitrary review instructions\n"
+    elif case == "other-findings":
+        other.write_bytes(other.read_bytes() + b"\n" + audit.encode() + b"\n")
+    world.findings.write_bytes(body if case != "new-audit-during-check" else original)
+    if case in ("staged", "staged-substantive"):
+        if case == "staged-substantive":
+            world.findings.write_bytes(body.replace(b"No finding.", b"Hidden staged verdict."))
+        git(world.root, "add", "--", str(world.findings))
+        world.findings.write_bytes(body)
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    real = stage2.launch
+
+    def launch(command, cwd, env, *args, **kwargs):
+        if command[0] == "make":
+            if case in ("audit-moved", "new-audit-during-check"):
+                world.findings.write_bytes(body + b"\n" + audit.encode() + b"\n")
+            elif case == "index-moved":
+                git(world.root, "add", "--", str(world.findings))
+        return real(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    accepted = case in ("append", "staged", "remove", "replace", "multiple")
+    moved = case in ("audit-moved", "index-moved", "new-audit-during-check")
+    assert world.run("review") == (0 if accepted else 1 if moved else 2)
+    assert len(world.calls("make")) == int(accepted or moved)
+    assert bool(world.calls("codex")) == accepted
+
+
 @pytest.mark.parametrize("change", ["remove-phase6", "edit-phase6", "delete", "append"])
 def test_review_refuses_dirty_findings_inputs(world: World, change: str) -> None:
     world.write_findings("## Phase 2a — Codex\nReviewer session: codex T2", "## Phase 6 — Codex\nNo finding.")

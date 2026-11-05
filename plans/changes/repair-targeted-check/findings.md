@@ -422,7 +422,7 @@ Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | BLOCKER | SPEC | Phase 6 | plans/changes/repair-targeted-check/plan.md:92–99; scripts/stage2.py:2950–2955 | [DIVERGENT] The plan explicitly permits existing runner audit changes in this change's `findings.md` before review, but the implementation rejects every dirty path. Reproduced with only `findings.md` modified: `require_fresh_full_verification()` raises `Refused` before starting verification. The plan and implementation therefore give opposite answers for the same review input; they must agree on whether audit-only changes are admitted. [Acceptance criterion 9; plan step 5] | Codex | taken — reproduced fault inside the spec (repaired without asking, standing rule 2026-11-03): an uncommitted findings.md passes when its difference to the committed file is only the runner's audit lines and leaves every `## Phase 6` block byte-identical; any change inside a Phase 6 block still refuses (keeps the L9-3 guarantee) | — |
+| F6-1 | BLOCKER | SPEC | Phase 6 | plans/changes/repair-targeted-check/plan.md:92–99; scripts/stage2.py:2950–2955 | [DIVERGENT] The plan explicitly permits existing runner audit changes in this change's `findings.md` before review, but the implementation rejects every dirty path. Reproduced with only `findings.md` modified: `require_fresh_full_verification()` raises `Refused` before starting verification. The plan and implementation therefore give opposite answers for the same review input; they must agree on whether audit-only changes are admitted. [Acceptance criterion 9; plan step 5] | Codex | fixed — tests/test_stage2.py::test_review_admits_only_runner_audit_changes_outside_phase6 | — |
 
 Phase 6 verdict: codex 01a1ab9f-49e6-7523-b163-a70abdb55a03, 2026-11-05
 Reviewer session: codex 01a1ab9f-49e6-7523-b163-a70abdb55a03 — a fresh session reviewed: no phase-2a session was recorded
@@ -520,3 +520,8 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-05: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3325 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3326 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure

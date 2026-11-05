@@ -2918,12 +2918,45 @@ def rejected_review_block(answer: str, thread: str) -> str:
     )
 
 
+def review_audit_only(before: bytes, after: bytes) -> bool:
+    """Admit only runner call lines outside byte-identical phase-6 blocks.
+
+    Remove each call's blank separator with it; all other bytes, including headers,
+    reviewer sessions and verdicts, remain review inputs and must match HEAD.
+    """
+
+    def phase6_blocks(body: bytes) -> list[bytes]:
+        blocks = []
+        current = None
+        offset = 0
+        for line in body.splitlines(keepends=True):
+            if line.startswith(b"## "):
+                if current is not None:
+                    blocks.append(body[current:offset])
+                current = offset if line.startswith(b"## Phase 6") else None
+            offset += len(line)
+        if current is not None:
+            blocks.append(body[current:])
+        return blocks
+
+    if phase6_blocks(before) != phase6_blocks(after):
+        return False
+    call = re.compile(
+        rb"\n\nStage-2 call, \d{4}-\d{2}-\d{2}: [a-z][a-z0-9-]*(?: \(loop marks\))?"
+        rb"(?: \xc2\xb7 attempt [1-9]\d* \xc2\xb7 route [a-z0-9-]+)?"
+        rb" \xc2\xb7 endpoint [a-z0-9-]+ \xc2\xb7 model [A-Za-z0-9_./:+-]+(?: \xc2\xb7 reason [^\r\n]+)?"
+        rb" \xc2\xb7 leak check clean over \d+ files, \d+ commits, \d+ rules\.(?=\n|$)"
+    )
+    return call.sub(b"", before) == call.sub(b"", after)
+
+
 def require_fresh_full_verification(root: Path, change: str) -> None:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
 
     A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
-    committed head, including `findings.md`: review reads its phase and session markers before
-    the runner writes any audit. The head and tree must be the same after the check as before.
+    committed head, except runner call audit lines in this change's `findings.md` outside
+    byte-identical phase-6 blocks. Review reads its phase and session markers before the runner
+    writes any audit. The head, index and tree must be the same after the check as before.
     The check runs on every phase-6 invocation, a re-check included, and leaves no receipt: it
     measures the head being reviewed.
     A dirty tree or a changed head or tree refuses; a red, unstartable or timed-out check fails the call.
@@ -2939,12 +2972,24 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         root,
     )
 
-    def standing() -> tuple[str, list[str]]:
+    def standing() -> tuple[str, list[str], tuple[bytes, bytes] | None]:
         head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
-        return head, sorted(path.as_posix() for path in changed_paths(root, env=env))
+        dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
+        audit = None
+        name = f"plans/changes/{change}/findings.md"
+        path = root / name
+        if name in dirty and path.is_file() and not path.is_symlink() and not path.stat().st_mode & 0o111:
+            committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
+            indexed = _git_bytes(root, "show", f":{name}", env=env)
+            content = path.read_bytes()
+            entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
+            if entries.startswith("100644 ") and all(review_audit_only(committed, body) for body in (indexed, content)):
+                dirty.remove(name)
+                audit = (indexed, content)
+        return head, dirty, audit
 
     try:
-        head, dirty = standing()
+        head, dirty, audit = standing()
     except (Refused, OSError) as error:
         raise Refused(f"the current head could not be read for the full check before phase 6 ({error})") from error
     if dirty:
@@ -2962,7 +3007,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         after = standing()
     except (Refused, OSError) as error:
         raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
-    if after != (head, dirty):
+    if after != (head, dirty, audit):
         raise CallFailed(
             f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
             "no reviewer was called. Run review again."
