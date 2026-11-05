@@ -525,3 +525,14 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3335 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-05
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-2 | BLOCKER | MAINT | Phase 6 | scripts/stage2.py:305–308, 5448–5455, 8430–8436 | [DIVERGENT] A covered Codex repair receives contradictory verification guarantees: `REPAIR_FORMAT` promises that the runner runs full `make verify`, while `MUST_RUN_COMMANDS` promises targeted verification for repair. Executing the extracted `repair_prompt()` confirmed both statements occur in the same prompt. The runner actually selects targeted verification for this case; its instructions must consistently state that scope and reserve full verification for fallback and phase 6. [Plan step 2: align embedded repair instructions] | Codex | taken — reproduced fault inside the spec (repaired without asking): REPAIR_FORMAT and every other runner string a repair attempt receives state the targeted check with the full make verify as fallback and before phase 6; the repair searches scripts/stage2.py for every remaining statement of full verification after a repair and aligns it (same mechanism as rows L5-2, L5-4; bead coding-harness-n4g5 measures the copies) | — |
+
+Phase 6 verdict: codex 01a1abfa-b431-7181-a841-64e278ff2fb4, 2026-11-05
+Reviewer session: codex 01a1abfa-b431-7181-a841-64e278ff2fb4 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
