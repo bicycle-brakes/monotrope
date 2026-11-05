@@ -5428,15 +5428,33 @@ def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[st
     return {os.fsdecode(name) for name in names if name}
 
 
-def _gate_entrypoints(command: list[str]) -> set[str]:
-    """Repository paths invoked by a gate, including Python modules and explicit test targets."""
+@dataclass
+class GateCommand:
+    assignments: list[str]
+    argv: list[str]
+    entrypoints: set[str]
+
+    def locked_command(self, python: Path, original: str) -> str:
+        """Replace only the parsed Python program, keeping shell assignments and literal arguments."""
+        if not self.argv or self.argv[0] != "python3":
+            return original
+        assignments = []
+        for word in self.assignments:
+            name, value = word.split("=", 1)
+            assignments.append(f"{name}={shlex.quote(value)}")
+        return " ".join([*assignments, shlex.join([str(python), *self.argv[1:]])])
+
+
+def _parse_gate_command(command: list[str]) -> GateCommand:
+    """Parse leading assignments, the program and its module/script/test entrypoints once."""
     words = list(command)
+    assignments = []
     while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
-        words.pop(0)
+        assignments.append(words.pop(0))
     if not words:
-        return set()
+        return GateCommand(assignments, words, set())
     if words[0] != "python3":
-        return {words[0]}
+        return GateCommand(assignments, words, {words[0]})
     args = words[1:]
     entrypoints: set[str] = set()
     if len(args) >= 2 and args[0] == "-m":
@@ -5452,7 +5470,7 @@ def _gate_entrypoints(command: list[str]) -> set[str]:
         path = arg.split("::", 1)[0]
         if not arg.startswith("-") and path.endswith(".py"):
             entrypoints.add(path)
-    return entrypoints
+    return GateCommand(assignments, words, entrypoints)
 
 
 def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
@@ -5548,7 +5566,7 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
         if (
             "docs" in gate["subsets"]
             or (membership and gate["id"] == "leerprobe")
-            or _gate_entrypoints(command) & touched_set
+            or _parse_gate_command(command).entrypoints & touched_set
         ):
             gates.append(gate)
     return Targeted(tests, sorted(set(python) - covered), gates)
@@ -5643,10 +5661,7 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
     for gate in chosen.gates:
         command = str(gate["command"])
-        tokens = shlex.split(command)
-        # Only the program token denotes the interpreter; arguments remain literal.
-        if tokens and tokens[0] == "python3":
-            command = shlex.join([str(python), *tokens[1:]])
+        command = _parse_gate_command(shlex.split(command)).locked_command(python, command)
         identity = f"gate `{gate['id']}` ({gate['enforcement']})"
         blocking = gate["enforcement"] == "block"
         try:

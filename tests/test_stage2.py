@@ -3895,9 +3895,16 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
     assert order == [], "the document check ran despite the rejected artefacts"
 
 
-def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) -> None:
-    # Criterion 6 (draft-gates-only). Planted fault: implement or repair selects the document
-    # subset, or omits full verification because a draft's document check already passed.
+def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: World) -> None:
+    # Criterion 6 (draft-gates-only). Planted fault: implement or a repair with unsupported
+    # scope omits full verification because a draft's document check already passed.
+    # The renamed contract must travel with its criterion ledger: otherwise the old
+    # promise that every repair runs full verification survives in the accepted plan.
+    ledger = (REPO_ROOT / "plans/changes/draft-gates-only/plan.md").read_text(encoding="utf-8")
+    assert "tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft —" in ledger, (
+        "criterion 6 must name the fallback-specific repair contract"
+    )
+    assert "tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft —" not in ledger
     successful_implementation(world)
     assert world.run("implement") == 0
     assert [call["argv"] for call in world.calls("make")] == [["verify"]], "implement left the full suite"
@@ -3920,7 +3927,8 @@ def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) ->
     }
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair left the full suite"
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair skipped required full fallback"
+    assert "verification-scope.txt" in world.text(), "the fallback must report its unsupported input"
     assert world.calls("bash") == [], "repair ran the document subset"
 
 
@@ -20487,6 +20495,35 @@ def test_targeted_gate_selection_handles_module_commands(world: World, path: str
     declared = {gate["id"]: gate for gate in ci_gates.gates()}
     for gate in chosen.gates:
         assert gate == declared[gate["id"]], "selection must preserve the declared command and enforcement"
+
+
+def test_targeted_ruleset_gate_uses_locked_interpreter(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L7-1: selection and execution agree on the real env-prefixed module command."""
+    seed_tests(world)
+    target = world.root / "tests" / "test_repo_settings.py"
+    target.write_text("def test_settings():\n    assert True\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ruleset gate input")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text(target.read_text() + "\n# repaired\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    ruleset = next(gate for gate in chosen.gates if gate["id"] == "ruleset")
+    declared = next(gate for gate in ci_gates.gates() if gate["id"] == "ruleset")
+    assert ruleset == declared
+    commands = targeted_mode(monkeypatch)
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    assert stage2.run_targeted(world.root, env, None, stage2.Targeted([], [], [ruleset])) == ([], [])
+    (call,) = commands.of("gate")
+    assert shlex.split(call["command"][2]) == [
+        "RULESET_ASSERT=1",
+        str(world.root / ".venv/bin/python3"),
+        "-m",
+        "pytest",
+        "tests/test_repo_settings.py",
+        "-q",
+        "-rs",
+    ], "an env-prefixed Python gate must use the same locked interpreter as other gates"
 
 
 @pytest.mark.parametrize("path, selects_probe", [("probe.py", False), ("scripts/kit/probe.py", True)])

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -194,3 +194,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-04 15:19:55–16:42:34 UTC, 4959 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-04 17:12:09–18:30:09 UTC, 4679 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-04 18:39:02–21:16:42 UTC, 9459 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-04 21:40:27–23:47:22 UTC, 7614 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-04 23:47:34–2026-11-05 02:32:30 UTC, 9896 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

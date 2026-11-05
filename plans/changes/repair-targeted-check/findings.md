@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -365,3 +365,27 @@ Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-04: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 867 files, 3280 commits, 12 rules.
+
+Stage-2 call, 2026-11-04: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3281 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/draft-gates-only/plan.md` +1 -1
+> - `scripts/stage2.py` +26 -11
+> - `tests/test_stage2.py` +34 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - L7-2: tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-1-20261104T214011528058Z-ef04934b.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3292 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
