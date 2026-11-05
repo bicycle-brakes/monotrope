@@ -137,6 +137,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/codex-repairs/research.md`](changes/codex-repairs/research.md) | draft | none | 2026-10-13 | coding-harness-0ga |
 | [`changes/codex-repairs/spec.md`](changes/codex-repairs/spec.md) | draft | none | 2026-10-13 | coding-harness-0ga |
 | [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
+| [`changes/conflict-marker-gate/research.md`](changes/conflict-marker-gate/research.md) | draft | none | 2026-11-05 | coding-harness-i76l |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/findings.md`](changes/criterion-test-ledger/findings.md) | draft | partial | 2026-10-11 | coding-harness-909 |
