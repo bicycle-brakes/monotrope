@@ -7,6 +7,7 @@ No test starts a real model or reaches the network. Each test names its planted 
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -251,6 +252,78 @@ def test_corrected_skeleton_publication_keeps_swarm_resume(sworld: SwarmWorld) -
     assert launched == ["repository", "judge"], "only the failed seat and the judge run again"
     complete = sworld.research.read_text(encoding="utf-8")
     assert complete.startswith(incomplete), "the resumed publication changed the bytes it appended to"
+
+
+def test_brief_explains_its_planned_publication_header(sworld: SwarmWorld) -> None:
+    # L1-5: the normalized header must not masquerade as the frozen file's actual attribution.
+    sworld.complete()
+    assert sworld.run() == 0
+    prompt = next(call["prompt"] for call in sworld.calls() if call["kind"] == "finder")
+    assert "runner's planned publication header" in prompt
+    assert "not the file's current header" in prompt
+    assert "0000-00-00 is a normalization sentinel, not a publication date" in prompt
+
+
+@pytest.mark.parametrize("edit", [b"Foreign body edit\n", b"owner: foreign\n"])
+def test_publication_uses_frozen_research_despite_prepublication_edit(sworld: SwarmWorld, monkeypatch, edit) -> None:
+    # L1-7: an edit after freezing must never become an accepted publication prefix.
+    import stage2_research_run
+
+    original = stage2_research_run.Run.publish
+
+    def edited(run, *args, **kwargs):
+        before = sworld.research.read_bytes()
+        altered = before + edit if edit.startswith(b"Foreign body") else before.replace(b"---\n", b"---\n" + edit, 1)
+        sworld.research.write_bytes(altered)
+        return original(run, *args, **kwargs)
+
+    sworld.complete(judge=[{"exit": 1}])
+    with monkeypatch.context() as patch:
+        patch.setattr(stage2_research_run.Run, "publish", edited)
+        assert sworld.run() == 1
+    assert edit not in sworld.research.read_bytes(), "publication must be formed from frozen bytes, never live edits"
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    assert manifest_of(sworld)["resume"]["usable"] is True
+    assert [call["kind"] for call in sworld.calls()] == ["judge"]
+
+
+@pytest.mark.parametrize("published", [True, False])
+def test_resume_reuses_publication_bytes_and_day(sworld: SwarmWorld, monkeypatch, published) -> None:
+    # L1-9: the second day must not rewrite the earlier publication's producer or prefix.
+    sworld.research.write_text(swarm.swarm_skeleton(), encoding="utf-8")
+    sworld.commit()
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-04")
+    sworld.complete(judge=[{"exit": 1}])
+    if published:
+        assert sworld.run() == 1
+        first = sworld.research.read_bytes()
+    else:
+
+        def failed_write(*_args, **_kwargs):
+            raise OSError("planted publication failure")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(stage2, "publish_research", failed_write)
+            with pytest.raises(OSError, match="planted publication failure"):
+                sworld.run()
+        first = stage2.research_publication(
+            sworld.research.read_bytes(), producer="stage2-research-swarm", day="2026-11-04"
+        )
+    binding = json.loads(next(swarm.store_dir(sworld).glob("*/run.json")).read_text())["binding"]
+    assert "research_publication" in binding, "the binding must retain exact publication bytes and day"
+    publication = binding["research_publication"]
+    stored_bytes = base64.b64decode(publication["base64"], validate=True)
+    assert publication["day"] == "2026-11-04"
+    assert first.startswith(stored_bytes)
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-05")
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    assert sworld.research.read_bytes().startswith(first), "resume must reuse the exact publication bytes and day"
+    assert manifest_of(sworld)["resume"]["usable"] is True
+    assert [call["kind"] for call in sworld.calls()] == ["judge"]
 
 
 # ---------------------------------------------------------------------------

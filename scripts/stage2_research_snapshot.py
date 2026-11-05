@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -218,14 +220,15 @@ def _sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def stored_binding(manifest, research_path, research_bytes, *, append=None, publication=None):
+def stored_binding(manifest, research_path, research_bytes, *, append=None, publication=None, publication_day=None):
     """The resume binding of one frozen state, in the shape the state store keeps (Q-13).
 
     ``research_bytes`` are the frozen bytes of ``research_path``; ``append`` are the exact bytes
     the runner will add to them, recorded before the write so a crash between the two is covered.
     ``publication`` are the runner-prepared bytes the append lands on — the corrected provenance
     header, the skeleton notices removed — recorded so a resume accepts exactly what was published
-    and nothing else.
+    and nothing else. With ``publication_day`` the exact bytes and day are retained as well, so a
+    later resume never recomputes that header from live bytes or a new date.
     """
     paths = dict(manifest["paths"])
     if research_path not in paths or paths[research_path] != _sha256(research_bytes):
@@ -243,7 +246,29 @@ def stored_binding(manifest, research_path, research_bytes, *, append=None, publ
         if not isinstance(publication, bytes):
             raise ResearchSnapshotError("invalid runner-prepared research bytes")
         binding["research_publication_normalised_sha256"] = _sha256(_without_updated(publication))
+        if publication_day is not None:
+            binding["research_publication"] = {
+                "base64": base64.b64encode(publication).decode("ascii"),
+                "day": publication_day,
+            }
     return binding
+
+
+def stored_publication(binding):
+    """Read the exact planned publication and its day, if a new-format binding records them."""
+    record = binding.get("research_publication")
+    if record is None:
+        return None
+    try:
+        data = base64.b64decode(record["base64"], validate=True)
+        day = record["day"]
+        if not isinstance(day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+            raise ValueError("invalid publication day")
+        if _sha256(_without_updated(data)) != binding["research_publication_normalised_sha256"]:
+            raise ValueError("publication bytes do not match their digest")
+    except (KeyError, TypeError, ValueError, binascii.Error) as error:
+        raise ResearchSnapshotError("malformed stored publication") from error
+    return data, day
 
 
 def changed_against_stored(manifest, research_path, research_bytes, stored):
@@ -261,6 +286,7 @@ def changed_against_stored(manifest, research_path, research_bytes, stored):
         normalised = stored["research_normalised_sha256"]
         append = stored.get("append")
         publication = stored.get("research_publication_normalised_sha256")
+        stored_publication(stored)
     except (KeyError, TypeError) as error:
         raise ResearchSnapshotError("malformed stored binding") from error
     if research != research_path:

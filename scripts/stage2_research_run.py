@@ -48,7 +48,14 @@ from stage2_research_judge import (
     research_judge_allowance,
 )
 from stage2_research_report import ResearchReportError, _keys, _load, research_seat_id, validate_research_report
-from stage2_research_snapshot import ResearchSnapshotError, _without_updated, freeze_research_state, stored_binding
+from stage2_research_snapshot import (
+    ResearchSnapshotError,
+    _sha256,
+    _without_updated,
+    freeze_research_state,
+    stored_binding,
+    stored_publication,
+)
 from stage2_research_store import STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
@@ -388,6 +395,32 @@ class Run:
         self.binding = stored_binding(self.manifest, self.research_rel, self.research_bytes)
         try:
             self.source = self.store.resume_source(self.manifest, self.research_rel, self.research_bytes)
+            previous = self.source.run["binding"] if self.source.usable else None
+            publication = stored_publication(previous) if previous is not None else None
+            if publication is None:
+                self.publication_day = runner.today()
+                self.publication_bytes = runner.research_publication(
+                    self.research_bytes, producer=SWARM_PUBLISHER, day=self.publication_day
+                )
+            else:
+                # The source binding has already verified the frozen file against the original
+                # input or the exact published prefix plus its tail. Never prepare it anew.
+                prefix, self.publication_day = publication
+                length = (previous.get("append") or {}).get("length", 0)
+                already_published = (
+                    _sha256(_without_updated(self.research_bytes)) != previous["research_normalised_sha256"]
+                )
+                if already_published and length:
+                    self.publication_bytes = prefix + self.research_bytes[-length:]
+                else:
+                    self.publication_bytes = prefix
+            self.binding = stored_binding(
+                self.manifest,
+                self.research_rel,
+                self.research_bytes,
+                publication=self.publication_bytes,
+                publication_day=self.publication_day,
+            )
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
@@ -420,7 +453,14 @@ class Run:
             BLOCK.sub("", research).encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY
         )
         research = _without_updated(corrected).decode(errors="replace").rstrip()
-        parts = [f"# Private brief for the change {self.change}", f"Bead: {self.ctx.bead}", "## research.md", research]
+        parts = [
+            f"# Private brief for the change {self.change}",
+            f"Bead: {self.ctx.bead}",
+            "## research.md",
+            "The embedded header is the runner's planned publication header, not the file's current header. "
+            "0000-00-00 is a normalization sentinel, not a publication date.",
+            research,
+        ]
         for name in ("decisions.md", "spec.md"):
             text = self.text_of(name)
             if text is not None:
@@ -1326,9 +1366,7 @@ class Run:
         publication keeps every result reusable.
         """
         assert self.store is not None and self.run_id is not None
-        prepared = self.runner.research_publication(
-            self.ctx.research.read_bytes(), producer=SWARM_PUBLISHER, day=self.runner.today()
-        )
+        prepared = self.publication_bytes
 
         def bind(text: str) -> None:
             addition = text.rstrip().encode() + b"\n"
@@ -1341,6 +1379,7 @@ class Run:
                     self.research_bytes,
                     append=separator + addition,
                     publication=prepared,
+                    publication_day=self.publication_day,
                 ),
             )
 
@@ -1364,7 +1403,7 @@ class Run:
                 with contextlib.suppress(ResearchSnapshotError, StoreWriteError):
                     bind(text)
         try:
-            self.runner.publish_research(self.ctx.research, prepared, text)
+            self.runner.publish_research(self.ctx.research, prepared, text, stamp=False)
         except BaseException:
             self.store.restore_clear(staging)
             raise
