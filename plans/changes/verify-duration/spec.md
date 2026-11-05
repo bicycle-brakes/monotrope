@@ -1,7 +1,7 @@
 ---
 title: "Spec — verify-duration"
 status: draft
-implementation_status: partial
+implementation_status: done
 date: 2026-11-04
 last_reviewed: 2026-11-04
 updated: 2026-11-05
