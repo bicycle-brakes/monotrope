@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import stat
 import sys
@@ -207,41 +208,56 @@ class Store:
                 raise StoreWriteError(f"the state store must stay outside {other}")
 
     def _ensure(self):
-        """Secure the base and store ancestry before creating records or taking a lock.
+        """Check every store-path level, independently of the research directory layout.
 
-        Shared platform parents (such as /var/tmp) may be writable by others; the per-user
-        base and everything beneath it must allow only owner access. Newly created ancestors
-        are private too; existing public directories are refused without changing their modes.
+        Root-owned system parents precede the user-owned store ancestry (and may include
+        sticky shared directories and platform aliases such as /var). Below that boundary,
+        existing directories must be ours, real directories and not writable by others.
+        Create missing levels privately; never silently chmod an existing directory.
         """
-        base = self.directory
-        if base.parent.parent.name == "stage2" and base.parent.parent.parent.name == "coding-harness":
-            base = base.parents[3]
-
-        def check(directory):
-            info = directory.lstat()
-            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
-                raise StoreWriteError(
-                    f"unsafe state store directory {directory}: a link, not ours or unsafe permissions"
-                )
-
-        def create(directory):
-            try:
-                directory.lstat()
-            except FileNotFoundError:
-                create(directory.parent)
-                with contextlib.suppress(FileExistsError):
-                    directory.mkdir(mode=0o700)
-                check(directory)
-
+        directory = self.directory.absolute()
+        ancestry = [*reversed(directory.parents), directory]
+        user = os.getuid()
+        in_store = False
+        # These shared system parents remain infrastructure even when tests run as root.
+        shared = [Path(p) for p in ("/var/tmp", "/tmp", "/Users/Shared", "/private/tmp", "/private/var/tmp")]
+        system_parents = {parent for path in shared for parent in (path, *path.parents)}
         try:
-            create(base)
-            check(base)
-            current = base
-            for part in self.directory.relative_to(base).parts:
-                current = current / part
-                with contextlib.suppress(FileExistsError):
-                    current.mkdir(mode=0o700)
-                check(current)
+            for current in ancestry:
+                try:
+                    info = current.lstat()
+                except FileNotFoundError:
+                    with contextlib.suppress(FileExistsError):
+                        current.mkdir(mode=0o700)
+                    info = current.lstat()
+                    in_store = True
+                # Trust only the leading root-owned system ancestry, never a system-owned
+                # directory encountered after entering the user's store path.
+                if (
+                    not in_store
+                    and current != directory
+                    and info.st_uid == 0
+                    and (user != 0 or current in system_parents)
+                ):
+                    system_info = current.stat()
+                    if (
+                        stat.S_ISDIR(system_info.st_mode)
+                        and system_info.st_uid == 0
+                        and (not stat.S_IMODE(system_info.st_mode) & 0o022 or system_info.st_mode & stat.S_ISVTX)
+                    ):
+                        continue
+                in_store = True
+                mode = stat.S_IMODE(info.st_mode)
+                if not stat.S_ISDIR(info.st_mode) or info.st_uid != user or mode & 0o022:
+                    raise StoreWriteError(
+                        f"unsafe state store directory {current}: a link, not ours or writable by others"
+                    )
+                if mode & 0o077:
+                    print(
+                        f"state store directory {current} has mode {mode:04o}; "
+                        f"make it owner-only with: chmod 700 -- {shlex.quote(str(current))}",
+                        file=sys.stderr,
+                    )
         except OSError as error:
             raise StoreWriteError(f"cannot create the state store: {error}") from error
 

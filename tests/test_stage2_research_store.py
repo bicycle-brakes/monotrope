@@ -425,7 +425,7 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
     with pytest.raises(m.StoreWriteError):  # a model directory inside the store
         store.assert_outside(store.directory / "agent")
     # a loosened directory or a symbolic link in its place is refused
-    store.directory.chmod(0o750)
+    store.directory.chmod(0o770)
     with pytest.raises(m.StoreWriteError):
         m.Store(store.directory).start_run(CHANGE, "r", BINDING)
     store.directory.chmod(0o700)
@@ -433,7 +433,7 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
 
 @pytest.mark.parametrize("depth", range(5), ids=["base", "harness", "stage2", "change", "research"])
 @pytest.mark.parametrize("mode", [0o700, 0o755, 0o740, 0o704, 0o710, 0o701, 0o720, 0o702])
-def test_store_refuses_group_or_other_access_at_every_store_level(state_home, depth, mode):
+def test_store_refuses_group_or_other_access_at_every_store_level(state_home, capsys, depth, mode):
     m = module()
     store = m.Store(m.research_dir("example", REPO_ROOT))
     directories = [state_home]
@@ -445,14 +445,17 @@ def test_store_refuses_group_or_other_access_at_every_store_level(state_home, de
     target.chmod(mode)
 
     try:
-        if mode == 0o700:
+        if not mode & 0o022:
             store.acquire_lock()
-            assert (store.directory / ".lock").is_file(), "private existing directories must remain usable"
+            assert (store.directory / ".lock").is_file(), "non-writable existing directories must remain usable"
         else:
             with pytest.raises(m.StoreWriteError, match="unsafe state store directory"):
                 store.acquire_lock()
             assert not (store.directory / ".lock").exists(), "refuse public ancestry before creating the lock"
-        assert stat.S_IMODE(target.stat().st_mode) == mode, "refuse unsafe modes without silently changing them"
+        diagnostic = capsys.readouterr().err
+        if mode & 0o077 and not mode & 0o022:
+            assert str(target) in diagnostic and "chmod 700" in diagnostic
+        assert stat.S_IMODE(target.stat().st_mode) == mode, "never silently change existing modes"
     finally:
         store.release_lock()
         target.chmod(0o700)
@@ -951,3 +954,73 @@ def test_a_reused_result_keeps_the_run_that_launched_it(store, repo):
     assert record["launched_in"] == first
     assert record["reused_from"] == {"run_id": source.run_id} and source.run_id != first
     assert record["started"] == "2026-10-18T10:00:00Z"
+
+
+@pytest.mark.parametrize("depth", range(4))
+@pytest.mark.parametrize("mode", [0o700, 0o755, 0o775, 0o707])
+def test_arbitrary_store_paths_check_every_existing_level(tmp_path, capsys, depth, mode):
+    m = module()
+    directories = [tmp_path / "custom-base"]
+    for part in ("unrelated", "layout", "records"):
+        directories.append(directories[-1] / part)
+    for directory in directories:
+        directory.mkdir(mode=0o700)
+    target = directories[depth]
+    target.chmod(mode)
+    store = m.Store(directories[-1])
+    try:
+        if mode & 0o022:
+            with pytest.raises(m.StoreWriteError, match="unsafe state store directory"):
+                store.acquire_lock()
+            assert not (store.directory / ".lock").exists()
+        else:
+            try:
+                store.acquire_lock()
+            except m.StoreWriteError as error:
+                pytest.fail(f"safe existing store ancestry must be accepted: {error}")
+            if mode != 0o700:
+                diagnostic = capsys.readouterr().err
+                assert str(target) in diagnostic and "chmod 700" in diagnostic
+        assert stat.S_IMODE(target.stat().st_mode) == mode
+    finally:
+        store.release_lock()
+        target.chmod(0o700)
+
+
+def test_legacy_public_store_ancestry_resumes_records(state_home, capsys, repo):
+    m = module()
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    slot = key()
+    run = make_source(store, repo, results=[(slot, terminal(slot))])
+    # Recreate the legacy mkdir default at all five levels, keeping records intact.
+    directories = [state_home]
+    for part in store.directory.relative_to(state_home).parts:
+        directories.append(directories[-1] / part)
+    for directory in directories:
+        directory.chmod(0o755)
+    reopened = m.Store(store.directory)
+    try:
+        try:
+            reopened.acquire_lock()
+        except m.StoreWriteError as error:
+            pytest.fail(f"legacy non-writable ancestry must resume without chmod: {error}")
+        with freeze(repo) as state:
+            source = reopened.resume_source(state.manifest(), RESEARCH, state.sources()[RESEARCH])
+        assert source.usable and source.run_id == run
+        assert "s1" in source.results
+        diagnostic = capsys.readouterr().err
+        for directory in directories:
+            assert str(directory) in diagnostic
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o755
+        assert "chmod 700" in diagnostic
+    finally:
+        reopened.release_lock()
+
+
+def test_workflow_does_not_attribute_shared_xdg_state_to_the_relocation():
+    workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text()
+    paragraph = workflow.split("The store's location is the research swarm's own setting", 1)[1].split(
+        "**The handoff is checked", 1
+    )[0]
+    assert "coding-harness-nxdy" not in paragraph, "the relocation bead did not introduce shared XDG state"
+    assert "the review-loop records:" in paragraph

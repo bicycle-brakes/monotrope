@@ -1016,7 +1016,7 @@ and the run gets its own run id, deadlines and receipt.
 
 The store's location is the research swarm's own setting and never
 `XDG_STATE_HOME`, which still places the machine-wide verification queue and
-the review-loop records (bead coding-harness-nxdy): a non-empty absolute
+the review-loop records: a non-empty absolute
 `STAGE2_RESEARCH_STATE` names the store base, read at every call; unset or
 empty selects `/Users/Shared/coding-harness-research-<uid>` on macOS and
 `/var/tmp/coding-harness-research-<uid>` on the other supported POSIX systems,
@@ -1024,8 +1024,14 @@ empty selects `/Users/Shared/coding-harness-research-<uid>` on macOS and
 XDG variable. One change's store is
 `<base>/coding-harness/stage2/<change>@<digest8>/research`, `<digest8>` the
 first eight SHA-256 characters of the resolved repository root. Store
-directories are owner-only (0700), records and the lock file (0600) reachable
-by no one else, and the exclusions hold: a store inside the inherited HOME,
+directories the runner creates are owner-only (0700); records and the lock file
+use 0600. At every level of any store path, regardless of its directory names,
+an existing directory must be owned by the user, must not be a symbolic link
+and must not be group- or other-writable. Modes such as 0755 are accepted with
+a diagnostic naming the directory and a `chmod 700` command; existing modes
+are never silently changed. Root-owned system parents before the user-owned
+store ancestry (including sticky shared directories and platform aliases)
+remain infrastructure. The exclusions hold: a store inside the inherited HOME,
 the worktree or a git directory is refused with exit 1 before any model call,
 as is a relative or otherwise unusable setting — the guidance names
 `STAGE2_RESEARCH_STATE`, and nothing falls back to another location. A store
