@@ -134,3 +134,7 @@ The phase-6 review compares the workflow paragraph with the resolver and spec.
 2026-11-05 00:49:32–01:30:35 UTC, 2463 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
 2026-11-05 07:43:36–09:22:01 UTC, 5904 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 11:52:54–13:32:29 UTC, 5975 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+
+## Appetite overrun — 2026-11-05
+
+Phase 4 took about 5 h gross (Time used above) against the 2-hour appetite, much of it verify-lock waits. The orchestrator reported it at about 3.3 h; the maintainer let the change run to its pull request ("Weiter", 2026-11-05, ~10:15 UTC).
