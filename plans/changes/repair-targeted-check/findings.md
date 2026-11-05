@@ -389,3 +389,17 @@ Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint 
 
 > Runner verification scope:
 > - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 867 files, 3301 commits, 12 rules.
+
+Loop attempt: 2026-11-05 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (1 day left).
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 867 files, 3301 commits, 12 rules.
+
+Loop attempt: 2026-11-05 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (1 day left).
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 867 files, 3301 commits, 12 rules.

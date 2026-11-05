@@ -17,8 +17,7 @@ runner measures each completed attempt itself and writes a line marked
 "measured by the runner" (a rejected attempt gets one too); the runner
 runs `make verify` after an implement attempt and, after a repair attempt, the
 repair's targeted check (the touched and linked test files and gates; the full
-`make verify` when the repair touches shared infrastructure or would run
-`tests/test_stage2.py` whole), and makes the local checkpoint commit; one full
+`make verify` when the repair touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), and makes the local checkpoint commit; one full
 `make verify` runs on the final head before phase 6. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you, and the interactive session reads its own
 clock and logs its own spans, as the appetite rule below says.

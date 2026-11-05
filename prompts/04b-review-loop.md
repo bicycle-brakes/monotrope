@@ -29,8 +29,7 @@ hunks, no tools, no repository access, and nothing else in its prompt.
 verdict.
 **Gate:** rounds until a clean round, bounded by the declared ladder; the
 repair brake and the maintainer stop stand above it; the repair's targeted
-check green after each repair (the full `make verify` for shared
-infrastructure), and one full `make verify` on the final head before phase 6.
+check green after each repair (the full `make verify` on any fallback of the runner's targeted selection), and one full `make verify` on the final head before phase 6.
 
 ## For the reviewer
 
@@ -86,13 +85,13 @@ explicitly, do not delete them.
    show, or `rejected — <reason>`.
 2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
    <change>` gives them to Codex in one call; the runner runs the repair's
-   targeted check (the full `make verify` for shared infrastructure) and
+   targeted check (the full `make verify` on any fallback of the runner's targeted selection) and
    writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
    findings").
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's
    evidence: `yes` when its repair turned a test red that was green before it,
    `no` when it did not; the next round starts only when the repair's
-   check (targeted, or the full `make verify` for shared infrastructure) is
+   check (targeted, or the full `make verify` on any fallback of the runner's targeted selection) is
    green. After a repair the orchestrator made by hand, a targeted check
    stands in for it: the touched and linked test files, `ruff` and the
    gates the touched files feed; one full `make verify` runs on the final
