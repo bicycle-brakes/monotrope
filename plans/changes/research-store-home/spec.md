@@ -1,7 +1,7 @@
 ---
 title: "Spec — research-store-home"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-05
 updated: 2026-11-05

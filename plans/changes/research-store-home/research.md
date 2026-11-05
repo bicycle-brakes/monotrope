@@ -1,10 +1,10 @@
 ---
 title: "Research — research-store-home"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-nxdy
@@ -13,6 +13,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-11-04"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+neighbours: []
 ---
 
 # research store home — Research
@@ -21,7 +22,7 @@ Stage-2 call, 2026-11-04: explore · attempt 1 · route flash · endpoint glm-co
 
 ## Runner exploration — 2026-11-04
 
-All facts are gathered — the exploration is complete. The three home-computing sites in `scripts/` are `stage2.py record_base()`, `stage2_research_store.py research_dir()`, and `verify_lock.py state_base()`; nothing else computes a state home. Here is the research, ready to append to `plans/changes/research-store-home/research.md`.
+The three home-computing sites in `scripts/` are `stage2.py record_base()`, `stage2_research_store.py research_dir()`, and `verify_lock.py state_base()`; nothing else computes a state home.
 
 ---
 
@@ -71,4 +72,3 @@ Suggested for `neighbours:`: `plans/changes/research-swarm/` (spec criteria 51-5
 
 ---
 
-Exploration complete. I designed nothing, judged nothing, and edited no file; the prose above is the finder contribution the runner appends to `plans/changes/research-store-home/research.md` and uses for the `neighbours:` header and the `research-handoff` gate.
