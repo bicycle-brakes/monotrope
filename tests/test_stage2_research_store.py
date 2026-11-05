@@ -1,6 +1,6 @@
 """Resumable research state store (Q-13): durable records, exact-binding reuse, lock.
 
-Real files under a temporary ``XDG_STATE_HOME``, the disposable Git repository of the
+Real files under a temporary ``STAGE2_RESEARCH_STATE``, the disposable Git repository of the
 snapshot tests, and real short-lived subprocesses for the SIGKILL and lock contracts.
 """
 
@@ -45,13 +45,13 @@ def snapshot():
 
 @pytest.fixture
 def state_home(tmp_path, monkeypatch):
-    home = tmp_path / "xdg-state"
-    monkeypatch.setenv("XDG_STATE_HOME", str(home))
+    home = tmp_path / "research-state"
+    monkeypatch.setenv(module().RESEARCH_STATE_VARIABLE, str(home))
     return home
 
 
 @pytest.fixture
-def store(state_home):  # noqa: ARG001 - sets XDG_STATE_HOME
+def store(state_home):  # noqa: ARG001 - sets the dedicated research-store variable
     m = module()
     return m.Store(m.research_dir("example", REPO_ROOT))
 
@@ -186,7 +186,7 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         text=True,
-        env={**os.environ, "XDG_STATE_HOME": str(state_home)},
+        env={**os.environ, "STAGE2_RESEARCH_STATE": str(state_home)},
     )
     store = m.Store(m.research_dir("example", REPO_ROOT))
     run_id = None
@@ -302,6 +302,101 @@ def test_unsafe_slot_ids_are_refused(store):
             store.write_launch(run, bad, key("s1"))
 
 
+# --- criteria 1-4 and 6: the dedicated setting and the default base -------------------------------
+
+
+def record_key(change="demo", root=REPO_ROOT):
+    return f"{change}@{hashlib.sha256(str(Path(root).resolve()).encode('utf-8')).hexdigest()[:8]}"
+
+
+def test_research_override_is_read_at_call_time(state_home, tmp_path, monkeypatch):
+    # Criterion 1. Planted fault: the setting is cached at import time, or XDG_STATE_HOME takes precedence.
+    m = module()
+    suffix = Path("coding-harness") / "stage2" / record_key() / "research"
+    assert m.research_dir("demo", REPO_ROOT) == Path(state_home) / suffix
+    moved = tmp_path / "moved-store"
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, str(moved))  # set after the module was imported
+    assert m.research_dir("demo", REPO_ROOT) == moved / suffix
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-trap"))
+    assert m.research_dir("demo", REPO_ROOT) == moved / suffix, "the shared state root never wins"
+
+
+def test_research_default_is_stable_per_user_and_outside_home(tmp_path, monkeypatch):
+    # Criterion 2. Planted fault: the default follows HOME, XDG_STATE_HOME or the working directory,
+    # or names the wrong platform directory or another user's id.
+    m = module()
+    monkeypatch.delenv(m.RESEARCH_STATE_VARIABLE, raising=False)
+    shared = Path("/Users/Shared") if sys.platform == "darwin" else Path("/var/tmp")
+    expected = shared / f"coding-harness-research-{os.getuid()}"
+    assert m.default_research_base() == expected
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, "")  # an empty override counts as unset
+    (tmp_path / "first-cwd").mkdir()
+    monkeypatch.chdir(tmp_path / "first-cwd")
+    first = m.research_base()
+    assert first == expected, "no real state is created: the default is only computed"
+    assert not first.is_relative_to(home.resolve()), "the default is outside HOME"
+    monkeypatch.setenv("HOME", str(tmp_path / "home-two"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-two"))
+    (tmp_path / "second-cwd").mkdir()
+    monkeypatch.chdir(tmp_path / "second-cwd")
+    assert m.research_base() == first, "no caller input moves the default"
+    suffix = Path("coding-harness") / "stage2" / record_key("demo", tmp_path) / "research"
+    assert m.research_dir("demo", tmp_path) == first / suffix
+
+
+def test_a_relative_override_is_refused_at_call_time(tmp_path, monkeypatch):
+    # Criterion 6, unit level. Planted fault: a relative base resolves against the caller's directory.
+    m = module()
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, "relative-store")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(m.StoreWriteError, match="absolute"):
+        m.research_dir("demo", REPO_ROOT)
+
+
+def test_research_setting_does_not_move_verification_or_loop_state(tmp_path, monkeypatch):
+    # Criterion 3. Planted fault: the dedicated setting moves the verification queue, the loop record
+    # or its lock with it.
+    stage2 = pytest.importorskip("stage2", reason="the runner is not part of this repository")
+    verify_lock = pytest.importorskip("verify_lock")
+    xdg = tmp_path / "xdg"
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    key = stage2.record_key("demo", tmp_path)
+    record = xdg / "coding-harness" / "stage2" / key
+    for setting in (tmp_path / "store-one", tmp_path / "store-two"):
+        monkeypatch.setenv(module().RESEARCH_STATE_VARIABLE, str(setting))
+        assert verify_lock.state_root() == xdg / "coding-harness"
+        assert stage2.record_dir("demo", tmp_path) == record
+        assert stage2.lock_path("demo", tmp_path) == xdg / "coding-harness" / "stage2" / f"{key}.lock"
+
+
+def test_research_store_keeps_change_and_resolved_worktree_keys(tmp_path, state_home):
+    # Criterion 4. Planted fault: two changes or two spellings of one resolved worktree share a store,
+    # or aliases of one resolved root split it.
+    m = module()
+    root = tmp_path / "worktree"
+    root.mkdir()
+    alias = tmp_path / "link-to-worktree"
+    alias.symlink_to(root)
+    deeper = tmp_path / "deeper"  # a real directory, so the ``..`` spelling crosses it before the resolver
+    deeper.mkdir()
+    through = deeper / ".." / "worktree"
+    suffix = Path("coding-harness") / "stage2" / record_key("demo", root) / "research"
+    assert m.research_dir("demo", root) == Path(state_home) / suffix
+    assert m.research_dir("demo", alias) == Path(state_home) / suffix, "a parent link is resolved"
+    assert m.research_dir("demo", through) == Path(state_home) / suffix, "``..`` is resolved"
+    other_change = m.research_dir("other", root)
+    assert other_change == Path(state_home) / "coding-harness" / "stage2" / record_key("other", root) / "research"
+    assert other_change != m.research_dir("demo", root)
+    second = tmp_path / "second-worktree"
+    second.mkdir()
+    assert m.research_dir("demo", second) != m.research_dir("demo", root)
+
+
 # --- criterion 52 and 17: placement and modes ----------------------------------------------------
 
 
@@ -319,7 +414,7 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
     store.release_lock()
     git_dir = Path(git(repo, "rev-parse", "--absolute-git-dir"))
     home = repo.parent / "home"
-    store.assert_outside(repo, git_dir, home, repo.parent / "agent")  # the XDG state home is none of these
+    store.assert_outside(repo, git_dir, home, repo.parent / "agent")  # the dedicated store base is none of these
     for model_directory in (repo, git_dir, home):
         for inside in (model_directory, model_directory / "deeper"):
             with pytest.raises(m.StoreWriteError):
@@ -344,13 +439,15 @@ def test_store_refuses_a_symlinked_directory(state_home, tmp_path):
         m.Store(link).start_run(CHANGE, "r", BINDING)
 
 
-def test_store_canary_never_reaches_a_payload_argv_or_environment(state_home):
+def test_store_canary_never_reaches_a_payload_argv_or_environment(state_home, monkeypatch):
     """A store path canary stays out of everything the dispatcher hands a child."""
     import stage2_research_dispatch as d
 
+    stage2 = pytest.importorskip("stage2", reason="the runner is not part of this repository")
     m = module()
     canary = "CANARY-STORE-PATH-7731"
-    store = m.Store(state_home / canary / "research")
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, str(Path(state_home) / canary))
+    store = m.Store(m.research_dir("example", REPO_ROOT))
     run = begin(store)
     seen = []
 
@@ -364,7 +461,7 @@ def test_store_canary_never_reaches_a_payload_argv_or_environment(state_home):
             text=True,
             start_new_session=True,
             cwd=str(state_home.parent),
-            env={k: v for k, v in os.environ.items() if k != "XDG_STATE_HOME"},
+            env=stage2.foreign_env({}),  # the production launch environment allow-list
         )
 
     slot = d.Slot("s1", "go", True, (1,), 10.0, {"stage": "topics"}, "prompt s1", "payload")
@@ -721,7 +818,7 @@ def test_one_run_per_change_and_a_killed_runs_lock_is_released(state_home):
         ],
         stdout=subprocess.PIPE,
         text=True,
-        env={**os.environ, "XDG_STATE_HOME": str(state_home)},
+        env={**os.environ, "STAGE2_RESEARCH_STATE": str(state_home)},
     )
     try:
         assert pipe_line(holder) == "LOCKED"
@@ -743,19 +840,19 @@ def test_one_run_per_change_and_a_killed_runs_lock_is_released(state_home):
 
 
 def test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing(tmp_path: Path) -> None:
-    # Criterion 52 (phase-6 F-19, Q-15). Planted fault: a lexical comparison lets a store under HOME pass
+    # Criterion 6 (phase-6 F-19, Q-15). Planted fault: a lexical comparison lets a store under HOME pass
     # when its path spells ``..`` or reaches HOME through a parent symlink.
     store_module = module()
     home = tmp_path / "home"
-    (home / ".local" / "state").mkdir(parents=True)
+    home.mkdir()
     link = tmp_path / "link-to-home"
     link.symlink_to(home)
     spelled = {
-        "dotdot": tmp_path / "other" / ".." / "home" / ".local" / "state" / "s",
-        "parent link": link / ".local" / "state" / "s",
+        "dotdot": tmp_path / "other" / ".." / "home" / "store" / "s",
+        "parent link": link / "store" / "s",
     }
     for label, directory in spelled.items():
-        with pytest.raises(store_module.StoreWriteError, match="XDG_STATE_HOME"):
+        with pytest.raises(store_module.StoreWriteError, match="STAGE2_RESEARCH_STATE"):
             store_module.Store(directory).assert_outside(home=home)
         assert label
     # A forbidden directory reached through a link is refused too, and a store truly outside passes.

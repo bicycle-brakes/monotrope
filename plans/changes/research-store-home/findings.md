@@ -86,3 +86,84 @@ Stage-2 call, 2026-11-05: draft · attempt 2 · route codex-repair · endpoint o
 
 > Attempt 2 (codex-repair): the runner put back what a draft may not change:
 > - `plans/INDEX.md`
+
+Stage-2 call, 2026-11-05: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 892 files, 3294 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +21 -0
+> - `plans/changes/research-store-home/plan.md` +7 -7
+> - `scripts/research_capture.py` +22 -19
+> - `scripts/stage2_research_run.py` +15 -3
+> - `scripts/stage2_research_store.py` +49 -12
+> - `tests/test_research_capture.py` +23 -2
+> - `tests/test_stage2_research_deep_review.py` +12 -8
+> - `tests/test_stage2_research_store.py` +111 -15
+> - `tests/test_stage2_swarm.py` +69 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_stage2_swarm.py`.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......F..............                                                    [100%]
+> =================================== FAILURES ===================================
+> _________ test_research_store_keeps_change_and_resolved_worktree_keys __________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-store-home/.venv/bin/python3
+>
+> self = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0/deeper/..')
+> mode = 511, parents = True, exist_ok = False
+>
+>     def mkdir(self, mode=0o777, parents=False, exist_ok=False):
+>         """
+>         Create a new directory at this given path.
+>         """
+>         try:
+> >           os.mkdir(self, mode)
+> E           FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0/deeper/..'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1311: FileNotFoundError
+>
+> During handling of the above exception, another exception occurred:
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0')
+> state_home = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0/research-state')
+>
+>     def test_research_store_keeps_change_and_resolved_worktree_keys(tmp_path, state_home):
+>         # Criterion 4. Planted fault: two changes or two spellings of one resolved worktree share a store,
+>         # or aliases of one resolved root split it.
+>         m = module()
+>         root = tmp_path / "worktree"
+>         root.mkdir()
+>         alias = tmp_path / "link-to-worktree"
+>         alias.symlink_to(root)
+>         through = tmp_path / "deeper" / ".." / "worktree"
+> >       through.parent.mkdir(parents=True)
+>
+> tests/test_stage2_research_store.py:386: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1316: in mkdir
+>     self.mkdir(mode, parents=False, exist_ok=exist_ok)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0/deeper/..')
+> mode = 511, parents = False, exist_ok = False
+>
+>     def mkdir(self, mode=0o777, parents=False, exist_ok=False):
+>         """
+>         Create a new directory at this given path.
+>         """
+>         try:
+> >           os.mkdir(self, mode)
+> E           FileExistsError: [Errno 17] File exists: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-912/popen-gw5/test_research_store_keeps_chan0/deeper/..'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1311: FileExistsError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_store.py::test_research_store_keeps_change_and_resolved_worktree_keys
+> 1 failed, 20 passed in 17.06s
+> ```
+
+Stage-2 call, 2026-11-05: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 892 files, 3297 commits, 12 rules.

@@ -376,32 +376,36 @@ def test_every_research_pi_launch_is_offline(tmp_path: Path, tools: str) -> None
 
 
 def test_releasing_the_loop_keeps_the_research_store_and_its_lock(tmp_path: Path, monkeypatch) -> None:
-    # Criteria 53, 58 (RS-2-1). Planted fault: `release-loop` deletes the whole record directory, the research
-    # state store with it: an interrupted run's results are lost, and while a run holds the old lock a second
-    # run takes a fresh one.
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    # Criterion 9 (RS-2-1). Planted fault: `release-loop` deletes the research state store, or lets a second
+    # holder take the lock a run still holds. Loop state (XDG) and store state (the dedicated variable) are
+    # created independently, as the production locations are.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "loop-state"))
+    monkeypatch.setenv(stage2_research_store.RESEARCH_STATE_VARIABLE, str(tmp_path / "research-state"))
     root = tmp_path / "repo"
     root.mkdir()
     directory = stage2.record_dir("demo", root)
+    directory.mkdir(parents=True)
     store = stage2_research_store.Store(stage2_research_store.research_dir("demo", root))
     store.acquire_lock()
     try:
+        run_id = store.start_run("plans/changes/demo", "receipt-1", {"binding": "frozen"})
         (directory / "loop.md").write_text("# loop\n", encoding="utf-8")
         (directory / "availability.json").write_text("{}", encoding="utf-8")
         (directory / "research-availability.json").write_text("{}", encoding="utf-8")
         (directory / "research-probe-1.json").write_text("{}", encoding="utf-8")
-        kept = sorted(p.relative_to(directory).as_posix() for p in directory.rglob("*") if "research" in p.name)
+        kept = sorted(p.name for p in directory.iterdir() if p.name.startswith("research-"))
         stage2.remove_loop_record(directory)
         assert not (directory / "loop.md").exists() and not (directory / "availability.json").exists()
-        left = sorted(p.relative_to(directory).as_posix() for p in directory.rglob("*") if "research" in p.name)
-        assert left == kept and (directory / "research").is_dir()
+        left = sorted(p.name for p in directory.iterdir() if p.name.startswith("research-"))
+        assert left == kept, "the research receipt and probe audit survive the release"
+        assert [run["run_id"] for run in store.runs()] == [run_id], "the store's durable records survive"
         second = stage2_research_store.Store(stage2_research_store.research_dir("demo", root))
         with pytest.raises(stage2_research_store.StoreLocked):
             second.acquire_lock()
     finally:
         store.release_lock()
     stage2.remove_loop_record(directory)
-    assert directory.exists(), "the research store keeps the directory"
+    assert directory.exists(), "the kept research receipt and probe audit hold the directory"
     empty = stage2.record_dir("other", root)
     empty.mkdir(parents=True)
     (empty / "loop.md").write_text("x", encoding="utf-8")

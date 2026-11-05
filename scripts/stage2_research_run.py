@@ -49,7 +49,15 @@ from stage2_research_judge import (
 )
 from stage2_research_report import ResearchReportError, _keys, _load, research_seat_id, validate_research_report
 from stage2_research_snapshot import ResearchSnapshotError, _without_updated, freeze_research_state, stored_binding
-from stage2_research_store import STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
+from stage2_research_store import (
+    RESEARCH_STATE_VARIABLE,
+    STOP_REASON,
+    Store,
+    StoreLocked,
+    StoreWriteError,
+    plan_reuse,
+    research_dir,
+)
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
 
@@ -363,14 +371,18 @@ class Run:
         if any(seat["endpoint"] == GO for seat in self.all_seats()):
             runner.require_pi()
             self.key = runner.reviewer_key()
-        self.store = Store(research_dir(self.change, self.root), scrub=self.scrub)
         try:
+            self.store = Store(research_dir(self.change, self.root), scrub=self.scrub)
             self.store.assert_outside(*git_boundaries(self.root), home=Path(os.environ.get("HOME") or Path.home()))
             self.store.acquire_lock()
         except StoreLocked as error:
             raise runner.Refused(str(error)) from error
         except StoreWriteError as error:
-            raise runner.CallFailed(f"the research state store is unusable ({error})") from error
+            # A relative base fails here like any unusable store: exit 1 before a call, the setting named.
+            raise runner.CallFailed(
+                f"the research state store is unusable ({error}); set {RESEARCH_STATE_VARIABLE} to an "
+                "absolute, owner-only directory outside the inherited home, the worktree and every git directory"
+            ) from error
         self.locked = True
         # The runner's appends stamp `updated:`; stamping before the freeze keeps the frozen prefix intact.
         runner.stamp_updated(self.ctx.research)

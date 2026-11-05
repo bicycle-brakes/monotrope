@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-03
+updated: 2026-11-05
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1013,6 +1013,27 @@ the same change resumes: a slot is reused only when its resume binding (the
 digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
 prompt hash match and its result was ok and validates; nothing else is reused,
 and the run gets its own run id, deadlines and receipt.
+
+The store's location is the research swarm's own setting and never
+`XDG_STATE_HOME`, which still places the machine-wide verification queue and
+the review-loop records (bead coding-harness-nxdy): a non-empty absolute
+`STAGE2_RESEARCH_STATE` names the store base, read at every call; unset or
+empty selects `/Users/Shared/coding-harness-research-<uid>` on macOS and
+`/var/tmp/coding-harness-research-<uid>` on the other supported POSIX systems,
+`<uid>` being the numeric user id — so an ordinary run needs no moved HOME or
+XDG variable. One change's store is
+`<base>/coding-harness/stage2/<change>@<digest8>/research`, `<digest8>` the
+first eight SHA-256 characters of the resolved repository root. Store
+directories are owner-only (0700), records and the lock file (0600) reachable
+by no one else, and the exclusions hold: a store inside the inherited HOME,
+the worktree or a git directory is refused with exit 1 before any model call,
+as is a relative or otherwise unusable setting — the guidance names
+`STAGE2_RESEARCH_STATE`, and nothing falls back to another location. A store
+path and the setting itself never reach a model's prompt, arguments or
+environment. Stores at old locations are neither moved, searched nor deleted:
+selecting the previous safe base explicitly (a directory outside HOME, same
+suffix) resumes their records; the new default never discovers them
+automatically.
 
 **The handoff is checked (gate `research-handoff`).** The runner derives an
 obligation inventory from the reports (accepted `[DECISION]` questions, class

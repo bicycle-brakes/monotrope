@@ -11,6 +11,7 @@ pinned Pi, contacts a provider or reads a secret.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -236,10 +237,30 @@ def test_world_plants_canaries_in_tracked_history_untracked_home_env_and_state(t
     assert by_name["repo-untracked"]["value"] in (repo / "untracked-notes.txt").read_text()
     assert by_name["home-ssh"]["value"] in (world.home / ".ssh" / "id_canary").read_text()
     assert by_name["env-key"]["value"] in world.parent_env.values()
-    state_file = next(world.state_home.rglob("canary-state.txt"))
+    state_file = next(world.research_state.rglob("canary-state.txt"))
     assert by_name["state-store"]["value"] in state_file.read_text()
-    assert world.home not in world.state_home.parents, "the state store lies outside the fake home (Q-15)"
+    assert world.home not in world.research_state.parents, "the research store lies outside the fake home (Q-15)"
+    assert world.parent_env["STAGE2_RESEARCH_STATE"] == str(world.research_state), "the dedicated setting is synthetic"
+    assert world.parent_env["XDG_STATE_HOME"] == str(world.state_home)
+    assert world.research_state != world.state_home, "loop state and store state are selected independently"
     assert all(c["value"].startswith("CANARY-") for c in world.canaries)
+
+
+def test_the_store_guard_uses_the_dedicated_setting_and_restores_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Criterion 6 of research-store-home. Planted fault: the guard reads XDG_STATE_HOME for the store or
+    # leaves the caller's dedicated setting changed.
+    pytest.importorskip("stage2_research_store", reason="the store module is not part of this repository")
+    world = rc.build_world(tmp_path, seed="s")
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", "sentinel-base")
+    outcomes = rc.state_store_guard(world)
+    assert outcomes["outside-home"] == "accepted"
+    assert outcomes["inside-home"].startswith("refused")
+    assert os.environ["STAGE2_RESEARCH_STATE"] == "sentinel-base", "the guard restores the previous value"
+    monkeypatch.delenv("STAGE2_RESEARCH_STATE")
+    outcomes = rc.state_store_guard(world)
+    assert outcomes["outside-home"] == "accepted"
+    assert outcomes["inside-home"].startswith("refused")
+    assert "STAGE2_RESEARCH_STATE" not in os.environ, "an unset variable stays unset"
 
 
 def test_world_is_deterministic_for_a_seed_and_random_without_one(tmp_path: Path):

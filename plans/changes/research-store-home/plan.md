@@ -109,18 +109,18 @@ The phase-6 review compares the workflow paragraph with the resolver and spec.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_research_store.py::test_research_override_is_read_at_call_time — cached environment or XDG takes precedence
-- 2: not yet written tests/test_stage2_research_store.py::test_research_default_is_stable_per_user_and_outside_home — default depends on HOME, XDG or cwd, or uses the wrong platform/user path
-- 2: not yet written tests/test_stage2_swarm.py::test_default_research_store_starts_without_moving_xdg — the default still causes the home guard to refuse an ordinary run
-- 3: not yet written tests/test_stage2_research_store.py::test_research_setting_does_not_move_verification_or_loop_state — another state path follows the dedicated setting
-- 4: not yet written tests/test_stage2_research_store.py::test_research_store_keeps_change_and_resolved_worktree_keys — roots collide or aliases split
+- 1: tests/test_stage2_research_store.py::test_research_override_is_read_at_call_time — cached environment or XDG takes precedence
+- 2: tests/test_stage2_research_store.py::test_research_default_is_stable_per_user_and_outside_home — default depends on HOME, XDG or cwd, or uses the wrong platform/user path
+- 2: tests/test_stage2_swarm.py::test_default_research_store_starts_without_moving_xdg — the default still causes the home guard to refuse an ordinary run
+- 3: tests/test_stage2_research_store.py::test_research_setting_does_not_move_verification_or_loop_state — another state path follows the dedicated setting
+- 4: tests/test_stage2_research_store.py::test_research_store_keeps_change_and_resolved_worktree_keys — roots collide or aliases split
 - 5: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — a private mode is widened or an unsafe existing store passes
 - 5: tests/test_stage2_research_store.py::test_store_refuses_a_symlinked_directory — a symlink is followed
 - 6: tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted — home overlap launches a model or guidance names only XDG
 - 6: tests/test_stage2_research_store.py::test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing — a resolved home or repository alias bypasses the guard
-- 6: not yet written tests/test_stage2_swarm.py::test_invalid_research_base_stops_before_model_calls — a relative or unwritable base launches a model, escapes failure handling or falls back
+- 6: tests/test_stage2_swarm.py::test_invalid_research_base_stops_before_model_calls — a relative or unwritable base launches a model, escapes failure handling or falls back
 - 7: tests/test_stage2_research_store.py::test_store_canary_never_reaches_a_payload_argv_or_environment — the dedicated setting or resolved store canary reaches a child
-- 7: not yet written tests/test_stage2_swarm.py::test_research_store_setting_never_reaches_model_launch_inputs — a real launcher forwards the setting or directory
+- 7: tests/test_stage2_swarm.py::test_research_store_setting_never_reaches_model_launch_inputs — a real launcher forwards the setting or directory
 - 8: tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome — relocation loses a flushed record after interruption
 - 8: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — a mismatched slot becomes reusable
 - 8: tests/test_stage2_research_store.py::test_a_changed_binding_reuses_nothing_and_names_the_paths — a different input binding reuses results
@@ -129,3 +129,6 @@ The phase-6 review compares the workflow paragraph with the resolver and spec.
 - 10: not a test — phase-6 review compares docs/WORKFLOW.md's setting, defaults, modes and migration guidance with the resolver and spec; stale XDG setup advice or an omitted default refutes it
 
 ## Time used
+
+2026-11-04 23:48:56–2026-11-05 00:49:21 UTC, 3624 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-05 00:49:32–01:30:35 UTC, 2463 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

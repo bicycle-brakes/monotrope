@@ -1,11 +1,15 @@
 """Resumable state store of the research swarm (Q-13): finished slots survive an aborted run.
 
-The store is runner-owned and lives outside the repository, beside the review loop record:
-``record_dir(change)/research/``. One directory per run (its random 128-bit id) holds
-``run.json`` and, per slot, ``<slot>.launch.json`` and ``<slot>.result.json``. Every record is
-scrubbed, written to a temporary name, flushed, renamed into place and its directory flushed,
-so a crash leaves the whole record or none; a reader ignores temporary names and refuses a
-record that does not parse or whose own SHA-256 field does not match.
+The store is runner-owned and lives outside the repository, at its own base: the directory the
+``STAGE2_RESEARCH_STATE`` environment variable names, or a per-user default outside every HOME.
+One change's store is ``<base>/coding-harness/stage2/<change>@<digest>/research/``, where ``<digest>``
+is eight characters of the SHA-256 of the resolved repository root, so two worktrees of one change
+keep two stores. The base is read at call time and never ``XDG_STATE_HOME``, which places the
+machine-wide verification queue and the review-loop records (Q-1 of research-store-home). One
+directory per run (its random 128-bit id) holds ``run.json`` and, per slot, ``<slot>.launch.json``
+and ``<slot>.result.json``. Every record is scrubbed, written to a temporary name, flushed, renamed
+into place and its directory flushed, so a crash leaves the whole record or none; a reader ignores
+temporary names and refuses a record that does not parse or whose own SHA-256 field does not match.
 
 The module knows nothing about models or the dispatcher: callers hand it plain dictionaries.
 A slot is reused only when the latest stored run's resume binding, stage, topic, seat,
@@ -24,6 +28,7 @@ import re
 import secrets
 import shutil
 import stat
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -41,6 +46,9 @@ STATES = ("running", "incomplete", "complete")
 SLOT_KEY_FIELDS = ("stage", "topic", "seat", "endpoint", "model", "prompt_sha256")
 REUSABLE_OUTCOME = "ok"
 STOP_REASON = "state-store-unwritable"
+# The research store's own setting, read at call time; never XDG_STATE_HOME, so research can use a
+# store outside the inherited home without moving the shared verification queue or the loop records.
+RESEARCH_STATE_VARIABLE = "STAGE2_RESEARCH_STATE"
 
 
 class StoreWriteError(OSError):
@@ -56,16 +64,45 @@ class StoreLocked(RuntimeError):
     exit_code = 2
 
 
+def default_research_base(*, system=None, uid=None):
+    """The pure default store base: per user, outside HOME, independent of the environment.
+
+    ``/Users/Shared/coding-harness-research-<uid>`` on macOS and ``/var/tmp/coding-harness-research-<uid>``
+    on the other supported POSIX systems; ``os.getuid()`` supplies the user, never a variable an
+    inherited environment could forge. An unusable default needs an explicit override, never a fallback.
+    """
+    platform = sys.platform if system is None else system
+    user = os.getuid() if uid is None else uid
+    shared = Path("/Users/Shared") if platform == "darwin" else Path("/var/tmp")
+    return shared / f"coding-harness-research-{user}"
+
+
+def research_base():
+    """The store base, read at call time: the dedicated setting, else the platform default.
+
+    An empty value counts as unset; a relative value is refused, because a store must not move
+    with the calling directory.
+    """
+    value = os.environ.get(RESEARCH_STATE_VARIABLE)
+    if value:
+        base = Path(value)
+        if not base.is_absolute():
+            raise StoreWriteError(f"{RESEARCH_STATE_VARIABLE} must name an absolute directory, not {value!r}")
+        return base
+    return default_research_base()
+
+
 def research_dir(change, root):
-    """``record_dir(change, root)/research`` without importing the runner (same XDG rule, read at call time).
+    """``<research_base()>/coding-harness/stage2/<change>@<digest>/research``, read at call time.
 
     The key is the runner's own record key - the change and a digest of the resolved repository root -
     so two worktrees of the same change keep two research directories (R-2 of the review-swarm review).
+    The base is the research store's own ``STAGE2_RESEARCH_STATE`` or the platform default, so an
+    explicit old safe base can still address existing records, while the verification queue and the
+    loop record stay where ``XDG_STATE_HOME`` places them.
     """
-    state = os.environ.get("XDG_STATE_HOME")
-    base = Path(state) if state else Path.home() / ".local" / "state"
     key = f"{change}@{hashlib.sha256(str(Path(root).resolve()).encode('utf-8')).hexdigest()[:8]}"
-    return base / "coding-harness" / "stage2" / key / "research"
+    return research_base() / "coding-harness" / "stage2" / key / "research"
 
 
 def _now():
@@ -153,7 +190,7 @@ class Store:
         """Refuse a store inside (or equal to) any directory a model, the worktree or git may see.
 
         ``home`` is the real home directory Claude research processes inherit; a store beneath it is refused
-        with the way out (Q-15): ``XDG_STATE_HOME`` must point outside it.
+        with the way out (Q-15): ``STAGE2_RESEARCH_STATE`` must name a directory outside it.
         """
         # Resolve ``..`` and parent links before comparing (F-19): a lexical spelling must not slip past.
         mine = Path(os.path.realpath(self.directory))
@@ -162,7 +199,7 @@ class Store:
             if mine == base or mine.is_relative_to(base) or base.is_relative_to(mine):
                 raise StoreWriteError(
                     f"the state store would lie inside the home directory {base}, which Claude research "
-                    "processes inherit; set XDG_STATE_HOME to a directory outside it"
+                    f"processes inherit; set {RESEARCH_STATE_VARIABLE} to a directory outside it"
                 )
         for other in forbidden:
             other = Path(os.path.realpath(other))

@@ -8,8 +8,9 @@ without any external request:
 
 * a scratch world: a fake repository (canaries in tracked files, git history
   and an untracked file, plus discovery traps), a fake HOME (dotfiles, ssh-like
-  and claude-like directories) and a fake XDG_STATE_HOME outside that HOME;
-  fake API-key-shaped canaries in the parent environment;
+  and claude-like directories), a fake XDG_STATE_HOME outside that HOME for
+  the shared state and a fake STAGE2_RESEARCH_STATE outside it for the research
+  store; fake API-key-shaped canaries in the parent environment;
 * a loopback OpenAI-compatible mock server that records every request (the
   full JSON body, tool schemas, headers with the transport key redacted) and
   answers from a script that asks the model side to call file, shell and
@@ -505,6 +506,7 @@ class World:
     repo: Path
     home: Path
     state_home: Path
+    research_state: Path
     canaries: list[dict]
     parent_env: dict[str, str]
     key: str
@@ -539,11 +541,12 @@ def _free_port() -> int:
 
 
 def build_world(scratch: Path, seed: str | None = None) -> World:
-    """Fake repository, HOME and state directory with synthetic canaries; nothing real is read."""
+    """Fake repository, HOME, shared state and research store with synthetic canaries; nothing real is read."""
     root = Path(scratch)
     root.mkdir(parents=True, exist_ok=True)
     repo, home, state_home = root / "repo", root / "home", root / "xdg-state"
-    for directory in (repo, home, state_home):
+    research_state = root / "research-state"
+    for directory in (repo, home, state_home, research_state):
         directory.mkdir(parents=True, exist_ok=True)
 
     def canary(name: str, klass: str) -> dict:
@@ -571,11 +574,11 @@ def build_world(scratch: Path, seed: str | None = None) -> World:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"synthetic {name}: {value}\n", encoding="utf-8")
         where[name] = f"$HOME/{relative}"
-    # the fake state store, outside the fake HOME (Q-15)
-    state_file = state_home / "coding-harness" / "stage2" / FIXTURE_CHANGE / "research" / "canary-state.txt"
+    # the fake research store, at its own base outside the fake HOME (Q-15, Q-1 of research-store-home)
+    state_file = research_state / "coding-harness" / "stage2" / FIXTURE_CHANGE / "research" / "canary-state.txt"
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(f"synthetic stored peer result: {add('state-store', 'state')}\n", encoding="utf-8")
-    where["state-store"] = "$XDG_STATE_HOME/.../canary-state.txt"
+    where["state-store"] = "$STAGE2_RESEARCH_STATE/.../canary-state.txt"
     # the fake repository
     (repo / "AGENTS.md").write_text(
         f"# Fixture rules\nsynthetic tracked rule {add('repo-tracked', 'repo')}\n", encoding="utf-8"
@@ -617,7 +620,7 @@ def build_world(scratch: Path, seed: str | None = None) -> World:
     key = add("transport-key", "transport-key")
     where["transport-key"] = "OPENCODE_API_KEY handed to Pi (allowed in the Authorization header only)"
     dead = _free_port()
-    parent_env.update(HOME=str(home), XDG_STATE_HOME=str(state_home))
+    parent_env.update(HOME=str(home), XDG_STATE_HOME=str(state_home), STAGE2_RESEARCH_STATE=str(research_state))
     parent_env.update(
         {
             name: f"http://127.0.0.1:{dead}"
@@ -628,7 +631,7 @@ def build_world(scratch: Path, seed: str | None = None) -> World:
     ordered = []
     for item in canaries.values():
         ordered.append({**item, "where": where[item["name"]]})
-    return World(root, repo, home, state_home, ordered, parent_env, key, dead)
+    return World(root, repo, home, state_home, research_state, ordered, parent_env, key, dead)
 
 
 @contextlib.contextmanager
@@ -763,7 +766,7 @@ def repository_script(world: World) -> list[dict]:
         {"name": "read", "arguments": {"path": "AGENTS.md"}},
         {"name": "read", "arguments": {"path": "untracked-notes.txt"}},
         {"name": "read", "arguments": {"path": str(world.home / ".ssh" / "id_canary")}},
-        {"name": "read", "arguments": {"path": str(next(world.state_home.rglob("canary-state.txt")))}},
+        {"name": "read", "arguments": {"path": str(next(world.research_state.rglob("canary-state.txt")))}},
         {"name": "grep", "arguments": {"pattern": "CANARY", "path": "."}},
         {"name": "ls", "arguments": {"path": "."}},
     ]
@@ -965,14 +968,14 @@ def excerpt(text: str, limit: int = 600) -> str:
 
 
 def state_store_guard(world: World) -> dict:
-    """Q-15 evidence: the runner's own placement guard on the fake state store, and on one inside the fake HOME."""
-    from stage2_research_store import Store, StoreWriteError, research_dir
+    """Q-15 evidence: the runner's own placement guard on the fake research store, and on one inside the fake HOME."""
+    from stage2_research_store import RESEARCH_STATE_VARIABLE, Store, StoreWriteError, research_dir
 
     outcomes = {}
     git_dir = world.repo / ".git"
-    for label, state in (("outside-home", world.state_home), ("inside-home", world.home / ".local" / "state")):
-        saved = os.environ.get("XDG_STATE_HOME")
-        os.environ["XDG_STATE_HOME"] = str(state)
+    for label, base in (("outside-home", world.research_state), ("inside-home", world.home / ".local" / "state")):
+        saved = os.environ.get(RESEARCH_STATE_VARIABLE)
+        os.environ[RESEARCH_STATE_VARIABLE] = str(base)
         try:
             Store(research_dir(FIXTURE_CHANGE, REPO_ROOT)).assert_outside(world.repo, git_dir, home=world.home)
             outcomes[label] = "accepted"
@@ -980,9 +983,9 @@ def state_store_guard(world: World) -> dict:
             outcomes[label] = f"refused: {error}"
         finally:
             if saved is None:
-                os.environ.pop("XDG_STATE_HOME", None)
+                os.environ.pop(RESEARCH_STATE_VARIABLE, None)
             else:
-                os.environ["XDG_STATE_HOME"] = saved
+                os.environ[RESEARCH_STATE_VARIABLE] = saved
     return outcomes
 
 
@@ -1177,7 +1180,7 @@ def execute(args, scratch: Path) -> dict:
 
 def method_lines(real: bool) -> list[str]:
     return [
-        "Scratch world: a fake repository (canaries in tracked files, discovery traps under .pi/, git history and an untracked file), a fake HOME and a fake XDG_STATE_HOME outside it; fake API-key-shaped canaries replace the process environment for the run. No real file or secret is read.",
+        "Scratch world: a fake repository (canaries in tracked files, discovery traps under .pi/, git history and an untracked file), a fake HOME, a fake XDG_STATE_HOME outside it for the shared state and a fake STAGE2_RESEARCH_STATE outside it for the research store; fake API-key-shaped canaries replace the process environment for the run. No real file or secret is read.",
         "Mock server: loopback, random port, records every request body, tool schema and header (the transport key redacted); answers from a script that calls file, shell, search and private-address tools.",
         "Launch paths: the online, online-free and repository seats are built by the swarm's own Run.pi_command (production argv, scratch HOME and agent directory, restricted environment, measured models.json written by activate_overlay) and the reachability probe by stage2_availability.probe_go; both start "
         + (
@@ -1201,7 +1204,7 @@ def enforcement(real: bool, sandbox: bool) -> dict:
     enforced = [
         "The mock server binds 127.0.0.1 only; every model route and both catalog sources point at it.",
         "Each seat runs with the production scratch HOME, scratch agent directory and restricted environment (public seats: PATH only plus their own variables).",
-        "The parent environment, HOME and XDG_STATE_HOME are replaced by synthetic canary values for the whole run.",
+        "The parent environment, HOME, XDG_STATE_HOME and STAGE2_RESEARCH_STATE are replaced by synthetic canary values for the whole run.",
         "Proxy variables of every child point at a dead loopback port.",
     ]
     not_enforced = [

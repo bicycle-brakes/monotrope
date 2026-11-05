@@ -485,6 +485,7 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
         "PATH": f"{bin_dir}:{git_dir}",
         "HOME": str(home),
         "XDG_STATE_HOME": str(tmp_path / "state"),
+        "STAGE2_RESEARCH_STATE": str(tmp_path / "research-state"),
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -2907,17 +2908,78 @@ def test_research_launches_install_the_consumed_catalog_store(sworld: SwarmWorld
 def test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted(
     sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Criterion 52 (phase-6 F-12, Q-15). Planted fault: the default store beneath the home Claude research
-    # processes inherit passes the placement guard.
+    # Criterion 6 (phase-6 F-12, Q-15). Planted fault: a dedicated store inside the home Claude research
+    # processes inherit passes the placement guard, or the guidance names only XDG.
     home = Path(os.environ["HOME"])
-    monkeypatch.delenv("XDG_STATE_HOME")  # the default beneath HOME
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", str(home / "research-inside-home"))
     sworld.complete()
     assert sworld.run() == 1
     assert sworld.calls() == [], "no model starts"
     message = capsys.readouterr().err
-    assert "XDG_STATE_HOME" in message and str(home) in message
-    monkeypatch.setenv("XDG_STATE_HOME", str(home.parent / "state-outside-home"))
+    assert "STAGE2_RESEARCH_STATE" in message and str(home) in message
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", str(home.parent / "research-store-outside-home"))
     assert sworld.run() == 0
+
+
+def test_default_research_store_starts_without_moving_xdg(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 2. Planted fault: with the dedicated variable unset the default store still lies beneath
+    # HOME, so an ordinary run stays refused until XDG_STATE_HOME leaves the home.
+    monkeypatch.delenv("STAGE2_RESEARCH_STATE", raising=False)
+    default_base = sworld.root.parent / "default-research-base"
+    monkeypatch.setattr(stage2_research_store, "default_research_base", lambda *_args, **_kwargs: default_base)
+    xdg = os.environ["XDG_STATE_HOME"]
+    sworld.complete()
+    assert sworld.run() == 0, "an ordinary run needs no moved HOME or XDG variable"
+    assert sworld.calls(), "models start"
+    assert (default_base / "coding-harness" / "stage2").is_dir(), "the selected default base held the store"
+    assert not (Path(os.environ["HOME"]) / "coding-harness").exists(), "nothing followed HOME"
+    record = stage2.record_dir("demo", sworld.root)
+    expected_record = Path(xdg) / "coding-harness" / "stage2" / stage2.record_key("demo", sworld.root)
+    assert record == expected_record, "XDG still places the loop record"
+
+
+def test_invalid_research_base_stops_before_model_calls(
+    sworld: SwarmWorld,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    # Criterion 6. Planted fault: a relative or unwritable dedicated base launches a model, escapes the
+    # exit-1 handling or silently falls back to the default store.
+    fallback = sworld.root.parent / "default-research-base"
+    monkeypatch.setattr(stage2_research_store, "default_research_base", lambda *_args, **_kwargs: fallback)
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", "relative/not-absolute")
+    sworld.complete()
+    assert sworld.run() == 1
+    assert sworld.calls() == [], "no model starts"
+    assert "STAGE2_RESEARCH_STATE" in capsys.readouterr().err
+    assert not fallback.exists(), "no fallback store was created"
+    unwritable = tmp_path / "research-base-unwritable"
+    unwritable.mkdir()
+    unwritable.chmod(0o500)
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", str(unwritable))
+    try:
+        assert sworld.run() == 1
+    finally:
+        unwritable.chmod(0o700)
+    assert sworld.calls() == [], "no model starts on an unwritable base either"
+    assert "STAGE2_RESEARCH_STATE" in capsys.readouterr().err
+    assert not fallback.exists(), "no fallback store was created"
+
+
+def test_research_store_setting_never_reaches_model_launch_inputs(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 7. Planted fault: a real launcher forwards the dedicated setting or the selected store path.
+    base = sworld.root.parent / "research-store-launch-canary-4e7a1"
+    monkeypatch.setenv("STAGE2_RESEARCH_STATE", str(base))
+    sworld.complete()
+    assert sworld.run() == 0
+    store = str(stage2_research_store.research_dir("demo", sworld.root))
+    for call in sworld.calls():
+        blob = json.dumps({k: call[k] for k in ("prompt", "argv", "env", "cwd")})
+        assert "STAGE2_RESEARCH_STATE" not in blob
+        assert str(base) not in blob and store not in blob
 
 
 @pytest.mark.parametrize("name", ["research.md", "spec.md"])
