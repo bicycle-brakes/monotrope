@@ -1132,16 +1132,33 @@ def test_new_swarm_class_without_complete_research_is_red(
     world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
 ) -> None:
     # Criterion 1 (bead coding-harness-in27). Planted fault: the applicability check collapses back into the
-    # old early return, so a new feature or architectural spec passes without a complete run as "legacy".
+    # old early return, so a new feature or architectural spec passes without a complete run as "legacy",
+    # or cited research items are checked against an empty complete-run inventory (exit 3 instead of 1).
+    records = [q_record(1, items=(f"{RUN1}/H-1",), claims=(gid(RUN1, 1, SEATS[0], "C1"),))]
     if evidence == "incomplete":
         run = run_text(RUN1, status="incomplete - stopped", klass=klass)
-        world.write([run], records=[], spec=spec_text(klass=klass))
+        world.write([run], records=records, spec=spec_text(klass=klass))
     else:
-        world.write([], spec=spec_text(klass=klass), research=evidence == "plain")
+        world.write([], records=records, spec=spec_text(klass=klass), research=evidence == "plain")
     code, out = world.check(capsys)
     assert code == 1, (evidence, klass, out)
     assert "demo" in out and "no complete" in out
     assert "legacy" not in out
+
+
+@pytest.mark.parametrize("klass", ["feature", "architectural"])
+@pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
+def test_granted_exception_without_complete_run_does_not_validate_item_links(
+    world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
+) -> None:
+    # Planted fault: after granting an exception, checking cited items or claims without a complete run
+    # overrides the waiver with exit 3. These links become obligations only with complete-run evidence.
+    record = q_record(1, items=(f"{RUN1}/H-1",), claims=(gid(RUN1, 1, SEATS[0], "C1"),), exception=GRANT)
+    runs = [run_text(RUN1, status="incomplete - stopped", klass=klass)] if evidence == "incomplete" else []
+    world.write(runs, records=[record], spec=spec_text(klass=klass), research=evidence != "absent")
+    code, out = world.check(capsys)
+    assert code == 0, (evidence, klass, out)
+    assert "Q-1" in out and "the swarm is skipped for this docs-only repair" in out
 
 
 def test_legacy_exemption_uses_start_day(world: World, capsys: pytest.CaptureFixture[str]) -> None:

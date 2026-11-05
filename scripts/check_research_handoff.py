@@ -1007,8 +1007,10 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
 
     if spec_exists:
         _missing_complete_run(out, label, folder, root, load_records, research_text, complete=bool(complete))
-        if not complete and records is None:
-            # Class and legacy exemptions need no interview evidence. Run validation above still applies.
+        if not complete:
+            # Applicability and any exception settle the missing-run verdict. Without a complete run,
+            # there is no handoff inventory against which to check interview item or claim links.
+            # Structural run validation has already run above, before any exception is applied.
             return out
     records = load_records()
     items = _items_of(complete)
