@@ -233,7 +233,11 @@ class World:
         else:
             research_file.unlink(missing_ok=True)
         items = (f"{RUN1}/H-1",)
-        recs = [q_record(1, items=items)] if records is None else records
+        recs = (
+            ([q_record(1, items=items)] if any("status: complete." in run for run in runs) else [])
+            if records is None
+            else records
+        )
         (self.folder / "decisions.md").write_text("# Decisions\n\n" + "\n".join(recs), encoding="utf-8")
         spec_file = self.folder / "spec.md"
         if spec is None:
@@ -1132,9 +1136,8 @@ def test_new_swarm_class_without_complete_research_is_red(
     world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
 ) -> None:
     # Criterion 1 (bead coding-harness-in27). Planted fault: the applicability check collapses back into the
-    # old early return, so a new feature or architectural spec passes without a complete run as "legacy",
-    # or cited research items are checked against an empty complete-run inventory (exit 3 instead of 1).
-    records = [q_record(1, items=(f"{RUN1}/H-1",), claims=(gid(RUN1, 1, SEATS[0], "C1"),))]
+    # old early return, so a new feature or architectural spec passes without a complete run as "legacy".
+    records = []
     if evidence == "incomplete":
         run = run_text(RUN1, status="incomplete - stopped", klass=klass)
         world.write([run], records=records, spec=spec_text(klass=klass))
@@ -1151,14 +1154,17 @@ def test_new_swarm_class_without_complete_research_is_red(
 def test_granted_exception_without_complete_run_does_not_validate_item_links(
     world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
 ) -> None:
-    # Planted fault: after granting an exception, checking cited items or claims without a complete run
-    # overrides the waiver with exit 3. These links become obligations only with complete-run evidence.
+    # A grant waives only the missing run; dangling item links remain unmeasured.
     record = q_record(1, items=(f"{RUN1}/H-1",), claims=(gid(RUN1, 1, SEATS[0], "C1"),), exception=GRANT)
     runs = [run_text(RUN1, status="incomplete - stopped", klass=klass)] if evidence == "incomplete" else []
     world.write(runs, records=[record], spec=spec_text(klass=klass), research=evidence != "absent")
     code, out = world.check(capsys)
-    assert code == 0, (evidence, klass, out)
-    assert "Q-1" in out and "the swarm is skipped for this docs-only repair" in out
+    assert code == 3 and "research_items" in out, (evidence, klass, out)
+    world.write(
+        runs, records=[q_record(1, exception=GRANT)], spec=spec_text(klass=klass), research=evidence != "absent"
+    )
+    code, out = world.check(capsys)
+    assert code == 0 and "Q-1" in out and "the swarm is skipped for this docs-only repair" in out
 
 
 def test_legacy_exemption_uses_start_day(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1401,15 +1407,14 @@ def test_exempt_incomplete_runs_need_no_readable_interview(world: World, capsys,
 
 @pytest.mark.parametrize("state", ["bounded", "spike", "legacy", "complete"])
 def test_exempt_applicability_never_reads_exception_or_unneeded_header(world: World, monkeypatch, state) -> None:
-    # L2-1/L2-2: applicability must stop before exception I/O and before an
-    # unnecessary research header; complete-run obligations remain a separate check.
+    # Applicability validates class headers but stops before unnecessary exception I/O.
+    # Complete-run obligations remain a separate check.
     klass = state if state in ("bounded", "spike") else "feature"
     world.write([], spec=spec_text(klass=klass, day=OLD_DAY), research=False)
     research = None if state == "legacy" else "---\ntitle: Undated research\n---\n"
     original_header = gate._header
 
     def needed_header(text, *args):
-        assert text != research, "an exempt state must not parse the research header"
         return original_header(text, *args)
 
     def unexpected_decisions():
@@ -1496,3 +1501,48 @@ def test_exception_documentation_scopes_unmeasured_records_to_owed_runs() -> Non
     workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
     section = workflow.split("**The handoff is checked", 1)[1].split("### The runner is the only way", 1)[0]
     assert "on a change that owes the run" in section
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+@pytest.mark.parametrize("research_class", ["feature", "doc"])
+@pytest.mark.parametrize("evidence", ["plain", "incomplete"])
+def test_class_validation_precedes_class_exemption(world: World, capsys, klass, research_class, evidence) -> None:
+    runs = [run_text(RUN1, status="incomplete - stopped")] if evidence == "incomplete" else []
+    world.write(runs, records=[], spec=spec_text(klass=klass), research_klass=research_class)
+    code, output = world.check(capsys)
+    assert code == 3 and "class" in output, output
+    world.write(runs, records=[], spec=spec_text(klass=klass), research_klass=klass)
+    assert world.check(capsys)[0] == 0
+
+
+@pytest.mark.parametrize("grant", [None, GRANT])
+@pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
+@pytest.mark.parametrize("fault", ["item", "claim", "directives"])
+def test_missing_run_never_skips_record_validation(world: World, capsys, grant, evidence, fault) -> None:
+    runs = [run_text(RUN1, status="incomplete - stopped")] if evidence == "incomplete" else []
+    kwargs = (
+        {"items": (f"{RUN1}/H-1",)}
+        if fault == "item"
+        else ({"claims": ("missing/claim",)} if fault == "claim" else {"keep": [P], "drop": [P]})
+    )
+    world.write(runs, records=[q_record(1, exception=grant, **kwargs)], research=evidence != "absent")
+    code, output = world.check(capsys)
+    assert code == 3 and "Q-1" in output, output
+    assert {"item": "research_items", "claim": "research_claims", "directives": "both"}[fault] in output
+    world.write(runs, records=[q_record(1, exception=grant)], research=evidence != "absent")
+    assert world.check(capsys)[0] == (0 if grant else 1)
+
+
+@pytest.mark.parametrize("field", ["answer", "context"])
+def test_impossible_exception_answer_or_context_is_not_measured(world: World, capsys, field) -> None:
+    record = q_record(1, exception=GRANT)
+    original = 'answer: "yes"' if field == "answer" else "context: |\n  Topic: demo."
+    record = record.replace(original, f"{field}: 2026-02-30")
+    world.write([], records=[record], research=False)
+    try:
+        code, output = world.check(capsys)
+    except ValueError as error:
+        pytest.fail(f"an impossible {field} date must report exit 3, not raise ValueError: {error}")
+    assert code == 3 and field in output and "Q-1" in output, output
+    world.write([], records=[q_record(1, exception=GRANT)], research=False)
+    assert world.check(capsys)[0] == 0

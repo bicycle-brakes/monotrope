@@ -595,7 +595,7 @@ def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> di
                     snippet = "answer: " + prose.group(1)
             try:
                 result = _yaml_load(snippet)
-            except yaml.YAMLError as error:
+            except (yaml.YAMLError, ValueError) as error:
                 raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
             return result.get(name) if isinstance(result, dict) else None
 
@@ -640,7 +640,7 @@ def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> di
                 continue
             try:
                 parsed = _yaml_load(_snippet(body, found[name]))
-            except yaml.YAMLError as error:
+            except (yaml.YAMLError, ValueError) as error:
                 raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
             content = parsed.get(name) if isinstance(parsed, dict) else None
             where = f"{label} {ident}: {name}"
@@ -856,6 +856,41 @@ def _legacy_note(label: str, start: date, adopted: date) -> str:
     )
 
 
+def _check_records(out: Outcome, label: str, records: dict[str, QRecord], runs: list[ParsedRun]) -> list[QRecord]:
+    """Validate interview links and directives even when the missing run is waived."""
+    complete = [run for run in runs if run.complete]
+    items = _items_of(complete)
+    all_claims = {c["id"] for run in runs for report in run.reports for c in report["claims"]}
+    for record in records.values():
+        for link in record.items:
+            if link not in items:
+                raise CannotMeasure(f"{label} {record.ident}: research_items names {link}, which no complete run holds")
+        for link in record.claims:
+            if link not in all_claims:
+                raise CannotMeasure(f"{label} {record.ident}: research_claims names {link}, which no run holds")
+    # directives of maintainer-answered records
+    directive_records = [r for r in records.values() if r.answered and r.context]
+    for record in directive_records:
+        lists = {"keep": record.keep, "drop": record.drop, "add": record.add}
+        for first in lists:
+            for second in lists:
+                if first < second and set(lists[first]) & set(lists[second]):
+                    raise CannotMeasure(f"{label} {record.ident}: a path stands in both {first} and {second}")
+    for index, record in enumerate(directive_records):
+        for other in directive_records[index + 1 :]:
+            clash = {*record.keep, *record.add} & set(other.drop) | {*other.keep, *other.add} & set(record.drop)
+            if clash:
+                raise CannotMeasure(
+                    f"{label}: {record.ident} and {other.ident} give incompatible directives for {sorted(clash)[0]}"
+                )
+    for record in directive_records:
+        for path in sorted(record.directive_paths()):
+            if not neighbour_form(path):
+                out.findings.append(f"{label} {record.ident}: {path!r} has none of the three permitted spec forms")
+
+    return directive_records
+
+
 def _missing_complete_run(
     out: Outcome,
     label: str,
@@ -865,10 +900,12 @@ def _missing_complete_run(
     research_text: str | None,
     *,
     complete: bool = False,
+    runs: list[ParsedRun] | None = None,
 ) -> Outcome:
     """The spec boundary: which spec-bearing change without a complete run owes one.
 
-    A `bounded` change or `spike` is exempt before reading research metadata. A complete run already
+    Class declarations are validated before any class exemption. A `bounded` change or `spike`
+    needs no start day or adoption date. A complete run already
     meets the obligation; its handoff checks run separately. Otherwise the start day decides:
     `research.md` frontmatter `date`, else the spec's `date`. Old stock (start on or before adoption)
     is a dated legacy exemption, with the class missing permitted. Only a new `feature` or
@@ -880,15 +917,6 @@ def _missing_complete_run(
         raise CannotMeasure(f"{label}: spec.md cannot be read ({error})") from error
     header = _header(spec_body)
     spec_class = header.get("class")
-    if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
-        out.notes.append(
-            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
-        )
-        return out
-    # Complete-run obligations are checked separately; applicability needs neither
-    # a research header nor exception records once the required run exists.
-    if complete:
-        return out
     research_header = _header(research_text, "research.md") if research_text is not None else {}
     research_class = research_header.get("class")
     for source, klass in (("research.md", research_class), ("spec.md", spec_class)):
@@ -896,6 +924,13 @@ def _missing_complete_run(
             raise CannotMeasure(f"{label}: {source} declares class {klass!r}, which is none of {', '.join(CLASSES)}")
     if spec_class is not None and research_class is not None and research_class != spec_class:
         raise CannotMeasure(f"{label}: research.md declares class {research_class!r} and spec.md {spec_class!r}")
+    if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
+        out.notes.append(
+            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
+        )
+        return out
+    if complete:
+        return out
     if research_text is not None:
         start = research_header.get("date")
         if type(start) is not date:
@@ -915,7 +950,9 @@ def _missing_complete_run(
             f"{label}: spec.md declares no class; a change started after {adopted.isoformat()} must declare "
             f"one of {', '.join(CLASSES)}"
         )
-    grants = [record for record in load_records().values() if record.exception is not None]
+    records = load_records()
+    _check_records(out, label, records, runs or [])
+    grants = [record for record in records.values() if record.exception is not None]
     if grants and grants[0].grants_research_exception():
         reason = grants[0].exception["reason"].strip()  # type: ignore[union-attr] - grants_research_exception checked it
         out.notes.append(f"{label}: exempt - the research swarm is waived by {grants[0].ident} (granted: {reason})")
@@ -1006,41 +1043,14 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
         return records
 
     if spec_exists:
-        _missing_complete_run(out, label, folder, root, load_records, research_text, complete=bool(complete))
+        _missing_complete_run(out, label, folder, root, load_records, research_text, complete=bool(complete), runs=runs)
         if not complete:
-            # Applicability and any exception settle the missing-run verdict. Without a complete run,
-            # there is no handoff inventory against which to check interview item or claim links.
-            # Structural run validation has already run above, before any exception is applied.
+            # Applicability checks record links and directives before granting an exception.
+            # Exempt stock does not require a readable historical interview.
             return out
     records = load_records()
     items = _items_of(complete)
-    all_claims = {c["id"] for run in runs for report in run.reports for c in report["claims"]}
-    for record in records.values():
-        for link in record.items:
-            if link not in items:
-                raise CannotMeasure(f"{label} {record.ident}: research_items names {link}, which no complete run holds")
-        for link in record.claims:
-            if link not in all_claims:
-                raise CannotMeasure(f"{label} {record.ident}: research_claims names {link}, which no run holds")
-    # directives of maintainer-answered records
-    directive_records = [r for r in records.values() if r.answered and r.context]
-    for record in directive_records:
-        lists = {"keep": record.keep, "drop": record.drop, "add": record.add}
-        for first in lists:
-            for second in lists:
-                if first < second and set(lists[first]) & set(lists[second]):
-                    raise CannotMeasure(f"{label} {record.ident}: a path stands in both {first} and {second}")
-    for index, record in enumerate(directive_records):
-        for other in directive_records[index + 1 :]:
-            clash = {*record.keep, *record.add} & set(other.drop) | {*other.keep, *other.add} & set(record.drop)
-            if clash:
-                raise CannotMeasure(
-                    f"{label}: {record.ident} and {other.ident} give incompatible directives for {sorted(clash)[0]}"
-                )
-    for record in directive_records:
-        for path in sorted(record.directive_paths()):
-            if not neighbour_form(path):
-                out.findings.append(f"{label} {record.ident}: {path!r} has none of the three permitted spec forms")
+    directive_records = _check_records(out, label, records, runs)
 
     # coverage: the persisted inventory against the independent derivation
     for run in complete:
