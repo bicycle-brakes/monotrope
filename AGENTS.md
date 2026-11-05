@@ -129,6 +129,12 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
 - A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
+- **Night runs stay plain** (maintainer, 2026-10-12): `ROADMAP.md` is the one map and the
+  morning handover the one report; no Kanban board, canvas or dashboard (Grafana included)
+  is proposed or built for the night run until the maintainer states that the plain form
+  has carried. Collecting data is not covered: a structured event log (JSONL with
+  OpenTelemetry GenAI field names, bead coding-harness-oebl) is allowed; a service that
+  shows it is not. Reason: everything is built for an ADHD reader, no feature creep.
 
 ## Tracker quick reference
 
