@@ -13,6 +13,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-11-05"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+class: feature
 ---
 
 # research free paid — Research
