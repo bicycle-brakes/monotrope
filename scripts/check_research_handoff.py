@@ -526,12 +526,12 @@ def _exception_field(body: list[str], found: dict[str, int], label: str, ident: 
         return None
     try:
         loaded = _yaml_load(_snippet(body, found["research_swarm_exception"]))
-    except yaml.YAMLError as error:
+    except (yaml.YAMLError, ValueError) as error:
         raise CannotMeasure(f"{label} {ident}: research_swarm_exception is not readable ({error})") from error
     content = loaded.get("research_swarm_exception") if isinstance(loaded, dict) else None
     if not isinstance(content, dict):
         raise CannotMeasure(f"{label} {ident}: research_swarm_exception must be a mapping of granted and reason")
-    unknown = sorted(set(content) - {"granted", "reason"})
+    unknown = sorted(set(content) - {"granted", "reason"}, key=repr)
     if unknown:
         raise CannotMeasure(f"{label} {ident}: research_swarm_exception holds the unknown key {unknown[0]!r}")
     if "granted" in content and type(content["granted"]) is not bool:
@@ -980,7 +980,20 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
     complete = [run for run in runs if run.complete]
     out.notes.append(f"{label}: {len(runs)} v2 run(s), {len(complete)} complete")
 
-    records = _decisions(folder, label)
+    records: dict[str, QRecord] | None = None
+
+    def load_records() -> dict[str, QRecord]:
+        nonlocal records
+        if records is None:
+            records = _decisions(folder, label)
+        return records
+
+    if not complete and spec_exists:
+        _missing_complete_run(out, label, folder, root, load_records, research_text)
+        if records is None:
+            # Class and legacy exemptions need no interview evidence. Run validation above still applies.
+            return out
+    records = load_records()
     items = _items_of(complete)
     all_claims = {c["id"] for run in runs for report in run.reports for c in report["claims"]}
     for record in records.values():
@@ -1052,7 +1065,7 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
     if not spec_exists:
         return out
     if not complete:
-        return _missing_complete_run(out, label, folder, root, lambda: records, research_text)
+        return out
     try:
         spec_text = spec.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:

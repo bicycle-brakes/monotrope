@@ -1357,3 +1357,64 @@ def test_applicability_and_exceptions_hold_in_live_archive_and_cli(
         capture_output=True, text=True, check=False,
     )  # fmt: skip
     assert done.returncode == 1 and "no complete" in done.stdout
+
+
+@pytest.mark.parametrize("klass,day", [("bounded", NEW_DAY), ("spike", NEW_DAY), ("feature", OLD_DAY)])
+def test_exempt_incomplete_runs_need_no_readable_interview(world: World, capsys, klass, day) -> None:
+    # A valid incomplete run must not make historical prose answers mandatory YAML.
+    record = q_record(1).replace('answer: "yes"', "answer: Keep this: the historical answer")
+    world.write(
+        [run_text(RUN1, status="incomplete - stopped")],
+        records=[record],
+        spec=spec_text(klass=klass),
+        research_day=day,
+    )
+    code, output = world.check(capsys)
+    assert code == 0, output
+    assert "legacy" in output if day == OLD_DAY else "class exemption" in output
+    # Exemption never hides malformed run evidence.
+    world.write(
+        [run_text(RUN1, inventory="corrupt")],
+        records=[record],
+        spec=spec_text(klass=klass),
+        research_day=day,
+    )
+    assert world.check(capsys)[0] == 3
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        'research_swarm_exception: {granted: true, reason: "r", 1: x, other: y}',
+        "research_swarm_exception: {granted: true, reason: 2026-02-30}",
+    ],
+)
+def test_malformed_exception_values_never_crash(world: World, capsys, field: str) -> None:
+    world.write([], records=[q_record(1, exception=field)], research=False)
+    try:
+        code, output = world.check(capsys)
+    except (TypeError, ValueError) as error:
+        pytest.fail(f"a malformed exception must report exit 3, not raise {type(error).__name__}: {error}")
+    assert code == 3 and "research_swarm_exception" in output and "Q-1" in output, output
+    world.write([], records=[q_record(1, exception=GRANT)], research=False)
+    assert world.check(capsys)[0] == 0
+
+
+def test_workflow_has_one_spec_boundary_rule() -> None:
+    workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
+    section = workflow.split("**The handoff is checked", 1)[1].split("### The runner is the only way", 1)[0]
+    assert section.count("At the spec boundary the gate also decides") == 1
+    assert "Exempt changes need no readable `decisions.md` answer" in section
+    for promise in ("review dates and archive", "reads no tracker, history or network", "3 (not measured)"):
+        assert promise in section
+
+
+def test_exception_documentation_scopes_unmeasured_records_to_owed_runs() -> None:
+    spec = REPO_ROOT / "plans/changes/handoff-new-feature/spec.md"
+    if not spec.exists():
+        pytest.skip("the change spec is not shipped in the kit")
+    criterion = spec.read_text(encoding="utf-8").split("5. If evidence", 1)[1].split("6. While", 1)[0]
+    assert "on a change that owes the run" in criterion
+    workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
+    section = workflow.split("**The handoff is checked", 1)[1].split("### The runner is the only way", 1)[0]
+    assert "on a change that owes the run" in section

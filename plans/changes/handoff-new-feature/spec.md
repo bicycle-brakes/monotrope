@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-in27
@@ -87,8 +87,9 @@ Research: `research.md`. Decision: `decisions.md#Q-1`.
 5. If evidence required to decide applicability or an exception is unreadable
    or ambiguous, the gate exits 3 with the affected input identified.
    *Refuted by:* missing or invalid adoption dates, required start dates,
-   invalid/conflicting class declarations, duplicate exception fields or
-   multiple exception records become success, legacy, or an uncaught traceback.
+   invalid/conflicting class declarations become success, legacy, or an
+   uncaught traceback; duplicate exception fields or multiple exception records
+   on a change that owes the run, where the record is read, do the same.
    *Basis:* `decisions.md#Q-1`; the existing unmeasured-input contract in `research.md`.
 
 6. While an exception is recorded, malformed v2 evidence and obligations

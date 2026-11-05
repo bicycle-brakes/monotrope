@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-04
+updated: 2026-11-05
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1027,34 +1027,17 @@ that links it (`research_items`), `neighbours:` of the spec equal to the given
 or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
 answered records.
 
-At the spec boundary the gate also decides who owes a complete run (bead
-coding-harness-in27). A `feature` or `architectural` change whose start day is
-after the repository's adoption day for the gate (`decisions/adoption.yaml`,
-`research-handoff`, day precision: the adoption day itself is old stock) fails
-with "no complete research-swarm/v2 run" when it has a spec and none exists,
-whether `research.md` is absent, plain or holds only incomplete runs. The start
-day is the `research.md` frontmatter `date`, or the spec's `date` when research
-is absent; an existing research file without a readable day is not measured
-(exit 3), never dated from the spec. Older changes report a dated legacy
-exemption; a `bounded` change or `spike` reports a class exemption. Exempt
-changes need no readable `decisions.md` answer. Before `spec.md` exists a missing
-run is only pending. A maintainer waives the missing run with exactly one interview
-record carrying `research_swarm_exception: {granted: true, reason: "…"}`, a
-non-blank reason, `answered_by: maintainer`, `status: answered`, an actual answer
-and context; the output names the question and reason. The waiver covers only the
-missing run: malformed evidence and every complete run's obligations still apply.
-An unreadable adoption or start day, an invalid or conflicting class, a malformed
-or repeated exception field or more than one exception record exit 3.
-
 At the spec boundary the gate also decides who owes a complete
-`research-swarm/v2` run. A change whose start day lies after the repository's
-adoption day for this gate (`decisions/adoption.yaml`, read per repository
+`research-swarm/v2` run (bead coding-harness-in27). A change whose start day lies
+after the repository's adoption day for this gate (`decisions/adoption.yaml`, read per repository
 through `scripts/adoption.py`; the adoption day itself counts as old stock) and
-whose spec declares `feature` or `architectural` fails without one, unless
+whose spec declares `feature` or `architectural` fails without one, whether
+`research.md` is absent, plain or holds only incomplete runs, unless
 exactly one interview record carries
 `research_swarm_exception: {granted: true, reason: "…"}` on a
-maintainer-answered record with an actual answer and context — the field
-records a grant, it never grants one, and it waives only the missing run: the
+maintainer-answered record with a non-blank reason, an actual answer and context.
+The output names the question and reason. The field records a grant, it never
+grants one, and it waives only the missing run: malformed evidence and the
 inventory, answer, neighbour and basis checks of every complete run stay in
 force. The start day is the `research.md` frontmatter `date`, or the spec's
 `date` when research is absent; an existing research file with no readable day
@@ -1062,10 +1045,14 @@ is never dated from the spec or the filesystem, and review dates and archive
 names do not date creation. A `bounded` change or `spike` is exempt by class
 without an adoption comparison, and a change started on or before the adoption
 day is a dated legacy exemption (a missing historical class is permitted
-there); before `spec.md` exists, missing evidence stays a pending note, never
+there). Exempt changes need no readable `decisions.md` answer to decide the
+missing-run obligation; complete runs still require their handoff checks.
+Before `spec.md` exists, missing evidence stays a pending note, never
 a legacy exemption. Evidence the gate cannot read or decide — an unreadable
-adoption or start day, an invalid or conflicting class, a malformed or
-duplicated exception record — is not measured: exit 3, ahead of any finding.
+adoption or start day or an invalid or conflicting class — is not measured:
+exit 3, ahead of any finding. A malformed or repeated exception field, or more
+than one exception record, on a change that owes the run is likewise not
+measured (exit 3), where the record is read.
 The gate reads no tracker, history or network, measures live and archived
 changes alike, and exits 0 (nothing found), 1 (findings) or 3 (not measured).
 
