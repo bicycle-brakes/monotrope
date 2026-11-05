@@ -2922,9 +2922,10 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
 
     A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
-    committed head apart from this change's own `findings.md` - the runner's audit file - and the head
-    and that substantive tree must be the same after the check as before. The check runs on every
-    phase-6 invocation, a re-check included, and leaves no receipt: it measures the head being reviewed.
+    committed head, including `findings.md`: review reads its phase and session markers before
+    the runner writes any audit. The head and tree must be the same after the check as before.
+    The check runs on every phase-6 invocation, a re-check included, and leaves no receipt: it
+    measures the head being reviewed.
     A dirty tree or a changed head or tree refuses; a red, unstartable or timed-out check fails the call.
     """
     env = runner_env(
@@ -2937,11 +2938,10 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         ),
         root,
     )
-    audit = Path("plans") / "changes" / change / "findings.md"
 
     def standing() -> tuple[str, list[str]]:
         head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
-        return head, sorted(path.as_posix() for path in changed_paths(root, env=env) if path != audit)
+        return head, sorted(path.as_posix() for path in changed_paths(root, env=env))
 
     try:
         head, dirty = standing()
@@ -2950,7 +2950,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
     if dirty:
         listing = ", ".join(f"`{path}`" for path in dirty[:20])
         raise Refused(
-            f"phase 6 reviews a committed tree, and these paths differ from HEAD: {listing}; commit or put "
+            f"phase 6 reviews a committed tree for `{change}`, and these paths differ from HEAD: {listing}; commit or put "
             "them back, then run review again. No reviewer was called."
         )
     problems = full_verify(root, env, None)
@@ -5528,8 +5528,8 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
         if present[posix]:
             python.append(posix)
     try:
-        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root))) | touch_map.links(
-            touch_map.Snapshot(str(root), against)
+        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)) | touch_map.links(
+            touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)
         )
     except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
         return full(f"the link inventory could not be read ({error})")

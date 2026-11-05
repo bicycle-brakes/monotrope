@@ -106,9 +106,15 @@ class CannotMeasure(Exception):
 # --- git ------------------------------------------------------------------------------
 
 
-def _git(repo: str, args: list[str], data: bytes | None = None) -> bytes:
+def _git(
+    repo: str, args: list[str], data: bytes | None = None, *, env: dict[str, str] | None = None, timeout: int = 120
+) -> bytes:
     try:
-        done = subprocess.run(["git", "-C", repo, *args], input=data, capture_output=True, check=True)
+        done = subprocess.run(
+            ["git", "-C", repo, *args], input=data, capture_output=True, check=True, env=env, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as err:
+        raise CannotMeasure(f"git {args[0]} did not finish within {timeout} seconds") from err
     except subprocess.CalledProcessError as err:
         lines = err.stderr.decode("utf-8", "replace").strip().splitlines()
         raise CannotMeasure(lines[0] if lines else f"git {args[0]} failed") from err
@@ -380,12 +386,14 @@ def read_code(path: str, body: str) -> Source:
 class Snapshot:
     """The tracked files of one revision; source texts are read from git objects on first use."""
 
-    def __init__(self, repo: str, rev: str) -> None:
+    def __init__(self, repo: str, rev: str, *, env: dict[str, str] | None = None, timeout: int = 120) -> None:
+        self.env = env
+        self.timeout = timeout
         self.repo = repo
         self.rev = rev
         self._blobs: dict[str, str] = {}  # path -> object id, regular files only
         paths = []
-        for record in git(repo, "ls-tree", "-r", "-z", "--full-tree", rev).split("\0"):
+        for record in self._git(["ls-tree", "-r", "-z", "--full-tree", rev]).decode("utf-8", "replace").split("\0"):
             if not record:
                 continue
             meta, _, path = record.partition("\t")
@@ -394,6 +402,10 @@ class Snapshot:
             if otype == "blob" and mode != "120000":
                 self._blobs[path] = oid
         self._index(paths)
+
+    def _git(self, args: list[str], data: bytes | None = None) -> bytes:
+        """Use the caller's execution boundary for both inventory and lazy blob reads."""
+        return _git(self.repo, args, data, env=self.env, timeout=self.timeout)
 
     def _index(self, paths: list[str]) -> None:
         """The name indexes the link rules read, built once from the revision's path list."""
@@ -432,7 +444,7 @@ class Snapshot:
         wanted = sorted({self._blobs[p] for p in self.sources})
         blobs: dict[str, bytes] = {}
         if wanted:
-            data = _git(self.repo, ["cat-file", "--batch"], ("\n".join(wanted) + "\n").encode())
+            data = self._git(["cat-file", "--batch"], ("\n".join(wanted) + "\n").encode())
             pos = 0
             while pos < len(data):
                 end = data.index(b"\n", pos)
@@ -454,13 +466,15 @@ class WorktreeSnapshot(Snapshot):
     `CannotMeasure`, so a caller never mistakes an unreadable inventory for zero links.
     """
 
-    def __init__(self, repo: str) -> None:
+    def __init__(self, repo: str, *, env: dict[str, str] | None = None, timeout: int = 120) -> None:
+        self.env = env
+        self.timeout = timeout
         self.repo = repo
         self.rev = "worktree"
         self._blobs: dict[str, str] = {}  # path -> path, regular files only
         self._read: dict[str, Source] | None = None
         root = Path(repo).resolve()
-        listing = git(repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+        listing = self._git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).decode("utf-8", "replace")
         paths = []
         for path in sorted({p for p in listing.split("\0") if p}):
             full = root / path

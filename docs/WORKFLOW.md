@@ -1241,8 +1241,9 @@ one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file
 and every other gate still do), so the check's exit code decides and the
-runner reads no gate output. `implement` and `repair` keep the full
-`make verify`: only the draft drops to the document subset. Only the
+runner reads no gate output. `implement` keeps the full `make verify`;
+`repair` takes the targeted check, with the full suite as its fallback and before phase 6.
+Only the draft drops to the document subset. Only the
 maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base

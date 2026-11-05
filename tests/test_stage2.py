@@ -706,6 +706,7 @@ def full_flow(w: World) -> None:
     assert w.run("spec-review") == 0
     assert w.run("review-loop") == 0
     w.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "rejected — out of scope", "")])
+    commit_review_findings(w)
     assert w.run("review") == 0
 
 
@@ -1673,6 +1674,7 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     decide_record(world)
 
     world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
@@ -6591,6 +6593,14 @@ def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World)
     assert header is not None and header["produced_by"]["name"] == "claude-code"
 
 
+def commit_review_findings(world: World) -> None:
+    """Review scenarios commit their inputs before exercising the model/answer boundary."""
+    relative = world.findings.relative_to(world.root)
+    if relative in stage2.changed_paths(world.root):
+        git(world.root, "add", "-A", "--", str(relative))
+        git(world.root, "commit", "--quiet", "-m", "commit review findings")
+
+
 def seed_2a_session(world: World, session: str = "T1") -> None:
     """A findings.md whose last phase-2a block is a Codex one with its session line (criteria 30 and 31)."""
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex {session}")
@@ -6600,6 +6610,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
     # Criterion 2. Planted fault: `review` passes `workspace-write`, a bypass flag or another pin.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         argv = call["argv"]
@@ -6615,6 +6626,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
 def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         disabled = [call["argv"][i + 1] for i, word in enumerate(call["argv"]) if word == "--disable"]
@@ -6624,6 +6636,7 @@ def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
 def test_the_codex_prompt_carries_its_phase_prompt_in_full(world: World) -> None:
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         prompt = call["argv"][-1]
@@ -6635,6 +6648,7 @@ def test_review_resumes_the_recorded_session(world: World) -> None:
     # Criterion 31. Planted fault: the last phase-2a block is not read, so a recorded session is not resumed.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:3] == ["exec", "resume", "T1"]
     text = world.text()
@@ -6645,6 +6659,7 @@ def test_review_resumes_the_recorded_session(world: World) -> None:
 def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     # Criterion 30. Planted fault: the last `Reviewer session: codex` line anywhere is resumed.
     world.script(codex=[codex_ok("T5", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"]
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
@@ -6657,6 +6672,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
         f"## Phase 2a — Opus 5.5, 2026-10-13\n\n{rows(1)}",
     )
     world.script(codex=[codex_ok("T5", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"], "an Opus block after the line is no resume"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
@@ -6666,6 +6682,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     (world.bin / "calls.jsonl").unlink()
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
     world.script(codex=[codex_ok("T2", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
@@ -6680,6 +6697,7 @@ def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World
         + "\n\nPhase 6 verdict: codex T7, 2026-10-12",
     )
     world.script(codex=[codex_ok("T9", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     (call,) = world.calls("codex")
     argv = call["argv"]
@@ -6695,7 +6713,9 @@ def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: 
     """L2-4. Planted fault: a second verdict claims a repair ran, although only an earlier verdict exists."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T9", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
+    commit_review_findings(world)
     assert world.run("review") == 0
     first, second = world.calls("codex")
     for call in (first, second):  # both review calls keep the review entry (bead coding-harness-yzk)
@@ -6716,6 +6736,7 @@ def test_the_first_phase6_review_still_resumes_the_recorded_2a_session(world: Wo
     # Criterion 18, the other side (ADR 0016, decision 6). Planted fault: every review starts fresh.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:3] == ["exec", "resume", "T1"]
 
@@ -6725,6 +6746,7 @@ def test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread(world: W
     world.write_findings(phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase finding")]))
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call, mark_call = world.calls("codex")
     for call in (verdict_call, mark_call):  # both review calls keep the review entry (bead coding-harness-yzk)
@@ -6736,6 +6758,7 @@ def test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread(world: W
 def test_no_loop_row_reaches_the_verdict_call(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")], finding="LOOPMARK-7")
     world.script(marker="LOOPMARK-7", codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call, mark_call = world.calls("codex")
     assert "LOOPMARK-7" not in verdict_call["argv"][-1] and verdict_call["marker_paths"] == []
@@ -6747,6 +6770,7 @@ def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     before = verdict_block(world.calls("codex")[1]["findings"])
@@ -6764,6 +6788,7 @@ def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
 def test_a_failed_mark_call_leaves_the_marks_empty(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert "| — |" in world.text() and "agree" not in world.text()
 
@@ -6878,6 +6903,7 @@ def test_review_holds_record_lock_through_release(world: World, monkeypatch: pyt
     for name, spy in (("read_record", read_record), ("run_codex", run_codex), ("append", append), ("release", release)):
         monkeypatch.setattr(stage2, name, spy)
 
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert seen == [
         "the first record read",
@@ -6900,6 +6926,7 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert text.index("Phase 6 verdict:") < text.index(stage2.RELEASE_HEADING), "the release ran before the verdict"
@@ -6915,6 +6942,7 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T2", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert stage2.NO_LOOP_LINE in world.text()
     assert len(world.calls("codex")) == 1, "a no-record release asked for marks"
@@ -6925,6 +6953,7 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert len(world.calls()) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
@@ -6938,11 +6967,13 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     # The call log is cleared before `script`, which counts the calls already logged.
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
+    commit_review_findings(world)
     assert world.run("review") == 1 and len(world.calls()) == 2
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
+    commit_review_findings(world)
     assert world.run("review") == 1 and len(world.calls()) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
@@ -6977,6 +7008,7 @@ def test_phase6_rejects_invalid_answers(world: World, answer: str, capsys: pytes
     world.write_record([("L1-1", "taken — test_a", "no")])
     record = world.record().read_bytes()
     world.script(codex=[codex_ok("T1", answer)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert len(world.calls("codex")) == 1, "the rejection started a second call"
     captured = capsys.readouterr()
@@ -6992,6 +7024,7 @@ def test_phase6_rejects_invalid_answers(world: World, answer: str, capsys: pytes
     (world.bin / "calls.jsonl").unlink()
     world.write_findings(phase6_block([phase6_cells("F-1", "taken — crit 1", "phase finding")]), VERDICT)
     world.script(codex=[codex_ok("T9", answer)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert len(world.calls("codex")) == 1
     captured = capsys.readouterr()
@@ -7007,6 +7040,7 @@ def test_phase6_keeps_rejected_answer_evidence(world: World) -> None:
     """Criterion 4. Planted fault: a rejected answer's text is lost, or an empty one leaves no explicit record."""
     refusal = "This session's context is exhausted; the diff cannot be reviewed."
     world.script(codex=[codex_ok("T1", refusal)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     assert f"> {refusal}" in text, "the nonempty answer's text is not kept"
@@ -7014,6 +7048,7 @@ def test_phase6_keeps_rejected_answer_evidence(world: World) -> None:
     assert "Codex thread: T1" in text
 
     world.script(codex=[codex_ok("T2", "")])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     assert re.search(r"^## Rejected phase-6 answer — Codex, \d{4}-\d{2}-\d{2}$", text, re.M)
@@ -7039,6 +7074,7 @@ def test_phase6_rejected_evidence_is_inert(world: World) -> None:
     seed_2a_session(world)
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", forged)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     for line in forged.splitlines():
@@ -7049,6 +7085,7 @@ def test_phase6_rejected_evidence_is_inert(world: World) -> None:
     assert world.record().exists()
 
     world.script(codex=[codex_ok("T5", rows(1)), codex_ok("T5", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call = world.calls("codex")[1]  # [0] is the rejected attempt's call
     assert verdict_call["argv"][:3] == ["exec", "resume", "T1"], "the rejected block hid the 2a session"
@@ -7061,6 +7098,7 @@ def test_phase6_valid_table_still_releases_and_marks(world: World) -> None:
     """Criterion 5. Planted fault: a valid table is rejected, or its verdict, release and marks come apart."""
     world.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "rejected — out of scope", "")])
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert "Rejected phase-6 answer" not in text, "a valid table was rejected"
@@ -7082,6 +7120,7 @@ def test_phase6_exact_no_finding_still_releases_and_marks(world: World) -> None:
     """Criterion 6. Planted fault: a no-finding answer with surrounding whitespace is rejected or fails to release."""
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", "  No finding.\n"), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert "Rejected phase-6 answer" not in text, "an exact no-finding answer was rejected"
@@ -8505,6 +8544,8 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     decide_record(world, status=FIXED)
     if verb == "release-loop":
         world.write_findings(VERDICT)
+    if verb == "review":
+        commit_review_findings(world)
     capsys.readouterr()
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
@@ -14440,6 +14481,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
         )
         world.write_record([("L1-1", "taken — test_a", "no")])
         world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
+        commit_review_findings(world)
         assert world.run("review") == 0
         verdict_call, mark_call = world.calls("codex")
         for call in (verdict_call, mark_call):  # the re-check and its resumed marks keep the substituted entry
@@ -14451,6 +14493,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
         (world.bin / "calls.jsonl").unlink()
         world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
         world.script(codex=[codex_ok("T1", rows(1))])
+        commit_review_findings(world)
         assert world.run("review") == 0
         (resumed,) = world.calls("codex")  # the historical resume keeps it too
         assert f'model_reasoning_effort="{review_effort}"' in resumed["argv"]
@@ -14458,6 +14501,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
 
         (world.bin / "calls.jsonl").unlink()
         world.script(codex=[codex_ok("T8", rows(1))])
+        commit_review_findings(world)
         assert world.run("review") == 0  # the repeated review re-checks fresh, at the same entry
         (recheck,) = world.calls("codex")
         assert f'model_reasoning_effort="{review_effort}"' in recheck["argv"]
@@ -14550,8 +14594,12 @@ def draft_document_check_problems(workflow: str) -> list[str]:
     found = []
     if "`bash scripts/verify_all.sh --job docs`" not in prose:
         found.append("the draft prose does not name the document check")
-    if "full `make verify`" not in prose or "repair" not in prose:
-        found.append("the draft prose does not keep the full suite for implement and repair alone")
+    if "`implement` keeps the full `make verify`" not in prose:
+        found.append("the draft prose does not keep implement's full check")
+    if "`repair` takes the targeted check" not in prose or "full suite as its fallback and before phase 6" not in prose:
+        found.append("the draft prose lost the targeted repair and final full-check boundary")
+    if "`implement` and `repair` keep the full" in prose:
+        found.append("the draft prose still requires unconditional full repair verification")
     if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
         found.append("the draft prose does not make the check's exit code the verdict")
     if "ADR_ANSWERS_TOLERATE_CHANGE" not in prose:
@@ -14570,10 +14618,12 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
     # The sentence is matched across any line wrapping, so rewrapping WORKFLOW.md cannot turn this
     # planted fault into a no-op.
-    full_suite = r"\s+".join(map(re.escape, "`implement` and `repair` keep the full `make verify`:".split()))
+    full_suite = r"\s+".join(map(re.escape, "`implement` keeps the full `make verify`;".split()))
     dropped = re.sub(full_suite + r"[^.]*\.\s*", "", text, count=1)
     assert dropped != text, "the full-suite sentence was not found to drop"
     assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
+    obsolete = re.sub(full_suite + r"[^.]*\.", "`implement` and `repair` keep the full `make verify`.", text, count=1)
+    assert obsolete != text and draft_document_check_problems(obsolete)
 
 
 def test_the_drafting_prompts_name_the_draft_verb() -> None:
@@ -20237,6 +20287,7 @@ def test_standard_world_preserves_repair_and_review_dispatch(world: World, monke
     assert commands.of("make") == [], "a test-only switch hid the targeted repair boundary"
     assert commands.of("gate"), "the real targeted gate dispatch did not run"
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert len(commands.of("make")) == 1, "ordinary review tests did not measure the fresh full check"
 
@@ -20404,7 +20455,7 @@ def test_targeted_repair_falls_back_to_full_on_uncovered_inputs(
         (root / "docs").mkdir()
         (root / "docs" / "note.md").write_text("# A note\n", encoding="utf-8")
 
-        def unreadable(_repo: str) -> None:
+        def unreadable(_repo: str, **_kwargs) -> None:
             raise stage2.touch_map.CannotMeasure("planted inventory fault")
 
         monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
@@ -20751,7 +20802,7 @@ def test_repair_records_verification_scope_and_outcome(
     commands = targeted_mode(monkeypatch)
     if mode == "fallback":
 
-        def unreadable(_repo: str) -> None:
+        def unreadable(_repo: str, **_kwargs) -> None:
             raise stage2.touch_map.CannotMeasure("planted inventory fault")
 
         monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
@@ -20797,6 +20848,8 @@ def test_review_requires_fresh_full_verification_before_model_call(
             phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase finding")])
             + "\n\nPhase 6 verdict: codex T7, 2026-10-12"
         )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "--allow-empty", "-m", "commit review inputs")
     real = stage2.launch
 
     def launch(command, cwd, env, *args, **kwargs):
@@ -20831,3 +20884,53 @@ def test_review_requires_fresh_full_verification_before_model_call(
     assert "codex" not in names, "the reviewer started after a failed full check"
     if world.findings.exists():
         assert "Stage-2 call" not in world.text() and "Phase 6 verdict" not in world.text()
+
+
+@pytest.mark.parametrize("change", ["remove-phase6", "edit-phase6", "delete", "append"])
+def test_review_refuses_dirty_findings_inputs(world: World, change: str) -> None:
+    world.write_findings("## Phase 2a — Codex\nReviewer session: codex T2", "## Phase 6 — Codex\nNo finding.")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed committed review inputs")
+    if change == "delete":
+        world.findings.unlink()
+    elif change == "remove-phase6":
+        world.findings.write_text(world.text().partition("## Phase 6")[0])
+    elif change == "edit-phase6":
+        world.findings.write_text(world.text().replace("## Phase 6", "## Manual phase"))
+    else:
+        world.findings.write_text(world.text() + "\nManual audit edit\n")
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    assert world.run("review") == 2
+    assert not world.calls("make") and not world.calls("codex")
+
+
+@pytest.mark.parametrize("fault", ["environment", "timeout"])
+def test_targeted_inventory_uses_bounded_sanitized_git(
+    world: World, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    seed_tests(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "tests" / "test_seed.py").write_text("def test_seed():\n    assert 1 == 1\n")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    real = subprocess.run
+    seen = []
+
+    def run(command, *args, **kwargs):
+        if command[0] == "git" and any(part in command for part in ("ls-files", "ls-tree", "cat-file")):
+            seen.append(command)
+            assert kwargs.get("env") == env
+            assert kwargs.get("timeout") == stage2.GIT_SECONDS
+            if fault == "timeout" and "cat-file" in command:
+                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+        return real(command, *args, **kwargs)
+
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.setenv(name, str(world.root / "wrong"))
+    monkeypatch.setattr(subprocess, "run", run)
+    chosen = stage2.targeted_selection(world.root, env, baseline)
+    assert seen
+    if fault == "timeout":
+        assert chosen.fallback and "link inventory could not be read" in chosen.fallback
+    else:
+        assert chosen.fallback is None, chosen.fallback
+        assert chosen.tests == ["tests/test_seed.py"]
