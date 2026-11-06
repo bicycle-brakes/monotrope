@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "questions": [
+    {
+      "id": "repair-model",
+      "text": "docs/WORKFLOW.md, the routing section ('The routing'), the row whose first cell reads 'Repair after 4b and 6': give the primary repair model's exact identifier as written in that row's model cell.",
+      "answer_type": "string",
+      "source": "docs/WORKFLOW.md",
+      "resolver": "repair-model"
+    },
+    {
+      "id": "repair-fallback",
+      "text": "The same 'Repair after 4b and 6' row names the model that takes over after two failed checks: give that fallback model's exact name, without its effort text.",
+      "answer_type": "string",
+      "source": "docs/WORKFLOW.md",
+      "resolver": "repair-fallback"
+    },
+    {
+      "id": "verify-floor",
+      "text": "scripts/verify_lock.py assigns the default memory floor to the constant DEFAULT_MEMORY_FLOOR: give that floor as a number in percent, without an environment override.",
+      "answer_type": "number",
+      "source": "scripts/verify_lock.py",
+      "resolver": "verify-floor"
+    },
+    {
+      "id": "verify-floor-override",
+      "text": "scripts/verify_lock.py assigns the memory floor's environment override to the constant FLOOR_ENV: give that environment variable's exact name.",
+      "answer_type": "string",
+      "source": "scripts/verify_lock.py",
+      "resolver": "verify-floor-override"
+    },
+    {
+      "id": "run-plans",
+      "text": "docs/orchestration.md, the section 'What a lane is', links dated run plans: give the one repository-relative directory those links resolve into (a trailing slash is optional).",
+      "answer_type": "directory",
+      "source": "docs/orchestration.md",
+      "resolver": "run-plans"
+    },
+    {
+      "id": "handovers",
+      "text": "docs/WORKFLOW.md, the section 'The eighth movement: the session handover', gives the handover artefact's dated path (<date>-<name>.md): give the repository-relative directory of that path (a trailing slash is optional).",
+      "answer_type": "directory",
+      "source": "docs/WORKFLOW.md",
+      "resolver": "handovers"
+    },
+    {
+      "id": "tracker-command",
+      "text": "AGENTS.md carries a house rule of the form 'Use ..., never bare ...' for the tracker: give the repository-relative tracker executable exactly as that rule writes it.",
+      "answer_type": "string",
+      "source": "AGENTS.md",
+      "resolver": "tracker-command"
+    },
+    {
+      "id": "instructions",
+      "text": "AGENTS.md declares in its opening that exactly one file is this repository's instruction file: give that file's name.",
+      "answer_type": "string",
+      "source": "AGENTS.md",
+      "resolver": "instructions"
+    }
+  ]
+}
