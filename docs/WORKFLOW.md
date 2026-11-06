@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-06
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1028,8 +1028,9 @@ directories the runner creates are owner-only (0700); records and the lock file
 use 0600. At every level of any store path, regardless of its directory names,
 an existing directory must be owned by the user, must not be a symbolic link
 and must not be group- or other-writable. Modes such as 0755 are accepted with
-a diagnostic naming the directory and a `chmod 700` command; existing modes
-are never silently changed. Root-owned system parents before the user-owned
+the runner tightening them to 0700 before use and a diagnostic naming the
+directory, its previous mode and the applied mode; writable levels are refused
+rather than tightened. Root-owned system parents before the user-owned
 store ancestry (including sticky shared directories and platform aliases)
 remain infrastructure. The exclusions hold: a store inside the inherited HOME,
 the worktree or a git directory is refused with exit 1 before any model call,

@@ -26,7 +26,6 @@ import json
 import os
 import re
 import secrets
-import shlex
 import shutil
 import stat
 import sys
@@ -213,7 +212,8 @@ class Store:
         Root-owned system parents precede the user-owned store ancestry (and may include
         sticky shared directories and platform aliases such as /var). Below that boundary,
         existing directories must be ours, real directories and not writable by others.
-        Create missing levels privately; never silently chmod an existing directory.
+        Create missing levels privately; tighten existing read/traverse access to 0700
+        and report it before the store is used. Refuse group/other write access.
         """
         directory = self.directory.absolute()
         ancestry = [*reversed(directory.parents), directory]
@@ -246,6 +246,22 @@ class Store:
                         and (not stat.S_IMODE(system_info.st_mode) & 0o022 or system_info.st_mode & stat.S_ISVTX)
                     ):
                         continue
+                # macOS allocates a protected per-user temporary container below
+                # /private/var/folders/<bucket>/<user-key>. It is infrastructure,
+                # although user-owned: chmod there may be forbidden by the OS.
+                # Trust only this exact platform layout, before entering the store,
+                # with the same ownership and non-writability checks as below.
+                if (
+                    sys.platform == "darwin"
+                    and not in_store
+                    and current != directory
+                    and current.resolve().parts[:4] == ("/", "private", "var", "folders")
+                    and len(current.resolve().parts) == 6
+                    and stat.S_ISDIR(info.st_mode)
+                    and info.st_uid == user
+                    and not stat.S_IMODE(info.st_mode) & 0o022
+                ):
+                    continue
                 in_store = True
                 mode = stat.S_IMODE(info.st_mode)
                 if not stat.S_ISDIR(info.st_mode) or info.st_uid != user or mode & 0o022:
@@ -253,11 +269,13 @@ class Store:
                         f"unsafe state store directory {current}: a link, not ours or writable by others"
                     )
                 if mode & 0o077:
+                    current.chmod(0o700)
                     print(
-                        f"state store directory {current} has mode {mode:04o}; "
-                        f"make it owner-only with: chmod 700 -- {shlex.quote(str(current))}",
+                        f"state store directory {current} had mode {mode:04o}; tightened to 0700",
                         file=sys.stderr,
                     )
+        except StoreWriteError:
+            raise
         except OSError as error:
             raise StoreWriteError(f"cannot create the state store: {error}") from error
 

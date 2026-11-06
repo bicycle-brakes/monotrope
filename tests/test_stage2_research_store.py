@@ -403,7 +403,7 @@ def test_research_store_keeps_change_and_resolved_worktree_keys(tmp_path, state_
 # --- criterion 52 and 17: placement and modes ----------------------------------------------------
 
 
-def test_store_is_owner_only_outside_every_model_directory(store, repo):
+def test_store_is_owner_only_outside_every_model_directory(store, repo, capsys):
     m = module()
     run = begin(store)
     store.write_launch(run, "s1", key("s1"))
@@ -424,10 +424,22 @@ def test_store_is_owner_only_outside_every_model_directory(store, repo):
                 m.Store(inside / "research").assert_outside(repo, git_dir, home)
     with pytest.raises(m.StoreWriteError):  # a model directory inside the store
         store.assert_outside(store.directory / "agent")
-    # a loosened directory or a symbolic link in its place is refused
-    store.directory.chmod(0o770)
-    with pytest.raises(m.StoreWriteError):
-        m.Store(store.directory).start_run(CHANGE, "r", BINDING)
+    # Plant read/traverse access: reopening must tighten it before using records.
+    for mode in (0o750, 0o755, 0o711, 0o704):
+        store.directory.chmod(mode)
+        try:
+            m.Store(store.directory).start_run(CHANGE, "r", BINDING)
+        except m.StoreWriteError as error:
+            pytest.fail(f"readable existing store must be tightened and opened: {error}")
+        assert stat.S_IMODE(store.directory.stat().st_mode) == 0o700, "reopening must restore owner-only mode"
+        diagnostic = capsys.readouterr().err
+        assert str(store.directory) in diagnostic and "0700" in diagnostic and "tightened" in diagnostic
+    # Plant group/other write access: never chmod an unsafe store into acceptance.
+    for mode in (0o770, 0o702):
+        store.directory.chmod(mode)
+        with pytest.raises(m.StoreWriteError):
+            m.Store(store.directory).start_run(CHANGE, "r", BINDING)
+        assert stat.S_IMODE(store.directory.stat().st_mode) == mode
     store.directory.chmod(0o700)
 
 
@@ -454,8 +466,8 @@ def test_store_refuses_group_or_other_access_at_every_store_level(state_home, ca
             assert not (store.directory / ".lock").exists(), "refuse public ancestry before creating the lock"
         diagnostic = capsys.readouterr().err
         if mode & 0o077 and not mode & 0o022:
-            assert str(target) in diagnostic and "chmod 700" in diagnostic
-        assert stat.S_IMODE(target.stat().st_mode) == mode, "never silently change existing modes"
+            assert str(target) in diagnostic and "tightened" in diagnostic and "0700" in diagnostic
+        assert stat.S_IMODE(target.stat().st_mode) == (mode if mode & 0o022 else 0o700)
     finally:
         store.release_lock()
         target.chmod(0o700)
@@ -980,8 +992,8 @@ def test_arbitrary_store_paths_check_every_existing_level(tmp_path, capsys, dept
                 pytest.fail(f"safe existing store ancestry must be accepted: {error}")
             if mode != 0o700:
                 diagnostic = capsys.readouterr().err
-                assert str(target) in diagnostic and "chmod 700" in diagnostic
-        assert stat.S_IMODE(target.stat().st_mode) == mode
+                assert str(target) in diagnostic and "tightened" in diagnostic and "0700" in diagnostic
+        assert stat.S_IMODE(target.stat().st_mode) == (mode if mode & 0o022 else 0o700)
     finally:
         store.release_lock()
         target.chmod(0o700)
@@ -1003,7 +1015,7 @@ def test_legacy_public_store_ancestry_resumes_records(state_home, capsys, repo):
         try:
             reopened.acquire_lock()
         except m.StoreWriteError as error:
-            pytest.fail(f"legacy non-writable ancestry must resume without chmod: {error}")
+            pytest.fail(f"legacy readable ancestry must be tightened and resume: {error}")
         with freeze(repo) as state:
             source = reopened.resume_source(state.manifest(), RESEARCH, state.sources()[RESEARCH])
         assert source.usable and source.run_id == run
@@ -1011,8 +1023,8 @@ def test_legacy_public_store_ancestry_resumes_records(state_home, capsys, repo):
         diagnostic = capsys.readouterr().err
         for directory in directories:
             assert str(directory) in diagnostic
-            assert stat.S_IMODE(directory.stat().st_mode) == 0o755
-        assert "chmod 700" in diagnostic
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+        assert "tightened" in diagnostic and "0700" in diagnostic
     finally:
         reopened.release_lock()
 
@@ -1024,3 +1036,33 @@ def test_workflow_does_not_attribute_shared_xdg_state_to_the_relocation():
     )[0]
     assert "coding-harness-nxdy" not in paragraph, "the relocation bead did not introduce shared XDG state"
     assert "the review-loop records:" in paragraph
+
+
+@pytest.mark.parametrize("unsafe", ["link", "foreign-owner", "group-write", "other-write"])
+def test_placement_refusals_are_not_rewrapped(tmp_path, monkeypatch, unsafe):
+    m = module()
+    directory = tmp_path / "store"
+    directory.mkdir(mode=0o700)
+    if unsafe == "link":
+        target = tmp_path / "target"
+        directory.rename(target)
+        directory.symlink_to(target, target_is_directory=True)
+    elif unsafe == "foreign-owner":
+        user = os.getuid()
+        monkeypatch.setattr(m.os, "getuid", lambda: user + 1)
+    else:
+        directory.chmod(0o720 if unsafe == "group-write" else 0o702)
+    store = m.Store(directory)
+    try:
+        with pytest.raises(m.StoreWriteError) as caught:
+            store.acquire_lock()
+        error = caught.value
+        assert str(error).startswith("unsafe state store directory"), (
+            "placement refusal must reach the caller unchanged"
+        )
+        assert error.__cause__ is None, "a placement refusal must not be caught as a filesystem failure"
+        assert not (directory / ".lock").exists()
+    finally:
+        store.release_lock()
+        if not directory.is_symlink():
+            directory.chmod(0o700)

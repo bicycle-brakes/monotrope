@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-nxdy
@@ -217,3 +217,104 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 892 files, 3331 commits, 12 rules.
 
 Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3336 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 892 files, 3345 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3345 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +3 -2
+> - `plans/changes/research-store-home/plan.md` +1 -1
+> - `scripts/stage2_research_store.py` +6 -4
+> - `tests/test_stage2_research_store.py` +54 -12
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> >       assert sworld.run() == 0
+> E       AssertionError: assert 1 == 0
+> E        +  where 1 = run()
+> E        +    where run = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1216/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1216/popen-gw2/test_a_store_inside_the_real_h0/home')).run
+>
+> tests/test_stage2_swarm.py:2921: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research state store is unusable (cannot create the state store: [Errno 1] Operation not permitted: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn'); set STAGE2_RESEARCH_STATE to an absolute, owner-only directory outside the inherited home, the worktree and every git directory
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[509-3]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[493-3]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[448-1]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[493-1]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[448-3]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[509-1]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[455-0]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[448-2]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[493-0]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[509-0]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[493-2]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[509-2]
+> FAILED tests/test_stage2_research_store.py::test_placement_refusals_are_not_rewrapped[other-write]
+> FAILED tests/test_stage2_research_store.py::test_placement_refusals_are_not_rewrapped[group-write]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[455-1]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[448-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[448-stage2]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[455-2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[448-change]
+> FAILED tests/test_stage2_research_store.py::test_a_changed_binding_reuses_nothing_and_names_the_paths
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[448-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[455-3]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[448-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[493-base]
+> FAILED tests/test_stage2_research_store.py::test_arbitrary_store_paths_check_every_existing_level[448-0]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[480-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[493-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[493-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[493-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[493-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[480-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[480-harness]
+> FAILED tests/test_stage2_research_store.py::test_legacy_public_store_ancestry_resumes_records
+> FAILED tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt
+> FAILED tests/test_stage2_research_store.py::test_placement_refusals_are_not_rewrapped[link]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[480-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[480-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[452-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[452-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[452-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_canary_never_reaches_a_payload_argv_or_environment
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[456-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[456-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[452-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[456-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[452-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[456-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[456-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[449-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[449-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[449-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[449-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[449-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[464-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[464-base]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[464-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[464-change]
+> FAILED tests/test_stage2_research_deep_review.py::test_a_failed_clear_binds_the_bytes_actually_appended
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[464-research]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[450-harness]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[450-stage2]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[450-base]
+> FAILED tests/test_stage2_research_deep_review.py::test_releasing_the_loop_keeps_the_research_store_and_its_lock
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[450-change]
+> FAILED tests/test_stage2_research_store.py::test_store_refuses_group_or_other_access_at_every_store_level[450-research]
+> FAILED tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome
+> FAILED tests/test_stage2_swarm.py::test_default_research_store_starts_without_moving_xdg
+> FAILED tests/test_stage2_swarm.py::test_research_store_setting_never_reaches_model_launch_inputs
+> FAILED tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted
+> 70 failed, 11 passed in 2.43s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/research-store-home/stage2/attempts/research-store-home/attempt-1-20261105T190203185973Z-53520fb4.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 892 files, 3346 commits, 12 rules.

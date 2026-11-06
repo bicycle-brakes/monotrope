@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-nxdy
@@ -114,7 +114,7 @@ The phase-6 review compares the workflow paragraph with the resolver and spec.
 - 2: tests/test_stage2_swarm.py::test_default_research_store_starts_without_moving_xdg — the default still causes the home guard to refuse an ordinary run
 - 3: tests/test_stage2_research_store.py::test_research_setting_does_not_move_verification_or_loop_state — another state path follows the dedicated setting
 - 4: tests/test_stage2_research_store.py::test_research_store_keeps_change_and_resolved_worktree_keys — roots collide or aliases split
-- 5: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — a private mode is widened or an unsafe existing store passes
+- 5: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — a readable/traversable existing level is not tightened to 0700 and reported, a private record or lock mode is widened, or a group/other-writable level is accepted
 - 5: tests/test_stage2_research_store.py::test_store_refuses_a_symlinked_directory — a symlink is followed
 - 6: tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted — home overlap launches a model or guidance names only XDG
 - 6: tests/test_stage2_research_store.py::test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing — a resolved home or repository alias bypasses the guard
@@ -135,6 +135,8 @@ The phase-6 review compares the workflow paragraph with the resolver and spec.
 2026-11-05 07:43:36–09:22:01 UTC, 5904 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 11:52:54–13:32:29 UTC, 5975 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 14:32:18–16:21:04 UTC, 6525 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-05 19:02:23–21:29:36 UTC, 8831 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-05 21:29:49–2026-11-06 00:59:19 UTC, 12568 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-05
 
