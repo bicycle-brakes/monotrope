@@ -2925,29 +2925,13 @@ def rejected_review_block(answer: str, thread: str) -> str:
 
 
 def review_audit_only(before: bytes, after: bytes) -> bool:
-    """Admit only runner call lines outside byte-identical phase-6 blocks.
+    """Admit runner call lines under any heading, comparing all remaining input bytes.
 
     Remove each call's blank separator with it and permit append's current-date
     header stamp. All other bytes, including reviewer sessions and verdicts,
     remain review inputs and must match HEAD.
     """
 
-    def phase6_blocks(body: bytes) -> list[bytes]:
-        blocks = []
-        current = None
-        offset = 0
-        for line in body.splitlines(keepends=True):
-            if line.startswith(b"## "):
-                if current is not None:
-                    blocks.append(body[current:offset])
-                current = offset if line.startswith(b"## Phase 6") else None
-            offset += len(line)
-        if current is not None:
-            blocks.append(body[current:])
-        return blocks
-
-    if phase6_blocks(before) != phase6_blocks(after):
-        return False
     call = re.compile(
         rb"\n\nStage-2 call, \d{4}-\d{2}-\d{2}: [a-z][a-z0-9-]*(?: \(loop marks\))?"
         rb"(?: \xc2\xb7 attempt [1-9]\d* \xc2\xb7 route [a-z0-9-]+)?"

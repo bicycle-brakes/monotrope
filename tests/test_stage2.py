@@ -20944,7 +20944,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
 def test_review_admits_only_runner_audit_changes_outside_phase6(
     world: World, monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
-    """F6-1: real audit-only disk/index deltas pass; phase-6 bytes and the checked snapshot stay protected.
+    """F6-1/F6-4: audit-only disk/index deltas pass; substantive bytes and the snapshot stay protected.
 
     Planted fault: rejecting all dirty findings prevents the full check and reviewer for an audit-only delta.
     """
@@ -21005,11 +21005,38 @@ def test_review_admits_only_runner_audit_changes_outside_phase6(
         return real(command, cwd, env, *args, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", launch)
-    accepted = case in ("append", "staged", "remove", "replace", "multiple")
+    accepted = case in ("append", "staged", "remove", "replace", "multiple", "phase6-audit")
     moved = case in ("audit-moved", "index-moved", "new-audit-during-check")
     assert world.run("review") == (0 if accepted else 1 if moved else 2)
     assert len(world.calls("make")) == int(accepted or moved)
     assert bool(world.calls("codex")) == accepted
+
+
+@pytest.mark.parametrize("placement", ["phase4b", "phase6", "end-of-file"])
+def test_review_audit_only_preserves_verdict_and_session_at_every_placement(placement: str) -> None:
+    """F6-4: runner audits are admissible under any heading, including a trailing phase-6 block.
+
+    Planted faults: baseline's raw phase-6 comparison rejects these audits; changing a verdict
+    or session beside an admissible audit must still fail the substantive-input comparison.
+    """
+    audit = (
+        "Stage-2 call, 2026-11-06: review · endpoint openai-codex · model gpt-6.1-sol"
+        " · leak check clean over 867 files, 3326 commits, 12 rules."
+    ).encode()
+    phase6 = b"## Phase 6\n\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n\nReviewer session: codex T7"
+    if placement == "phase4b":
+        before = phase6 + b"\n\n## Phase 4b\n\nReleased loop rows."
+        after = before + b"\n\n" + audit
+    elif placement == "phase6":
+        before = phase6 + b"\n\n## Phase 4b\n\nReleased loop rows."
+        after = before.replace(b"\n\n## Phase 4b", b"\n\n" + audit + b"\n\n## Phase 4b")
+    else:
+        before = phase6
+        after = before + b"\n\n" + audit
+    assert stage2.review_audit_only(before, after)
+    assert not stage2.review_audit_only(before, after.replace(b"verdict: codex T7", b"verdict: codex T8"))
+    assert not stage2.review_audit_only(before, after.replace(b"session: codex T7", b"session: codex T8"))
+    assert not stage2.review_audit_only(before, after.replace(b"No finding.", b"Changed verdict."))
 
 
 @pytest.mark.parametrize("case", ["disk", "staged", "wrong-date", "other-header", "phase6"])

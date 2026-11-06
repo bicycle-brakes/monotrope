@@ -700,7 +700,12 @@ Stage-2 call, 2026-11-06: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-4 | BLOCKER | SPEC | Phase 6 | scripts/stage2.py:2935–2950; plans/changes/repair-targeted-check/plan.md:93–94 | [DIVERGENT] When the last findings heading is `## Phase 6`, the runner's next call audit is appended inside the block compared byte-for-byte. If that reviewer call fails, retrying review rejects the audit-only change before full verification, although the plan explicitly permits runner audit changes. New evidence: executing `review_audit_only()` against HEAD and this worktree's sole current review-audit addition returns `False`; an equivalent addition after a `## Phase 4b` heading returns `True`. Runner-generated trailing audits must remain admissible while verdict and session bytes stay protected. [Acceptance criterion 9; plan step 5] | Codex | taken — maintainer answer A (2026-11-06, mechanism repair): `review_audit_only()` strips every runner audit line wherever it sits (any heading, including `## Phase 6`) and compares only the verdict and session lines; one test per placement (after `## Phase 4b`, after `## Phase 6`, at end of file) | — |
+| F6-4 | BLOCKER | SPEC | Phase 6 | scripts/stage2.py:2935–2950; plans/changes/repair-targeted-check/plan.md:93–94 | [DIVERGENT] When the last findings heading is `## Phase 6`, the runner's next call audit is appended inside the block compared byte-for-byte. If that reviewer call fails, retrying review rejects the audit-only change before full verification, although the plan explicitly permits runner audit changes. New evidence: executing `review_audit_only()` against HEAD and this worktree's sole current review-audit addition returns `False`; an equivalent addition after a `## Phase 4b` heading returns `True`. Runner-generated trailing audits must remain admissible while verdict and session bytes stay protected. [Acceptance criterion 9; plan step 5] | Codex | fixed — tests/test_stage2.py::test_review_audit_only_preserves_verdict_and_session_at_every_placement | — |
 
 Phase 6 verdict: codex 01a1ae5b-f177-7943-a7ed-1d1bf11f7b5b, 2026-11-06
 Reviewer session: codex 01a1ae5b-f177-7943-a7ed-1d1bf11f7b5b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3399 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
