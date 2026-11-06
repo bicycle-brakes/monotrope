@@ -933,9 +933,10 @@ def _missing_complete_run(
             _check_records(out, label, _decisions(folder, label, linked_only=True), runs or [])
 
     if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
-        out.notes.append(
-            f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
-        )
+        if not complete:
+            out.notes.append(
+                f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
+            )
         check_exempt_records()
         return out
     if complete and spec_class is not None:

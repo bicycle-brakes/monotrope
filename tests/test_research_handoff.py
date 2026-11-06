@@ -1152,7 +1152,7 @@ def test_new_swarm_class_without_complete_research_is_red(
 
 @pytest.mark.parametrize("klass", ["feature", "architectural"])
 @pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
-def test_granted_exception_without_complete_run_does_not_validate_item_links(
+def test_granted_exception_without_complete_run_still_validates_item_links(
     world: World, capsys: pytest.CaptureFixture[str], klass: str, evidence: str
 ) -> None:
     # A grant waives only the missing run; dangling item links remain unmeasured.
@@ -1407,21 +1407,31 @@ def test_exempt_incomplete_runs_need_no_readable_interview(world: World, capsys,
 
 
 @pytest.mark.parametrize("state", ["bounded", "spike", "legacy", "complete"])
-def test_exempt_applicability_never_reads_exception_or_unneeded_header(world: World, monkeypatch, state) -> None:
+def test_exempt_applicability_reads_only_required_headers_and_adoption(world: World, monkeypatch, state) -> None:
     # Applicability validates class headers but stops before unnecessary exception I/O.
     # Complete-run obligations remain a separate check.
     klass = state if state in ("bounded", "spike") else "feature"
     world.write([], spec=spec_text(klass=klass, day=OLD_DAY), research=False)
     research = None if state == "legacy" else "---\ntitle: Undated research\n---\n"
     original_header = gate._header
+    original_adopted = gate._adopted
+    headers_read = []
+    adoption_reads = []
 
-    def needed_header(text, *args):
-        return original_header(text, *args)
+    def needed_header(text, where="spec.md"):
+        headers_read.append(where)
+        return original_header(text, where)
+
+    def needed_adoption(root):
+        assert state == "legacy", "class-exempt and complete states need no adoption record"
+        adoption_reads.append(root)
+        return original_adopted(root)
 
     def unexpected_decisions():
         pytest.fail("an exempt applicability state must not read decisions.md")
 
     monkeypatch.setattr(gate, "_header", needed_header)
+    monkeypatch.setattr(gate, "_adopted", needed_adoption)
     outcome = gate._missing_complete_run(
         gate.Outcome(),
         "demo",
@@ -1432,6 +1442,21 @@ def test_exempt_applicability_never_reads_exception_or_unneeded_header(world: Wo
         complete=state == "complete",
     )
     assert not outcome.findings
+    expected_headers = ["demo: spec.md"]
+    if research is not None:
+        expected_headers.append("demo: research.md")
+    assert headers_read == expected_headers
+    assert adoption_reads == ([world.root] if state == "legacy" else [])
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_complete_exempt_class_reports_evidence_without_exemption(world: World, capsys, klass) -> None:
+    # A complete run satisfies the obligation; a class exemption must not contradict that evidence.
+    world.write([run_text(RUN1, klass=klass, assessed=klass)], spec=spec_text(klass=klass))
+    code, output = world.check(capsys)
+    assert code == 0, output
+    assert "1 v2 run(s), 1 complete" in output
+    assert "exempt" not in output, output
 
 
 @pytest.mark.parametrize("klass", ["bounded", "spike"])
