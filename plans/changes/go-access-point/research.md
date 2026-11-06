@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-01
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-4tr4
@@ -17,16 +17,6 @@ tags: [research]
 ---
 
 # go access point — Research
-
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 > **Phase 1 routing exception (maintainer, 2026-10-31).** The bead is a
 > `feature` (bead coding-harness-4tr4), but its own subject blocks the research
 > swarm: every OpenCode Go model is refused at the swarm's origin check. The

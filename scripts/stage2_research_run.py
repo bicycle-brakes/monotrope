@@ -410,7 +410,7 @@ class Run:
                 already_published = (
                     _sha256(_without_updated(self.research_bytes)) != previous["research_normalised_sha256"]
                 )
-                if already_published and length:
+                if already_published and 0 < length <= len(self.research_bytes):
                     self.publication_bytes = prefix + self.research_bytes[-length:]
                 else:
                     self.publication_bytes = prefix

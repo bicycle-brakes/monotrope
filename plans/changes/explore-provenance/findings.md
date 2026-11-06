@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -392,3 +392,45 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 893 files, 3331 commits, 12 rules.
 
 Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 893 files, 3338 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 893 files, 3345 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 893 files, 3345 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +15 -3
+> - `plans/changes/explore-provenance/spec.md` +11 -3
+> - `plans/changes/fail-fast-attempts/research.md` +1 -10
+> - `plans/changes/go-access-point/research.md` +1 -11
+> - `plans/changes/interview-context/research.md` +1 -10
+> - `plans/changes/loop-until-clean/research.md` +1 -1
+> - `plans/changes/run-report/research.md` +1 -10
+> - `scripts/stage2_research_run.py` +1 -1
+> - `tests/test_explore_provenance.py` +32 -5
+> - `tests/test_stage2_research_deep_review.py` +35 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261105T185753012888Z-ac4e569a.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 893 files, 3345 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +11 -3
+> - `plans/changes/explore-provenance/spec.md` +7 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L5-6: tests/test_explore_provenance.py::test_loop_backfill_stamp_reaches_its_correction_day: fixed-code proof: pytest ended 1 on the fixed code; the session ended 1, not as a passing run
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-2-20261105T185753012888Z-ac4e569a.md
+> ```
+
+Stage-2 call, 2026-11-06: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 893 files, 3361 commits, 12 rules.

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -112,7 +112,7 @@ Research: [research.md](research.md). Scope: [decisions.md, Q-1](decisions.md#q-
   of `allowed:` in the provenance map.
 - No archive cleanup, changes to the living implementation-verification spec,
   or correction of research without evidence of model publication.
-- No change to model selection, prompts, leak checks, admission, swarm record
+- No change to model selection, prompt files, leak checks, admission, swarm record
   format, interview rules, research findings or the meaning of human approval.
 - No alteration of the deterministic new-change skeleton's initial provenance:
   it may remain `human-written` until model research is actually published.
@@ -153,6 +153,12 @@ None open. The maintainer's answer in Q-1 is unchanged.
 - [DETAIL] Backfill producer identity and version from the existing Explore audit
   evidence, stamp `updated:` on the correction date and keep review pending;
   this records what is known without inventing historical approval.
+- [DETAIL] The swarm's private brief (not a prompt file) embeds the research as
+  the runner's publication would leave it, with the fixed sentinel day
+  `0000-00-00`, and says so in one sentence; this is what lets a resumed run
+  hash the same prompts after the runner's own correction (criterion 8). The
+  sentinel is a normalization value, never a publication date. Prompt files,
+  model selection and the swarm record format stay unchanged.
 - [DETAIL] Set a two-hour implementation appetite, repairs included, because
   this bounded correction must include swarm-resume regression coverage; stop
   and report remaining work if that budget is exhausted.

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -88,6 +88,13 @@ Implements [spec.md](spec.md) and the maintainer's answered scope in
    and prove it red against an affected pre-correction copy and green afterward.
    Re-scan active research first; if the affected set changed, name any additional
    paths in this plan before editing them under the already answered scope.
+   The re-scan (review-loop round 5, 2026-11-05) found four further affected
+   active files, named here before their correction:
+   `plans/changes/run-report/research.md`,
+   `plans/changes/interview-context/research.md`,
+   `plans/changes/fail-fast-attempts/research.md` and
+   `plans/changes/go-access-point/research.md`. They get the same narrow
+   correction, and their `updated:` stamp is the day of the last edit.
 8. Attempt/orchestrator: update implementation status in
    `plans/changes/explore-provenance/spec.md` and
    `plans/changes/explore-provenance/plan.md` as appropriate, and replace each
@@ -160,6 +167,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash fai
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: second Sonnet attempt, 2026-11-04: test_corrected_skeleton_publication_keeps_swarm_resume and test_swarm_publication_corrects_research_provenance are red because a resume after the corrected publication reruns every finder and seat; trace where the resume compares research.md (stage2_research_snapshot.changed_against_stored and the caller that records publication= in stored_binding) and make the stored binding carry the prepared corrected bytes before the write.
 
+## Runner route — 2026-11-06
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-04 16:42:41–18:07:04 UTC, 5063 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -171,6 +182,9 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: second Sonnet att
 2026-11-05 08:51:51–09:21:28 UTC, 1777 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 11:52:54–13:32:37 UTC, 5983 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 14:33:13–16:21:03 UTC, 6470 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-05 18:58:04–20:01:38 UTC, 3814 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-05 20:02:03–2026-11-06 01:00:56 UTC, 17931 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 01:01:07–05:50:49 UTC, 17380 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 

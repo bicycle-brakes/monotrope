@@ -763,3 +763,38 @@ def test_invalid_research_publication_is_refused_without_writing(tmp_path, sourc
         assert reason in str(error)
     assert refused, "Publication must refuse research whose provenance and opening cannot be corrected"
     assert path.read_bytes() == source, "Refused publication must preserve the original file"
+
+
+@pytest.mark.parametrize("length", [0, -1, 10**9])
+def test_resume_does_not_copy_out_of_bounds_tail(sworld: SwarmWorld, monkeypatch, length):
+    # L5-3: a truncated file or corrupt recorded length must never clamp a slice to the whole input.
+    import stage2_research_run as runs
+
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    original_resume = stage2_research_store.Store.resume_source
+    original_brief = runs.Run.build_brief
+
+    def invalid_length(store, *args, **kwargs):
+        source = original_resume(store, *args, **kwargs)
+        assert source.usable, "the fixture must reach the resume branch"
+        source.run["binding"]["append"]["length"] = length
+        return source
+
+    def checked_brief(run):
+        prefix, _ = runs.stored_publication(run.source.run["binding"])
+        assert run.publication_bytes == prefix, "an invalid append length must not duplicate frozen research"
+        return original_brief(run)
+
+    monkeypatch.setattr(stage2_research_store.Store, "resume_source", invalid_length)
+    monkeypatch.setattr(runs.Run, "build_brief", checked_brief)
+    sworld.complete()
+    assert sworld.run() == 0
+
+
+def test_spec_covers_private_brief_normalization():
+    # L5-4: the private model input's normalization must be declared in the accepted contract.
+    spec = (Path(__file__).resolve().parent.parent / "plans/changes/explore-provenance/spec.md").read_text()
+    assert "0000-00-00" in spec, "the spec must declare the brief's sentinel date"
+    assert "private brief" in spec, "the spec must declare the changed model input"
+    assert "No change to model selection, prompts," not in spec, "the prompt non-goal must allow this normalization"

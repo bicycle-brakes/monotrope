@@ -3,8 +3,8 @@
 Scans every active ``plans/changes/<name>/research.md`` — never the archive — for a header that still
 declares ``provenance: human-written`` while the body carries published model research: a published Runner exploration
 answer or a research-swarm/v2 envelope. Opening skeleton notices are also contradictions once
-research has been published. Plan step 7 belongs to the orchestrator; the repository census remains
-skipped until the additional active-file correction is complete, while fixture tests run normally.
+research has been published. The repository census runs alongside fixture tests after the
+step-7 active-file correction.
 """
 
 from __future__ import annotations
@@ -120,9 +120,6 @@ def test_census_names_unreadable_headers(tmp_path, monkeypatch, text, reason):
         assert_active_model_research_has_no_false_human_provenance()
 
 
-@pytest.mark.skip(
-    reason="Bootstrap: orchestrator corrects run-report, interview-context, fail-fast-attempts and go-access-point after the accepted repair, then enables this census (plan step 7)."
-)
 def test_active_model_research_has_no_false_human_provenance():
     assert_active_model_research_has_no_false_human_provenance()
 
@@ -160,3 +157,33 @@ def test_census_reports_undecodable_research(tmp_path, monkeypatch):
             assert_active_model_research_has_no_false_human_provenance()
     except UnicodeDecodeError as error:
         pytest.fail(f"The census must report the unreadable file instead of aborting: {error}")
+
+
+def test_active_census_is_enabled():
+    # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+    marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+    assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+    test_active_model_research_has_no_false_human_provenance()
+
+
+def test_named_backfills_have_no_opening_notices(monkeypatch):
+    # L5-2: check the real four additional active backfills, including already-corrected headers.
+    paths = [
+        PLANS / name / "research.md"
+        for name in ("run-report", "interview-context", "fail-fast-attempts", "go-access-point")
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "active_research_files", lambda: paths)
+    assert_active_model_research_has_no_false_human_provenance()
+
+
+def test_loop_backfill_stamp_reaches_its_correction_day():
+    # L5-6: use the existing gate's real reference date, so this check does not age with the calendar.
+    from datetime import date
+
+    import check_frontmatter_current as current
+
+    relative = "plans/changes/loop-until-clean/research.md"
+    reference, source = current.reference_dates(REPO_ROOT, [relative], date.today())[relative]
+    reference = max(reference, date(2026, 11, 5))  # the recorded repair day, not the decision day
+    updated = current.read_updated((REPO_ROOT / relative).read_text())
+    assert isinstance(updated, date) and updated >= reference, f"backfill stamp must reach {reference} ({source})"
