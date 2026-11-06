@@ -9,6 +9,7 @@ inventory itself, through the same pure function the runner uses (`scripts/resea
 
 from __future__ import annotations
 
+import ast
 import json
 import shutil
 import subprocess
@@ -1437,7 +1438,9 @@ def test_exempt_applicability_never_reads_exception_or_unneeded_header(world: Wo
 def test_class_exemption_needs_no_research_start_day(world: World, capsys, klass) -> None:
     # L2-2: planting an undated research skeleton must not demand its date.
     world.write([], spec=spec_text(klass=klass, day=None), research_day=None)
-    (world.folder / "decisions.md").write_bytes(b"\xff")
+    (world.folder / "decisions.md").write_text(
+        q_record(1).replace('answer: "yes"', "answer: Keep this: the historical answer"), encoding="utf-8"
+    )
     write_adoption(world.root, None)
     code, output = world.check(capsys)
     assert code == 0 and "class exemption" in output, output
@@ -1604,3 +1607,69 @@ def test_complete_new_run_requires_spec_class(world: World, capsys) -> None:
     assert world.check(capsys)[0] == 0
     world.write([run_text(RUN1)], spec=spec_text(klass=None), research_day=OLD_DAY)
     assert world.check(capsys)[0] == 0
+
+
+def test_missing_complete_run_has_no_unreachable_complete_return() -> None:
+    # L7-1: reintroducing the bare complete-run return after the missing-class
+    # guard leaves a dead exemption path. Inspect syntax because no input reaches it.
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    function = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_missing_complete_run"
+    )
+    assert not any(
+        isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "complete"
+        for node in function.body
+    ), "complete runs already return with a class or reach the legacy/missing-class branches"
+
+
+@pytest.mark.parametrize("klass,day", [("bounded", NEW_DAY), ("spike", NEW_DAY), ("feature", OLD_DAY)])
+@pytest.mark.parametrize("evidence", ["absent", "plain", "incomplete"])
+@pytest.mark.parametrize("fault", ["item", "claim", "directives", "path", "malformed"])
+def test_exempt_records_are_validated_without_research(world: World, capsys, klass, day, evidence, fault) -> None:
+    # L7-2: making record checks conditional on an incomplete run hides identical
+    # invalid links/directives when research is absent or merely prose.
+    kwargs = {
+        "item": {"items": (f"{RUN1}/H-1",)},
+        "claim": {"claims": ("missing/claim",)},
+        "directives": {"keep": [P], "drop": [P]},
+        "path": {"add": ["invalid/path"]},
+        "malformed": {"extra": "\nresearch_neighbours: [not-a-mapping]"},
+    }[fault]
+    runs = [run_text(RUN1, status="incomplete - stopped")] if evidence == "incomplete" else []
+    world.write(
+        runs,
+        records=[q_record(1, **kwargs)],
+        spec=spec_text(klass=klass, day=day),
+        research=evidence != "absent",
+        research_day=day,
+    )
+    code, output = world.check(capsys)
+    assert code == (1 if fault == "path" else 3) and "Q-1" in output, output
+    expected = {
+        "item": "research_items",
+        "claim": "research_claims",
+        "directives": "both",
+        "path": "three permitted spec forms",
+        "malformed": "research_neighbours",
+    }[fault]
+    assert expected in output, output
+    world.write(
+        runs,
+        records=[q_record(1, add=[P])],
+        spec=spec_text(klass=klass, day=day),
+        research=evidence != "absent",
+        research_day=day,
+    )
+    assert world.check(capsys)[0] == 0
+
+
+def test_complete_legacy_run_reports_evidence_without_missing_run_exemption(world: World, capsys) -> None:
+    # L7-3: planting the unconditional legacy note contradicts the complete-run
+    # summary for old specs whose historical header has no class.
+    world.write([run_text(RUN1)], spec=spec_text(klass=None), research_day=OLD_DAY)
+    code, output = world.check(capsys)
+    assert code == 0 and "1 complete" in output, output
+    assert "exempt - legacy" not in output and "no complete research-swarm/v2 run required" not in output, output
+    world.write([], spec=spec_text(klass=None), research_day=OLD_DAY)
+    code, output = world.check(capsys)
+    assert code == 0 and "exempt - legacy" in output, output

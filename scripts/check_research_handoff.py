@@ -929,8 +929,8 @@ def _missing_complete_run(
         raise CannotMeasure(f"{label}: research.md declares class {research_class!r} and spec.md {spec_class!r}")
 
     def check_exempt_records() -> None:
-        if runs and not complete:
-            _check_records(out, label, _decisions(folder, label, linked_only=True), runs)
+        if not complete:
+            _check_records(out, label, _decisions(folder, label, linked_only=True), runs or [])
 
     if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
         out.notes.append(
@@ -952,7 +952,8 @@ def _missing_complete_run(
             raise CannotMeasure(f"{label}: spec.md names no readable start date")
     adopted = _adopted(root)
     if start <= adopted:
-        out.notes.append(_legacy_note(label, start, adopted))
+        if not complete:
+            out.notes.append(_legacy_note(label, start, adopted))
         check_exempt_records()
         return out
     if spec_class is None:
@@ -960,8 +961,6 @@ def _missing_complete_run(
             f"{label}: spec.md declares no class; a change started after {adopted.isoformat()} must declare "
             f"one of {', '.join(CLASSES)}"
         )
-    if complete:
-        return out
     records = load_records()
     _check_records(out, label, records, runs or [])
     grants = [record for record in records.values() if record.exception is not None]
