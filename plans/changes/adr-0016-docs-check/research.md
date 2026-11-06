@@ -4,13 +4,13 @@ status: draft
 implementation_status: done
 date: 2026-11-03
 last_reviewed: 2026-11-03
-updated: 2026-11-03
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-v9xx
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-03"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-03"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research, stage-2, adr]
 ---

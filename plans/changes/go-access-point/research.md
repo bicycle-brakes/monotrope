@@ -11,7 +11,7 @@ bead: coding-harness-4tr4
 owner: Data Architect
 class: feature
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-10-31"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-31"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---

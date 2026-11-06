@@ -227,8 +227,9 @@ def stored_binding(manifest, research_path, research_bytes, *, append=None, publ
     the runner will add to them, recorded before the write so a crash between the two is covered.
     ``publication`` are the runner-prepared bytes the append lands on — the corrected provenance
     header, the skeleton notices removed — recorded so a resume accepts exactly what was published
-    and nothing else. With ``publication_day`` the exact bytes and day are retained as well, so a
-    later resume never recomputes that header from live bytes or a new date.
+    and nothing else. ``publication_day`` is required whenever ``publication`` is supplied; the
+    exact bytes and day are retained together, so a later resume never recomputes that header
+    from live bytes or a new date.
     """
     paths = dict(manifest["paths"])
     if research_path not in paths or paths[research_path] != _sha256(research_bytes):
@@ -245,12 +246,13 @@ def stored_binding(manifest, research_path, research_bytes, *, append=None, publ
     if publication is not None:
         if not isinstance(publication, bytes):
             raise ResearchSnapshotError("invalid runner-prepared research bytes")
+        if not isinstance(publication_day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", publication_day):
+            raise ResearchSnapshotError("runner-prepared research requires a publication day")
         binding["research_publication_normalised_sha256"] = _sha256(_without_updated(publication))
-        if publication_day is not None:
-            binding["research_publication"] = {
-                "base64": base64.b64encode(publication).decode("ascii"),
-                "day": publication_day,
-            }
+        binding["research_publication"] = {
+            "base64": base64.b64encode(publication).decode("ascii"),
+            "day": publication_day,
+        }
     return binding
 
 

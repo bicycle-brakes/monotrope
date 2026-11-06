@@ -110,6 +110,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — the gate ratchet's analyzer (RB-G4); tests/test_ci.py imports it, and the "
         "pytest gate runs it there (bead coding-harness-diic)"
     ),
+    "normalise_active_research.py": (
+        "One-time, explicitly invoked active-research backfill for explore-provenance, not a CI gate; "
+        "tests/test_explore_provenance.py imports its metadata census and exercises its correction offline. "
+        "CI must check the resulting metadata, never rewrite historical research"
+    ),
     "pr_sync.py": (
         "Entry point, not a gate - the supported local merge (merge-main) and the on-request sync "
         "(sync) that the day session and the night orchestrator call explicitly; "

@@ -4,13 +4,13 @@ status: draft
 implementation_status: partial
 date: 2026-10-30
 last_reviewed: 2026-10-30
-updated: 2026-10-30
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-bomd
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-10-30"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-30"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research, model-terms, opencode-go]
 ---

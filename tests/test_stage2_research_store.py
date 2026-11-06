@@ -899,7 +899,11 @@ def test_digest_only_publication_reports_binding_drift_without_reuse(store, repo
     with freeze(repo) as first:
         frozen = first.sources()[RESEARCH]
         prepared = frozen + b"Corrected prefix\n"
-        stored = snap.stored_binding(first.manifest(), RESEARCH, frozen, append=tail, publication=prepared)
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-06"
+        )
+    # Model a digest-only record written by an older version; the writer now refuses this shape.
+    del stored["research_publication"]
     k = key("s1")
     make_source(store, repo, results=[(k, terminal(k))], binding=stored)
     if published:
@@ -911,3 +915,19 @@ def test_digest_only_publication_reports_binding_drift_without_reuse(store, repo
     assert source.reasons == ["binding changed: " + RESEARCH]
     assert plan.reused == {}
     assert plan.to_launch == [k]
+
+
+def test_storing_publication_requires_its_day(repo):
+    snap = snapshot()
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        try:
+            snap.stored_binding(first.manifest(), RESEARCH, frozen, publication=frozen)
+        except snap.ResearchSnapshotError as error:
+            assert "publication day" in str(error)
+        else:
+            pytest.fail("A stored publication must require its day before an unusable binding is saved")
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, publication=frozen, publication_day="2026-11-06"
+        )
+        assert snap.stored_publication(stored) == (frozen, "2026-11-06")

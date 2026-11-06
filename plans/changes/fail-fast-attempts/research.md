@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-5tyh
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-28"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 class: bounded

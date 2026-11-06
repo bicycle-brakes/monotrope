@@ -1,11 +1,4 @@
-"""The active research census (bead coding-harness-g19n): published model research never says human-written.
-
-Scans every active ``plans/changes/<name>/research.md`` — never the archive — for a header that still
-declares ``provenance: human-written`` while the body carries published model research: a published Runner exploration
-answer or a research-swarm/v2 envelope. Opening skeleton notices are also contradictions once
-research has been published. The repository census runs alongside fixture tests after the
-step-7 active-file correction.
-"""
+"""Active model-written research has truthful, complete publication metadata."""
 
 from __future__ import annotations
 
@@ -30,35 +23,43 @@ def active_research_files() -> list[Path]:
 
 
 def assert_active_model_research_has_no_false_human_provenance() -> None:
+    try:
+        import normalise_active_research as normalise
+    except ModuleNotFoundError as error:
+        pytest.fail(f"Active research needs the complete metadata census and normaliser: {error}")
     affected = []
     for path in active_research_files():
         relative = path.relative_to(REPO_ROOT).as_posix()
         try:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_bytes().decode("utf-8")
         except UnicodeDecodeError:
             affected.append(f"{relative}: unreadable file (not UTF-8)")
             continue
-        frontmatter = re.match(r"\A\ufeff?---\n(.*?)\n---(?:\n|$)", text, re.S)
+        frontmatter = normalise.FRONTMATTER.match(text)
         if frontmatter is None:
             affected.append(f"{relative}: unreadable header (no frontmatter)")
             continue
         try:
             header = yaml.safe_load(frontmatter.group(1))
-        except yaml.YAMLError:
+        except (yaml.YAMLError, ValueError):
             affected.append(f"{relative}: unreadable header (malformed YAML)")
             continue
         if not isinstance(header, Mapping):
             affected.append(f"{relative}: unreadable header (not a mapping)")
             continue
         body = text[frontmatter.end() :]
-        # Quoted examples and fenced code are not runner publication evidence.
-        visible = re.sub(r"(?ms)^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$", "", body)
-        published = re.search(r"(?m)^## Runner exploration — \d{4}-\d{2}-\d{2}\s*\n\s*\S", visible) or re.search(
-            r"(?ms)^<!-- research-swarm/v2 run [0-9a-f]+ -->\n.+?^<!-- /research-swarm/v2 -->[ \t]*$", visible
-        )
-        if published:
-            if header.get("provenance") == "human-written":
-                affected.append(relative)
+        try:
+            program, publication_day = normalise.publication_evidence(body)
+        except ValueError as error:
+            affected.append(f"{relative}: {error}")
+            program, publication_day = None, None
+        producer = header.get("produced_by")
+        model_written = isinstance(producer, Mapping) and producer.get("kind") == "llm-session"
+        if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
+            affected.extend(
+                f"{relative}: {problem}"
+                for problem in normalise.metadata_problems(header, frontmatter.group(1), program, publication_day)
+            )
             try:
                 notices = stage2.research_opening_notices(text, frontmatter.end())
             except AttributeError as error:
@@ -133,8 +134,10 @@ def test_census_reports_opening_skeleton_notices(tmp_path, monkeypatch, notice, 
     folder.mkdir()
     body = "# Research\n\n" + notice + "\n\n"
     if published:
+        body += "Stage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
         body += "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
-    (folder / "research.md").write_text("---\nprovenance: ai-drafted-reviewed\n---\n" + body)
+    header = valid_research_header() if published else "---\nprovenance: human-written\n---\n"
+    (folder / "research.md").write_text(header + body)
     monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
     if published:
@@ -187,3 +190,151 @@ def test_loop_backfill_stamp_reaches_its_correction_day():
     reference = max(reference, date(2026, 11, 5))  # the recorded repair day, not the decision day
     updated = current.read_updated((REPO_ROOT / relative).read_text())
     assert isinstance(updated, date) and updated >= reference, f"backfill stamp must reach {reference} ({source})"
+
+
+def valid_research_header():
+    return (
+        "---\nprovenance: ai-drafted-reviewed\n"
+        'produced_by: {kind: llm-session, name: claude-code, version: "2026-11-05"}\n'
+        "review: {status: pending, approved_by: null, approved_at: null}\n"
+        "date: 2026-11-04\nlast_reviewed: 2026-11-04\nupdated: 2026-11-05\n---\n"
+    )
+
+
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
+@pytest.mark.parametrize("route", ["single", "swarm"])
+def test_census_reads_real_line_endings(tmp_path, monkeypatch, eol, route):
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    body = "# Research\n"
+    if route == "single":
+        body += "Stage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
+        body += "## Runner exploration — 2026-11-05\n\nAccepted answer.\n"
+    else:
+        body += "<!-- research-swarm/v2 run abc123 -->\n## Research swarm\n"
+        body += "<!-- /research-swarm/v2 -->\n"
+    text = valid_research_header() + body
+    if route == "swarm":
+        text = text.replace("name: claude-code", "name: stage2-research-swarm")
+    path = folder / "research.md"
+    path.write_bytes(text.replace("\n", eol).encode())
+    # Do not let universal-newline translation hide a broken CRLF regex in the census.
+    original_read = Path.read_text
+    monkeypatch.setattr(
+        Path,
+        "read_text",
+        lambda self, *a, **kw: self.read_bytes().decode() if self == path else original_read(self, *a, **kw),
+    )
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    assert_active_model_research_has_no_false_human_provenance()
+    path.write_bytes(text.replace("ai-drafted-reviewed", "human-written").replace("\n", eol).encode())
+    with pytest.raises(AssertionError, match="provenance: expected"):
+        assert_active_model_research_has_no_false_human_provenance()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing-producer",
+        "model-name",
+        "wrong-program",
+        "compound-version",
+        "stale-version",
+        "producer-kind",
+        "missing-review",
+        "approved-review",
+        "missing-provenance",
+        "duplicate-producer",
+        "duplicate-nested-producer",
+        "duplicate-nested-review",
+        "invalid-date",
+        "stale-updated",
+        "missing-updated",
+        "missing-reviewed",
+    ],
+)
+def test_census_rejects_incomplete_publication_metadata(tmp_path, monkeypatch, fault):
+    text = valid_research_header()
+    if fault == "missing-producer":
+        text = re.sub(r"(?m)^produced_by:.*\n", "", text)
+    elif fault == "model-name":
+        text = text.replace("name: claude-code", "name: glm-5.3-flash")
+    elif fault == "wrong-program":
+        text = text.replace("name: claude-code", "name: codex")
+    elif fault == "compound-version":
+        text = text.replace('version: "2026-11-05"', 'version: "GLM 5.3 Flash, 2026-11-05"')
+    elif fault == "stale-version":
+        text = text.replace('version: "2026-11-05"', 'version: "2026-11-04"')
+    elif fault == "producer-kind":
+        text = text.replace("kind: llm-session", "kind: human")
+    elif fault == "missing-review":
+        text = re.sub(r"(?m)^review:.*\n", "", text)
+    elif fault == "approved-review":
+        text = text.replace(
+            "status: pending, approved_by: null, approved_at: null",
+            "status: approved, approved_by: maintainer, approved_at: 2026-11-05",
+        )
+    elif fault == "missing-provenance":
+        text = text.replace("provenance: ai-drafted-reviewed\n", "")
+    elif fault == "duplicate-producer":
+        text = text.replace(
+            "review:", 'produced_by: {kind: llm-session, name: claude-code, version: "2026-11-05"}\nreview:'
+        )
+    elif fault == "duplicate-nested-producer":
+        text = text.replace("name: claude-code", "name: codex, name: claude-code")
+    elif fault == "duplicate-nested-review":
+        text = text.replace("status: pending", "status: approved, status: pending")
+    elif fault == "invalid-date":
+        text = text.replace("date: 2026-11-04", "date: 2026-02-30")
+    elif fault == "stale-updated":
+        text = text.replace("updated: 2026-11-05", "updated: 2026-11-03")
+    elif fault == "missing-updated":
+        text = text.replace("updated: 2026-11-05\n", "")
+    elif fault == "missing-reviewed":
+        text = text.replace("last_reviewed: 2026-11-04\n", "")
+    text += "# Research\nStage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
+    text += "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    (folder / "research.md").write_text(text)
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    with pytest.raises(AssertionError, match="demo/research.md"):
+        assert_active_model_research_has_no_false_human_provenance()
+
+
+def test_additional_backfills_identify_the_program_and_publication_day():
+    expected = {
+        "run-report": "2026-10-28",
+        "fail-fast-attempts": "2026-10-28",
+        "interview-context": "2026-10-14",
+        "go-access-point": "2026-10-31",
+    }
+    for name, day in expected.items():
+        header = yaml.safe_load((PLANS / name / "research.md").read_text().split("---", 2)[1])
+        assert header["produced_by"] == {"kind": "llm-session", "name": "claude-code", "version": day}, name
+
+
+def test_normaliser_preserves_research_and_is_idempotent():
+    try:
+        from normalise_active_research import normalised_research
+    except ModuleNotFoundError as error:
+        pytest.fail(f"An evidence-based active research normaliser is required: {error}")
+    original = (
+        (
+            valid_research_header()
+            .replace("name: claude-code", "name: codex")
+            .replace('version: "2026-11-05"', 'version: "gpt-6.1-sol, 2026-11-05"')
+            + "# Research\n\nAuthored prose.\n"
+            + "Stage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
+            + "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
+        )
+        .replace("\n", "\r\n")
+        .encode()
+    )
+    corrected = normalised_research(original, correction_day="2026-11-06")
+    assert b'name: claude-code, version: "2026-11-05"' in corrected
+    assert b"updated: 2026-11-06" in corrected
+    assert corrected.split(b"---", 2)[2] == original.split(b"---", 2)[2]
+    assert normalised_research(corrected, correction_day="2026-11-06") == corrected
