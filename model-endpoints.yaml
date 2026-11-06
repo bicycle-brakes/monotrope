@@ -491,6 +491,16 @@ endpunkte:
             with "Upstream request failed: Model is unavailable" (loop round 1
             and the runner's probe, both 2026-10-17); excluding it saves a
             call that fails every time until the model is served.
+        - id: iceman-contributor-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06 and picked as the whole
+            free swarm by prepare-loop; "contributor" ids on Go have meant
+            that request data may be used for training, and the maintainer's
+            decision of 2026-10-17 (question Q-12) keeps such models off. Its
+            terms are not read. A bridge until one central per-use-case model
+            policy exists (bead coding-harness-k0ub with coding-harness-wq1m);
+            maintainer, 2026-11-06, morning question Q-M9, option A.
       input: implementation-diff
       hinweis: >-
         Class admission instead of individual declarations: every id this
