@@ -115,7 +115,7 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   "The question protocol").
 - Say what behavior changed and why it matters; mark proposed, implemented and
   tested work apart. Ask one decision at a time, with a recommendation and its
-  consequence; do not re-ask settled decisions or existing permission.
+  consequence; do not re-ask settled decisions or existing permission. An open question for the maintainer is written at once, with its context and recommendation, into the notes of the bead it concerns (`tools/bd update <id> --append-notes`, then `tools/bd dolt push`), never only into chat or a session scratchpad; the handover gathers them under "Needed from the maintainer" (maintainer, 2026-11-06).
 - An orchestrating session shows a sub-agent's plan card to the maintainer
   unchanged; the veto stays the maintainer's (`prompts/03-plan.md`).
 - At session start or after a break, read the latest relevant handover and its addenda;
