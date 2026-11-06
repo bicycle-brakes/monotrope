@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-2ym2
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -93,3 +95,40 @@ Die Exploration ist fertig. Der Tracker (Bead-Beschreibung) ist aus dieser Lese-
 ---
 
 Kurzum für dich: Der Explorer-Lauf hat die komplette Refusal-Landschaft kartiert. Die stärkste dokumentierte Lücke zum Namen „definitive refusal" ist der Merge-/Codex-Brems块 in `.claude/settings.json` („a brake, not a lock: another spelling passes" — vier Belege inkl. ungebautem Hook-Vorschlag). **Nächster Schritt:** Interview-Frage 1 an dich — die exakte Bead-Beschreibung (`tools/bd show coding-harness-2ym2`) entscheidet, welcher Refusal gemeint ist; ich konnte sie aus dieser Phase nicht lesen.
+
+## Scope correction and repository gap check — 2026-11-06
+
+The answered interview record settles the earlier scope questions: this is a
+bounded change to paid review-loop rungs, not to permission hooks
+(`decisions.md#Q-1`). The tracker description remains not read in this draft.
+The following observations were read at commit `4a80673c` on 2026-11-06:
+
+- `scripts/stage2.py::run_reviewer` turns a nonzero Pi exit into `CallFailed`
+  through `fail`; the message keeps only the last nonempty stderr line,
+  scrubbed and cut to 200 characters. It does not distinguish HTTP 403/410.
+- `run_swarm` preserves each member's exception; `Refused` from admission
+  propagates rather than becoming a replaceable provider failure.
+- `_review_round` replaces failed Flash members down the pinned paid ladder,
+  but a failed single rung reaches the all-failed `CallFailed` branch. No
+  round or stage consumption is written. `review_loop` only continues within
+  the same invocation for `FreeStageUnavailable`, not a failed paid rung.
+- `retire_stage`, used by `release-loop --stage-failed`, already persists a
+  quoted `Stage failed` block and consumption together through `write_round`
+  and atomic `replace_record`. This does not invent a completed round.
+- Existing offline fixtures and tests in `tests/test_stage2.py` cover manual
+  retirement after release, quoted failure text, failed Flash replacement,
+  and an all-failed attempt leaving the stage unconsumed. These are the
+  regression boundary for automatic retirement of definitive paid-rung errors.
+- `docs/WORKFLOW.md` describes manual retirement and says an all-failed
+  attempt consumes no stage. It needs the interview's narrow automatic
+  retirement exception; the no-round bookkeeping must remain truthful.
+
+No live provider call or captured 403/410 response was read. Detection must
+therefore use explicit HTTP failure evidence from a failed Pi call, with
+offline fixtures for accepted forms and false positives; successful reviewer
+prose and a bare model number are not evidence of an HTTP refusal.
+
+The worktree has `templates/spec.md` and `templates/design.md`, but no
+`templates/plan.md`; existing change plans and `prompts/03-plan.md` supply the
+plan form. `scripts/validate_change_artefacts.py` is absent at this commit;
+the available interview and criterion-ledger checks can be run separately.
