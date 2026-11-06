@@ -143,6 +143,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/definitive-refusal/research.md`](changes/definitive-refusal/research.md) | draft | none | 2026-11-06 | coding-harness-2ym2 |
 | [`changes/dirty-index/decisions.md`](changes/dirty-index/decisions.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/findings.md`](changes/dirty-index/findings.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/dirty-index/plan.md`](changes/dirty-index/plan.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
