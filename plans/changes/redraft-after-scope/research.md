@@ -85,6 +85,27 @@ Four completed changes record the practice; they agree with each other, but no t
 
 Where the related rules live today, so the mapping is factual, not a recommendation: `docs/WORKFLOW.md` (the phase table rows for 1/1a/2, §4 stage-2 mechanics, "Which change gets what" class routing, the stale-worktree rule); `prompts/01-explore.md` (routing by class, update-not-create, resume), `prompts/01a-interview.md` (retained answers, record form, "Terms count"), `prompts/02-spec.md` ("After the spec review" second-draft rule, answer forms, Basis/neighbours), `prompts/03-plan.md` (the "Draft handoff" convention lives only in practice, e.g. `research-swarm/plan.md`); `templates/spec.md` and `templates/design.md` (`supersedes`/`superseded_by`, `class`, `neighbours`, the Non-goals fence); `plans/_README.md` (frontmatter semantics, DRIFT, duplicate-creation); `AGENTS.md` (only where a standing rule must reach every harness, per the house rule on standing rules); and the existing gates a redraft rule would meet: `scripts/check_interview_minimums.py`, `scripts/check_research_handoff.py`, `scripts/plans_registry.py`, plus derived `plans/INDEX.md` (regenerated, never hand-edited — "a stale `plans/INDEX.md` turns `make verify` red", `docs/WORKFLOW.md`).
 
+### Evidence check — 2026-11-06, phase 4 (baseline `3c1e2581`)
+
+The exploration above is retained unchanged. This section separates what the
+later interview skip adds and what the implementation re-checked.
+
+- **Re-read and confirmed in this worktree:** the guard-test provenance
+  (`guard-test/decisions.md`, "Where these answers come from": 1199 commits
+  behind, answers Q-1 to Q-5 stand, `1d6cd430`); the research-swarm
+  appendices (`research.md` lines 135, 214, 409; `decisions.md` line 426;
+  `plan.md` line 1101); sol-effort `research.md` line 129; loop-until-clean
+  `decisions.md` line 226; ADR 0023 line 23.
+- **Not read — the protected-prompt incident.** The only source is the
+  interview skip in `decisions.md` (2026-11-06): the orchestrator edited
+  `prompts/` that the handoff-new-feature spec keeps unchanged (loop row
+  L6-1), reverted in `b04c119d`. `plans/changes/handoff-new-feature/` is not
+  in this worktree and this attempt had no command tool for `git show
+  b04c119d`. So the authorized cross-folder exception versus the forbidden
+  prompt edit could not be separated from the source; the report says so and
+  asks a reviewer to check it.
+- The report is `docs/research/2026-11-06-redraft-after-scope.md`.
+
 ### Neighbours (paths for the header, all read for this research)
 
 `plans/changes/guard-test/spec.md` (exists; its decisions.md is the canonical precedent record), `plans/changes/research-swarm/spec.md`, `plans/changes/loop-until-clean/spec.md`, `plans/changes/sol-effort/spec.md`, `plans/changes/interview-context/spec.md`. Not read, therefore not neighbours: the live tracker, hosted PR state, and any artifact outside this worktree.

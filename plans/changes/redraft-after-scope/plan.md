@@ -93,4 +93,10 @@ endpoint or harness settings, tracker data or other change folders. No held
 path needs a bootstrap edit. No `design.md` is due for class `spike`, and
 there is no plan template in `templates/`; this plan follows phase 3's form.
 
+## Runner route — 2026-11-06
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: spike: on 2026-11-06 Flash implement was accepted with an empty diff on both spikes tried (beads bvy and xay1; bug coding-harness-te7q), so this spike goes to Sonnet first.
+
 ## Time used
+
+2026-11-06 04:39:21–05:48:25 UTC, 4144 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
