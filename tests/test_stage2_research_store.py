@@ -1128,3 +1128,77 @@ def test_placement_refusals_are_not_rewrapped(tmp_path, monkeypatch, unsafe):
         store.release_lock()
         if not directory.is_symlink():
             directory.chmod(0o700)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_research_setting_refuses_parent_components_before_creating_paths(tmp_path, monkeypatch, existing):
+    m = module()
+    intermediate = tmp_path / "unneeded"
+    if existing:
+        intermediate.mkdir(mode=0o700)
+    setting = str(intermediate / ".." / "store")
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, setting)
+    try:
+        m.research_dir("example", REPO_ROOT)
+    except m.StoreWriteError as error:
+        message = str(error)
+        assert m.RESEARCH_STATE_VARIABLE in message and setting in message and ".." in message
+    else:
+        pytest.fail("a research setting containing '..' must be refused before opening the store")
+    assert intermediate.exists() == existing
+    assert not (tmp_path / "store").exists()
+
+
+def test_workflow_names_the_macos_temporary_container_exemption():
+    workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text()
+    paragraph = " ".join(
+        workflow.split("The store's location is the research swarm's own setting", 1)[1]
+        .split("**The handoff is checked", 1)[0]
+        .split()
+    )
+    assert "macOS per-user temporary container" in paragraph
+    assert "/private/var/folders/<bucket>/<user-key>" in paragraph
+    assert "without tightening" in paragraph
+    assert "owned by the current user" in paragraph
+    assert "not group- or other-writable" in paragraph
+
+
+@pytest.mark.parametrize("setting", [None, ""])
+def test_foreign_owned_default_names_the_owner_and_override(tmp_path, monkeypatch, setting):
+    m = module()
+    base = tmp_path / "default-store"
+    base.mkdir(mode=0o755)
+    base.chmod(0o755)
+    user = os.getuid()
+    foreign_owner = user + 1
+    monkeypatch.setattr(m, "default_research_base", lambda: base)
+    if setting is None:
+        monkeypatch.delenv(m.RESEARCH_STATE_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, setting)
+    original_lstat = Path.lstat
+
+    def lstat(path):
+        info = original_lstat(path)
+        if path == base:
+            fields = list(info)
+            fields[4] = foreign_owner
+            return os.stat_result(fields)
+        return info
+
+    monkeypatch.setattr(Path, "lstat", lstat)
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    try:
+        try:
+            store.acquire_lock()
+        except m.StoreWriteError as error:
+            message = str(error)
+            assert str(base) in message
+            assert f"owned by uid {foreign_owner}" in message, "refusal must identify the pre-existing owner"
+            assert m.RESEARCH_STATE_VARIABLE in message and "set " in message
+        else:
+            pytest.fail("a default base pre-created by another user must be refused with override guidance")
+        assert not (base / "coding-harness").exists()
+        assert stat.S_IMODE(base.stat().st_mode) == 0o755
+    finally:
+        store.release_lock()

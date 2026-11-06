@@ -1034,7 +1034,11 @@ the runner tightening them to 0700 before use and a diagnostic naming the
 directory, its previous mode and the applied mode; writable levels are refused
 rather than tightened. Root-owned system parents before the user-owned
 store ancestry (including sticky shared directories and platform aliases)
-remain infrastructure. The exclusions hold: a store inside the inherited HOME,
+remain infrastructure. The macOS per-user temporary container at
+`/private/var/folders/<bucket>/<user-key>` also remains infrastructure without tightening:
+before entering the store ancestry, this exact level must be a real directory
+owned by the current user and not group- or other-writable.
+The exclusions hold: a store inside the inherited HOME,
 the worktree or a git directory is refused with exit 1 before any model call,
 as is a relative or otherwise unusable setting — the guidance names
 `STAGE2_RESEARCH_STATE`, and nothing falls back to another location. A store

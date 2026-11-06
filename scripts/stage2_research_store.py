@@ -80,14 +80,16 @@ def default_research_base(*, system=None, uid=None):
 def research_base():
     """The store base, read at call time: the dedicated setting, else the platform default.
 
-    An empty value counts as unset; a relative value is refused, because a store must not move
-    with the calling directory.
+    An empty value counts as unset; relative values and parent components are refused before
+    any directories are created.
     """
     value = os.environ.get(RESEARCH_STATE_VARIABLE)
     if value:
         base = Path(value)
         if not base.is_absolute():
             raise StoreWriteError(f"{RESEARCH_STATE_VARIABLE} must name an absolute directory, not {value!r}")
+        if ".." in base.parts:
+            raise StoreWriteError(f"{RESEARCH_STATE_VARIABLE} must not contain a '..' component: {value!r}")
         return base
     return default_research_base()
 
@@ -221,6 +223,7 @@ class Store:
         directory = self.directory.absolute()
         ancestry = [*reversed(directory.parents), directory]
         user = os.getuid()
+        default_base = default_research_base().absolute() if not os.environ.get(RESEARCH_STATE_VARIABLE) else None
         in_store = False
         root_base = directory
         if user == 0:
@@ -236,6 +239,11 @@ class Store:
                         current.mkdir(mode=0o700)
                     info = current.lstat()
                     in_store = True
+                if current == default_base and info.st_uid != user:
+                    raise StoreWriteError(
+                        f"unsafe state store directory {current}: owned by uid {info.st_uid}, "
+                        f"not current uid {user}; set {RESEARCH_STATE_VARIABLE} to another safe directory"
+                    )
                 # Trust only the leading root-owned system ancestry, never a system-owned
                 # directory encountered after entering the user's store path.
                 if (
