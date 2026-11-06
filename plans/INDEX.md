@@ -264,7 +264,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/night-machine-facts/decisions.md`](changes/night-machine-facts/decisions.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/findings.md`](changes/night-machine-facts/findings.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/pi-catalog-move/decisions.md`](changes/pi-catalog-move/decisions.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/findings.md`](changes/pi-catalog-move/findings.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/plan.md`](changes/pi-catalog-move/plan.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
