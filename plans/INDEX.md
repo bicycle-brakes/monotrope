@@ -217,6 +217,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/implement-route-file/research.md`](changes/implement-route-file/research.md) | draft | none | 2026-11-06 | coding-harness-9ycy |
 | [`changes/index-merge-regenerates/decisions.md`](changes/index-merge-regenerates/decisions.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
 | [`changes/index-merge-regenerates/findings.md`](changes/index-merge-regenerates/findings.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
 | [`changes/index-merge-regenerates/plan.md`](changes/index-merge-regenerates/plan.md) | draft | partial | 2026-10-28 | coding-harness-njtm |
