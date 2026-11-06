@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40
@@ -137,17 +137,23 @@ the runner; no validator success or implementation result is claimed here.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_free.py::test_both_preparations_use_shared_selection — bypassing the shared selector in either caller leaves its production preparation successful
-- 2: not yet written tests/test_stage2_free.py::test_preparations_select_same_members_for_equivalent_inputs — equivalent policy/eligibility over one catalog yields different pre-probe memberships
+- 1: tests/test_stage2_free.py::test_both_preparations_use_shared_selection — bypassing the shared selector in either caller leaves its production preparation successful
+- 2: tests/test_stage2_free.py::test_preparations_select_same_members_for_equivalent_inputs — equivalent policy/eligibility over one catalog yields different pre-probe memberships
 - 3: tests/test_stage2_availability.py::test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free — a paid free-looking id is probed or prevents review preparation
-- 3: not yet written tests/test_stage2_research_availability.py::test_paid_free_candidate_is_dropped_before_research_probes — beam-free is probed, frozen or blocks the remaining research candidates
-- 4: not yet written tests/test_stage2_free.py::test_policy_adapters_preserve_membership_contracts — provider/freshness, plain ids, includes, excludes or data-class exclusions widen or shrink incorrectly
-- 5: not yet written tests/test_stage2_free.py::test_both_preparations_share_destination_assessment — foreign destinations survive or same-host move notices disappear
-- 6: not yet written tests/test_stage2_research_availability.py::test_shared_selection_preserves_optional_research_eligibility — missing tools/deprecation is admitted or unavailable free capability/probes block required slots
-- 7: not yet written tests/test_stage2_availability.py::test_review_report_names_paid_free_drop — the report hides the paid admission reason
-- 7: not yet written tests/test_stage2_research_availability.py::test_research_report_names_paid_free_drop — the report hides the paid admission reason
-- 8: not yet written tests/test_stage2_free.py::test_free_call_boundaries_reject_paid_ids_in_frozen_selection — either boundary trusts a planted frozen paid id
-- 9: not yet written tests/test_pi_contract.py::test_shipped_catalog_prepares_both_swarms_offline — installed catalog or either valid preparation receipt is absent, a paid id is free, or external/model traffic occurs
-- 10: not yet written tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults — a forced failure or selection bypass in either preparation escapes the same contract assertions
+- 3: tests/test_stage2_research_availability.py::test_paid_free_candidate_is_dropped_before_research_probes — beam-free is probed, frozen or blocks the remaining research candidates
+- 4: tests/test_stage2_free.py::test_policy_adapters_preserve_membership_contracts — provider/freshness, plain ids, includes, excludes or data-class exclusions widen or shrink incorrectly
+- 5: tests/test_stage2_free.py::test_both_preparations_share_destination_assessment — foreign destinations survive or same-host move notices disappear
+- 6: tests/test_stage2_research_availability.py::test_shared_selection_preserves_optional_research_eligibility — missing tools/deprecation is admitted or unavailable free capability/probes block required slots
+- 7: tests/test_stage2_availability.py::test_review_report_names_paid_free_drop — the report hides the paid admission reason
+- 7: tests/test_stage2_research_availability.py::test_research_report_names_paid_free_drop — the report hides the paid admission reason
+- 8: tests/test_stage2_free.py::test_free_call_boundaries_reject_paid_ids_in_frozen_selection — either boundary trusts a planted frozen paid id
+- 9: tests/test_pi_contract.py::test_shipped_catalog_prepares_both_swarms_offline — installed catalog or either valid preparation receipt is absent, a paid id is free, or external/model traffic occurs
+- 10: tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults — a forced failure or selection bypass in either preparation escapes the same contract assertions
+
+## Runner route — 2026-11-05
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice and Sonnet 5.5 once on 2026-11-05 (the last with two red tests: test_shared_selection_preserves_optional_research_eligibility, test_shipped_catalog_prepares_both_swarms_offline).
 
 ## Time used
+
+2026-11-05 18:59:33–21:29:31 UTC, 8997 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

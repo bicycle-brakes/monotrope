@@ -1,10 +1,10 @@
 ---
 title: "Spec — research-free-paid"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40

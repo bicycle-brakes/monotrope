@@ -150,6 +150,12 @@ OHNE_AUFRUFER: dict[str, str] = {
         "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
         "swarm's against stand-ins and a fixture catalog"
     ),
+    "stage2_free.py": (
+        "Helper of scripts/stage2.py, scripts/stage2_availability.py and scripts/stage2_swarm.py, never an "
+        "entry point of its "
+        "own: the one free-model selection shared by the review loop and the research swarm. "
+        "tests/test_stage2_free.py runs it, tests/test_pi_contract.py checks both preparations offline"
+    ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
         "Direct structural and claim-cap contracts live in tests/test_stage2_research_refs.py; "
