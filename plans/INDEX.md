@@ -264,7 +264,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/outcome-test/decisions.md`](changes/outcome-test/decisions.md) | draft | none | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/findings.md`](changes/outcome-test/findings.md) | draft | none | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/plan.md`](changes/outcome-test/plan.md) | draft | none | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/research.md`](changes/outcome-test/research.md) | draft | none | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/spec.md`](changes/outcome-test/spec.md) | draft | none | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/pi-catalog-move/decisions.md`](changes/pi-catalog-move/decisions.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/findings.md`](changes/pi-catalog-move/findings.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/plan.md`](changes/pi-catalog-move/plan.md) | draft | none | 2026-11-04 | coding-harness-vku6 |

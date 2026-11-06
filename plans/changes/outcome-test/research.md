@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-3nm5
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol draft gap check, 2026-11-06; exploration attributed below"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -83,3 +85,38 @@ Research complete. Here is the prose for `plans/changes/outcome-test/research.md
 - `plans/changes/research-currency/spec.md` — the nightly drift-report precedent (report-level enforcement on a schedule).
 - `plans/changes/run-report/spec.md` — the read-only measurement-report precedent.
 - `plans/changes/stage2-session/spec.md` — the fresh-session mechanism for foreign models.
+
+## Draft gap check — 2026-11-06
+
+Read at worktree input commit `86a1d919`; these checks supplement, rather
+than replace, the exploration above.
+
+- The interview now records class `bounded` and one answered maintainer
+  record: eight questions, on-demand before instruction-file or
+  handover-convention changes, one baseline now, and one JSONL history under
+  `docs/research/` (`decisions.md#Q-1`). The record does not select a harness
+  or settle whether the answering session may look up repository files.
+- Current model routing is the repair row under “The routing” in
+  `docs/WORKFLOW.md`: `gpt-6.1-sol`, then Sonnet 5.5 after two failed checks.
+  `decisions/answers/stage2-repair/adr.yaml` instead describes the older GLM
+  proposal; it is historical decision evidence, not a current answer key.
+- The live floor is the literal `DEFAULT_MEMORY_FLOOR = 25.0`, its variable
+  name is `FLOOR_ENV = "HARNESS_VERIFY_MEMORY_FLOOR"`, and the current reader
+  is `memory_floor()` (`scripts/verify_lock.py`); the exploration's name
+  `configured_floor` is not the current function name.
+- The normal session-start hook can reconcile the tracker before emitting
+  context (`tools/claude-code/hooks/beads-start.sh`, wired in
+  `.claude/settings.json`). The measurement must not launch that hook itself
+  or claim that recording a score isolates every startup side effect.
+- No spec or plan for this topic exists elsewhere under `plans/specs/` or
+  `plans/changes/` in the topic search. The supplied `findings.md` contains
+  only the runner call audit, no phase-2a review rows to resolve.
+- `templates/spec.md` and `templates/design.md` exist; there is no separate
+  `templates/plan.md`, and no `scripts/validate_change_artefacts.py` exists in
+  this input tree. The phase-3 prompt supplies the plan's card and ledger.
+  The interview check discovers changes through their spec, so its pre-draft
+  “no change folder” result measured no interview; rerun after the spec exists.
+- The current branch is `feat/outcome-test`. The latest relevant handovers
+  were read; the GitHub PR lookup failed for connectivity, so current PR
+  state is not read. The shared tracker and live session inventory are not
+  read under this attempt's worktree-only access boundary; neither is changed.
