@@ -20,3 +20,5 @@ tags: [findings, stage-2]
 # Findings — verify-worker-count
 
 Stage-2 call, 2026-11-06: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 910 files, 3371 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 913 files, 3373 commits, 12 rules.
