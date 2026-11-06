@@ -106,6 +106,9 @@ rules:
   - prefix: scripts/check_adr_answers.py
     rolle: mechanismus
     reason: "the check behind the gate adr-answers — the gate file travels, so its script does"
+  - prefix: scripts/check_conflict_markers.py
+    rolle: mechanismus
+    reason: "the check behind the gate conflict-markers — the gate file travels, so its script does (bead coding-harness-i76l)"
   - prefix: scripts/check_criterion_ledger.py
     rolle: mechanismus
     reason: "the check behind the gate criterion-ledger — the gate file travels, so its script does (ADR 0013)"
@@ -195,6 +198,9 @@ rules:
   - prefix: tests/test_check_adr_answers.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
+  - prefix: tests/test_check_conflict_markers.py
+    rolle: mechanismus
+    reason: "builds its own disposable git repositories and reads only files that travel; holds in the probe copy (bead coding-harness-i76l)"
   - prefix: tests/test_check_criterion_ledger.py
     rolle: mechanismus
     reason: "builds its own trees and reads only files that travel; holds in the probe copy"
