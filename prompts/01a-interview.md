@@ -95,6 +95,13 @@ research_neighbours: {keep: [plans/changes/<name>/spec.md], drop: [], add: []}
   `keep`, `drop` or `add`, as the maintainer stated it. The same path in two
   lists, or two answered records that disagree, is not measurable. A prose
   "keep it" without the field leaves the item open.
+- A `feature` or `architectural` change without a complete research-swarm run
+  passes the gate only when exactly one maintainer-answered record (non-blank
+  answer and context) carries
+  `research_swarm_exception: {granted: true, reason: "…"}` with a non-blank
+  reason, as the maintainer stated it. The field records a grant, it never
+  grants one, and it waives only the missing run (`docs/WORKFLOW.md`, gate
+  `research-handoff`).
 - The agent never answers, waives or drops an item itself; a `[DETAIL]` stays
   prose and closes nothing. The gate `research-handoff`
   (`scripts/check_research_handoff.py`) checks the identities and fields, not
