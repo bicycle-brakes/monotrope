@@ -80,3 +80,38 @@ The exploration is complete. Here is the research, ready to append to `plans/cha
 **Where we are:** phase-1 exploration for `go-wire-apis` is complete; the prose above is ready to append to `plans/changes/go-wire-apis/research.md` (whose frontmatter then needs `provenance: ai-drafted-reviewed` with `produced_by:` and `review:`, per its own note).
 **Next step:** the runner appends this, sets the `neighbours:` header, and the interview (phase 1a) takes the open questions above — first of all what the bead names and what counts as "measured".
 **Needed from you:** nothing right now.
+
+## Drafting follow-up — 2026-11-06
+
+Read at `acebe186`, within this worktree: `decisions.md` records the bounded
+class, and its Q-1 selects separate native measurements for Messages,
+Responses and Google. There is no complete research-swarm/v2 record and no phase-2a
+finding in the change's `findings.md`.
+
+The existing mechanism is already generic: `probe_go` in
+`scripts/stage2_availability.py` installs a checked model definition and uses
+the pinned Pi with static text and no tools; `stage2_go` supplies per-API
+bases without a fixed API roster. `dispatch_go` in `scripts/stage2.py`
+independently rechecks paid terms, including skip marks, even when supplied
+an admission callback. An API-measurement plan must therefore not rely on a
+callback to bypass the wire skip. The orchestrator can provisionally maintain
+the held declaration for the existing tool-free preparation, retaining the
+final expansion only with successful evidence; no production bypass is needed.
+
+`stage2.py probe` is not the static tool-free measurement path: its docstring
+and implementation send a diff to free members and retain read tools for
+paid calls. `prepare-loop` uses the existing static availability probes.
+The offline stand-in and real-provider assertion in `tests/test_pi_contract.py`
+currently cover Chat Completions only; the assertion explicitly files every
+eligible rung in that one shipped catalog group. Native protocol exchanges
+and a per-model API assertion are the bounded contract changes needed.
+
+`templates/plan.md` and `scripts/validate_change_artefacts.py` are not present
+in this tree. Use the phase-3 prompt's plan form and the available interview,
+research-handoff and criterion-ledger checks; do not report the missing
+validator as green. The latest available handover read was
+`docs/journal/handover/2026-11-03-five-lane-night.md`; its lane state is dated
+2026-11-03 and does not establish today's parallel-session or PR state.
+Current hosted PR and parallel-session state were not read: this draft is
+restricted to the worktree and repository git directory and makes no tracker
+write, commit or branch change.
