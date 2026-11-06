@@ -20863,7 +20863,7 @@ def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPa
     assert source.count('verify_mode="targeted"') == 1
 
 
-@pytest.mark.parametrize("mode", ["targeted", "fallback"])
+@pytest.mark.parametrize("mode", ["targeted", "fallback", "fallback-launch-failure"])
 def test_repair_records_verification_scope_and_outcome(
     world: World, monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
@@ -20871,12 +20871,27 @@ def test_repair_records_verification_scope_and_outcome(
     output claims full green."""
     repair_world(world)
     commands = targeted_mode(monkeypatch)
-    if mode == "fallback":
+    if mode.startswith("fallback"):
 
         def unreadable(_repo: str, **_kwargs) -> None:
             raise stage2.touch_map.CannotMeasure("planted inventory fault")
 
         monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+    if mode == "fallback-launch-failure":
+        baseline = git(world.root, "rev-parse", "HEAD")
+        commands.outcomes["make"] = stage2.CallFailed("make could not be started: planted launch fault")
+        assert world.run("repair") == 1
+        text = world.text()
+        assert f"{stage2.SCOPE_LABEL}:" in text
+        assert "full `make verify` selected (result: not completed)" in text
+        assert "the targeted coverage was not safe" in text
+        assert "the link inventory could not be read" in text and "planted inventory fault" in text
+        assert "planted launch fault" in text
+        assert "full `make verify` ran" not in text
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert loop_status(world) == "taken — test_a"
+        assert len(commands.of("make")) == 1
+        return
     assert world.run("repair") == 0
     body = git(world.root, "log", "-1", "--format=%B")
     text = world.text()

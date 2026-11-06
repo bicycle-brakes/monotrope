@@ -5650,7 +5650,8 @@ def scope_text(chosen: Targeted, result: str, notes: Sequence[str] = ()) -> str:
 
 def fallback_text(reason: str, result: str) -> str:
     """The evidence line of a repair whose targeted coverage could not stand: the full check, and why."""
-    return f"full `make verify` ran (result: {result}) because the targeted coverage was not safe: {reason}"
+    action = "selected" if result == "not completed" else "ran"
+    return f"full `make verify` {action} (result: {result}) because the targeted coverage was not safe: {reason}"
 
 
 def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
@@ -5827,9 +5828,12 @@ def _targeted_body(
         return preparation
     chosen = targeted_selection(root, env, against)
     if chosen.fallback is not None:
+        # Keep the selected scope even if the full check raises before returning its result.
+        if scope is not None:
+            scope.append(fallback_text(chosen.fallback, "not completed"))
         problems = full_verify(root, env, key)
         if scope is not None:
-            scope.append(fallback_text(chosen.fallback, "red" if problems else "green"))
+            scope[-1] = fallback_text(chosen.fallback, "red" if problems else "green")
         return problems
     problems = []
     notes: list[str] = []
