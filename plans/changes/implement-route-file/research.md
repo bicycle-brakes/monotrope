@@ -9,20 +9,16 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-9ycy
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # implement route file — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md), followed
+by the dated repository checks recorded below during drafting.
 
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3347 commits, 12 rules.
 
@@ -71,3 +67,38 @@ Runner and constants: `scripts/stage2.py` (`GLM_FLASH`…`OPUS` constants, `impl
 ## Known neighbours (for the header)
 
 `plans/specs/implementation-verification/spec.md` · `plans/changes/research-swarm/spec.md` · `plans/changes/codex-repairs/spec.md` · `plans/changes/kimi-admission/spec.md`
+
+## Drafting gap checks — 2026-11-06, base `ff012eba`
+
+- The interview now resolves the central artifact, edit authority and initial
+  GLM 5.3 switch (Q-1, including its context); the research's earlier scope
+  questions predate that answer. The tracker and hosted PR state were not
+  read in this drafting attempt, which is confined to the worktree and git
+  directory. No claim about the separate failed-edit-continuation work is made.
+- `scripts/stage2.py:implement` selects `GLM_FLASH` in both its preflight and
+  two primary rungs; `run_work_model` accepts an endpoint/model/effort tuple
+  and already handles GLM credentials separately from native Claude Code.
+  A file-driven choice on those existing transports needs no new transport;
+  `GLM` already names `glm-5.3` at effort `max`, admitted in
+  `model-endpoints.yaml`. Other verbs still need their constants.
+- `scripts/stage2_runs.py:routes_cleared` checks its historical/current
+  `FOREIGN_ROUTES` tuple, which already includes `stage2.GLM` as well as
+  Flash. Its report does not select the implementer. New generic route labels
+  do not require a parser or declaration-probe change.
+- The living implementation-verification spec fixes the old Flash wording
+  as well as the three-attempt ceiling. Synchronizing only its current model
+  wording preserves the preparation and retry guarantees; changing counts or
+  failed-edit continuation would be different work.
+- The active implementation-routing statements in ADR 0007 are not limited
+  to one mention: the widening paragraph and decisions 2 and 5 name Flash;
+  decision 6 requires a separate decision for a non-loop role. The authorised
+  amendment must make the current implement role defer to the new file,
+  preserving endpoint admission and dated historical statements.
+- `scripts/check_interview_minimums.py:measure` requires five counted human
+  answers for a claimed ADR actually edited by the diff, regardless of the
+  change's bounded class or ordinary-PR authority. Q-1 is the only record at
+  this base. The bounded-only draft can pass before the ADR edit; that is not
+  evidence that the eventual ADR-edit interview requirement is fulfilled.
+- `scripts/validate_change_artefacts.py` is absent at this base.
+  `templates/` contains the spec and design forms but no plan template; the
+  plan form therefore follows `prompts/03-plan.md` and existing plans.
