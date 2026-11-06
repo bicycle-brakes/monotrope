@@ -1076,6 +1076,21 @@ def test_root_store_never_chmods_ancestors_of_the_configured_base(tmp_path, monk
         store.release_lock()
 
 
+def test_workflow_warns_about_linux_default_store_eviction():
+    workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text()
+    paragraph = workflow.split("The store's location is the research swarm's own setting", 1)[1].split(
+        "**The handoff is checked", 1
+    )[0]
+    sentences = " ".join(paragraph.split()).split(". ")
+    assert any(
+        all(
+            term in sentence
+            for term in ("Linux", "/var/tmp", "systemd-tmpfiles", "aged out", "STAGE2_RESEARCH_STATE", "long-lived")
+        )
+        for sentence in sentences
+    ), "the store-location guidance must explain Linux eviction and the override for long-lived runs"
+
+
 def test_workflow_does_not_attribute_shared_xdg_state_to_the_relocation():
     workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text()
     paragraph = workflow.split("The store's location is the research swarm's own setting", 1)[1].split(

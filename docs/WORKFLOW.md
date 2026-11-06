@@ -1021,7 +1021,9 @@ the review-loop records: a non-empty absolute
 empty selects `/Users/Shared/coding-harness-research-<uid>` on macOS and
 `/var/tmp/coding-harness-research-<uid>` on the other supported POSIX systems,
 `<uid>` being the numeric user id — so an ordinary run needs no moved HOME or
-XDG variable. One change's store is
+XDG variable. On Linux, `/var/tmp` may be aged out by systemd-tmpfiles; set
+`STAGE2_RESEARCH_STATE` to a persistent safe base to keep long-lived runs.
+One change's store is
 `<base>/coding-harness/stage2/<change>@<digest8>/research`, `<digest8>` the
 first eight SHA-256 characters of the resolved repository root. Store
 directories the runner creates are owner-only (0700); records and the lock file

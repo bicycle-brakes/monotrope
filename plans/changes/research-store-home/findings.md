@@ -322,3 +322,19 @@ Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint 
 Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 892 files, 3360 commits, 12 rules.
 
 Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3362 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 892 files, 3370 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3371 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - L6-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/research-store-home/stage2/attempts/research-store-home/attempt-1-20261106T031313637227Z-faed0bc6.md
+> ```
+
+Stage-2 call, 2026-11-06: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 892 files, 3375 commits, 12 rules.
