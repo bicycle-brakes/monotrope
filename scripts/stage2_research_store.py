@@ -214,14 +214,19 @@ class Store:
         existing directories must be ours, real directories and not writable by others.
         Create missing levels privately; tighten existing read/traverse access to 0700
         and report it before the store is used. Refuse group/other write access.
+        For root, ownership alone cannot identify the store boundary: only the
+        configured base and its descendants may be tightened. An arbitrary direct
+        Store path outside that base uses the requested directory as its boundary.
         """
         directory = self.directory.absolute()
         ancestry = [*reversed(directory.parents), directory]
         user = os.getuid()
         in_store = False
-        # These shared system parents remain infrastructure even when tests run as root.
-        shared = [Path(p) for p in ("/var/tmp", "/tmp", "/Users/Shared", "/private/tmp", "/private/var/tmp")]
-        system_parents = {parent for path in shared for parent in (path, *path.parents)}
+        root_base = directory
+        if user == 0:
+            configured_base = research_base().absolute()
+            if directory.is_relative_to(configured_base):
+                root_base = configured_base
         try:
             for current in ancestry:
                 try:
@@ -237,7 +242,7 @@ class Store:
                     not in_store
                     and current != directory
                     and info.st_uid == 0
-                    and (user != 0 or current in system_parents)
+                    and (user != 0 or current in root_base.parents)
                 ):
                     system_info = current.stat()
                     if (
@@ -245,6 +250,11 @@ class Store:
                         and system_info.st_uid == 0
                         and (not stat.S_IMODE(system_info.st_mode) & 0o022 or system_info.st_mode & stat.S_ISVTX)
                     ):
+                        if user == 0 and stat.S_IMODE(system_info.st_mode) & 0o077:
+                            print(
+                                f"root-owned state store ancestor {current} is outside the store base; unchanged",
+                                file=sys.stderr,
+                            )
                         continue
                 # macOS allocates a protected per-user temporary container below
                 # /private/var/folders/<bucket>/<user-key>. It is infrastructure,

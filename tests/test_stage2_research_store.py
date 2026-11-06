@@ -1029,6 +1029,53 @@ def test_legacy_public_store_ancestry_resumes_records(state_home, capsys, repo):
         reopened.release_lock()
 
 
+@pytest.mark.parametrize("ancestor_name", ["opt", "srv"])
+def test_root_store_never_chmods_ancestors_of_the_configured_base(tmp_path, monkeypatch, capsys, ancestor_name):
+    m = module()
+    ancestor = tmp_path / ancestor_name
+    ancestor.mkdir(mode=0o755)
+    ancestor.chmod(0o755)
+    base = ancestor / "research-state"
+    base.mkdir(mode=0o755)
+    base.chmod(0o755)
+    monkeypatch.setenv(m.RESEARCH_STATE_VARIABLE, str(base))
+    store = m.Store(m.research_dir("example", REPO_ROOT))
+    original_lstat = Path.lstat
+    original_stat = Path.stat
+    original_chmod = Path.chmod
+    chmod_calls = []
+
+    def root_owned(info):
+        fields = list(info)
+        fields[4] = 0
+        return os.stat_result(fields)
+
+    def chmod(path, mode, **kwargs):
+        chmod_calls.append(path)
+        # Never alter real infrastructure, even when proving the baseline fault.
+        if path == base or path.is_relative_to(base):
+            original_chmod(path, mode, **kwargs)
+
+    monkeypatch.setattr(m.os, "getuid", lambda: 0)
+    monkeypatch.setattr(Path, "lstat", lambda path: root_owned(original_lstat(path)))
+    monkeypatch.setattr(Path, "stat", lambda path, **kwargs: root_owned(original_stat(path, **kwargs)))
+    monkeypatch.setattr(Path, "chmod", chmod)
+    try:
+        try:
+            store.acquire_lock()
+        except m.StoreWriteError as error:
+            pytest.fail(f"a safe root-owned ancestor must permit opening the configured private store: {error}")
+        assert all(path == base or path.is_relative_to(base) for path in chmod_calls), (
+            "root must only tighten its configured store, never root-owned ancestors"
+        )
+        assert stat.S_IMODE(ancestor.stat().st_mode) == 0o755
+        assert stat.S_IMODE(base.stat().st_mode) == 0o700
+        diagnostic = capsys.readouterr().err
+        assert str(ancestor) in diagnostic and "unchanged" in diagnostic
+    finally:
+        store.release_lock()
+
+
 def test_workflow_does_not_attribute_shared_xdg_state_to_the_relocation():
     workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text()
     paragraph = workflow.split("The store's location is the research swarm's own setting", 1)[1].split(
