@@ -845,3 +845,14 @@ Stage-2 call, 2026-11-06: repair · attempt 2 · route codex-repair · endpoint 
 
 > Runner verification scope:
 > - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-06: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3446 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-06
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MINOR | SPEC | Phase 6 | scripts/stage2.py:5829; scripts/stage2.py:7824 | When targeted selection requires full fallback but `make` cannot start, `full_verify()` raises before the fallback evidence is appended. Read-only execution with a simulated launch failure confirmed that `scope` remains empty; `run_attempts()` records the launch error without the selected verification mode or fallback reason. Preserve that scope evidence on launch failure as well. [Acceptance criterion 11; plan step 4] | Codex | taken — reproduced fault inside the spec (criterion 11), a MINOR on recorded evidence (repaired without asking, standing rule): record the selected verification mode and fallback reason before launching the full run, so a launch failure keeps them; one test with a simulated launch failure | — |
+
+Phase 6 verdict: codex 01a1b2ea-badd-70c0-bbbf-006db8ea5806, 2026-11-06
+Reviewer session: codex 01a1b2ea-badd-70c0-bbbf-006db8ea5806 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
