@@ -476,7 +476,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-worker-cap/plan.md`](changes/verify-worker-cap/plan.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
 | [`changes/verify-worker-cap/research.md`](changes/verify-worker-cap/research.md) | draft | none | 2026-10-29 | coding-harness-l7sc |
 | [`changes/verify-worker-cap/spec.md`](changes/verify-worker-cap/spec.md) | draft | partial | 2026-10-29 | coding-harness-l7sc |
+| [`changes/verify-worker-count/decisions.md`](changes/verify-worker-count/decisions.md) | draft | none | 2026-11-06 | coding-harness-xay1 |
+| [`changes/verify-worker-count/findings.md`](changes/verify-worker-count/findings.md) | draft | none | 2026-11-06 | coding-harness-xay1 |
+| [`changes/verify-worker-count/plan.md`](changes/verify-worker-count/plan.md) | draft | none | 2026-11-06 | coding-harness-xay1 |
 | [`changes/verify-worker-count/research.md`](changes/verify-worker-count/research.md) | draft | none | 2026-11-06 | coding-harness-xay1 |
+| [`changes/verify-worker-count/spec.md`](changes/verify-worker-count/spec.md) | draft | none | 2026-11-06 | coding-harness-xay1 |
 | [`changes/workflow-promises/decisions.md`](changes/workflow-promises/decisions.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/findings.md`](changes/workflow-promises/findings.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
 | [`changes/workflow-promises/plan.md`](changes/workflow-promises/plan.md) | draft | partial | 2026-10-27 | coding-harness-i0l |
