@@ -52,6 +52,11 @@ The criteria concern empirical observations and document review; a unit test can
 - 3: not a test — compare the addendum with retained outputs and the pre-change baseline; a changed historical row or an untraceable new count refutes it.
 - 4: not a test — review the conclusion against the five observations and stated limits; configured-as-observed, unsupported speed or hosted claims refute it.
 
+## Runner route — 2026-11-06
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Flash attempt 1 on 2026-11-06 was accepted with an empty diff (commit 14d1fbf3, bead coding-harness-te7q); the spike's deliverable is missing.
+
 ## Time used
 
 2026-11-06 03:32:16–04:38:18 UTC, 3961 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-11-06 04:39:09–05:24:49 UTC, 2739 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
