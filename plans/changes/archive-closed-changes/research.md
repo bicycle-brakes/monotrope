@@ -9,20 +9,17 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-cqun
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06; draft-time checks appended to the recorded Flash exploration"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # archive closed changes — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
+The exploration route and model are recorded below; draft-time repository
+checks are appended at the end.
 
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3403 commits, 12 rules.
 
@@ -73,3 +70,42 @@ For each archived change: the folder `plans/changes/<name>/` moves to `plans/cha
 ---
 
 **Candidate `neighbours:` for the header** (spec paths known to relate): `plans/changes/beads-close-themselves/spec.md`, `plans/changes/criterion-test-ledger/spec.md`, `plans/changes/adr-0016-docs-check/spec.md`, `plans/changes/verify-duration/spec.md`, `plans/changes/run-report/spec.md`, `plans/specs/implementation-verification/spec.md`. `plans/changes/index-merge-regenerates/` is topically adjacent (index regeneration) but I verified only `research.md`, `findings.md` and a `plan.md` there — no `spec.md` seen, so I do not list one.
+
+
+## Draft-time repository checks — 2026-11-06
+
+Checked against HEAD `8be8751e`, without reading the tracker or anything
+outside this worktree and its Git directory:
+
+- `decisions.md` records class `bounded`, one maintainer-answered interview
+  record (Q-1), and the archive-day, header-normalisation and report-default
+  details. This resolves the class uncertainty above; phase 2b is not due.
+- `templates/spec.md` and `templates/design.md` exist; there is no
+  `templates/plan.md`. The plan therefore follows `prompts/03-plan.md` and
+  the existing `plans/changes/beads-close-themselves/plan.md` structure.
+- `scripts/validate_change_artefacts.py` is absent. Its named check cannot be
+  reported green or implemented as part of this change. The interview,
+  research-handoff and criterion-ledger checkers exist.
+- `Makefile` exposes the separate `close-merged` report/write target;
+  `prompts/07-commit.md` requires its writing invocation after confirmed
+  `MERGED`. Adding the archive invocation there gives the answered Q-1 its
+  recurring local caller without adding working-tree mutations to SessionStart.
+- `scripts/ci_gates.py` declares `close_merged_beads.py` in
+  `OHNE_AUFRUFER`, because it is a local command rather than a hosted gate.
+  A new local archive script needs the same declaration; `tests/test_ci.py`
+  checks this inventory. No new gate is needed.
+- `scripts/plans_registry.py` exposes `render_index()` independently of
+  tracker reads. Reuse that generator; do not duplicate its index format.
+  Its CLI has no `--root` option: fixture tests should patch its repository,
+  plans and index constants, as existing tests do.
+- The default `check_docs.py` walks `docs/`, resolving links from each
+  visited file. It does not recursively validate Markdown links inside the
+  archived change folders. Moving a historical document adds a directory
+  level, so its unchanged relative link text may resolve differently; this
+  change promises preservation of historical bodies, not general link repair.
+- The latest handover in this checkout is
+  `docs/journal/handover/2026-11-03-five-lane-night.md`. Its lane state is
+  historical; this branch already contains later merges. No current tracker
+  state or hosted pull-request state was read. A backlog move manifest must
+  consequently be measured by the orchestrator at application time; the two
+  examples in the exploration are not an exhaustive eligibility list.
