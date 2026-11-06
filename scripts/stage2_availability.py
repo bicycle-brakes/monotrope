@@ -39,6 +39,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import leakcheck
+import stage2_free
 import stage2_go
 import stage2_research_map
 import stage2_swarm
@@ -1050,6 +1051,7 @@ def research_report(state: dict) -> str:
     lines.append(f"Pool, cheapest first: {pool}")
     lines.extend(intelligence_lines(state))
     lines.append(f"Free selection: {_free_text(state['free']['selected'])}")
+    lines.extend(f"Dropped (free): {model}: {reason}" for model, reason in state["free"].get("dropped", {}).items())
     lines.extend(f"Unavailable (free): {model}: {reason}" for model, reason in state["free"]["unavailable"].items())
     lines.append("Models:")
     for key, item in state["models"].items():
@@ -1180,6 +1182,8 @@ def prepare_research(
             expected_version=runner.PI_VERSION,
             measured_wire_apis=rule["measured_wire_apis"],
             address=go_policy(runner, root),
+            paid=[str(model) for model in go_entry.get("modelle") or []],
+            exclusion=lambda model: stage2_swarm.exclusion_problem(data, model, "public-web"),
         )
     except stage2_swarm.ResearchCatalogError as error:
         if error.exit_code == 2:
@@ -1187,7 +1191,10 @@ def prepare_research(
         raise runner.CallFailed(f"the Go catalog is unmeasured: {error}; no probe or research call starts.") from error
     selection = _Selection(root, change, runner, data, rule, catalog)
     chosen = {label: selection.fill(label, trio) for label, trio in seats.items()}
-    free_selected = [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m, "public-web")]
+    # The one shared selection already applied paid admission and the public-web exclusion: no second filter.
+    free_selected = list(catalog["selected"])
+    free_excluded = sorted(c["id"] for c in catalog["candidates"] if c["reason"] == "excluded-by-declaration")
+    free_dropped = {c["id"]: stage2_free.PAID_REASON for c in catalog["candidates"] if c["reason"] == "paid-admitted"}
     # A free member stays optional: a failed probe only removes it, it never stops the preparation.
     free_reachable, free_failed = probe_free_research(selection, free_selected)
     terms = selection.go.get("modelle_terms")
@@ -1213,7 +1220,8 @@ def prepare_research(
         "free": {
             "selected": free_reachable,
             "unavailable": free_failed,
-            "excluded": [m for m in catalog["selected"] if stage2_swarm.exclusion_problem(data, m, "public-web")],
+            "excluded": free_excluded,
+            "dropped": free_dropped,
             "policy": catalog["policy"],
         },
         "seats": chosen,
