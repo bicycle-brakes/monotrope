@@ -709,3 +709,14 @@ Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-
 
 > Runner verification scope:
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-06: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3419 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-06
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-5 | MINOR | SPEC | Phase 6 | scripts/stage2.py:5537; scripts/stage2.py:4140–4142 | A modified tracked test whose filename contains a carriage return, such as `tests/test_\rname.py`, can escape targeted verification. `changed_paths()` reads Git output in text mode, converting the carriage return into a newline. The selector treats that nonexistent pathname as a removed test. Read-only reproduction confirmed the conversion; an in-memory selector reproduction returned no tests and no fallback. The surviving changed test must execute whole, or unsafe selection must require full verification. [Acceptance criteria 2 and 5] | Codex | taken — reproduced fault inside the spec, a MINOR on verification coverage (repaired without asking, standing rule): read `git` path output NUL-separated (`-z`) in bytes so no character in a filename changes; a path that cannot be decoded or mapped safely makes the selection unsafe and falls back to the full `make verify`; one test with a carriage-return filename | — |
+
+Phase 6 verdict: codex 01a1b1c4-d295-7473-8ada-7e0a21bf4640, 2026-11-06
+Reviewer session: codex 01a1b1c4-d295-7473-8ada-7e0a21bf4640 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
