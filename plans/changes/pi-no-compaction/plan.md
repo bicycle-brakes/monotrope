@@ -94,7 +94,15 @@ make verify
 - 1: tests/test_stage2.py::test_the_review_loop_launches_pi_isolated — reviewer settings omit or enable compaction, or enable retry
 - 1: tests/test_stage2.py::test_free_discovery_forces_live_refresh_before_listing — refresh or listing settings differ from the required JSON
 - 1: tests/test_stage2_availability.py::test_preparation_calls_only_static_toolless_probes — a probe uses retry-only settings
-- 1: not yet written tests/test_stage2_swarm.py::test_research_pi_settings_disable_compaction — a repository or public research launch omits disabled compaction
-- 2: not yet written tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction — real Pi summarises/retries or the runner accepts the overflow
+- 1: tests/test_stage2_swarm.py::test_research_pi_settings_disable_compaction — a repository or public research launch omits disabled compaction
+- 2: tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction — real Pi summarises/retries or the runner accepts the overflow
+
+## Runner route — 2026-11-06
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-11-06 05:25:52–05:49:07 UTC, 1395 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 05:49:20–06:21:41 UTC, 1941 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 06:21:54–07:30:46 UTC, 4131 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

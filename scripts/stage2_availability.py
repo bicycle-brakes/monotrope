@@ -534,7 +534,9 @@ def probe_go(
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        (agent / "settings.json").write_text(
+            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
+        )
         # Research preparation probes what its launches will use: one checked row (deep review RS-3-1). The review
         # loop's probes keep the whole overlay until that loop's own repair changes `activate_overlay`.
         try:

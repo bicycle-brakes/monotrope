@@ -718,7 +718,9 @@ class Run:
     def pi_command(self, entry: dict, prompt: str, scratch: Path) -> tuple[list[str], Path, dict]:
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        (agent / "settings.json").write_text(
+            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
+        )
         dropped = stage2_availability.install_measured_models(
             self.runner,
             agent,

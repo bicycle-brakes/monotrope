@@ -419,10 +419,11 @@ PI_DISCOVERY_SECONDS = 120
 FREE_DIFF_MAX_LINES = 400
 FREE_DIFF_MAX_TOTAL = 2000
 # A paid member reads the whole change, but not without end: over this bound the prompt carries a cut
-# marker and the round says so. Pi 1.2.0 compacts an oversized context instead of failing (read in the
-# pinned install: `docs/compaction.md`, "Auto-compaction triggers when contextTokens > contextWindow -
-# reserveTokens"; `dist/core/agent-session.js:418`), so a `No finding.` could rest on a summary the
-# member never saw in full (R-15 of the review-swarm review).
+# marker and the round says so. The bound stays as a limit on cost and on how much one member can
+# attend to (R-15 of the review-swarm review), not as a guard against summaries: the runner's Pi
+# agent settings disable automatic compaction, so an oversized context now fails the member
+# (`CallFailed`) instead of ending in a summary it answers on (measured:
+# `docs/research/2026-11-03-pi-context-overflow.md`).
 REVIEW_DIFF_MAX_LINES = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
@@ -2310,7 +2311,9 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        (agent / "settings.json").write_text(
+            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
+        )
         home = scratch / "home"
         home.mkdir()
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
@@ -2746,7 +2749,9 @@ def run_reviewer(
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        (agent / "settings.json").write_text(
+            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
+        )
         # The launch resolves and assesses its model offline, against the one
         # address record read fresh from the held declaration. Without the
         # run's refreshed definitions there is no checked destination, and no
