@@ -5486,7 +5486,9 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(
         stage2.subprocess,
         "run",
-        lambda *args, **_kwargs: subprocess.CompletedProcess(args[0], ancestor, b"", b""),
+        lambda *args, **_kwargs: subprocess.CompletedProcess(
+            args[0], ancestor if "merge-base" in args[0] else 0, b"", b""
+        ),
     )
     with pytest.raises(stage2.CallFailed):
         stage2.checkpoint(tmp_path, "demo", "base")
@@ -20379,6 +20381,42 @@ def test_targeted_repair_runs_whole_touched_and_linked_test_files(
     runs = pytest_targets(commands)
     assert len(runs) == 4 and runs[3] == ["tests/test_fix.py"], runs
     assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize("case", ["working-tree", "staged-only", "untracked", "undecodable"])
+def test_targeted_repair_preserves_carriage_return_test_paths(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """A path's carriage return must survive Git output; undecodable paths require full verification."""
+    seed_tests(world)
+    if case == "undecodable":
+        real_git_bytes = stage2._git_bytes
+
+        def bad_path(root: Path, *args: str, **kwargs) -> bytes:
+            if args[0] == "diff":
+                return b"tests/test_\xffname.py\0"
+            return real_git_bytes(root, *args, **kwargs)
+
+        monkeypatch.setattr(stage2, "_git_bytes", bad_path)
+        chosen = stage2.targeted_selection(world.root, dict(os.environ), "HEAD")
+        assert chosen.fallback is not None, "an undecodable path received targeted acceptance"
+        assert chosen.tests == []
+        return
+    relative = "tests/test_\rname.py"
+    path = world.root / relative
+    original = "def test_original():\n    assert True\n"
+    path.write_text(original, encoding="utf-8")
+    if case != "untracked":
+        git(world.root, "add", "--", relative)
+        git(world.root, "commit", "--quiet", "-m", "a test with a special filename")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    path.write_text(original + "\n\ndef test_changed():\n    assert False\n", encoding="utf-8")
+    if case == "staged-only":
+        git(world.root, "add", "--", relative)
+        path.write_text(original, encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    assert chosen.tests == [relative], "the surviving changed test was omitted or its name changed"
 
 
 def test_targeted_repair_keeps_baseline_links_for_removed_paths(world: World) -> None:

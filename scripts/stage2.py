@@ -4137,10 +4137,25 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     differs from the commit in the index alone; `--cached` lists it (bead coding-harness-0c8).
     """
     # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
-    tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
-    tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
-    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
-    return {Path(name) for name in [*tracked, *untracked] if name}
+    # Text-mode subprocess output translates CR to LF even with NUL delimiters.
+    tracked = _git_bytes(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split(b"\0")
+    tracked += _git_bytes(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split(b"\0")
+    untracked = _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0")
+    paths: set[Path] = set()
+    for raw in [*tracked, *untracked]:
+        if not raw:
+            continue
+        try:
+            name = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise Refused("a changed Git path cannot be decoded safely") from error
+        path = Path(name)
+        # Git lists an untracked nested repository as a directory ending in '/'.
+        # That suffix is an inventory marker, not an unsafe pathname conversion.
+        if path.is_absolute() or ".." in path.parts or name not in (path.as_posix(), path.as_posix() + "/"):
+            raise Refused("a changed Git path cannot be mapped safely")
+        paths.add(path)
+    return paths
 
 
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
