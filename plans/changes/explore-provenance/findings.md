@@ -787,3 +787,5 @@ Stage-2 call, 2026-11-06: draft · attempt 3 · route glm · endpoint glm-coding
 > tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > ````
+
+Stage-2 call, 2026-11-06: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 894 files, 3446 commits, 12 rules.
