@@ -78,15 +78,15 @@ deadline expiring after persisted retirement: only confirmed retirements remain.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_definitive_paid_refusal_retires_the_rung — parameterized 403/410 leaves the rung pending.
-- 1: not yet written tests/test_stage2.py::test_definitive_retirement_write_failure_starts_no_next_stage — failed atomic persistence is followed by another model call.
-- 2: not yet written tests/test_stage2.py::test_definitive_retirement_continues_in_saved_order — continuation needs another command, changes order or repeats a rung.
-- 2: not yet written tests/test_stage2.py::test_definitive_retirement_does_not_extend_the_deadline — the next rung starts after expiry.
-- 3: not yet written tests/test_stage2.py::test_definitive_retirement_preserves_protected_provider_evidence — status or diagnostic is lost, a secret escapes, or quoted text becomes control state.
-- 4: not yet written tests/test_stage2.py::test_only_definitive_paid_provider_failures_retire — transient, local, malformed, successful-output or incidental-number cases consume a stage.
-- 5: not yet written tests/test_stage2.py::test_definitive_retirement_is_not_a_completed_round — retirement creates a round, clean result or numbering gap.
-- 6: not yet written tests/test_stage2.py::test_definitive_retirement_survives_resume_and_release — a retired stage repeats or prior history or evidence changes across release and continuation.
-- 7: not yet written tests/test_stage2.py::test_definitive_retirements_exhaust_the_saved_ladder — exhaustion loses retirement, returns clean or calls an unsaved model.
+- 1: tests/test_stage2.py::test_definitive_paid_refusal_retires_the_rung — parameterized 403/410 leaves the rung pending.
+- 1: tests/test_stage2.py::test_definitive_retirement_write_failure_starts_no_next_stage — failed atomic persistence is followed by another model call.
+- 2: tests/test_stage2.py::test_definitive_retirement_continues_in_saved_order — continuation needs another command, changes order or repeats a rung.
+- 2: tests/test_stage2.py::test_definitive_retirement_does_not_extend_the_deadline — the next rung starts after expiry.
+- 3: tests/test_stage2.py::test_definitive_retirement_preserves_protected_provider_evidence — status or diagnostic is lost, a secret escapes, or quoted text becomes control state.
+- 4: tests/test_stage2.py::test_only_definitive_paid_provider_failures_retire — transient, local, malformed, successful-output or incidental-number cases consume a stage.
+- 5: tests/test_stage2.py::test_definitive_retirement_is_not_a_completed_round — retirement creates a round, clean result or numbering gap.
+- 6: tests/test_stage2.py::test_definitive_retirement_survives_resume_and_release — a retired stage repeats or prior history or evidence changes across release and continuation.
+- 7: tests/test_stage2.py::test_definitive_retirements_exhaust_the_saved_ladder — exhaustion loses retirement, returns clean or calls an unsaved model.
 
 ## Boundaries and route
 
@@ -99,3 +99,6 @@ this tree; use the available interview/ledger gates and the runner's document
 checks without creating substitutes or weakening requirements.
 
 ## Time used
+
+2026-11-06 16:19:48–16:50:20 UTC, 1832 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 16:50:29–17:39:15 UTC, 2925 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-06
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1091,7 +1091,15 @@ into a shell. Twelve verbs exist:
   declaration uses `flash_swarm`), then one eligible ladder rung each, until a
   round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
   refusal and exit 3 a loop that finished with a clean round (R-11 of the
-  review-swarm review).
+  review-swarm review). A paid rung whose provider call fails with explicit
+  HTTP 403 or 410 evidence retires itself (bead coding-harness-2ym2): the
+  stage is consumed without a round, the scrubbed diagnostic is quoted in a
+  `## Stage failed` block that names the runner — not the maintainer — as the
+  actor, and the same invocation continues with the next stage of the saved
+  ladder on the same round deadline, until the ladder is exhausted or the
+  deadline is spent. Any other failure — HTTP 429, a 5xx, a timeout, a launch
+  failure, a malformed answer, a local admission refusal, an incidental status
+  number in the text — keeps the failed attempt that consumes no stage.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
   With `--stage-failed <model> --reason <text>` it retires the stage that model
   belongs to instead: the stage is consumed, the reason and a `## Stage failed`
@@ -1463,6 +1471,13 @@ read as possible carriers of that isolation (bead `coding-harness-8df`). Every l
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
+The one exception is the paid rung whose failed call carries explicit HTTP 403 or 410 evidence (bead
+coding-harness-2ym2): it retires itself, and its retirement differs from every failure above. The stage is consumed
+without a round; its `## Stage failed` block names the runner as the actor, quotes the scrubbed diagnostic, and
+stands in the record where the round would have stood, so the attempt's audit lines are accounted for by that block
+and no no-round line is written for them. The same invocation continues with the next stage of the saved ladder on
+the same round deadline; a spent ladder or a spent deadline stops with a diagnostic, and a retirement whose record
+write fails retires nothing — its attempt keeps the no-round line with its audit count, and no later stage starts.
 A member whose answer is malformed — no six-cell row and not exactly `No finding.` — is asked once more with the
 format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
 keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).

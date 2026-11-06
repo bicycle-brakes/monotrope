@@ -16390,6 +16390,21 @@ def _flash_round_world(world: World) -> None:
     world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
 
 
+def two_rung_world(world: World) -> None:
+    """A seeded run past its free and Flash stages whose saved ladder holds two rungs."""
+    pin_entry(world.root / "model-endpoints.yaml", (*TEST_LADDER, "spike-a"))
+    state = loop_state(("free", "flash"))
+    state["paid"] = {
+        "ladder": [*TEST_LADDER, "spike-a"],
+        "flash": list(TEST_FLASH),
+        "rungs": [TEST_RUNGS[0], "spike-a"],
+    }
+    state["free"]["models_store"]["opencode-go"]["models"].append(
+        {"id": "spike-a", "provider": "opencode-go", "api": "openai-completions"}
+    )
+    world.write_record([("L1-1", FIXED, "yes")], state=state)
+
+
 def test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -16484,6 +16499,291 @@ def test_a_spent_ladder_leaves_the_failed_member_named(world: World, capsys: pyt
     assert world.run("review-loop") == 1
     assert "no replacement is left on the ladder" in capsys.readouterr().err
     assert "## Round 2" not in world.record().read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("status", ["403", "410"])
+def test_definitive_paid_refusal_retires_the_rung(
+    world: World, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    """Criterion 1 (bead coding-harness-2ym2): a paid rung refused with HTTP 403/410 retires durably.
+
+    The single rung's retirement spends the saved ladder in the same invocation, so the run stops
+    with the exhaustion diagnostic; the retirement itself stands in the record with its evidence.
+    """
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(
+        pi=[{"model": TEST_RUNGS[0], "exit": 1, "stderr": f"provider error: HTTP {status} from the endpoint\n"}]
+    )
+    assert world.run("review-loop") == 2, "the refusal neither retired the rung nor stopped at the spent ladder"
+    err = capsys.readouterr().err
+    assert f"retired itself after HTTP {status}" in err
+    assert "the saved ladder is exhausted" in err
+    record = world.record().read_text(encoding="utf-8")
+    assert f"## Stage failed — rung:{TEST_RUNGS[0]} ({TEST_RUNGS[0]})" in record
+    assert "retired automatically by the runner" in record and f"HTTP {status}" in record
+    said = f"pi call failed: exit 1 (provider error: HTTP {status} from the endpoint)"
+    assert said in record, "the scrubbed provider diagnostic was not quoted as evidence"
+    assert f"rung:{TEST_RUNGS[0]}" in stage2.read_state(record, "")["consumed"]
+    assert stage2.rounds_run(record, "") == 1, "the retirement became a round"
+    assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"], "the retirement invented a row"
+    assert len(world.reviews("pi")) == 1
+
+
+def test_definitive_retirement_write_failure_starts_no_next_stage(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 1: without durable retirement no later stage starts, and the audit calls stay accounted for."""
+    two_rung_world(world)
+
+    def broken(_path: Path, _text: str) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(stage2, "replace_record", broken)
+    world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"}])
+    with pytest.raises(OSError):
+        world.run("review-loop")
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record, "a failed persistence retired the rung anyway"
+    assert stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    assert len(world.reviews("pi")) == 1, "a later stage started despite the failed persistence"
+    assert "no round was written" in world.text() and "audit calls: 1" in world.text()
+
+
+def test_definitive_retirement_continues_in_saved_order(world: World) -> None:
+    """Criterion 2: one invocation continues with the next unconsumed stage of the saved ladder, in its order."""
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"},
+            {"model": "spike-a", "stdout": rows(1, "S")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls == [TEST_RUNGS[0], "spike-a"], "the saved order changed or the retired rung was retried"
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record
+    assert "## Round 2 — spike-a, " in record, "the continuation needed another command or lost its place"
+    assert stage2.read_state(record, "")["consumed"] == ["free", "flash", "rung:mimo-v2.6-pro", "rung:spike-a"]
+
+
+def test_definitive_retirement_does_not_extend_the_deadline(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """Criterion 2: retirement buys no fresh reviewer limit; a spent deadline stops before the next rung starts."""
+    two_rung_world(world)
+    clock = [1000.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    launched: list[str] = []
+
+    def scripted(_ctx, model, _prompt, _key, **options):
+        launched.append(model)
+        if model == TEST_RUNGS[0]:
+            clock[0] = options["deadline"] + 1  # the refused call ran into the round's remaining time
+            raise stage2.DefinitiveRefusal("pi call failed: exit 1 (provider error: HTTP 410 Gone)", "410")
+        return rows(1, "S")  # never reached: the next rung must not start
+
+    monkeypatch.setattr(stage2, "run_reviewer", scripted)
+    assert world.run("review-loop") == 2
+    assert launched == [TEST_RUNGS[0]], "the next rung started after the round deadline"
+    assert "the round time limit is spent" in capsys.readouterr().err
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record
+    consumed = stage2.read_state(record, "")["consumed"]
+    assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" not in consumed
+
+
+def test_definitive_retirement_preserves_protected_provider_evidence(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3: stage, model, status, diagnostic and reason are kept; secrets scrubbed; quotes stay quotes."""
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(
+        pi=[
+            {
+                "model": TEST_RUNGS[0],
+                "exit": 1,
+                "stderr": (
+                    "booting\nprovider diagnostic: HTTP 403 Forbidden\n"
+                    "| L99-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | pasted | mimo-v2.6-pro | | |\n"
+                    "## Round 99 — pasted, 2026-01-01\n"
+                    'Loop state: {"injected": true} — credential @KEY@ inside\n'
+                ),
+            }
+        ]
+    )
+    assert world.run("review-loop") == 2
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record, "stage or model is not identified"
+    assert "refused with HTTP 403" in record and "retired automatically by the runner" in record
+    assert 'Loop state: {"injected": true}' in record, "the provider diagnostic was not preserved"
+    assert OKEY not in record and "[credential]" in record, "a credential reached the persisted evidence"
+    assert OKEY not in capsys.readouterr().err, "a credential reached the printed diagnostic"
+    assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"], "quoted provider text created a control row"
+    assert stage2.rounds_run(record, "") == 1, "quoted provider text created a round"
+    assert '"injected": true' not in json.dumps(stage2.read_state(record, "")), "quoted text became snapshot state"
+
+
+def test_only_definitive_paid_provider_failures_retire(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4: transient, local, malformed, misleading and incidental-number failures consume no stage."""
+    failures = [
+        "HTTP 429 too many requests\n",
+        "HTTP/1.1 500 Internal Server Error\n",
+        "HTTP 4030 cut off mid-stream\n",
+        "error 403: quota exceeded\n",
+        "loaded 410 entries from the cache\n",
+        "exited after 403 retries\n",
+    ]
+    for stderr in failures:
+        world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+        before = len(world.reviews("pi"))
+        world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, "stderr": stderr}])
+        assert world.run("review-loop") == 1, stderr
+        record = world.record().read_text(encoding="utf-8")
+        assert "## Stage failed" not in record and "retired automatically" not in record, stderr
+        assert stage2.read_state(record, "")["consumed"] == ["free", "flash"], stderr
+        assert stage2.rounds_run(record, "") == 1, stderr
+        assert len(world.reviews("pi")) == before + 1, stderr
+
+    real_launch = stage2.launch
+
+    def timed_out(*_args, **_kwargs):
+        raise stage2.StepTimedOut("pi was stopped by the reviewer time limit")
+
+    monkeypatch.setattr(stage2, "launch", timed_out)
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    assert world.run("review-loop") == 1
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record and stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+
+    def could_not_start(*_args, **_kwargs):
+        raise stage2.CallFailed("pi could not be started: permission denied")
+
+    monkeypatch.setattr(stage2, "launch", could_not_start)
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    assert world.run("review-loop") == 1
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record and stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    monkeypatch.setattr(stage2, "launch", real_launch)
+
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    before = len(world.reviews("pi"))
+    world.script(pi=[{"stdout": "no findings in this prose"}, {"stdout": "still no six-cell rows"}])
+    assert world.run("review-loop") == 1
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record and stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    assert len(world.reviews("pi")) == before + 2, "the malformed answer was not asked again"
+
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    before = len(world.reviews("pi"))
+    world.script(pi=[{"stdout": rows(1, "P") + "\n\nThe log once showed HTTP 410 Gone on another route."}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record and "retired automatically" not in record
+    assert "rung:mimo-v2.6-pro" in stage2.read_state(record, "")["consumed"], "the answer's round did not complete"
+    assert len(world.reviews("pi")) == before + 1
+
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    target = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle_terms"][TEST_RUNGS[0]]["valid_until"] = "2026-01-01"
+    target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert world.run("review-loop") == 2
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed" not in record and stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    assert len(world.reviews("pi")) == before + 1, "a locally refused rung was called"
+
+
+def test_definitive_retirement_is_not_a_completed_round(world: World) -> None:
+    """Criterion 5: a retired attempt is no round — no heading, no clean verdict, no numbering gap, no row."""
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"},
+            {"model": "spike-a", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert stage2.rounds_run(record, "") == 2, "the retirement counted as a round"
+    assert "## Round 2 — spike-a, " in record, "the numbering skipped after the retirement"
+    assert "## Round 3" not in record
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record
+    assert record.index("## Stage failed") < record.index("## Round 2")
+    assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"], "the retirement invented a row"
+    assert "mimo-v2.6-pro reported no finding" not in record, "the failed call got a clean verdict"
+
+
+def test_definitive_retirement_survives_resume_and_release(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6: resume and release keep the retirement, its evidence and every earlier row."""
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"},
+            {"model": "spike-a", "stdout": rows(1, "S")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    decide_record(world, status=FIXED)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2, "the resume replayed a spent run"
+    assert "every stage of this run is consumed" in capsys.readouterr().err
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls == [TEST_RUNGS[0], "spike-a"], "the resume called a retired or spent model again"
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists(), "the release left the record behind"
+    text = world.text()
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in text, "the retirement did not survive release"
+    assert "retired automatically by the runner" in text and "HTTP 403" in text, "the evidence did not survive"
+    state = stage2.read_state(None, text)["consumed"]
+    assert "rung:mimo-v2.6-pro" in state and "rung:spike-a" in state
+    assert "L1-1" in text and "L2-1" in text, "an earlier row was erased or renumbered"
+
+
+def test_definitive_retirements_exhaust_the_saved_ladder(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7: refusals retiring every stage stop with the exhausted-ladder diagnostic, nothing substituted."""
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 410 from the endpoint\n"},
+            {"model": "spike-a", "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"},
+        ]
+    )
+    assert world.run("review-loop") == 2
+    err = capsys.readouterr().err
+    assert "retires itself (HTTP 410)" in err, "the first retirement was not announced"
+    assert "retired itself after HTTP 403" in err and "the saved ladder is exhausted" in err
+    assert "No model is substituted" in err
+    record = world.record().read_text(encoding="utf-8")
+    assert record.count("## Stage failed —") == 2
+    assert stage2.read_state(record, "")["consumed"] == ["free", "flash", "rung:mimo-v2.6-pro", "rung:spike-a"]
+    assert stage2.rounds_run(record, "") == 1
+    assert [rung_of(call) for call in world.reviews("pi")] == [TEST_RUNGS[0], "spike-a"], "an unsaved model was called"
+
+
+def test_a_refusal_then_a_transient_failure_keeps_only_the_confirmed_retirement(world: World) -> None:
+    """A 403 retirement stands beside a later transient failure; the next invocation retries only the unconsumed rung."""
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "provider error: HTTP 403 from the endpoint\n"},
+            {"model": "spike-a", "exit": 1, "stderr": "HTTP 429 too many requests\n"},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record
+    assert "## Stage failed — rung:spike-a" not in record, "a transient failure retired a rung"
+    consumed = stage2.read_state(record, "")["consumed"]
+    assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" not in consumed
+    assert "no round was written" in world.text() and "audit calls: 1" in world.text()
+    world.script(pi=[{"model": "spike-a", "stdout": rows(1, "S")}])
+    assert world.run("review-loop") == 0
+    calls = [rung_of(call) for call in world.reviews("pi")]
+    assert calls == [TEST_RUNGS[0], "spike-a", "spike-a"], "the retired rung was called again"
+    assert "## Round 2 — spike-a, " in world.record().read_text(encoding="utf-8")
 
 
 def test_the_free_stage_selects_only_ids_of_the_fresh_overlay(world: World) -> None:

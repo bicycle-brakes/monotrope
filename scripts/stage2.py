@@ -634,6 +634,20 @@ class MalformedAnswer(CallFailed):
         self.answer = answer
 
 
+class DefinitiveRefusal(CallFailed):
+    """A failed provider call carried explicit HTTP 403 or 410 evidence: a definitive refusal.
+
+    The status was classified from the call's whole standard error before `fail`
+    truncated the diagnostic (bead coding-harness-2ym2); a successful answer's
+    text is never classified, and every other failure stays a plain
+    `CallFailed`. The message is the scrubbed diagnostic as `fail` built it.
+    """
+
+    def __init__(self, message: str, status: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
 def today() -> str:
     return dt.date.today().isoformat()
 
@@ -1031,6 +1045,31 @@ def launch(
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
 
+# A definitive provider refusal is explicit HTTP 403 or 410 evidence on a failed
+# call (bead coding-harness-2ym2): a status line ("HTTP 403", "HTTP/1.1 410 Gone",
+# "HTTP status code 403") or the canonical reason phrase beside the number
+# ("403 Forbidden", "410 Gone"). A bare number, an exit code, another status and
+# a number inside a word never match, and a successful answer's text is never
+# classified at all.
+DEFINITIVE_REFUSAL = re.compile(
+    r"\bHTTP(?:/[0-9]+(?:\.[0-9]+)?)?(?:[ \t]+status(?:[ \t]+code)?)?[ \t]+(403|410)\b"
+    r"|\b(403)[ \t]+Forbidden\b"
+    r"|\b(410)[ \t]+Gone\b"
+)
+
+
+def definitive_refusal_status(text: str) -> str | None:
+    """The explicit HTTP 403 or 410 evidence in a failed call's standard error, or None.
+
+    Classified from the whole diagnostic before `fail` truncates it to the last
+    line; a diagnostic that holds none of the explicit forms retires nothing.
+    """
+    matched = DEFINITIVE_REFUSAL.search(text)
+    if matched is None:
+        return None
+    return matched.group(1) or matched.group(2) or matched.group(3)
+
+
 def last_error_line(done: subprocess.CompletedProcess, secret: str | list[str] | None = None) -> str:
     """The last non-empty line of the program's standard error, scrubbed and bounded; empty when there is none."""
     lines = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
@@ -1045,13 +1084,16 @@ def fail(
     reason: str,
     secret: str | list[str] | None = None,
     label: str | None = None,
+    refusal: str | None = None,
 ) -> CallFailed:
     """Print the last lines of the program's standard error, scrubbed; return the exception to raise.
 
     The reason names the last line of the standard error beside the exit
     ("Model is unavailable"), so a failed swarm member says why in the loop
     record. A `label` (a swarm member's model id) prefixes every printed line,
-    because the members' tails interleave on one stream (Q-13).
+    because the members' tails interleave on one stream (Q-13). A `refusal`
+    status (explicit HTTP 403/410 evidence the caller classified before this
+    truncation) is carried on a `DefinitiveRefusal`; the message is unchanged.
     """
     tail = "\n".join((done.stderr or "").splitlines()[-40:])
     if tail:
@@ -1061,7 +1103,8 @@ def fail(
         print(printed, file=sys.stderr)
     last = last_error_line(done, secret)
     detail = f" ({last})" if last else ""
-    return CallFailed(f"{program} call failed: {reason}{detail}")
+    message = f"{program} call failed: {reason}{detail}"
+    return DefinitiveRefusal(message, refusal) if refusal else CallFailed(message)
 
 
 def failed_with_answer_file(error: CallFailed, answer_file: Path) -> CallFailed:
@@ -2830,7 +2873,17 @@ def run_reviewer(
             **({"deadline": deadline} if deadline is not None else {}),
         )
         if done.returncode != 0:
-            raise fail("pi", done, f"exit {done.returncode}", secrets, model)
+            # The whole standard error is classified before `fail` truncates it to the last line: an
+            # explicit HTTP 403 or 410 marks this failed call a definitive refusal (bead
+            # coding-harness-2ym2); every other exit stays a plain failure.
+            raise fail(
+                "pi",
+                done,
+                f"exit {done.returncode}",
+                secrets,
+                model,
+                refusal=definitive_refusal_status(done.stderr or ""),
+            )
         answer = scrub(done.stdout or "", secrets)
         if not answer.strip():
             # A successful empty response is malformed too: the round owes it its format retry.
@@ -8330,6 +8383,22 @@ def prepare_loop(root: Path, change: str) -> None:
 _RATE_LIMITED = re.compile(r"(?<![\w-])429(?![\w-])|rate[ _-]?limit|too many requests|\bunavailable\b", re.IGNORECASE)
 
 
+class StageRetired(Exception):
+    """A paid rung retired itself after a definitive refusal; the loop continues with the next stage.
+
+    Control flow like `FreeStageUnavailable`: the retirement is durably recorded
+    when this is raised, so `review_loop` catches it, re-reads the record and
+    starts the next stage of the saved ladder on the same round deadline - or
+    stops at an exhausted ladder or a spent deadline (bead coding-harness-2ym2).
+    """
+
+    def __init__(self, stage_key: str, status: str, deadline: float) -> None:
+        super().__init__(f"the paid rung {stage_key} retired itself after HTTP {status}")
+        self.stage_key = stage_key
+        self.status = status
+        self.deadline = deadline
+
+
 class FreeStageUnavailable(Exception):
     """Every member of a free round failed with a rate-limit or unavailability error (bead coding-harness-pj98)."""
 
@@ -8426,6 +8495,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             print(f"review-loop: paid models skipped: {'; '.join(skipped)}")
         # The snapshot is written only with the first completed round: a failed
         # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
+    # The one round deadline a chain of automatic retirements shares (bead coding-harness-2ym2):
+    # the first paid round starts one, and every stage continued after a retirement receives it.
+    shared_deadline: float | None = None
     while True:
         stage = next_stage(state)
         free_input = None
@@ -8476,8 +8548,40 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 "green before the next round starts."
             )
         try:
-            _review_round(root, change, record, findings_text, state, stage, free_input, free_cut, receipt_taken)
+            _review_round(
+                root,
+                change,
+                record,
+                findings_text,
+                state,
+                stage,
+                free_input,
+                free_cut,
+                receipt_taken,
+                deadline=shared_deadline,
+            )
             return
+        except StageRetired as retired:
+            # The refused rung is retired and durably recorded; this invocation continues with the
+            # next stage of the saved ladder on the same round deadline, and every pre-launch check
+            # runs again in the round that follows. A spent ladder or a spent deadline stops here:
+            # retirement never buys a fresh reviewer limit (bead coding-harness-2ym2). Fresh record
+            # text keeps the round numbering right.
+            if next_stage(state) is None:
+                raise Refused(
+                    f"{retired}; every remaining stage of the saved ladder is retired and no usable review "
+                    "answer stands: the saved ladder is exhausted. The loop stops and reports to the "
+                    "maintainer. No model is substituted."
+                ) from None
+            if time.monotonic() >= retired.deadline:
+                raise Refused(
+                    f"{retired}; the round time limit is spent; no further call starts. The retirements "
+                    "stand in the record; the loop stops and reports to the maintainer."
+                ) from None
+            record = read_record(change, root)
+            findings_text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+            shared_deadline = retired.deadline
+            continue
         except FreeStageUnavailable as dropped:
             # Every free member was rate-limited or unavailable at review size: the run drops the free
             # stage and the next stage takes this call's round; the snapshot written with that round
@@ -8503,6 +8607,7 @@ def _review_round(
     free_input: str | None,
     free_cut: str | None,
     receipt_taken: bool,
+    deadline: float | None = None,
 ) -> None:
     """One round of `review_loop` on its chosen stage: prompts, calls, the written round."""
     round_number = rounds_run(record, findings_text) + 1
@@ -8592,8 +8697,10 @@ def _review_round(
             append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
             audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
-        # limit per call (R-8 of the review-swarm review).
-        deadline = time.monotonic() + REVIEWER_MINUTES * 60
+        # limit per call (R-8 of the review-swarm review). A stage continued after an automatic
+        # retirement receives this same deadline, so retirement buys no fresh reviewer limit (bead
+        # coding-harness-2ym2).
+        deadline = deadline if deadline is not None else time.monotonic() + REVIEWER_MINUTES * 60
         answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
         replaced: list[str] = []
 
@@ -8637,6 +8744,33 @@ def _review_round(
 
         for member in members:
             ask_malformed_again(member)
+        if stage["kind"] == "paid" and isinstance(answers[members[0]], DefinitiveRefusal):
+            # A definitive refusal (explicit HTTP 403 or 410) retires this paid rung: the stage is
+            # consumed without a round, the scrubbed diagnostic is quoted as protected evidence, and
+            # the loop continues with the next stage of the saved ladder on this round's one deadline
+            # (bead coding-harness-2ym2). The runner, never the maintainer, is named as the actor, and
+            # every other failure keeps the failed attempt that consumes nothing. The write comes
+            # first: a persistence failure retires nothing, and its attempt keeps the truthful
+            # no-round accounting below.
+            refusal = answers[members[0]]
+            block = "\n\n".join(
+                [
+                    f"## Stage failed — {stage['key']} ({members[0]})",
+                    quote_reviewer(str(refusal)),
+                    f"The stage is retired automatically by the runner: the provider refused with "
+                    f"HTTP {refusal.status} (403 access disabled, 410 deprecated); a transient failure never "
+                    "retires. No round of it counts, and the loop continues with the next stage of the "
+                    "saved ladder on the same round deadline.",
+                ]
+            )
+            state["consumed"] = [*state["consumed"], stage["key"]]
+            write_round(change, block, state, root)
+            notes.append(
+                f"{members[0]} failed: {refusal}; the paid rung retires itself (HTTP {refusal.status}): "
+                "the loop continues with the next stage"
+            )
+            print(f"review-loop: {notes[-1]}", file=sys.stderr)
+            raise StageRetired(stage["key"], refusal.status, deadline)
         if stage["kind"] == "paid-swarm":
             # A failed Flash member is replaced by the cheapest admitted ladder model
             # not in this round and not consumed, on the same paid prompt; each model
@@ -8761,6 +8895,10 @@ def _review_round(
         # A replacement is consumed too: it is no later rung. Both land in the same write as the round.
         state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
         write_round(change, "\n\n".join(parts), state, root)
+    except StageRetired:
+        # The retirement is durably recorded; its Stage failed block accounts for this attempt's
+        # audit lines, so the no-round line below must not claim they consumed nothing.
+        raise
     except BaseException:
         for notice in retain_address_notices([]):
             note = f"Address notice: {notice}"
