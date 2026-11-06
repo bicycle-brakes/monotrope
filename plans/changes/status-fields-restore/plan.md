@@ -98,14 +98,14 @@ endpoint `glm-coding-plan`, on 2026-11-06.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_lifecycle_fields_are_restored_before_verification — distinct values or removed keys reach the verifier or checkpoint.
-- 2: not yet written tests/test_stage2.py::test_repair_lifecycle_fields_survive_failed_attempts — a parameterized early exit, retry or exhaustion leaves changed fields.
-- 2: not yet written tests/test_stage2.py::test_repair_lifecycle_recovery_keeps_safety_refusals — an unsafe destination is written or moved HEAD is reset.
-- 3: not yet written tests/test_stage2.py::test_repair_lifecycle_restoration_preserves_other_edits — valid body/header edits or runner time disappear, or a field edit alone rejects the repair.
-- 4: not yet written tests/test_stage2.py::test_repair_lifecycle_protection_allows_no_design — absent optional design is created or the repair is refused.
-- 5: not yet written tests/test_stage2.py::test_repair_lifecycle_report_describes_each_attempt — accepted, rejected or unchanged attempts lack an accurate report, including safety refusal diagnostics.
-- 6: not yet written tests/test_stage2.py::test_repair_lifecycle_prompts_name_the_protected_fields — either route omits the keys, documents or restoration sentence.
-- 7: not yet written tests/test_stage2.py::test_repair_status_changes_are_hand_repairs — workflow or orchestrator instructions omit the exception to automated repair.
+- 1: tests/test_stage2.py::test_repair_lifecycle_fields_are_restored_before_verification — distinct values or removed keys reach the verifier or checkpoint.
+- 2: tests/test_stage2.py::test_repair_lifecycle_fields_survive_failed_attempts — a parameterized early exit, retry or exhaustion leaves changed fields.
+- 2: tests/test_stage2.py::test_repair_lifecycle_recovery_keeps_safety_refusals — an unsafe destination is written or moved HEAD is reset.
+- 3: tests/test_stage2.py::test_repair_lifecycle_restoration_preserves_other_edits — valid body/header edits or runner time disappear, or a field edit alone rejects the repair.
+- 4: tests/test_stage2.py::test_repair_lifecycle_protection_allows_no_design — absent optional design is created or the repair is refused.
+- 5: tests/test_stage2.py::test_repair_lifecycle_report_describes_each_attempt — accepted, rejected or unchanged attempts lack an accurate report, including safety refusal diagnostics.
+- 6: tests/test_stage2.py::test_repair_lifecycle_prompts_name_the_protected_fields — either route omits the keys, documents or restoration sentence.
+- 7: tests/test_stage2.py::test_repair_status_changes_are_hand_repairs — workflow or orchestrator instructions omit the exception to automated repair.
 
 ## Not touched
 
@@ -115,3 +115,6 @@ No standalone design: the class is bounded. The orchestrator owns the one
 held prompt edit; all other held paths remain outside the implementation.
 
 ## Time used
+
+2026-11-06 00:58:03–02:34:23 UTC, 5779 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 02:34:40–04:14:38 UTC, 5998 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
