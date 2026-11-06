@@ -2927,8 +2927,9 @@ def rejected_review_block(answer: str, thread: str) -> str:
 def review_audit_only(before: bytes, after: bytes) -> bool:
     """Admit only runner call lines outside byte-identical phase-6 blocks.
 
-    Remove each call's blank separator with it; all other bytes, including headers,
-    reviewer sessions and verdicts, remain review inputs and must match HEAD.
+    Remove each call's blank separator with it and permit append's current-date
+    header stamp. All other bytes, including reviewer sessions and verdicts,
+    remain review inputs and must match HEAD.
     """
 
     def phase6_blocks(body: bytes) -> list[bytes]:
@@ -2953,16 +2954,24 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
         rb" \xc2\xb7 endpoint [a-z0-9-]+ \xc2\xb7 model [A-Za-z0-9_./:+-]+(?: \xc2\xb7 reason [^\r\n]+)?"
         rb" \xc2\xb7 leak check clean over \d+ files, \d+ commits, \d+ rules\.(?=\n|$)"
     )
-    return call.sub(b"", before) == call.sub(b"", after)
+    clean_before, clean_after = call.sub(b"", before), call.sub(b"", after)
+    if clean_before == clean_after:
+        return True
+    try:
+        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), dt.date.today()).encode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return stamped == clean_after
 
 
 def require_fresh_full_verification(root: Path, change: str) -> None:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
 
     A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
-    committed head, except runner call audit lines in this change's `findings.md` outside
-    byte-identical phase-6 blocks. Review reads its phase and session markers before the runner
-    writes any audit. The head, index and tree must be the same after the check as before.
+    committed head, except runner call audit lines and their current-date header stamp in
+    this change's `findings.md` outside byte-identical phase-6 blocks. Review reads its phase and
+    session markers before the runner writes any audit. The head, index and tree must be the same
+    after the check as before.
     The check runs on every phase-6 invocation, a re-check included, and leaves no receipt: it
     measures the head being reviewed.
     A dirty tree or a changed head or tree refuses; a red, unstartable or timed-out check fails the call.

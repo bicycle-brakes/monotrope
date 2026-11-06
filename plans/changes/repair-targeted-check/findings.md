@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-31
 created: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-gxwg
@@ -658,6 +658,38 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 > ````
 
 Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3340 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Stage-2 call, 2026-11-05: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3345 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-05
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:2956 | A runner call appended on the day after `findings.md` was committed also updates its `updated:` header. `review_audit_only()` removes the call line but retains that date difference, so review refuses before running full verification despite having only runner-owned audit changes. Reproduced in memory using the actual `append()` and comparison functions: the appended result is rejected; restoring only the previous date makes it pass. The permitted audit changes must accommodate the runner's date stamp. [Acceptance criterion 9; plan step 5] | Codex | fixed — tests/test_stage2.py::test_review_accepts_runner_audit_date_stamp | — |
+
+Phase 6 verdict: codex 01a1acfc-59f3-70a1-a815-efa0e36485a3, 2026-11-05
+Reviewer session: codex 01a1acfc-59f3-70a1-a815-efa0e36485a3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 867 files, 3345 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +15 -6
+> - `tests/test_stage2.py` +37 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-targeted-check/stage2/attempts/repair-targeted-check/attempt-1-20261105T185902903541Z-655e5076.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 867 files, 3346 commits, 12 rules.
 
 > Runner verification scope:
 > - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure

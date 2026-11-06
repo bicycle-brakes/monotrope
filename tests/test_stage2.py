@@ -21012,6 +21012,43 @@ def test_review_admits_only_runner_audit_changes_outside_phase6(
     assert bool(world.calls("codex")) == accepted
 
 
+@pytest.mark.parametrize("case", ["disk", "staged", "wrong-date", "other-header", "phase6"])
+def test_review_accepts_runner_audit_date_stamp(world: World, case: str) -> None:
+    """F6-3: append's next-day stamp passes, but other header dates/inputs and phase-6 edits do not.
+
+    Planted fault: stripping only the call line rejects the real append's updated header before make runs.
+    """
+    yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    world.findings.write_text(
+        old_header(yesterday)
+        + "\n## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n"
+        + "\n## Phase 4b — released loop rows\n"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed yesterday's committed review inputs")
+    stage2.append(
+        world.findings,
+        f"Stage-2 call, {stage2.today()}: repair · attempt 1 · route codex · endpoint openai-codex · "
+        "model gpt-6.1-sol · leak check clean over 867 files, 3326 commits, 12 rules.",
+    )
+    body = world.text()
+    assert f"updated: {stage2.today()}\n" in body
+    if case == "wrong-date":
+        body = body.replace(f"updated: {stage2.today()}", "updated: 2099-01-01")
+    elif case == "other-header":
+        body = body.replace("title: Findings", "title: Changed")
+    elif case == "phase6":
+        body = body.replace("No finding.", "Changed verdict.")
+    world.findings.write_text(body)
+    if case == "staged":
+        git(world.root, "add", "--", str(world.findings))
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    accepted = case in ("disk", "staged")
+    assert world.run("review") == (0 if accepted else 2)
+    assert len(world.calls("make")) == int(accepted)
+    assert bool(world.calls("codex")) == accepted
+
+
 @pytest.mark.parametrize("change", ["remove-phase6", "edit-phase6", "delete", "append"])
 def test_review_refuses_dirty_findings_inputs(world: World, change: str) -> None:
     world.write_findings("## Phase 2a — Codex\nReviewer session: codex T2", "## Phase 6 — Codex\nNo finding.")
