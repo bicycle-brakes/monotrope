@@ -1009,3 +1009,85 @@ def test_installation_refuses_an_unassessed_go_row(world, tmp_path, base):
             stage2, tmp_path, go_store(row(TEST_LADDER[0], baseUrl=base)), model=TEST_LADDER[0], address=policy
         )
     assert not (tmp_path / "models.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# The native wire APIs (go-wire-apis, criterion 6)
+# ---------------------------------------------------------------------------
+
+
+NEW_API_BASES = {
+    "anthropic-messages": "https://opencode.ai/inference/go/anthropic",
+    "openai-responses": "https://opencode.ai/inference/go/openai/v1",
+    "google-generative-ai": "https://opencode.ai/inference/go/google/v1beta",
+}
+
+
+@pytest.mark.parametrize("api", sorted(NEW_API_BASES))
+def test_native_api_probes_keep_their_assessed_destinations(world, monkeypatch, api):
+    """Each new wire API's probe keeps its own assessed destination, explicit base and absent base alike.
+
+    The record maps the API; the probe dispatches on an explicit base and on an
+    absent base, and the sending configuration Pi consumes carries that API's
+    own base each time. A configuration whose wire API was swapped behind
+    dispatch's back and a foreign-host row may not send.
+    """
+    base = NEW_API_BASES[api]
+    edit_entry(
+        world,
+        lambda e: e["adresse"]["apis"].update(
+            {api: {"basis": base, "quelle": "the synthetic native record (go-wire-apis)", "gelesen": "2026-11-06"}}
+        ),
+    )
+    model = TEST_LADDER[0]
+    harness = Harness(world, monkeypatch)
+    installed: list[tuple] = []
+    original = stage2.dispatch_go
+
+    def reading_dispatch(root, model_arg, send, *args, **kwargs):
+        """Read the configuration artifact the launch will consume; change nothing."""
+        config = kwargs.get("configuration")
+        if config is not None:
+            content = json.loads(Path(config).read_text(encoding="utf-8"))
+            rows = (
+                [content["model"]]
+                if Path(config).name == "checked-model.json"
+                else content["providers"]["opencode-go"]["models"]
+            )
+            installed.extend((one.get("api"), one.get("baseUrl")) for one in rows)
+        return original(root, model_arg, send, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "dispatch_go", reading_dispatch)
+    # The explicit base dispatches, and the sending configuration carries it.
+    explicit_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl=base)))
+    explicit_call()
+    assert installed == [(api, base)], f"{api}: the sending configuration carried {installed}"
+    # The absent base resolves to the same API's own mapping, never another API's default.
+    bare = row(model, api=api)
+    del bare["baseUrl"]
+    bare_call, _audit = harness.probe(model, go_store(bare))
+    bare_call()
+    assert installed == [(api, base), (api, base)], f"{api}: the absent base resolved to {installed}"
+    assert len(harness.sent) == 2, "a resolved native probe failed to dispatch"
+
+    # Plant: the installed configuration swaps the wire API behind dispatch's back.
+    def swapped_dispatch(root, model_arg, send, *args, **kwargs):
+        config = kwargs.get("configuration")
+        if config is not None:
+            content = json.loads(Path(config).read_text(encoding="utf-8"))
+            for one in content["providers"]["opencode-go"]["models"]:
+                one["api"] = "openai-completions"
+            Path(config).write_text(json.dumps(content), encoding="utf-8")
+        return original(root, model_arg, send, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "dispatch_go", swapped_dispatch)
+    swapped_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl=base)))
+    with pytest.raises(stage2.Refused, match="configuration"):
+        swapped_call()
+    monkeypatch.setattr(stage2, "dispatch_go", original)
+    # Plant: a foreign host under the new mapping refuses before anything is installed.
+    foreign_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl="https://evil.test/go/v1")))
+    with pytest.raises(stage2_go.DestinationRefused, match="not the admitted host"):
+        foreign_call()
+    assert len(harness.sent) == 2, "a mismatched configuration or a foreign host reached a send"
+    assert installed == [(api, base), (api, base)], "a refused probe rewrote the dispatch evidence"

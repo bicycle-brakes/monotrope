@@ -538,18 +538,30 @@ def _address_problems(entry: dict) -> list[str]:
     return problems
 
 
+# The four wire APIs this repository supports on Go (go-wire-apis, criterion 4):
+# the shipped Chat Completions API plus the three native APIs the change measures.
+SUPPORTED_WIRE_APIS = {"openai-completions", "anthropic-messages", "openai-responses", "google-generative-ai"}
+
+
 def _address_fixture() -> dict:
-    """The minimal valid record, as the orchestrator's bootstrap will declare it."""
+    """The minimal valid record, as the orchestrator's bootstrap will declare it.
+
+    Responses legitimately shares the completions base: the adapters append
+    different routes to the same base.
+    """
+    bases = {
+        "openai-completions": "https://opencode.ai/inference/go/openai/v1",
+        "anthropic-messages": "https://opencode.ai/inference/go/anthropic",
+        "openai-responses": "https://opencode.ai/inference/go/openai/v1",
+        "google-generative-ai": "https://opencode.ai/inference/go/google/v1beta",
+    }
     return {
         "name": "opencode-go",
         "adresse": {
             "host": "opencode.ai",
             "apis": {
-                "openai-completions": {
-                    "basis": "https://opencode.ai/zen/go/v1",
-                    "quelle": "https://opencode.ai/docs/go",
-                    "gelesen": "2026-10-31",
-                }
+                api: {"basis": base, "quelle": "https://opencode.ai/docs/go", "gelesen": "2026-10-31"}
+                for api, base in bases.items()
             },
         },
     }
@@ -577,6 +589,14 @@ ADDRESS_FAULTS = {
     "blank-source": lambda e: e["adresse"]["apis"]["openai-completions"].update(quelle="   "),
     "native-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen=dt.date(2026, 10, 31)),
     "impossible-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen="2026-13-45"),
+    # The same strictness on the new native rows: an unsourced, undated or
+    # invalid base of any measured API must not load (go-wire-apis, criterion 4).
+    "messages-unsourced": lambda e: e["adresse"]["apis"]["anthropic-messages"].pop("quelle"),
+    "responses-undated": lambda e: e["adresse"]["apis"]["openai-responses"].pop("gelesen"),
+    "google-impossible-date": lambda e: e["adresse"]["apis"]["google-generative-ai"].update(gelesen="2026-13-45"),
+    "google-foreign-base": lambda e: e["adresse"]["apis"]["google-generative-ai"].update(
+        basis="https://elsewhere.invalid/google/v1beta"
+    ),
 }
 
 
@@ -914,6 +934,52 @@ def test_seat_candidate_lists_and_availability_rule_are_validated() -> None:
     assert not any("q-flash" in problem for problem in stage2_swarm.seat_problems(data))
 
 
+def _measured_apis_problems(data: dict) -> list[str]:
+    """Why the measured-API list and the one address record disagree, outside the supported four.
+
+    go-wire-apis, criterion 4: a measured API without its address-record
+    mapping, a mapped API the measurement never named, an unrelated API, and
+    anything outside the supported four each fail. The check applies to the
+    real declaration and to the planted faults below alike; before the
+    orchestrator's bootstrap it passes the old single-API declaration.
+    """
+    problems: list[str] = []
+    rule = (data.get("research_swarm") or {}).get("availability_preflight") or {}
+    measured = rule.get("measured_wire_apis")
+    if not isinstance(measured, list) or not measured or not all(isinstance(api, str) for api in measured):
+        return ["measured_wire_apis is not a nonempty list of names"]
+    if len(set(measured)) != len(measured):
+        problems.append("measured_wire_apis repeats a name")
+    unsupported = sorted(set(measured) - SUPPORTED_WIRE_APIS)
+    if unsupported:
+        problems.append(f"measured_wire_apis leaves the supported four: {unsupported}")
+    entry = next((e for e in data.get("endpunkte") or [] if e.get("name") == "opencode-go"), {})
+    mapped = set((entry.get("adresse") or {}).get("apis") or {})
+    for api in sorted(set(measured) - mapped):
+        problems.append(f"{api}: measured without an address-record mapping")
+    for api in sorted(mapped - set(measured)):
+        problems.append(f"{api}: mapped without being measured")
+    unrelated = sorted(mapped - SUPPORTED_WIRE_APIS)
+    if unrelated:
+        problems.append(f"the address record maps unsupported wire APIs: {unrelated}")
+    return problems
+
+
+def _measured_synthetic(measured: list[str], mapped: set[str]) -> dict:
+    """A declaration shaped as the completed change's bootstrap declares it: measured list and mappings given."""
+    return {
+        "endpunkte": [
+            {
+                "name": "opencode-go",
+                "adresse": {"host": "opencode.ai", "apis": {api: {} for api in sorted(mapped)}},
+            }
+        ],
+        "research_swarm": {
+            "availability_preflight": {"measured_wire_apis": list(measured)},
+        },
+    }
+
+
 def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     import sys
 
@@ -932,8 +998,47 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     ]
     assert block["online_seats"] == [{"endpoint": "opencode-go"}] * 3
     rule = block["availability_preflight"]
-    assert rule["max_age_seconds"] == 900 and rule["measured_wire_apis"] == ["openai-completions"]
+    assert rule["max_age_seconds"] == 900
     assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
+    # go-wire-apis, criterion 4: the measured list, the address record's mappings
+    # and the supported four agree - an unmeasured API or a measured API without
+    # its mapping passes nothing.
+    assert _measured_apis_problems(geladen) == []
+    # The check's own teeth: each planted fault names its disagreement, on a
+    # synthetic declaration shaped as the completed change's bootstrap declares.
+    assert _measured_apis_problems(_measured_synthetic(sorted(SUPPORTED_WIRE_APIS), SUPPORTED_WIRE_APIS)) == []
+    faults = {
+        "measured-without-mapping": (
+            sorted(SUPPORTED_WIRE_APIS),
+            SUPPORTED_WIRE_APIS - {"anthropic-messages"},
+            "measured without an address-record mapping",
+        ),
+        "mapped-without-measured": (
+            sorted(SUPPORTED_WIRE_APIS - {"google-generative-ai"}),
+            SUPPORTED_WIRE_APIS,
+            "mapped without being measured",
+        ),
+        "unrelated-api": (
+            sorted(SUPPORTED_WIRE_APIS),
+            SUPPORTED_WIRE_APIS | {"other-wire"},
+            "unsupported wire APIs",
+        ),
+        "unsupported-measured": (
+            sorted(SUPPORTED_WIRE_APIS | {"some-new-wire"}),
+            SUPPORTED_WIRE_APIS,
+            "leaves the supported four",
+        ),
+        "repeated-name": (
+            ["openai-completions", "openai-completions"],
+            {"openai-completions"},
+            "repeats a name",
+        ),
+        "empty-measured": ([], {"openai-completions"}, "not a nonempty list"),
+    }
+    for name, (measured, mapped, expected) in faults.items():
+        found = _measured_apis_problems(_measured_synthetic(measured, mapped))
+        assert found, f"{name}: the fault passed the measured-API check"
+        assert any(expected in problem for problem in found), f"{name}: named {found}, not {expected!r}"
     # A model's data-terms record belongs to the review swarm's declaration (#157); until that merges,
     # only "not declared" may remain open here, never a shape or permission fault.
     open_problems = [p for p in stage2_swarm.seat_problems(geladen) if "is not declared" not in p]
