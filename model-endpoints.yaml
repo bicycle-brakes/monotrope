@@ -201,13 +201,13 @@ endpunkte:
       - beam-free
     modelle_terms:
       deepseek-v4.1-flash:
-        gelesen: "2026-10-29"
+        gelesen: "2026-11-06"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30; re-read 2026-11-06, the Go page now states it: 'The current agreement is valid through November 30, 2026.')"
         training: "Not used"
-        anfragen_5h: 34670
-        anfragen_gelesen: "2026-10-17"
+        anfragen_5h: 43330
+        anfragen_gelesen: "2026-11-06"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
         gelesen: "2026-11-03"
@@ -281,10 +281,10 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       deepseek-v4-pro:
-        gelesen: "2026-10-29"
+        gelesen: "2026-11-06"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30; re-read 2026-11-06, the Go page now states it: 'The current agreement is valid through November 30, 2026.')"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
@@ -491,6 +491,33 @@ endpunkte:
             with "Upstream request failed: Model is unavailable" (loop round 1
             and the runner's probe, both 2026-10-17); excluding it saves a
             call that fails every time until the model is served.
+        - id: iceman-contributor-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06 and picked as the whole
+            free swarm by prepare-loop; "contributor" ids on Go have meant
+            that request data may be used for training, and the maintainer's
+            decision of 2026-10-17 (question Q-12) keeps such models off. The
+            Go page's privacy table, read 2026-11-06, confirms it: 'Iceman
+            Contributor Free | Yes | Not ZDR'. A bridge until one central per-use-case model
+            policy exists (bead coding-harness-k0ub with coding-harness-wq1m);
+            maintainer, 2026-11-06, morning question Q-M9, option A.
+        - id: cat-jam-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06; the privacy table of the
+            Go page (https://opencode.ai/docs/go, read 2026-11-06) does not
+            list it, so its training and retention terms are unknown. Excluded
+            until the page lists it as not training on request data;
+            maintainer, 2026-11-06.
+        - id: longcat-2.5-preview-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06; the privacy table of the
+            Go page (https://opencode.ai/docs/go, read 2026-11-06) does not
+            list it (only LongCat-2.0), so its training and retention terms are
+            unknown. Excluded until the page lists it as not training on
+            request data; maintainer, 2026-11-06.
       input: implementation-diff
       hinweis: >-
         Class admission instead of individual declarations: every id this
