@@ -371,20 +371,30 @@ def test_other_conflicts_preserve_target(tmp_path: Path) -> None:
     world = World(tmp_path)
     world.branch("feat/clash")
     world.write_root("docs/guide.md", "branch line\n")
-    clash_head = world.commit_raw("branch writes the guide")
+    world.write_root("src/tool.py", "VALUE = 'branch'\n")
+    clash_head = world.commit_raw("branch writes the guide and the tool")
     world.push("feat/clash")
     world.advance_main([("alpha/spec.md", "alpha-1"), ("delta/spec.md", "delta")])
     world.write_root("docs/guide.md", "main line\n")
-    world.commit_raw("main writes the guide differently")
+    world.write_root("src/tool.py", "VALUE = 'main'\n")
+    world.commit_raw("main writes the guide and the tool differently")
     _git(world.work, "push", "--quiet", "origin", "main")
 
     world.checkout("feat/clash")
     index_before = (world.work / "plans" / "INDEX.md").read_bytes()
+    git_index_before = (world.work / ".git" / "index").read_bytes()
+    guide_before = (world.work / "docs" / "guide.md").read_bytes()
+    tool_before = (world.work / "src" / "tool.py").read_bytes()
     done = world.run_merge_main()
     assert done.returncode == 1, done.stdout + done.stderr
     assert "docs/guide.md" in done.stdout, "the conflicting paths were not named"
+    assert "src/tool.py" in done.stdout, "a second conflicting path was omitted"
     assert _git(world.work, "rev-parse", "HEAD") == clash_head, "the target branch moved despite the conflict"
     assert (world.work / "plans" / "INDEX.md").read_bytes() == index_before
+    assert (world.work / ".git" / "index").read_bytes() == git_index_before, "the Git index changed"
+    assert (world.work / "docs" / "guide.md").read_bytes() == guide_before, "a conflicted working file changed"
+    assert (world.work / "src" / "tool.py").read_bytes() == tool_before, "a conflicted working file changed"
+    assert _git(world.work, "status", "--porcelain") == "", "the invoking checkout is no longer clean"
     assert world.origin_ref("refs/heads/feat/clash") == clash_head
 
 

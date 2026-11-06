@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-i76l
@@ -118,15 +118,21 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers — any approved marker prefix in an otherwise clean committed tree passes
-- 2: not yet written tests/test_check_conflict_markers.py::test_reports_all_marker_locations_without_writes — a path or line number is omitted or checking changes repository state
-- 3: not yet written tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured — a binary/untracked/exact fixture is rejected or a sibling fixture name bypasses scanning
-- 4: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage
-- 5: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete — a failed Git command or unreadable tracked file yields success
-- 6: not yet written tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path — the declared command, enforcement, placement or docs membership differs, or derived commands/workflow omit it
+- 1: tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers — any approved marker prefix in an otherwise clean committed tree passes
+- 2: tests/test_check_conflict_markers.py::test_reports_all_marker_locations_without_writes — a path or line number is omitted or checking changes repository state
+- 3: tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured — a binary/untracked/exact fixture is rejected or a sibling fixture name bypasses scanning
+- 4: tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage
+- 5: tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete — a failed Git command or unreadable tracked file yields success
+- 6: tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path — the declared command, enforcement, placement or docs membership differs, or derived commands/workflow omit it
 - 7: tests/test_pr_sync.py::test_other_conflicts_preserve_target — an ordinary conflict succeeds, omits paths or changes the branch, index, checkout or remote
 - 7: tests/test_pr_sync.py::test_index_only_conflict_is_regenerated — the existing generated-index exception stops working
-- 8: not yet written tests/test_check_conflict_markers.py::test_gate_and_tests_travel_with_the_kit — either new path is absent from the mechanism copy
+- 8: tests/test_check_conflict_markers.py::test_gate_and_tests_travel_with_the_kit — either new path is absent from the mechanism copy
 - 8: not a test — python3 scripts/kit/probe.py exercises the isolated copy; a new failure caused by the scanner or its tests refutes portability
 
+## Runner route — 2026-11-06
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Sonnet 5.5 attempts on 2026-11-05/06 failed on the CI-caller entry and then on tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured.
+
 ## Time used
+
+2026-11-05 23:48:52–2026-11-06 00:35:02 UTC, 2770 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
