@@ -153,16 +153,19 @@ at draft base `8be8751e` (2026-11-06). Do not build it here or claim a pass.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_archive_closed_changes.py::test_only_closed_single_bead_folders_are_selected — an eligible folder is omitted or an open, unknown, mixed, empty, archived or living folder is selected without the required skip report.
-- 2: not yet written tests/test_archive_closed_changes.py::test_default_cli_and_make_are_read_only — reporting changes any file, calls a tracker writer or invokes a mutating Git command.
-- 3: not yet written tests/test_archive_closed_changes.py::test_write_moves_complete_folder_on_captured_day — a source remains, a companion/body changes, or the date/name differs.
-- 4: not yet written tests/test_archive_closed_changes.py::test_only_lifecycle_header_fields_change — any required field is wrong or an unrelated field/body changes.
-- 5: not yet written tests/test_archive_closed_changes.py::test_index_matches_registry_after_archive — generated rows differ or registry closed-active coupling remains for the moved fixtures.
-- 5: not yet written tests/test_archive_closed_changes.py::test_archiving_does_not_exempt_criterion_ledger — a deliberately invalid post-cutoff ledger stops failing solely because it moved.
-- 6: not yet written tests/test_archive_closed_changes.py::test_preflight_failure_leaves_entire_batch_unchanged — broken render, duplicate IDs, malformed header, collision or symlink allows a mutation.
-- 7: not yet written tests/test_archive_closed_changes.py::test_write_failure_reports_partial_work — injected move/index failure returns success, overwrites evidence or hides completed/unfinished work.
-- 8: not yet written tests/test_archive_closed_changes.py::test_successful_repeat_is_byte_identical — rerunning restamps history, creates another copy or rewrites an unchanged index.
-- 9: not yet written tests/test_archive_closed_changes.py::test_post_merge_procedure_orders_archive_after_closure — the procedure omits or misorders the write command, or tells a session to mutate another checkout; orchestrator adds after bootstrap.
+- 1: tests/test_archive_closed_changes.py::test_only_closed_single_bead_folders_are_selected — an eligible folder is omitted or an open, unknown, mixed, empty, archived or living folder is selected without the required skip report.
+- 2: tests/test_archive_closed_changes.py::test_default_cli_and_make_are_read_only — reporting changes any file, calls a tracker writer or invokes a mutating Git command.
+- 3: tests/test_archive_closed_changes.py::test_write_moves_complete_folder_on_captured_day — a source remains, a companion/body changes, or the date/name differs.
+- 4: tests/test_archive_closed_changes.py::test_only_lifecycle_header_fields_change — any required field is wrong or an unrelated field/body changes.
+- 5: tests/test_archive_closed_changes.py::test_index_matches_registry_after_archive — generated rows differ or registry closed-active coupling remains for the moved fixtures.
+- 5: tests/test_archive_closed_changes.py::test_archiving_does_not_exempt_criterion_ledger — a deliberately invalid post-cutoff ledger stops failing solely because it moved.
+- 6: tests/test_archive_closed_changes.py::test_preflight_failure_leaves_entire_batch_unchanged — broken render, duplicate IDs, malformed header, collision or symlink allows a mutation.
+- 7: tests/test_archive_closed_changes.py::test_write_failure_reports_partial_work — injected move/index failure returns success, overwrites evidence or hides completed/unfinished work.
+- 8: tests/test_archive_closed_changes.py::test_successful_repeat_is_byte_identical — rerunning restamps history, creates another copy or rewrites an unchanged index.
+- 9: tests/test_archive_closed_changes.py::test_post_merge_procedure_orders_archive_after_closure — the procedure omits or misorders the write command, or tells a session to mutate another checkout; orchestrator adds after bootstrap.
 - 10: not a test — the orchestrator's dated manifest, application transcript and before/after registry output in findings.md and the PR identify every moved file and show no eligible closed folder left active; any omission or unsupported all-drift-green claim refutes it.
 
 ## Time used
+
+2026-11-06 16:19:48–17:39:17 UTC, 4768 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 17:39:27–18:21:25 UTC, 2518 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
