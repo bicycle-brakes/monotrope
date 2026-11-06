@@ -93,13 +93,13 @@ instruction on a particular night.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_machine_facts.py::test_cli_prints_fresh_dated_machine_block — a field/stamp is absent or successive changed sources reuse stale values.
-- 2: not yet written tests/test_machine_facts.py::test_disk_reports_worktree_available_space — the wrong filesystem, used bytes, unit or scope is reported.
-- 3: not yet written tests/test_machine_facts.py::test_swap_reports_used_and_total_on_both_platforms — conversion or subtraction is wrong, or valid zero swap is unreadable.
-- 4: not yet written tests/test_machine_facts.py::test_worktrees_count_registered_non_bare_entries — main, linked, stale, bare or whitespace-path fixtures give an incorrect count.
-- 5: not yet written tests/test_machine_facts.py::test_jobs_use_existing_process_recognition — a real invocation is lost, a wrapper is counted, an attribution is guessed or raw arguments leak.
-- 6: not yet written tests/test_machine_facts.py::test_sources_fail_independently_without_becoming_a_gate — failure/timeout becomes zero, suppresses another field, leaks raw diagnostics or yields a failing valid invocation.
-- 7: not yet written tests/test_machine_facts.py::test_snapshot_is_local_and_read_only — a write, unexpected command, tracker/network access or state change occurs.
+- 1: tests/test_machine_facts.py::test_cli_prints_fresh_dated_machine_block — a field/stamp is absent or successive changed sources reuse stale values.
+- 2: tests/test_machine_facts.py::test_disk_reports_worktree_available_space — the wrong filesystem, used bytes, unit or scope is reported.
+- 3: tests/test_machine_facts.py::test_swap_reports_used_and_total_on_both_platforms — conversion or subtraction is wrong, or valid zero swap is unreadable.
+- 4: tests/test_machine_facts.py::test_worktrees_count_registered_non_bare_entries — main, linked, stale, bare or whitespace-path fixtures give an incorrect count.
+- 5: tests/test_machine_facts.py::test_jobs_use_existing_process_recognition — a real invocation is lost, a wrapper is counted, an attribution is guessed or raw arguments leak.
+- 6: tests/test_machine_facts.py::test_sources_fail_independently_without_becoming_a_gate — failure/timeout becomes zero, suppresses another field, leaks raw diagnostics or yields a failing valid invocation.
+- 7: tests/test_machine_facts.py::test_snapshot_is_local_and_read_only — a write, unexpected command, tracker/network access or state change occurs.
 - 7: not a test — phase-6 diff review verifies no admission, mutation or network path was introduced beyond the instrumented command tests.
 - 8: not a test — phase-6 review reads docs/orchestration.md for the exact command, display before lane startup, dated start-state recording and snapshot-only meaning; omission or a claimed gate refutes it.
 
@@ -115,4 +115,12 @@ on 2026-11-06, route flash, endpoint `glm-coding-plan`, model
 `glm-5.3-flash`; no Stage-1 fallback is recorded. The interview was skipped
 with the reason recorded in `decisions.md`; no maintainer answer is invented.
 
+## Runner route — 2026-11-06
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-06 00:58:23–02:11:13 UTC, 4370 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 02:11:26–03:01:55 UTC, 3029 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-06 03:02:09–03:26:11 UTC, 1442 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

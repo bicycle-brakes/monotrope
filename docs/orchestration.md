@@ -3,8 +3,8 @@ title: "Lanes — how one session runs several changes at once"
 category: architecture
 status: proposed
 created: 2026-10-28
-last_reviewed: 2026-11-02
-updated: 2026-11-02
+last_reviewed: 2026-11-06
+updated: 2026-11-06
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -21,7 +21,7 @@ so parallel lanes keep the work moving. The trial began with three lanes on
 night names how many. The limits are the machine's memory,
 the one local verification slot and the maintainer's attention, not the
 number of lanes. This page describes how this repository runs it as of
-2026-11-02. Much of it is still kept by hand.
+2026-11-06. Much of it is still kept by hand.
 
 ## What a lane is
 
@@ -58,6 +58,34 @@ then:
 4. **No restart after a memory stop without the maintainer's word.** The
    leftovers are committed unchanged, and the lane moves to its next remote
    step.
+
+## Machine facts at the start of a night run
+
+Before the first lane of a night run starts, the orchestrator reads the
+machine once and shows the result in the main conversation (bead
+coding-harness-yql7):
+
+```sh
+python3 scripts/machine_facts.py
+```
+
+The command runs from the worktree the night run drives and prints one dated
+block: free disk on the invoking worktree's filesystem, host-wide swap used
+and total, the repository's registered non-bare worktrees (main checkout
+included, stale registrations counted, bare entries not), and the runner and
+verification invocations the existing run report recognizes (one `ps`
+snapshot; each row carries process id, elapsed time, verb and change
+attribution where known, and a verify wrapper and its child are two
+invocations, not one logical job).
+
+Show the block in the main conversation before any lane starts, and copy it
+into the night plan's “State at the start”. The block is an **observation,
+not an admission verdict**: nothing is compared against a floor, nothing is
+refused, cleaned up, started, stopped or admitted. A source the command
+cannot read says `not read` with a short reason — never a zero — and the
+readable fields stay. The readings describe the one invocation only;
+rerunning the command later, for example the next morning, gives a fresh
+observation and adds no automation.
 
 ## Keeping every lane busy
 
