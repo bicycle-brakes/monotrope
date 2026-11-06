@@ -1546,3 +1546,61 @@ def test_impossible_exception_answer_or_context_is_not_measured(world: World, ca
     assert code == 3 and field in output and "Q-1" in output, output
     world.write([], records=[q_record(1, exception=GRANT)], research=False)
     assert world.check(capsys)[0] == 0
+
+
+@pytest.mark.parametrize("site", ["header", "exception", "answer", "links"])
+def test_impossible_yaml_dates_are_not_measured_at_every_reader(world: World, capsys, site) -> None:
+    record = q_record(1, exception=GRANT)
+    if site == "exception":
+        record = record.replace(GRANT, "research_swarm_exception: {granted: true, reason: 2026-02-30}")
+    elif site == "answer":
+        record = record.replace('answer: "yes"', "answer: 2026-02-30")
+    elif site == "links":
+        record += "research_items: [2026-02-30]\n"
+    world.write([], records=[record], research_day="2026-02-30" if site == "header" else NEW_DAY)
+    try:
+        code, output = world.check(capsys)
+    except ValueError as error:
+        pytest.fail(f"an impossible YAML date must be not measured, not a traceback: {error}")
+    assert code == 3 and "demo" in output, output
+    assert {
+        "header": "research.md",
+        "exception": "research_swarm_exception",
+        "answer": "answer",
+        "links": "research_items",
+    }[site] in output
+    world.write([], records=[q_record(1, exception=GRANT)])
+    assert world.check(capsys)[0] == 0
+
+
+@pytest.mark.parametrize("fault", ["two-records", "malformed"])
+def test_pre_spec_incomplete_run_does_not_read_exceptions(world: World, capsys, fault) -> None:
+    records = [q_record(1, exception=GRANT), q_record(2, exception=GRANT)]
+    if fault == "malformed":
+        records = [q_record(1, exception="research_swarm_exception: [not a grant]")]
+    runs = [run_text(RUN1, status="incomplete - stopped")]
+    world.write(runs, records=records, spec=None)
+    code, output = world.check(capsys)
+    assert code == 0 and "0 complete" in output, output
+    world.write(runs, records=records)
+    assert world.check(capsys)[0] == 3
+
+
+@pytest.mark.parametrize("klass,day", [("bounded", NEW_DAY), ("spike", NEW_DAY), ("feature", OLD_DAY)])
+def test_exempt_incomplete_runs_preserve_record_findings(world: World, capsys, klass, day) -> None:
+    runs = [run_text(RUN1, status="incomplete - stopped")]
+    world.write(runs, records=[q_record(1, add=["invalid/path"])], spec=spec_text(klass=klass), research_day=day)
+    code, output = world.check(capsys)
+    assert code == 1 and "three permitted spec forms" in output and "Q-1" in output, output
+    world.write(runs, records=[q_record(1, add=[P])], spec=spec_text(klass=klass), research_day=day)
+    assert world.check(capsys)[0] == 0
+
+
+def test_complete_new_run_requires_spec_class(world: World, capsys) -> None:
+    world.write([run_text(RUN1)], spec=spec_text(klass=None))
+    code, output = world.check(capsys)
+    assert code == 3 and "spec.md declares no class" in output, output
+    world.write([run_text(RUN1)])
+    assert world.check(capsys)[0] == 0
+    world.write([run_text(RUN1)], spec=spec_text(klass=None), research_day=OLD_DAY)
+    assert world.check(capsys)[0] == 0

@@ -143,8 +143,12 @@ def _construct_unique_mapping(loader: _UniqueKeyLoader, node: yaml.MappingNode, 
 _UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
 
 
-def _yaml_load(text: str) -> object:
-    return yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506 - SafeLoader subclass
+def _yaml_load(text: str, where: str) -> object:
+    """One boundary for unreadable YAML, including impossible timestamp values."""
+    try:
+        return yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506 - SafeLoader subclass
+    except (OSError, UnicodeError, yaml.YAMLError, ValueError) as error:
+        raise CannotMeasure(f"{where} is not readable ({error})") from error
 
 
 def _json(body: str, where: str) -> object:
@@ -525,10 +529,7 @@ def _exception_field(body: list[str], found: dict[str, int], label: str, ident: 
     """
     if "research_swarm_exception" not in found:
         return None
-    try:
-        loaded = _yaml_load(_snippet(body, found["research_swarm_exception"]))
-    except (yaml.YAMLError, ValueError) as error:
-        raise CannotMeasure(f"{label} {ident}: research_swarm_exception is not readable ({error})") from error
+    loaded = _yaml_load(_snippet(body, found["research_swarm_exception"]), f"{label} {ident}: research_swarm_exception")
     content = loaded.get("research_swarm_exception") if isinstance(loaded, dict) else None
     if not isinstance(content, dict):
         raise CannotMeasure(f"{label} {ident}: research_swarm_exception must be a mapping of granted and reason")
@@ -546,7 +547,9 @@ def _exception_field(body: list[str], found: dict[str, int], label: str, ident: 
     return content
 
 
-def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> dict[str, QRecord]:
+def parse_decisions(
+    text: str, label: str, *, read_exception: bool = True, linked_only: bool = False
+) -> dict[str, QRecord]:
     """Read research links; inspect exception fields only when a missing run is owed."""
     lines = _lines(text)
     fenced = _fenced_flags(lines)
@@ -593,10 +596,7 @@ def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> di
                 )
                 if prose:
                     snippet = "answer: " + prose.group(1)
-            try:
-                result = _yaml_load(snippet)
-            except (yaml.YAMLError, ValueError) as error:
-                raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
+            result = _yaml_load(snippet, f"{label} {ident}: {name}")
             return result.get(name) if isinstance(result, dict) else None
 
         def value(
@@ -625,6 +625,11 @@ def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> di
                     break
             return " ".join(tail).strip()
 
+        # Exempt stock still validates research directives, without parsing unrelated historical answers.
+        if linked_only and not any(
+            name in found for name in ("research_items", "research_claims", "research_neighbours")
+        ):
+            continue
         exception = _exception_field(body, found, label, ident)
         if exception is not None:
             # A grant never rests on a stringified value: answer and context must be text before the
@@ -638,10 +643,7 @@ def parse_decisions(text: str, label: str, *, read_exception: bool = True) -> di
         for name in ("research_items", "research_claims", "research_neighbours"):
             if name not in found:
                 continue
-            try:
-                parsed = _yaml_load(_snippet(body, found[name]))
-            except (yaml.YAMLError, ValueError) as error:
-                raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
+            parsed = _yaml_load(_snippet(body, found[name]), f"{label} {ident}: {name}")
             content = parsed.get(name) if isinstance(parsed, dict) else None
             where = f"{label} {ident}: {name}"
             if name == "research_items":
@@ -758,10 +760,7 @@ def _header(text: str, where: str = "spec.md") -> dict:
     matched = re.match(r"\A﻿?---\r?\n(.*?)^---[ \t]*\r?$", text, re.S | re.M)
     if not matched:
         return {}
-    try:
-        loaded = _yaml_load(matched.group(1))
-    except yaml.YAMLError as error:
-        raise CannotMeasure(f"{where}: the header is not readable ({error})") from error
+    loaded = _yaml_load(matched.group(1), f"{where}: the header")
     return loaded if isinstance(loaded, dict) else {}
 
 
@@ -828,12 +827,16 @@ class Outcome:
     notes: list[str] = field(default_factory=list)
 
 
-def _decisions(folder: Path, label: str, *, read_exception: bool = False) -> dict[str, QRecord]:
+def _decisions(
+    folder: Path, label: str, *, read_exception: bool = False, linked_only: bool = False
+) -> dict[str, QRecord]:
     """The change's Q-records; an unreadable file is not measured."""
     decisions = folder / "decisions.md"
     try:
         return (
-            parse_decisions(decisions.read_text(encoding="utf-8"), label, read_exception=read_exception)
+            parse_decisions(
+                decisions.read_text(encoding="utf-8"), label, read_exception=read_exception, linked_only=linked_only
+            )
             if decisions.is_file()
             else {}
         )
@@ -915,21 +918,27 @@ def _missing_complete_run(
         spec_body = (folder / "spec.md").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise CannotMeasure(f"{label}: spec.md cannot be read ({error})") from error
-    header = _header(spec_body)
+    header = _header(spec_body, f"{label}: spec.md")
     spec_class = header.get("class")
-    research_header = _header(research_text, "research.md") if research_text is not None else {}
+    research_header = _header(research_text, f"{label}: research.md") if research_text is not None else {}
     research_class = research_header.get("class")
     for source, klass in (("research.md", research_class), ("spec.md", spec_class)):
         if klass is not None and (not isinstance(klass, str) or klass not in CLASSES):
             raise CannotMeasure(f"{label}: {source} declares class {klass!r}, which is none of {', '.join(CLASSES)}")
     if spec_class is not None and research_class is not None and research_class != spec_class:
         raise CannotMeasure(f"{label}: research.md declares class {research_class!r} and spec.md {spec_class!r}")
+
+    def check_exempt_records() -> None:
+        if runs and not complete:
+            _check_records(out, label, _decisions(folder, label, linked_only=True), runs)
+
     if isinstance(spec_class, str) and spec_class in ("bounded", "spike"):
         out.notes.append(
             f"{label}: exempt - a {spec_class} change needs no complete research-swarm/v2 run (class exemption)"
         )
+        check_exempt_records()
         return out
-    if complete:
+    if complete and spec_class is not None:
         return out
     if research_text is not None:
         start = research_header.get("date")
@@ -944,12 +953,15 @@ def _missing_complete_run(
     adopted = _adopted(root)
     if start <= adopted:
         out.notes.append(_legacy_note(label, start, adopted))
+        check_exempt_records()
         return out
     if spec_class is None:
         raise CannotMeasure(
             f"{label}: spec.md declares no class; a change started after {adopted.isoformat()} must declare "
             f"one of {', '.join(CLASSES)}"
         )
+    if complete:
+        return out
     records = load_records()
     _check_records(out, label, records, runs or [])
     grants = [record for record in records.values() if record.exception is not None]
@@ -1039,14 +1051,14 @@ def check_change(folder: Path, label: str, root: Path) -> Outcome:
     def load_records() -> dict[str, QRecord]:
         nonlocal records
         if records is None:
-            records = _decisions(folder, label, read_exception=not complete)
+            records = _decisions(folder, label, read_exception=spec_exists and not complete)
         return records
 
     if spec_exists:
         _missing_complete_run(out, label, folder, root, load_records, research_text, complete=bool(complete), runs=runs)
         if not complete:
             # Applicability checks record links and directives before granting an exception.
-            # Exempt stock does not require a readable historical interview.
+            # Exempt stock checks research records without parsing unrelated historical answers.
             return out
     records = load_records()
     items = _items_of(complete)

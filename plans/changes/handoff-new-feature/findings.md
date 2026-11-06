@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-in27
@@ -455,3 +455,24 @@ Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 892 files, 3332 commits, 12 rules.
 
 Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3338 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 892 files, 3345 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3345 commits, 12 rules.
+
+Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 892 files, 3345 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/check_research_handoff.py` +38 -26
+> - `tests/test_research_handoff.py` +58 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/handoff-new-feature/stage2/attempts/handoff-new-feature/attempt-1-20261105T185902738410Z-430137b3.md
+> ```
+
+Stage-2 call, 2026-11-05: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 892 files, 3345 commits, 12 rules.

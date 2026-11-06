@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-05
+updated: 2026-11-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-in27
@@ -166,6 +166,8 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash fai
 2026-11-05 07:30:37–09:21:55 UTC, 6678 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 11:52:54–13:33:21 UTC, 6026 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-05 14:33:13–16:20:42 UTC, 6449 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-05 18:59:14–19:31:06 UTC, 1912 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-05 19:31:31–2026-11-06 00:59:46 UTC, 19693 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 
