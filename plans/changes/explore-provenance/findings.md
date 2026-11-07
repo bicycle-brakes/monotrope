@@ -793,3 +793,326 @@ Stage-2 call, 2026-11-06: draft · attempt 1 · route codex · endpoint openai-c
 Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 894 files, 3447 commits, 12 rules.
 
 Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 894 files, 3450 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 894 files, 3453 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/research.md` +2 -2
+> - `scripts/normalise_active_research.py` +117 -28
+> - `tests/test_explore_provenance.py` +136 -12
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> E         Left contains 78 more items, first extra item: "plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+> >       assert_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:133: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def assert_active_model_research_has_no_false_human_provenance() -> None:
+>         try:
+>             import normalise_active_research as normalise
+>         except ModuleNotFoundError as error:
+>             pytest.fail(f"Active research needs the complete metadata census and normaliser: {error}")
+>         affected = []
+>         for path in active_research_files():
+>             relative = path.relative_to(REPO_ROOT).as_posix()
+>             try:
+>                 text = path.read_bytes().decode("utf-8")
+>             except (OSError, UnicodeDecodeError):
+>                 affected.append(f"{relative}: unreadable file (not UTF-8)")
+>                 continue
+>             frontmatter = normalise.FRONTMATTER.match(text)
+>             if frontmatter is None:
+>                 affected.append(f"{relative}: unreadable header (no frontmatter)")
+>                 continue
+>             try:
+>                 header = yaml.safe_load(frontmatter.group(1))
+>             except (yaml.YAMLError, ValueError):
+>                 affected.append(f"{relative}: unreadable header (malformed YAML)")
+>                 continue
+>             if not isinstance(header, Mapping):
+>                 affected.append(f"{relative}: unreadable header (not a mapping)")
+>                 continue
+>             body = text[frontmatter.end() :]
+>             try:
+>                 program, publication_day = normalise.publication_evidence(body)
+>             except ValueError as error:
+>                 affected.append(f"{relative}: {error}")
+>                 program, publication_day = None, None
+>             producer = header.get("produced_by")
+>             model_written = normalise.model_attribution(producer)
+>             try:
+>                 historical = normalise.historical_research(REPO_ROOT, relative) if (REPO_ROOT / ".git").exists() else None
+>                 required = normalise.known_producers(text.encode("utf-8"), historical=historical)
+>             except (ValueError, OSError, yaml.YAMLError) as error:
+>                 affected.append(f"{relative}: producer history unreadable: {error}")
+>                 required = []
+>             if program or model_written or required or header.get("provenance") == "ai-drafted-reviewed":
+>                 affected.extend(
+>                     f"{relative}: {problem}"
+>                     for problem in normalise.metadata_problems(
+>                         header, frontmatter.group(1), program, publication_day, required_producers=required
+>                     )
+>                 )
+>                 try:
+>                     notices = stage2.research_opening_notices(text, frontmatter.end())
+>                 except AttributeError as error:
+>                     pytest.fail(f"The census requires the publisher's opening-notice detector: {error}")
+>                 if notices:
+>                     affected.append(f"{relative}: opening skeleton notice over published research")
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ["plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}", "plans/changes/adr-owning-change/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-12', 'model': 'glm-5.3-flash'}", "plans/changes/archite [… 13835 characters left out …]
+> E       assert ["plans/chang...flash'}", ...] == []
+> E         
+> E         Left contains 78 more items, first extra item: "plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_additional_backfills_identify_the_program_and_publication_day
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 74 passed in 25.59s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261107T002116398251Z-06d766cc.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 894 files, 3453 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> E         Left contains 78 more items, first extra item: "plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+> >       assert_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:133: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def assert_active_model_research_has_no_false_human_provenance() -> None:
+>         try:
+>             import normalise_active_research as normalise
+>         except ModuleNotFoundError as error:
+>             pytest.fail(f"Active research needs the complete metadata census and normaliser: {error}")
+>         affected = []
+>         for path in active_research_files():
+>             relative = path.relative_to(REPO_ROOT).as_posix()
+>             try:
+>                 text = path.read_bytes().decode("utf-8")
+>             except (OSError, UnicodeDecodeError):
+>                 affected.append(f"{relative}: unreadable file (not UTF-8)")
+>                 continue
+>             frontmatter = normalise.FRONTMATTER.match(text)
+>             if frontmatter is None:
+>                 affected.append(f"{relative}: unreadable header (no frontmatter)")
+>                 continue
+>             try:
+>                 header = yaml.safe_load(frontmatter.group(1))
+>             except (yaml.YAMLError, ValueError):
+>                 affected.append(f"{relative}: unreadable header (malformed YAML)")
+>                 continue
+>             if not isinstance(header, Mapping):
+>                 affected.append(f"{relative}: unreadable header (not a mapping)")
+>                 continue
+>             body = text[frontmatter.end() :]
+>             try:
+>                 program, publication_day = normalise.publication_evidence(body)
+>             except ValueError as error:
+>                 affected.append(f"{relative}: {error}")
+>                 program, publication_day = None, None
+>             producer = header.get("produced_by")
+>             model_written = normalise.model_attribution(producer)
+>             try:
+>                 historical = normalise.historical_research(REPO_ROOT, relative) if (REPO_ROOT / ".git").exists() else None
+>                 required = normalise.known_producers(text.encode("utf-8"), historical=historical)
+>             except (ValueError, OSError, yaml.YAMLError) as error:
+>                 affected.append(f"{relative}: producer history unreadable: {error}")
+>                 required = []
+>             if program or model_written or required or header.get("provenance") == "ai-drafted-reviewed":
+>                 affected.extend(
+>                     f"{relative}: {problem}"
+>                     for problem in normalise.metadata_problems(
+>                         header, frontmatter.group(1), program, publication_day, required_producers=required
+>                     )
+>                 )
+>                 try:
+>                     notices = stage2.research_opening_notices(text, frontmatter.end())
+>                 except AttributeError as error:
+>                     pytest.fail(f"The census requires the publisher's opening-notice detector: {error}")
+>                 if notices:
+>                     affected.append(f"{relative}: opening skeleton notice over published research")
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ["plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}", "plans/changes/adr-owning-change/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-12', 'model': 'glm-5.3-flash'}", "plans/changes/archite [… 13835 characters left out …]
+> E       assert ["plans/chang...flash'}", ...] == []
+> E         
+> E         Left contains 78 more items, first extra item: "plans/changes/adr-0016-docs-check/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-11-03', 'model': 'Opus 5.5'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_additional_backfills_identify_the_program_and_publication_day
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 74 passed in 47.71s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-2-20261107T002116398251Z-06d766cc.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 894 files, 3453 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/adr-0016-docs-check/research.md` +2 -2
+> - `plans/changes/adr-owning-change/research.md` +2 -2
+> - `plans/changes/architecture-reconcile/research.md` +2 -2
+> - `plans/changes/attempt-diagnostics/research.md` +2 -2
+> - `plans/changes/beads-close-themselves/research.md` +2 -2
+> - `plans/changes/codex-drafts/research.md` +2 -2
+> - `plans/changes/codex-repairs/research.md` +2 -2
+> - `plans/changes/codex-takeover/research.md` +2 -2
+> - `plans/changes/dirty-index/research.md` +2 -2
+> - `plans/changes/docs-job-report-header/research.md` +2 -2
+> - `plans/changes/draft-gates-only/research.md` +2 -2
+> - `plans/changes/explore-role/research.md` +2 -2
+> - `plans/changes/explorer-reviewer-agents/research.md` +2 -2
+> - `plans/changes/failed-check-secrets/research.md` +2 -2
+> - `plans/changes/failed-check-spans/research.md` +2 -2
+> - `plans/changes/free-member-rate-limit/research.md` +2 -2
+> - `plans/changes/go-access-point/research.md` +2 -2
+> - `plans/changes/guard-test/research.md` +2 -2
+> - `plans/changes/haiku-5-5/research.md` +2 -2
+> - `plans/changes/index-merge-regenerates/research.md` +2 -2
+> - `plans/changes/interview-context/research.md` +2 -2
+> - `plans/changes/interview-fenced-examples/research.md` +2 -2
+> - `plans/changes/kimi-admission/research.md` +2 -2
+> - `plans/changes/ledger-instance-layout/research.md` +2 -2
+> - `plans/changes/ledger-marker/research.md` +2 -2
+> - `plans/changes/loop-until-clean/research.md` +2 -2
+> - `plans/changes/malformed-answer-retry/research.md` +2 -2
+> - `plans/changes/merge-queue/research.md` +2 -2
+> - `plans/changes/mutation-evidence-module/research.md` +2 -2
+> - `plans/changes/pi-catalog-redirect/research.md` +2 -2
+> - `plans/changes/pi-pin/research.md` +2 -2
+> - `plans/changes/plan-held-paths/research.md` +2 -2
+> - `plans/changes/provenance-location/research.md` +2 -2
+> - `plans/changes/raising-fault-test/research.md` +2 -2
+> - `plans/changes/ratchet-mutation-evidence/research.md` +2 -2
+> - `plans/changes/red-first-install/research.md` +2 -2
+> - `plans/changes/red-first-own-refs/research.md` +2 -2
+> - `plans/changes/red-first-pytest-failed/research.md` +2 -2
+> - `plans/changes/registry-block-last/research.md` +2 -2
+> - `plans/changes/repair-fixed-line-format/research.md` +2 -2
+> - … and 25 more files
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> E         Left contains 2 more items, first extra item: "plans/changes/fail-fast-attempts/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-28', 'model': 'glm-5.3-flash'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+> >       assert_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:133: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def assert_active_model_research_has_no_false_human_provenance() -> None:
+>         try:
+>             import normalise_active_research as normalise
+>         except ModuleNotFoundError as error:
+>             pytest.fail(f"Active research needs the complete metadata census and normaliser: {error}")
+>         affected = []
+>         for path in active_research_files():
+>             relative = path.relative_to(REPO_ROOT).as_posix()
+>             try:
+>                 text = path.read_bytes().decode("utf-8")
+>             except (OSError, UnicodeDecodeError):
+>                 affected.append(f"{relative}: unreadable file (not UTF-8)")
+>                 continue
+>             frontmatter = normalise.FRONTMATTER.match(text)
+>             if frontmatter is None:
+>                 affected.append(f"{relative}: unreadable header (no frontmatter)")
+>                 continue
+>             try:
+>                 header = yaml.safe_load(frontmatter.group(1))
+>             except (yaml.YAMLError, ValueError):
+>                 affected.append(f"{relative}: unreadable header (malformed YAML)")
+>                 continue
+>             if not isinstance(header, Mapping):
+>                 affected.append(f"{relative}: unreadable header (not a mapping)")
+>                 continue
+>             body = text[frontmatter.end() :]
+>             try:
+>                 program, publication_day = normalise.publication_evidence(body)
+>             except ValueError as error:
+>                 affected.append(f"{relative}: {error}")
+>                 program, publication_day = None, None
+>             producer = header.get("produced_by")
+>             model_written = normalise.model_attribution(producer)
+>             try:
+>                 historical = normalise.historical_research(REPO_ROOT, relative) if (REPO_ROOT / ".git").exists() else None
+>                 required = normalise.known_producers(text.encode("utf-8"), historical=historical)
+>             except (ValueError, OSError, yaml.YAMLError) as error:
+>                 affected.append(f"{relative}: producer history unreadable: {error}")
+>                 required = []
+>             if program or model_written or required or header.get("provenance") == "ai-drafted-reviewed":
+>                 affected.extend(
+>                     f"{relative}: {problem}"
+>                     for problem in normalise.metadata_problems(
+>                         header, frontmatter.group(1), program, publication_day, required_producers=required
+>                     )
+>                 )
+>                 try:
+>                     notices = stage2.research_opening_notices(text, frontmatter.end())
+>                 except AttributeError as error:
+>                     pytest.fail(f"The census requires the publisher's opening-notice detector: {error}")
+>                 if notices:
+>                     affected.append(f"{relative}: opening skeleton notice over published research")
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ["plans/changes/fail-fast-attempts/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-28', 'model': 'glm-5.3-flash'}", "plans/changes/guard-test/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-29'}"]
+> E       assert ["plans/chang...2026-10-29'}"] == []
+> E         
+> E         Left contains 2 more items, first extra item: "plans/changes/fail-fast-attempts/research.md: produced_by: missing known contribution {'kind': 'llm-session', 'name': 'claude-code', 'version': '2026-10-28', 'model': 'glm-5.3-flash'}"
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:77: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_additional_backfills_identify_the_program_and_publication_day
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 74 passed in 55.66s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261107T002116398251Z-06d766cc.md
+> ```
