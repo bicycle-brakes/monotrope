@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-x2g9
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: "glm-5.3-flash; codex gap check", version: "2026-11-07"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -76,3 +78,27 @@ Research complete. Here is the repository research for `address-drift-warning`, 
 Depending on which open question the interview settles: `scripts/stage2_go.py` (notice wording or assessment behaviour); `scripts/stage2.py` (`activate_overlay`, `check_overlay`, the free-stage listing flow, `run_reviewer`, the review-loop notice evidence); `scripts/stage2_swarm.py` (`select_research_catalog` notices); `scripts/stage2_availability.py` (`install_measured_models`, `probe_go`, the availability report lines and snapshot keys); `scripts/stage2_session.py` (`checked_session_model`) — with their tests (`tests/test_stage2_go_access.py`, `tests/test_stage2.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_session.py`, `tests/test_stage2_session_policy.py`, `tests/test_pi_contract.py`, `tests/test_model_endpoints.py`). A record update touches `model-endpoints.yaml` (orchestrator route only) and the `bemerkung` prose; doctrine changes touch `docs/WORKFLOW.md` and, if one were needed, a new ADR file under `docs/adr/`. This change's own folder `plans/changes/address-drift-warning/` and `plans/INDEX.md` (regenerated) follow in every case.
 
 **Neighbours known** (for the header): `plans/changes/go-access-point/spec.md` (direct predecessor; also its `research.md`, `decisions.md`, `plan.md`, `findings.md`), `plans/changes/pi-catalog-redirect/spec.md`, `plans/changes/research-swarm/spec.md`, `plans/changes/pi-pin/spec.md`, `plans/changes/kimi-admission/spec.md`, `plans/changes/terms-expiry/spec.md`, `plans/changes/review-loop-deep-b/spec.md`, `plans/changes/registry-block-last/spec.md`.
+
+## Draft gap check — 2026-11-07
+
+Codex inspected the worktree at `a40f22e5` for the approved bounded warning
+change (`decisions.md#Q-1`); this addendum preserves the exploration above.
+An offline call to `stage2_go.assess`, using a synthetic address record with
+only `openai-completions`, returned `admitted=True` with a path notice for a
+mapped API's same-host move, but `admitted=True, notice=None` for
+`anthropic-messages` with an explicit valid same-host base. The branch
+`recorded is None or _same_path(recorded, observed)` returns without notice.
+Thus the exploration's description of unmapped-API refusal applies to an
+absent base; an explicit admitted base is a distinct, silent case.
+
+In `stage2_swarm.select_research_catalog`, `address_notice` is called only
+after candidate/seat eligibility succeeds; a paid row excluded with
+`wire-api-not-measured` contributes no notice. Review overlay activation,
+probe preparation, research launch and initial session binding already pass
+`Assessment.notice` to their existing evidence channels. Extending that
+notice and collecting it before research eligibility can expose the remaining
+API difference without changing destination or model admission. No live
+catalog, documentation page, tracker render or remote PR state was read in
+this draft check. The class comes from the answered decision, not a new
+classification; address-record maintenance and notice-volume changes are
+outside that answer's warning-only scope.
