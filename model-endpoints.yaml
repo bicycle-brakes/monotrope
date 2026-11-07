@@ -582,9 +582,11 @@ endpunkte:
       shipped catalog; `gpt-6-luna` uses openai-responses. Until 2026-11-06
       all four were skipped: wire API not measured. On 2026-11-06 Messages
       and Responses were measured live (docs/research/2026-11-06-go-wire-apis.md):
-      `qwen3.8-flash` and `minimax-m3` run; `claude-haiku-5-5` stays skipped
-      for Pi's thinking setting and `gpt-6-luna` for a 403. Google is not
-      measured (no admissible model, bead coding-harness-twdu).
+      `qwen3.8-flash`, `qwen3.7-plus`, `qwen3.8-max`, `minimax-m3` and
+      `grok-4.7` run; `claude-haiku-5-5` stays skipped for Pi's thinking
+      setting, `gpt-6-luna` and `gpt-5.6-luna` for a 403. Google is not
+      measured (`gemini-4-argon` stays skipped: no admissible model, bead
+      coding-harness-twdu).
       On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
       Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
       models `https://opencode.ai/inference/go/v1/models`) and Pi's live

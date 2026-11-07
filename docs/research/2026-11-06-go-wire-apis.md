@@ -69,6 +69,7 @@ above.
 
 ## Open
 
-Criterion "three APIs measured" is **not met**: Google has no representative.
-This change is therefore not complete as planned; whether it ships with two
-of three APIs is the maintainer's decision.
+Google has no admissible representative, so it is not measured. The
+maintainer decided on 2026-11-07 to ship the two measured APIs
+(`plans/changes/go-wire-apis/decisions.md`, Q-2); Google follows in its own
+change once Go offers an admissible Google model (bead coding-harness-twdu).
