@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -1275,8 +1275,9 @@ one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file
 and every other gate still do), so the check's exit code decides and the
-runner reads no gate output. `implement` and `repair` keep the full
-`make verify`: only the draft drops to the document subset. Only the
+runner reads no gate output. `implement` keeps the full `make verify`;
+`repair` takes the targeted check, with the full suite as its fallback and before phase 6.
+Only the draft drops to the document subset. Only the
 maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
@@ -1505,7 +1506,7 @@ or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round who
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
-runs `make verify`, which must be green before the next round starts. **The
+runs the repair's targeted check (the touched and linked test files and gates; the full `make verify` when the repair touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), which must be green before the next round starts; the review verb requires a fresh full `make verify` before phase 6. **The
 evidence rule of §2 holds here:** a finding is taken
 only when a test demonstrates it or the spec supports it. A row left
 undecided holds the next round and the release. Two consecutive rounds whose
@@ -1582,15 +1583,22 @@ temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. The repair prompt names the accepted
 plan's ledger tests as must-runs before handback, and commands Codex to run
 ruff and them itself; a file-only fallback delegates the same cheap checks to
-the runner, which stops at the first red one before `make verify`. An
+the runner, which stops at the first red one before post-run verification. An
 attempt's edit of the change's `findings.md` is restored from the runner's
 pre-call snapshot before any check reads model-written state: the fixed lines
 are validated against the restored file, and the restoration stands in the
 attempt's bookkeeping with its real verdict — a note beside the failure when
 the attempt is rejected, a quoted notice under its audit line when it passes.
-When every post-run check passes —
-`make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
-one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
+Post-run verification runs the repair's targeted check: whole touched and
+linked test files, accepted-ledger and retry selections, read-only ruff checks
+of touched Python files, and applicable local gates. It requires full
+`make verify` on fallback when targeted coverage is unsafe, including shared
+infrastructure, prompts, or a selection of the whole `tests/test_stage2.py`.
+The review verb requires a fresh full `make verify` before phase 6, including
+re-checks; a green targeted repair does not replace that check.
+When every post-run check passes — the selected verification is green,
+every fixed line checked — the runner writes each row's Status `fixed` in
+its place, makes the one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
 with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
 only after two failed post-run checks; a failed call stops the run without a
@@ -1697,7 +1705,19 @@ each learned on the night of 2026-10-29/30:
   `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
   round starts. One full `make verify` under the lock runs on the final head
   before phase 6 and before the pull request leaves draft; CI stays the full
-  gate. A runner repair keeps the runner's own `make verify`.
+  gate. A runner repair gets the same shape from the runner (bead
+  coding-harness-gxwg): after its format step and cheap checks, `repair` runs
+  the whole touched and linked test files, `ruff` on the touched Python files
+  and the local gates the touched kinds of file feed, outside the lock, and
+  checkpoints on green. Where that coverage cannot be determined safely - a
+  prompt, a shared test or execution configuration, an unclassified input, code
+  with no linked test, an unreadable link inventory - it runs the admitted full
+  `make verify` instead and says why in `findings.md` and the checkpoint
+  message. A targeted green is never worded as full verification: `review`
+  (phase 6) runs a fresh full `make verify` of the current head under the lock
+  before it calls the reviewer, on every invocation, a re-check included, and
+  refuses a dirty tree or a head that moved during the check. `implement` and
+  the draft keep their own post-run checks.
 
 ### Night runs
 

@@ -10,7 +10,9 @@ Spec: plans/changes/archive/2026-10-06-touch-map/spec.md.
 
 Nothing is read from the working tree or the network. The script asks git for
 objects only (`rev-parse`, `merge-base`, `diff-tree`, `ls-tree`, `cat-file`), uses the
-standard library only, and gives the same bytes for the same two commits.
+standard library only, and gives the same bytes for the same two commits. The one reader of
+the working tree is `WorktreeSnapshot`, which the stage-2 runner uses to see the links of an
+uncommitted repair; the command line never uses it.
 
 The rules, in short:
 
@@ -53,10 +55,12 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import stat
 import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import NamedTuple
 
 # What this repository means by runner, test, code and prose.
@@ -102,9 +106,15 @@ class CannotMeasure(Exception):
 # --- git ------------------------------------------------------------------------------
 
 
-def _git(repo: str, args: list[str], data: bytes | None = None) -> bytes:
+def _git(
+    repo: str, args: list[str], data: bytes | None = None, *, env: dict[str, str] | None = None, timeout: int = 120
+) -> bytes:
     try:
-        done = subprocess.run(["git", "-C", repo, *args], input=data, capture_output=True, check=True)
+        done = subprocess.run(
+            ["git", "-C", repo, *args], input=data, capture_output=True, check=True, env=env, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as err:
+        raise CannotMeasure(f"git {args[0]} did not finish within {timeout} seconds") from err
     except subprocess.CalledProcessError as err:
         lines = err.stderr.decode("utf-8", "replace").strip().splitlines()
         raise CannotMeasure(lines[0] if lines else f"git {args[0]} failed") from err
@@ -376,12 +386,14 @@ def read_code(path: str, body: str) -> Source:
 class Snapshot:
     """The tracked files of one revision; source texts are read from git objects on first use."""
 
-    def __init__(self, repo: str, rev: str) -> None:
+    def __init__(self, repo: str, rev: str, *, env: dict[str, str] | None = None, timeout: int = 120) -> None:
+        self.env = env
+        self.timeout = timeout
         self.repo = repo
         self.rev = rev
         self._blobs: dict[str, str] = {}  # path -> object id, regular files only
         paths = []
-        for record in git(repo, "ls-tree", "-r", "-z", "--full-tree", rev).split("\0"):
+        for record in self._git(["ls-tree", "-r", "-z", "--full-tree", rev]).decode("utf-8", "replace").split("\0"):
             if not record:
                 continue
             meta, _, path = record.partition("\t")
@@ -389,6 +401,14 @@ class Snapshot:
             paths.append(path)
             if otype == "blob" and mode != "120000":
                 self._blobs[path] = oid
+        self._index(paths)
+
+    def _git(self, args: list[str], data: bytes | None = None) -> bytes:
+        """Use the caller's execution boundary for both inventory and lazy blob reads."""
+        return _git(self.repo, args, data, env=self.env, timeout=self.timeout)
+
+    def _index(self, paths: list[str]) -> None:
+        """The name indexes the link rules read, built once from the revision's path list."""
         self.paths = sorted(paths)
         names = Counter(p.rsplit("/", 1)[-1] for p in self.paths)
         # Basename -> path, for the basenames that name one file and are long enough to mean it.
@@ -424,7 +444,7 @@ class Snapshot:
         wanted = sorted({self._blobs[p] for p in self.sources})
         blobs: dict[str, bytes] = {}
         if wanted:
-            data = _git(self.repo, ["cat-file", "--batch"], ("\n".join(wanted) + "\n").encode())
+            data = self._git(["cat-file", "--batch"], ("\n".join(wanted) + "\n").encode())
             pos = 0
             while pos < len(data):
                 end = data.index(b"\n", pos)
@@ -435,6 +455,52 @@ class Snapshot:
                     blobs[header[0].decode()] = data[pos : pos + size]
                     pos += size + 1
         return {p: read_code(p, blobs.get(self._blobs[p], b"").decode("utf-8", "replace")) for p in self.sources}
+
+
+class WorktreeSnapshot(Snapshot):
+    """The files of the working tree: tracked and non-ignored untracked paths, read from disk.
+
+    The adapter the stage-2 runner uses to see links an uncommitted repair creates; the command
+    line stays on committed objects. A path deleted on disk is absent; a link, or a file whose
+    real path leaves the worktree, is never read. A source that cannot be read raises
+    `CannotMeasure`, so a caller never mistakes an unreadable inventory for zero links.
+    """
+
+    def __init__(self, repo: str, *, env: dict[str, str] | None = None, timeout: int = 120) -> None:
+        self.env = env
+        self.timeout = timeout
+        self.repo = repo
+        self.rev = "worktree"
+        self._blobs: dict[str, str] = {}  # path -> path, regular files only
+        self._read: dict[str, Source] | None = None
+        root = Path(repo).resolve()
+        listing = self._git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).decode("utf-8", "replace")
+        paths = []
+        for path in sorted({p for p in listing.split("\0") if p}):
+            full = root / path
+            try:
+                info = full.lstat()
+            except FileNotFoundError:
+                continue  # deleted in the working tree
+            except OSError as err:
+                raise CannotMeasure(f"cannot inspect {path}: {err.strerror or err}") from err
+            paths.append(path)
+            if stat.S_ISREG(info.st_mode):
+                if not full.resolve().is_relative_to(root):
+                    raise CannotMeasure(f"{path} resolves outside the worktree")
+                self._blobs[path] = path
+        self._index(paths)
+
+    def _load(self) -> dict[str, Source]:
+        out: dict[str, Source] = {}
+        root = Path(self.repo)
+        for path in self.sources:
+            try:
+                body = (root / path).read_bytes()
+            except OSError as err:
+                raise CannotMeasure(f"cannot read {path}: {err.strerror or err}") from err
+            out[path] = read_code(path, body.decode("utf-8", "replace"))
+        return out
 
 
 def _full_paths(snap: Snapshot, src: str) -> set[str]:
