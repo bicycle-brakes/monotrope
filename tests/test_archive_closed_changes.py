@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -421,7 +422,8 @@ def test_only_lifecycle_header_fields_change(plans_repo: Fixture) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_index_matches_registry_after_archive(plans_repo: Fixture) -> None:
+@pytest.mark.parametrize("index_mode", [0o644, 0o640, 0o664])
+def test_index_matches_registry_after_archive(plans_repo: Fixture, index_mode: int) -> None:
     fx = plans_repo
     fx.add("closed-one", files=_closed_files("b-closed"))
     # The one active fixture `check()` reads for age uses a date relative to
@@ -438,9 +440,13 @@ def test_index_matches_registry_after_archive(plans_repo: Fixture) -> None:
     )
     fx.add("archive/2026-01-01-older", files=_archived_files("b-closed"))
     fx.set_render({"b-closed": "closed", "b-open": "open"})
+    index = fx.root / "plans" / "INDEX.md"
+    index.write_text(reg.render_index(), encoding="utf-8")
+    index.chmod(index_mode)
 
     assert archive.main(["--write"]) == 0
 
+    assert stat.S_IMODE(index.stat().st_mode) == index_mode, "index regeneration changed the existing file mode"
     index_text = (fx.root / "plans" / "INDEX.md").read_text(encoding="utf-8")
     assert index_text == reg.render_index(), "the index deviates from the registry generator's output"
     assert "archive/2026-03-04-closed-one/spec.md" in index_text
@@ -637,11 +643,7 @@ def test_successful_repeat_is_byte_identical(plans_repo: Fixture, capsys: pytest
 
 def test_post_merge_procedure_orders_archive_after_closure() -> None:
     prompt = (REPO_ROOT / "prompts" / "07-commit.md").read_text(encoding="utf-8")
-    if "make archive" not in prompt:
-        pytest.skip(
-            "plan step 5 (bootstrap) owns the held prompts/07-commit.md; this attempt must not "
-            "depend on its future wording, so the real assertions wait for the bootstrap"
-        )
+    assert "make archive" in prompt, "the post-merge procedure must include the archive step"
     first_archive = prompt.index("make archive")
     first_close = prompt.index("close-merged")
     assert first_close < first_archive, "the archive step must follow the close-merged reconciliation"

@@ -555,6 +555,7 @@ def _regenerate_index() -> tuple[str, str | None]:
     try:
         rendered = plans_registry.render_index()
         current = index.read_text(encoding="utf-8") if index.exists() else None
+        mode = index.stat().st_mode & 0o7777 if current is not None else None
     except Exception as exc:
         return "", f"not regenerated — the registry generator failed: {exc}"
     if current == rendered:
@@ -564,6 +565,8 @@ def _regenerate_index() -> tuple[str, str | None]:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=index.parent, delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(rendered)
+        if mode is not None:
+            temporary.chmod(mode)
         temporary.replace(index)
     except OSError as exc:
         return "", f"not regenerated — the write failed: {exc}"
