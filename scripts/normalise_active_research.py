@@ -48,6 +48,76 @@ def publication_evidence(body: str) -> tuple[str | None, str | None]:
     return stage2.producer_for((endpoint, "", None)), answer.group(1)
 
 
+def publication_producers(body: str) -> list[dict]:
+    """Read each accepted single-model contribution, including its audited model.
+
+    An audit without an ensuing publication is not a contribution. Fenced and
+    quoted examples are not runner publications either.
+    """
+    visible = re.sub(r"(?ms)^(`{3,}|~{3,})[^\r\n]*\r?\n.*?^\1[ \t]*\r?$", "", body)
+    records = []
+    previous = 0
+    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
+        calls = list(
+            re.finditer(
+                r"(?m)^Stage-2 call, [^\r\n]*?explore ·[^\r\n]*?endpoint ([\w-]+)([^\r\n]*)",
+                visible[previous : answer.start()],
+            )
+        )
+        if not calls:
+            raise ValueError("runner publication has no producing endpoint evidence")
+        call = calls[-1]
+        endpoint = call.group(1)
+        if endpoint not in {"glm-coding-plan", "claude-code-plan", "openai-codex", "opencode-go"}:
+            raise ValueError(f"unknown producing endpoint: {endpoint}")
+        record = {"kind": "llm-session", "name": stage2.producer_for((endpoint, "", None)), "version": answer.group(1)}
+        model = re.search(r" · model ([^·\r\n]+)", call.group(2))
+        if model:
+            record["model"] = model.group(1).strip().rstrip(".")
+        if record not in records:
+            records.append(record)
+        previous = answer.end()
+    return records
+
+
+def known_producers(original: bytes, *, historical: bytes | None = None) -> list[dict]:
+    """Recover original attribution plus all accepted audited contributions.
+
+    Bare replacement headers from this branch do not erase the base's history.
+    Later explicit model records remain evidence and are retained too.
+    """
+    text = original.decode("utf-8")
+    match = FRONTMATTER.match(text)
+    if match is None:
+        raise ValueError("no research frontmatter")
+    program, _ = publication_evidence(text[match.end() :])
+    current = stage2.research_header_producers(match.group(1), program_hint=program)
+    records = current if historical is None else []
+    if historical is not None:
+        old_text = historical.decode("utf-8")
+        old = FRONTMATTER.match(old_text)
+        if old is None:
+            raise ValueError("historical research has no frontmatter")
+        old_program, _ = publication_evidence(old_text[old.end() :])
+        records = stage2.research_header_producers(old.group(1), program_hint=old_program)
+        records += [record for record in current if record.get("model") and record not in records]
+        for record in publication_producers(old_text[old.end() :]):
+            if record not in records:
+                records.append(record)
+    for record in publication_producers(text[match.end() :]):
+        if record not in records:
+            records.append(record)
+    # A model-specific record also represents a previously known bare program/day.
+    return [
+        record
+        for record in records
+        if record.get("model")
+        or not any(
+            other.get("model") and all(other.get(key) == value for key, value in record.items()) for other in records
+        )
+    ]
+
+
 def is_day(value: object) -> bool:
     if isinstance(value, date):
         return type(value) is date
@@ -61,7 +131,12 @@ def is_day(value: object) -> bool:
 
 
 def metadata_problems(
-    header: Mapping, raw_header: str, program: str | None = None, publication_day: str | None = None
+    header: Mapping,
+    raw_header: str,
+    program: str | None = None,
+    publication_day: str | None = None,
+    *,
+    required_producers=(),
 ) -> list[str]:
     """Check the whole publication metadata contract, including duplicate owned fields."""
     problems = []
@@ -111,6 +186,12 @@ def metadata_problems(
         for record in records
     ):
         problems.append("produced_by: missing publication program/date")
+    for required in required_producers:
+        if not any(
+            isinstance(record, Mapping) and all(record.get(key) == value for key, value in required.items())
+            for record in records
+        ):
+            problems.append(f"produced_by: missing known contribution {required}")
     if header.get("review") != PENDING:
         problems.append("review: expected pending without approval")
     for field in ("date", "last_reviewed", "updated"):
@@ -142,29 +223,14 @@ def normalised_research(original: bytes, *, correction_day: str, historical: byt
         raise ValueError("research header is not a mapping")
     program, publication_day = publication_evidence(text[match.end() :])
     producer = header.get("produced_by")
-    producer_header = match.group(1)
-    if not program and not model_attribution(producer) and header.get("provenance") != "ai-drafted-reviewed":
+    records = known_producers(original, historical=historical)
+    if (
+        not program
+        and not records
+        and not model_attribution(producer)
+        and header.get("provenance") != "ai-drafted-reviewed"
+    ):
         return original
-    # Recover the pre-correction attribution, never the already collapsed branch header.
-    if historical is not None:
-        old = FRONTMATTER.match(historical.decode("utf-8"))
-        if old is None:
-            raise ValueError("historical research has no frontmatter")
-        producer_header = old.group(1)
-    history_program = program
-    if historical is not None:
-        history_program, _ = publication_evidence(historical.decode("utf-8")[old.end() :])
-    records = stage2.research_header_producers(producer_header, program_hint=history_program)
-    if historical is not None:
-        # Explicit model identities added later are evidence too. Bare replacement
-        # program/date records from the failed backfill are not historical authorship.
-        for record in stage2.research_header_producers(match.group(1), program_hint=program):
-            if record.get("model") and record not in records:
-                records.append(record)
-    if program and publication_day:
-        contribution = {"kind": "llm-session", "name": program, "version": publication_day}
-        if not any(record["name"] == program and record["version"] == publication_day for record in records):
-            records.append(contribution)
     if not records:
         raise ValueError("no historical producer/date evidence")
     if not is_day(correction_day):
@@ -172,7 +238,7 @@ def normalised_research(original: bytes, *, correction_day: str, historical: byt
     bom = b"\xef\xbb\xbf" if original.startswith(b"\xef\xbb\xbf") else b""
     # A compliant file is byte-identical, including its unrelated formatting and edit stamp.
     if (
-        not metadata_problems(header, match.group(1), program, publication_day)
+        not metadata_problems(header, match.group(1), program, publication_day, required_producers=records)
         and header.get("produced_by") == (records[0] if len(records) == 1 else records)
         and not stage2.research_opening_notices(text, match.end())
     ):
@@ -181,7 +247,9 @@ def normalised_research(original: bytes, *, correction_day: str, historical: byt
         original[len(bom) :], producer=records[-1]["name"], day=correction_day, producers=records
     )
     final = FRONTMATTER.match(corrected.decode("utf-8"))
-    problems = metadata_problems(yaml.safe_load(final.group(1)), final.group(1), program, publication_day)
+    problems = metadata_problems(
+        yaml.safe_load(final.group(1)), final.group(1), program, publication_day, required_producers=records
+    )
     if problems:
         raise ValueError("; ".join(problems))
     return corrected
@@ -214,15 +282,36 @@ def historical_research(root: Path, relative: str) -> bytes | None:
     return None
 
 
+def base_research_paths(root: Path) -> set[str]:
+    """Freeze the one-time authorisation to active research present at the base."""
+    result = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", BASE, "--", "plans/changes/"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode:
+        raise ValueError("pre-correction Git base inventory is unreadable")
+    return {
+        path
+        for path in result.stdout.decode().splitlines()
+        if re.fullmatch(r"plans/changes/(?!archive/)[^/]+/research\.md", path)
+    }
+
+
 def authorised_research(root: Path) -> list[Path]:
-    """Refuse new or archived paths outside the maintainer-approved plan inventory."""
+    """Check the approved base inventory; later research is outside this one-time batch."""
     plan = (root / "plans/changes/explore-provenance/plan.md").read_text()
     inventory = set(re.findall(r"^- `(plans/changes/[^/]+/research\.md)`", plan, re.M))
-    paths = sorted(path for path in (root / "plans/changes").glob("*/research.md") if path.parent.name != "archive")
-    for path in paths:
+    base = base_research_paths(root)
+    paths = []
+    for path in sorted((root / "plans/changes").glob("*/research.md")):
         relative = path.relative_to(root).as_posix()
+        if relative not in base:
+            continue
         if relative not in inventory or path.is_symlink() or path.parent.is_symlink():
             raise ValueError(f"{relative}: outside authorised active research inventory")
+        paths.append(path)
     return paths
 
 

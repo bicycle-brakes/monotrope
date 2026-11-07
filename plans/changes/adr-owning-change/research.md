@@ -4,13 +4,13 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-afa
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "2026-10-12"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-12", model: "glm-5.3-flash"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research, gates, interview-minimums, adr]
 ---

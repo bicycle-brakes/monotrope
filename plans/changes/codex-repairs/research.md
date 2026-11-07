@@ -4,13 +4,13 @@ status: draft
 implementation_status: none
 date: 2026-10-13
 last_reviewed: 2026-10-13
-updated: 2026-10-13
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ga
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "2026-10-13"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-13", model: "claude-haiku-4-5"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research, stage2, repair, codex]
 ---

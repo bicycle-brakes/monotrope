@@ -32,7 +32,7 @@ def assert_active_model_research_has_no_false_human_provenance() -> None:
         relative = path.relative_to(REPO_ROOT).as_posix()
         try:
             text = path.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
+        except (OSError, UnicodeDecodeError):
             affected.append(f"{relative}: unreadable file (not UTF-8)")
             continue
         frontmatter = normalise.FRONTMATTER.match(text)
@@ -55,10 +55,18 @@ def assert_active_model_research_has_no_false_human_provenance() -> None:
             program, publication_day = None, None
         producer = header.get("produced_by")
         model_written = normalise.model_attribution(producer)
-        if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
+        try:
+            historical = normalise.historical_research(REPO_ROOT, relative) if (REPO_ROOT / ".git").exists() else None
+            required = normalise.known_producers(text.encode("utf-8"), historical=historical)
+        except (ValueError, OSError, yaml.YAMLError) as error:
+            affected.append(f"{relative}: producer history unreadable: {error}")
+            required = []
+        if program or model_written or required or header.get("provenance") == "ai-drafted-reviewed":
             affected.extend(
                 f"{relative}: {problem}"
-                for problem in normalise.metadata_problems(header, frontmatter.group(1), program, publication_day)
+                for problem in normalise.metadata_problems(
+                    header, frontmatter.group(1), program, publication_day, required_producers=required
+                )
             )
             try:
                 notices = stage2.research_opening_notices(text, frontmatter.end())
@@ -317,12 +325,15 @@ def test_additional_backfills_identify_the_program_and_publication_day():
         records = records if isinstance(records, list) else [records]
         expected = {"kind": "llm-session", "name": "claude-code", "version": day}
         assert any(all(record.get(key) == value for key, value in expected.items()) for record in records), name
-        # Prior contributions may accompany this publication, and every entry must
-        # remain a complete program/date record rather than a collapsed model label.
-        from normalise_active_research import metadata_problems
+        # Independently compare the backfill with pre-correction attribution and
+        # accepted audited models, so a complete-looking collapsed header fails.
+        from normalise_active_research import historical_research, known_producers, metadata_problems
 
-        raw_header = (PLANS / name / "research.md").read_text().split("---", 2)[1]
-        assert metadata_problems(header, raw_header) == [], name
+        path = PLANS / name / "research.md"
+        raw_header = path.read_text().split("---", 2)[1]
+        history = historical_research(REPO_ROOT, path.relative_to(REPO_ROOT).as_posix())
+        required = known_producers(path.read_bytes(), historical=history)
+        assert metadata_problems(header, raw_header, required_producers=required) == [], name
 
 
 def test_normaliser_preserves_research_and_is_idempotent():
@@ -349,7 +360,7 @@ def test_normaliser_preserves_research_and_is_idempotent():
     assert normalised_research(corrected, correction_day="2026-11-06") == corrected
 
 
-def test_normaliser_checks_authorised_scope(tmp_path):
+def test_normaliser_checks_authorised_scope(tmp_path, monkeypatch):
     import normalise_active_research as normalise
 
     check = getattr(normalise, "authorised_research", None)
@@ -363,14 +374,15 @@ def test_normaliser_checks_authorised_scope(tmp_path):
     archive = folder.parent / "archive"
     archive.mkdir()
     (archive / "research.md").write_text("historical")
+    monkeypatch.setattr(normalise, "base_research_paths", lambda _: {"plans/changes/demo/research.md"})
     assert check(tmp_path) == [demo / "research.md"]
     foreign = folder.parent / "new-lane"
     foreign.mkdir()
     (foreign / "research.md").write_text("not approved")
-    with pytest.raises(ValueError, match="new-lane/research.md: outside authorised"):
+    assert check(tmp_path) == [demo / "research.md"], "post-base research is outside the one-time batch"
+    (folder / "plan.md").write_text("")
+    with pytest.raises(ValueError, match="demo/research.md: outside authorised"):
         check(tmp_path)
-    # The real active inventory must also match the newly approved scope.
-    assert set(check(REPO_ROOT)) == set(active_research_files())
 
 
 def test_normaliser_keeps_all_known_producers():
@@ -477,6 +489,7 @@ def test_normaliser_dry_run_and_batch_preparation(tmp_path, monkeypatch, capsys)
     history = getattr(normalise, "historical_research", None)
     assert callable(history), "batch preparation must recover pre-correction attribution from Git"
     monkeypatch.setattr(normalise, "historical_research", lambda *_: None)
+    monkeypatch.setattr(normalise, "base_research_paths", lambda _: {p.relative_to(tmp_path).as_posix() for p in paths})
     before = [p.read_bytes() for p in paths]
     normalise.main(tmp_path, [])
     assert [p.read_bytes() for p in paths] == before, "default invocation must only report corrections"
@@ -491,3 +504,114 @@ def test_normaliser_dry_run_and_batch_preparation(tmp_path, monkeypatch, capsys)
     assert after != before
     normalise.main(tmp_path, ["--write"])
     assert [p.read_bytes() for p in paths] == after
+
+
+@pytest.mark.parametrize("name", ["go-access-point", "interview-context"])
+def test_normaliser_restores_merge_base_contributors(name):
+    import normalise_active_research as normalise
+
+    relative = f"plans/changes/{name}/research.md"
+    historical = normalise.historical_research(REPO_ROOT, relative)
+    assert historical is not None, "the regression needs the original merge-base attribution"
+    original = (REPO_ROOT / relative).read_bytes()
+    corrected = normalise.normalised_research(original, correction_day="2026-11-07", historical=historical)
+    records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    assert isinstance(records, list), "retain the original contributors alongside the accepted runner model"
+    assert {
+        "kind": "llm-session",
+        "name": "claude-code",
+        "version": "2026-10-31" if name == "go-access-point" else "2026-10-14",
+        "model": "glm-5.3-flash",
+    } in records, "retain the model from the accepted runner call"
+    if name == "go-access-point":
+        for model in ("GLM 5.3 Flash", "Claude Haiku 5.5"):
+            assert {"kind": "llm-session", "name": "pi", "version": "2026-10-31", "model": model} in records
+    else:
+        assert {"kind": "llm-session", "name": "codex", "version": "2026-10-14"} in records
+    assert corrected.split(b"---", 2)[2] == original.split(b"---", 2)[2]
+    assert normalise.normalised_research(corrected, correction_day="2026-11-08", historical=historical) == corrected
+
+
+def test_batch_restores_models_before_reaching_fixed_point(tmp_path, monkeypatch):
+    import normalise_active_research as normalise
+
+    folder = tmp_path / "plans/changes/demo"
+    folder.mkdir(parents=True)
+    path = folder / "research.md"
+    historical = valid_research_header().replace('version: "2026-11-05"', 'version: "Opus 5.5, 2026-11-05"').encode()
+    body = (
+        "# Research\nStage-2 call, 2026-11-05: explore · endpoint glm-coding-plan · model glm-5.3-flash\n"
+        "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
+    ).encode()
+    path.write_bytes(valid_research_header().encode() + body)
+    monkeypatch.setattr(normalise, "authorised_research", lambda _: [path])
+    monkeypatch.setattr(normalise, "historical_research", lambda *_: historical + b"# Research\n")
+    changes = normalise.prepare_batch(tmp_path, correction_day="2026-11-07")
+    assert len(changes) == 1, "collapsed attribution must still need a correction"
+    records = yaml.safe_load(changes[0][1].decode().split("---", 2)[1])["produced_by"]
+    assert isinstance(records, list), "the batch must preserve historical and audited contributions as a list"
+    assert {record.get("model") for record in records} == {"Opus 5.5", "glm-5.3-flash"}, (
+        "restore historical and published models"
+    )
+    path.write_bytes(changes[0][1])
+    assert normalise.prepare_batch(tmp_path, correction_day="2026-11-08") == [], (
+        "the applied batch must reach a fixed point"
+    )
+
+
+@pytest.mark.parametrize("lost", ["model", "program"])
+def test_census_rejects_lost_historical_contributors(tmp_path, monkeypatch, lost):
+    import normalise_active_research as normalise
+
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    path = folder / "research.md"
+    text = valid_research_header()
+    history = text.replace("name: claude-code", "name: codex") if lost == "program" else text
+    history = history.replace('version: "2026-11-05"', 'version: "Opus 5.5, 2026-11-05"')
+    path.write_text(text + "# Research\n")
+    (tmp_path / ".git").write_text("fixture: history supplied below")
+    monkeypatch.setattr(normalise, "historical_research", lambda *_: (history + "# Research\n").encode())
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    try:
+        with pytest.raises(AssertionError, match="demo/research.md: produced_by: missing known contribution"):
+            assert_active_model_research_has_no_false_human_provenance()
+    except AttributeError as error:
+        pytest.fail(f"the census must compare each header with known historical producers: {error}")
+    corrected = normalise.normalised_research(
+        path.read_bytes(), correction_day="2026-11-07", historical=(history + "# Research\n").encode()
+    )
+    path.write_bytes(corrected)
+    assert_active_model_research_has_no_false_human_provenance()
+
+
+def test_new_change_folder_keeps_census_green(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import normalise_active_research as normalise
+
+    folder = tmp_path / "plans/changes/explore-provenance"
+    folder.mkdir(parents=True)
+    (folder / "plan.md").write_text("- `plans/changes/demo/research.md` — approved\n")
+    demo = folder.parent / "demo"
+    demo.mkdir()
+    (demo / "research.md").write_text(valid_research_header() + "# Research\n")
+    # Git's frozen inventory is unchanged when the new-change command adds a skeleton.
+    monkeypatch.setattr(
+        normalise.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=b"plans/changes/demo/research.md\n"),
+    )
+    before = normalise.authorised_research(tmp_path)
+    fresh = folder.parent / "future-lane"
+    fresh.mkdir()
+    (fresh / "research.md").write_text("---\nprovenance: human-written\n---\n# Research\n")
+    try:
+        after = normalise.authorised_research(tmp_path)
+    except ValueError as error:
+        pytest.fail(f"a post-base change folder must keep verification green: {error}")
+    assert after == before == [demo / "research.md"]
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", folder.parent)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    assert_active_model_research_has_no_false_human_provenance()

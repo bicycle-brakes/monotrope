@@ -303,6 +303,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: second Sonnet att
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-07
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-04 16:42:41–18:07:04 UTC, 5063 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -320,6 +324,9 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-06 15:40:31–16:10:43 UTC, 1812 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-06 16:10:52–16:52:51 UTC, 2518 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-06 22:12:15–2026-11-07 00:14:35 UTC, 7339 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-07 00:21:33–00:41:38 UTC, 1205 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 00:41:53–00:44:33 UTC, 160 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 00:45:53–00:51:20 UTC, 327 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 
