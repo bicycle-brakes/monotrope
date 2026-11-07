@@ -89,14 +89,19 @@ def resolve_worktree(run: RunCommand, cwd: Path) -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def disk_field(statvfs: StatVfs, worktree: Path) -> str:
-    """User-available bytes on the filesystem that contains the invoking worktree, in GiB."""
+def disk_field(statvfs: StatVfs, worktree: Path, *, worktree_identified: bool = True) -> str:
+    """User-available GiB on the worktree filesystem, or an explicitly labelled cwd fallback."""
     try:
         status = statvfs(worktree)
     except OSError:
         return f"{NOT_READ} (statvfs: unavailable)"
     available = status.f_bavail * status.f_frsize
-    return f"{available / GIB:.1f} GiB available (filesystem of the invoking worktree)"
+    scope = (
+        "filesystem of the invoking worktree"
+        if worktree_identified
+        else "filesystem of the invoking directory; worktree not identified"
+    )
+    return f"{available / GIB:.1f} GiB available ({scope})"
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +258,7 @@ def collect_snapshot(
     except Exception:
         worktree = None  # Git-dependent facts are unavailable; the disk reader stays independent
     try:
-        disk = disk_field(statvfs, cwd)
+        disk = disk_field(statvfs, worktree if worktree is not None else cwd, worktree_identified=worktree is not None)
     except Exception as error:
         disk = f"{NOT_READ} (statvfs: internal error: {type(error).__name__})"
     where = proc_dir if proc_dir is not None else (None if sys.platform == "darwin" else Path("/proc"))

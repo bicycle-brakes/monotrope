@@ -182,24 +182,35 @@ def test_cli_prints_fresh_dated_machine_block(tmp_path: Path, capsys) -> None:
     assert "registered worktrees: 2 (git worktree list" in second
 
 
-def test_disk_reports_worktree_available_space(tmp_path: Path) -> None:
+@pytest.mark.parametrize("resolved", [True, False])
+def test_disk_reports_worktree_available_space(tmp_path: Path, resolved: bool) -> None:
     """Fault: the home volume's space is reported, used bytes count as free, or the unit or the
     filesystem scope is missing (spec criterion 2)."""
     worktree = tmp_path / "repo"
     home = tmp_path / "home"
     worktree.mkdir()
     home.mkdir()
+    cwd = worktree / "mounted-subdirectory"
+    cwd.mkdir()
     # The worktree volume offers 5 GiB of its 40; the home volume lies in wait with 40 free.
-    table = {worktree: statvfs_result(5 * GIB, 40 * GIB), home: statvfs_result(40 * GIB, 40 * GIB)}
+    table = {
+        worktree: statvfs_result(5 * GIB, 40 * GIB),
+        home: statvfs_result(40 * GIB, 40 * GIB),
+        cwd: statvfs_result(2 * GIB, 40 * GIB),
+    }
     statvfs = fake_statvfs(table)
-    run = fake_run(git_keys(worktree))
-    out = machine_facts.render(snapshot(run, statvfs, cwd=worktree, proc_dir=proc_fixture(tmp_path)))
+    resolution = ("git", "-C", str(cwd), "rev-parse", "--show-toplevel")
+    run = fake_run({resolution: f"{worktree}\n"}, fail=None if resolved else {resolution})
+    out = machine_facts.render(snapshot(run, statvfs, cwd=cwd, proc_dir=proc_fixture(tmp_path)))
     disk_line = next(line for line in out.splitlines() if line.startswith("free disk:"))
-    assert "5.0 GiB available" in disk_line
+    assert f"{5.0 if resolved else 2.0:.1f} GiB available" in disk_line
     assert "40.0 GiB" not in disk_line  # neither the home volume's figure nor the raw total
-    assert "GiB" in disk_line and "filesystem" in disk_line and "worktree" in disk_line  # unit and scope
+    if resolved:
+        assert "filesystem of the invoking worktree" in disk_line
+    else:
+        assert "filesystem of the invoking directory; worktree not identified" in disk_line
     assert str(tmp_path) not in out  # the scope is named, no absolute path is printed
-    assert statvfs.asked == [worktree]  # the home volume was never probed
+    assert statvfs.asked == [worktree if resolved else cwd]  # the home volume was never probed
 
 
 def test_swap_reports_used_and_total_on_both_platforms(tmp_path: Path) -> None:
