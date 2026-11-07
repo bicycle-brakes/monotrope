@@ -155,8 +155,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
-- **Omnigent starts inside the worktree** (ADR 0006); which of its tools are denied or asked, and why:
-  `docs/WORKFLOW.md` §3, "Worktrees".
+- **Omnigent starts inside the worktree** (ADR 0006). Its default policy (`tools/omnigent/`) is a second layer;
+  nothing depends on it alone. Which tools are denied or asked, and why: `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none"** — an unopened file
   and an empty query say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
