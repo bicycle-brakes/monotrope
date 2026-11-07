@@ -172,7 +172,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
-  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04).
+  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
   days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
