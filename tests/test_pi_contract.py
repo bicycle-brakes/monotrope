@@ -20,6 +20,7 @@ named in the test.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -1630,8 +1631,7 @@ def shipped_bridge(models: list[dict]) -> dict:
     }
 
 
-@pytest.fixture
-def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
+def configure_offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     """A test world holding the repository's current declaration and the installed Pi's shipped Go catalog.
 
     Only the sources are local stand-ins: the forced refresh writes the shipped rows as the fresh overlay,
@@ -1692,6 +1692,25 @@ def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         paid={str(model) for model in entry["modelle"]},
         free_ids=sorted(i for i in ids if i.endswith("-free")),
     )
+
+
+@pytest.fixture
+def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    setup = configure_offline_world(world, tmp_path, monkeypatch)
+    serial = 0
+
+    @contextlib.contextmanager
+    def fresh():
+        nonlocal serial
+        serial += 1
+        root = tmp_path / f"fresh-{serial}"
+        root.mkdir()
+        with monkeypatch.context() as isolated:
+            fresh_world = stage2_world.__wrapped__(root, isolated)
+            yield configure_offline_world(fresh_world, root, isolated)
+
+    setup.fresh = fresh
+    return setup
 
 
 def probed_models(calls: list[dict]) -> set[str]:
@@ -1755,7 +1774,6 @@ def test_both_preparation_contracts_detect_planted_faults(
     Planted faults, one at a time: the review preparation refuses, the research preparation refuses, the
     review preparation skips the shared selection's paid veto, the research preparation does the same.
     """
-    run_offline_contract(offline_world)  # the control: no fault, no failure
 
     def refuse_review(*_args, **_kwargs):
         raise stage2.Refused("planted: the review preparation refuses")
@@ -1779,11 +1797,36 @@ def test_both_preparation_contracts_detect_planted_faults(
         "review bypasses the shared selection": (stage2_free, "select", bypass(True)),
         "research bypasses the shared selection": (stage2_free, "select", bypass(False)),
     }
+    expected = {
+        "review preparation refuses": "the review preparation refused the shipped Go catalog",
+        "research preparation refuses": "the research preparation refused the shipped Go catalog",
+        "review bypasses the shared selection": "the review preparation refused the shipped Go catalog",
+        "research bypasses the shared selection": "the research preparation refused the shipped Go catalog",
+    }
     for name, (target, attribute, planted) in faults.items():
-        with monkeypatch.context() as fault:
+        with offline_world.fresh() as control:
+            run_offline_contract(control)
+        with offline_world.fresh() as subject, monkeypatch.context() as fault:
             fault.setattr(target, attribute, planted)
-            try:
-                run_offline_contract(offline_world)
-            except AssertionError:
-                continue
-        pytest.fail(f"the contract stayed green with a planted fault: {name}")
+            with pytest.raises(AssertionError, match=rf"(?m)^{re.escape(expected[name])}$"):
+                run_offline_contract(subject)
+
+
+def test_fault_proof_rejects_unrelated_contract_failure(monkeypatch):
+    """An unrelated repeat-preparation failure cannot count as detection of a planted fault."""
+    calls = 0
+
+    def unrelated(_setup):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("unrelated repeat-preparation failure")
+
+    @contextlib.contextmanager
+    def fresh():
+        yield setup
+
+    setup = types.SimpleNamespace(fresh=fresh)
+    monkeypatch.setattr(sys.modules[__name__], "run_offline_contract", unrelated)
+    with pytest.raises(AssertionError, match="unrelated repeat-preparation failure"):
+        test_both_preparation_contracts_detect_planted_faults(setup, monkeypatch)

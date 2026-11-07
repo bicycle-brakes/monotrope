@@ -71,6 +71,7 @@ def research_catalog(*extra: dict) -> Catalog:
 
 
 def research_select(catalog: Catalog, policy: dict | None = None, **more) -> dict:
+    more = {"paid": (), "exclusion": None, **more}
     return swarm.select_research_catalog(
         catalog.bridge(),
         policy or {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
@@ -236,3 +237,109 @@ def test_free_call_boundaries_reject_paid_ids_in_frozen_selection(world: World) 
     problem = swarm.invocation_problem(data, "online_free", GO, "beam-free", selected_free=["beam-free"])
     assert problem and "paid model" in problem, "the research boundary trusted a frozen paid id"
     assert swarm.invocation_problem(data, "online_free", GO, "alpha-free", selected_free=["alpha-free"]) is None
+
+
+@pytest.mark.parametrize("path", ["review", "research"])
+def test_paid_admission_reason_wins_over_global_exclusion(world, monkeypatch, path, capsys):
+    if path == "review":
+        enable(world)
+        declare_paid(world, "beam-free")
+        world.script(
+            pi_catalog="provider model context input output\nopencode-go beam-free 128000 0 0\n"
+            "opencode-go acme-v1-free 128000 0 0\n",
+            pi=[{"stdout": "OK"}] * 5,
+        )
+    else:
+        from test_stage2_research_availability import declare_paid_free
+
+        fixture = Fixture(world, monkeypatch)
+        declare_paid_free(fixture)
+    declaration = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(declaration.read_text())
+    data["ausgeschlossen"] = [{"klasse": "framework" if path == "review" else "public-web", "modelle": ["beam-free"]}]
+    declaration.write_text(yaml.safe_dump(data))
+    result = world.run("prepare-loop") if path == "review" else fixture.prepare()
+    assert result == 0
+    report = capsys.readouterr().out
+    label = "Skipped" if path == "review" else "Dropped (free)"
+    assert f"{label}: beam-free: {stage2_free.PAID_REASON}" in report, "the paid collision lost its admission reason"
+
+
+def test_adr_documentation_records_confirmed_maintainer_answer():
+    """The confirmed answer must replace the draft's contradictory pending-answer claims."""
+    root = Path(__file__).resolve().parent.parent
+    change = root / "plans/changes/research-free-paid"
+    for name in ("spec.md", "design.md", "plan.md"):
+        document = (change / name).read_text(encoding="utf-8")
+        assert 'Q-M2, 2026-11-06, "Nein"' in document, f"{name} must identify the confirmed maintainer statement"
+        assert "0baba58f" in document, f"{name} must identify the recorded ADR answer"
+        for stale in (
+            "no maintainer answer is claimed or written here",
+            "No maintainer ADR answer has been recorded by this draft",
+            "do not write an ADR answer",
+        ):
+            assert stale not in document, f"{name} contradicts the recorded maintainer answer"
+
+
+def test_research_destination_refusal_keeps_shared_reason():
+    catalog = research_catalog(pi_model("foreign-free", baseUrl="https://evil.example/x"))
+    result = research_select(catalog, paid=(), exclusion=None)
+    candidate = next(c for c in result["candidates"] if c["id"] == "foreign-free")
+    expected = stage2_go.assess(ADDRESS, "foreign-free", definition("foreign-free", "https://evil.example/x"))
+    assert candidate["reason"] == "destination-refused", "a refused destination was misclassified as malformed Pi"
+    assert candidate["detail"] == expected.problem
+    assert "foreign-free" not in result["selected"] and "alpha-free" in result["selected"]
+
+
+@pytest.mark.parametrize("selector", ["shared", "research"])
+@pytest.mark.parametrize("missing", ["paid", "exclusion"])
+def test_selectors_require_admission_inputs(selector, missing):
+    kwargs = {"paid": (), "exclusion": None}
+    del kwargs[missing]
+
+    def call():
+        if selector == "shared":
+            return stage2_free.select([], stage2_free.Policy(GO), fresh=set(), **kwargs)
+        return swarm.select_research_catalog(
+            research_catalog().bridge(),
+            {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
+            [],
+            expected_version=stage2.PI_VERSION,
+            address=ADDRESS,
+            **kwargs,
+        )
+
+    with pytest.raises(TypeError, match=missing):
+        call()
+
+
+def test_explicit_public_exclusion_is_filtered_without_refusing(world, monkeypatch, capsys):
+    try:
+        result = research_select(
+            research_catalog(),
+            {"provider": GO, "suffix": "-free", "include": ["alpha-free", "beta-free"], "exclude": []},
+            paid=(),
+            exclusion=lambda ident: "public-web exclusion" if ident == "alpha-free" else None,
+        )
+    except swarm.ResearchCatalogError as error:
+        pytest.fail(f"a public-web exclusion must filter the explicit include, not refuse preparation: {error}")
+    assert result["selected"] == ["beta-free"]
+    candidate = next(c for c in result["candidates"] if c["id"] == "alpha-free")
+    assert candidate["reason"] == "excluded-by-declaration"
+    assert candidate["detail"] == "public-web exclusion"
+
+    fixture = Fixture(world, monkeypatch)
+    fixture.edit_declaration(
+        lambda data: data["research_swarm"]["online_free"].update(include=["alpha-free", "beta-free"])
+    )
+    fixture.edit_declaration(
+        lambda data: data.update(ausgeschlossen=[{"klasse": "public-web", "modelle": ["alpha-free"]}])
+    )
+    assert fixture.prepare() == 0, "a declaration exclusion refused the preparation"
+    free = fixture.receipt()["state"]["free"]
+    assert free["selected"] == ["beta-free"] and free["excluded"] == ["alpha-free"]
+    assert "alpha-free" not in fixture.probed(), "the excluded explicit include received a free probe"
+    assert (
+        "Dropped (free): alpha-free: the model alpha-free is excluded by model-endpoints.yaml"
+        in capsys.readouterr().out
+    )

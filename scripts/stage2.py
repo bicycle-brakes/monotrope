@@ -2105,6 +2105,8 @@ def select_free(rule: dict, catalog: list[dict]) -> list[str]:
         [stage2_free.Candidate(row["provider"], row["model"]) for row in catalog],
         free_policy(rule),
         fresh={row["model"] for row in catalog},
+        paid=(),
+        exclusion=None,
     ).selected
 
 

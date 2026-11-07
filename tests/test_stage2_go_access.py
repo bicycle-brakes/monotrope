@@ -412,10 +412,12 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         [],
         expected_version="test-pin",
         address=policy,
+        paid=(),
+        exclusion=None,
     )
     assert result["selected"] == ["aa-free"]
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
-    assert reasons["bb-free"] == "pi-malformed"
+    assert reasons["bb-free"] == "destination-refused"
     evidence = next(item for item in result["candidates"] if item["id"] == "bb-free")["evidence"]
     assert evidence["pi"]["baseUrl"]["value"] == "https://evil.test/x", "raw catalog evidence was rewritten"
     # An empty admitted set is not a clean selection: nothing stays selected.
@@ -425,6 +427,8 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         [],
         expected_version="test-pin",
         address=policy,
+        paid=(),
+        exclusion=None,
     )
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
 
@@ -442,6 +446,8 @@ def test_research_selector_skips_an_explicit_null_base(world):
         [],
         expected_version="test-pin",
         address=policy,
+        paid=(),
+        exclusion=None,
     )
     assert result["selected"] == ["aa-free"]
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
@@ -823,6 +829,8 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         ["paid-seat"],
         expected_version="test-pin",
         address=policy,
+        paid=(),
+        exclusion=None,
     )
     seat = next(item for item in result["models"] if item["id"] == "paid-seat")
     assert seat["reason"] == "wire-api-not-measured"

@@ -168,13 +168,14 @@ Research: `research.md`. Maintainer answers: `decisions.md`.
 - The pull request closes the shared-free-selection task
   (`coding-harness-wb40`); its last commit carries
   `Closes-Bead: coding-harness-wb40`.
-- Special runs: none. The ADR proposal is not a maintainer answer; any required
-  answer is recorded by the orchestrator only after the maintainer states it.
+- Special runs: none. The ADR answer "no" is the maintainer's (Q-M2, 2026-11-06,
+  "Nein"), recorded by the orchestrator with `harness.py decide adr` (commit
+  0baba58f); this change adds no answer of its own.
 
 ## Open decisions
 
-None open about implementation scope. The feature's ADR proposal is "no";
-no maintainer answer is claimed or written here.
+None open about implementation scope. The feature's ADR answer is "no",
+stated by the maintainer (Q-M2, 2026-11-06, "Nein") and recorded at 0baba58f.
 
 - [DETAIL] Keep the change a feature and write a design for the shared
   component. No ADR draft is proposed: existing admission and address rules

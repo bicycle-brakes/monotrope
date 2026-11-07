@@ -798,7 +798,10 @@ console.log(JSON.stringify(await collectCatalog(JSON.parse(process.argv[2]))));
 def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[str]]:
     """The real pinned-Pi catalog helper and the real selection, with both sources replaced by the mock."""
     import stage2_swarm
+    import yaml
 
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(item for item in data["endpunkte"] if item["name"] == GO)
     helper = SCRIPT_DIR / "stage2_research_catalog.mjs"
     with tempfile.TemporaryDirectory(prefix="capture-catalog-") as tmp:
         env = runner.foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
@@ -825,6 +828,8 @@ def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[s
         list(FIXED_MODELS),
         expected_version=runner.PI_VERSION,
         address=capture_policy(),
+        paid=entry["modelle"],
+        exclusion=lambda model: stage2_swarm.exclusion_problem(data, model, "public-web"),
     )
     return selection, [line for line in done.stderr.splitlines() if "pi-network-guard" in line]
 

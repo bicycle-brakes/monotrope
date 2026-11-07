@@ -1194,7 +1194,11 @@ def prepare_research(
     # The one shared selection already applied paid admission and the public-web exclusion: no second filter.
     free_selected = list(catalog["selected"])
     free_excluded = sorted(c["id"] for c in catalog["candidates"] if c["reason"] == "excluded-by-declaration")
-    free_dropped = {c["id"]: stage2_free.PAID_REASON for c in catalog["candidates"] if c["reason"] == "paid-admitted"}
+    free_dropped = {
+        c["id"]: stage2_free.PAID_REASON if c["reason"] == "paid-admitted" else c["detail"]
+        for c in catalog["candidates"]
+        if c["reason"] in ("paid-admitted", "destination-refused", "excluded-by-declaration")
+    }
     # A free member stays optional: a failed probe only removes it, it never stops the preparation.
     free_reachable, free_failed = probe_free_research(selection, free_selected)
     terms = selection.go.get("modelle_terms")

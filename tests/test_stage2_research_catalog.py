@@ -290,6 +290,7 @@ def address_policy() -> stage2_go.AddressPolicy:
 
 
 def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None, **admission) -> dict:
+    admission = {"paid": (), "exclusion": None, **admission}
     return swarm.select_research_catalog(
         bridge,
         POLICY if policy is None else policy,
@@ -734,7 +735,7 @@ def test_preflight_free_definition_cannot_redirect_its_declared_go_origin(tmp_pa
     result = select(collect(tmp_path, sources))
     assert result["selected"] == ["beta-free"]
     item = next(item for item in result["candidates"] if item["id"] == "alpha-free")
-    assert item["reason"] == "pi-malformed"
+    assert item["reason"] == ("pi-malformed" if "provider" in change else "destination-refused")
     for field, value in change.items():
         assert item["evidence"]["pi"][field] == {"present": True, "value": value}
 
@@ -751,7 +752,7 @@ def test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin(tmp_p
     sources.pi_models[0].update(change)
     result = select(collect(tmp_path, sources))
     skipped = outcome(result, FIXED[0])
-    assert skipped["reason"] == "pi-malformed"
+    assert skipped["reason"] == ("pi-malformed" if "provider" in change else "destination-refused")
     for field, value in change.items():
         assert skipped["evidence"]["pi"][field] == {"present": True, "value": value}
     assert outcome(result, FIXED[1])["reason"] is None

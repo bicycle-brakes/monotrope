@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40
@@ -40,7 +40,8 @@ the maintainer grants that one exception (`decisions.md#Q-2`, confirmed by
 Q-3). This is not a Stage-1 fallback and grants no future bypass.
 `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent at
 the baseline: follow the phase-3 prompt and report the unavailable validator.
-No ADR draft is due under the spec's "no" proposal; do not write an ADR answer.
+No ADR draft is due: the maintainer answered "no" (Q-M2, 2026-11-06, "Nein"),
+recorded with `harness.py decide adr` at 0baba58f; this change writes no answer.
 
 ## Build sequence and files
 
@@ -154,6 +155,13 @@ the runner; no validator success or implementation result is claimed here.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice and Sonnet 5.5 once on 2026-11-05 (the last with two red tests: test_shared_selection_preserves_optional_research_eligibility, test_shipped_catalog_prepares_both_swarms_offline).
 
+## Runner route — 2026-11-06
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-05 18:59:33–21:29:31 UTC, 8997 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-06 17:50:34–19:08:55 UTC, 4701 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 19:09:08–20:21:46 UTC, 4358 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 20:21:59–2026-11-07 00:50:45 UTC, 16124 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

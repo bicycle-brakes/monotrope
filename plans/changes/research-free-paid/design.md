@@ -2,7 +2,7 @@
 title: "Design — research-free-paid"
 category: design
 created: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 status: draft
 implementation_status: none
 date: 2026-11-05
@@ -107,7 +107,9 @@ bindings, versions, paths and frozen selection semantics are preserved.
 
 None — the feature proposes "no": the existing model and destination contracts
 are consolidated internally, without new admission or governance authority.
-No maintainer ADR answer has been recorded by this draft.
+The maintainer confirmed "no" (Q-M2, 2026-11-06, "Nein"); the orchestrator
+recorded it with `harness.py decide adr` (commit 0baba58f) in
+`decisions/answers/research-free-paid/adr.yaml`.
 
 ## Architecture delta
 
