@@ -520,7 +520,8 @@ endpunkte:
     # The one admitted Go address (ADR 0024, go-access-point Q-1 to Q-5): the
     # runner, both swarms, the probes and the session read it; the
     # orchestrating session maintains the path, a runner attempt never does.
-    # Only the measured wire API is mapped. A definition without a base under an
+    # Only measured wire APIs are mapped (completions; Messages and Responses
+    # since 2026-11-06). A definition without a base under an
     # unmapped wire API is refused; one that names a base is admitted only on
     # the admitted host, like every other.
     adresse:
@@ -578,9 +579,12 @@ endpunkte:
       `https://opencode.ai/zen/go/v1/messages` is not used — three calls
       there were refused on 2026-10-08. As of 2026-10-17, `qwen3.8-flash`,
       `claude-haiku-5-5` and `minimax-m3` use anthropic-messages in Pi's
-      shipped catalog; `gpt-6-luna` uses openai-responses. All four are
-      skipped: wire API not measured. Their data-terms admission under Q-11
-      stands; a probe must measure their real address before use.
+      shipped catalog; `gpt-6-luna` uses openai-responses. Until 2026-11-06
+      all four were skipped: wire API not measured. On 2026-11-06 Messages
+      and Responses were measured live (docs/research/2026-11-06-go-wire-apis.md):
+      `qwen3.8-flash` and `minimax-m3` run; `claude-haiku-5-5` stays skipped
+      for Pi's thinking setting and `gpt-6-luna` for a 403. Google is not
+      measured (no admissible model, bead coding-harness-twdu).
       On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
       Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
       models `https://opencode.ai/inference/go/v1/models`) and Pi's live

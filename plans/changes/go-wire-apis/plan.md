@@ -1,10 +1,10 @@
 ---
 title: "Plan — go-wire-apis"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -155,10 +155,10 @@ Keep final verification and live evidence tied to their exact code commits.
 - 1: tests/test_pi_contract.py::test_real_go_native_wire_api_exchange — wrong native route/body/model, missing decoded text, wrong authentication or external traffic passes
 - 2: tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory — failed, empty or malformed exchange passes
 - 2: tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory — missing prerequisites skip instead of failing
-- 3: not a test — the phase-6 review checks the three dated live rows and their code commit in docs/research/2026-11-06-go-wire-apis.md against the runner audit; offline or failed evidence cannot satisfy it
+- 3: not a test — the phase-6 review checks the two dated live rows (Messages, Responses; Google deferred, decisions.md#Q-2) and their code commit in docs/research/2026-11-06-go-wire-apis.md against the runner audit; offline or failed evidence cannot satisfy it
 - 4: tests/test_model_endpoints.py::test_the_repository_declaration_carries_six_seats_and_the_rule — an unmeasured API or a measured API without its mapping passes
 - 4: tests/test_model_endpoints.py::test_the_address_record_shape_is_validated — an unsourced, undated or invalid API base loads
-- 4: not a test — phase 6 verifies that the final address and measured lists contain exactly the existing completions API plus the three successfully measured APIs
+- 4: not a test — phase 6 verifies that the final address and measured lists contain exactly the existing completions API plus the two successfully measured APIs (decisions.md#Q-2)
 - 5: tests/test_pi_contract.py::test_real_opencode_provider_contracts — an eligible native rung is missing or forced into the completions group
 - 5: tests/test_stage2_research_availability.py::test_newly_measured_native_apis_admit_only_eligible_seat_models — a qualifying measured model stays excluded or an unmeasured peer is selected
 - 5: not a test — phase 6 compares the nine original wire-skip records with the final declaration, fresh catalog and unchanged terms

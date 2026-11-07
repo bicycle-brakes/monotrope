@@ -2,7 +2,7 @@
 title: "Go wire APIs — live measurement 2026-11-06"
 category: research
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 last_reviewed: 2026-11-06
 status: draft
 implementation_status: partial
@@ -10,6 +10,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-11-06"}
 review: {status: pending, approved_by: null, approved_at: null}
 bead: coding-harness-36za
+owner: framework-architect
 tags: [stage-2, opencode-go, wire-api, measurement]
 ---
 
@@ -57,6 +58,14 @@ Models that stay skipped, with the measured reason:
 Now qualifying (wire skip removed): qwen3.8-flash, qwen3.7-plus, qwen3.8-max,
 minimax-m3 (Messages) and grok-4.7 (Responses); fresh preparation places them
 on the paid ladder.
+
+
+Routes. The offline contracts (`GO_NATIVE_ROUTES` in
+`tests/test_pi_contract.py`) prove that the pinned Pi appends `/v1/messages` to the Messages base
+`https://opencode.ai/inference/go/anthropic` and `/responses` to the
+Responses base `https://opencode.ai/inference/go/openai/v1`; the expected
+live routes are therefore the two documented page endpoints in the table
+above.
 
 ## Open
 

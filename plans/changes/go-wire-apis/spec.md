@@ -1,10 +1,10 @@
 ---
 title: "Spec — go-wire-apis"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -64,12 +64,12 @@ translation into Chat Completions (`decisions.md#Q-1`).
    *Basis:* `decisions.md#Q-1`; the existing mandatory contract boundary.
 
 3. When an API is finally declared measured, a dated repository measurement note records a successful live probe through the pinned runner for that API, identifying the code commit, Pi version, exact model id, API, effective base, expected request route, documentation source and probe outcome without credentials or repository content in the model request.
-   *Refuted by:* any of the three APIs lacking a successful measurement, evidence for another API/base/id, an offline stand-in being reported as a live result, or an unrecorded/failed probe being treated as success.
-   *Basis:* `decisions.md#Q-1`; `research.md`, the predecessor's measurement-before-use rule.
+   *Refuted by:* an API declared measured without its successful measurement (Google stays undeclared, `decisions.md#Q-2`), evidence for another API/base/id, an offline stand-in being reported as a live result, or an unrecorded/failed probe being treated as success.
+   *Basis:* `decisions.md#Q-1`, narrowed by `decisions.md#Q-2`; `research.md`, the predecessor's measurement-before-use rule.
 
-4. When the completed change's declaration is inspected, the one Go address record contains sourced and dated mappings for all four measured APIs, and the research measured-API list contains exactly those four API names.
+4. When the completed change's declaration is inspected, the one Go address record contains sourced and dated mappings for exactly the measured APIs — completions, Anthropic Messages and OpenAI Responses (`decisions.md#Q-2`) — and the research measured-API list contains exactly those three API names.
    *Refuted by:* a missing new mapping/list member, an additional unmeasured API, an unsourced or undated base, or a separate runtime address default outside that record.
-   *Basis:* `decisions.md#Q-1`; the existing address-record contract.
+   *Basis:* `decisions.md#Q-1`, narrowed by `decisions.md#Q-2`; the existing address-record contract.
 
 5. When a wire-skipped model has an exact fresh catalog definition on a successfully measured API and still-valid admitted data terms, its wire-measurement skip no longer prevents a direct call in that definition's native protocol.
    *Refuted by:* a qualifying model retaining that wire-only obstacle, a different model id being substituted, an unrelated exclusion being removed, an absent id being admitted, or a catalog-only assertion forcing every eligible model back into Chat Completions.
@@ -103,7 +103,9 @@ orchestrator, never an implement/repair attempt.
 ## Definition of Done
 
 - The offline contracts and `make verify` pass after the orchestrator's final
-  configuration edit, with all three successful live measurements recorded.
+  configuration edit, with the two successful live measurements (Messages,
+  Responses) recorded; Google waits for an admissible model in its own change
+  (bead coding-harness-twdu, `decisions.md#Q-2`).
 - Move together: `model-endpoints.yaml`, the tests named in `plan.md`, and
   `docs/research/2026-11-06-go-wire-apis.md`; no ADR changes.
 - The pull request file list respects the protected areas and non-goals.
