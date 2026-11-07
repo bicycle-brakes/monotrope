@@ -10,7 +10,7 @@ updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-yql7
-owner: Data Architect
+owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-11-06"}
 review: {status: pending, approved_by: null, approved_at: null}
@@ -314,3 +314,7 @@ Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3464 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · leak check clean over 917 files, 3487 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · leak check clean over 917 files, 3493 commits, 12 rules.
