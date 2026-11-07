@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-06
+updated: 2026-11-07
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1593,7 +1593,10 @@ the attempt is rejected, a quoted notice under its audit line when it passes.
 `status` and `implementation_status` in the change's `spec.md`, optional `design.md` and `plan.md`
 back to the values they had before that attempt's call — before a post-run check, the derived
 preparation or the checkpoint reads the documents — and the attempt's bookkeeping names what was
-restored, or says the fields stayed unchanged. A finding whose remedy requires changing one of
+restored, or says the fields stayed unchanged. Two limits hold (the change's Boundary): after a
+safety refusal of the recovery preflight nothing is written and no restoration is reported, and
+after a moved HEAD only the working-tree documents are restored — the moved commit keeps the
+model's values and stays for the maintainer. A finding whose remedy requires changing one of
 those two fields is therefore repaired by hand: the orchestrator repairs that finding itself before
 handing the remaining taken rows to the model, and books the hand repair in the row's Status as
 above. An approval or an implementation transition stays the orchestrator's act; a model attempt
