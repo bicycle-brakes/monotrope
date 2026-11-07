@@ -98,8 +98,8 @@ def select_research_catalog(
     expected_version,
     measured_wire_apis=("openai-completions",),
     address,
-    paid=(),
-    exclusion=None,
+    paid,
+    exclusion,
 ):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
@@ -178,8 +178,6 @@ def select_research_catalog(
             if address.default_base(item.get("api")) is None:
                 return "no-recorded-base"
             return None
-        if stage2_go.url_problem(base, address.host) is not None:
-            return "pi-malformed"
         return None
 
     baseline = set(bridge.get("baseline", []))
@@ -192,6 +190,9 @@ def select_research_catalog(
         reason = pi_reason(item)
         if reason:
             return reason
+        verdict = stage2_go.assess(address, ident, item)
+        if not verdict.admitted:
+            return "destination-refused"
         return None if item.get("api") in wire_apis else "wire-api-not-measured"
 
     metadata = sources.get("models_dev", {})
@@ -312,9 +313,11 @@ def select_research_catalog(
         ident = candidate["id"]
         if ident in chosen.vetoed:
             candidate["reason"] = veto_codes[chosen.vetoed[ident].kind]
+            candidate["detail"] = chosen.vetoed[ident].reason
         elif candidate["reason"] is None:
             if ident in chosen.refused_destination:
-                candidate["reason"] = "pi-malformed"
+                candidate["reason"] = "destination-refused"
+                candidate["detail"] = chosen.refused_destination[ident]
             elif chosen.skipped.get(ident) in (stage2_free.SKIP_EXCLUDED, stage2_free.SKIP_NOT_INCLUDED):
                 candidate["reason"] = chosen.skipped[ident]
     seat_models = []
@@ -332,7 +335,8 @@ def select_research_catalog(
         )
     eligible = set(chosen.eligible)
     for ident in policy["include"]:
-        if ident not in eligible:
+        veto = chosen.vetoed.get(ident)
+        if ident not in eligible and not (veto and veto.kind == "excluded"):
             raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
     selected = set(chosen.selected)
     return {

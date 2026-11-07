@@ -52,17 +52,17 @@ def model_veto(
 ) -> Veto | None:
     """The hard veto of one id, or None: the per-id check both the selector and the call boundaries share.
 
-    The order is the id's shape, the declaration's exclusion, then paid admission. `paid` is the current
+    The order is the id's shape, paid admission, then the declaration's exclusion. `paid` is the current
     `modelle` of the endpoint, supplied at the call, never trusted from a saved selection.
     """
     if plain and not MODEL_ID.fullmatch(model):
         return Veto("plain", "not a plain model id")
+    if model in set(paid):
+        return Veto("paid", PAID_REASON)
     if exclusion is not None:
         problem = exclusion(model)
         if problem:
             return Veto("excluded", problem)
-    if model in set(paid):
-        return Veto("paid", PAID_REASON)
     return None
 
 
@@ -115,8 +115,8 @@ def select(
     policy: Policy,
     *,
     fresh: set[str],
-    paid: Iterable[str] = (),
-    exclusion: Callable[[str], str | None] | None = None,
+    paid: Iterable[str],
+    exclusion: Callable[[str], str | None] | None,
     address: stage2_go.AddressPolicy | None = None,
 ) -> Result:
     """The free members among the candidates, by the one rule.

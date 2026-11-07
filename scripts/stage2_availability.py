@@ -39,7 +39,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import leakcheck
-import stage2_free
 import stage2_go
 import stage2_research_map
 import stage2_swarm
@@ -1194,7 +1193,9 @@ def prepare_research(
     # The one shared selection already applied paid admission and the public-web exclusion: no second filter.
     free_selected = list(catalog["selected"])
     free_excluded = sorted(c["id"] for c in catalog["candidates"] if c["reason"] == "excluded-by-declaration")
-    free_dropped = {c["id"]: stage2_free.PAID_REASON for c in catalog["candidates"] if c["reason"] == "paid-admitted"}
+    free_dropped = {
+        c["id"]: c["detail"] for c in catalog["candidates"] if c["reason"] in ("paid-admitted", "destination-refused")
+    }
     # A free member stays optional: a failed probe only removes it, it never stops the preparation.
     free_reachable, free_failed = probe_free_research(selection, free_selected)
     terms = selection.go.get("modelle_terms")

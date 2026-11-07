@@ -49,6 +49,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import yaml
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
@@ -819,12 +821,16 @@ def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[s
     if done.returncode != 0:
         raise RuntimeError(f"the catalog helper ended {done.returncode}: {done.stderr[-400:]}")
     bridge = json.loads(done.stdout)
+    declaration = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(item for item in declaration["endpunkte"] if item["name"] == GO)
     selection = stage2_swarm.select_research_catalog(
         bridge,
         {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         list(FIXED_MODELS),
         expected_version=runner.PI_VERSION,
         address=capture_policy(),
+        paid=entry["modelle"],
+        exclusion=lambda model: stage2_swarm.exclusion_problem(declaration, model, "public-web"),
     )
     return selection, [line for line in done.stderr.splitlines() if "pi-network-guard" in line]
 

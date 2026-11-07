@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40
@@ -40,7 +40,10 @@ the maintainer grants that one exception (`decisions.md#Q-2`, confirmed by
 Q-3). This is not a Stage-1 fallback and grants no future bypass.
 `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent at
 the baseline: follow the phase-3 prompt and report the unavailable validator.
-No ADR draft is due under the spec's "no" proposal; do not write an ADR answer.
+The maintainer answered "no" to the ADR question on 2026-11-06 (morning question Q-M2), recorded
+in `decisions/answers/research-free-paid/adr.yaml` at commit `0baba58f`.
+No ADR draft is due. Preserve the recorded answer, including its author and reason.
+The earlier missing-answer evidence in `findings.md` predates this record.
 
 ## Build sequence and files
 
@@ -157,3 +160,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash fai
 ## Time used
 
 2026-11-05 18:59:33–21:29:31 UTC, 8997 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-07 00:53:22–02:04:59 UTC, 4297 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 02:05:10–05:49:32 UTC, 13461 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

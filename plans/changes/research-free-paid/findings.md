@@ -352,3 +352,30 @@ Stage-2 call, 2026-11-06: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-6: tests/test_pi_contract.py::test_fault_proof_rejects_unrelated_contract_failure: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/research-free-paid/stage2/attempts/research-free-paid/attempt-3-20261106T175015787736Z-3554805b.md
 > ```
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 919 files, 3455 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-free-paid/design.md` +3 -1
+> - `plans/changes/research-free-paid/plan.md` +3 -1
+> - `plans/changes/research-free-paid/spec.md` +5 -4
+> - `scripts/research_capture.py` +6 -0
+> - `scripts/stage2.py` +2 -0
+> - `scripts/stage2_availability.py` +3 -2
+> - `scripts/stage2_free.py` +5 -5
+> - `scripts/stage2_swarm.py` +10 -6
+> - `tests/test_pi_contract.py` +40 -10
+> - `tests/test_stage2_free.py` +91 -1
+> - `tests/test_stage2_go_access.py` +9 -1
+> - `tests/test_stage2_research_catalog.py` +3 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-5: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/research-free-paid/stage2/attempts/research-free-paid/attempt-1-20261107T005305744145Z-48790cf5.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 919 files, 3466 commits, 12 rules.

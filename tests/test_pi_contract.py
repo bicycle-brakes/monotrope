@@ -1747,15 +1747,47 @@ def test_shipped_catalog_prepares_both_swarms_offline(offline_world: types.Simpl
 
 
 @pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize(
+    "fault_name, expected, diagnostic",
+    [
+        (
+            "review preparation refuses",
+            "the review preparation refused the shipped Go catalog",
+            "planted: the review preparation refuses",
+        ),
+        (
+            "research preparation refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the research preparation refuses",
+        ),
+        (
+            "review bypasses the shared selection",
+            "the review preparation refused the shipped Go catalog",
+            f"refused: the model beam-free is {stage2_free.PAID_REASON}",
+        ),
+        (
+            "research bypasses the shared selection",
+            "the research preparation refused the shipped Go catalog",
+            f"refused: beam-free is {stage2_free.PAID_REASON}",
+        ),
+    ],
+)
 def test_both_preparation_contracts_detect_planted_faults(
-    offline_world: types.SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    offline_world: types.SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    fault_name: str,
+    expected: str,
+    diagnostic: str,
 ) -> None:
     """Criterion 10: the same contract assertions fail for a refusing or bypassing preparation, on either path.
 
     Planted faults, one at a time: the review preparation refuses, the research preparation refuses, the
     review preparation skips the shared selection's paid veto, the research preparation does the same.
     """
-    run_offline_contract(offline_world)  # the control: no fault, no failure
+    # Parametrization gives every fault a fresh world and a clean control.
+    run_offline_contract(offline_world)  # no fault, no failure
+    capsys.readouterr()  # Only the fault run may supply its diagnostic.
 
     def refuse_review(*_args, **_kwargs):
         raise stage2.Refused("planted: the review preparation refuses")
@@ -1779,11 +1811,9 @@ def test_both_preparation_contracts_detect_planted_faults(
         "review bypasses the shared selection": (stage2_free, "select", bypass(True)),
         "research bypasses the shared selection": (stage2_free, "select", bypass(False)),
     }
-    for name, (target, attribute, planted) in faults.items():
-        with monkeypatch.context() as fault:
-            fault.setattr(target, attribute, planted)
-            try:
-                run_offline_contract(offline_world)
-            except AssertionError:
-                continue
-        pytest.fail(f"the contract stayed green with a planted fault: {name}")
+    target, attribute, planted = faults[fault_name]
+    with monkeypatch.context() as fault:
+        fault.setattr(target, attribute, planted)
+        with pytest.raises(AssertionError, match="^" + re.escape(expected) + r"(?:\n|$)"):
+            run_offline_contract(offline_world)
+        assert diagnostic in capsys.readouterr().err, "the contract failed for a different cause than the planted fault"

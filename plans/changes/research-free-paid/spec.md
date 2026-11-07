@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40
@@ -168,13 +168,15 @@ Research: `research.md`. Maintainer answers: `decisions.md`.
 - The pull request closes the shared-free-selection task
   (`coding-harness-wb40`); its last commit carries
   `Closes-Bead: coding-harness-wb40`.
-- Special runs: none. The ADR proposal is not a maintainer answer; any required
-  answer is recorded by the orchestrator only after the maintainer states it.
+- Special runs: none. The maintainer answered "no" to the ADR question on 2026-11-06 (morning
+  question Q-M2), recorded in `decisions/answers/research-free-paid/adr.yaml` at commit
+  `0baba58f`.
 
 ## Open decisions
 
-None open about implementation scope. The feature's ADR proposal is "no";
-no maintainer answer is claimed or written here.
+None open about implementation scope or the ADR question. The maintainer answered "no" to the
+ADR question on 2026-11-06 (morning question Q-M2), recorded in
+`decisions/answers/research-free-paid/adr.yaml` at commit `0baba58f`.
 
 - [DETAIL] Keep the change a feature and write a design for the shared
   component. No ADR draft is proposed: existing admission and address rules
