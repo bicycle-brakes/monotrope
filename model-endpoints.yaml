@@ -198,6 +198,7 @@ endpunkte:
       - kimi-k3.1-pro
       - minimax-m3.1-flash
       - step-5-preview
+      - beam-free
     modelle_terms:
       deepseek-v4.1-flash:
         gelesen: "2026-11-06"
@@ -450,6 +451,14 @@ endpunkte:
         valid_until: "2026-11-29"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
         aufbewahrung: "0 days"
+        training: "Not used"
+      beam-free:
+        uebersprungen: "2026-10-30"
+        grund: "not in the live Go catalog (2026-10-30)"
+        gelesen: "2026-10-30"
+        valid_until: "2026-11-29"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        aufbewahrung: "30 days"
         training: "Not used"
     # Legacy membership for declarations without availability_preflight.
     # Fresh runs of this declaration select the cheapest reachable members.
