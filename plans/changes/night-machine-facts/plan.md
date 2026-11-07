@@ -126,7 +126,8 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 ## Time used
 
-Appetite overrun, 2026-11-07: about 9.7 h recorded against the 2 h card, most
+Appetite overrun, 2026-11-07: about 9.7 h recorded against the 2 h card when the
+lane was parked (12.9 h, 46362 s, after the granted hour's repair), most
 of it repair attempts waiting on the machine-wide verify lock; the lane was
 parked at loop round 4 and the maintainer granted one more hour to finish
 (hand fixes, phase 6, pull request).
