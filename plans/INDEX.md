@@ -315,6 +315,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/redraft-after-scope/decisions.md`](changes/redraft-after-scope/decisions.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/findings.md`](changes/redraft-after-scope/findings.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/plan.md`](changes/redraft-after-scope/plan.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/research.md`](changes/redraft-after-scope/research.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/spec.md`](changes/redraft-after-scope/spec.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
 | [`changes/registry-block-last/decisions.md`](changes/registry-block-last/decisions.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
 | [`changes/registry-block-last/findings.md`](changes/registry-block-last/findings.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
 | [`changes/registry-block-last/plan.md`](changes/registry-block-last/plan.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |
