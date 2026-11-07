@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
-from test_stage2 import REPO_ROOT, TEST_FREE, TEST_LADDER, VERDICT, World  # noqa: E402
+from test_stage2 import REPO_ROOT, REQUIRED_PI_SETTINGS, TEST_FREE, TEST_LADDER, VERDICT, World  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
 
 world = stage2_world
@@ -153,6 +153,8 @@ def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch
         assert "--no-tools" in call["argv"] and "--tools" not in call["argv"]
         assert call["cwd"] != str(world.root)
         assert "Availability probe only" in call["prompt_file"]
+        # pi-no-compaction (criterion 1): every probe's settings file disables retry and compaction.
+        assert json.loads(call["agent_settings"]) == REQUIRED_PI_SETTINGS
         # Only the free probe carries the diff; the paid probe stays the small static text.
         if not any(f"{model}" in " ".join(call["argv"]) for model in TEST_FREE):
             assert "VALUE = 2" not in call["prompt_file"]
