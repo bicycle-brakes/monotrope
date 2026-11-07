@@ -98,9 +98,16 @@ The requested aggregate artifact validator and plan template are absent in
 this tree; use the available interview/ledger gates and the runner's document
 checks without creating substitutes or weakening requirements.
 
+## Runner route — 2026-11-07
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-06 16:19:48–16:50:20 UTC, 1832 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 16:50:29–17:39:15 UTC, 2925 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
 2026-11-06 18:35:23–19:31:14 UTC, 3351 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-06 19:31:24–2026-11-07 00:52:51 UTC, 19285 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-07 01:04:13–02:26:43 UTC, 4950 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 02:26:55–04:15:34 UTC, 6518 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 04:15:47–05:23:36 UTC, 4069 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

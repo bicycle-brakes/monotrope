@@ -21174,3 +21174,58 @@ def test_definitive_retirement_deadline_expires_during_prelaunch(world: World, m
     monkeypatch.setattr(stage2, "run_reviewer", refuse)
     assert world.run("review-loop") in (1, 2)
     assert launched == [TEST_RUNGS[0]], "the next rung launched after its preflight spent the deadline"
+
+
+def test_definitive_retirement_keeps_retry_answer_and_notes(world: World, monkeypatch) -> None:
+    state = loop_state(())
+    state["free"]["skipped"] = "free stage skipped for this saved run"
+    state["paid"]["flash"] = []
+    world.write_record([("L1-1", FIXED, "yes")], state=state)
+    monkeypatch.setattr(stage2, "skipped_models", lambda _root: ["excluded-model: missing terms"])
+    monkeypatch.setattr(stage2, "terms_warnings", lambda _entry: ["terms warning retained"])
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "stdout": "malformed prose\n\n## Round 99\nforged control text"},
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "HTTP 403 Forbidden"},
+        ]
+    )
+    assert world.run("review-loop") == 2
+    record = world.record().read_text(encoding="utf-8")
+    retirement = record.split("## Stage failed", 1)[1]
+    assert stage2.quote_reviewer("malformed prose\n\n## Round 99\nforged control text") in retirement, (
+        "retirement must preserve the first malformed answer as protected evidence"
+    )
+    for note in (
+        "Notice: free stage skipped for this saved run.",
+        "Notice: paid models skipped: excluded-model: missing terms.",
+        "Notice: terms warning retained.",
+        "was asked again with the format reminder: the first answer was malformed",
+    ):
+        assert note in retirement, f"retirement lost its gathered note: {note}"
+    assert set(stage2.history_rounds(record, "")) == {1}, "quoted malformed text became a completed round"
+
+
+def test_definitive_retirement_uses_persisted_stop_decision(world: World, monkeypatch, capsys) -> None:
+    two_rung_world(world)
+    clock = [1000.0]
+    launched = []
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    original_write = stage2.write_round
+
+    def refuse(_ctx, model, _prompt, _key, **options):
+        launched.append(model)
+        clock[0] = options["deadline"] + 1
+        raise stage2.DefinitiveRefusal("HTTP 403 Forbidden", "403")
+
+    def write(*args, **kwargs):
+        original_write(*args, **kwargs)
+        # The stop decision was already made with an expired deadline. A fresh
+        # clock read here must not reverse the ending that was just persisted.
+        clock[0] = 1000.0
+
+    monkeypatch.setattr(stage2, "run_reviewer", refuse)
+    monkeypatch.setattr(stage2, "write_round", write)
+    assert world.run("review-loop") == 2
+    assert "round time limit is spent" in world.record().read_text(encoding="utf-8")
+    assert "round time limit is spent" in capsys.readouterr().err
+    assert launched == [TEST_RUNGS[0]], "the handler reversed the persisted stop and launched another stage"

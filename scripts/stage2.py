@@ -1064,8 +1064,10 @@ def definitive_refusal_status(text: str, stderr: str = "") -> str | None:
     """Classify provider response envelopes; transient evidence anywhere vetoes retirement.
 
     Structured JSON status fields are accepted only with a matching provider error
-    type. Plain HTTP response lines have to start the diagnostic, optionally after
-    its error label; pasted prose and local tool messages cannot supply a status.
+    type. A line-initial HTTP response line in the call's own streams is trusted
+    as the provider's answer, optionally after an error label and subject to the
+    status-reason checks below. Provenance is not observable: a local helper or
+    pasted document emitting the same response form can also supply a status.
     """
     streams = (text, stderr)
     text = "\n".join(streams)
@@ -8447,11 +8449,13 @@ class StageRetired(Exception):
     stops at an exhausted ladder or a spent deadline (bead coding-harness-2ym2).
     """
 
-    def __init__(self, stage_key: str, status: str, deadline: float) -> None:
+    def __init__(self, stage_key: str, status: str, deadline: float, ending: str) -> None:
         super().__init__(f"the paid rung {stage_key} retired itself after HTTP {status}")
         self.stage_key = stage_key
         self.status = status
         self.deadline = deadline
+        # Decided before persistence, so the record and handler use the same ending.
+        self.ending = ending
 
 
 class FreeStageUnavailable(Exception):
@@ -8622,13 +8626,13 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             # runs again in the round that follows. A spent ladder or a spent deadline stops here:
             # retirement never buys a fresh reviewer limit (bead coding-harness-2ym2). Fresh record
             # text keeps the round numbering right.
-            if next_stage(state) is None:
+            if retired.ending == "exhausted":
                 raise Refused(
                     f"{retired}; every remaining stage of the saved ladder is retired and no usable review "
                     "answer stands: the saved ladder is exhausted. The loop stops and reports to the "
                     "maintainer. No model is substituted."
                 ) from None
-            if time.monotonic() >= retired.deadline:
+            if retired.ending == "deadline":
                 raise Refused(
                     f"{retired}; the round time limit is spent; no further call starts. The retirements "
                     "stand in the record; the loop stops and reports to the maintainer."
@@ -8814,14 +8818,19 @@ def _review_round(
             refusal = answers[members[0]]
             retired_state = {**state, "consumed": [*state["consumed"], stage["key"]]}
             if next_stage(retired_state) is None:
+                outcome = "exhausted"
                 ending = "The saved ladder is exhausted; no further call starts."
             elif time.monotonic() >= deadline:
+                outcome = "deadline"
                 ending = "The round time limit is spent; no further call starts."
             else:
+                outcome = "continue"
                 ending = "The next saved stage is pending fresh admission and round-deadline checks."
             block = "\n\n".join(
                 [
                     f"## Stage failed — {stage['key']} ({members[0]})",
+                    *notes,
+                    *malformed_blocks,
                     quote_reviewer(str(refusal)),
                     quote_reviewer(refusal.diagnostic),
                     f"The stage is retired automatically by the runner: the provider refused with "
@@ -8835,7 +8844,7 @@ def _review_round(
                 f"{members[0]} failed: {refusal}; the paid rung retires itself (HTTP {refusal.status}): {ending}"
             )
             print(f"review-loop: {notes[-1]}", file=sys.stderr)
-            raise StageRetired(stage["key"], refusal.status, deadline)
+            raise StageRetired(stage["key"], refusal.status, deadline, outcome)
         if stage["kind"] == "paid-swarm":
             # A failed Flash member is replaced by the cheapest admitted ladder model
             # not in this round and not consumed, on the same paid prompt; each model
