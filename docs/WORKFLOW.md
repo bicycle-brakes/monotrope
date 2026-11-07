@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-07
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -267,6 +267,35 @@ in any session. It writes no tracker and takes no git action of its own; what
 it leaves behind goes into a pull request that a person reviews and merges. The
 first one is [`prompts/research-recheck.md`](../prompts/research-recheck.md):
 it re-checks one research note on the web and appends a dated addendum to it.
+
+### The outcome test: a fresh session against the current rules
+
+The gates check artefacts; the outcome test checks what a freshly started
+session can still answer about the harness itself. An administrator runs
+[`scripts/outcome_test.py`](../scripts/outcome_test.py) `questions`, hands the
+printed questionnaire to one separately started, memory-free session, and
+records its answers with `record`. Every run carries four attested labels —
+harness, model, startup context and permitted repository access;
+`--fresh-session` is the administrator's attestation, not proof of a context
+reset. The scope a run measured is carried in those labels, and comparisons
+hold only between runs that recorded the same scope.
+
+The tool runs on demand, never on a schedule: once as the baseline at an
+accepted commit, and before every change to `AGENTS.md` or the handover
+convention (`--purpose pre-change --target AGENTS.md|handover-convention`).
+Expected answers are derived anew from the same commit's sources at recording
+time — never stored, in the questionnaire or in the history. Answers are
+graded exactly: case-sensitive strings, directories up to an optional trailing
+slash, the memory floor as a finite number; no synonyms, no partial credit, no
+model judging another model. `record` exits 0 at eight of eight, and 1 when
+the run was measured with incorrect answers — a low score is evidence, not a
+failed implementation. Exit 3 means **not measured**: an unreadable or
+conflicting source, a stale snapshot, malformed input or an unwritable history
+appends nothing and must never be read as a score. The history,
+`docs/research/outcome-test-results.jsonl`, keeps one dated, commit-bound JSON
+line per run with the four labels, the submitted answers and the eight
+verdicts. Foreign sessions still start through
+[`scripts/stage2.py`](../scripts/stage2.py); this tool starts none.
 
 ### The five rules that make the difference
 
