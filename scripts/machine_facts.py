@@ -89,10 +89,8 @@ def resolve_worktree(run: RunCommand, cwd: Path) -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def disk_field(statvfs: StatVfs, worktree: Path | None) -> str:
+def disk_field(statvfs: StatVfs, worktree: Path) -> str:
     """User-available bytes on the filesystem that contains the invoking worktree, in GiB."""
-    if worktree is None:
-        return f"{NOT_READ} (worktree: not identified)"
     try:
         status = statvfs(worktree)
     except OSError:
@@ -168,19 +166,20 @@ def swap_field(run: RunCommand, proc_dir: Path | None) -> str:
 def worktree_records(raw: str) -> list[list[str]]:
     """The records of one `git worktree list --porcelain -z` table.
 
-    `-z` separates the records with NUL bytes, so a path with whitespace -
-    or even a newline - cannot split a record. The attributes of a record
-    follow its `worktree ` path line; `bare` marks a bare entry (spec
-    criterion 4).
+    `-z` terminates every attribute with a NUL and separates records with
+    an empty attribute. A path stays intact, including newlines and leading
+    or trailing whitespace; `bare` is a separate attribute (spec criterion 4).
     """
     records: list[list[str]] = []
-    for chunk in raw.split("\0"):
-        for line in chunk.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith("worktree "):
-                records.append([stripped])
-            elif records and stripped:
-                records[-1].append(stripped)
+    record: list[str] | None = None
+    for attribute in raw.split("\0"):
+        if not attribute:
+            record = None
+        elif attribute.startswith("worktree "):
+            record = [attribute]
+            records.append(record)
+        elif record is not None:
+            record.append(attribute)
     return records
 
 
@@ -225,7 +224,8 @@ def jobs_field(run: RunCommand, worktree: Path | None) -> list[str]:
         lines.append(str(error))
         return lines
     if not rows:
-        lines.append("none matched")
+        if run_report.stage2 is not None:
+            lines.append("none matched")
         return lines
     lines.extend(f"pid {row.pid} · {row.label} · change {row.change} · elapsed {row.elapsed}" for row in rows)
     return lines
@@ -251,9 +251,9 @@ def collect_snapshot(
     try:
         worktree = resolve_worktree(run, cwd)
     except Exception:
-        worktree = None  # every worktree-scoped field then reports `not read` on its own
+        worktree = None  # Git-dependent facts are unavailable; the disk reader stays independent
     try:
-        disk = disk_field(statvfs, worktree)
+        disk = disk_field(statvfs, cwd)
     except Exception as error:
         disk = f"{NOT_READ} (statvfs: internal error: {type(error).__name__})"
     where = proc_dir if proc_dir is not None else (None if sys.platform == "darwin" else Path("/proc"))

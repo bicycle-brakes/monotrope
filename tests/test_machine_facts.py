@@ -8,9 +8,8 @@ fixture injects its sources - clock, statvfs, system commands, the Linux proc
 path - and never probes the real machine's pressure, so the tests are
 deterministic on macOS and Linux. Each test names the fault that turns it red;
 the fault is the ledger's em-dash text of its criterion. The two-second
-subprocess bound itself is `run_report.run_command`'s and is proven in
-`tests/test_run_report.py`; here the same SourceError path is exercised with
-injected failures.
+subprocess bound is exercised through the shared command reader with injected
+TimeoutExpired failures for every subprocess source.
 """
 
 from __future__ import annotations
@@ -21,6 +20,8 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -40,10 +41,10 @@ MEMINFO = "MemTotal:  16384000 kB\nSwapTotal:   2097152 kB\nSwapFree:    1572864
 MEMINFO_ZERO = "MemTotal:  16384000 kB\nSwapTotal:         0 kB\nSwapFree:          0 kB\n"
 MEMINFO_WRONG = "MemTotal:  16384000 kB\nSwapTotal:   1048576 kB\nSwapFree:    2097152 kB\n"
 
-MAIN = "worktree /repo/main\nHEAD abc123\nbranch refs/heads/main\n"
-LINKED = "worktree /repo/linked wt\nHEAD def456\nbranch refs/heads/feature\n"
-STALE = "worktree /repo/stale\nHEAD 0000000\nprunable git status file missing\n"
-BARE = "worktree /repo/bare\nbare\n"
+MAIN = "worktree /repo/main\0HEAD abc123\0branch refs/heads/main\0"
+LINKED = "worktree /repo/linked wt\0HEAD def456\0branch refs/heads/feature\0"
+STALE = "worktree /repo/stale\0HEAD 0000000\0prunable git status file missing\0"
+BARE = "worktree /repo/bare\0bare\0"
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ def git_keys(worktree: Path) -> dict[tuple[str, ...], str]:
 
 
 def worktree_list_fixture(*entries: str) -> str:
-    """One `-z` porcelain table: every entry is NUL-terminated, its attributes newline-separated."""
+    """One `-z` porcelain table: attributes are NUL-terminated, with an empty attribute between records."""
     return "".join(f"{entry}\0" for entry in entries)
 
 
@@ -307,7 +308,7 @@ def test_jobs_use_existing_process_recognition(tmp_path: Path, monkeypatch) -> N
 def test_sources_fail_independently_without_becoming_a_gate(tmp_path: Path, capsys) -> None:
     """Fault: a failed or malformed source becomes zero or `none`, suppresses an independent field,
     leaks raw diagnostics, or turns a valid invocation into a failing admission check (criterion 6).
-    The two-second timeout shares this path; `run_report.run_command`'s own tests prove the bound."""
+    Timeout cases below also exercise the shared bounded subprocess reader."""
     worktree = tmp_path / "repo"
     (worktree / "plans" / "changes").mkdir(parents=True)
     proc = proc_fixture(tmp_path)
@@ -330,7 +331,7 @@ def test_sources_fail_independently_without_becoming_a_gate(tmp_path: Path, caps
     assert "0.0 GiB used" not in out and "none matched" not in out  # no safe zero, no false `none`
     assert "Traceback" not in out and "no swap here" not in out  # raw diagnostics never echo
 
-    # Git cannot identify the worktree: its two fields say so; swap and the process row stay.
+    # Git cannot identify the worktree: disk, swap and the process row stay readable.
     (proc / "meminfo").write_text(MEMINFO, encoding="utf-8")
     revparse = ("git", "-C", str(worktree), "rev-parse", "--show-toplevel")
     run = fake_run(
@@ -345,7 +346,7 @@ def test_sources_fail_independently_without_becoming_a_gate(tmp_path: Path, caps
     code = machine_facts.main([], run=run, statvfs=statvfs, proc_dir=proc, cwd=worktree, now=clock(T0))
     out = capsys.readouterr().out
     assert code == 0
-    assert "free disk: not read (worktree: not identified)" in out
+    assert "free disk: 2.0 GiB available" in out
     assert "registered worktrees: not read (worktree: not identified)" in out
     assert "swap: 0.5 GiB used of 2.0 GiB total (host-wide)" in out
     assert "pid 12345 · implement · change not read · elapsed 03:12" in out
@@ -369,8 +370,6 @@ def test_sources_fail_independently_without_becoming_a_gate(tmp_path: Path, caps
 def test_snapshot_is_local_and_read_only(tmp_path: Path) -> None:
     """Fault: the snapshot writes a file (bytecode included), runs a mutation, network or tracker
     command beyond its read-only sources, or leaves state behind (spec criterion 7)."""
-    assert sys.dont_write_bytecode, "machine_facts.py must set the flag before importing local helpers"
-
     worktree = tmp_path / "repo"
     (worktree / "plans" / "changes").mkdir(parents=True)
     outputs = {
@@ -414,10 +413,34 @@ def test_snapshot_is_local_and_read_only(tmp_path: Path) -> None:
         tool.chmod(0o755)
 
     before = sorted(str(path.relative_to(worktree)) for path in worktree.rglob("*"))
-    env = {key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"}
+    scripts = REPO_ROOT / "scripts"
+
+    def bytecode_state() -> dict[Path, bytes]:
+        return {path: path.read_bytes() for path in scripts.rglob("*.pyc")}
+
+    bytecode_before = bytecode_state()
+    cache_dirs_before = set(scripts.rglob("__pycache__"))
+    env = {
+        key: value for key, value in os.environ.items() if key not in {"PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX"}
+    }
+    # Check at the import boundary, before run_report can set the flag itself.
+    probe = """
+import builtins
+import runpy
+import sys
+original_import = builtins.__import__
+def checked_import(name, *args, **kwargs):
+    if name == "run_report":
+        assert sys.dont_write_bytecode, "bytecode must be disabled before importing run_report"
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = checked_import
+sys.dont_write_bytecode = False
+sys.argv = [sys.argv[1]]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
     env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
     done = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "machine_facts.py")],
+        [sys.executable, "-c", probe, str(scripts / "machine_facts.py")],
         cwd=worktree,
         capture_output=True,
         text=True,
@@ -432,3 +455,72 @@ def test_snapshot_is_local_and_read_only(tmp_path: Path) -> None:
     after = sorted(str(path.relative_to(worktree)) for path in worktree.rglob("*"))
     assert after == before, "the invocation wrote into the temporary repository"
     assert not list(worktree.rglob("__pycache__")), "the invocation left bytecode behind"
+
+    assert bytecode_state() == bytecode_before, "the invocation wrote bytecode beside its own scripts"
+    assert set(scripts.rglob("__pycache__")) == cache_dirs_before, "the invocation created a bytecode directory"
+
+
+def test_worktree_paths_preserve_newlines() -> None:
+    """NUL-delimited attributes preserve newlines, even at the start of a path."""
+    paths = ["\nleading", "/repo/line\nworktree /fake\nbare", "/repo/trailing\n"]
+    entries = [f"worktree {path}\0HEAD abc123\0detached\0" for path in paths]
+    raw = worktree_list_fixture(*entries, BARE)
+    records = machine_facts.worktree_records(raw)
+    assert records == [[f"worktree {path}", "HEAD abc123", "detached"] for path in paths] + [
+        ["worktree /repo/bare", "bare"]
+    ]
+    run = fake_run({("git", "-C", "/repo", "worktree", "list", "--porcelain", "-z"): raw})
+    assert machine_facts.worktree_field(run, Path("/repo")).startswith("3 (git worktree list")
+
+
+def test_missing_runner_definitions_never_claim_none(monkeypatch) -> None:
+    """Unread runner recognition cannot establish that no runner jobs matched."""
+    monkeypatch.setattr(run_report, "stage2", None)
+    monkeypatch.setattr(run_report, "KNOWN_VERBS", frozenset())
+    run = fake_run({("ps", "-axo", "pid,etime,command"): ps_output("123 00:01 unrelated")})
+    lines = machine_facts.jobs_field(run, None)
+    assert any("runner recognition: not read" in line for line in lines)
+    assert "none matched" not in lines
+
+
+@pytest.mark.parametrize("source", ["rev-parse", "worktree", "sysctl", "ps"])
+def test_timed_out_sources_preserve_independent_facts(tmp_path: Path, monkeypatch, capsys, source: str) -> None:
+    """Each subprocess uses the shared two-second bound; a timeout only removes its own fact."""
+    worktree = tmp_path / "repo"
+    worktree.mkdir()
+    outputs = {
+        **git_keys(worktree),
+        ("git", "-C", str(worktree), "worktree", "list", "--porcelain", "-z"): worktree_list_fixture(MAIN),
+        ("sysctl", "-n", "vm.swapusage"): SWAPUSAGE,
+        ("ps", "-axo", "pid,etime,command"): ps_output("123 00:01 make verify"),
+    }
+    calls = []
+
+    def bounded_run(argv, *, capture_output, timeout, check):
+        assert capture_output and not check
+        assert timeout == 2, "every machine-facts subprocess must retain the shared two-second bound"
+        calls.append(argv)
+        if source in argv:
+            raise subprocess.TimeoutExpired(argv, timeout, output=b"private raw diagnostic")
+        return subprocess.CompletedProcess(argv, 0, outputs[tuple(argv)].encode())
+
+    monkeypatch.setattr(run_report.subprocess, "run", bounded_run)
+    monkeypatch.setattr(machine_facts.sys, "platform", "darwin")
+    code = machine_facts.main([], cwd=worktree, statvfs=fake_statvfs({worktree: statvfs_result(2 * GIB)}))
+    out = capsys.readouterr().out
+    assert code == 0
+    assert calls and any(source in argv for argv in calls)
+    assert "free disk: 2.0 GiB available" in out
+    if source in {"rev-parse", "worktree"}:
+        assert "registered worktrees: not read" in out
+    else:
+        assert "registered worktrees: 1 (git worktree list" in out
+    if source == "sysctl":
+        assert "swap: not read (sysctl: timed out)" in out
+    else:
+        assert "swap: 0.5 GiB used of 4.0 GiB total" in out
+    if source == "ps":
+        assert "running jobs:\n  not read (ps: timed out)" in out
+    else:
+        assert "pid 123 · verify" in out
+    assert "private raw diagnostic" not in out and "Traceback" not in out
