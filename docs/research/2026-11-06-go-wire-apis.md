@@ -59,13 +59,14 @@ Now qualifying (wire skip removed): qwen3.8-flash, qwen3.7-plus, qwen3.8-max,
 minimax-m3 (Messages) and grok-4.7 (Responses); fresh preparation places them
 on the paid ladder.
 
+### Routes
 
-Routes. The offline contracts (`GO_NATIVE_ROUTES` in
+The offline contracts (`GO_NATIVE_ROUTES` in
 `tests/test_pi_contract.py`) prove that the pinned Pi appends `/v1/messages` to the Messages base
 `https://opencode.ai/inference/go/anthropic` and `/responses` to the
 Responses base `https://opencode.ai/inference/go/openai/v1`; the expected
 live routes are therefore the two documented page endpoints in the table
-above.
+above. Google has no route here: no admissible model (decisions.md Q-2).
 
 ## Open
 

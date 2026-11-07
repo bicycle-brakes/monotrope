@@ -18,8 +18,8 @@ tags: [plan, stage-2, opencode-go, wire-api]
 # Plan — go-wire-apis
 
 ```text
-For you:     Already admitted Go models can use Messages, Responses and Google directly after each API is measured.
-Done when:   Native offline contracts, three recorded live API measurements and make verify pass with the final declaration.
+For you:     Already admitted Go models can use Messages and Responses directly; Google waits for an admissible model (decisions.md Q-2).
+Done when:   Native offline contracts, the two recorded live API measurements (Messages, Responses) and make verify pass with the final declaration.
 Appetite:    3 hours of phase 4, repairs included — a stop, not an estimate.
 Not now:     New model admissions, terms renewal, translation, a Pi upgrade or changed routing policy.
 Pre-mortem:  suppose it failed: most likely because the fresh catalog lacks an exact admitted representative for one API.
@@ -79,8 +79,9 @@ this plan follows the phase-3 prompt, without claiming the missing gate ran.
    with `basis`, actual documentation `quelle` and quoted reading-date
    `gelesen`; expected Pi-shaped bases are Messages
    `https://opencode.ai/inference/go/anthropic`, Responses
-   `https://opencode.ai/inference/go/openai/v1`, Google
-   `https://opencode.ai/inference/go/google/v1beta`. Responses legitimately
+   `https://opencode.ai/inference/go/openai/v1`; Google
+   (`https://opencode.ai/inference/go/google/v1beta`) is not declared — no
+   admissible model (decisions.md Q-2, bead coding-harness-twdu). Responses legitimately
    shares the completions base; the adapters append different routes.
    A changed source/base is evidence to investigate, never silently replace.
 6. **Orchestrator only:** stage the candidate measurement-list expansion and
@@ -107,7 +108,7 @@ this plan follows the phase-3 prompt, without claiming the missing gate ran.
    ids now qualify and why others remain blocked. Never copy keys or raw
    credential-bearing traffic. If any API has no successful measurement,
    restore its provisional skips/list entry/mapping and report the blocked
-   criterion; do not claim this three-API change complete. On success retain
+   criterion; this change ships the two measured APIs (decisions.md Q-2). On success retain
    only justified wire-skip removals and correct the entry's present-tense
    `bemerkung`/comments, preserving dated history. Report preparation's
    selections/failures in the main conversation; do not consume its receipt
@@ -168,6 +169,10 @@ Keep final verification and live evidence tied to their exact code commits.
 - 6: tests/test_stage2_research_availability.py::test_pool_requires_tool_support_and_a_measured_wire_api — an unmeasured or incapable candidate becomes a substitute
 
 ## Time used
+
+Appetite overrun, 2026-11-07: 14684 s recorded against the 3 h card; parked at
+loop round 3, the maintainer granted one more hour (repair, phase 6, pull
+request).
 
 2026-11-06 16:19:48–17:39:18 UTC, 4769 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 17:39:28–18:44:18 UTC, 3890 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
