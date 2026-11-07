@@ -124,6 +124,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ci-minutes/plan.md`](changes/ci-minutes/plan.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/research.md`](changes/ci-minutes/research.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/spec.md`](changes/ci-minutes/spec.md) | draft | none | 2026-10-13 | coding-harness-cac |
+| [`changes/codex-capacity-retry/research.md`](changes/codex-capacity-retry/research.md) | draft | none | 2026-11-07 | coding-harness-m98e |
 | [`changes/codex-drafts/decisions.md`](changes/codex-drafts/decisions.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/design.md`](changes/codex-drafts/design.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/findings.md`](changes/codex-drafts/findings.md) | draft | none | 2026-10-12 | coding-harness-rhq |
