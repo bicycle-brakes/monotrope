@@ -2737,7 +2737,7 @@ def run_reviewer(
     repository wrapper (ADR 0019): the rung's id under the `opencode-go`
     provider, thinking `max` (Pi clamps it per model), the read-only tools,
     every discovery switched off, no session, retries off. Each call gets its
-    own scratch directory: a `HOME`, an agent directory with retry settings
+    own scratch directory: a `HOME`, an agent directory whose settings set retries and turn compaction off
     and the run's refreshed provider definitions, and the prompt file. The key reaches Pi as
     `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
     ended after `REVIEWER_MINUTES` is stopped (criterion 15).
