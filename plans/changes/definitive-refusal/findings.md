@@ -395,3 +395,15 @@ Kept from the loop record:
 Stage-2 call, 2026-11-07: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3492 commits, 12 rules.
 
 Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3499 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3523 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-07
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | implementation | scripts/stage2.py:1117 | A failed paid call with stderr `HTTP/1.1 403 Access Denied` or `HTTP/1.1 410 Resource removed` is not recognized: the classifier additionally requires selected reason phrases. Reproduced: both return `None`. The rung remains pending and stops the invocation despite explicit HTTP refusal evidence. Recognize these response statuses independently of their reason wording. [Acceptance criteria 1–2] | Codex | open | — |
+| F6-5 | MAJOR | SPEC | implementation | scripts/stage2.py:1128–1130 | A failed call with a stdout line containing `403` and over 12,000 characters, plus stderr containing `HTTP 410 Gone: model retired by provider` followed by 41 debug lines, retires the rung but loses the provider diagnostic. Reproduced: stdout exhausts the diagnostic limit, while the exception retains only the last debug line. Preserve the actual refusal evidence before truncating unrelated output. [Acceptance criterion 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1b627-c192-7403-b037-41da4ed00294, 2026-11-07
+Reviewer session: codex 01a1b627-c192-7403-b037-41da4ed00294 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
