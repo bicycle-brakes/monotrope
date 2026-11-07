@@ -5626,6 +5626,40 @@ PI_FLAGS = [
 ]
 
 
+def test_every_pi_settings_writer_uses_shared_constant() -> None:
+    """One settings definition prevents discovery, reviews, probes and research from drifting.
+
+    Planting the old inline literal at any writer must fail even while its JSON
+    still matches today's content; the contract here is shared ownership.
+    """
+    expected = {
+        "stage2.py": (2, "PI_AGENT_SETTINGS"),
+        "stage2_availability.py": (1, "runner.PI_AGENT_SETTINGS"),
+        "stage2_research_run.py": (1, "self.runner.PI_AGENT_SETTINGS"),
+    }
+    assert hasattr(stage2, "PI_AGENT_SETTINGS"), "all Pi settings writers need one shared production constant"
+    assert stage2.PI_AGENT_SETTINGS == {"retry": {"enabled": False}, "compaction": {"enabled": False}}
+    for filename, (count, reference) in expected.items():
+        tree = ast.parse((REPO_ROOT / "scripts" / filename).read_text(encoding="utf-8"))
+        writes = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "write_text"
+            and isinstance(node.func.value, ast.BinOp)
+            and isinstance(node.func.value.right, ast.Constant)
+            and node.func.value.right.value == "settings.json"
+        ]
+        assert len(writes) == count, f"{filename}: the settings writer inventory changed"
+        for write in writes:
+            value = write.args[0]
+            assert isinstance(value, ast.Call) and ast.unparse(value.func) == "json.dumps", filename
+            assert len(value.args) == 1 and ast.unparse(value.args[0]) == reference, (
+                f"{filename}:{write.lineno}: settings must serialize the shared {reference}"
+            )
+
+
 def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     """Criterion 8: one launch path for the loop's paid rounds - the rung under the provider, the measured flag set, a fresh home."""
     # The free stage is already consumed, so this run starts on the Flash swarm: two paid members, then the rung.

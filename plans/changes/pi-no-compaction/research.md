@@ -4,33 +4,22 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-mwzv.2
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2, version: "glm-5.3-flash, 2026-11-06; Codex repair, 2026-11-07"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # pi no compaction — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3379 commits, 12 rules.
 
 ## Runner exploration — 2026-11-06
-
-The exploration is complete. Here is the research, ready to append to `plans/changes/pi-no-compaction/research.md`.
-
----
 
 ## What exists today
 
@@ -90,3 +79,22 @@ The exploration is complete. Here is the research, ready to append to `plans/cha
 - `plans/changes/loop-until-clean/spec.md`, `plans/changes/review-release-lock/spec.md`, `plans/changes/review-verdict-validated/spec.md` — review-loop ending and release rules the overflow failure kind interacts with (ADR 0021 territory; the overflow note records that an amendment is needed only if overflow becomes its own named failure kind).
 - `plans/specs/implementation-verification/spec.md` — living spec of the runner's attempt preparation, the phase whose derived-file checks surround the loop.
 - Bead `coding-harness-z4oo` (contract tests reading the pinned Pi's real data) — named in the night-run plan backlog; no `plans/` folder yet.
+
+## Repair measurement — 2026-11-07
+
+The phase-1 observations above describe the pre-implementation tree. The offline
+contract now measures the installed Pi 1.5.0 through the production reviewer
+launch with synthetic credentials and a loopback provider; no paid provider is
+called. The repair started from `ba80de2ccbb90a9baa39ffecd9626f93cecd2fdd`.
+
+`tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused`
+passes with the narrower 1.5.0 expectations: exactly one request, process exit
+1, stderr containing `Response was truncated`, and the runner's `CallFailed`
+containing `output token limit`. The old 1.2.0 measurement returned zero with
+empty stdout. Keeping that older expectation would describe the wrong refusal
+path for the pinned runtime; the test now pins the measured 1.5.0 path rather
+than accepting either version's behavior.
+
+`tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction`
+also passes on Pi 1.5.0. Its production-setting fault and restoration evidence
+are recorded in this change's plan, under the repair verification section.

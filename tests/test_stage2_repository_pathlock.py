@@ -179,7 +179,10 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     run.root, run.change, run.key = tmp_path, "some-change", "k"
     run.selection = {}
     run.runner = SimpleNamespace(
-        PI_WRAPPER=Path("/pinned/pi"), PI_TOOLS=stage2.PI_TOOLS, foreign_env=stage2.foreign_env
+        PI_WRAPPER=Path("/pinned/pi"),
+        PI_TOOLS=stage2.PI_TOOLS,
+        PI_AGENT_SETTINGS=stage2.PI_AGENT_SETTINGS,
+        foreign_env=stage2.foreign_env,
     )
     scratch = tmp_path / "seat"
     scratch.mkdir()

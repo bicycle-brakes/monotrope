@@ -1467,24 +1467,21 @@ def test_contract_prerequisites_and_failures_are_mandatory(
 def test_real_truncated_pi_print_failure_is_refused(project: Path, transport) -> None:
     """Criterion 13: the runner refuses the real Pi result of a length finish.
 
-    Measured on Pi 1.2.0: Pi appends a context edit that removes the truncated
-    assistant message before printing, so the process returns zero with empty
-    stdout. The runner's empty-answer guard refuses it; the separate unit test
-    covers nonzero print refusals.
+    Pi 1.5.0 exits 1 with "Response was truncated" after one request; the runner
+    refuses it through the nonzero-exit path ("output token limit"). Pi 1.2.0
+    instead returned zero with empty stdout, using the empty-answer guard.
+    The version change is recorded in pi-no-compaction/research.md, under
+    "Repair measurement — 2026-11-07"; this contract pins the installed 1.5.0 path.
     """
     standin = StandIn([{"content": "partial review", "finish_reason": "length"}])
     transport.providers["opencode-go"] = {"baseUrl": standin.url}
     try:
-        # Pi 1.2.0 printed nothing and exited 0 (the runner's empty-answer guard refuses it); the
-        # pinned Pi 1.5.0 exits 1 with "Response was truncated" (the nonzero-exit refusal). Either
-        # way the runner refuses the length finish after exactly one provider request.
-        with pytest.raises(stage2.CallFailed, match="answer is empty|output token limit"):
+        with pytest.raises(stage2.CallFailed, match="output token limit"):
             stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
         assert len(standin.requests) == 1
         result = transport.calls[-1]["result"]
-        assert result.returncode != 0 or not result.stdout.strip(), (
-            "Pi's measured truncated-print behavior changed; recheck the refusal path"
-        )
+        assert result.returncode == 1, "Pi 1.5.0 must refuse the length finish with exit 1"
+        assert "Response was truncated" in result.stderr, "Pi's measured length-finish diagnostic changed"
     finally:
         standin.close()
 
@@ -1498,7 +1495,7 @@ def test_real_context_overflow_fails_without_compaction(project: Path, transport
     answer, so exactly one provider request, a nonzero text-mode exit and `CallFailed` refute the
     recovery. The settings file is production's own (`run_reviewer`'s scratch), observed at the
     transport seam and never injected by the test. Planted fault: removing the production
-    `compaction` setting turns this red (a second request arrives and the member answers), as does
+    `compaction` setting turns this red (recovery loses the original overflow refusal), as does
     accepting a zero-exit or empty overflow answer.
     """
     standin = StandIn(

@@ -414,6 +414,8 @@ ZEN = "opencode"
 # `pi update --models` and `--list-models` share one fresh scratch directory and
 # this timeout; a refresh that has not ended inside it refuses the run (criterion 5).
 PI_DISCOVERY_SECONDS = 120
+# Every runner-written Pi settings file uses this one definition.
+PI_AGENT_SETTINGS = {"retry": {"enabled": False}, "compaction": {"enabled": False}}
 # Bounds of the implementation diff a free call may see: per file and in total,
 # so no whole source file travels (criterion 3).
 FREE_DIFF_MAX_LINES = 400
@@ -422,8 +424,9 @@ FREE_DIFF_MAX_TOTAL = 2000
 # marker and the round says so. The bound stays as a limit on cost and on how much one member can
 # attend to (R-15 of the review-swarm review), not as a guard against summaries: the runner's Pi
 # agent settings disable automatic compaction, so an oversized context now fails the member
-# (`CallFailed`) instead of ending in a summary it answers on (measured:
-# `docs/research/2026-11-03-pi-context-overflow.md`).
+# (`CallFailed`) instead of ending in a summary it answers on. The pinned Pi 1.5.0 evidence is
+# `tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction`; the historical
+# `docs/research/2026-11-03-pi-context-overflow.md` measured Pi 1.2.0.
 REVIEW_DIFF_MAX_LINES = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
@@ -2311,9 +2314,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(
-            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
-        )
+        (agent / "settings.json").write_text(json.dumps(PI_AGENT_SETTINGS), encoding="utf-8")
         home = scratch / "home"
         home.mkdir()
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
@@ -2749,9 +2750,7 @@ def run_reviewer(
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
-        (agent / "settings.json").write_text(
-            json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
-        )
+        (agent / "settings.json").write_text(json.dumps(PI_AGENT_SETTINGS), encoding="utf-8")
         # The launch resolves and assesses its model offline, against the one
         # address record read fresh from the held declaration. Without the
         # run's refreshed definitions there is no checked destination, and no
