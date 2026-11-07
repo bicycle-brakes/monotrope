@@ -168,3 +168,7 @@ Runner restoration, 2026-11-07: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · leak check clean over 915 files, 3515 commits, 12 rules.
 
 Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · leak check clean over 915 files, 3515 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3516 commits, 12 rules.
+
+Runner restoration, 2026-11-07: repair · attempt 1 · route codex — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged

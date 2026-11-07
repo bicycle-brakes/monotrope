@@ -11954,6 +11954,55 @@ def test_repair_lifecycle_crlf_documents_are_reported_unchanged(tmp_path: Path) 
             assert (folder / name).read_bytes() == content, name
 
 
+@pytest.mark.parametrize("field", ["status", "implementation_status"])
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged-first", "changed-first"])
+def test_repair_lifecycle_duplicate_removal_is_reported(tmp_path: Path, field: str, changed: bool) -> None:
+    """Duplicate cleanup is reported separately from a net change to the surviving field."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    path = folder / "spec.md"
+    original = "---\nstatus: draft\nimplementation_status: none\n---\n\n# Spec\n"
+    path.write_text(original, encoding="utf-8")
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    baseline = {path: fields}
+    standing = fields[field]
+    damaged = original.replace(standing, f"{field}: superseded" if changed else standing)
+    damaged = damaged.replace("\n---\n\n", f"\n{field}: partial\n{field}: draft\n---\n\n")
+    path.write_text(damaged, encoding="utf-8")
+
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+
+    assert not problems
+    assert path.read_text(encoding="utf-8") == original
+    expected_fields = field if changed else stage2.LIFECYCLE_UNCHANGED
+    assert report == [
+        f"plans/changes/demo/spec.md — {expected_fields}; "
+        f"removed duplicate {field} line 4; removed duplicate {field} line 5"
+    ], "duplicate removal must identify each removed line without claiming an unchanged field was restored"
+
+
+def test_repair_lifecycle_mixed_report_names_unchanged_documents(tmp_path: Path) -> None:
+    """Criterion 5: changed spec and untouched design/plan all appear in the same report."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\nstatus: draft\nimplementation_status: none\n---\n\n# Document\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original, encoding="utf-8")
+    baseline = stage2.lifecycle_snapshot(folder)
+    (folder / "spec.md").write_text(original.replace("status: draft", "status: accepted"), encoding="utf-8")
+
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+
+    assert not problems
+    assert report == [
+        "plans/changes/demo/spec.md — status",
+        "plans/changes/demo/design.md, plans/changes/demo/plan.md — unchanged",
+    ], "every protected document must be accounted for even when only one needed restoration"
+    for name in stage2.LIFECYCLE_DOCS:
+        assert (folder / name).read_text(encoding="utf-8") == original
+
+
 def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> None:
     """Criterion 3. Planted fault: the restoration reverts whole documents, unrelated header fields
     or the runner's own time bookkeeping, or an edit to the protected fields alone rejects the repair."""
@@ -12086,7 +12135,7 @@ def test_repair_lifecycle_report_describes_each_attempt(
         assert world.run("repair") == 0
         line = restored_line(world)
         assert spec_line in line and "plans/changes/demo/plan.md — status, implementation_status" in line
-        assert "unchanged" not in line
+        assert "plans/changes/demo/design.md — unchanged" in line
     elif scenario == "rejected":
         script_repair(
             world,

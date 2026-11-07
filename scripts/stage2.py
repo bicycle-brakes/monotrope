@@ -7269,8 +7269,8 @@ def lifecycle_snapshot(folder: Path) -> dict[Path, dict[str, str]]:
     return baseline
 
 
-def reapply_lifecycle_fields(text: str, baseline: dict[str, str]) -> tuple[str, list[str]]:
-    """The text with the baseline lifecycle lines back in its initial frontmatter, and the fields touched.
+def reapply_lifecycle_fields(text: str, baseline: dict[str, str]) -> tuple[str, list[str], list[str]]:
+    """The restored text, fields whose surviving lines changed, and duplicate-line removals.
 
     An edited baseline line goes back at its key's first top-level occurrence, a removed one at the
     block's end; a protected line the baseline lacks goes, as does a duplicate beyond the first.
@@ -7280,11 +7280,12 @@ def reapply_lifecycle_fields(text: str, baseline: dict[str, str]) -> tuple[str, 
     block: list[str] = []
     seen: set[str] = set()
     touched: list[str] = []
-    for line in lines[1:closing]:
+    duplicates: list[str] = []
+    for number, line in enumerate(lines[1:closing], start=2):
         key = line.split(":", 1)[0]
         if key in LIFECYCLE_FIELDS:
             if key in seen:
-                touched.append(key)
+                duplicates.append(f"removed duplicate {key} line {number}")
                 continue
             seen.add(key)
             if key not in baseline:
@@ -7298,9 +7299,9 @@ def reapply_lifecycle_fields(text: str, baseline: dict[str, str]) -> tuple[str, 
         if key not in seen:
             block.append(line)
             touched.append(key)
-    if touched:
+    if touched or duplicates:
         lines[1:closing] = block
-    return "\n".join(lines), touched
+    return "\n".join(lines), touched, duplicates
 
 
 def restore_lifecycle_fields(
@@ -7315,10 +7316,11 @@ def restore_lifecycle_fields(
     its bytes, and the problem returned here rejects the attempt instead of inventing surrounding
     content. The complete batch stands checked before its first write, and a refusal leaves it
     unwritten with a diagnostic that names the lifecycle protection. Returns the restoration report -
-    one line per changed document, or the unchanged line - and the structural problems.
+    changed documents (including duplicate cleanup), every unchanged document, and structural problems.
     """
     changes: dict[Path, bytes] = {}
     report: list[str] = []
+    unchanged: list[str] = []
     problems: list[str] = []
     for path, fields in baseline.items():
         relative = path.relative_to(root).as_posix()
@@ -7329,15 +7331,19 @@ def restore_lifecycle_fields(
         if text is None or frontmatter_fields(text) is None:
             problems.append(f"{relative} was deleted or lost its frontmatter; the snapshotted-input recovery owns it")
             continue
-        updated, touched = reapply_lifecycle_fields(text, fields)
-        if touched:
+        updated, touched, duplicates = reapply_lifecycle_fields(text, fields)
+        if touched or duplicates:
             changes[path] = updated.encode("utf-8")
-            # The fields read in their fixed order, however the attempt's header ordered them,
-            # so the report line reads the same whatever the damage moved first.
-            report.append(f"{relative} — {', '.join(field for field in LIFECYCLE_FIELDS if field in touched)}")
-    if not report and not problems:
-        relatives = ", ".join(sorted(path.relative_to(root).as_posix() for path in baseline))
-        report = [f"{relatives or 'no protected document'} — {LIFECYCLE_UNCHANGED}"]
+            # The fields read in their fixed order, however the attempt's header ordered them.
+            # Duplicate cleanup is a separate action, not a net change to the surviving field.
+            restored = ", ".join(field for field in LIFECYCLE_FIELDS if field in touched)
+            details = "; ".join([restored or LIFECYCLE_UNCHANGED, *duplicates])
+            report.append(f"{relative} — {details}")
+        else:
+            unchanged.append(relative)
+    if unchanged or not baseline:
+        relatives = ", ".join(sorted(unchanged)) or "no protected document"
+        report.append(f"{relatives} — {LIFECYCLE_UNCHANGED}")
     if changes:
         try:
             preflight_recovery(root, changes, aliases=aliases)
