@@ -1755,7 +1755,9 @@ facility is available, the session reports the missing supervision instead
 of declaring the run ready. It also starts keep-awake bounded to the
 intended run period — on macOS, `caffeinate -i -t <remaining-run-seconds>`
 as a separately owned background job — records that handle and expiry, and
-verifies both before unattended work begins. No scheduler adapter is
+verifies both before unattended work begins. Where no keep-awake command
+exists, the session reports the missing keep-awake, as it does a missing
+delivery facility, instead of declaring the run ready. No scheduler adapter is
 introduced for this. The wake is time-based: it returns even when every
 lane looks busy, and lane idleness alone triggers nothing.
 
