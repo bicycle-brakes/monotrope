@@ -131,17 +131,17 @@ existing runner modules, verification admission or startup hooks.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_outcome_test.py::test_question_set_has_eight_fixed_topics — a source-value edit alters IDs or a topic is missing
-- 2: not yet written tests/test_outcome_test.py::test_expected_answers_follow_live_sources — changed source values leave old answers correct or code import runs
-- 3: not yet written tests/test_outcome_test.py::test_questionnaire_contains_no_answer_key — derived-value sentinels enter subject material
-- 4: not yet written tests/test_outcome_test.py::test_session_metadata_and_fresh_attestation_are_required — an anonymous or unattested run is recorded
+- 1: tests/test_outcome_test.py::test_question_set_has_eight_fixed_topics — a source-value edit alters IDs or a topic is missing
+- 2: tests/test_outcome_test.py::test_expected_answers_follow_live_sources — changed source values leave old answers correct or code import runs
+- 3: tests/test_outcome_test.py::test_questionnaire_contains_no_answer_key — derived-value sentinels enter subject material
+- 4: tests/test_outcome_test.py::test_session_metadata_and_fresh_attestation_are_required — an anonymous or unattested run is recorded
 - 4: not a test — phase-6 review reads the baseline's session provenance against the answered scope; a reset cannot be proved from metadata alone
-- 5: not yet written tests/test_outcome_test.py::test_grading_is_exact_and_keeps_denominator_eight — omitted answers, wrong types or contradictory prose earn points or shrink the total
-- 6: not yet written tests/test_outcome_test.py::test_unread_or_changed_evidence_prevents_recording — missing, conflicting or changed sources produce a score or append
-- 7: not yet written tests/test_outcome_test.py::test_measured_runs_append_one_dated_commit_bound_line — metadata or verdicts are missing, earlier bytes change or expected values are stored
-- 8: not yet written tests/test_outcome_test.py::test_bad_history_and_append_failure_preserve_old_records — invalid history, duplicate IDs or failed writes appear successful or destroy earlier bytes
+- 5: tests/test_outcome_test.py::test_grading_is_exact_and_keeps_denominator_eight — omitted answers, wrong types or contradictory prose earn points or shrink the total
+- 6: tests/test_outcome_test.py::test_unread_or_changed_evidence_prevents_recording — missing, conflicting or changed sources produce a score or append
+- 7: tests/test_outcome_test.py::test_measured_runs_append_one_dated_commit_bound_line — metadata or verdicts are missing, earlier bytes change or expected values are stored
+- 8: tests/test_outcome_test.py::test_bad_history_and_append_failure_preserve_old_records — invalid history, duplicate IDs or failed writes appear successful or destroy earlier bytes
 - 9: not a test — the orchestrator records an actual fresh-session baseline at an accepted commit; phase-6 review checks it and both documented pre-change triggers
-- 10: not yet written tests/test_outcome_test.py::test_tool_only_writes_explicit_history — a model, tracker, Git mutation or substituted output path is used
+- 10: tests/test_outcome_test.py::test_tool_only_writes_explicit_history — a model, tracker, Git mutation or substituted output path is used
 
 ## Verification
 
