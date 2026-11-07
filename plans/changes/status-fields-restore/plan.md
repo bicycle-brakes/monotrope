@@ -121,6 +121,11 @@ held prompt edit; all other held paths remain outside the implementation.
 
 ## Time used
 
+Appetite overrun, 2026-11-07: about 11 h recorded against the 2 h card, mostly
+repairs waiting on the machine-wide verify lock; parked at loop round 4, the
+maintainer granted one more hour for a mechanism repair, phase 6 and the pull
+request.
+
 2026-11-06 00:58:03–02:34:23 UTC, 5779 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 02:34:40–04:14:38 UTC, 5998 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
 2026-11-07 01:50:33–05:22:57 UTC, 12743 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
