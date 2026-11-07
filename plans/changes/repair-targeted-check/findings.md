@@ -938,3 +938,14 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a1b35a-63e1-7f93-9359-9cbdb14ee887, 2026-11-07
 Reviewer session: codex 01a1b35a-63e1-7f93-9359-9cbdb14ee887 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3477 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-07
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-7 | MAJOR | SPEC | Phase 6 | scripts/touch_map.py:477–484; scripts/stage2.py:5817–5823 | An unchanged linked test whose filename contains byte `0xff` is silently omitted: the inventory replaces that byte with `�`, then treats the resulting nonexistent path as deleted. With another valid linked test present, targeted selection succeeds without running the omitted test, even if it contains a failing regression assertion. In-memory execution of the actual adapter and selector reproduced `tests=['tests/test_ok.py']` with `fallback=None` for this inventory. Preserve filesystem names losslessly or require full verification when decoding is unsafe. [Acceptance criteria 2 and 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1b44b-e381-7472-aa86-de1457ec9daa, 2026-11-07
+Reviewer session: codex 01a1b44b-e381-7472-aa86-de1457ec9daa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
