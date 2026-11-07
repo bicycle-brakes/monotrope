@@ -12171,6 +12171,12 @@ def test_repair_status_changes_are_hand_repairs() -> None:
     ):
         with pytest.raises(AssertionError):
             check_lifecycle(broken)
+    # The held prompt carries the same exception before the hand-off (plan step 4, orchestrator edit).
+    prompt = flat((REPO_ROOT / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8"))
+    needle = "is repaired by hand first: the runner restores those two fields after every repair attempt"
+    assert needle in prompt
+    assert prompt.index(needle) < prompt.index("Then hand the remaining taken rows to the repair")
+
 
 
 def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:
