@@ -65,3 +65,18 @@ context: |
   Architecture change: none.
 
 In the context of a repair that followed the maintainer's wider answer while spec and plan did not, facing a BLOCKER for touching protected files and a loss of producer knowledge, we decided to redraft spec and plan to Q-2's scope and keep every producing model as a list, to achieve a change that does what was decided without losing provenance, accepting about one to two hours beyond the spent appetite. — 2026-11-06
+
+## Q-4 · Ship without the one-time normalisation
+
+asked: 2026-11-07
+answer: "Ohne Normalisierung liefern (Recommended)" — this change ships the explore fix and the census for future research files; the one-time normalisation of existing research files becomes its own bead with its own spec that reads producers from history.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: explore writes truthful provenance; Q-2/Q-3 also asked for a one-time normalisation of all active research files without losing producers.
+  Intention: the mechanism repair failed three times on the census tests; the appetite after Q-3 is spent; the lane is parked with the attempt saved.
+  Today: the explore fix and the census work; only normalising other changes' files is hard, because producers must be read from history.
+  Repository change: the normalisation moves to its own bead.
+  Architecture change: none.
+
+In the context of a mechanism repair that failed three times within its appetite, facing a hard history-reading problem, we decided to ship the explore fix and the census and move the normalisation to its own bead, to achieve a finished lane and a clean plan for the hard part, accepting that existing research files keep their current headers until then. — 2026-11-07
