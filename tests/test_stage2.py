@@ -11602,6 +11602,96 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
             check_workflow(broken)
 
 
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "status : accepted",
+        '"status": accepted',
+        "'status': accepted",
+        "? status\n: accepted",
+        "?\n  status\n: accepted",
+        '"sta\\x74us": accepted',
+        "!!str status: accepted",
+    ],
+)
+def test_repair_lifecycle_yaml_keys_are_restored(spelling: str) -> None:
+    """YAML key syntax cannot hide a protected field or leave a duplicate."""
+    original = "---\nstatus: draft\nimplementation_status: none\ntitle: Keep this formatting\n---\nBody\n"
+    damaged = original.replace("status: draft", spelling).replace(
+        "implementation_status: none", '"implementation_status" : complete'
+    )
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    header = yaml.safe_load(restored.split("---")[1])
+    assert header["status"] == "draft", "restore YAML-spelled status before verification"
+    assert header["implementation_status"] == "none"
+    assert restored == original, "remove protected entries without altering unrelated text"
+
+
+def test_repair_lifecycle_alias_key_is_restored() -> None:
+    """A key alias refers to status but must not rewrite its unrelated anchor line."""
+    original = "---\nkey: &s status\nstatus: draft\nimplementation_status: none\n---\nBody\n"
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    damaged = original.replace("status: draft", "*s : accepted")
+    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    assert restored == original, "recognize the aliased key at its own source location"
+
+
+@pytest.mark.parametrize("baseline_flow", [False, True])
+def test_repair_lifecycle_flow_keys_are_restored(baseline_flow: bool) -> None:
+    """Flow-style top-level YAML keys are protected without reformatting unrelated pairs."""
+    original = (
+        '---\n{status: draft, implementation_status: none, title : "Keep formatting"}\n---\nBody\n'
+        if baseline_flow
+        else "---\nstatus: draft\nimplementation_status: none\ntitle: Keep formatting\n---\nBody\n"
+    )
+    damaged = '---\n{"status" : accepted, implementation_status : complete, title : "Keep formatting"}\n---\nBody\n'
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    header = yaml.safe_load(restored.split("---")[1])
+    assert header["status"] == "draft", "a flow mapping must not evade restoration"
+    assert header["implementation_status"] == "none"
+    assert 'title : "Keep formatting"' in restored
+    assert restored.endswith("---\nBody\n")
+
+
+def test_repair_lifecycle_created_design_is_removed_before_retry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed attempt's new design cannot become the retry's lifecycle baseline."""
+    repair_world(world)
+    plant_lifecycle(world, design=False)
+    design = world.root / "plans/changes/demo/design.md"
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "plans/changes/demo/design.md": "---\nstatus: accepted\nimplementation_status: complete\n---\n# Design\n",
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                }
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    real_begin = stage2.begin_work_call
+    calls = []
+
+    def begin(*args, **kwargs):
+        assert not design.exists(), "remove a created design before the next attempt snapshots it"
+        calls.append(1)
+        return real_begin(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "begin_work_call", begin)
+    assert world.run("repair") == 0
+    assert len(calls) == 2
+    assert not design.exists(), "the checkpoint must not carry the model's invented lifecycle"
+    assert "design.md — removed" in world.text()
+
+
 def test_repair_lifecycle_fields_are_restored_before_verification(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -12071,7 +12161,7 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
 @pytest.mark.parametrize("created", [False, True], ids=["absent", "created-by-the-attempt"])
 def test_repair_lifecycle_protection_allows_no_design(world: World, created: bool) -> None:
     """Criterion 4. Planted fault: protection creates the absent optional design, refuses the repair
-    for its absence, or strips the values of a design the attempt just created."""
+    for its absence, or keeps a design without an orchestrator baseline."""
     repair_world(world)
     plant_lifecycle(world, design=False)
     planted_design = (
@@ -12082,20 +12172,12 @@ def test_repair_lifecycle_protection_allows_no_design(world: World, created: boo
         plant["plans/changes/demo/design.md"] = planted_design
     script_repair(world, [repair_step(plant=plant)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
-    if created:
-        standing = (world.root / "plans/changes/demo/design.md").read_text(encoding="utf-8")
-        # The runner's derived preparation stamps a changed held document (`updated:`), as it does
-        # the plan; the attempt's own values stand beside that one added line, unstripped, and the
-        # protection neither refuses the repair nor invents a baseline for the new document.
-        for needle in ("title: Design", "status: draft", "implementation_status: partial", "bead: demo-1"):
-            assert needle in standing, needle
-        shown = git(world.root, "show", "HEAD:plans/changes/demo/design.md")
-        assert "status: draft" in shown and "implementation_status: partial" in shown
-    else:
-        assert not (world.root / "plans/changes/demo/design.md").exists()
+    assert not (world.root / "plans/changes/demo/design.md").exists()
     line = restored_line(world)
-    assert "design.md" not in line
-    if not created:
+    if created:
+        assert "design.md — removed" in line
+    else:
+        assert "design.md" not in line
         assert "plans/changes/demo/plan.md, plans/changes/demo/spec.md — unchanged" in line
     assert "plans/changes/demo/spec.md" in line
 

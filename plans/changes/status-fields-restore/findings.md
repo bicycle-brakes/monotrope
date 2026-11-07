@@ -174,3 +174,7 @@ Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-07: repair · attempt 1 · route codex — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
 
 Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 915 files, 3523 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3537 commits, 12 rules.
+
+Runner restoration, 2026-11-07: repair · attempt 1 · route codex — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged

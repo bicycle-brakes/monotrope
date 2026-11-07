@@ -1600,7 +1600,10 @@ model's values and stays for the maintainer. A finding whose remedy requires cha
 those two fields is therefore repaired by hand: the orchestrator repairs that finding itself before
 handing the remaining taken rows to the model, and books the hand repair in the row's Status as
 above. An approval or an implementation transition stays the orchestrator's act; a model attempt
-never makes one.
+never makes one. A protected document created by an attempt has no orchestrator lifecycle
+baseline: the runner removes it before checks and before a retry can snapshot it, and reports
+that removal explicitly. Existing documents have their fields restored; an absent optional
+design stays absent.
 
 When every post-run check passes —
 `make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
