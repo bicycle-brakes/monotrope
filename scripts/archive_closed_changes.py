@@ -22,7 +22,7 @@ How it decides:
   without artefacts or with mixed/beadless artefacts — skipped, because they
   are not completion candidates — and folders that WOULD be eligible but
   cannot be interpreted safely (unreadable front matter, invalid header
-  fields, an existing destination, a symlink on the source or archive
+  fields, a conflicting destination, a symlink on the source or archive
   boundary). A blocked folder refuses a write run before the first byte
   moves; silently leaving a finished change in the drift backlog is exactly
   what this command exists to end.
@@ -47,6 +47,8 @@ nothing):
   promised: before source removal a failed copy leaves the source intact;
   after source removal starts, a failure keeps the verified destination and
   reports both paths, because the source may be partially removed. A rerun
+  resumes source removal when the destination still matches the complete
+  source (with its archived headers); conflicting copies remain blocked. It
   verifies the index even when nothing remains eligible; after success,
   unchanged inputs leave the tree byte-identical.
 
@@ -325,13 +327,30 @@ def _tracker_state() -> tuple[Path, dict[str, str]]:
     return render, statuses
 
 
-def _destination_block(dst: Path, src: Path) -> str:
-    """'' when the folder can move to dst; the reason it cannot, otherwise.
+def _walk_error(error: OSError) -> None:
+    """Never let an unreadable subtree disappear from a walk."""
+    raise OSError(f"cannot list {error.filename}: {error}") from error
 
-    Run for every eligible folder before the first byte moves: an existing
-    destination is never overwritten, and no symlink on the archive boundary
-    or inside the moved folder is ever traversed.
-    """
+
+def _tree_bytes(root: Path, artefacts: dict[Path, Artefact], day: dt.date) -> dict[Path, bytes | None]:
+    """A complete tree, with expected archived headers when reading a source."""
+    tree: dict[Path, bytes | None] = {}
+    for directory, dirnames, filenames in os.walk(root, followlinks=False, onerror=_walk_error):
+        base = Path(directory)
+        tree[base.relative_to(root)] = None
+        for name in [*dirnames, *filenames]:
+            member = base / name
+            if member.is_symlink():
+                raise OSError(f"symlink inside the folder: {_display(member)}")
+        for name in filenames:
+            member = base / name
+            art = artefacts.get(member)
+            tree[member.relative_to(root)] = _edited_text(art, day).encode("utf-8") if art else member.read_bytes()
+    return tree
+
+
+def _destination_block(dst: Path, src: Path, artefacts: list[Artefact], day: dt.date) -> str:
+    """Preflight both trees; only an exact verified copy is resumable."""
     if CHANGES.is_symlink():
         return "plans/changes is a symlink, not a real directory"
     if ARCHIVE.is_symlink() or (ARCHIVE.exists() and not ARCHIVE.is_dir()):
@@ -341,17 +360,11 @@ def _destination_block(dst: Path, src: Path) -> str:
             return "the archive directory cannot be created (plans/changes is not a writable directory)"
     elif not os.access(ARCHIVE, os.W_OK):
         return "the archive directory is not writable"
+    expected = _tree_bytes(src, {art.path: art for art in artefacts}, day)
     if dst.exists() or dst.is_symlink():
+        if not dst.is_symlink() and dst.is_dir() and _tree_bytes(dst, {}, day) == expected:
+            return ""
         return f"the destination already exists: {_display(dst)}"
-    for root, dirnames, filenames in os.walk(src, followlinks=False):
-        base = Path(root)
-        dirnames.sort()
-        for dirname in dirnames:
-            if (base / dirname).is_symlink():
-                return f"symlink inside the folder: {_display(base / dirname)}"
-        for filename in sorted(filenames):
-            if (base / filename).is_symlink():
-                return f"symlink inside the folder: {_display(base / filename)}"
     return ""
 
 
@@ -416,7 +429,7 @@ def _classify(
             blocked.append((where, f"{_display(art.path)}: {why}"))
             continue
         dst = ARCHIVE / f"{day.isoformat()}-{folder.name}"
-        reason = _destination_block(dst, folder)
+        reason = _destination_block(dst, folder, loaded, day)
         if reason:
             blocked.append((where, reason))
             continue
@@ -454,7 +467,7 @@ def _manifest(entry: Eligible) -> list[str]:
     """Every prospective directory and file, companions marked."""
     artefact_paths = {art.path for art in entry.artefacts}
     lines: list[str] = []
-    for root, dirnames, filenames in os.walk(entry.src, followlinks=False):
+    for root, dirnames, filenames in os.walk(entry.src, followlinks=False, onerror=_walk_error):
         dirnames.sort()
         directory = Path(root)
         target_dir = entry.dst / directory.relative_to(entry.src)
@@ -480,10 +493,18 @@ def _relocate(src: Path, dst: Path, artefacts: dict[Path, Artefact], day: dt.dat
     folder as unfinished. Copy failures permit destination cleanup; source
     removal failures preserve the verified destination for recovery.
     """
+    if dst.exists():
+        if _tree_bytes(dst, {}, day) != _tree_bytes(src, artefacts, day):
+            raise OSError(f"retained destination no longer matches source: {_display(dst)}")
+        try:
+            shutil.rmtree(src)
+        except OSError as exc:
+            raise SourceRemovalError(str(exc)) from exc
+        return
     dst.mkdir(parents=True)
     edited: list[tuple[Path, bytes]] = []
     companions: list[tuple[Path, Path]] = []
-    for root, dirnames, filenames in os.walk(src, followlinks=False):
+    for root, dirnames, filenames in os.walk(src, followlinks=False, onerror=_walk_error):
         base = Path(root)
         dirnames.sort()
         (dst / base.relative_to(src)).mkdir(parents=True, exist_ok=True)
@@ -567,18 +588,27 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
     """Archive every eligible folder, then the index; 0 only when all went well."""
     completed: list[str] = []
     unfinished: list[str] = []
+    try:
+        manifests = [_manifest(entry) for entry in eligible]
+    except OSError as exc:
+        _report_failure([], [f"manifest unreadable — nothing moved: {exc}"])
+        return 1
     for position, entry in enumerate(eligible):
-        _print_entry(entry, "archiving")
+        print(f"archiving {_display(entry.src)} (bead {entry.bead}, closed)")
+        for line in manifests[position]:
+            print(f"  {line}")
         artefacts = {art.path: art for art in entry.artefacts}
+        retained_destination = entry.dst.exists()
         try:
             _relocate(entry.src, entry.dst, artefacts, day)
         except SourceRemovalError as exc:
             unfinished.append(
                 f"{_display(entry.src)}: source removal failed — {exc}; source may be partially removed; "
-                f"complete verified destination retained at {_display(entry.dst)}"
+                f"complete verified destination retained at {_display(entry.dst)}; "
+                "plans/INDEX.md not regenerated; rerun resumes removal only if both trees still match"
             )
         except OSError as exc:
-            cleaned = _remove_partial(entry.dst)
+            cleaned = False if retained_destination else _remove_partial(entry.dst)
             note = f"{_display(entry.src)}: not moved — {exc} (source left in place; "
             if cleaned:
                 note += "partial destination removed)"
@@ -649,7 +679,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"archive: cannot measure — nothing attempted: {exc}", file=sys.stderr)
         return 1
     if not args.write:
-        _report(eligible, blocked, skipped, day, render)
+        try:
+            _report(eligible, blocked, skipped, day, render)
+        except OSError as exc:
+            print(f"archive: cannot report — nothing attempted: {exc}", file=sys.stderr)
+            return 1
         return 0
     if blocked:
         return _refuse(blocked)

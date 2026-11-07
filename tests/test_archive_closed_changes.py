@@ -647,7 +647,10 @@ def test_post_merge_procedure_orders_archive_after_closure() -> None:
     assert first_close < first_archive, "the archive step must follow the close-merged reconciliation"
     assert "make archive ARGS=--write" in prompt, "the write invocation is part of the procedure"
     assert first_close < prompt.index("make archive ARGS=--write"), "archive writing must follow closure"
-    assert "another session's checkout" not in prompt, "the procedure must never touch another session's checkout"
+    wording = " ".join(prompt.split())
+    assert (
+        "in its own up-to-date cleanup worktree" in wording or "never modify another session's checkout" in wording
+    ), "the procedure must restrict cleanup to the session's own checkout"
 
 
 def test_partial_source_removal_preserves_complete_destination(plans_repo, monkeypatch, capsys):
@@ -824,3 +827,55 @@ def test_symlinked_changes_boundary_is_refused(plans_repo, capsys):
     assert archive.main(["--write"]) == 1, "a symlinked changes boundary must refuse archiving"
     assert "plans/changes" in capsys.readouterr().err
     assert _snapshot(real) == before
+
+
+def test_verified_destination_resumes_after_removal_failure(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    src = fx.add("retry", files=_closed_files("b"), companions={"keep.bin": b"unchanged"})
+    fx.set_render({"b": "closed"})
+    original = archive.shutil.rmtree
+
+    def fail_removal(path):
+        if path == src:
+            raise OSError("removal interrupted")
+        original(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(archive.shutil, "rmtree", fail_removal)
+        assert archive.main(["--write"]) == 1
+    dst = fx.archive / "2026-03-04-retry"
+    retained = _snapshot(dst)
+    assert src.exists() and retained
+    failure_report = capsys.readouterr().err
+    assert archive.main(["--write"]) == 0, "a matching verified destination must resume source removal"
+    assert not src.exists()
+    assert "plans/INDEX.md not regenerated" in failure_report
+    assert _snapshot(dst) == retained, "resuming must retain the verified copy byte for byte"
+    assert reg.INDEX.read_text(encoding="utf-8") == reg.render_index()
+
+
+@pytest.mark.parametrize("walk_number", [1, 2])
+def test_unreadable_subtree_refuses_entire_batch(plans_repo, monkeypatch, capsys, walk_number):
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b"))
+    src = fx.add("beta", files=_closed_files("b"), companions={"hidden/keep.bin": b"must survive"})
+    fx.set_render({"b": "closed"})
+    before = _snapshot(fx.root)
+    original = archive.os.walk
+    calls = 0
+
+    def unreadable_walk(top, *args, **kwargs):
+        nonlocal calls
+        if Path(top) == src:
+            calls += 1
+            if calls == walk_number:
+                error = PermissionError(13, "permission denied", str(src / "hidden"))
+                if kwargs.get("onerror"):
+                    kwargs["onerror"](error)
+                return
+        yield from original(top, *args, **kwargs)
+
+    monkeypatch.setattr(archive.os, "walk", unreadable_walk)
+    assert archive.main(["--write"]) == 1, "an unreadable subtree must refuse the batch"
+    assert _snapshot(fx.root) == before, "all walks needed for preflight must finish before any move"
+    assert str(src / "hidden") in capsys.readouterr().err
