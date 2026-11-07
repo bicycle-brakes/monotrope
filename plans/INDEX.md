@@ -456,6 +456,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/tolerate-derived-leftovers/plan.md`](changes/tolerate-derived-leftovers/plan.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/tolerate-derived-leftovers/research.md`](changes/tolerate-derived-leftovers/research.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
 | [`changes/tolerate-derived-leftovers/spec.md`](changes/tolerate-derived-leftovers/spec.md) | draft | partial | 2026-10-25 | coding-harness-b5w |
+| [`changes/triage-verb/decisions.md`](changes/triage-verb/decisions.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/triage-verb/research.md`](changes/triage-verb/research.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/venv-pycache/decisions.md`](changes/venv-pycache/decisions.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/findings.md`](changes/venv-pycache/findings.md) | draft | none | 2026-10-24 | coding-harness-q94b |
