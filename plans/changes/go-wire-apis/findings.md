@@ -335,3 +335,51 @@ Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model glm-5.3-f
 Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3539 commits, 12 rules.
 
 Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 922 files, 3553 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3556 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_capture.py` +1 -0
+> - `scripts/stage2_swarm.py` +1 -3
+> - `tests/test_pi_contract.py` +29 -5
+> - `tests/test_stage2_go_access.py` +9 -2
+> - `tests/test_stage2_research_catalog.py` +9 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: tests/test_pi_contract.py::test_real_go_native_wire_api_exchange: the setup phase of `tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[anthropic-messages]` ended failed; red first needs passing setup and teardown
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-1-20261107T152519725158Z-2af224d9.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 922 files, 3567 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: no fixed line
+> - L3-3: no fixed line
+> - L3-4: no fixed line
+> - L3-5: no fixed line
+> - L3-6: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-2-20261107T152519725158Z-2af224d9.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 922 files, 3569 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L3-1: tests/test_pi_contract.py::test_real_go_native_wire_api_exchange: the setup phase of `tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[anthropic-messages]` ended failed; red first needs passing setup and teardown
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261107T152519725158Z-2af224d9.md
+> ```

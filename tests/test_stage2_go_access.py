@@ -411,6 +411,7 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=list(policy.apis),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -424,6 +425,7 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=list(policy.apis),
         address=policy,
     )
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
@@ -441,6 +443,7 @@ def test_research_selector_skips_an_explicit_null_base(world):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=list(policy.apis),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -822,6 +825,7 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         selector_policy(),
         ["paid-seat"],
         expected_version="test-pin",
+        measured_wire_apis=list(policy.apis),
         address=policy,
     )
     seat = next(item for item in result["models"] if item["id"] == "paid-seat")
@@ -1029,8 +1033,11 @@ def test_native_api_probes_keep_their_assessed_destinations(world, monkeypatch, 
 
     The record maps the API; the probe dispatches on an explicit base and on an
     absent base, and the sending configuration Pi consumes carries that API's
-    own base each time. A configuration whose wire API was swapped behind
-    dispatch's back and a foreign-host row may not send.
+    own base each time. A configuration whose wire API is swapped after
+    assessment, before the final send, is refused by the destination-to-artifact comparison. This
+    proves artifact integrity, not that assessment detects a catalog row
+    pairing an API with another API's same-host base. A foreign-host row
+    is also refused before sending.
     """
     base = NEW_API_BASES[api]
     edit_entry(

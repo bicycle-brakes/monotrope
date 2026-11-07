@@ -89,9 +89,7 @@ def _identity_doubt(entries):
     )
 
 
-def select_research_catalog(
-    bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",), address
-):
+def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis, address):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
     The bridge transports raw source bodies. Python retains duplicate identity and

@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import hashlib
+import inspect
 import json
 import os
 import subprocess
@@ -295,6 +296,7 @@ def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = Non
         POLICY if policy is None else policy,
         FIXED if ids is None else ids,
         expected_version=PIN,
+        measured_wire_apis=list(address_policy().apis),
         address=address_policy(),
     )
 
@@ -1356,3 +1358,10 @@ def test_a_redirect_cannot_meet_the_overlap_barrier(sources):
     sources.overlap = threading.Barrier(2)
     with pytest.raises(AssertionError, match="overlap barrier"):
         refuse_redirect_with_hold(sources)
+
+
+def test_selector_requires_explicit_measured_wire_apis():
+    """A caller must supply its declaration's measurements instead of inheriting an old gate."""
+    parameter = inspect.signature(swarm.select_research_catalog).parameters["measured_wire_apis"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is inspect.Parameter.empty, "measured wire APIs must have no implicit code default"

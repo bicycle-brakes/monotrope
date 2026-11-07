@@ -697,14 +697,14 @@ def native_base_urls(provider: str, api: str) -> set[str]:
 
 
 def native_contract_model(api: str, base_url: str) -> dict:
-    """A models.json definition Pi activates for one native wire API, shaped as the overlay writes them."""
+    """A reasoning-enabled models.json row, shaped as the overlay writes native definitions."""
     model_id = GO_NATIVE_MODELS[api]
     return {
         "id": model_id,
         "name": f"{model_id} contract",
         "api": api,
         "baseUrl": base_url,
-        "reasoning": False,
+        "reasoning": True,
         "input": ["text"],
         "contextWindow": 128000,
         "maxTokens": 4096,
@@ -807,8 +807,8 @@ def test_real_catalog_move_contains_new_go_models() -> None:
 def test_real_catalog_move_keeps_messages_catalog_base() -> None:
     """Ledger 3: the shipped opencode-go Messages entries carry anthropic-messages on the moved base.
 
-    Catalog evidence for the separate Messages follow-up - no wire exchange is measured or
-    admitted here (spec criterion 3).
+    Messages is now measured live and admitted by the repository declaration
+    (spec criterion 3); this test checks its shipped catalog base.
     """
     catalog = {
         model["id"]: model
@@ -1499,7 +1499,11 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     shipped = {}
     for api, models in provider_data("opencode-go").items():
         for model in models.values():
-            assert model.get("id") not in shipped, f"{model['id']}: the shipped catalog files it under two wire APIs"
+            assert isinstance(model, dict), f"{api}: non-dict shipped catalog entry: {model!r}"
+            assert isinstance(model.get("id"), str) and model["id"], (
+                f"{api}: shipped catalog entry has no model id: {model!r}"
+            )
+            assert model["id"] not in shipped, f"{model['id']}: the shipped catalog files it under two wire APIs"
             shipped[model["id"]] = (api, model)
     # Every admitted rung must hold an exact shipped definition on a wire API the
     # address record measures, at that API's own recorded base - including ids an
@@ -1556,6 +1560,8 @@ def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: st
     schema and the synthetic credential in that protocol's own header - never a
     translation into Chat Completions, a foreign credential or a credential in
     the request body - and the decoded streamed text must reach Pi's stdout.
+    A reasoning-enabled row with --thinking max must also send the native
+    thinking configuration, as the paid review path does.
     """
     model_id = GO_NATIVE_MODELS[api]
     standin = StandIn([{"content": NATIVE_ANSWER}])
@@ -1564,6 +1570,8 @@ def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: st
             project,
             scratch_of(tmp_path),
             *REVIEWER_FLAGS,
+            "--thinking",
+            "max",
             "--model",
             f"opencode-go/{model_id}",
             "answer on the native wire API",
@@ -1592,6 +1600,22 @@ def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: st
         assert PLANTED_KEY not in json.dumps(exchange.headers), "a foreign credential authenticated the request"
         assert SYNTHETIC_KEY not in json.dumps(exchange.body), f"{api}: the key travelled in the body"
         body = exchange.body
+        if api == "anthropic-messages":
+            thinking = body.get("thinking", {})
+            assert thinking.get("type") == "enabled" and thinking.get("budget_tokens", 0) > 0, (
+                f"{api}: reasoning-enabled model sent no native thinking budget: {thinking!r}"
+            )
+        elif api == "openai-responses":
+            assert body.get("reasoning", {}).get("effort") == "high", (
+                f"{api}: max thinking did not reach the native reasoning field: {body.get('reasoning')!r}"
+            )
+        else:
+            # The pinned Google adapter uses -1 for an automatic thinking budget
+            # on this synthetic id, distinct from disabled (0) or absent.
+            thinking = body.get("generationConfig", {}).get("thinkingConfig", {})
+            assert thinking.get("includeThoughts") is True and thinking.get("thinkingBudget") == -1, (
+                f"{api}: reasoning-enabled model sent no native thinking config: {thinking!r}"
+            )
         if api == "anthropic-messages":
             assert body.get("model") == model_id, f"{api}: the model id arrived as {body.get('model')!r}"
             assert body.get("stream") is True, f"{api}: the exchange was not requested as a stream"

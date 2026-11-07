@@ -824,6 +824,7 @@ def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[s
         {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         list(FIXED_MODELS),
         expected_version=runner.PI_VERSION,
+        measured_wire_apis=list(CAPTURE_ADDRESS["apis"]),
         address=capture_policy(),
     )
     return selection, [line for line in done.stderr.splitlines() if "pi-network-guard" in line]
