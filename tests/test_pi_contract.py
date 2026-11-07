@@ -379,11 +379,8 @@ def run_pi(
     home = scratch / "home"
     agent.mkdir(parents=True, exist_ok=True)
     home.mkdir(parents=True, exist_ok=True)
-    # The runner's own scratch settings, kept identical to what `run_reviewer` writes
-    # (pi-no-compaction, criterion 1): retry and compaction off.
-    (agent / "settings.json").write_text(
-        json.dumps({"retry": {"enabled": False}, "compaction": {"enabled": False}}), encoding="utf-8"
-    )
+    # Use the runner's settings directly so helper launches follow `run_reviewer`.
+    (agent / "settings.json").write_text(json.dumps(stage2.PI_AGENT_SETTINGS), encoding="utf-8")
     if providers:
         (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
     env = {

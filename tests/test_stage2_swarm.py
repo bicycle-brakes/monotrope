@@ -35,6 +35,7 @@ import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+from test_stage2 import REQUIRED_PI_SETTINGS  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -585,13 +586,12 @@ def test_research_pi_settings_disable_compaction(sworld: SwarmWorld) -> None:
     sworld.selection = selection_for(free=FREE)
     sworld.complete()
     assert sworld.run() == 0
-    required = {"retry": {"enabled": False}, "compaction": {"enabled": False}}
     seats = [call for call in sworld.calls() if call["name"] == "pi"]
     assert seats, "the run never launched a Pi seat"
     assert {call["kind"] for call in seats} == {"finder", "repository", "online"}, "a role outside the seats rode Pi"
     assert set(FREE) <= {call["model"] for call in seats}, "the free seats never rode Pi"
     for call in seats:
-        assert json.loads(call["agent_settings"]) == required, (
+        assert json.loads(call["agent_settings"]) == REQUIRED_PI_SETTINGS, (
             f"{call['kind']} seat {call['model']}: the settings are not the required two-key JSON"
         )
     assert all(call["agent_settings"] is None for call in sworld.calls() if call["name"] == "claude"), (
