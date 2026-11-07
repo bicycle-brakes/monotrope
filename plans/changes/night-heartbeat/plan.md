@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-7x3c
@@ -45,8 +45,8 @@ the supplied `findings.md` (read 2026-11-06).
    session state, never a replacement tracker or committed task list.
 2. In that section, require a 30-minute scheduled return to the same session
    and verification that the harness will deliver it. Use an existing session
-   scheduler or a foreground `sleep 1800` submitted as its own background tool
-   job with completion delivery; never shell `&` or `nohup`. Record the returned
+   scheduler wake or a background tool job running `sleep 1800` whose
+   completion the harness delivers to the orchestrating session; never shell `&` or `nohup`. Record the returned
    wake handle and due time. A background process without delivery is not a wake.
    If that facility is unavailable, report the missing supervision instead of
    declaring the run ready. Start and verify run-bounded keep-awake (on macOS,
@@ -59,8 +59,8 @@ the supplied `findings.md` (read 2026-11-06).
    due time. A busy marker names owner/activity and is cleared when that work
    finishes; verify an apparent leftover against the owner's current activity,
    never blindly launch a duplicate or treat a marker as permanent proof.
-   Log unchecked state as unknown. On resume, add the gap from the last actual
-   check, refresh lane state and rearm; never invent missed successful wakes.
+   Log unchecked state as unknown. On resume, rearm first, refresh lane state
+   and record the gap from the last actual check; never invent missed successful wakes.
    At finish/all parked, cancel the owned wake and keep-awake handles, clear owned
    markers and record why the run ended. Markers live at `busy/<lane-id>`;
    each names its owner and current activity. Do not kill by broad pattern.
@@ -79,7 +79,9 @@ the supplied `findings.md` (read 2026-11-06).
    completion semantics before claiming live readiness; when unavailable, record
    that limit and leave the live demonstration unperformed. No model call or
    30-minute sleep is needed for the walkthrough. The trial file
-   `plans/changes/night-heartbeat/trial-lane-watchdog.sh.txt` stays reference only.
+   `plans/changes/night-heartbeat/trial-lane-watchdog.sh.txt` was committed by
+   the orchestrator as reference evidence before this change's implementation
+   attempt; it stays reference only and adds no supported implementation path.
 
 The criteria govern an operator procedure, not executable enforcement;
 text-matching tests would not establish that the orchestrator follows it.
@@ -117,8 +119,10 @@ this draft does not access tracker state outside the worktree.
 
 Create no implementation file. Change only the two documentation paths named
 above, this plan for evidence/time, and runner-owned findings/index. Do not
-edit other change specs, historical night plans/handovers, trial reference,
-runner code, hooks, model/gate configuration, ADRs or tracker state. The current
+edit other change specs or historical night plans/handovers. The taken
+review rows authorise corrections to `research.md` and a historical header
+and non-executable mode for the existing trial reference; no other path is
+added. Do not edit runner code, hooks, model/gate configuration, ADRs or tracker state. The current
 PR state and live session scheduler were not read by this draft. Stop at the
 one-hour appetite with remaining work recorded; do not weaken criteria.
 
@@ -146,14 +150,17 @@ demonstration remains open for the orchestrator's bootstrap and a real
 night run. The trial file `trial-lane-watchdog.sh.txt` stays reference
 only.
 
-Scenario: run `night-2026-11-06-a`, watched by orchestrating session S1
+Scenario: run `2026-11-06-a`, watched by orchestrating session S1
 (later its successor S2), on a machine where a second, older run
-`night-2026-11-06-b` is already active with its own wake `W-b4` (due
+`2026-11-06-b` is already active with its own wake `W-b4` (due
 05:10Z) and keep-awake `KA-b`.
 
 **Setup — 2026-11-06T23:05Z.** S1 creates the run state directory
 `${XDG_STATE_HOME:-~/.local/state}/coding-harness/night/2026-11-06-a/`
-and writes `lanes.txt` (empty `busy/`, empty `lane-watch.log`):
+and records run id `2026-11-06-a` and the directory path in its handover
+file `docs/journal/handover/2026-11-06-night-a.md` (a synthetic record in
+this simulation, not a file created by this change). It writes `lanes.txt`
+(empty `busy/`, empty `lane-watch.log`):
 
     l1 | .claude/worktrees/docs-sweep   | docs-sweep, explore dispatched | on completion: dispatch stage2.py implement docs-sweep
     l2 | .claude/worktrees/spec-polish  | spec-polish, repair dispatched | on completion: dispatch stage2.py review spec-polish
@@ -173,7 +180,8 @@ explore finished 23:21Z → idle with eligible work, `stage2.py implement
 docs-sweep` dispatched now; entry updated (current item: implement
 dispatched; next action: on completion dispatch review). l2's repair
 finished 23:12Z → idle with eligible work, `stage2.py review spec-polish`
-dispatched now; entry updated likewise. l3 holds marker `busy/l3` ("owner
+dispatched now; entry updated (current item: review dispatched; next
+action: record review outcome; if green, lane complete). l3 holds marker `busy/l3` ("owner
 S1 · activity: triage loop rows for rename-util") — genuine busy work,
 still in progress → left untouched, no duplicate dispatched. l4's
 implement needs a maintainer decision (two queued changes edit the same
@@ -200,13 +208,18 @@ service is claimed; `lane-watch.log` stays silent after the 00:05:38Z
 line.
 
 **Resume — 2026-11-07T02:14Z.** Usage returns; successor session S2
-reopens the run from the state files alone, with no chat memory of S1.
+finds run id `2026-11-06-a` and its state-directory path in the run's
+handover file and reopens that directory, with no chat memory of S1.
+Its ownership record identifies KA-a and the wake handles as run a's
+resources; S2 takes over their management as successor owner of run a.
 `lanes.txt` at that moment (entries as last updated):
 
     l1 | .claude/worktrees/docs-sweep   | docs-sweep implement (dispatched 23:35Z) | on completion: dispatch stage2.py review docs-sweep
+    l2 | .claude/worktrees/spec-polish  | spec-polish review (dispatched 23:35Z) | on completion: record review outcome; if green, lane complete
     l3 | .claude/worktrees/rename-util  | rename-util implement (dispatched 00:05Z) | on completion: dispatch stage2.py review rename-util
 
-S2 rearms first: `W4` (bg-118, due 02:44:00Z). Lane state is refreshed
+S2 retires the missed W3 handle and rearms first: `W4` (bg-118, due
+02:44:00Z). Lane state is refreshed
 from actual job activity, not from the gap: l1's implement finished
 00:41Z and l2's review finished 01:02Z green (both read from their runner
 records now) → l1's next authorised action (`stage2.py review docs-sweep`)
@@ -214,22 +227,22 @@ is dispatched now; l2 has no next action → lane complete, entry removed.
 l3's implement is still running → left running. S2's first summary line
 names the gap explicitly:
 
-    2026-11-07T02:14:25Z | W4 due 02:44Z | gap: 00:35Z-02:14Z unobserved (usage limit; no checks claimed) | l1 idle served: review dispatched | l2 complete, off the list | l3 running | next W5 02:44Z
+    2026-11-07T02:14:25Z | resume | gap: 00:05:38Z-02:14Z unobserved (usage limit; no checks claimed) | l1 idle served: review dispatched | l2 complete, off the list | l3 running | next W4 02:44Z
 
-**Wake W5 and teardown — 2026-11-07T02:44Z, delivered.** Rearm first:
-`W6` (bg-122, due 03:14:00Z). Then: l1's review finished 02:39Z green →
+**Wake W4 and teardown — 2026-11-07T02:44Z, delivered.** Rearm first:
+`W5` (bg-122, due 03:14:00Z). Then: l1's review finished 02:39Z green →
 lane complete, entry removed. l3's implement finished 02:38Z, but its
 next step (review) is not eligible: the finished triage recorded a
 maintainer decision (a spec Boundary) as its prerequisite → l3 is parked
 with that question in the run's handover record, entry removed, not
 started. All remaining work is done or parked, so the run ends in this
-wake: S2 cancels exactly the handles it owns (W6 and KA-a) and checks
-`busy/` for markers it owns (none left — l3's marker was cleared at W2);
+wake: S2 cancels exactly the run's own handles (W5 and KA-a), identified
+by the run-state ownership record, and checks `busy/` for the run's own markers (none left — l3's marker was cleared at W2);
 run b's `W-b4` and `KA-b` are left untouched. The end and its reason go
 into the run's handover record; `lanes.txt` is empty and `lane-watch.log`
-holds one line per handled wake and nothing else:
+holds one line per handled wake plus the resume check, and no invented checks:
 
-    2026-11-07T02:44:33Z | W5 due 02:44Z | l1 complete, off the list | l3 parked: maintainer decision before review -> morning, off the list | run ended: W6 cancelled, KA-a cancelled, no owned markers left | run b untouched
+    2026-11-07T02:44:33Z | W4 due 02:44Z | l1 complete, off the list | l3 parked: maintainer decision before review -> morning, off the list | run ended: all work complete or parked; W5 cancelled, KA-a cancelled, no owned markers left | run b untouched
 
 **Observations against the criterion ledger.**
 
@@ -238,18 +251,20 @@ holds one line per handled wake and nothing else:
    is periodic and time-based — no idle-only trigger substitutes for it.
 2. Keep-awake owned (bg-102), bounded to the intended run period with a
    recorded expiry, started before unattended work.
-3. At resume, S2 reconstructed lanes and next steps from `lanes.txt`
-   alone; parked lanes (l4 at W1, l3 at teardown) and completed lanes
+3. At resume, S2 reconstructed lanes and next steps from all three retained
+   entries in `lanes.txt`, then checked actual job activity; parked lanes (l4 at W1, l3 at teardown) and completed lanes
    (l2) left the watch list.
 4. W1 left genuine busy work untouched (no duplicate); W2 verified the
    leftover marker against its owner's activity, cleared it and
    dispatched once — no duplicate dispatch, no permanent busy state.
-5. Four handled wakes (W1, W2, W4, W5), four summary lines — one line per
-   wake, each covering all watched lanes plus the next due time or the
-   end record; missed W3 produced no line and no invented observation.
-6. Every handled wake rearmed before lane work and retained its handle
-   (W1→W2→W3, W4→W5→W6); no wake was the last because nobody rearmed,
-   and the last handle was cancelled at teardown, not left serving.
+5. Three delivered wakes (W1, W2, W4) and one resume check, four summary
+   lines — one per handled wake or resume, each covering all watched lanes
+   plus the next due time or the end record; missed W3 produced no line and no invented observation.
+6. W1 armed W2 and W2 armed W3 before lane work. W3 was missed;
+   resume retired the missed handle and armed W4 (bg-118) at 02:14Z.
+   W4 was delivered at 02:44Z and armed W5 (bg-122) before lane work;
+   teardown cancelled W5. Each armed handle is accounted for: W1, W2
+   and W4 delivered once, W3 missed, W5 cancelled.
 7. Idle lanes with eligible work (l1 and l2 at W1, l3 at W2, l1 at
    resume) were served in the wake that found them; decisions (l4's
    hot-file question, l3's Boundary prerequisite) were parked with their
@@ -268,3 +283,4 @@ stays with the orchestrator's bootstrap and a real night run.
 ## Time used
 
 2026-11-06 14:38:22–15:22:15 UTC, 2633 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-11-07 08:27:20–08:50:50 UTC, 1410 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

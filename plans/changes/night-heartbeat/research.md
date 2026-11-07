@@ -4,37 +4,32 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-7x3c
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2, version: "glm-5.3-flash, 2026-11-06"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # night heartbeat — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3391 commits, 12 rules.
 
 ## Runner exploration — 2026-11-06
 
-Research complete. Here is the phase-1 prose for `plans/changes/night-heartbeat/research.md`, every statement with its source, ready to append.
-
----
-
 ## What exists today
 
-**The change folder.** `plans/changes/night-heartbeat/` holds only `research.md` (confirmed by Glob); its skeleton frontmatter carries bead `coding-harness-7x3c`, `provenance: human-written`, and no `class:` field. `plans/INDEX.md` row at line 267 lists it as draft / implementation none / 2026-11-06. The branch is `feat/night-heartbeat`. The bead's own description was **not read**: the tracker is the Dolt database under `.beads/`, the worktree's `.beads/` holds only `config.yaml`, `metadata.json` and a two-line `interactions.jsonl` (last entry 2026-09-16), no rendered export, and reads outside the worktree are refused (`.git/logs/...` read attempt blocked). What exactly the change owes is therefore an open question, recorded below.
+**The change folder at exploration time (2026-11-06).** The explorer
+reported only the research skeleton in `plans/changes/night-heartbeat/`.
+That is a historical snapshot, not the current file list: the folder now
+also holds decisions, spec, plan, findings and trial reference evidence.
+The bead's description was **not read** by the explorer because its tools
+could not access the shared Dolt tracker. The scope question raised then
+was subsequently settled by the maintainer's statement below.
 
 **"Heartbeat" exists in this repository as three separate, unrelated threads.**
 
@@ -58,7 +53,16 @@ Files and symbols named inline above; the concentrated map: `scripts/stage2.py` 
 
 ## What is unclear about it
 
-- `[DECISION-shaped, for the interview]` The bead `coding-harness-7x3c`'s description was not readable with this phase's tools (tracker is a Dolt database; no rendered export in the worktree). Which liveness signal the change owes — runner-level, lane-level, or lock-level — is not stated anywhere in the tree; three candidate "heartbeat" threads exist (recap lock A.3, lane watch 5q2p, unattended-run supervision) and the change folder names none.
+- **Scope settled, 2026-11-06.** The exploration initially left open
+  which of the three heartbeat threads this change owed. The maintainer's
+  statement that the heartbeat is a fixed part of every night run settled
+  that point (`decisions.md`, `SKIP · interview`; also recorded in
+  `docs/journal/handover/2026-11-06-heartbeat-night.md`). The selected thread
+  is the orchestrating session's recurring 30-minute lane-watch wake, with
+  keep-awake, a durable lane list and an honest wake log, as specified in
+  `spec.md`. Recap-lock and tracker-lease heartbeats and the broader runner
+  lane diary remain outside this change. There is no remaining scope choice
+  for the interview.
 - The lane-watch interview (bead 5q2p, five answers) stood before the maintainer's 15:00 block per the 2026-11-01 handover; the latest handover (2026-11-03) lists four explores waiting for interviews and 5q2p is not among them — its current state after 2026-11-01 is unknown to this phase.
 - Whether the recap-lock fix options (heartbeat touch, owner token) ever got their bead opened and what its id is — the A.3 note says "for a bead, not applied" without an id.
 - The registry rows for swarm-time-limits, time-records-data and verify-machine-lock all still read `none` in `plans/INDEX.md` while parts of each exist in the tree (`scripts/stage2_research_limits.py`, `scripts/time_records.py`, the verify-lock spec's token mechanism); this phase records both facts without reconciling them.
@@ -66,10 +70,10 @@ Files and symbols named inline above; the concentrated map: `scripts/stage2.py` 
 
 ## Which files a change would have to touch
 
-Depends on which thread the bead names, but the surfaces are: `scripts/stage2.py` and `tests/test_stage2.py` for runner-level signalling (declared hot file: at most three open changes at once, night-run plan 2026-11-02/03 rule 3); `tools/claude-code/hooks/recap.sh` and `tests/test_recap_lock.py` for the lock heartbeat (changes belong in `tools/claude-code/` with a reinstall via `install.sh`, never only in `~/.claude`, per AGENTS.md); a state file beside `verify.lock` under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/` for machine-scoped liveness (the shared home the verify-machine-lock spec names); `docs/WORKFLOW.md` §4 "Night runs" and `prompts/04-implement.md` wherever the night rules gain a mechanism; `tools/claude-code/statusline.sh` if the signal reaches the maintainer's display; `plans/INDEX.md` regenerated via `scripts/plans_registry.py --index` after any frontmatter edit.
+The settled scope touches `docs/WORKFLOW.md`, “Night runs”, and the
+orchestrator's authorised instruction pointer in `AGENTS.md`, with the
+scenario evidence in `plan.md`. The runner regenerates `plans/INDEX.md`
+after header edits. The recap lock, runner, tracker leases and status line
+are neighbouring mechanisms, not implementation surfaces for this change.
 
 **Candidate neighbours for the header:** `plans/changes/verify-machine-lock/spec.md`, `plans/changes/swarm-time-limits/spec.md`, `plans/changes/time-records-data/spec.md`, `plans/changes/run-report/spec.md`, `plans/changes/attempt-diagnostics/spec.md`, `plans/specs/implementation-verification/spec.md` (the one living spec), and the archived `plans/changes/archive/2026-09-21-reproducible-bead-export/spec.md` (the lease-field stripping).
-
----
-
-Not done here, by design: no design, no recommendation, no judgment — the three heartbeat threads are reported as they stand.
