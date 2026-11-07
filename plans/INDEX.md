@@ -120,7 +120,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/beads-close-themselves/spec.md`](changes/beads-close-themselves/spec.md) | draft | partial | 2026-10-31 | coding-harness-l1if |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/ci-caller-rule/decisions.md`](changes/ci-caller-rule/decisions.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
+| [`changes/ci-caller-rule/findings.md`](changes/ci-caller-rule/findings.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
+| [`changes/ci-caller-rule/plan.md`](changes/ci-caller-rule/plan.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
 | [`changes/ci-caller-rule/research.md`](changes/ci-caller-rule/research.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
+| [`changes/ci-caller-rule/spec.md`](changes/ci-caller-rule/spec.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
 | [`changes/ci-minutes/decisions.md`](changes/ci-minutes/decisions.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/findings.md`](changes/ci-minutes/findings.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/plan.md`](changes/ci-minutes/plan.md) | draft | none | 2026-10-13 | coding-harness-cac |
