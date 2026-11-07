@@ -5708,7 +5708,7 @@ class Targeted:
 def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[str]:
     """Every path the baseline commit holds, as the repository's own posix names."""
     names = _git_bytes(root, "ls-tree", "-r", "-z", "--name-only", against, env=env).split(b"\0")
-    return {os.fsdecode(name) for name in names if name}
+    return {touch_map.inventory_path(name) for name in names if name}
 
 
 @dataclass
@@ -5773,7 +5773,7 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
     try:
         touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
         before = _baseline_inventory(root, env, against)
-    except (Refused, OSError) as error:
+    except (Refused, OSError, touch_map.CannotMeasure) as error:
         return full(f"the touched paths could not be listed ({error})")
     resolved = root.resolve()
     present: dict[str, bool] = {}

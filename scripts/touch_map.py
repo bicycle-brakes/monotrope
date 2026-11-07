@@ -457,6 +457,22 @@ class Snapshot:
         return {p: read_code(p, blobs.get(self._blobs[p], b"").decode("utf-8", "replace")) for p in self.sources}
 
 
+def inventory_path(raw: bytes) -> str:
+    """Decode a targeted inventory path only when its filesystem spelling preserves every byte.
+
+    Check the NUL-delimited Git bytes before filesystem access: a lossy name can
+    look deleted and silently remove a linked test. The committed CLI is unchanged.
+    """
+    try:
+        path = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CannotMeasure("a Git inventory path cannot round-trip byte-exactly through UTF-8") from error
+    mapped = Path(path)
+    if mapped.is_absolute() or ".." in mapped.parts or mapped.as_posix().encode("utf-8") != raw:
+        raise CannotMeasure("a Git inventory path cannot round-trip byte-exactly through the filesystem mapping")
+    return path
+
+
 class WorktreeSnapshot(Snapshot):
     """The files of the working tree: tracked and non-ignored untracked paths, read from disk.
 
@@ -474,9 +490,10 @@ class WorktreeSnapshot(Snapshot):
         self._blobs: dict[str, str] = {}  # path -> path, regular files only
         self._read: dict[str, Source] | None = None
         root = Path(repo).resolve()
-        listing = self._git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).decode("utf-8", "replace")
+        listing = self._git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"])
+        names = {inventory_path(raw) for raw in listing.split(b"\0") if raw}
         paths = []
-        for path in sorted({p for p in listing.split("\0") if p}):
+        for path in sorted(names):
             full = root / path
             try:
                 info = full.lstat()

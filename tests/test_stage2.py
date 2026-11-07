@@ -21278,6 +21278,58 @@ def test_targeted_repair_preserves_carriage_return_test_paths(
     assert chosen.tests == [relative], "the surviving changed test was omitted or its name changed"
 
 
+@pytest.mark.parametrize("byte_class", [b"\r", b"\n", b"\xff", b"\xc3\x28"], ids=["cr", "lf", "ff", "invalid-utf8"])
+@pytest.mark.parametrize("inventory", ["worktree", "baseline-only"])
+def test_targeted_repair_requires_byte_exact_inventory_paths(world: World, byte_class: bytes, inventory: str) -> None:
+    """F6-7: an unchanged linked test must survive byte-exactly, or require full verification.
+
+    A second ordinary linked test prevents missing coverage from accidentally forcing fallback.
+    The baseline-only case removes the odd path from both disk and index before the repair starts.
+    """
+    seed_tests(world)
+    relative = os.fsdecode(b"tests/test_" + byte_class + b"name.py")
+    odd_test = world.root / relative
+    invalid = byte_class in (b"\xff", b"\xc3\x28")
+    if not invalid:
+        odd_test.write_text(LINKED_TEST, encoding="utf-8")
+    (world.root / "tests" / "test_ok.py").write_text(LINKED_TEST, encoding="utf-8")
+    git(world.root, "add", "-A")
+    if invalid:
+        # macOS cannot create these names on disk. Git objects and its index can
+        # still carry the real raw bytes, without mocking the inventory or links.
+        oid = stage2._git_bytes(world.root, "hash-object", "-w", "--stdin", stdin=LINKED_TEST.encode()).strip()
+        stage2._git_bytes(
+            world.root,
+            "update-index",
+            "-z",
+            "--index-info",
+            stdin=b"100644 " + oid + b"\t" + os.fsencode(relative) + b"\0",
+        )
+        git(world.root, "update-index", "--assume-unchanged", "--", relative)
+    git(world.root, "commit", "--quiet", "-m", "linked tests with raw path bytes")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    if inventory == "baseline-only":
+        if not invalid:
+            odd_test.unlink()
+        git(world.root, "update-index", "--force-remove", "--", relative)
+    (world.root / "scripts" / "helper.py").write_text("VALUE = 3\n", encoding="utf-8")
+
+    if invalid and inventory == "worktree":
+        with pytest.raises(stage2.touch_map.CannotMeasure, match="byte-exact"):
+            stage2.touch_map.WorktreeSnapshot(str(world.root))
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    if invalid:
+        assert chosen.fallback is not None, "a lossy inventory omitted a linked failing test without full verification"
+        if inventory == "worktree":
+            assert "inventory" in chosen.fallback and "byte-exact" in chosen.fallback, chosen.fallback
+        assert chosen.tests == [] and chosen.gates == [] and chosen.ruff == []
+    else:
+        assert chosen.fallback is None, chosen.fallback
+        expected = ["tests/test_ok.py", *([relative] if inventory == "worktree" else [])]
+        assert chosen.tests == sorted(expected), "a round-trippable linked test path was changed or omitted"
+        assert {path.encode("utf-8") for path in chosen.tests} == {path.encode("utf-8") for path in expected}
+
+
 def test_targeted_repair_keeps_baseline_links_for_removed_paths(world: World) -> None:
     """Criterion 2. Planted fault: only the working tree's links are read, so deleting code loses its tests."""
     (world.root / "tests").mkdir(exist_ok=True)
