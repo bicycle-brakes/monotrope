@@ -21049,6 +21049,35 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
 
 
+def test_definitive_refusal_ignores_request_number(world: World) -> None:
+    """F6-2: an unrelated request number is not a transient HTTP status."""
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, "stderr": "HTTP 403 Forbidden\nRequest ID: 500"}])
+    assert world.run("review-loop") == 2, "the request number vetoed the provider's definitive refusal"
+    record = world.record().read_text(encoding="utf-8")
+    assert f"rung:{TEST_RUNGS[0]}" in stage2.read_state(record, "")["consumed"]
+    assert "refused with HTTP 403" in record
+
+
+def test_definitive_refusal_ignores_stdout_example(world: World) -> None:
+    """F6-3: reviewer stdout cannot supply a failed provider response."""
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(
+        pi=[
+            {
+                "model": TEST_RUNGS[0],
+                "exit": 1,
+                "stdout": "Example response:\nHTTP 410 Gone\nEnd of example.",
+                "stderr": "Error: Connection reset by peer",
+            }
+        ]
+    )
+    assert world.run("review-loop") == 1, "a quoted stdout example retired a connection failure"
+    record = world.record().read_text(encoding="utf-8")
+    assert stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    assert "## Stage failed" not in record
+
+
 @pytest.mark.parametrize("stream", ["stdout", "stderr"])
 @pytest.mark.parametrize(
     ("answer", "status"),
@@ -21069,10 +21098,15 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     ],
 )
 def test_definitive_provider_answer_spellings(world: World, stream: str, answer: str, status: str) -> None:
-    """Only a failed call's provider answer, on either stream, supplies refusal evidence."""
+    """Only a failed call's error channel supplies refusal evidence."""
     world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
     world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, stream: answer}])
-    assert world.run("review-loop") == 2, "the explicit provider refusal did not retire the rung"
+    result = world.run("review-loop")
+    if stream == "stdout":
+        assert result == 1, "reviewer stdout supplied provider failure evidence"
+        assert "## Stage failed" not in world.record().read_text(encoding="utf-8")
+        return
+    assert result == 2, "the explicit provider refusal did not retire the rung"
     record = world.record().read_text(encoding="utf-8")
     assert f"refused with HTTP {status}" in record
     assert answer in record, "the actual provider answer was lost"

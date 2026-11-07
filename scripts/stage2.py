@@ -1047,8 +1047,9 @@ def launch(
 
 
 # Match response lines, not status phrases embedded in unrelated diagnostics.
-# Pi may print the provider's HTTP answer or its structured error on either stream.
+# Only the error channel supplies provider failure evidence; stdout is reviewer text.
 HTTP_STATUS = re.compile(
+    r"^(?:(?:provider (?:error|diagnostic)|error)\s*:\s*)?"
     r"HTTP(?:/[0-9]+(?:\.[0-9]+)?)?(?:[ \t]*status(?:[ \t]+code)?)?[ \t]*:?[ \t]*(\d{3})\b",
     re.IGNORECASE,
 )
@@ -1061,20 +1062,22 @@ PROVIDER_STATUS = re.compile(
 
 
 def definitive_refusal_status(text: str, stderr: str = "") -> str | None:
-    """Classify provider response envelopes; transient evidence anywhere vetoes retirement.
+    """Read refusal and transient statuses only from stderr response envelopes.
 
-    Structured JSON status fields are accepted only with a matching provider error
-    type. A line-initial HTTP response line in the call's own streams is trusted
-    as the provider's answer, optionally after an error label and subject to the
-    status-reason checks below. Provenance is not observable: a local helper or
-    pasted document emitting the same response form can also supply a status.
+    Stdout is reviewer content, even on a failed call. Statuses in unrelated
+    diagnostic prose (for example request identifiers) are not HTTP evidence.
+    Structured JSON status fields and line-initial provider status forms carry
+    the error channel's evidence.
     """
-    streams = (text, stderr)
-    text = "\n".join(streams)
+    text = stderr
     statuses: list[str] = []
-    transient = bool(re.search(r"timeout|timed[ _-]?out|time[ _-]?out", text, re.IGNORECASE))
-    transient |= any(m.group(1) == "429" or m.group(1).startswith("5") for m in HTTP_STATUS.finditer(text))
-    transient |= bool(re.search(r"(?<![\w-])(?:429|5[0-9]{2})(?![\w-])", text))
+    transient = False
+    for line in text.splitlines():
+        matched = HTTP_STATUS.match(line.strip()) or re.match(
+            r"^(?:error:\s*)?(429|5[0-9]{2})\b[ \t:]+", line.strip(), re.IGNORECASE
+        )
+        if matched:
+            transient |= matched.group(1) == "429" or matched.group(1).startswith("5")
 
     def structured(value: object) -> None:
         nonlocal transient
@@ -1097,7 +1100,7 @@ def definitive_refusal_status(text: str, stderr: str = "") -> str | None:
                 structured(item)
 
     # A whole JSON answer can be pretty-printed; line JSON also occurs in Pi logs.
-    for candidate in [*streams, *text.splitlines()]:
+    for candidate in [text, *text.splitlines()]:
         with contextlib.suppress(ValueError):
             structured(json.loads(candidate))
     for line in text.splitlines():

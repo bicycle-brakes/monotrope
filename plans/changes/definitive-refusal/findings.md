@@ -339,8 +339,8 @@ Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-2 | MAJOR | SPEC | implementation | scripts/stage2.py:1077 | A failed paid call with stderr `HTTP 403 Forbidden\nRequest ID: 500` returns no definitive refusal: the unrelated request number triggers the transient veto. Reproduced against the implementation function. The rung remains pending and the invocation stops instead of retiring it and continuing. Only actual transient failure evidence should veto retirement. [Acceptance criteria 1–2] | Codex | taken — mechanism repair (two findings of one classifier): read the HTTP status and transient evidence only from the error channel's structured status line, never from free text such as a request number; one test per reproduced input | — |
-| F6-3 | MAJOR | SPEC | implementation | scripts/stage2.py:1103 | A failed call with stdout `Example response:\nHTTP 410 Gone\nEnd of example.` and stderr `Error: Connection reset by peer` is classified as HTTP 410. Reproduced against the implementation function. The paid rung is consequently consumed even though the status came from quoted reviewer text and the actual failure was a connection reset. Retirement requires evidence from the failed provider response. [Acceptance criterion 4] | Codex | taken — mechanism repair, same classifier as F6-2: never read a status from the reviewer's stdout; the connection reset in stderr keeps the rung pending; test with the reproduced input | — |
+| F6-2 | MAJOR | SPEC | implementation | scripts/stage2.py:1077 | A failed paid call with stderr `HTTP 403 Forbidden\nRequest ID: 500` returns no definitive refusal: the unrelated request number triggers the transient veto. Reproduced against the implementation function. The rung remains pending and the invocation stops instead of retiring it and continuing. Only actual transient failure evidence should veto retirement. [Acceptance criteria 1–2] | Codex | fixed — tests/test_stage2.py::test_definitive_refusal_ignores_request_number | — |
+| F6-3 | MAJOR | SPEC | implementation | scripts/stage2.py:1103 | A failed call with stdout `Example response:\nHTTP 410 Gone\nEnd of example.` and stderr `Error: Connection reset by peer` is classified as HTTP 410. Reproduced against the implementation function. The paid rung is consequently consumed even though the status came from quoted reviewer text and the actual failure was a connection reset. Retirement requires evidence from the failed provider response. [Acceptance criterion 4] | Codex | fixed — tests/test_stage2.py::test_definitive_refusal_ignores_stdout_example | — |
 
 Phase 6 verdict: codex 01a1b520-257c-7701-8e40-26e7f080eaae, 2026-11-07
 Reviewer session: codex 01a1b520-257c-7701-8e40-26e7f080eaae — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -393,3 +393,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-07: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3492 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3499 commits, 12 rules.
