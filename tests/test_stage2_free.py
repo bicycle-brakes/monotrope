@@ -311,21 +311,39 @@ def test_selectors_require_admission_inputs(selector, omitted):
             )
 
 
-def test_explicit_research_include_excluded_for_public_web_stays_optional(world, monkeypatch):
+@pytest.mark.parametrize("veto", ["paid", "excluded"])
+def test_explicit_research_include_refuses_hard_veto(world, monkeypatch, capsys, veto):
     fixture = Fixture(world, monkeypatch)
 
-    def exclude(data):
-        data["ausgeschlossen"] = [{"klasse": "public-web", "modelle": ["alpha-free"]}]
+    def declare(data):
         data["research_swarm"]["online_free"]["include"] = ["alpha-free"]
+        if veto == "paid":
+            entry = next(item for item in data["endpunkte"] if item["name"] == GO)
+            entry["modelle"].append("alpha-free")
+        else:
+            data["ausgeschlossen"] = [{"klasse": "public-web", "modelle": ["alpha-free"]}]
 
-    fixture.edit_declaration(exclude)
-    assert fixture.prepare() == 0, "a public-web exclusion widened the explicit-include refusal contract"
-    state = fixture.receipt()["state"]
-    assert state["free"]["selected"] == []
-    assert state["free"]["excluded"] == ["alpha-free"]
-    candidate = next(c for c in state["catalog"]["candidates"] if c["id"] == "alpha-free")
-    assert candidate["reason"] == "excluded-by-declaration"
+    fixture.edit_declaration(declare)
+    assert fixture.prepare() == 2, "an explicit hard-vetoed include must refuse the declaration"
+    diagnostic = capsys.readouterr().err
+    assert "explicit free include is ineligible: alpha-free" in diagnostic
+    assert ("paid model" if veto == "paid" else "excluded") in diagnostic
+    assert "Go catalog is unmeasured" not in diagnostic
     assert "alpha-free" not in fixture.probed()
+
+
+def test_select_free_preserves_declaration_vetoes(world, monkeypatch):
+    declare_paid(world, "paid-free")
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [{"klasse": "framework", "modelle": ["excluded-free"]}]
+    path.write_text(yaml.safe_dump(data))
+    monkeypatch.chdir(world.root)
+    ids = ["paid-free", "excluded-free", "alpha-free"]
+    catalog = [{"provider": GO, "model": ident} for ident in ids]
+    assert stage2.select_free(review_rule(), catalog) == ["alpha-free"], (
+        "the compatibility wrapper admitted a paid or declaration-excluded id"
+    )
 
 
 def test_recorded_maintainer_adr_answer_is_reflected_in_change_contract():

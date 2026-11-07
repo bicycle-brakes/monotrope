@@ -336,7 +336,9 @@ def select_research_catalog(
     eligible = set(chosen.eligible)
     for ident in policy["include"]:
         veto = chosen.vetoed.get(ident)
-        if ident not in eligible and not (veto and veto.kind == "excluded"):
+        if ident not in eligible:
+            if veto:
+                raise ResearchCatalogError(f"explicit free include is ineligible: {ident}: {veto.reason}", 2)
             raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
     selected = set(chosen.selected)
     return {

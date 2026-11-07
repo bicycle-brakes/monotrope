@@ -21,7 +21,6 @@ named in the test.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import json
 import os
 import re
@@ -53,8 +52,10 @@ from terms_fixtures import admissible_terms  # noqa: E402
 from test_stage2 import World  # noqa: E402
 from test_stage2 import git as run_git  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
+from test_stage2_research_catalog import sources as research_catalog_sources  # noqa: E402
 
 world = stage2_world
+catalog_sources = research_catalog_sources
 # The repository's own Pi wrapper, read before any test world re-points `stage2.PI_WRAPPER` at a stand-in.
 REAL_PI_WRAPPER = stage2.PI_WRAPPER
 # The runtime search path before a test world replaces it: the real Pi wrapper needs Node on it.
@@ -1591,47 +1592,10 @@ def shipped_go_models() -> list[dict]:
     return list(rows.values())
 
 
-def shipped_bridge(models: list[dict]) -> dict:
-    """The catalog helper's document for the shipped rows; the capability source is a labelled synthetic one.
-
-    The synthetic capability source states tool support for every id: it stands in for the models.dev
-    request, which an offline contract must not make.
-    """
-    body = json.dumps(models)
-    capability = json.dumps({GO: {"models": {m["id"]: {"id": m["id"], "tool_call": True} for m in models}}})
-    stamp = "2026-11-05T11:59:30.000Z"
-    return {
-        "schema": 1,
-        "exit_code": 0,
-        "reason": None,
-        "pi_version": stage2.PI_VERSION,
-        "pi_runtime": {"errors": [], "aborted": False},
-        "sources": {
-            "pi": {
-                "url": "http://127.0.0.1/api/models/providers/opencode-go",
-                "outcome": "ok",
-                "status": 200,
-                "retrieved_at": stamp,
-                "body": body,
-                "sha256": hashlib.sha256(body.encode()).hexdigest(),
-            },
-            "models_dev": {
-                "url": "http://127.0.0.1/synthetic-capability-evidence",
-                "outcome": "ok",
-                "status": 200,
-                "retrieved_at": stamp,
-                "body": capability,
-                "sha256": hashlib.sha256(capability.encode()).hexdigest(),
-            },
-        },
-        "baseline": [m["id"] for m in models],
-        "models_store": {GO: {"models": models, "checkedAt": 0, "lastModified": 0}},
-        "elapsed_ms": 5,
-    }
-
-
 @pytest.fixture
-def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
+def offline_world(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog_sources
+) -> types.SimpleNamespace:
     """A test world holding the repository's current declaration and the installed Pi's shipped Go catalog.
 
     Only the sources are local stand-ins: the forced refresh writes the shipped rows as the fresh overlay,
@@ -1674,7 +1638,44 @@ def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", no_intelligence)
     monkeypatch.setattr(availability, "now", lambda: CONTRACT_NOW)
     monkeypatch.setattr(stage2, "terms_today", lambda: CONTRACT_NOW.date())
-    monkeypatch.setattr(availability, "catalog_bridge", lambda _runner, _root: shipped_bridge(models))
+    # The real catalog_bridge launches the production helper's CLI, which imports the pinned
+    # runtime, reads its baseline and constructs the bridge. Only HTTP transport is redirected:
+    # Pi's source serves unmodified shipped rows as a synthetic fresh response; models.dev's
+    # tool support is labelled synthetic evidence, not a capability claim about these models.
+    catalog_sources.pi_models = models
+    catalog_sources.metadata = {
+        "source": "synthetic successful capability evidence for the offline preparation contract",
+        GO: {"models": {m["id"]: {"id": m["id"], "tool_call": True} for m in models}},
+    }
+    preload = tmp_path / "synthetic-catalog-transport.mjs"
+    preload.write_text(
+        f"import {json.dumps(GUARD.as_uri())};\n"
+        "const fetch = globalThis.fetch;\n"
+        f"const local = {json.dumps(catalog_sources.url)};\n"
+        "globalThis.fetch = (input, init) => {\n"
+        "  const url = new URL(input instanceof Request ? input.url : input);\n"
+        "  if (url.origin === 'https://pi.dev' && url.pathname === '/api/models/providers/opencode-go')\n"
+        "    return fetch(local + url.pathname + url.search, init);\n"
+        "  if (url.href === 'https://models.dev/api.json') return fetch(local + '/metadata', init);\n"
+        "  return fetch(input, init);\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    real_run = subprocess.run
+    helper = REPO_ROOT / "scripts" / "stage2_research_catalog.mjs"
+
+    def local_catalog_transport(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(helper):
+            command = [shutil.which("node", path=REAL_PATH), command[1]]
+            kwargs["env"] = {
+                **kwargs["env"],
+                "PATH": REAL_PATH,
+                "NODE_OPTIONS": f"--import {preload}",
+            }
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", local_catalog_transport)
+    monkeypatch.setenv("PATH", os.environ["PATH"] + os.pathsep + REAL_PATH)
     real_launch = stage2.launch
 
     def local_sources(command, cwd, env, *args, **kwargs):
@@ -1689,6 +1690,7 @@ def offline_world(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(stage2, "launch", local_sources)
     return types.SimpleNamespace(
         world=world,
+        catalog_sources=catalog_sources,
         paid={str(model) for model in entry["modelle"]},
         free_ids=sorted(i for i in ids if i.endswith("-free")),
     )
@@ -1729,6 +1731,11 @@ def run_offline_contract(setup: types.SimpleNamespace) -> None:
     assert reasons.get("beam-free") == "paid-admitted", f"research kept the paid id: {reasons.get('beam-free')}"
     assert not set(state["free"]["selected"]) & setup.paid, "a paid id is a free member of the research swarm"
     assert f"Dropped (free): beam-free: {stage2_free.PAID_REASON}" in availability.research_report(state)
+    source_requests = setup.catalog_sources.requests
+    assert any(path.startswith("/api/models/providers/opencode-go") for path, _ in source_requests), (
+        "the research catalog helper did not retrieve the shipped rows through the local Pi source"
+    )
+    assert any(path == "/metadata" for path, _ in source_requests), "synthetic capability evidence was not read"
     research_calls = w.reviews()[middle:]
     assert "beam-free" not in probed_models(research_calls), "research probed a paid id as a free candidate"
     for call in [*review_calls, *research_calls]:
@@ -1759,6 +1766,11 @@ def test_shipped_catalog_prepares_both_swarms_offline(offline_world: types.Simpl
             "research preparation refuses",
             "the research preparation refused the shipped Go catalog",
             "planted: the research preparation refuses",
+        ),
+        (
+            "research catalog helper refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the production research catalog helper refuses",
         ),
         (
             "review bypasses the shared selection",
@@ -1805,7 +1817,20 @@ def test_both_preparation_contracts_detect_planted_faults(
 
         return planted
 
+    real_run = subprocess.run
+
+    def refuse_catalog_helper(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(REPO_ROOT / "scripts/stage2_research_catalog.mjs"):
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                json.dumps({"exit_code": 1, "reason": "planted: the production research catalog helper refuses"}),
+                "",
+            )
+        return real_run(command, *args, **kwargs)
+
     faults = {
+        "research catalog helper refuses": (subprocess, "run", refuse_catalog_helper),
         "review preparation refuses": (stage2, "discover_free", refuse_review),
         "research preparation refuses": (stage2_swarm, "select_research_catalog", refuse_research),
         "review bypasses the shared selection": (stage2_free, "select", bypass(True)),
