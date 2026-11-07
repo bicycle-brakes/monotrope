@@ -748,3 +748,174 @@ Stage-2 call, 2026-11-06: repair · attempt 3 · route stage-1 · endpoint claud
 > - L1-13: tests/test_archive_closed_changes.py::test_disagreeing_completion_headers_are_normalised: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/archive-closed-changes/stage2/attempts/archive-closed-changes/attempt-3-20261106T185753502715Z-f5712eb8.md
 > ```
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3502 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/archive-closed-changes/research.md` +2 -1
+> - `scripts/archive_closed_changes.py` +53 -13
+> - `tests/test_archive_closed_changes.py` +168 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 58 lines of this gate left out …]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ..................................................................       [100%]
+> =================================== FAILURES ===================================
+> ___________ test_paid_terms_doctrine_records_the_retention_decision ____________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/.venv/bin/python3
+>
+>     def test_paid_terms_doctrine_records_the_retention_decision() -> None:
+> >       spec = (REPO_ROOT / "plans/changes/loop-until-clean/spec.md").read_text()
+>
+> tests/test_stage2.py:16830: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1027: in read_text
+>     with self.open(mode='r', encoding=encoding, errors=errors) as f:
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/plans/changes/loop-until-clean/spec.md')
+> mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+>
+>     def open(self, mode='r', buffering=-1, encoding=None,
+>              errors=None, newline=None):
+>         """
+>         Open the file pointed to by this path and return a file object, as
+>         the built-in open() function does.
+>         """
+>         if "b" not in mode:
+>             encoding = io.text_encoding(encoding)
+> >       return io.open(self, mode, buffering, encoding, errors, newline)
+> E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/plans/changes/loop-until-clean/spec.md'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1013: FileNotFoundError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=55747) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/tests/test_stage2.py:18933: DeprecationWarning: This process (pid=55753) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_paid_terms_doctrine_records_the_retention_decision
+> 1 failed, 4871 passed, 18 skipped, 5 warnings in 1081.57s (0:18:01)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32112 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/archive-closed-changes/stage2/attempts/archive-closed-changes/attempt-1-20261107T091114455329Z-47b606f4.md
+> ````
+
+Stage-2 call, 2026-11-07: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 917 files, 3513 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_archive_closed_changes.py` +30 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - Runner cheap checks before `make verify`: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ...........................F..                                           [100%]
+> =================================== FAILURES ===================================
+> ___________ test_paid_terms_doctrine_records_the_retention_decision ____________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/.venv/bin/python3
+>
+>     def test_paid_terms_doctrine_records_the_retention_decision() -> None:
+> >       spec = (REPO_ROOT / "plans/changes/loop-until-clean/spec.md").read_text()
+>
+> tests/test_stage2.py:16830: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1027: in read_text
+>     with self.open(mode='r', encoding=encoding, errors=errors) as f:
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/plans/changes/loop-until-clean/spec.md')
+> mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+>
+>     def open(self, mode='r', buffering=-1, encoding=None,
+>              errors=None, newline=None):
+>         """
+>         Open the file pointed to by this path and return a file object, as
+>         the built-in open() function does.
+>         """
+>         if "b" not in mode:
+>             encoding = io.text_encoding(encoding)
+> >       return io.open(self, mode, buffering, encoding, errors, newline)
+> E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/mikypiky/coding-harness/.claude/worktrees/archive-closed-changes/plans/changes/loop-until-clean/spec.md'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1013: FileNotFoundError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_paid_terms_doctrine_records_the_retention_decision
+> 1 failed, 29 passed in 6.74s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/archive-closed-changes/stage2/attempts/archive-closed-changes/attempt-2-20261107T091114455329Z-47b606f4.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 917 files, 3514 commits, 12 rules.

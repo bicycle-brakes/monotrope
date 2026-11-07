@@ -28,6 +28,8 @@ import bead_render  # noqa: E402 — the patched tracker access point
 import check_criterion_ledger  # noqa: E402 — the real ledger gate, reused
 import plans_registry as reg  # noqa: E402 — the real generator and checker, reused
 
+REAL_RENDER_PATH = bead_render.render_pfad
+
 # The controlled archiving day every write run of this module uses.
 DAY = dt.date(2026, 3, 4)
 
@@ -219,7 +221,7 @@ def test_default_cli_and_make_are_read_only(
     fx.set_render({"b-closed": "closed"})
 
     def _no_subprocess(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("a report must not start a subprocess")
+        raise AssertionError("a report with a supplied render must not start a subprocess")
 
     sp_names = ("run", "call", "check_call", "check_output", "Popen")
     real = {name: getattr(subprocess, name) for name in sp_names}
@@ -358,12 +360,26 @@ def test_only_lifecycle_header_fields_change(plans_repo: Fixture) -> None:
     fx = plans_repo
     original = _artefact("Spec — full", "b-full", date="2026-09-09")
     no_updated = _artefact("Spec — no updated", "b-noup", updated=None)
-    fx.add("full-one", files={"spec.md": original, "plan.md": _artefact("Plan — full", "b-full")})
+    fx.add(
+        "full-one",
+        files={
+            "spec.md": original,
+            "plan.md": _artefact("Plan — full", "b-full", status="accepted", implementation="partial"),
+        },
+    )
     fx.add("no-updated", files={"spec.md": no_updated})
     fx.set_render({"b-full": "closed", "b-noup": "closed"})
 
     assert archive.main(["--write"]) == 0
 
+    for path in (fx.archive / "2026-03-04-full-one").glob("*.md"):
+        meta = _meta(path.read_text(encoding="utf-8"))[0]
+        assert (meta["status"], meta["implementation_status"], meta["updated"], meta["last_reviewed"]) == (
+            "accepted",
+            "done",
+            DAY,
+            DAY,
+        )
     moved = (fx.archive / "2026-03-04-full-one" / "spec.md").read_text(encoding="utf-8")
     old_meta, old_header, old_tail = _meta(original)
     new_meta, _, new_tail = _meta(moved)
@@ -630,4 +646,181 @@ def test_post_merge_procedure_orders_archive_after_closure() -> None:
     first_close = prompt.index("close-merged")
     assert first_close < first_archive, "the archive step must follow the close-merged reconciliation"
     assert "make archive ARGS=--write" in prompt, "the write invocation is part of the procedure"
+    assert first_close < prompt.index("make archive ARGS=--write"), "archive writing must follow closure"
     assert "another session's checkout" not in prompt, "the procedure must never touch another session's checkout"
+
+
+def test_partial_source_removal_preserves_complete_destination(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    src = fx.add("partial", files=_closed_files("b"), companions={"keep.bin": b"only copy"})
+    fx.set_render({"b": "closed"})
+    original = archive.shutil.rmtree
+
+    def partial_remove(path):
+        if path == src:
+            (src / "keep.bin").unlink()
+            raise OSError("removal interrupted")
+        original(path)
+
+    monkeypatch.setattr(archive.shutil, "rmtree", partial_remove)
+    assert archive.main(["--write"]) == 1
+    dst = fx.archive / "2026-03-04-partial"
+    assert (dst / "keep.bin").is_file(), "failed source removal destroyed the complete destination"
+    assert (dst / "keep.bin").read_bytes() == b"only copy"
+    assert all((dst / name).is_file() for name in _closed_files("b"))
+    err = capsys.readouterr().err
+    assert "source may be partially removed" in err
+    assert str(src.relative_to(fx.root)) in err and str(dst.relative_to(fx.root)) in err
+
+
+def test_failed_batch_reports_unattempted_folders(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    for name in ("alpha", "beta", "gamma"):
+        fx.add(name, files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    original = archive._relocate
+
+    def fail_beta(src, *args):
+        if src.name == "beta":
+            raise OSError("copy interrupted")
+        original(src, *args)
+
+    monkeypatch.setattr(archive, "_relocate", fail_beta)
+    assert archive.main(["--write"]) == 1
+    unfinished = capsys.readouterr().err.split("unfinished work:")[1]
+    assert "plans/changes/beta" in unfinished
+    assert "plans/changes/gamma: not attempted" in unfinished
+    assert (fx.changes / "gamma" / "spec.md").exists()
+
+
+def test_report_documents_tracker_render_subprocess(plans_repo, monkeypatch, capsys):
+    # Exercise the real default reader, mocking only its export boundary so
+    # this test never reads the live tracker or starts a tracker process.
+    import render_beads_export
+
+    fx = plans_repo
+    fx.add("report", files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    before = _snapshot(fx.root)
+    exports = []
+
+    def export(destination):
+        exports.append(destination)
+        destination.write_bytes(fx.render_path.read_bytes())
+
+    monkeypatch.delenv("BEAD_RENDER", raising=False)
+    monkeypatch.setattr(bead_render, "render_pfad", REAL_RENDER_PATH)
+    monkeypatch.setattr(bead_render, "_GERENDERT", None)
+    monkeypatch.setattr(bead_render, "_HALTER", None)
+    monkeypatch.setattr(render_beads_export, "_render_nach", export)
+    try:
+        assert archive.main([]) == 0
+        assert len(exports) == 1, "default reporting must reach the shared export boundary"
+        assert "would archive plans/changes/report" in capsys.readouterr().out
+        assert _snapshot(fx.root) == before
+    finally:
+        if bead_render._HALTER is not None:
+            bead_render._HALTER.cleanup()
+    assert "no subprocess" not in archive.__doc__
+    assert "tools/bd export" in archive.__doc__
+
+
+def test_manifest_includes_recreated_directories(plans_repo, capsys):
+    fx = plans_repo
+    fx.add("dirs", files=_closed_files("b"), empty_dirs=["empty/nested"])
+    fx.set_render({"b": "closed"})
+    assert archive.main([]) == 0
+    report = capsys.readouterr().out
+    assert archive.main(["--write"]) == 0
+    dst = fx.archive / "2026-03-04-dirs"
+    for directory in [dst, *sorted(p for p in dst.rglob("*") if p.is_dir())]:
+        relative = directory.relative_to(dst)
+        source = fx.changes / "dirs" / relative
+        assert f"{source.relative_to(fx.root)}/ -> {directory.relative_to(fx.root)}/ (directory)" in report
+
+
+def test_empty_rerun_repairs_index_after_generation_failure(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    fx.add("once", files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    reg.INDEX.write_text("stale index", encoding="utf-8")
+    with monkeypatch.context() as patch:
+
+        def fail():
+            raise OSError("render interrupted")
+
+        patch.setattr(reg, "render_index", fail)
+        assert archive.main(["--write"]) == 1
+    capsys.readouterr()
+    assert archive.main(["--write"]) == 0
+    assert reg.INDEX.read_text(encoding="utf-8") == reg.render_index(), (
+        "empty rerun reported success with a stale index"
+    )
+
+
+@pytest.mark.parametrize("boundary", ["validation", "render-read", "registry"])
+@pytest.mark.parametrize("error", [OSError("unreadable"), UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")])
+def test_read_errors_are_clean_measurement_failures(plans_repo, monkeypatch, capsys, boundary, error):
+    fx = plans_repo
+    fx.add("read", files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    before = _snapshot(fx.root)
+
+    def fail(*_args, **_kwargs):
+        raise error
+
+    if boundary == "validation":
+        monkeypatch.setattr(archive.check_bead_export, "run", fail)
+    elif boundary == "registry":
+        monkeypatch.setattr(reg, "artefacts", fail)
+    else:
+        monkeypatch.setattr(archive.check_bead_export, "run", lambda _path: [])
+        monkeypatch.setattr(Path, "read_text", fail)
+    try:
+        result = archive.main(["--write"])
+    except (OSError, UnicodeDecodeError) as exc:
+        pytest.fail(f"read failure must return a clean cannot-measure diagnostic: {exc}")
+    assert result == 1
+    assert "cannot measure — nothing attempted" in capsys.readouterr().err
+    assert _snapshot(fx.root) == before
+
+
+@pytest.mark.parametrize("failure", ["replace", "render"])
+def test_index_failure_is_atomic_and_diagnostic(plans_repo, monkeypatch, capsys, failure):
+    fx = plans_repo
+    fx.add("atomic", files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    reg.INDEX.write_bytes(b"original complete index")
+    if failure == "replace":
+
+        def fail_replace(*_args, **_kwargs):
+            raise OSError("index replacement interrupted")
+
+        monkeypatch.setattr(Path, "replace", fail_replace)
+    else:
+
+        def fail_render():
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+
+        monkeypatch.setattr(reg, "render_index", fail_render)
+    try:
+        result = archive.main(["--write"])
+    except UnicodeDecodeError as exc:
+        pytest.fail(f"render error must be reported without a traceback: {exc}")
+    assert result == 1, "index replacement failure must fail the command"
+    assert reg.INDEX.read_bytes() == b"original complete index"
+    assert "plans/INDEX.md: not regenerated" in capsys.readouterr().err
+    assert sorted(p.name for p in reg.INDEX.parent.iterdir()) == ["INDEX.md", "changes"]
+
+
+def test_symlinked_changes_boundary_is_refused(plans_repo, capsys):
+    fx = plans_repo
+    fx.add("linked", files=_closed_files("b"))
+    fx.set_render({"b": "closed"})
+    real = fx.root / "real-changes"
+    fx.changes.rename(real)
+    fx.changes.symlink_to(real, target_is_directory=True)
+    before = _snapshot(real)
+    assert archive.main(["--write"]) == 1, "a symlinked changes boundary must refuse archiving"
+    assert "plans/changes" in capsys.readouterr().err
+    assert _snapshot(real) == before

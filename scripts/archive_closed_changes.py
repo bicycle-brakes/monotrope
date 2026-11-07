@@ -44,15 +44,18 @@ nothing):
   only when it differs.
 - An I/O or index failure stops the run, exits nonzero and lists completed
   moves and unfinished work separately. All-or-nothing recovery is not
-  promised: a failed folder is reported with its source left in place and
-  its partial destination removed. A rerun after a successful run finds
-  nothing eligible and rewrites nothing — the tree stays byte-identical.
+  promised: before source removal a failed copy leaves the source intact;
+  after source removal starts, a failure keeps the verified destination and
+  reports both paths, because the source may be partially removed. A rerun
+  verifies the index even when nothing remains eligible; after success,
+  unchanged inputs leave the tree byte-identical.
 
 Exit codes: 0 = report written, or the batch archived cleanly (a rerun with
 nothing eligible included); 1 = nothing measurable, a blocked folder during a
 write run, or an I/O or index failure. No tracker write, no Git, no shell, no
-subprocess; the checkout is resolved from this script's location, linked
-worktrees included.
+mutating subprocess. Without BEAD_RENDER the tracker reader runs a read-only
+`tools/bd export` subprocess to create a temporary render; the checkout is
+resolved from this script's location, linked worktrees included.
 """
 
 from __future__ import annotations
@@ -65,6 +68,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -101,6 +105,10 @@ _HEADER_KEY = re.compile(r"([A-Za-z0-9_.-]+):(?:\s|$)")
 
 class PreflightError(RuntimeError):
     """A precondition failed — nothing may be attempted."""
+
+
+class SourceRemovalError(OSError):
+    """The verified destination must survive a failed source removal."""
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -283,6 +291,8 @@ def _active_folders() -> list[Path]:
     Symlinks are never followed — the same rule `run_report.active_changes`
     applies, so a link cannot pull a foreign folder into the batch.
     """
+    if CHANGES.is_symlink():
+        raise PreflightError("plans/changes is a symlink, not a real directory")
     try:
         entries = sorted(CHANGES.iterdir())
     except OSError as exc:
@@ -322,6 +332,8 @@ def _destination_block(dst: Path, src: Path) -> str:
     destination is never overwritten, and no symlink on the archive boundary
     or inside the moved folder is ever traversed.
     """
+    if CHANGES.is_symlink():
+        return "plans/changes is a symlink, not a real directory"
     if ARCHIVE.is_symlink() or (ARCHIVE.exists() and not ARCHIVE.is_dir()):
         return "the archive is not a real directory (a file or a symlink)"
     if not ARCHIVE.exists():
@@ -439,11 +451,14 @@ def _edited_text(art: Artefact, day: dt.date) -> str:
 
 
 def _manifest(entry: Eligible) -> list[str]:
-    """Every prospective source/destination file line, companions marked."""
+    """Every prospective directory and file, companions marked."""
     artefact_paths = {art.path for art in entry.artefacts}
     lines: list[str] = []
     for root, dirnames, filenames in os.walk(entry.src, followlinks=False):
         dirnames.sort()
+        directory = Path(root)
+        target_dir = entry.dst / directory.relative_to(entry.src)
+        lines.append(f"{_display(directory)}/ -> {_display(target_dir)}/ (directory)")
         for filename in sorted(filenames):
             source = Path(root) / filename
             target = entry.dst / source.relative_to(entry.src)
@@ -462,7 +477,8 @@ def _relocate(src: Path, dst: Path, artefacts: dict[Path, Artefact], day: dt.dat
     """Move the whole folder: edited artefacts, untouched companions, then the source goes.
 
     Raises OSError on the first failing operation; the caller reports the
-    folder as unfinished and removes what this call had already created.
+    folder as unfinished. Copy failures permit destination cleanup; source
+    removal failures preserve the verified destination for recovery.
     """
     dst.mkdir(parents=True)
     edited: list[tuple[Path, bytes]] = []
@@ -483,7 +499,17 @@ def _relocate(src: Path, dst: Path, artefacts: dict[Path, Artefact], day: dt.dat
         target.write_bytes(payload)
     for source, target in companions:
         shutil.copy2(source, target)
-    shutil.rmtree(src)
+    # Read back the entire copy before deleting even the first source byte.
+    for target, payload in edited:
+        if target.read_bytes() != payload:
+            raise OSError(f"copy verification failed: {target}")
+    for source, target in companions:
+        if target.read_bytes() != source.read_bytes():
+            raise OSError(f"copy verification failed: {target}")
+    try:
+        shutil.rmtree(src)
+    except OSError as exc:
+        raise SourceRemovalError(str(exc)) from exc
 
 
 def _remove_partial(dst: Path) -> bool:
@@ -508,14 +534,22 @@ def _regenerate_index() -> tuple[str, str | None]:
     try:
         rendered = plans_registry.render_index()
         current = index.read_text(encoding="utf-8") if index.exists() else None
-    except OSError as exc:
+    except Exception as exc:
         return "", f"not regenerated — the registry generator failed: {exc}"
     if current == rendered:
         return "already current", None
+    temporary: Path | None = None
     try:
-        index.write_text(rendered, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=index.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(rendered)
+        temporary.replace(index)
     except OSError as exc:
         return "", f"not regenerated — the write failed: {exc}"
+    finally:
+        if temporary is not None:
+            with contextlib.suppress(OSError):
+                temporary.unlink(missing_ok=True)
     return "regenerated from the registry generator", None
 
 
@@ -533,11 +567,16 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
     """Archive every eligible folder, then the index; 0 only when all went well."""
     completed: list[str] = []
     unfinished: list[str] = []
-    for entry in eligible:
+    for position, entry in enumerate(eligible):
         _print_entry(entry, "archiving")
         artefacts = {art.path: art for art in entry.artefacts}
         try:
             _relocate(entry.src, entry.dst, artefacts, day)
+        except SourceRemovalError as exc:
+            unfinished.append(
+                f"{_display(entry.src)}: source removal failed — {exc}; source may be partially removed; "
+                f"complete verified destination retained at {_display(entry.dst)}"
+            )
         except OSError as exc:
             cleaned = _remove_partial(entry.dst)
             note = f"{_display(entry.src)}: not moved — {exc} (source left in place; "
@@ -546,6 +585,8 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
             else:
                 note += f"PARTIAL DESTINATION REMAINS at {_display(entry.dst)})"
             unfinished.append(note)
+        if unfinished:
+            unfinished.extend(f"{_display(pending.src)}: not attempted" for pending in eligible[position + 1 :])
             break
         completed.append(f"{_display(entry.src)} -> {_display(entry.dst)}")
         print(f"archived {_display(entry.src)}")
@@ -554,7 +595,6 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
         return 1
     if not completed:
         print("archive: nothing to archive — no eligible closed folder is left active")
-        return 0
     summary, failure = _regenerate_index()
     if failure is not None:
         _report_failure(completed, [f"plans/INDEX.md: {failure}"])
@@ -605,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         render, statuses = _tracker_state()
         eligible, blocked, skipped = _classify(statuses, day)
-    except PreflightError as exc:
+    except (PreflightError, OSError, UnicodeError) as exc:
         print(f"archive: cannot measure — nothing attempted: {exc}", file=sys.stderr)
         return 1
     if not args.write:

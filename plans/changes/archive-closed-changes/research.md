@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-cqun
@@ -13,6 +13,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06; draft-time checks appended to the recorded Flash exploration"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+neighbours: []
 ---
 
 # archive closed changes — Research
@@ -60,7 +61,7 @@ Doctrine: `plans/_README.md` (three places, frontmatter, DRIFT/BLOCK split), `do
 - Which day the archive-folder prefix `YYYY-MM-DD-` carries: all 19 folders are dated 1–6 days after their artifacts' last `last_reviewed`, but no doctrine text (plans/_README.md, WORKFLOW, new_change.py) defines the day. Not found — and "not written down" is a different statement from "the merge date is meant".
 - Whether `status:` must move `draft → accepted` on archiving: the entire archived stock shows `accepted`, but no rule text says so; `plans/_README.md` only says status "moves when the project decides".
 - The change's class declaration is absent from this `research.md` skeleton, and the bead description (which names the class per the 2026-10-22 rule) is not readable in this session.
-- The skeleton lacks the required `neighbours:` header (`prompts/01-explore.md` states a missing header refuses the swarm) — it must be added before any swarm run.
+- The required `neighbours:` header is now present as an empty list; no swarm run is planned. Historical candidate paths below are draft-time context, not a prepared handoff.
 - Whether `check_docs.py` resolves links from `docs/` into `plans/changes/...` paths: its default basis is `REPO_ROOT / "docs"` (`--base`), so its reach beyond `docs/` was not verified in this session.
 
 ## Which files a change would have to touch
