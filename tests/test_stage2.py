@@ -21103,16 +21103,6 @@ def test_definitive_refusal_rejects_incidental_and_transient_evidence(world: Wor
     assert "## Stage failed" not in world.record().read_text(encoding="utf-8")
 
 
-def test_definitive_research_has_no_stale_skeleton_instructions() -> None:
-    """Completed research must not tell its reader that it is an empty human-written skeleton."""
-    research = (REPO_ROOT / "plans/changes/definitive-refusal/research.md").read_text(encoding="utf-8")
-    assert "file is empty until it has run" not in research, "completed research still calls itself empty"
-    assert "Bring the provenance up to date" not in research, (
-        "completed research still carries the skeleton instruction"
-    )
-    assert "provenance: ai-drafted-reviewed" in research
-
-
 def test_definitive_retirement_counts_format_retry_calls(world: World) -> None:
     two_rung_world(world)
     world.script(

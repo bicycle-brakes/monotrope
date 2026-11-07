@@ -322,3 +322,13 @@ Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3482 commits, 12 rules.
 
 Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3483 commits, 12 rules.
+
+## Phase 6 — Sonnet 5.5 (stand-in for Codex), 2026-11-07
+
+Codex failed twice (exit 1) at this step; per docs/WORKFLOW.md, "Night runs", rule 1, a read-only Sonnet 5.5 sub-agent reviewed at 8d9e7871. Its answer is recorded unchanged.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MINOR | MAINT | phase-6 Claude (stand-in for Codex) | tests/test_stage2.py:21106 (`test_definitive_research_has_no_stale_skeleton_instructions`) | This test asserts the wording of the change's own `plans/changes/definitive-refusal/research.md` (no "file is empty until it has run", provenance string). It checks a document, not runner behaviour. It belongs to no acceptance criterion and is not in the plan's ledger. It couples the permanent suite to one change folder's prose, so it breaks when that folder is archived, moved or edited. Move the check to the document gate, or drop it. It is not a guard test and has no `STAGE2_PLANT_FAULT` counterpart. [no criterion; scope hygiene] | Sonnet | open | — |
+
+Verdict: no BLOCKER, no MAJOR, no `[DIVERGENT]`. The reviewer ran the plan's verification selector (63 passed), not make verify or the full suite, and not the plan's fault-injection demonstrations; criteria 1-7 implemented with named tests; protected areas untouched; no guard tests.
