@@ -379,7 +379,8 @@ def run_pi(
     home = scratch / "home"
     agent.mkdir(parents=True, exist_ok=True)
     home.mkdir(parents=True, exist_ok=True)
-    (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+    # Use the runner's settings directly so helper launches follow `run_reviewer`.
+    (agent / "settings.json").write_text(json.dumps(stage2.PI_AGENT_SETTINGS), encoding="utf-8")
     if providers:
         (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
     env = {
@@ -458,7 +459,19 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
             command.remove(controls["omit"])
         if controls["mcp_control"]:
             command[1:1] = ["-e", "builtin:mcp"]
-        calls.append({"argv": list(command), "cwd": str(cwd), "env": dict(env)})
+        # Production wrote the agent settings this launch runs on; the transport only observes the
+        # bytes here - the scratch directory is gone once `run_reviewer` returns or raises, so this
+        # record is where a test can still read them (pi-no-compaction, criterion 2).
+        directory = env.get("PI_CODING_AGENT_DIR")
+        settings = Path(directory, "settings.json") if directory else None
+        calls.append(
+            {
+                "argv": list(command),
+                "cwd": str(cwd),
+                "env": dict(env),
+                "agent_settings": settings.read_text(encoding="utf-8") if settings and settings.is_file() else None,
+            }
+        )
         done = original_launch(command, cwd, env, key, timeout=timeout, limit=limit)
         calls[-1]["result"] = done
         return done
@@ -1451,23 +1464,66 @@ def test_contract_prerequisites_and_failures_are_mandatory(
 def test_real_truncated_pi_print_failure_is_refused(project: Path, transport) -> None:
     """Criterion 13: the runner refuses the real Pi result of a length finish.
 
-    Measured on Pi 1.2.0: Pi appends a context edit that removes the truncated
-    assistant message before printing, so the process returns zero with empty
-    stdout. The runner's empty-answer guard refuses it; the separate unit test
-    covers nonzero print refusals.
+    Pi 1.5.0 exits 1 with "Response was truncated" after one request; the runner
+    refuses it through the nonzero-exit path ("output token limit"). Pi 1.2.0
+    instead returned zero with empty stdout, using the empty-answer guard.
+    The version change is recorded in pi-no-compaction/research.md, under
+    "Repair measurement — 2026-11-07"; this contract pins the installed 1.5.0 path.
     """
     standin = StandIn([{"content": "partial review", "finish_reason": "length"}])
     transport.providers["opencode-go"] = {"baseUrl": standin.url}
     try:
-        with pytest.raises(stage2.CallFailed, match="answer is empty"):
+        with pytest.raises(stage2.CallFailed, match="output token limit"):
             stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
         assert len(standin.requests) == 1
         result = transport.calls[-1]["result"]
-        assert result.returncode == 0 and not result.stdout.strip(), (
-            "Pi's measured truncated-print behavior changed; recheck the refusal path"
-        )
+        assert result.returncode == 1, "Pi 1.5.0 must refuse the length finish with exit 1"
+        assert "Response was truncated" in result.stderr, "Pi's measured length-finish diagnostic changed"
     finally:
         standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_context_overflow_fails_without_compaction(project: Path, transport) -> None:
+    """pi-no-compaction (criterion 2): a provider context overflow fails the member, with no summary retry.
+
+    The stand-in scripts the measured provider 400 ("maximum context length is … tokens") and then a
+    valid answer: a Pi that still compacted would summarise and retry, consume the second entry and
+    answer, so exactly one provider request, a nonzero text-mode exit and `CallFailed` refute the
+    recovery. The settings file is production's own (`run_reviewer`'s scratch), observed at the
+    transport seam and never injected by the test. Planted fault: removing the production
+    `compaction` setting turns this red (recovery loses the original overflow refusal), as does
+    accepting a zero-exit or empty overflow answer.
+    """
+    standin = StandIn(
+        [
+            {
+                "status": 400,
+                "error": {
+                    "message": "This endpoint's maximum context length is 262144 tokens. "
+                    "However, you requested about 314571 tokens"
+                },
+            },
+            {"content": "No finding."},
+        ]
+    )
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        with pytest.raises(stage2.CallFailed, match="maximum context length"):
+            stage2.run_reviewer(contract_ctx(project), "contract-rung", "Review demo.", SYNTHETIC_KEY)
+    finally:
+        standin.close()
+    assert len(standin.requests) == 1, (
+        f"Pi recovered from the overflow: {len(standin.requests)} provider requests reached the stand-in"
+    )
+    result = transport.calls[-1]["result"]
+    assert result.returncode != 0, "the text-mode overflow ended with exit 0; the runner would accept it"
+    assert "maximum context length" in (result.stderr or ""), "the overflow diagnostic never reached the runner"
+    settings = transport.calls[-1]["agent_settings"]
+    assert settings is not None, "the reviewer launch carried no agent settings file"
+    assert json.loads(settings) == {"retry": {"enabled": False}, "compaction": {"enabled": False}}, (
+        "production's settings file does not disable retry and compaction"
+    )
 
 
 @pytest.mark.usefixtures("installed_pi")
