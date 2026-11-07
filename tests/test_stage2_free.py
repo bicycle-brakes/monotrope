@@ -341,7 +341,7 @@ def test_select_free_preserves_declaration_vetoes(world, monkeypatch):
     monkeypatch.chdir(world.root)
     ids = ["paid-free", "excluded-free", "alpha-free"]
     catalog = [{"provider": GO, "model": ident} for ident in ids]
-    assert stage2.select_free(review_rule(), catalog) == ["alpha-free"], (
+    assert stage2.select_free(review_rule(), catalog, root=world.root) == ["alpha-free"], (
         "the compatibility wrapper admitted a paid or declaration-excluded id"
     )
 
@@ -363,3 +363,52 @@ def test_recorded_maintainer_adr_answer_is_reflected_in_change_contract():
         assert 'The maintainer answered "no"' in text, f"{name} omits the maintainer's answer"
         assert "2026-11-06" in text and "Q-M2" in text and "0baba58f" in text
         assert "decisions/answers/research-free-paid/adr.yaml" in text
+
+
+def test_select_free_requires_repository_root_from_another_directory(world, monkeypatch, tmp_path):
+    declare_paid(world, "paid-free")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    declaration = yaml.safe_load((world.root / "model-endpoints.yaml").read_text())
+    entry = next(item for item in declaration["endpunkte"] if item["name"] == GO)
+    entry["modelle"] = []
+    (foreign / "model-endpoints.yaml").write_text(yaml.safe_dump(declaration))
+    monkeypatch.chdir(foreign)
+    catalog = [{"provider": GO, "model": ident} for ident in ["paid-free", "alpha-free"]]
+    assert stage2.select_free(review_rule(), catalog, root=world.root) == ["alpha-free"], (
+        "selection must apply the named repository's paid veto from a foreign directory"
+    )
+    with pytest.raises(TypeError, match="root"):
+        stage2.select_free(review_rule(), catalog)
+
+
+@pytest.mark.parametrize("capability_problem", ["no-tool-support", "capability-unavailable"])
+def test_research_reports_destination_and_capability_refusals(world, monkeypatch, capsys, capability_problem):
+    fixture = Fixture(world, monkeypatch)
+    fixture.catalog.pi.append(pi_model("foreign-free", baseUrl="https://evil.example/x"))
+    fixture.catalog.tools["foreign-free"] = {"id": "foreign-free", "tool_call": False}
+    fixture.catalog.metadata_ok = capability_problem != "capability-unavailable"
+    for item in fixture.catalog.pi:
+        if item["id"] == "qwen3.8-flash":
+            item["api"] = "openai-completions"
+    assessed = []
+    real = stage2_go.assess
+
+    def spy(policy, model, definition_):
+        verdict = real(policy, model, definition_)
+        if model == "foreign-free":
+            assessed.append(verdict.problem)
+        return verdict
+
+    monkeypatch.setattr(stage2_go, "assess", spy)
+    assert fixture.prepare() == 0
+    state = fixture.receipt()["state"]
+    candidate = next(c for c in state["catalog"]["candidates"] if c["id"] == "foreign-free")
+    assert assessed, "a capability refusal must not suppress destination assessment"
+    assert candidate["reason"] == "destination-refused"
+    assert capability_problem in candidate["detail"] and assessed[0] in candidate["detail"]
+    assert state["free"]["dropped"]["foreign-free"] == candidate["detail"]
+    assert f"Dropped (free): foreign-free: {candidate['detail']}" in capsys.readouterr().out
+    assert "foreign-free" not in fixture.probed()
+    if capability_problem == "no-tool-support":
+        assert {"alpha-free", "beta-free"} <= set(state["free"]["selected"])

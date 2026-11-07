@@ -2093,15 +2093,9 @@ def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> 
     return free_selection(root, rule, catalog, fresh).dropped
 
 
-def select_free(rule: dict, catalog: list[dict], *, root: Path | None = None) -> list[str]:
-    """Compatibility selection with the current declaration's paid and exclusion vetoes.
-
-    Callers may supply their repository root; the two-argument form reads the
-    current working directory's declaration, just like a local invocation.
-    """
-    return free_selection(
-        root if root is not None else Path.cwd(), rule, catalog, {row["model"] for row in catalog}
-    ).selected
+def select_free(rule: dict, catalog: list[dict], *, root: Path) -> list[str]:
+    """Compatibility selection using the explicitly named repository's paid and exclusion vetoes."""
+    return free_selection(root, rule, catalog, {row["model"] for row in catalog}).selected
 
 
 def overlay_store(agent: Path, provider: str) -> dict:

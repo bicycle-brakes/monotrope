@@ -151,10 +151,10 @@ def select(
         notice = None
         if veto:
             result.vetoed[model] = veto
-        elif problem is None and candidate.definition is not None and address is not None:
+        if candidate.definition is not None and address is not None:
             verdict = stage2_go.assess(address, model, candidate.definition)
             if not verdict.admitted:
-                problem = verdict.problem
+                problem = f"{problem}; {verdict.problem}" if problem else verdict.problem
                 result.refused_destination[model] = verdict.problem
             else:
                 notice = verdict.notice

@@ -314,11 +314,11 @@ def select_research_catalog(
         if ident in chosen.vetoed:
             candidate["reason"] = veto_codes[chosen.vetoed[ident].kind]
             candidate["detail"] = chosen.vetoed[ident].reason
+        elif ident in chosen.refused_destination:
+            candidate["reason"] = "destination-refused"
+            candidate["detail"] = chosen.dropped.get(ident, chosen.refused_destination[ident])
         elif candidate["reason"] is None:
-            if ident in chosen.refused_destination:
-                candidate["reason"] = "destination-refused"
-                candidate["detail"] = chosen.refused_destination[ident]
-            elif chosen.skipped.get(ident) in (stage2_free.SKIP_EXCLUDED, stage2_free.SKIP_NOT_INCLUDED):
+            if chosen.skipped.get(ident) in (stage2_free.SKIP_EXCLUDED, stage2_free.SKIP_NOT_INCLUDED):
                 candidate["reason"] = chosen.skipped[ident]
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):

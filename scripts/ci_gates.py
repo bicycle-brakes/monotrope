@@ -151,9 +151,8 @@ OHNE_AUFRUFER: dict[str, str] = {
         "swarm's against stand-ins and a fixture catalog"
     ),
     "stage2_free.py": (
-        "Helper of scripts/stage2.py, scripts/stage2_availability.py and scripts/stage2_swarm.py, never an "
-        "entry point of its "
-        "own: the one free-model selection shared by the review loop and the research swarm. "
+        "Helper imported by scripts/stage2.py and scripts/stage2_swarm.py for the shared free-model "
+        "selection of the review loop and the research swarm; never an entry point of its own. "
         "tests/test_stage2_free.py runs it, tests/test_pi_contract.py checks both preparations offline"
     ),
     "stage2_research_refs.py": (
