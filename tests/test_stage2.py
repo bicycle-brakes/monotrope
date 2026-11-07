@@ -16616,6 +16616,7 @@ def test_definitive_retirement_preserves_protected_provider_evidence(
     record = world.record().read_text(encoding="utf-8")
     assert "## Stage failed — rung:mimo-v2.6-pro (mimo-v2.6-pro)" in record, "stage or model is not identified"
     assert "refused with HTTP 403" in record and "retired automatically by the runner" in record
+    assert "provider diagnostic: HTTP 403 Forbidden" in record, "the actual provider status line was lost"
     assert 'Loop state: {"injected": true}' in record, "the provider diagnostic was not preserved"
     assert OKEY not in record and "[credential]" in record, "a credential reached the persisted evidence"
     assert OKEY not in capsys.readouterr().err, "a credential reached the printed diagnostic"
@@ -21046,3 +21047,130 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+@pytest.mark.parametrize(
+    ("answer", "status"),
+    [
+        ("HTTP 403 Forbidden", "403"),
+        ("HTTP/1.1 410 Gone", "410"),
+        ("HTTP status code 403: permission_error", "403"),
+        ("HTTP status code: 403: access disabled", "403"),
+        ("HTTP Status: 403 permission_error", "403"),
+        ("http 403 forbidden", "403"),
+        ("HTTP403 permission_error", "403"),
+        ("403 Forbidden", "403"),
+        ("410 Gone", "410"),
+        ("403 permission_error: access disabled", "403"),
+        ("410 ModelDeprecated", "410"),
+        ('{"statusCode":403,"error":{"type":"permission_error","message":"access disabled"}}', "403"),
+        ('{"error":{"status_code":410,"type":"ModelDeprecated"}}', "410"),
+    ],
+)
+def test_definitive_provider_answer_spellings(world: World, stream: str, answer: str, status: str) -> None:
+    """Only a failed call's provider answer, on either stream, supplies refusal evidence."""
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, stream: answer}])
+    assert world.run("review-loop") == 2, "the explicit provider refusal did not retire the rung"
+    record = world.record().read_text(encoding="utf-8")
+    assert f"refused with HTTP {status}" in record
+    assert answer in record, "the actual provider answer was lost"
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr"),
+    [
+        ("", "local tool failed while discussing HTTP 403"),
+        ("", "HTTP 403 was mentioned by a local tool"),
+        ("", "Error: HTTP 410 copied from a guide"),
+        ("", "previous response was 403 Forbidden; file not found"),
+        ("", "pasted response: HTTP/1.1 410 Gone"),
+        ("", "HTTP 403 Forbidden\nHTTP 503 Service Unavailable"),
+        ("HTTP 403 Forbidden", "HTTP 429 Too Many Requests"),
+        ("HTTP 410 Gone", "request timeout"),
+        ("", "HTTP 504 Gateway Timeout\nHTTP 403 Forbidden"),
+        ('{"status":403,"error":{"type":"permission_error"}}', '{"statusCode":500,"error":"upstream"}'),
+        ("", 'HTTP 403 Forbidden\n{"error":{"status_code":429}}'),
+        ("HTTP 403 Forbidden", "429 Too Many Requests"),
+        ("HTTP 410 Gone", "503 Service Unavailable"),
+    ],
+)
+def test_definitive_refusal_rejects_incidental_and_transient_evidence(world: World, stdout: str, stderr: str) -> None:
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    world.script(pi=[{"model": TEST_RUNGS[0], "exit": 1, "stdout": stdout, "stderr": stderr}])
+    assert world.run("review-loop") == 1, "incidental or transient evidence retired the paid rung"
+    assert "## Stage failed" not in world.record().read_text(encoding="utf-8")
+
+
+def test_definitive_research_has_no_stale_skeleton_instructions() -> None:
+    """Completed research must not tell its reader that it is an empty human-written skeleton."""
+    research = (REPO_ROOT / "plans/changes/definitive-refusal/research.md").read_text(encoding="utf-8")
+    assert "file is empty until it has run" not in research, "completed research still calls itself empty"
+    assert "Bring the provenance up to date" not in research, (
+        "completed research still carries the skeleton instruction"
+    )
+    assert "provenance: ai-drafted-reviewed" in research
+
+
+def test_definitive_retirement_counts_format_retry_calls(world: World) -> None:
+    two_rung_world(world)
+    world.script(
+        pi=[
+            {"model": TEST_RUNGS[0], "stdout": "malformed prose"},
+            {"model": TEST_RUNGS[0], "exit": 1, "stderr": "HTTP 403 Forbidden"},
+            {"model": "spike-a", "stdout": "No finding."},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    retirement = record.split("## Stage failed", 1)[1].split("## Round 2", 1)[0]
+    assert "audit calls: 2" in retirement, "the format retry's audited call was not counted"
+    assert len(world.reviews("pi")) == 3
+
+
+@pytest.mark.parametrize("ending", ["exhausted", "deadline"])
+def test_definitive_retirement_records_actual_ending(world: World, monkeypatch, ending: str) -> None:
+    world.write_record([("L1-1", FIXED, "yes")], state=loop_state(("free", "flash")))
+    if ending == "deadline":
+        two_rung_world(world)
+    clock = [1000.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+
+    def refuse(_ctx, _model, _prompt, _key, **options):
+        if ending == "deadline":
+            clock[0] = options["deadline"] + 1
+        raise stage2.DefinitiveRefusal("HTTP 403 Forbidden", "403")
+
+    monkeypatch.setattr(stage2, "run_reviewer", refuse)
+    assert world.run("review-loop") == 2
+    record = world.record().read_text(encoding="utf-8")
+    assert "the loop continues with the next stage" not in record
+    assert ("saved ladder is exhausted" if ending == "exhausted" else "round time limit is spent") in record
+
+
+def test_definitive_retirement_deadline_expires_during_prelaunch(world: World, monkeypatch) -> None:
+    two_rung_world(world)
+    clock = [1000.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    launched = []
+    deadline = []
+    original_check = stage2.checked_prompt
+
+    def check(*args, **kwargs):
+        result = original_check(*args, **kwargs)
+        if launched:
+            clock[0] = deadline[0] + 1
+        return result
+
+    def refuse(_ctx, model, _prompt, _key, **options):
+        launched.append(model)
+        deadline.append(options["deadline"])
+        if model == TEST_RUNGS[0]:
+            raise stage2.DefinitiveRefusal("HTTP 403 Forbidden", "403")
+        return "No finding."
+
+    monkeypatch.setattr(stage2, "checked_prompt", check)
+    monkeypatch.setattr(stage2, "run_reviewer", refuse)
+    assert world.run("review-loop") in (1, 2)
+    assert launched == [TEST_RUNGS[0]], "the next rung launched after its preflight spent the deadline"

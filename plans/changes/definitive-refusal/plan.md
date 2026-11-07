@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-2ym2
@@ -102,3 +102,5 @@ checks without creating substitutes or weakening requirements.
 
 2026-11-06 16:19:48–16:50:20 UTC, 1832 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 16:50:29–17:39:15 UTC, 2925 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-11-06 18:35:23–19:31:14 UTC, 3351 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 19:31:24–2026-11-07 00:52:51 UTC, 19285 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

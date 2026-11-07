@@ -637,15 +637,16 @@ class MalformedAnswer(CallFailed):
 class DefinitiveRefusal(CallFailed):
     """A failed provider call carried explicit HTTP 403 or 410 evidence: a definitive refusal.
 
-    The status was classified from the call's whole standard error before `fail`
-    truncated the diagnostic (bead coding-harness-2ym2); a successful answer's
+    The status was classified from the call's provider answer before `fail`
+    built its short message (bead coding-harness-2ym2); a successful answer's
     text is never classified, and every other failure stays a plain
     `CallFailed`. The message is the scrubbed diagnostic as `fail` built it.
     """
 
-    def __init__(self, message: str, status: str) -> None:
+    def __init__(self, message: str, status: str, diagnostic: str = "") -> None:
         super().__init__(message)
         self.status = status
+        self.diagnostic = diagnostic or message
 
 
 def today() -> str:
@@ -1045,29 +1046,83 @@ def launch(
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
 
-# A definitive provider refusal is explicit HTTP 403 or 410 evidence on a failed
-# call (bead coding-harness-2ym2): a status line ("HTTP 403", "HTTP/1.1 410 Gone",
-# "HTTP status code 403") or the canonical reason phrase beside the number
-# ("403 Forbidden", "410 Gone"). A bare number, an exit code, another status and
-# a number inside a word never match, and a successful answer's text is never
-# classified at all.
-DEFINITIVE_REFUSAL = re.compile(
-    r"\bHTTP(?:/[0-9]+(?:\.[0-9]+)?)?(?:[ \t]+status(?:[ \t]+code)?)?[ \t]+(403|410)\b"
-    r"|\b(403)[ \t]+Forbidden\b"
-    r"|\b(410)[ \t]+Gone\b"
+# Match response lines, not status phrases embedded in unrelated diagnostics.
+# Pi may print the provider's HTTP answer or its structured error on either stream.
+HTTP_STATUS = re.compile(
+    r"HTTP(?:/[0-9]+(?:\.[0-9]+)?)?(?:[ \t]*status(?:[ \t]+code)?)?[ \t]*:?[ \t]*(\d{3})\b",
+    re.IGNORECASE,
+)
+PROVIDER_STATUS = re.compile(
+    r"^(?:(?:provider (?:error|diagnostic)|error)\s*:\s*)?"
+    r"(?:HTTP(?:/[0-9]+(?:\.[0-9]+)?)?(?:[ \t]*status(?:[ \t]+code)?)?[ \t]*:?[ \t]*(403|410)\b"
+    r"|(?P<reason>403[ \t]+Forbidden|410[ \t]+Gone)\b)",
+    re.IGNORECASE,
 )
 
 
-def definitive_refusal_status(text: str) -> str | None:
-    """The explicit HTTP 403 or 410 evidence in a failed call's standard error, or None.
+def definitive_refusal_status(text: str, stderr: str = "") -> str | None:
+    """Classify provider response envelopes; transient evidence anywhere vetoes retirement.
 
-    Classified from the whole diagnostic before `fail` truncates it to the last
-    line; a diagnostic that holds none of the explicit forms retires nothing.
+    Structured JSON status fields are accepted only with a matching provider error
+    type. Plain HTTP response lines have to start the diagnostic, optionally after
+    its error label; pasted prose and local tool messages cannot supply a status.
     """
-    matched = DEFINITIVE_REFUSAL.search(text)
-    if matched is None:
-        return None
-    return matched.group(1) or matched.group(2) or matched.group(3)
+    streams = (text, stderr)
+    text = "\n".join(streams)
+    statuses: list[str] = []
+    transient = bool(re.search(r"timeout|timed[ _-]?out|time[ _-]?out", text, re.IGNORECASE))
+    transient |= any(m.group(1) == "429" or m.group(1).startswith("5") for m in HTTP_STATUS.finditer(text))
+    transient |= bool(re.search(r"(?<![\w-])(?:429|5[0-9]{2})(?![\w-])", text))
+
+    def structured(value: object) -> None:
+        nonlocal transient
+        if isinstance(value, list):
+            for item in value:
+                structured(item)
+        elif isinstance(value, dict):
+            codes = [
+                str(code)
+                for key, code in value.items()
+                if key.lower().replace("_", "") in {"status", "statuscode", "code"} and isinstance(code, str | int)
+            ]
+            transient |= any(code == "429" or re.fullmatch(r"5[0-9]{2}", code) for code in codes)
+            error = json.dumps(value, ensure_ascii=False).lower()
+            if "403" in codes and re.search(r"permission[_ -]?error|access[ _-]?disabled|forbidden", error):
+                statuses.append("403")
+            if "410" in codes and re.search(r"model[_ -]?deprecated|gone", error):
+                statuses.append("410")
+            for item in value.values():
+                structured(item)
+
+    # A whole JSON answer can be pretty-printed; line JSON also occurs in Pi logs.
+    for candidate in [*streams, *text.splitlines()]:
+        with contextlib.suppress(ValueError):
+            structured(json.loads(candidate))
+    for line in text.splitlines():
+        matched = PROVIDER_STATUS.match(line.strip())
+        if matched:
+            status = matched.group(1) or matched.group("reason")[:3]
+            tail = line.strip()[matched.end() :].strip(" :")
+            provider_label = re.match(r"^provider (?:error|diagnostic)\s*:", line.strip(), re.IGNORECASE)
+            reason = (
+                r"forbidden|permission[_ -]?error|access[ _-]?disabled"
+                if status == "403"
+                else r"gone|model[_ -]?deprecated"
+            )
+            if provider_label or matched.group("reason") or not tail or re.match(reason, tail, re.IGNORECASE):
+                statuses.append(status)
+        else:
+            typed = re.match(r"^(?:error:\s*)?(403|410)\b[ \t:]+(.+)$", line.strip(), re.IGNORECASE)
+            if typed:
+                structured({"status": typed.group(1), "error": typed.group(2)})
+    return statuses[0] if statuses and not transient else None
+
+
+def refusal_diagnostic(done: subprocess.CompletedProcess, secret: str | list[str] | None) -> str:
+    """Bound and scrub both streams, retaining status-bearing lines ahead of log tails."""
+    lines = scrub("\n".join([done.stdout or "", done.stderr or ""]), secret).splitlines()
+    evidence = [line for line in lines if re.search(r"403|410", line)]
+    return "\n".join(dict.fromkeys([*evidence, *lines[-40:]]))[:12000]
 
 
 def last_error_line(done: subprocess.CompletedProcess, secret: str | list[str] | None = None) -> str:
@@ -1104,7 +1159,7 @@ def fail(
     last = last_error_line(done, secret)
     detail = f" ({last})" if last else ""
     message = f"{program} call failed: {reason}{detail}"
-    return DefinitiveRefusal(message, refusal) if refusal else CallFailed(message)
+    return DefinitiveRefusal(message, refusal, refusal_diagnostic(done, secret)) if refusal else CallFailed(message)
 
 
 def failed_with_answer_file(error: CallFailed, answer_file: Path) -> CallFailed:
@@ -2873,7 +2928,7 @@ def run_reviewer(
             **({"deadline": deadline} if deadline is not None else {}),
         )
         if done.returncode != 0:
-            # The whole standard error is classified before `fail` truncates it to the last line: an
+            # Both response streams are classified before `fail` truncates its message: an
             # explicit HTTP 403 or 410 marks this failed call a definitive refusal (bead
             # coding-harness-2ym2); every other exit stays a plain failure.
             raise fail(
@@ -2882,7 +2937,7 @@ def run_reviewer(
                 f"exit {done.returncode}",
                 secrets,
                 model,
-                refusal=definitive_refusal_status(done.stderr or ""),
+                refusal=definitive_refusal_status(done.stdout or "", done.stderr or ""),
             )
         answer = scrub(done.stdout or "", secrets)
         if not answer.strip():
@@ -8690,6 +8745,10 @@ def _review_round(
                 problem = terms_problem(entry, member)
                 if problem:
                     raise Refused(problem)
+        # A continued stage shares the earlier deadline. Preflight and leak checks
+        # may have spent it; do not audit or start a call after those checks.
+        if deadline is not None:
+            remaining(deadline)
         # Audit only after the final admission check allows the initial dispatch.
         if not ctx.findings.exists():
             ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
@@ -8753,21 +8812,27 @@ def _review_round(
             # first: a persistence failure retires nothing, and its attempt keeps the truthful
             # no-round accounting below.
             refusal = answers[members[0]]
+            retired_state = {**state, "consumed": [*state["consumed"], stage["key"]]}
+            if next_stage(retired_state) is None:
+                ending = "The saved ladder is exhausted; no further call starts."
+            elif time.monotonic() >= deadline:
+                ending = "The round time limit is spent; no further call starts."
+            else:
+                ending = "The next saved stage is pending fresh admission and round-deadline checks."
             block = "\n\n".join(
                 [
                     f"## Stage failed — {stage['key']} ({members[0]})",
                     quote_reviewer(str(refusal)),
+                    quote_reviewer(refusal.diagnostic),
                     f"The stage is retired automatically by the runner: the provider refused with "
                     f"HTTP {refusal.status} (403 access disabled, 410 deprecated); a transient failure never "
-                    "retires. No round of it counts, and the loop continues with the next stage of the "
-                    "saved ladder on the same round deadline.",
+                    f"retires. No round of it counts; audit calls: {audited}. {ending}",
                 ]
             )
             state["consumed"] = [*state["consumed"], stage["key"]]
             write_round(change, block, state, root)
             notes.append(
-                f"{members[0]} failed: {refusal}; the paid rung retires itself (HTTP {refusal.status}): "
-                "the loop continues with the next stage"
+                f"{members[0]} failed: {refusal}; the paid rung retires itself (HTTP {refusal.status}): {ending}"
             )
             print(f"review-loop: {notes[-1]}", file=sys.stderr)
             raise StageRetired(stage["key"], refusal.status, deadline)

@@ -1474,7 +1474,8 @@ attempt whose every member failed completes no round and consumes no stage.
 The one exception is the paid rung whose failed call carries explicit HTTP 403 or 410 evidence (bead
 coding-harness-2ym2): it retires itself, and its retirement differs from every failure above. The stage is consumed
 without a round; its `## Stage failed` block names the runner as the actor, quotes the scrubbed diagnostic, and
-stands in the record where the round would have stood, so the attempt's audit lines are accounted for by that block
+carries `audit calls: N` for every call in that attempt, including a format retry. It stands in the record where
+the round would have stood, so the attempt's audit lines are accounted for by that block
 and no no-round line is written for them. The same invocation continues with the next stage of the saved ladder on
 the same round deadline; a spent ladder or a spent deadline stops with a diagnostic, and a retirement whose record
 write fails retires nothing — its attempt keeps the no-round line with its audit count, and no later stage starts.

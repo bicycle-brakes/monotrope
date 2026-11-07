@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-2ym2
@@ -163,3 +163,22 @@ Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 915 files, 3426 commits, 12 rules.
 
 Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 915 files, 3428 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3433 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +2 -1
+> - `plans/changes/definitive-refusal/research.md` +0 -9
+> - `scripts/stage2.py` +94 -29
+> - `tests/test_stage2.py` +118 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-11: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/definitive-refusal/stage2/attempts/definitive-refusal/attempt-1-20261106T183505248248Z-6b92d893.md
+> ```
+
+Stage-2 call, 2026-11-06: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3438 commits, 12 rules.
