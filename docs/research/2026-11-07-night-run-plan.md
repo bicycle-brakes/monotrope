@@ -63,10 +63,11 @@ is the only tracker writer. It keeps five to six lanes running, never more
 
 ## Backlog added (maintainer, 2026-11-07 about 15:20 UTC: "Kannst du mehr beads in den backlog legen")
 
-All are `bounded` and unblocked. Each explores through GLM 5.3 Flash and
-stops at the interview: an explore writes only under `plans/changes/`, and the
-interview questions park for the morning. Most touch `scripts/stage2.py`, so
-none goes past the interview tonight beside lanes 1 and 4.
+All are `bounded` and unblocked. Each explores through GLM 5.3 Flash. The
+maintainer answered their interviews before the night (2026-11-07, recorded in
+each bead's notes), so each goes on to `draft` (spec and plan) and stops at the
+plan card, which the maintainer sees in the morning. Most touch
+`scripts/stage2.py`, so no implementation starts tonight beside lanes 1 and 4.
 
 7. Codex capacity retry (coding-harness-m98e) as the package the maintainer
    set on 2026-10-27, with the `cut_rounds` crash (coding-harness-jmtl) and
@@ -77,15 +78,19 @@ none goes past the interview tonight beside lanes 1 and 4.
 9. An implement attempt that changes only runner bookkeeping is accepted as
    verified (coding-harness-te7q): read the saved attempt record first, as
    its notes say.
-10. Repair brake: the orchestrator sets the Origin cell (coding-harness-ywbh).
+10. Repair brake: the orchestrator sets the Origin cell (coding-harness-ywbh);
+    the maintainer's answer of 2026-10-25 is its interview.
 11. Warn when a catalog base URL or API differs from the declared Go address
     (coding-harness-x2g9).
 12. `stage2.py session` launch command truncated by the terminal
     (coding-harness-rm8).
-13. Plan card readable at a glance (coding-harness-6xx), a prompt-text change.
-14. The Flash route's `unrecognized_model` failure (coding-harness-ygsw):
+13. The Flash route's `unrecognized_model` failure (coding-harness-ygsw):
     first check whether the night's Flash explores hit it; explore only if
     they do.
+
+The plan card redesign (coding-harness-6xx) left this backlog: the maintainer
+chose a redesign with research, so it is now a `feature` for the research
+swarm after lane 1 merges.
 
 Not started tonight: the speed beads coding-harness-w2ay, -wnka, -0swp and
 the other test-strategy beads now linked to coding-harness-1ga5 wait for the
