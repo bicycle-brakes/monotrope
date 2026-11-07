@@ -8,7 +8,7 @@ updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-y0qm
-owner: Data Architect
+owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: stage2-and-codex, version: "glm-5.3-flash exploration; claude-sonnet-5-5 implementation; gpt-6.1-sol repair, 2026-11-07"}
 review: {status: pending, approved_by: null, approved_at: null}

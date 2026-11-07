@@ -16,7 +16,12 @@ tags: [spec, spike, scope]
 class: spike
 appetite: 2
 adr_files: []
-neighbours: []
+neighbours:
+  - plans/changes/guard-test/spec.md
+  - plans/changes/research-swarm/spec.md
+  - plans/changes/loop-until-clean/spec.md
+  - plans/changes/sol-effort/spec.md
+  - plans/changes/interview-context/spec.md
 ---
 
 # Spec — redraft-after-scope
@@ -118,7 +123,7 @@ by the orchestrator or runner, never edited by an implementation attempt.
   repository's text-only rule. The runner owns its draft checks and commit.
 - The pull request closes the scope-investigation bead `coding-harness-y0qm`;
   its final commit carries `Closes-Bead: coding-harness-y0qm`.
-- Special runs: none; no foreign calls are needed for historical source review.
+- Special runs: none are needed for historical source review. Note (orchestrator, 2026-11-07): the stage-2 review loop ran two rounds on this spike by an orchestrator routing error — `docs/WORKFLOW.md`, "Which change gets what", gives a spike no stage 2; its round-1 text repairs are kept, no further round runs, and the review is Opus 5.5 as §3 asks.
 
 ## Open decisions
 
