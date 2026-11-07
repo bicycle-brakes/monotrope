@@ -61,6 +61,32 @@ is the only tracker writer. It keeps five to six lanes running, never more
 6. Conflict-marker gate (coding-harness-i76l): hand-complete the CI step and
    the empty-probe reason, `make verify`, review loop.
 
+## Backlog added (maintainer, 2026-11-07 about 15:20 UTC: "Kannst du mehr beads in den backlog legen")
+
+All are `bounded` and unblocked. Each explores through GLM 5.3 Flash and
+stops at the interview: an explore writes only under `plans/changes/`, and the
+interview questions park for the morning. Most touch `scripts/stage2.py`, so
+none goes past the interview tonight beside lanes 1 and 4.
+
+7. Codex capacity retry (coding-harness-m98e) as the package the maintainer
+   set on 2026-10-27, with the `cut_rounds` crash (coding-harness-jmtl) and
+   coding-harness-y125 in one pull request.
+8. A runner verb to triage loop rows (coding-harness-o2s1): replaces the
+   orchestrator's hand edits of the loop record, which caused several failed
+   repairs this week.
+9. An implement attempt that changes only runner bookkeeping is accepted as
+   verified (coding-harness-te7q): read the saved attempt record first, as
+   its notes say.
+10. Repair brake: the orchestrator sets the Origin cell (coding-harness-ywbh).
+11. Warn when a catalog base URL or API differs from the declared Go address
+    (coding-harness-x2g9).
+12. `stage2.py session` launch command truncated by the terminal
+    (coding-harness-rm8).
+13. Plan card readable at a glance (coding-harness-6xx), a prompt-text change.
+14. The Flash route's `unrecognized_model` failure (coding-harness-ygsw):
+    first check whether the night's Flash explores hit it; explore only if
+    they do.
+
 Not started tonight: the speed beads coding-harness-w2ay, -wnka, -0swp and
 the other test-strategy beads now linked to coding-harness-1ga5 wait for the
 spike's report (maintainer-approved grooming, 2026-11-07).
