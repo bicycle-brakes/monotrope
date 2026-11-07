@@ -14280,6 +14280,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     unrelated malformed prose passes."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", f"{rows(1)}\n{GUARD_EVIDENCE_TEXT}"), codex_ok("T1", "X1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert text.index(GUARD_EVIDENCE_TEXT) < text.index("Phase 6 verdict: codex T1")
@@ -14289,6 +14290,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     (world.bin / "calls.jsonl").unlink()
     seed_2a_session(world)
     world.script(codex=[codex_ok("T2", f"No finding.\n{GUARD_EVIDENCE_TEXT}")])
+    commit_review_findings(world)
     assert world.run("review") == 0, "evidence beside `No finding.` was refused"
     text = world.text()
     assert GUARD_EVIDENCE_TEXT in text and "No finding." in text
@@ -14297,6 +14299,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T3", GUARD_EVIDENCE_TEXT)])
+    commit_review_findings(world)
     assert world.run("review") != 0, "evidence alone became a verdict"
     text = world.text()
     assert "Phase 6 verdict" not in text
@@ -14306,6 +14309,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     (world.bin / "calls.jsonl").unlink()
     malformed = "Guard evidence: tests/test_fix.py::test_fix — fault: x — catches without switch: maybe"
     world.script(codex=[codex_ok("T4", malformed)])
+    commit_review_findings(world)
     assert world.run("review") != 0, "a malformed evidence line passed as a verdict"
     assert "Phase 6 verdict" not in world.text()
 
@@ -14321,6 +14325,7 @@ def test_phase6_refuses_malformed_guard_evidence_beside_findings(world: World, e
     """A finding row must not hide an invalid or reasonless guard-evidence line."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", f"{rows(1)}\n{evidence}")])
+    commit_review_findings(world)
     assert world.run("review") != 0, "malformed guard evidence passed beside a finding"
     text = world.text()
     assert "Phase 6 verdict" not in text
@@ -14331,6 +14336,7 @@ def test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows(wo
     """Criterion 9. Planted fault: the prompt allows sampling or exposes loop rows before the verdict."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "X1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     prompt = world.calls("codex")[0]["argv"][-1]
     assert stage2.PHASE6_GUARD_INSTRUCTION in prompt
