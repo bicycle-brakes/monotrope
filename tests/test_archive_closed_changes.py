@@ -219,7 +219,7 @@ def test_default_cli_and_make_are_read_only(
     fx.set_render({"b-closed": "closed"})
 
     def _no_subprocess(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("a report must not start a subprocess")
+        raise AssertionError("a report with a preset fixture render must not start a subprocess")
 
     sp_names = ("run", "call", "check_call", "check_output", "Popen")
     real = {name: getattr(subprocess, name) for name in sp_names}
@@ -630,4 +630,239 @@ def test_post_merge_procedure_orders_archive_after_closure() -> None:
     first_close = prompt.index("close-merged")
     assert first_close < first_archive, "the archive step must follow the close-merged reconciliation"
     assert "make archive ARGS=--write" in prompt, "the write invocation is part of the procedure"
+    assert first_close < prompt.index("make archive ARGS=--write"), "the archive write must follow closure"
     assert "another session's checkout" not in prompt, "the procedure must never touch another session's checkout"
+
+
+def test_source_removal_failure_keeps_verified_destination(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    src = fx.add("alpha", files=_closed_files("b-a"), companions={"only.bin": b"unique"})
+    fx.set_render({"b-a": "closed"})
+    original_remove = archive.shutil.rmtree
+
+    def partial_remove(path, *args, **kwargs):
+        if path == src:
+            (src / "only.bin").unlink()
+            raise OSError("source removal interrupted")
+        return original_remove(path, *args, **kwargs)
+
+    monkeypatch.setattr(archive.shutil, "rmtree", partial_remove)
+    assert archive.main(["--write"]) == 1
+    dst = fx.archive / "2026-03-04-alpha"
+    assert (dst / "only.bin").is_file(), "retain the complete copy after partial source deletion"
+    assert (dst / "only.bin").read_bytes() == b"unique"
+    assert all((dst / name).is_file() for name in _closed_files("b-a"))
+    err = capsys.readouterr().err
+    assert "source may be partially removed" in err
+    assert "complete verified destination retained" in err
+    assert str(src.relative_to(fx.root)) in err and str(dst.relative_to(fx.root)) in err
+    assert "source left in place" not in err
+
+
+def test_failure_reports_unattempted_folders(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    for name in ("alpha", "beta", "gamma"):
+        fx.add(name, files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+
+    def fail(*_args):
+        raise OSError("cannot copy")
+
+    monkeypatch.setattr(archive, "_relocate", fail)
+    assert archive.main(["--write"]) == 1
+    err = capsys.readouterr().err
+    assert "plans/changes/beta: not attempted" in err
+    assert "plans/changes/gamma: not attempted" in err
+
+
+def test_real_report_path_allows_read_only_export(plans_repo, monkeypatch, capsys):
+    import importlib.util
+
+    # Load an independent real access point; the fixture's render_pfad lambda
+    # must not shortcut the export path under examination.
+    spec = importlib.util.spec_from_file_location("archive_real_bead_render", REPO_ROOT / "scripts/bead_render.py")
+    real = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(real)
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+    monkeypatch.delenv("BEAD_RENDER", raising=False)
+    monkeypatch.setattr(archive, "bead_render", real)
+    calls = []
+
+    def export(argv, **_kwargs):
+        calls.append(argv[1:3])
+        assert argv[1:3] == ["export", "-o"], "only read-only export may run"
+        Path(argv[3]).write_bytes(fx.render_path.read_bytes())
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", export)
+    before = _snapshot(fx.root)
+    try:
+        assert archive.main([]) == 0
+        assert calls == [["export", "-o"]]
+        assert _snapshot(fx.root) == before
+        assert "fresh render" in capsys.readouterr().out
+        assert "read-only bd export" in archive.__doc__, "document the real export subprocess"
+    finally:
+        if real._HALTER is not None:
+            real._HALTER.cleanup()
+
+
+def test_manifest_includes_every_recreated_directory(plans_repo, capsys):
+    fx = plans_repo
+    src = fx.add("alpha", files=_closed_files("b-a"), empty_dirs=["empty/deep"], companions={"assets/x": b"x"})
+    fx.set_render({"b-a": "closed"})
+    directories = [src, *(p for p in sorted(src.rglob("*")) if p.is_dir())]
+    assert archive.main([]) == 0
+    out = capsys.readouterr().out
+    dst = fx.archive / "2026-03-04-alpha"
+    for directory in directories:
+        target = dst / directory.relative_to(src)
+        assert f"{directory.relative_to(fx.root)}/ -> {target.relative_to(fx.root)}/ (directory)" in out
+
+
+def test_empty_repeat_repairs_index_after_generation_failure(plans_repo, monkeypatch):
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+    render = reg.render_index
+
+    def fail():
+        raise OSError("index unavailable")
+
+    monkeypatch.setattr(reg, "render_index", fail)
+    assert archive.main(["--write"]) == 1
+    monkeypatch.setattr(reg, "render_index", render)
+    assert archive.main(["--write"]) == 0
+    index = fx.root / "plans/INDEX.md"
+    assert index.is_file(), "a no-move retry must regenerate the missing index"
+    assert index.read_text() == render()
+
+
+@pytest.mark.parametrize("boundary", ["validate", "read", "registry", "unicode"])
+def test_read_errors_become_cannot_measure(plans_repo, monkeypatch, capsys, boundary):
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+    before = _snapshot(fx.root)
+
+    def fail(*_args, **_kwargs):
+        raise OSError("read denied")
+
+    if boundary == "validate":
+        monkeypatch.setattr(archive.check_bead_export, "run", fail)
+    elif boundary == "read":
+        monkeypatch.setattr(archive.check_bead_export, "run", lambda _: [])
+        original = Path.read_text
+
+        def read(path, *args, **kwargs):
+            if path == fx.render_path:
+                raise OSError("read denied")
+            return original(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read)
+    elif boundary == "registry":
+        monkeypatch.setattr(reg, "artefacts", fail)
+    else:
+        fx.render_path.write_bytes(b"\xff")
+        before = _snapshot(fx.root)
+    try:
+        result = archive.main(["--write"])
+    except (OSError, UnicodeError) as exc:
+        pytest.fail(f"read errors must produce cannot measure, not escape: {exc}")
+    assert result == 1
+    assert "cannot measure" in capsys.readouterr().err
+    assert _snapshot(fx.root) == before
+
+
+def test_index_replacement_is_atomic_and_render_errors_are_reported(plans_repo, monkeypatch, capsys):
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+    index = reg.INDEX
+    index.write_text("original index\n")
+    original_replace = Path.replace
+    original_write = Path.write_text
+
+    def fail_replace(path, target):
+        if target == index:
+            raise OSError("index replacement denied")
+        return original_replace(path, target)
+
+    def fail_in_place(path, text, *args, **kwargs):
+        if path == index:
+            path.write_bytes(b"truncated")
+            raise OSError("index write denied")
+        return original_write(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    monkeypatch.setattr(Path, "write_text", fail_in_place)
+    assert archive.main(["--write"]) == 1
+    assert index.read_text() == "original index\n", "failed replacement must retain the old index"
+    assert not list(index.parent.glob(".INDEX-*"))
+    assert "not regenerated" in capsys.readouterr().err
+
+    def invalid_render():
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+
+    monkeypatch.setattr(reg, "render_index", invalid_render)
+    try:
+        result = archive.main(["--write"])
+    except UnicodeDecodeError:
+        pytest.fail("index render errors must produce a diagnostic")
+    assert result == 1
+    assert "registry generator failed" in capsys.readouterr().err
+    assert index.read_text() == "original index\n"
+
+
+def test_symlinked_changes_boundary_is_refused(plans_repo, capsys):
+    fx = plans_repo
+    fx.add("alpha", files=_closed_files("b-a"))
+    fx.set_render({"b-a": "closed"})
+    real = fx.root / "outside-changes"
+    fx.changes.rename(real)
+    fx.changes.symlink_to(real, target_is_directory=True)
+    before = _snapshot(fx.root)
+    assert archive.main(["--write"]) == 1
+    assert "plans/changes is a symlink" in capsys.readouterr().err
+    assert _snapshot(fx.root) == before
+
+
+def test_disagreeing_completion_headers_are_normalised(plans_repo):
+    fx = plans_repo
+    originals = {
+        "spec.md": _artefact("Spec", "b-a", status="accepted", implementation="done"),
+        "plan.md": _artefact("Plan", "b-a", status="draft", implementation="partial"),
+        "research.md": _artefact("Research", "b-a", status="superseded", implementation="none"),
+    }
+    fx.add("mixed", files=originals)
+    fx.set_render({"b-a": "closed"})
+    assert archive.main(["--write"]) == 0
+    for name, original in originals.items():
+        new, _, tail = _meta((fx.archive / "2026-03-04-mixed" / name).read_text())
+        old, _, old_tail = _meta(original)
+        assert (new["status"], new["implementation_status"], new["updated"], new["last_reviewed"]) == (
+            "accepted",
+            "done",
+            DAY,
+            DAY,
+        )
+        assert tail == old_tail
+        assert {k: v for k, v in new.items() if k not in archive.LIFECYCLE} == {
+            k: v for k, v in old.items() if k not in archive.LIFECYCLE
+        }
+
+
+def test_post_merge_order_check_rejects_early_write(monkeypatch):
+    original = Path.read_text
+    prompt_path = REPO_ROOT / "prompts/07-commit.md"
+
+    def misordered(path, *args, **kwargs):
+        if path == prompt_path:
+            return "make archive ARGS=--write\nclose-merged\nmake archive\n"
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", misordered)
+    with pytest.raises(AssertionError, match="follow"):
+        test_post_merge_procedure_orders_archive_after_closure()

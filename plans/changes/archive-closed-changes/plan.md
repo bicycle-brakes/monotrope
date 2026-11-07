@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-cqun
@@ -165,7 +165,14 @@ at draft base `8be8751e` (2026-11-06). Do not build it here or claim a pass.
 - 9: tests/test_archive_closed_changes.py::test_post_merge_procedure_orders_archive_after_closure — the procedure omits or misorders the write command, or tells a session to mutate another checkout; orchestrator adds after bootstrap.
 - 10: not a test — the orchestrator's dated manifest, application transcript and before/after registry output in findings.md and the PR identify every moved file and show no eligible closed folder left active; any omission or unsupported all-drift-green claim refutes it.
 
+## Runner route — 2026-11-06
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-06 16:19:48–17:39:17 UTC, 4768 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 17:39:27–18:21:25 UTC, 2518 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-11-06 18:58:12–19:59:02 UTC, 3649 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 19:59:15–21:28:19 UTC, 5343 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 21:28:32–2026-11-07 03:53:56 UTC, 23122 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

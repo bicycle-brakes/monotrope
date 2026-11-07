@@ -44,15 +44,18 @@ nothing):
   only when it differs.
 - An I/O or index failure stops the run, exits nonzero and lists completed
   moves and unfinished work separately. All-or-nothing recovery is not
-  promised: a failed folder is reported with its source left in place and
-  its partial destination removed. A rerun after a successful run finds
-  nothing eligible and rewrites nothing — the tree stays byte-identical.
+  promised: copy failures leave the source intact and remove the partial
+  destination. Source-removal failures retain the verified complete destination
+  and report both paths, because the source may already be partially removed.
+  A rerun after a successful run finds nothing eligible and rewrites nothing
+  — the tree stays byte-identical.
 
 Exit codes: 0 = report written, or the batch archived cleanly (a rerun with
 nothing eligible included); 1 = nothing measurable, a blocked folder during a
-write run, or an I/O or index failure. No tracker write, no Git, no shell, no
-subprocess; the checkout is resolved from this script's location, linked
-worktrees included.
+write run, or an I/O or index failure. No tracker write, no Git, no shell
+interpolation. The tracker access point may invoke a read-only bd export
+subprocess when no BEAD_RENDER is preset; the checkout is resolved from this
+script's location, linked worktrees included.
 """
 
 from __future__ import annotations
@@ -65,6 +68,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -283,6 +287,8 @@ def _active_folders() -> list[Path]:
     Symlinks are never followed — the same rule `run_report.active_changes`
     applies, so a link cannot pull a foreign folder into the batch.
     """
+    if CHANGES.is_symlink():
+        raise PreflightError("plans/changes is a symlink, not a real directory")
     try:
         entries = sorted(CHANGES.iterdir())
     except OSError as exc:
@@ -294,14 +300,17 @@ def _tracker_state() -> tuple[Path, dict[str, str]]:
     """The render path plus its validated `id -> status`, duplicate ids refused."""
     try:
         render = bead_render.render_pfad()
-    except (OSError, bead_render.RendererNichtMoeglich, SystemExit) as exc:
+    except (OSError, UnicodeError, bead_render.RendererNichtMoeglich, SystemExit) as exc:
         raise PreflightError(f"the tracker render is not readable: {exc}") from None
-    findings = check_bead_export.run(render)
+    try:
+        findings = check_bead_export.run(render)
+    except (OSError, UnicodeError) as exc:
+        raise PreflightError(f"the tracker render is not readable: {exc}") from None
     if findings:
         raise PreflightError("the tracker render is not valid: " + "; ".join(findings))
     try:
         lines = render.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise PreflightError(f"the tracker render is not readable: {exc}") from None
     statuses: dict[str, str] = {}
     for line in lines:
@@ -322,6 +331,8 @@ def _destination_block(dst: Path, src: Path) -> str:
     destination is never overwritten, and no symlink on the archive boundary
     or inside the moved folder is ever traversed.
     """
+    if CHANGES.is_symlink():
+        return "plans/changes is a symlink, not a real directory"
     if ARCHIVE.is_symlink() or (ARCHIVE.exists() and not ARCHIVE.is_dir()):
         return "the archive is not a real directory (a file or a symlink)"
     if not ARCHIVE.exists():
@@ -358,7 +369,10 @@ def _classify(
     skipped: list[tuple[str, str]] = []
     for folder in _active_folders():
         where = _display(folder)
-        artefact_paths = _folder_artefacts(folder)
+        try:
+            artefact_paths = _folder_artefacts(folder)
+        except (OSError, UnicodeError) as exc:
+            raise PreflightError(f"the registry cannot be read: {exc}") from None
         if not artefact_paths:
             skipped.append((where, "no registry artefacts (nothing to classify)"))
             continue
@@ -439,11 +453,14 @@ def _edited_text(art: Artefact, day: dt.date) -> str:
 
 
 def _manifest(entry: Eligible) -> list[str]:
-    """Every prospective source/destination file line, companions marked."""
+    """Every prospective source/destination directory and file, companions marked."""
     artefact_paths = {art.path for art in entry.artefacts}
     lines: list[str] = []
     for root, dirnames, filenames in os.walk(entry.src, followlinks=False):
         dirnames.sort()
+        source_dir = Path(root)
+        target_dir = entry.dst / source_dir.relative_to(entry.src)
+        lines.append(f"{_display(source_dir)}/ -> {_display(target_dir)}/ (directory)")
         for filename in sorted(filenames):
             source = Path(root) / filename
             target = entry.dst / source.relative_to(entry.src)
@@ -458,11 +475,15 @@ def _print_entry(entry: Eligible, lead: str) -> None:
         print(f"  {line}")
 
 
+class SourceRemovalError(OSError):
+    """The complete destination is verified; source deletion failed."""
+
+
 def _relocate(src: Path, dst: Path, artefacts: dict[Path, Artefact], day: dt.date) -> None:
     """Move the whole folder: edited artefacts, untouched companions, then the source goes.
 
-    Raises OSError on the first failing operation; the caller reports the
-    folder as unfinished and removes what this call had already created.
+    Copy and verify before deleting any source byte. SourceRemovalError
+    tells the caller to retain the complete destination for recovery.
     """
     dst.mkdir(parents=True)
     edited: list[tuple[Path, bytes]] = []
@@ -483,7 +504,16 @@ def _relocate(src: Path, dst: Path, artefacts: dict[Path, Artefact], day: dt.dat
         target.write_bytes(payload)
     for source, target in companions:
         shutil.copy2(source, target)
-    shutil.rmtree(src)
+    for target, payload in edited:
+        if target.read_bytes() != payload:
+            raise OSError(f"destination verification failed: {target}")
+    for source, target in companions:
+        if target.read_bytes() != source.read_bytes():
+            raise OSError(f"destination verification failed: {target}")
+    try:
+        shutil.rmtree(src)
+    except OSError as exc:
+        raise SourceRemovalError(str(exc)) from exc
 
 
 def _remove_partial(dst: Path) -> bool:
@@ -508,14 +538,26 @@ def _regenerate_index() -> tuple[str, str | None]:
     try:
         rendered = plans_registry.render_index()
         current = index.read_text(encoding="utf-8") if index.exists() else None
-    except OSError as exc:
+    except Exception as exc:
         return "", f"not regenerated — the registry generator failed: {exc}"
     if current == rendered:
         return "already current", None
+    temporary = None
     try:
-        index.write_text(rendered, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=index.parent, prefix=".INDEX-", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(rendered)
+        if index.exists():
+            temporary.chmod(index.stat().st_mode)
+        temporary.replace(index)
     except OSError as exc:
         return "", f"not regenerated — the write failed: {exc}"
+    finally:
+        if temporary is not None:
+            with contextlib.suppress(OSError):
+                temporary.unlink(missing_ok=True)
     return "regenerated from the registry generator", None
 
 
@@ -533,11 +575,18 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
     """Archive every eligible folder, then the index; 0 only when all went well."""
     completed: list[str] = []
     unfinished: list[str] = []
-    for entry in eligible:
+    for position, entry in enumerate(eligible):
         _print_entry(entry, "archiving")
         artefacts = {art.path: art for art in entry.artefacts}
         try:
             _relocate(entry.src, entry.dst, artefacts, day)
+        except SourceRemovalError as exc:
+            unfinished.append(
+                f"{_display(entry.src)}: source removal failed — {exc}; source may be partially removed; "
+                f"complete verified destination retained at {_display(entry.dst)}"
+            )
+            unfinished.extend(f"{_display(pending.src)}: not attempted" for pending in eligible[position + 1 :])
+            break
         except OSError as exc:
             cleaned = _remove_partial(entry.dst)
             note = f"{_display(entry.src)}: not moved — {exc} (source left in place; "
@@ -546,6 +595,7 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
             else:
                 note += f"PARTIAL DESTINATION REMAINS at {_display(entry.dst)})"
             unfinished.append(note)
+            unfinished.extend(f"{_display(pending.src)}: not attempted" for pending in eligible[position + 1 :])
             break
         completed.append(f"{_display(entry.src)} -> {_display(entry.dst)}")
         print(f"archived {_display(entry.src)}")
@@ -554,7 +604,6 @@ def _write_batch(eligible: list[Eligible], day: dt.date) -> int:
         return 1
     if not completed:
         print("archive: nothing to archive — no eligible closed folder is left active")
-        return 0
     summary, failure = _regenerate_index()
     if failure is not None:
         _report_failure(completed, [f"plans/INDEX.md: {failure}"])

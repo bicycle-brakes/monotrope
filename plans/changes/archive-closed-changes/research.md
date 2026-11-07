@@ -13,6 +13,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06; draft-time checks appended to the recorded Flash exploration"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+neighbours: []
 ---
 
 # archive closed changes — Research
@@ -109,3 +110,7 @@ outside this worktree and its Git directory:
   state or hosted pull-request state was read. A backlog move manifest must
   consequently be measured by the orchestrator at application time; the two
   examples in the exploration are not an exhaustive eligibility list.
+
+Repair note — 2026-11-06: the neighbours header is now explicitly empty.
+The candidates above are historical exploration suggestions, not a prepared
+swarm handoff; no further swarm run is planned for this bounded change.

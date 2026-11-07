@@ -16827,7 +16827,7 @@ def test_first_paid_rung_names_missing_cost_when_flash_is_skipped(
 
 
 def test_paid_terms_doctrine_records_the_retention_decision() -> None:
-    spec = (REPO_ROOT / "plans/changes/loop-until-clean/spec.md").read_text()
+    spec = (REPO_ROOT / "plans/changes/archive/2026-11-06-loop-until-clean/spec.md").read_text()
     adr = (REPO_ROOT / "docs/adr/0021-review-swarms-until-clean.md").read_text()
     for text in (spec, adr):
         assert "Q-11" in text
