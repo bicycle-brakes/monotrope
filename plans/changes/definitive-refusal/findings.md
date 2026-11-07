@@ -186,3 +186,5 @@ Stage-2 call, 2026-11-06: repair · attempt 2 · route codex-repair · endpoint 
 ## Verification evidence — orchestrator, 2026-11-07
 
 Loop row L1-12 (the repair does not write this file). At `65ed167e`, `.venv/bin/python -m pytest -q -n auto tests/test_stage2.py -k "refusal or retire or definitive or stage_failed"`: 92 passed in 19.66s. The red-first proofs of the repaired rows are the runner's `Broke a test` / fixed-line records of the round-1 repair in the loop record; the repair's full `make verify` was green (commit 65ed167e).
+
+Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 915 files, 3458 commits, 12 rules.
