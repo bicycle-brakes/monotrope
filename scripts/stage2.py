@@ -7249,18 +7249,23 @@ def frontmatter_fields(text: str) -> dict[str, str] | None:
 def lifecycle_snapshot(folder: Path) -> dict[Path, dict[str, str]]:
     """Each protected document's lifecycle lines as they stand right now - one attempt's baseline.
 
-    Only documents that exist and carry a usable frontmatter are protected: an absent optional design
-    stays unprotected, and no baseline is invented for a document an attempt creates.
+    Spec and plan require readable frontmatter. Only an absent optional design is skipped;
+    no baseline is invented for a document an attempt creates.
     """
     baseline: dict[Path, dict[str, str]] = {}
     for name in LIFECYCLE_DOCS:
         path = folder / name
         try:
             fields = frontmatter_fields(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError):
-            continue
-        if fields is not None:
-            baseline[path] = fields
+        except FileNotFoundError as error:
+            if name == "design.md" and not path.is_symlink():
+                continue
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        except (OSError, UnicodeDecodeError) as error:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        if fields is None:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: missing frontmatter")
+        baseline[path] = fields
     return baseline
 
 
@@ -7620,25 +7625,28 @@ def run_attempts(
                     except RestorationRefused as safety_error:
                         preserve_attempt_failure(safety_error, evidence_error)
                         raise
-                    if moved and protect_lifecycle:
-                        try:
-                            # A moved HEAD is never reset or amended; the safe working-tree
-                            # fields go back before the stop carries them (status-fields-restore).
-                            lifecycle_report, broken = restore_lifecycle_fields(root, lifecycle_before, aliases)
-                        except RestorationRefused as safety_error:
-                            preserve_attempt_failure(safety_error, evidence_error)
-                            raise
                     put_findings_back(original=evidence_error)
                     exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
                     try:
                         saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                     except OSError as save_error:
                         saved = f"saving the attempt failed ({save_error})"
+                    if protect_lifecycle:
+                        try:
+                            # Measure recovery before generic input restoration removes the edits.
+                            # A moved HEAD is never reset or amended.
+                            preflight_recovery(root, (*inputs_before, ctx.findings), aliases=aliases)
+                            lifecycle_report, broken = restore_lifecycle_fields(root, lifecycle_before, aliases)
+                        except RestorationRefused as safety_error:
+                            preserve_attempt_failure(safety_error, evidence_error)
+                            raise
                     restored = (
                         "HEAD moved or could not be read; history was not rewritten"
                         if moved
                         else restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                     )
+                    if protect_lifecycle:
+                        append(ctx.findings, restoration_line(verb, attempt, route, [*lifecycle_report, *broken]))
                     failures = [str(call_error)] if call_error is not None else []
                     failures += [str(evidence_error), saved, restored]
                     failures += [f"{LIFECYCLE_LABEL}: {line}" for line in [*broken, *lifecycle_report]]
@@ -7721,9 +7729,15 @@ def run_attempts(
                     saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                 except OSError as save_error:
                     saved = f"saving the attempt failed ({save_error})"
+                if protect_lifecycle:
+                    lifecycle_report, broken = restore_lifecycle_fields(root, lifecycle_before, aliases)
                 restored = restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
+                if protect_lifecycle:
+                    append(ctx.findings, restoration_line(verb, attempt, route, [*lifecycle_report, *broken]))
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 ended = f"{error}; {saved}; {restored}{leaked}"
+                for line in [*lifecycle_report, *broken]:
+                    ended += f"; {LIFECYCLE_LABEL}: {line}"
                 if retain_answer and evidence is not None:
                     ended += f"\nthe attempt's protected answer is saved at {evidence}"
                 raise CallFailed(ended) from error
@@ -7932,7 +7946,7 @@ def run_attempts(
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
                 try:
                     checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
-                except CheckpointRolledBack:
+                except CheckpointRolledBack as error:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
                     # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
@@ -7949,9 +7963,18 @@ def run_attempts(
                         # The rollback's own restore already put the tree back; when it failed, the
                         # protected fields still go back before the run stops. A refusal propagates
                         # before the findings write below (status-fields-restore).
-                        restore_lifecycle_fields(root, lifecycle_before, aliases)
+                        rollback_report, broken = restore_lifecycle_fields(root, lifecycle_before, aliases)
+                        # Restoring findings below removes the earlier report too. Keep both the
+                        # pre-check restoration and rollback outcome in the terminal diagnostic.
+                        for line in [*lifecycle_report, *rollback_report, *broken]:
+                            error.args = (f"{error}; {LIFECYCLE_LABEL}: {line}",)
                     if kept is not None and not moved:
                         restore_findings(kept)
+                    if protect_lifecycle:
+                        append(
+                            ctx.findings,
+                            restoration_line(verb, attempt, route, [*lifecycle_report, *rollback_report, *broken]),
+                        )
                     raise
                 if after_commit is not None:
                     after_commit()

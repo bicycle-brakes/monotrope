@@ -11779,6 +11779,118 @@ def test_repair_lifecycle_fields_survive_failed_attempts(
         assert text.count(f"{stage2.LIFECYCLE_LABEL}: plans/changes/demo/plan.md — status, implementation_status") == 3
 
 
+@pytest.mark.parametrize("failure", ["call", "evidence"])
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged", "restored"])
+def test_repair_lifecycle_early_failure_reports_restoration(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: str, changed: bool
+) -> None:
+    """Failed calls and evidence saves retain lifecycle values and name their recovery."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    damage = (
+        {
+            relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+            for relative in LIFECYCLE_STATES
+        }
+        if changed
+        else {}
+    )
+    script_repair(
+        world,
+        [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})],
+        make=[{"stdout": "must not run\n"}],
+    )
+    real_codex = stage2.run_codex
+
+    def codex(*args, **kwargs):
+        real_codex(*args, **kwargs)
+        raise stage2.CallFailed("planted transport failure")
+
+    def evidence(*_args, **_kwargs):
+        raise stage2.CallFailed("planted evidence failure")
+
+    monkeypatch.setattr(
+        stage2, "run_codex" if failure == "call" else "save_answer_evidence", codex if failure == "call" else evidence
+    )
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert f"planted {'transport' if failure == 'call' else 'evidence'} failure" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert world.calls("make") == []
+    assert len(repair_calls(world)) == 1
+    for relative, content in baseline_bytes.items():
+        standing = (world.root / relative).read_text(encoding="utf-8")
+        fields = stage2.frontmatter_fields(content.decode("utf-8"))
+        assert stage2.frontmatter_fields(standing) == fields, relative
+    report = restored_line(world)
+    if changed:
+        for relative in LIFECYCLE_STATES:
+            assert f"{relative} — status, implementation_status" in report
+    else:
+        assert stage2.LIFECYCLE_LABEL in report and stage2.LIFECYCLE_UNCHANGED in report
+
+
+def test_repair_lifecycle_checkpoint_rollback_reports_restoration(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A real held-path checkpoint refusal restores fields and retains its lifecycle report."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    **damage,
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "model-endpoints.yaml": "tampered: true\n",
+                }
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert "the attempt changed paths a stage-2 run does not commit" in error
+    assert "model-endpoints.yaml" in error
+    assert world.calls("make"), "the passing attempt must reach the checkpoint guard"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+    for relative, content in baseline_bytes.items():
+        standing = (world.root / relative).read_text(encoding="utf-8")
+        assert stage2.frontmatter_fields(standing) == stage2.frontmatter_fields(content.decode("utf-8")), relative
+        assert f"{relative} — status, implementation_status" in restored_line(world)
+    assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+
+
+@pytest.mark.parametrize("name", ["spec.md", "plan.md", "design.md"])
+@pytest.mark.parametrize("damage", ["missing", "header", "unreadable"])
+def test_repair_lifecycle_snapshot_refuses_unusable_documents(world: World, name: str, damage: str) -> None:
+    """A protected document without a readable baseline cannot silently escape protection."""
+    repair_world(world)
+    plant_lifecycle(world)
+    path = world.plan.parent / name
+    if damage == "missing":
+        path.unlink()
+    elif damage == "header":
+        path.write_text("# Missing frontmatter\n", encoding="utf-8")
+    else:
+        path.write_bytes(b"\xff")
+    try:
+        stage2.lifecycle_snapshot(world.plan.parent)
+    except stage2.CallFailed as error:
+        assert name in str(error)
+    else:
+        assert name == "design.md" and damage == "missing", "unusable lifecycle baseline was silently skipped"
+
+
 def test_repair_lifecycle_recovery_keeps_safety_refusals(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

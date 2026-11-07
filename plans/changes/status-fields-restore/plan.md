@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-ljmi
@@ -100,9 +100,14 @@ endpoint `glm-coding-plan`, on 2026-11-06.
 
 - 1: tests/test_stage2.py::test_repair_lifecycle_fields_are_restored_before_verification — distinct values or removed keys reach the verifier or checkpoint.
 - 2: tests/test_stage2.py::test_repair_lifecycle_fields_survive_failed_attempts — a parameterized early exit, retry or exhaustion leaves changed fields.
+- 2: tests/test_stage2.py::test_repair_lifecycle_early_failure_reports_restoration — failed calls and evidence-save failures leave changed fields or omit the restoration report.
+- 2: tests/test_stage2.py::test_repair_lifecycle_checkpoint_rollback_reports_restoration — a refused checkpoint leaves changed fields or drops its restoration report.
+- 1: tests/test_stage2.py::test_repair_lifecycle_snapshot_refuses_unusable_documents — unreadable protected documents or missing frontmatter are silently omitted from the baseline.
 - 2: tests/test_stage2.py::test_repair_lifecycle_recovery_keeps_safety_refusals — an unsafe destination is written or moved HEAD is reset.
 - 3: tests/test_stage2.py::test_repair_lifecycle_restoration_preserves_other_edits — valid body/header edits or runner time disappear, or a field edit alone rejects the repair.
 - 4: tests/test_stage2.py::test_repair_lifecycle_protection_allows_no_design — absent optional design is created or the repair is refused.
+- 5: tests/test_stage2.py::test_repair_lifecycle_early_failure_reports_restoration — failed calls or evidence-save failures omit the restoration report.
+- 5: tests/test_stage2.py::test_repair_lifecycle_checkpoint_rollback_reports_restoration — a refused checkpoint drops its restoration report.
 - 5: tests/test_stage2.py::test_repair_lifecycle_report_describes_each_attempt — accepted, rejected or unchanged attempts lack an accurate report, including safety refusal diagnostics.
 - 6: tests/test_stage2.py::test_repair_lifecycle_prompts_name_the_protected_fields — either route omits the keys, documents or restoration sentence.
 - 7: tests/test_stage2.py::test_repair_status_changes_are_hand_repairs — workflow or orchestrator instructions omit the exception to automated repair.
@@ -118,3 +123,4 @@ held prompt edit; all other held paths remain outside the implementation.
 
 2026-11-06 00:58:03–02:34:23 UTC, 5779 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 02:34:40–04:14:38 UTC, 5998 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-11-07 01:50:33–05:22:57 UTC, 12743 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
