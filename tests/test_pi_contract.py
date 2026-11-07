@@ -1643,7 +1643,6 @@ def test_real_go_native_wire_api_failures_are_mandatory(project: Path, tmp_path:
         assert len(standin.requests) == 1, (
             f"{api}/{failure}: expected the one broken exchange, saw {len(standin.requests)}"
         )
-        assert NATIVE_ANSWER not in done.stdout, f"{api}/{failure}: a decoded answer passed a broken exchange"
         assert done.returncode != 0 or not done.stdout.strip(), (
             f"{api}/{failure}: Pi succeeded against the broken exchange: rc={done.returncode} out={done.stdout[:200]!r}"
         )

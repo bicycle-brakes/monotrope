@@ -327,3 +327,5 @@ Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261107T103812616334Z-5f64e324.md
 > ````
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3525 commits, 12 rules.

@@ -549,7 +549,10 @@ SUPPORTED_WIRE_APIS = {"openai-completions", "anthropic-messages", "openai-respo
 
 
 def _address_fixture() -> dict:
-    """The minimal valid record, as the orchestrator's bootstrap will declare it.
+    """A minimal valid record covering all four supported wire-API shapes.
+
+    Google is mapped only to test the shape, not to mirror the repository's
+    measured declaration; its live measurement remains deferred.
 
     Responses legitimately shares the completions base: the adapters append
     different routes to the same base.
@@ -940,13 +943,10 @@ def test_seat_candidate_lists_and_availability_rule_are_validated() -> None:
 
 
 def _measured_apis_problems(data: dict) -> list[str]:
-    """Why the measured-API list and the one address record disagree, outside the supported four.
+    """Require exactly the three measured APIs and matching address mappings.
 
-    go-wire-apis, criterion 4: a measured API without its address-record
-    mapping, a mapped API the measurement never named, an unrelated API, and
-    anything outside the supported four each fail. The check applies to the
-    real declaration and to the planted faults below alike; before the
-    orchestrator's bootstrap it passes the old single-API declaration.
+    Criterion 4 requires completions, Messages and Responses. Google remains
+    undeclared until measured; matching incomplete lists and mappings fail too.
     """
     problems: list[str] = []
     rule = (data.get("research_swarm") or {}).get("availability_preflight") or {}
@@ -955,6 +955,9 @@ def _measured_apis_problems(data: dict) -> list[str]:
         return ["measured_wire_apis is not a nonempty list of names"]
     if len(set(measured)) != len(measured):
         problems.append("measured_wire_apis repeats a name")
+    expected = {"openai-completions", "anthropic-messages", "openai-responses"}
+    if set(measured) != expected:
+        problems.append("measured_wire_apis must contain exactly completions, Messages and Responses")
     unsupported = sorted(set(measured) - SUPPORTED_WIRE_APIS)
     if unsupported:
         problems.append(f"measured_wire_apis leaves the supported four: {unsupported}")
@@ -1005,13 +1008,19 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     rule = block["availability_preflight"]
     assert rule["max_age_seconds"] == 900
     assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
-    # go-wire-apis, criterion 4: the measured list, the address record's mappings
-    # and the supported four agree - an unmeasured API or a measured API without
-    # its mapping passes nothing.
+    # Criterion 4: exactly the three measured APIs, with matching mappings.
     assert _measured_apis_problems(geladen) == []
     # The check's own teeth: each planted fault names its disagreement, on a
     # synthetic declaration shaped as the completed change's bootstrap declares.
-    assert _measured_apis_problems(_measured_synthetic(sorted(SUPPORTED_WIRE_APIS), SUPPORTED_WIRE_APIS)) == []
+    expected = {"openai-completions", "anthropic-messages", "openai-responses"}
+    assert _measured_apis_problems(_measured_synthetic(sorted(expected), expected)) == []
+    # Matching omissions must fail, including the old completions-only state.
+    names = sorted(expected)
+    for mask in range(1 << len(names)):
+        subset = {api for index, api in enumerate(names) if mask & (1 << index)}
+        if subset != expected:
+            assert _measured_apis_problems(_measured_synthetic(sorted(subset), subset)), subset
+    assert _measured_apis_problems(_measured_synthetic(sorted(SUPPORTED_WIRE_APIS), SUPPORTED_WIRE_APIS))
     faults = {
         "measured-without-mapping": (
             sorted(SUPPORTED_WIRE_APIS),
