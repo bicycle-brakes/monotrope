@@ -274,6 +274,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/pi-catalog-redirect/plan.md`](changes/pi-catalog-redirect/plan.md) | draft | partial | 2026-10-30 | coding-harness-j2wb |
 | [`changes/pi-catalog-redirect/research.md`](changes/pi-catalog-redirect/research.md) | draft | none | 2026-10-30 | coding-harness-j2wb |
 | [`changes/pi-catalog-redirect/spec.md`](changes/pi-catalog-redirect/spec.md) | draft | partial | 2026-10-30 | coding-harness-j2wb |
+| [`changes/pi-no-compaction/decisions.md`](changes/pi-no-compaction/decisions.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/findings.md`](changes/pi-no-compaction/findings.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/plan.md`](changes/pi-no-compaction/plan.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/research.md`](changes/pi-no-compaction/research.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/spec.md`](changes/pi-no-compaction/spec.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/pi-pin/decisions.md`](changes/pi-pin/decisions.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/design.md`](changes/pi-pin/design.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/findings.md`](changes/pi-pin/findings.md) | draft | none | 2026-10-15 | coding-harness-agx |
@@ -315,6 +320,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-pytest-failed/plan.md`](changes/red-first-pytest-failed/plan.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/research.md`](changes/red-first-pytest-failed/research.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
 | [`changes/red-first-pytest-failed/spec.md`](changes/red-first-pytest-failed/spec.md) | draft | partial | 2026-10-27 | coding-harness-a7m |
+| [`changes/redraft-after-scope/decisions.md`](changes/redraft-after-scope/decisions.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/findings.md`](changes/redraft-after-scope/findings.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/plan.md`](changes/redraft-after-scope/plan.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/research.md`](changes/redraft-after-scope/research.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/spec.md`](changes/redraft-after-scope/spec.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
 | [`changes/registry-block-last/decisions.md`](changes/registry-block-last/decisions.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
 | [`changes/registry-block-last/findings.md`](changes/registry-block-last/findings.md) | draft | none | 2026-11-03 | coding-harness-2g7y |
 | [`changes/registry-block-last/plan.md`](changes/registry-block-last/plan.md) | draft | partial | 2026-11-03 | coding-harness-2g7y |

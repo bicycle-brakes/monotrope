@@ -139,6 +139,14 @@ def locked(shared):
     return handle
 
 
+def agent_settings_text():
+    # The launch's runner-written agent settings, read while the file exists: the scratch
+    # directory is cleaned up before the test reads the log.
+    directory = os.environ.get("PI_CODING_AGENT_DIR", "")
+    path = Path(directory) / "settings.json" if directory else None
+    return path.read_text() if path and path.is_file() else None
+
+
 with locked(True):
     previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 # A new script starts its own count: only the calls made since it was written use its steps.
@@ -195,6 +203,7 @@ if alias == "pi" and "update" in argv and "--models" in argv:
                     "argv": argv,
                     "home": os.environ.get("HOME", ""),
                     "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+                    "agent_settings": agent_settings_text(),
                     "cwd": os.getcwd(),
                     "stdin": os.read(0, 100).decode(),
                 }
@@ -240,6 +249,7 @@ if alias == "pi" and "--list-models" in argv:
                     "argv": argv,
                     "home": os.environ.get("HOME", ""),
                     "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+                    "agent_settings": agent_settings_text(),
                     "cwd": os.getcwd(),
                     "stdin": os.read(0, 100).decode(),
                 }
@@ -279,7 +289,7 @@ record = {
     "stdin": os.read(0, 100).decode(),
     "config_listing": sorted(os.listdir(config)) if config and os.path.isdir(config) else None,
     "agent_listing": sorted(os.listdir(agent)) if agent and os.path.isdir(agent) else None,
-    "agent_settings": (Path(agent) / "settings.json").read_text() if agent and (Path(agent) / "settings.json").is_file() else None,
+    "agent_settings": agent_settings_text(),
     "home_listing": sorted(os.listdir(os.environ["HOME"])) if os.path.isdir(os.environ.get("HOME", "")) else None,
     "prompt_file": Path(prompt_file).read_text() if prompt_file else None,
     "marker_paths": found,
@@ -487,6 +497,10 @@ TEST_LADDER = ("deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro")
 TEST_FLASH = TEST_LADDER[:2]
 TEST_FREE = ("acme-v1-free", "beacon-2-free")
 TEST_RUNGS = ("mimo-v2.6-pro",)
+# The exact content every runner-written Pi settings file must parse to: retries and Pi's
+# automatic compaction are off, so an overflow fails the member instead of ending in a summary
+# it answers on (pi-no-compaction, spec criterion 1).
+REQUIRED_PI_SETTINGS = {"retry": {"enabled": False}, "compaction": {"enabled": False}}
 
 
 def test_policy() -> stage2_go.AddressPolicy:
@@ -5637,6 +5651,40 @@ PI_FLAGS = [
 ]
 
 
+def test_every_pi_settings_writer_uses_shared_constant() -> None:
+    """One settings definition prevents discovery, reviews, probes and research from drifting.
+
+    Planting the old inline literal at any writer must fail even while its JSON
+    still matches today's content; the contract here is shared ownership.
+    """
+    expected = {
+        "stage2.py": (2, "PI_AGENT_SETTINGS"),
+        "stage2_availability.py": (1, "runner.PI_AGENT_SETTINGS"),
+        "stage2_research_run.py": (1, "self.runner.PI_AGENT_SETTINGS"),
+    }
+    assert hasattr(stage2, "PI_AGENT_SETTINGS"), "all Pi settings writers need one shared production constant"
+    assert stage2.PI_AGENT_SETTINGS == {"retry": {"enabled": False}, "compaction": {"enabled": False}}
+    for filename, (count, reference) in expected.items():
+        tree = ast.parse((REPO_ROOT / "scripts" / filename).read_text(encoding="utf-8"))
+        writes = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "write_text"
+            and isinstance(node.func.value, ast.BinOp)
+            and isinstance(node.func.value.right, ast.Constant)
+            and node.func.value.right.value == "settings.json"
+        ]
+        assert len(writes) == count, f"{filename}: the settings writer inventory changed"
+        for write in writes:
+            value = write.args[0]
+            assert isinstance(value, ast.Call) and ast.unparse(value.func) == "json.dumps", filename
+            assert len(value.args) == 1 and ast.unparse(value.args[0]) == reference, (
+                f"{filename}:{write.lineno}: settings must serialize the shared {reference}"
+            )
+
+
 def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     """Criterion 8: one launch path for the loop's paid rounds - the rung under the provider, the measured flag set, a fresh home."""
     # The free stage is already consumed, so this run starts on the Flash swarm: two paid members, then the rung.
@@ -5660,9 +5708,10 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     assert Path(argv[argv.index("--append-system-prompt") + 1]).name == "review-prompt.md"
     assert call["prompt_file"].rstrip().endswith(stage2.READ_REQUEST)
     # the agent directory holds the settings and the run's refreshed definitions (stored and activated),
-    # and a second call gets a directory of its own
+    # and a second call gets a directory of its own; the paid member's settings disable retry and
+    # compaction (pi-no-compaction, criterion 1), and the free member's do below in the discovery test
     assert call["agent_listing"] == ["models-store.json", "models.json", "settings.json"]
-    assert json.loads(call["agent_settings"]) == {"retry": {"enabled": False}}
+    assert json.loads(call["agent_settings"]) == REQUIRED_PI_SETTINGS
     env = call["env"]
     assert env["HOME"] != os.environ["HOME"] and not Path(env["HOME"]).is_relative_to(world.root)
     assert not Path(env["PI_CODING_AGENT_DIR"]).is_relative_to(world.root)
@@ -7910,6 +7959,13 @@ def test_free_discovery_forces_live_refresh_before_listing(
         "the refresh and the listing used different scratch directories"
     )
     assert not Path(refresh["home"]).is_relative_to(world.root)
+    # pi-no-compaction (criterion 1): the refresh, the listing and the free member they lead to
+    # start on exactly the required settings JSON, retry and compaction both disabled.
+    assert json.loads(refresh["agent_settings"]) == REQUIRED_PI_SETTINGS
+    assert json.loads(listing["agent_settings"]) == REQUIRED_PI_SETTINGS
+    assert json.loads(world.reviews("pi")[0]["agent_settings"]) == REQUIRED_PI_SETTINGS, (
+        "a free reviewer started without the required settings"
+    )
     forget_the_run(world)
     (world.bin / "calls.jsonl").unlink()
     world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_exit=1)
@@ -7926,6 +7982,17 @@ def test_free_discovery_forces_live_refresh_before_listing(
     assert "no stale cache is listed" in capsys.readouterr().err
     assert [call.get("kind") for call in world.calls("pi")] == ["refresh"]
     assert world.reviews("pi") == []
+    # The listing's own agent directory: an invalid catalog id forces the separate agent whose
+    # settings are the refresh file's byte copy, and the copy must parse to the same JSON
+    # (pi-no-compaction, criterion 1).
+    forget_the_run(world)
+    (world.bin / "calls.jsonl").unlink()
+    world.script(pi=[{"stdout": rows(1)}], pi_overlay=["acme-v1-free", "bad id-free"])
+    assert world.run("review-loop") == 0
+    refresh, listing = world.calls("pi")[:2]
+    assert listing["agent"] != refresh["agent"], "the listing did not run on its own byte-copied agent directory"
+    assert json.loads(refresh["agent_settings"]) == REQUIRED_PI_SETTINGS
+    assert json.loads(listing["agent_settings"]) == REQUIRED_PI_SETTINGS
 
 
 def test_free_selection_changes_in_yaml_without_runner_edits(world: World) -> None:

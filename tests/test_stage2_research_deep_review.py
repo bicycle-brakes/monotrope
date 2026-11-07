@@ -362,7 +362,10 @@ def test_every_research_pi_launch_is_offline(tmp_path: Path, tools: str) -> None
     run.selection = {}
     run.lines, run.lock = [], __import__("threading").Lock()
     run.runner = SimpleNamespace(
-        PI_WRAPPER=Path("/pinned/pi"), PI_TOOLS=stage2.PI_TOOLS, foreign_env=stage2.foreign_env
+        PI_WRAPPER=Path("/pinned/pi"),
+        PI_TOOLS=stage2.PI_TOOLS,
+        PI_AGENT_SETTINGS=stage2.PI_AGENT_SETTINGS,
+        foreign_env=stage2.foreign_env,
     )
     scratch = tmp_path / "seat"
     scratch.mkdir()
