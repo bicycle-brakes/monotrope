@@ -167,7 +167,14 @@ Keep final verification and live evidence tied to their exact code commits.
 - 6: tests/test_stage2_go_access.py::test_every_send_rechecks_current_policy — a saved selection sends after the current policy refuses it
 - 6: tests/test_stage2_research_availability.py::test_pool_requires_tool_support_and_a_measured_wire_api — an unmeasured or incapable candidate becomes a substitute
 
+## Runner route — 2026-11-07
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-06 16:19:48–17:39:18 UTC, 4769 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 17:39:28–18:44:18 UTC, 3890 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
+2026-11-07 10:38:27–11:26:00 UTC, 2853 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 11:26:12–12:11:01 UTC, 2689 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 12:11:15–12:53:56 UTC, 2561 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
