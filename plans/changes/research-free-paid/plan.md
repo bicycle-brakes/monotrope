@@ -108,6 +108,10 @@ The earlier missing-answer evidence in `findings.md` predates this record.
    `plans/changes/research-free-paid/findings.md`, regenerates
    `plans/INDEX.md`, stamps derived dates and commits the accepted attempt.
 
+Two files outside steps 1-7 follow the new module (recorded 2026-11-07):
+`scripts/ci_gates.py` declares `stage2_free.py` in `OHNE_AUFRUFER`, and
+`scripts/research_capture.py` passes the declared paid ids and the declaration exclusion
+into the research catalog selection.
 No files are deleted. No held-path bootstrap edit is needed: all source and
 test edits above belong to the implementation attempt; the runner owns the
 derived index. Do not edit `model-endpoints.yaml`, `scripts/stage2_go.py`,
@@ -158,6 +162,10 @@ the runner; no validator success or implementation result is claimed here.
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash failed twice and Sonnet 5.5 once on 2026-11-05 (the last with two red tests: test_shared_selection_preserves_optional_research_eligibility, test_shipped_catalog_prepares_both_swarms_offline).
 
 ## Time used
+
+Appetite overrun, 2026-11-07: about 10.8 h recorded against the 4 h card,
+mostly repairs waiting on the machine-wide verify lock; parked at loop round 4,
+the maintainer granted one more hour (one repair, phase 6, pull request).
 
 2026-11-05 18:59:33–21:29:31 UTC, 8997 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-07 00:53:22–02:04:59 UTC, 4297 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
