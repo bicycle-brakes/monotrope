@@ -76,9 +76,9 @@ included, stale registrations counted, bare entries not), and the runner and
 verification invocations the existing run report recognizes (one `ps`
 snapshot; each row carries process id, elapsed time, verb and change
 attribution where known, and a verify wrapper and its child are two
-invocations, not one logical job). Two lines under `running jobs:` carry no
-process: the source error of the process table when the snapshot itself
-failed, and
+invocations, not one logical job). Three lines under `running jobs:` carry no
+process: `none matched` when no runner or verification job runs, the source
+error of the process table when the snapshot itself failed, and
 `runner recognition: not read (…)` when the runner's verb definitions could
 not be loaded.
 
