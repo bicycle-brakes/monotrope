@@ -126,6 +126,11 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 ## Time used
 
+Appetite overrun, 2026-11-07: about 9.7 h recorded against the 2 h card, most
+of it repair attempts waiting on the machine-wide verify lock; the lane was
+parked at loop round 4 and the maintainer granted one more hour to finish
+(hand fixes, phase 6, pull request).
+
 2026-11-06 00:58:23–02:11:13 UTC, 4370 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 02:11:26–03:01:55 UTC, 3029 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 03:02:09–03:26:11 UTC, 1442 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

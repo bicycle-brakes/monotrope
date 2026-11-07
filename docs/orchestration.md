@@ -70,7 +70,8 @@ python3 scripts/machine_facts.py
 ```
 
 The command runs from the worktree the night run drives and prints one dated
-block: free disk on the invoking worktree's filesystem, host-wide swap used
+block: free disk on the worktree's filesystem (the invoking directory's,
+labelled so, when Git cannot identify the worktree), host-wide swap used
 and total, the repository's registered non-bare worktrees (main checkout
 included, stale registrations counted, bare entries not), and the runner and
 verification invocations the existing run report recognizes (one `ps`
@@ -80,7 +81,9 @@ invocations, not one logical job). Three lines under `running jobs:` carry no
 process: `none matched` when no runner or verification job runs, the source
 error of the process table when the snapshot itself failed, and
 `runner recognition: not read (…)` when the runner's verb definitions could
-not be loaded.
+not be loaded. Any field may read `not read (…: internal error: <Type>)`: then
+the script itself failed on that field, not the source, and the fault belongs
+in a bead.
 
 Show the block in the main conversation before any lane starts, and copy it
 into the night plan's “State at the start”. The block is an **observation,
