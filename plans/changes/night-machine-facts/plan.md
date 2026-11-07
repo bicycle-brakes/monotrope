@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-yql7
@@ -70,6 +70,10 @@ Starts unless you say stop.
    the night plan's “State at the start”. Explain scopes, `not read`, the
    absence of an admission verdict and optional fresh morning reruns;
    update the document's review/update dates without rewriting history.
+   Register the script in `scripts/ci_gates.py` as an `OHNE_AUFRUFER` entry
+   (reason: it reads the live host, which no CI checkout can stand in for);
+   `tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason`
+   requires it (maintainer answer Q-M1, bead coding-harness-8sxb).
 7. Update `plans/changes/night-machine-facts/plan.md` as tests land (remove
    their `not yet written` markers) and record measured phase-4 time below;
    record revision-bound validation/review evidence in
@@ -109,7 +113,12 @@ No edits to `scripts/run_report.py`, `tests/test_run_report.py`,
 `scripts/stage2.py`, `scripts/verify_lock.py`, `scripts/verify_all.sh`,
 `scripts/verify_duration.py`, `AGENTS.md`, `docs/WORKFLOW.md`, `Makefile`,
 ADRs, prompts, templates, gate definitions, tracker data or harness
-configuration. There is no held-path bootstrap edit for the orchestrator.
+configuration. One exception to the gate-definition rule is required and
+recorded: the `OHNE_AUFRUFER` entry for `scripts/machine_facts.py` in
+`scripts/ci_gates.py`, forced by
+`tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason`
+(every new script needs a `ci.yml` step or a declared reason); it adds no
+gate and changes no existing one. There is no held-path bootstrap edit for the orchestrator.
 No design or ADR is due for this bounded change. Explore ran through Stage 2
 on 2026-11-06, route flash, endpoint `glm-coding-plan`, model
 `glm-5.3-flash`; no Stage-1 fallback is recorded. The interview was skipped
@@ -119,8 +128,15 @@ with the reason recorded in `decisions.md`; no maintainer answer is invented.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-07
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-06 00:58:23–02:11:13 UTC, 4370 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 02:11:26–03:01:55 UTC, 3029 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 03:02:09–03:26:11 UTC, 1442 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-06 19:56:51–21:06:20 UTC, 4170 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-06 21:06:31–2026-11-07 00:52:51 UTC, 13579 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-07 00:53:03–01:41:18 UTC, 2895 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

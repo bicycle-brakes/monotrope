@@ -119,6 +119,7 @@ handover.
 
 | Rule | Today | Planned |
 | --- | --- | --- |
+| Show and record dated machine facts before night lanes start | kept by hand; the command reads facts, not an admission verdict (bead coding-harness-yql7) | — |
 | One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |

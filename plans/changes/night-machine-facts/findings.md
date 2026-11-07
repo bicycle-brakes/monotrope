@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-yql7
@@ -257,3 +257,58 @@ Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 917 files, 3441 commits, 12 rules.
 
 Stage-2 call, 2026-11-06: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 917 files, 3441 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3443 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/orchestration.md` +1 -0
+> - `plans/changes/night-machine-facts/plan.md` +13 -4
+> - `plans/changes/night-machine-facts/research.md` +3 -10
+> - `plans/changes/night-machine-facts/spec.md` +6 -2
+> - `scripts/machine_facts.py` +12 -20
+> - `tests/test_machine_facts.py` +118 -10
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-6: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - L1-7: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - L1-11: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-machine-facts/stage2/attempts/night-machine-facts/attempt-1-20261106T195640848113Z-30bc0d99.md
+> ```
+
+Stage-2 call, 2026-11-06: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 917 files, 3446 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/night-machine-facts/plan.md` +12 -2
+> - `plans/changes/night-machine-facts/spec.md` +6 -1
+> - `tests/test_machine_facts.py` +23 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-4: tests/test_machine_facts.py::test_snapshot_is_local_and_read_only: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-machine-facts/stage2/attempts/night-machine-facts/attempt-2-20261106T195640848113Z-30bc0d99.md
+> ```
+
+Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 917 files, 3455 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/night-machine-facts/plan.md` +10 -1
+> - `tests/test_machine_facts.py` +32 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `tests/test_machine_facts.py`.
+> - L1-5: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - L1-6: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - L1-7: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - L1-11: answered `not a test`, but the row is a code row; it needs a test that was red first
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-machine-facts/stage2/attempts/night-machine-facts/attempt-3-20261106T195640848113Z-30bc0d99.md
+> ```
