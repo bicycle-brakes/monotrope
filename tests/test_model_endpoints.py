@@ -543,8 +543,8 @@ def _address_problems(entry: dict) -> list[str]:
     return problems
 
 
-# The four wire APIs this repository supports on Go (go-wire-apis, criterion 4):
-# the shipped Chat Completions API plus the three native APIs the change measures.
+# Supported wire-API shapes on Go (go-wire-apis, criterion 4).
+# Google is supported but not measured (decisions.md Q-2).
 SUPPORTED_WIRE_APIS = {"openai-completions", "anthropic-messages", "openai-responses", "google-generative-ai"}
 
 
