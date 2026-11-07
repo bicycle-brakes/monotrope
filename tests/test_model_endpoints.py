@@ -13,6 +13,7 @@ without a single row of payload data.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from pathlib import Path
 
@@ -363,7 +364,12 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert free["include"] == []
     # Each exclusion is a dated decision; its record shape is validated below
     # through the runner's own `free_rule_problems`.
-    assert [record["id"] for record in free["exclude"]] == ["step-5-preview-free"]
+    assert [record["id"] for record in free["exclude"]] == [
+        "step-5-preview-free",
+        "iceman-contributor-free",
+        "cat-jam-free",
+        "longcat-2.5-preview-free",
+    ]
     assert free["input"] == "implementation-diff"
 
 
@@ -486,6 +492,147 @@ def test_unread_terms_reach_the_free_stage_alone() -> None:
         assert forbidden in one, f"the acceptance does not name what it does not cover: {forbidden}"
 
 
+# ---------------------------------------------------------------------------
+# The one Go address record (go-access-point)
+# ---------------------------------------------------------------------------
+
+
+def _address_problems(entry: dict) -> list[str]:
+    """What makes the entry's `adresse` unusable as the one Go address record.
+
+    The synthetic cases below carry the faults; the real entry is checked with
+    the same function, so the orchestrator's bootstrap cannot land a weaker
+    shape than these tests hold (plan step 10: the runner never edits the held
+    file). The strictness mirrors the runner's `load_address_policy`: exact
+    keys, one host, per-wire-api bases on that host, dated sources.
+    """
+    problems: list[str] = []
+    record = entry.get("adresse")
+    if not isinstance(record, dict):
+        return ["no adresse record"]
+    if set(record) != {"host", "apis"}:
+        problems.append(f"unknown or missing address keys: {sorted(record)}")
+        return problems
+    host = record["host"]
+    if not isinstance(host, str) or not re.fullmatch(r"[a-z0-9.-]+", host or ""):
+        problems.append(f"host is not a plain hostname: {host!r}")
+        return problems
+    apis = record["apis"]
+    if not isinstance(apis, dict) or not apis:
+        problems.append("no per-wire-api bases")
+        return problems
+    for api, part in apis.items():
+        if not isinstance(api, str) or not api:
+            problems.append("a wire api key is not a plain string")
+            continue
+        if not isinstance(part, dict) or set(part) != {"basis", "quelle", "gelesen"}:
+            problems.append(f"{api}: not exactly basis, quelle and gelesen")
+            continue
+        if not isinstance(part["basis"], str) or not part["basis"].startswith(f"https://{host}/"):
+            problems.append(f"{api}: basis is not an HTTPS URL on {host}")
+        if not isinstance(part["quelle"], str) or not part["quelle"].strip():
+            problems.append(f"{api}: quelle is missing or blank")
+        read = part["gelesen"]
+        if not isinstance(read, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", read):
+            problems.append(f"{api}: gelesen is not a quoted ISO date")
+        else:
+            try:
+                dt.date.fromisoformat(read)
+            except ValueError:
+                problems.append(f"{api}: gelesen is not a calendar date")
+    return problems
+
+
+def _address_fixture() -> dict:
+    """The minimal valid record, as the orchestrator's bootstrap will declare it."""
+    return {
+        "name": "opencode-go",
+        "adresse": {
+            "host": "opencode.ai",
+            "apis": {
+                "openai-completions": {
+                    "basis": "https://opencode.ai/zen/go/v1",
+                    "quelle": "https://opencode.ai/docs/go",
+                    "gelesen": "2026-10-31",
+                }
+            },
+        },
+    }
+
+
+ADDRESS_FAULTS = {
+    "no-record": lambda e: e.pop("adresse"),
+    "unknown-key": lambda e: e["adresse"].update(gueltig_bis="x"),
+    "no-apis": lambda e: e["adresse"].pop("apis"),
+    "apis-not-a-map": lambda e: e["adresse"].update(apis=[]),
+    "api-key-empty": lambda e: e["adresse"].update(apis={"": e["adresse"]["apis"]["openai-completions"]}),
+    "host-with-scheme": lambda e: e["adresse"].update(host="https://opencode.ai"),
+    "host-empty": lambda e: e["adresse"].update(host=""),
+    "base-keys-broken": lambda e: e["adresse"]["apis"]["openai-completions"].pop("quelle"),
+    "extra-base-key": lambda e: e["adresse"]["apis"]["openai-completions"].update(notiz="x"),
+    "foreign-host-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://elsewhere.invalid/zen/go/v1"
+    ),
+    "plain-http-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="http://opencode.ai/zen/go/v1"
+    ),
+    "userinfo-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://user@opencode.ai/zen/go/v1"
+    ),
+    "blank-source": lambda e: e["adresse"]["apis"]["openai-completions"].update(quelle="   "),
+    "native-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen=dt.date(2026, 10, 31)),
+    "impossible-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen="2026-13-45"),
+}
+
+
+def test_the_address_record_shape_is_validated() -> None:
+    """The record's faults are named: shape, dated sources, bases on the host (plan step 10)."""
+    assert _address_problems(_address_fixture()) == []
+    for name, fault in ADDRESS_FAULTS.items():
+        entry = _address_fixture()
+        fault(entry)
+        assert _address_problems(entry), f"{name}: the fault passed the record shape check"
+
+
+def test_the_opencode_go_entry_declares_its_address_record() -> None:
+    """Criterion 1 (go-access-point): the real entry carries the record the runner loads.
+
+    The orchestrator's bootstrap has landed (plan step 12): a missing or
+    malformed record must fail, including deletion of the whole record.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    stage2_go = pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+
+    entry = _endpunkt("opencode-go")
+    assert _address_problems(entry) == []
+    # The runner's own loader accepts exactly what the shape check accepts.
+    try:
+        policy = stage2_go.load_address_policy(REPO_ROOT)
+    except stage2_go.RecordUnusable as error:
+        raise AssertionError(f"the declared record does not load: {error}") from None
+    assert policy.host == entry["adresse"]["host"]
+
+
+def test_missing_address_record_fails_the_real_entry_proof(monkeypatch) -> None:
+    """Deleting the bootstrapped address must fail the criterion's named proof, never skip it."""
+    # The exported kit carries this test but not the runner. Only that missing
+    # dependency may skip the proof; a missing production address may not.
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+    entry = dict(_endpunkt("opencode-go"))
+    entry.pop("adresse", None)
+    monkeypatch.setattr(__import__(__name__), "_endpunkt", lambda _name: entry)
+    try:
+        with pytest.raises(AssertionError, match="no adresse record"):
+            test_the_opencode_go_entry_declares_its_address_record()
+    except pytest.skip.Exception:
+        pytest.fail("the missing production address record skipped its proof")
+
+
 def opencode_remark_problems(remark: str) -> list[str]:
     """Criterion 2: every point of the remark, each one stated by its source."""
     one = " ".join(remark.split())
@@ -509,6 +656,9 @@ def opencode_remark_problems(remark: str) -> list[str]:
         "0 days",
         '"Not used"',
         "valid through 2026-10-31",
+        "Address until 2026-10-31 (history; the admitted address is the `adresse` record)",
+        "On 2026-10-31 the Go page names only `/inference/go/` addresses",
+        "the admitted host and the known base stand in `adresse` (ADR 0024)",
         "states no region",
         '"All our models are hosted in the US and EU."',
         "read 2026-10-07",

@@ -70,6 +70,12 @@ reveals two plausible readings of spec or plan is `[AMBIGUITY]` and is never
 decided locally; two places answering the same question in opposite ways are
 `[DIVERGENT]` and a `BLOCKER`, however harmless each line looks alone.
 
+**Guard tests (ADR 0023).** Read every guard test the change adds or changes —
+every one, no sample. For each, record in your verdict the real fault it plants
+under `STAGE2_PLANT_FAULT` and whether the test catches that fault without the
+switch. A guard test whose failure is only conditional, with no real fault
+behind it, is a `BLOCKER`.
+
 A finding already rejected in an earlier round may only reappear **with new
 evidence attached**. Repetition without new evidence is not a finding.
 

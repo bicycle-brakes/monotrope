@@ -1,10 +1,10 @@
 ---
 title: "Plan — guard-test"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -84,7 +84,7 @@ If those inputs are unavailable, report the dependency and stop at that boundary
    applies the doctrine/status updates, retaining planting branches.
 6. Exercise new tests against their named planted faults, measure red then
    restored green, run verification and record commit-bound results. Remove
-   `not yet written` ledger prefixes only when the functions exist. Phase 6
+   ledger prefixes only when the functions exist. Phase 6
    must inspect each new guard test's real fault; stand-in reviewer tests
    prove transport/instructions, not the quality of a live review.
 
@@ -150,24 +150,44 @@ only in isolated child environments. Full verification belongs to the runner.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_guard_answer_accepts_the_named_test_form — the canonical guard answer is rejected
-- 2: not yet written tests/test_stage2.py::test_guard_answer_requires_explicit_row_authorisation — an unmarked, text, quoted or reasonless row runs guard proof
-- 3: not yet written tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — correct baseline code is used or the planted run is green
-- 4: not yet written tests/test_stage2.py::test_guard_proof_requires_clean_green_without_the_switch — a dirty clean leg receives a proof mark
-- 5: not yet written tests/test_stage2.py::test_guard_proof_preserves_outcome_and_execution_guards — invalid evidence, setup/crash/skip, tool/tree/ref mutation or timeout passes either leg
-- 5: not yet written tests/test_stage2.py::test_guard_proof_scrubs_failure_diagnostics — a proof refusal exposes the test secret
-- 6: not yet written tests/test_stage2.py::test_guard_switch_must_appear_in_the_named_test — another function's switch reference is accepted
-- 7: not yet written tests/test_stage2.py::test_guard_repairs_write_statuses_and_marks_only_after_complete_proof — a failed leg writes a mark or a successful repair loses its guard form in any row location
+- 1: tests/test_stage2.py::test_guard_answer_accepts_the_named_test_form — the canonical guard answer is rejected
+- 2: tests/test_stage2.py::test_guard_answer_requires_explicit_row_authorisation — an unmarked, text, quoted or reasonless row runs guard proof
+- 3: tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — correct baseline code is used or the planted run is green
+- 4: tests/test_stage2.py::test_guard_proof_requires_clean_green_without_the_switch — a dirty clean leg receives a proof mark
+- 5: tests/test_stage2.py::test_guard_proof_preserves_outcome_and_execution_guards — invalid evidence, setup/crash/skip, tool/tree/ref mutation or timeout passes either leg
+- 5: tests/test_stage2.py::test_guard_proof_scrubs_failure_diagnostics — a proof refusal exposes the test secret
+- 6: tests/test_stage2.py::test_guard_switch_must_appear_in_the_named_test — another function's switch reference is accepted
+- 7: tests/test_stage2.py::test_guard_repairs_write_statuses_and_marks_only_after_complete_proof — a failed leg writes a mark or a successful repair loses its guard form in any row location
 - 8: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — an ordinary green-baseline test passes
 - 8: tests/test_stage2.py::test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written — an authorised text repair is refused
-- 8: not yet written tests/test_stage2.py::test_guard_form_keeps_other_repair_forms_and_environments_strict — ordinary/text authorisation changes or a caller switch reaches an ordinary proof
-- 9: not yet written tests/test_stage2.py::test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts — evidence is lost/refused, evidence alone becomes a verdict, or unrelated malformed prose passes
-- 9: not yet written tests/test_stage2.py::test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows — the prompt allows sampling or exposes loop rows before verdict
-- 10: not yet written tests/test_stage2.py::test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards — the prompt omits mandatory semantic evidence or the conditional-failure BLOCKER
+- 8: tests/test_stage2.py::test_guard_form_keeps_other_repair_forms_and_environments_strict — ordinary/text authorisation changes or a caller switch reaches an ordinary proof
+- 9: tests/test_stage2.py::test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts — evidence is lost/refused, evidence alone becomes a verdict, or unrelated malformed prose passes
+- 9: tests/test_stage2.py::test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows — the prompt allows sampling or exposes loop rows before verdict
+- 10: tests/test_stage2.py::test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards — the prompt omits mandatory semantic evidence or the conditional-failure BLOCKER
 - 10: not a test — phase 6 reads every added/changed guard test and records its real fault; accepting a conditional failure without a real fault refutes this criterion
-- 11: not yet written tests/test_ci.py::test_guard_environment_gate_goes_red_when_the_switch_is_present — any present value exits 0, an absent value fails, or either verification path omits the blocking gate
-- 12: not yet written tests/test_stage2.py::test_guard_doctrine_keeps_repeatable_repair_only_proofs — planting branches are removed or operative status/proof instructions contradict the repair-only contract
-- 12: not yet written tests/test_stage2.py::test_guard_repairs_preserve_the_planting_branch_for_replay — a successful repair removes its branch or its retained test cannot repeat the two-run proof
-- 12: not yet written tests/test_stage2.py::test_guard_status_does_not_extend_the_criterion_ledger — a guard repair status parses as a ledger entry
+- 11: tests/test_ci.py::test_guard_environment_gate_goes_red_when_the_switch_is_present — any present value exits 0, an absent value fails, or either verification path omits the blocking gate
+- 12: tests/test_stage2.py::test_guard_doctrine_keeps_repeatable_repair_only_proofs — planting branches are removed or operative status/proof instructions contradict the repair-only contract
+- 12: tests/test_stage2.py::test_guard_repairs_preserve_the_planting_branch_for_replay — a successful repair removes its branch or its retained test cannot repeat the two-run proof
+- 12: tests/test_stage2.py::test_guard_status_does_not_extend_the_criterion_ledger — a guard repair status parses as a ledger entry
+
+## Runner route — 2026-11-01
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-11-03
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
+
+2026-11-01 18:48:27–20:24:27 UTC, 5760 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 20:24:46–21:01:39 UTC, 2212 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-01 21:01:51–21:03:03 UTC, 73 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-02 — hand acceptance: the 2026-11-01 implement attempt was finished by a Sonnet 5.5 sub-agent on the maintainer's word, from the saved attempt (refs/stage2/attempts/guard-test/orchestrator-saved-20261102). Five guard tests went from red to green by test-side repairs only, no change to scripts/stage2.py: the launch spy gained `key=None` (criteria 3 and 8), the retry prompt is read at index 1 and the worktree is reset between runs (criterion 4), the expected-fail case expects the classifier's "session ended 0" refusal (criterion 5), the `guard_step` kwargs merge and a findings-row mark expectation that contradicted the spec's "existing location" (criterion 7), and a duplicate seed commit removed (criterion 8)
+2026-11-03 06:57:46–07:20:27 UTC, 1361 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 07:20:36–07:22:20 UTC, 104 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-03 07:22:29–07:23:46 UTC, 77 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-03 — hand acceptance of the review-loop round-1 repair, on the maintainer's word: all three runner attempts failed on one plans-registry block (attempt 1 set the invalid status `in-review` on spec, design and plan for row L1-7; the block line was cut from the model's diagnostics, bead coding-harness-2g7y). The orchestrator kept attempt 3's tree (saved at refs/stage2/attempts/guard-test/orchestrator-saved-20261103, b036443a), repaired L1-7 with valid values (`implementation_status: partial`), regenerated the index; `make verify` green. No runner red-first proof per row; phase 6 reads every repaired row.
+2026-11-03 19:10:07–20:18:55 UTC, 4127 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 20:23:58–21:37:14 UTC, 4396 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-03 22:11:51–23:29:44 UTC, 4673 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

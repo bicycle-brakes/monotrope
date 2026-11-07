@@ -2,8 +2,9 @@
 """stage2.py - the one way this repository starts a foreign model.
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
-content: the review loop (4b) runs on OpenCode Go through Pi at
-`https://opencode.ai/zen/go/v1/chat/completions` until a round is clean - a
+content: the review loop (4b) runs on OpenCode Go through Pi, at the one
+address the `model-endpoints.yaml` record admits (`stage2_go`), until a round
+is clean - a
 discovered free-model swarm first, the declared Flash swarm next, then one
 declared paid model per round (ADR 0021); Codex drafts the spec, the design
 and the plan (2, 2b and 3; GLM 5.3 after two failed Codex attempts) and
@@ -183,6 +184,7 @@ import check_frontmatter_current  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import touch_map  # noqa: E402
 import verify_lock  # noqa: E402
@@ -279,10 +281,51 @@ ANSWER_FORMAT = (
 FORMAT_REMINDER = (
     "Your previous answer was not in the required format, so it could not be read as findings; answer once more."
 )
+# Phase 6 alone records guard evidence beside its verdict (spec, criterion 9; ADR 0023): the
+# six-cell findings format stands unchanged, and every guard test the change adds or changes
+# gets one line of its own, separated from the verdict before the verdict is checked.
+PHASE6_GUARD_EVIDENCE = (
+    "Beside the findings or beside `No finding.`, record one evidence line for every guard test this "
+    "change adds or changes - a test whose source names `STAGE2_PLANT_FAULT`:\n"
+    "`Guard evidence: tests/<path>::<function> — fault: <description> — catches without switch: "
+    "<yes|no and reason>`.\n"
+    "An evidence line is not a finding row and never replaces one; findings keep their six cells."
+)
+PHASE6_GUARD_INSTRUCTION = (
+    "Read every guard test the change adds or changes from the test's source and the implementation "
+    "diff - every one, never a sample. Name the real fault the test plants under `STAGE2_PLANT_FAULT=1` "
+    "in the fault description, and answer `yes`, or `no` with the reason, on whether the test would "
+    "still catch that fault without the switch. The loop rows are withheld until your verdict stands, "
+    "so no evidence may come from them. A test that only fails conditionally on the switch, planting "
+    "no real fault in what it exercises, is a BLOCKER finding, however green its two runner runs are."
+)
+# A phase-6-specific answer instruction replaces, rather than contradicts, `ANSWER_FORMAT` for
+# this call only (spec, criterion 9).
+PHASE6_ANSWER_FORMAT = (
+    ANSWER_FORMAT.replace(
+        "no header and no other text", "no header; guard-evidence lines may stand beside the rows"
+    ).replace(
+        "When there is no finding, answer exactly: No finding.",
+        "When there is no finding, write `No finding.` as the verdict; guard evidence stands beside it.",
+    )
+    + f"\n{PHASE6_GUARD_EVIDENCE}"
+)
+# One evidence line's whole form. A line that merely begins `Guard evidence:` is not
+# evidence; phase 6 explicitly refuses malformed evidence even beside findings.
+GUARD_EVIDENCE_LINE = re.compile(
+    r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
+    r" — fault: (?P<fault>\S.+?)"
+    r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
+)
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
+RAISING_FAULT_SENTENCE = (
+    "When the fault itself raises an exception, catch that specific exception in the regression test body "
+    "and fail with `assert` or `pytest.fail` so the baseline failure states the test's expectation."
+)
 REPAIR_ANSWER = (
-    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
-    "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
+    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>`,\n"
+    "`<ID>: fixed — guard test — tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`.\n"
+    "Headings, fences and report prose around the fixed lines are\n"
     "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
     "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
     "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
@@ -290,12 +333,16 @@ REPAIR_ANSWER = (
     "taken row, whatever the id's shape. A taken row takes exactly one distinct fixed line: a repeated\n"
     "identical line counts once, and two different fixed lines for one row fail the attempt, so give\n"
     "each row's status once and leave the rest of the report as prose. Write a `|` inside a reason as `\\|`.\n"
-    "A code row needs a test that fails on the\n"
-    "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
-    "answered `not a test`. Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
+    "An ordinary code row needs a test that fails on the baseline's code, which the runner runs; a row\n"
+    "taken as `taken — guard test — <reason>` is answered with the guard form instead, and the runner\n"
+    "requires a nonempty unquoted reason (a quoted or backticked reason is not authorisation) and\n"
+    "proves its named test twice on the attempt's code - qualifying red with `STAGE2_PLANT_FAULT=1`,\n"
+    "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
+    "in the kept test so the proof can be repeated. Only a row taken as\n"
+    f"`taken — not a test — <reason>` may be answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
     "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
     "is booked in the row's own Status as\n"
-    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
     "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair.\n"
     "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
@@ -440,6 +487,10 @@ FROM_LINE = re.compile(r"From [A-Za-z0-9][A-Za-z0-9._:/-]*:")
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
 # ledger's gate does (`check_criterion_ledger.py`).
 FIXED_TEST = re.compile(r"^tests/(?P<file>[^|\s]+\.py)::(?P<function>test_\w+)$")
+# The switch a guard test plants its fault under (ADR 0023): the runner adds it
+# to the planted launch's own environment alone, after the caller's environment
+# is filtered away, and the verification gate refuses its presence anywhere else.
+GUARD_SWITCH = "STAGE2_PLANT_FAULT"
 # A red-first pytest run that has not ended after this many minutes is stopped (spec, criterion 18).
 RED_FIRST_MINUTES = 10
 # The runner-owned probe of a red-first run: written into the temporary checkout as a file and
@@ -525,9 +576,11 @@ def pytest_sessionfinish(session, exitstatus):
 
 RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
-    "Write `Status` (`taken — <test or criterion>`, `taken — not a test — <reason>` or "
-    "`rejected — <reason>`) for every row below.\n"
-    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release; "
+    "Write `Status` (`taken — <test or criterion>`, `taken — guard test — <reason>`, "
+    "`taken — not a test — <reason>` or `rejected — <reason>`) for every row below.\n"
+    "For a taken row also write `Broke a test` (`yes`, `no` or "
+    "`yes — guard test — tests/<path>::<function>` after both guard proof legs pass) "
+    "— before the next round or the release; "
     "a row the repair marked `fixed` needs the mark too."
 )
 
@@ -1090,6 +1143,21 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
     return rows, "\n".join(rest)
 
 
+def split_guard_evidence(answer: str) -> tuple[list[str], str]:
+    """Separate the phase-6 guard-evidence lines from the verdict text they stand beside.
+
+    A line is evidence only in its whole stripped form; a line that merely begins
+    `Guard evidence:` stays in the verdict text, where phase 6 refuses it explicitly.
+    The evidence is carried on verbatim by the caller, which keeps the full
+    answer in its block; only the verdict check reads the rest (spec, criterion 9).
+    """
+    evidence: list[str] = []
+    rest: list[str] = []
+    for line in answer.splitlines():
+        (evidence if GUARD_EVIDENCE_LINE.fullmatch(line.strip()) else rest).append(line.strip())
+    return evidence, "\n".join(rest)
+
+
 def render_table(columns: list[str], rows: list[list[str]]) -> str:
     """A Markdown table; an unescaped `|` in a cell is escaped, so a cell never moves the columns (DL-B-7)."""
     lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
@@ -1486,13 +1554,13 @@ def begin_work_call(
     )
 
 
-def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "", answer_format: str = ANSWER_FORMAT) -> str:
     """The phase prompt in full, the change's name, the answer format, and the read request last."""
     body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
     parts = [body.rstrip(), f"---\n\nChange under review: {change} (plans/changes/{change}/)."]
     if extra:
         parts.append(extra)
-    parts += [ANSWER_FORMAT, READ_REQUEST]
+    parts += [answer_format, READ_REQUEST]
     return "\n\n".join(parts)
 
 
@@ -1630,6 +1698,31 @@ def retain_terms_warnings(warnings: list[str]) -> list[str]:
     return evidence
 
 
+_address_notice_evidence: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar(
+    "address_notice_evidence", default=None
+)
+
+
+@contextlib.contextmanager
+def capture_address_notices() -> Iterator[list[str]]:
+    """Collect a round's notices across concurrent members, retries and replacements."""
+    notices: list[str] = []
+    token = _address_notice_evidence.set(notices)
+    try:
+        yield notices
+    finally:
+        _address_notice_evidence.reset(token)
+
+
+def retain_address_notices(notices: list[str]) -> list[str]:
+    """Keep assessed, path-only diagnostics for the operation's durable evidence."""
+    evidence = _address_notice_evidence.get()
+    if evidence is None:
+        return notices
+    evidence.extend(notice for notice in notices if notice not in evidence)
+    return evidence
+
+
 def terms_warnings(entry: dict) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
@@ -1651,13 +1744,36 @@ def terms_warnings(entry: dict) -> list[str]:
     return warnings
 
 
-def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, **kwargs):
+def dispatch_go(
+    root: Path, model: str, send: Callable, *args, admission=None, destination=None, configuration=None, **kwargs
+):
     """The final shared Go send boundary, independent of tools, retries and saved admission.
 
     Only a caller's checked discovered-free admission can replace paid terms.
     A declared paid record always keeps its terms check, even with that callback.
     All command construction and leak scans precede this function.
+
+    `destination` is the caller's checked effective definition. The boundary
+    re-assesses it against the address policy read fresh from the held
+    declaration (criterion 6): an earlier selection, a saved overlay, a
+    receipt, a resumed round, a replacement or a retry never dispatches a
+    destination the current record refuses. A same-host path move is announced
+    here once more; a foreign destination is refused before the send. The
+    caller supplies the models.json or checked-model.json that its launch
+    consumes; its selected API and explicit base must match the assessment.
     """
+    if destination is None:
+        raise Refused(f"the launch of {model} carries no checked destination; no model request starts.")
+    try:
+        policy = stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise Refused(f"the Go address record is unusable: {error}") from None
+    verdict = stage2_go.assess(policy, model, destination)
+    if verdict.notice:
+        retain_address_notices([verdict.notice])
+        print(f"Address notice: {verdict.notice}")
+    if verdict.problem:
+        raise Refused(verdict.problem)
     entry = endpoint_entry(root)
     paid = model in (entry.get("modelle") or []) or model in (entry.get("modelle_terms") or {})
     if paid or admission is None:
@@ -1670,6 +1786,27 @@ def dispatch_go(root: Path, model: str, send: Callable, *args, admission=None, *
         problem = admission(root, model)
     if problem:
         raise Refused(problem)
+    # Check the artifact Pi actually consumes, not just the caller's earlier assessment.
+    # Never echo its contents: a mismatched URL can carry credentials.
+    try:
+        if configuration is None:
+            raise ValueError("missing configuration")
+        content = json.loads(Path(configuration).read_text(encoding="utf-8"))
+        if Path(configuration).name == "checked-model.json":
+            actual = content.get("model") if content.get("provider") == OPENCODE else None
+        else:
+            actual = stage2_go.definition_of(content.get("providers"), OPENCODE, model)
+        if not isinstance(actual, dict) or actual.get("id") != model:
+            raise ValueError("missing or ambiguous model")
+        if any(actual.get(field) != verdict.definition.get(field) for field in ("api", "baseUrl")):
+            raise ValueError("destination mismatch")
+        checked = stage2_go.assess(policy, model, actual)
+        if not checked.admitted:
+            raise ValueError("refused destination")
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, AttributeError):
+        raise Refused(
+            f"the sending configuration of {model} does not match its checked destination; no request starts."
+        ) from None
     return send(*args, **kwargs)
 
 
@@ -1924,9 +2061,11 @@ def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> 
     """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7).
 
     A candidate is an id of the rule's provider that its suffix or include would select. An id outside
-    `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names: the maintainer's exclusion
-    leaves that id out, not the whole stage.
+    `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names or one the entry declares paid
+    in `modelle`: a shipped catalog id can carry the free suffix and still be a paid model, and the
+    declaration leaves that id out, not the whole stage (bead coding-harness-vku6).
     """
+    paid = {str(item) for item in endpoint_entry(root).get("modelle") or []}
     suffix = rule.get("id_suffix", "")
     includes = {str(record["id"]) for record in rule.get("include") or []}
     excludes = {str(record["id"]) for record in rule.get("exclude") or []}
@@ -1939,6 +2078,8 @@ def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> 
             continue
         if not MODEL_ID.fullmatch(model):
             dropped[model] = "not a plain model id"
+        elif model in paid:
+            dropped[model] = "a paid model; the free class does not admit it"
         elif problem := excluded_problem(root, model):
             dropped[model] = problem
     return dropped
@@ -2003,23 +2144,31 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
 # The catalog fields a model definition may carry into Pi's active configuration (RS-3-3 of the
 # research-swarm review): `samplingParams` is merged into the request body and could name another
 # model than `--model` and the audit line; `headers`, `compat` and every other field are dropped.
-# `baseUrl` crosses as it came: checking it against a declared address is the open DL-B-8.
+# `baseUrl` crosses assessed (DL-B-8, closed by go-access-point): the one address record in
+# `model-endpoints.yaml` (`stage2_go`) admits it — a different path on the admitted host runs on
+# with a notice, any other destination is dropped here and refused before any model request.
 OVERLAY_FIELDS = ("id", "name", "api", "baseUrl", "reasoning", "input", "contextWindow", "maxTokens", "cost")
 
 
-def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
-    """Activate fetched definitions through Pi's explicit model configuration; return the fields dropped per id.
+def activate_overlay(
+    agent: Path, store: dict, policy: stage2_go.AddressPolicy
+) -> tuple[dict[str, list[str]], list[str]]:
+    """Activate fetched definitions through Pi's explicit model configuration.
 
-    Pi 1.2.0 restores its remote cache only for server dates newer than its
-    shipped catalog. A successful fresh retrieval need not carry such a date.
-    Keep models-store.json as retrieval evidence and use models.json's model
-    definitions to activate that exact catalog independently of cache age.
-    Only the fields of `OVERLAY_FIELDS` cross, never provider auth
+    Returns the fields dropped per id and the address notices of same-host
+    path moves. Pi 1.2.0 restores its remote cache only for server dates newer
+    than its shipped catalog. A successful fresh retrieval need not carry such
+    a date. Keep models-store.json as retrieval evidence and use models.json's
+    model definitions to activate that exact catalog independently of cache
+    age. Only the fields of `OVERLAY_FIELDS` cross, never provider auth
     configuration, request-body parameters or headers; the fetched store is
-    never mutated (the retrieval evidence and persisted run snapshot).
+    never mutated (the retrieval evidence and persisted run snapshot). An
+    `opencode-go` definition whose destination the address policy refuses is
+    dropped and named — it never reaches Pi's active configuration.
     """
     providers = {}
     dropped: dict[str, list[str]] = {}
+    notices: list[str] = []
     for provider, entry in store.items():
         models = []
         for position, definition in enumerate(entry.get("models", []), 1):
@@ -2027,6 +2176,14 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
             if not isinstance(definition, dict):
                 dropped[label] = ["not a model object"]
                 continue
+            if provider == stage2_go.PROVIDER:
+                verdict = stage2_go.assess(policy, str(definition.get("id") or label), definition)
+                if not verdict.admitted:
+                    dropped[str(definition.get("id") or label)] = [verdict.problem]
+                    continue
+                if verdict.notice:
+                    notices.append(verdict.notice)
+                definition = verdict.definition
             model = {name: definition[name] for name in OVERLAY_FIELDS if name in definition}
             # A `provider` equal to the store's key says nothing the key does not: it crosses unnamed;
             # any other value would route the definition elsewhere and is dropped.
@@ -2050,16 +2207,26 @@ def activate_overlay(agent: Path, store: dict) -> dict[str, list[str]]:
         if models:
             providers[provider] = {"models": models}
     (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
-    return dropped
+    return dropped, notices
 
 
-def check_overlay(agent: Path, home: Path, model: str | None = None) -> None:
+def check_overlay(agent: Path, home: Path, model: str | None = None, *, policy: stage2_go.AddressPolicy) -> None:
     """Refuse before any call if pinned Pi rejects or broadens the filtered configuration.
 
     Pi can report a configuration error yet resolve a model from its unfiltered remote cache.
     Exercise its real offline resolver, without credentials, and check both the error and the
-    resolved definitions. The fetched store stays untouched as evidence.
+    resolved definitions. Before Pi sees the file, its `opencode-go` rows are
+    assessed against the address policy once more: the activated configuration
+    carries checked bases alone. The fetched store stays untouched as evidence.
     """
+    activated = json.loads((agent / "models.json").read_text(encoding="utf-8"))
+    for definition in (activated.get("providers") or {}).get(stage2_go.PROVIDER, {}).get("models", []):
+        verdict = stage2_go.assess(policy, str(definition.get("id")), definition)
+        if not verdict.admitted:
+            raise Refused(
+                f"the activated configuration of {definition.get('id')} fails the address policy: "
+                f"{verdict.problem}; no listing or reviewer starts."
+            )
     runtime = REPO_ROOT / "tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js"
     script = r"""
 import { readFileSync } from 'node:fs';
@@ -2146,6 +2313,12 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     what OpenCode Go actually bills for the call.
     """
     rule = free_rule(root)
+    # The one address record, read fresh before anything is activated: without
+    # it the free stage fails closed, and no literal origin stands in (Q-1).
+    try:
+        policy = stage2_go.load_address_policy(root)
+    except stage2_go.RecordUnusable as error:
+        raise Refused(f"the Go address record is unusable: {error}") from None
     key = reviewer_key()
     with tempfile.TemporaryDirectory(prefix="stage2-free-") as tmp:
         scratch = Path(tmp)
@@ -2171,10 +2344,12 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 "from a stale cache."
             )
         store = overlay_store(agent, rule["provider"])
-        stripped = activate_overlay(agent, store)
+        stripped, notices = activate_overlay(agent, store, policy)
         if stripped:
             listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
             print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
+        for notice in notices:
+            print(f"Address notice: {notice}", file=sys.stderr)
         fresh = {
             str(model["id"])
             for model in store.get(rule["provider"], {}).get("models", [])
@@ -2201,9 +2376,9 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 for provider, entry in store.items()
             }
             (listing_agent / "models-store.json").write_text(json.dumps(safe_store), encoding="utf-8")
-            activate_overlay(listing_agent, safe_store)
+            activate_overlay(listing_agent, safe_store, policy)
             env = {**env, "PI_CODING_AGENT_DIR": str(listing_agent)}
-        check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home)
+        check_overlay(Path(env["PI_CODING_AGENT_DIR"]), home, policy=policy)
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -2219,6 +2394,15 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     dropped = free_drops(
         root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
     )
+    # Only assessed definitions become selectable: a fresh catalog row whose
+    # destination the record refuses is named as a drop and never reaches a
+    # launch, however the rule filters (criterion 5).
+    for definition in store.get(rule["provider"], {}).get("models", []):
+        if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
+            continue
+        verdict = stage2_go.assess(policy, definition["id"], definition)
+        if not verdict.admitted:
+            dropped.setdefault(definition["id"], verdict.problem)
     selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
     if dropped:
         print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
@@ -2232,6 +2416,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         "catalog": catalog,
         "selected": selected,
         "dropped": dropped,
+        "notices": notices,
         "overlay": sorted(fresh),
         "models_store": store,
         "billing": "not measured: pi.dev is a live catalog, not a billing statement",
@@ -2576,14 +2761,34 @@ def run_reviewer(
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        # The launch resolves and assesses its model offline, against the one
+        # address record read fresh from the held declaration. Without the
+        # run's refreshed definitions there is no checked destination, and no
+        # unchecked launch stands in for one (criterion 2).
+        try:
+            policy = stage2_go.load_address_policy(ctx.root)
+        except stage2_go.RecordUnusable as error:
+            raise Refused(f"the Go address record is unusable: {error}") from None
         store = getattr(ctx, "models_store", None)
-        if store is not None:
-            (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
-            activate_overlay(agent, store)
+        if store is None:
+            raise Refused(
+                f"no refreshed provider definitions accompany the reviewer call for {model}; "
+                "its destination cannot be assessed and the call does not start."
+            )
+        (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+        _dropped, notices = activate_overlay(agent, store, policy)
+        retain_address_notices(notices)
+        for notice in notices:
+            print(f"Address notice: {notice}", file=sys.stderr)
         home = scratch / "home"
         home.mkdir()
-        if store is not None:
-            check_overlay(agent, home, model)
+        check_overlay(agent, home, model, policy=policy)
+        row = stage2_go.definition_of(store, stage2_go.PROVIDER, model)
+        if row is None:
+            raise Refused(f"the refreshed definitions of {model} are missing or duplicated; no reviewer starts.")
+        assessment = stage2_go.assess(policy, model, row)
+        if not assessment.admitted:
+            raise Refused(assessment.problem)
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [
@@ -2632,6 +2837,8 @@ def run_reviewer(
             env,
             secrets,
             admission=getattr(ctx, "go_admission", None),
+            destination=assessment.definition,
+            configuration=agent / "models.json",
             timeout=seconds,
             limit=limit,
             **({"deadline": deadline} if deadline is not None else {}),
@@ -3035,15 +3242,26 @@ def review(root: Path, change: str) -> None:
         # An earlier phase-6 block makes this a fresh read-only session: no 2a thread, no earlier
         # verdict thread, never the repair's (ADR 0017). The first review keeps ADR 0016's rule.
         recorded = None
-    prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
+    prompt = phase_prompt(
+        root,
+        "06-review.md",
+        change,
+        "\n\n".join(["Write only your verdict now.", PHASE6_GUARD_INSTRUCTION]),
+        answer_format=PHASE6_ANSWER_FORMAT,
+    )
     require_fresh_full_verification(root, change)
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
-    rows, _ = parse_rows(answer)
+    _evidence, verdict_text = split_guard_evidence(answer)
+    malformed_evidence = any(line.strip().startswith("Guard evidence:") for line in verdict_text.splitlines())
+    rows, _ = parse_rows(verdict_text)
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
-    # boundary): six-cell findings, or exactly `No finding.`. An empty, refused or malformed answer
-    # records no verdict, releases nothing, and stands as rejected evidence for the next attempt.
-    if not rows and answer.strip() != "No finding.":
+    # boundary): six-cell findings, or exactly `No finding.`. Guard-evidence lines travel beside
+    # them and never instead of them (spec, criterion 9); `answer_block` below keeps the full
+    # original answer, so the evidence stands verbatim before the verdict line. An empty, refused
+    # or malformed answer records no verdict, releases nothing, and stands as rejected evidence
+    # for the next attempt.
+    if malformed_evidence or (not rows and verdict_text.strip() != "No finding."):
         append(ctx.findings, rejected_review_block(answer, thread))
         raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(
@@ -6458,26 +6676,61 @@ def _proof_reference_guard(
     return scrub(f"{test}: {'; '.join(faults)}", key) if faults else None
 
 
-def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
-    """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
+GUARD_SOURCE_PROBE_SOURCE = '''
 
-    A green suite can include a skipped or expected-failing named test. The same runner-owned probe
-    used for red first must show passing setup, call and teardown for every selected case here.
+class GuardSourceProbe:
+    """Read the functions pytest actually collected, including overwritten definitions."""
+
+    def pytest_collection_finish(self, session):
+        import inspect
+
+        fault = None
+        try:
+            if not session.items:
+                fault = "the guard source check collected no tests"
+            for item in session.items:
+                if "STAGE2_PLANT_FAULT" not in inspect.getsource(item.function):
+                    function = _SELECTOR.partition("::")[2]
+                    fault = (
+                        f"{_SELECTOR} names STAGE2_PLANT_FAULT nowhere in `{function}`; "
+                        "a guard proof plants nothing there"
+                    )
+                    break
+        except Exception:
+            fault = "the collected guard function's source could not be read"
+        with open(_REPORT + ".source", "w", encoding="utf-8") as stream:
+            json.dump({"token": _TOKEN, "selector": _SELECTOR, "fault": fault}, stream)
+'''
+
+
+def _attempt_tree_proof(
+    root: Path, test: str, key: str | None, tools: dict[str, str] | None, *, planted: bool, leg: str
+) -> str | None:
+    """Run the named test on the attempt's tree under the runner-owned probe; None when the leg proves.
+
+    This is the one execution the fixed-code proof and the guard proof share (ADR 0023): the tool
+    snapshot, the environment filtering, the pinned interpreter, the admission lock, the time limit,
+    the tree and ref snapshots and the scrubbed diagnostics are the same. The clean legs expect exit
+    0 and every selected case passing; the planted leg alone adds `STAGE2_PLANT_FAULT=1` to its own
+    environment after the caller's is filtered away - a caller's value supplies neither launch - and
+    expects the qualifying red the red-first classifier states. Each call carries its own token,
+    report and time limit; `leg` names the proof in every refusal.
+
     The proof runs in a private repository of its own: the source worktree's current Git-visible
-    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
-    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
-    activity in the source cannot void the proof. A proof that changes its own tree or any of its
-    own refs is refused, with every changed reference named; nothing in the source is compared,
-    deleted or reset, and the private repository is removed on every exit.
+    tree is materialized in the checkout, so the attempt's bytes are what runs, and another
+    session's Git activity in the source cannot void the proof. A proof that changes its own tree
+    or any of its own refs is refused, with every changed reference named; nothing in the source
+    is compared, deleted or reset, and the private repository is removed on every exit.
     """
     tampered = tool_problem(root, tools)
     if tampered:
-        return f"{test}: fixed-code proof: {tampered}"
+        return f"{test}: {leg}: {tampered}"
     bootstrap = (
         "import importlib.util, sys, pytest; "
         "spec = importlib.util.spec_from_file_location('stage2_fixed_probe', sys.argv[1]); "
         "probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe); "
-        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
+        "plugins = [probe] + ([probe.GuardSourceProbe()] if hasattr(probe, 'GuardSourceProbe') else []); "
+        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=plugins))"
     )
     token = os.urandom(16).hex()
     tmp = None
@@ -6494,7 +6747,7 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         private = tmp / "tree"
         probe = tmp / "probe.py"
         report = tmp / "outcome.json"
-        probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+        probe.write_text(RED_PROBE_SOURCE + (GUARD_SOURCE_PROBE_SOURCE if planted else ""), encoding="utf-8")
         # The fixed tree is captured before the clone copies objects: the tree `worktree_tree`
         # writes is unreferenced, and the local object copy carries it; a tree the clone cannot
         # read refuses the proof instead of running older bytes.
@@ -6506,30 +6759,57 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
         # One machine-wide admission around the timed proof; queue and memory waits consume
         # none of the proof's time limit (bead coding-harness-p6mu).
         with verify_lock.hold_admission(["pytest", test]) as owned:
+            own = {
+                "STAGE2_RED_REPORT": str(report),
+                "STAGE2_RED_TOKEN": token,
+                "STAGE2_RED_SELECTOR": test,
+            }
+            if planted:
+                own[GUARD_SWITCH] = "1"
             done = launch(
                 [red_first_python(root), "-c", bootstrap, str(probe), test],
                 private,
                 verify_lock.inherit_env(
                     runner_env(
-                        foreign_env(
-                            {
-                                "STAGE2_RED_REPORT": str(report),
-                                "STAGE2_RED_TOKEN": token,
-                                "STAGE2_RED_SELECTOR": test,
-                            }
-                        ),
+                        foreign_env(own),
                         root,
                         tmp,
                     )
                 ),
                 key,
                 timeout=RED_FIRST_MINUTES * 60,
-                limit="the fixed-code proof time limit",
+                limit=f"the {leg} time limit",
                 pass_fds=_lock_fds(owned),
             )
-        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
-        if done.returncode != 0:
+        fault = _red_record_fault(_red_report_bytes(report), token, test, passing=not planted)
+        if planted:
+            if done.returncode != 1:
+                fault = (
+                    "pytest ended "
+                    f"{done.returncode} on the planted run; a guard proof needs exit 1 with an "
+                    "assertion failure or pytest's own failed outcome"
+                ) + (f"; {fault}" if fault else "")
+        elif done.returncode != 0:
             fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
+        if planted:
+            # Collection is performed in the same private tree and invocation as the proof.
+            # inspect.getsource follows pytest's actual function, rather than guessing from ASTs.
+            try:
+                source = json.loads(report.with_suffix(".json.source").read_text(encoding="utf-8"))
+                if (
+                    not isinstance(source, dict)
+                    or source.get("token") != token
+                    or source.get("selector") != test
+                    or (source.get("fault") is not None and not isinstance(source["fault"], str))
+                    or "fault" not in source
+                ):
+                    raise ValueError("invalid guard source record")
+            except (OSError, ValueError):
+                source_fault = "the collected guard source record is missing or invalid"
+            else:
+                source_fault = source["fault"]
+            if source_fault:
+                fault = f"{fault}; {source_fault}" if fault else source_fault
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         fault = str(error)
     finally:
@@ -6546,19 +6826,50 @@ def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
                     named.append(f"the private tree could not be measured ({error})")
                 else:
                     if tree_now != tree_before:
-                        named.append("the private checkout changed while the fixed-code proof ran")
+                        named.append(f"the private checkout changed while the {leg} ran")
         finally:
             if tmp is not None:
                 cleanup = _remove_private(tmp)
     if named:
         fault = f"{fault}; {'; '.join(named)}" if fault else "; ".join(named)
     if cleanup is not None:
-        removal = f"the private fixed-code proof repository could not be removed ({cleanup})"
+        removal = f"the private {leg} repository could not be removed ({cleanup})"
         fault = f"{fault}; {removal}" if fault else removal
-    outcome = scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
+    outcome = scrub(f"{test}: {leg}: {fault}", key) if fault else None
     if ref_fault:
         outcome = f"{outcome}\n{ref_fault}" if outcome else ref_fault
     return outcome
+
+
+def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
+    """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
+
+    A green suite can include a skipped or expected-failing named test. The same runner-owned probe
+    used for red first must show passing setup, call and teardown for every selected case here.
+    The proof runs in a private repository of its own: the source worktree's current Git-visible
+    tree - uncommitted changes, deletions, new files, file modes and symlinks included - is
+    materialized in the checkout, so the attempt's bytes are what runs, and another session's Git
+    activity in the source cannot void the proof. A proof that changes its own tree or any of its
+    own refs is refused, with every changed reference named; nothing in the source is compared,
+    deleted or reset, and the private repository is removed on every exit.
+    """
+    return _attempt_tree_proof(root, test, key, tools, planted=False, leg="fixed-code proof")
+
+
+def guard_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
+    """Prove an authorised guard repair on the attempt's code: planted red, then clean green (ADR 0023).
+
+    The planted leg runs the named test with `STAGE2_PLANT_FAULT=1` and needs the qualifying red of
+    the red-first classifier - the fault the test plants under the switch is the only failure it may
+    show. The clean leg then reruns the same test without the switch and needs every case passing; a
+    caller's value of the switch supplies neither launch. Each leg carries its own token, report and
+    time limit; the tool, tree and ref safeguards of the fixed-code proof hold on both. The guard
+    marks are written only after both legs prove (spec, criteria 3, 4 and 7).
+    """
+    planted = _attempt_tree_proof(root, test, key, tools, planted=True, leg="planted guard proof")
+    if planted is not None:
+        return planted
+    return _attempt_tree_proof(root, test, key, tools, planted=False, leg="clean guard proof")
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -6723,12 +7034,22 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
     return outcome
 
 
+def _test_ref_problem(ref: str) -> str | None:
+    """Why a fixed line's tail is no provable test reference, or None when it is one."""
+    if (test := FIXED_TEST.fullmatch(ref)) and Path(test.group("file")).name.startswith("test_"):
+        if any(segment in (".", "..") for segment in ref.partition("::")[0].split("/")):
+            return f"`{ref}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
+        return None
+    return f"`{ref}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
+
+
 def fixed_status(ident: str, rest: str) -> str:
     """The Status one fixed line gives, or the problem sentence that holds for it."""
     match = re.fullmatch(r"fixed — (.+)", rest)
     if match is None:
         return (
-            f"{ident}: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
+            f"{ident}: the line is neither `<ID>: fixed — tests/<path>::<function>`, "
+            "`<ID>: fixed — guard test — tests/<path>::<function>` nor "
             "`<ID>: fixed — not a test — <reason>`"
         )
     body = match.group(1).strip()
@@ -6739,11 +7060,26 @@ def fixed_status(ident: str, rest: str) -> str:
         # Escaped once, whatever the fixed line spelled: a `\|` the format asked for is unfolded first,
         # so a reason written the way REPAIR_FORMAT asks never lands with a second backslash.
         return "fixed — not a test — " + reason.replace("\\|", "|").replace("|", "\\|")
-    if (test := FIXED_TEST.fullmatch(body)) and Path(test.group("file")).name.startswith("test_"):
-        if any(segment in (".", "..") for segment in body.partition("::")[0].split("/")):
-            return f"{ident}: `{body}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
-        return f"fixed — {body}"
-    return f"{ident}: `{body}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
+    if body == "guard test" or body.startswith("guard test — "):
+        ref = body.partition("—")[2].strip()
+        if not ref:
+            return f"{ident}: `fixed — guard test` without the named test"
+        problem = _test_ref_problem(ref)
+        return f"fixed — guard test — {ref}" if problem is None else f"{ident}: {problem}"
+    problem = _test_ref_problem(body)
+    return f"fixed — {body}" if problem is None else f"{ident}: {problem}"
+
+
+def guard_authorised(status: str) -> bool:
+    """Whether a row's own Status authorises the guard proof (spec, criterion 2).
+
+    Only the complete unquoted form `taken — guard test — <reason>` with a nonempty
+    reason opens the planted run; a quoted marker is a reviewer's or an attempt's
+    words, and an ordinary or `not a test` row keeps its own route.
+    """
+    unquoted = re.sub(r"""`+[^`]*`+|"[^"]*"|'[^']*'""", "", status).strip().lower()
+    reason = unquoted[len("taken — guard test — ") :] if unquoted.startswith("taken — guard test — ") else ""
+    return bool(reason.strip())
 
 
 def only_scan_records_added(before: str, now: str) -> bool:
@@ -6793,7 +7129,11 @@ def check_repair_answer(
     outside the taken rows' Status before this check (spec, criterion 8), and the comparison stays as
     the guard that the restore held, so such an edit is never checkpointed (phase 6, F-3; review row L3-2). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter's one `updated:` date
-    may be refreshed by the runner. Only when no problem stands do the red-first runs start, one pytest run
+    may be refreshed by the runner. A row the orchestrator took as `taken — guard test — <reason>`
+    with a nonempty reason may be answered `fixed — guard test — tests/<path>::<function>`; its named
+    test must define `STAGE2_PLANT_FAULT` in its own source, and the runner proves it planted red and
+    clean green on the attempt's code instead of the baseline route (spec, criteria 2, 3 and 6). Only
+    when no problem stands do the red-first runs start, one pytest run
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
@@ -6867,12 +7207,19 @@ def check_repair_answer(
                 problems.append(
                     f"{ident}: answered `not a test`, but the row is a code row; it needs a test that was red first"
                 )
-        else:
-            test = fix[len("fixed — ") :]
-            function = test.partition("::")[2]
-            body = _read_quietly(ctx.root / test.partition("::")[0])
-            if not defines_test(body, function):
-                problems.append(f"{ident}: {test} defines no function `def {function}(`")
+            continue
+        guard = fix.startswith("fixed — guard test — ")
+        if guard and not guard_authorised(row[7]):
+            problems.append(
+                f"{ident}: answered `guard test`, but the row does not authorise it; only "
+                "`taken — guard test — <reason>` with a nonempty reason opens the planted proof"
+            )
+            continue
+        test = fix[len("fixed — guard test — ") :] if guard else fix[len("fixed — ") :]
+        function = test.partition("::")[2]
+        body = _read_quietly(ctx.root / test.partition("::")[0])
+        if not defines_test(body, function):
+            problems.append(f"{ident}: {test} defines no function `def {function}(`")
     for place, rows_before, rows_now in (
         ("released", before[0], released_now),
         ("phase-6", before[1], phase6_now),
@@ -6889,7 +7236,17 @@ def check_repair_answer(
     marks: dict[str, str] = {}
     for _place, row in taken:
         fix = fixes[row[0]]
-        if fix.startswith("fixed — tests/"):
+        if fix.startswith("fixed — guard test — tests/"):
+            anchor = fix[len("fixed — guard test — ") :]
+            outcome = guard_test_proof(ctx.root, anchor, key, tools)
+            if outcome is not None:
+                problems.append(f"{row[0]}: {outcome}")
+                continue
+            # Both legs proved - planted red under the runner's own switch, clean green without it,
+            # both on this attempt's code: the mark states exactly what was shown, distinct from an
+            # ordinary repair's baseline mark (spec, criterion 7; ADR 0023).
+            marks[row[0]] = f"yes — guard test — {anchor}"
+        elif fix.startswith("fixed — tests/"):
             anchor = fix[len("fixed — ") :]
             outcome = red_first(ctx.root, baseline, anchor, key, tools)
             if outcome is None:
@@ -8733,6 +9090,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 ) from None
 
 
+@capture_address_notices()
 def _review_round(
     root: Path,
     change: str,
@@ -8787,6 +9145,11 @@ def _review_round(
                 notes.append(f"Notice: {state['free']['skipped']}.")
             if state["free"].get("dropped"):
                 notes.append(f"Notice: free ids dropped: {dropped_notice(state['free']['dropped'])}.")
+            for notice in state["free"].get("notices") or []:
+                # A same-host path move observed at discovery stays in the
+                # round's notes: the move is evidence, not a transient line.
+                notes.append(f"Notice: {notice}.")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
             skipped = skipped_models(root)
             if skipped:
                 notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
@@ -8983,6 +9346,8 @@ def _review_round(
             note = f"Notice: {warning}."
             if note not in notes:
                 notes.append(note)
+        for notice in retain_address_notices([]):
+            notes.append(f"Address notice: {notice}")
         parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
         for member, block in reviewer_blocks:
             # The runner's line names whose words follow (DL-B-3); the note stays the switch `_record_lines` reads.
@@ -8995,6 +9360,10 @@ def _review_round(
         state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
         write_round(change, "\n\n".join(parts), state, root)
     except BaseException:
+        for notice in retain_address_notices([]):
+            note = f"Address notice: {notice}"
+            if note not in notes:
+                notes.append(note)
         if audited:
             # The calls above wrote no round: say so in findings.md, so their audit lines read as an
             # attempt that consumed nothing and not as a lost record (DL-A-6 of the deep review).
@@ -9030,17 +9399,18 @@ def probe(root: Path, change: str) -> None:
     """The compatibility probe: every discovered free member and every eligible paid model, once each.
 
     Declared special run of phase 4 (the Definition of Done): the calls measure
-    whether OpenCode Go's chat-completions address
-    (`https://opencode.ai/zen/go/v1/chat/completions`, the one Pi's built-in
-    provider calls) accepts the ids. The pinned Pi is checked once before the
-    first call; the free members come from a forced live refresh and its
-    listing, and each free call runs through the free path - no tools, the
-    implementation diff as its only content - while every paid call keeps the
-    read tools. No record is written; each id and the answer's first line are
-    printed for the pull request body, and skipped paid models are named. A
-    failed member is reported without stopping later checks; the final summary
-    lists answered and failed members and any failure makes the probe exit
-    nonzero (spec, criterion 14). No second address, no substituted model.
+    whether the ids are accepted at the address the one record admits
+    (`model-endpoints.yaml`'s `opencode-go` `adresse`, through `stage2_go`): a
+    different path on the recorded host runs on with a notice, a foreign
+    destination is refused before its call. The pinned Pi is checked once
+    before the first call; the free members come from a forced live refresh
+    and its listing, and each free call runs through the free path - no tools,
+    the implementation diff as its only content - while every paid call keeps
+    the read tools. No record is written; each id and the answer's first line
+    are printed for the pull request body, and skipped paid models are named.
+    A failed member is reported without stopping later checks; the final
+    summary lists answered and failed members and any failure makes the probe
+    exit nonzero (spec, criterion 14). No second address, no substituted model.
     """
     folder_of(root, change)
     key = reviewer_key()
@@ -9059,12 +9429,12 @@ def probe(root: Path, change: str) -> None:
     failed: list[str] = []
 
     def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
-        # Declaration and leak checks stay outside this handler: only a model
-        # call failure permits continuing, never a failed admission check.
+        # Declaration and leak checks stay outside this handler. A member's
+        # refused destination, like a failed call, must not skip valid peers.
         ctx.models_store = discovery.get("models_store")
         try:
             answer = run_reviewer(ctx, model, prompt, key, free=free)
-        except CallFailed as error:
+        except (CallFailed, Refused) as error:
             print(f"probe: {model} failed: {scrub(str(error), key)}")
             failed.append(model)
             return

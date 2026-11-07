@@ -88,6 +88,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
     ),
+    "close_merged_beads.py": (
+        "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
+        "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "
@@ -181,6 +185,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
     ),
+    "stage2_research_limits.py": (
+        "Library of scripts/stage2_research_run.py, never an entry point of its own: loads and checks the "
+        "research swarm's time limits from research-swarm-limits.yaml (bead coding-harness-ht1b); "
+        "tests/test_stage2_research_limits.py runs it"
+    ),
     "stage2_research_run.py": (
         "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "
         "phase-1 research run - frozen inputs, finder trio, map merge, public sentence, history, eleven topics "
@@ -196,6 +205,11 @@ OHNE_AUFRUFER: dict[str, str] = {
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
+    ),
+    "stage2_go.py": (
+        "Library of scripts/stage2.py, stage2_swarm.py, stage2_availability.py and stage2_session.py, never an "
+        "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
+        "tests/test_stage2_go_access.py runs it against synthetic address records"
     ),
     "time_records.py": (
         "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "

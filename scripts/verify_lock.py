@@ -32,6 +32,15 @@ the lock held by the descriptor its protected child inherited, and that
 child's own nested calls still nest. Only the owner removes the published
 ownership, and only while it still names the owner.
 
+**Admission context.** Each admission also carries a non-secret identity and
+its measured queue-plus-memory wait (`admission_id`, `admission_wait` in the
+published ownership, `HARNESS_VERIFY_ADMISSION_ID` /
+`HARNESS_VERIFY_ADMISSION_WAIT` in a protected child's environment). A nested
+entry resolves both from the validated ownership record and marks its wait as
+reused — the ancestor's shared context, never measured or re-counted again
+(bead coding-harness-1um6, `admission_context()`). The ownership token is
+never part of the context.
+
 **Boundary.** The admission protects the machine's load, not data. Normal
 exit, failure, cancellation and trapped signals end the protected work before
 release. A protected descendant can briefly outlive the admission only when an
@@ -90,12 +99,19 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
 LOCK_ENV = "HARNESS_VERIFY_LOCK_HELD"
 TOKEN_ENV = "HARNESS_VERIFY_LOCK_TOKEN"
 FLOOR_ENV = "HARNESS_VERIFY_MEMORY_FLOOR"
+# The non-secret admission context (bead coding-harness-1um6): the id names the
+# admission to its descendants, the wait is the measured queue-plus-memory
+# seconds. The ownership token never travels in either — it stays in TOKEN_ENV
+# alone, the one secret of the relation.
+ADMISSION_ID_ENV = "HARNESS_VERIFY_ADMISSION_ID"
+ADMISSION_WAIT_ENV = "HARNESS_VERIFY_ADMISSION_WAIT"
 DEFAULT_MEMORY_FLOOR = 25.0
 MEMORY_POLL_SECONDS = 30.0
 QUEUE_LOG_SECONDS = 300.0
@@ -411,6 +427,77 @@ def _active_token() -> str | None:
         return _ACTIVE.token if _ACTIVE is not None else None
 
 
+def _active_context() -> AdmissionContext | None:
+    """The measured context of this process's own active admission, or None."""
+    with _ACTIVE_LOCK:
+        if _ACTIVE is not None:
+            return AdmissionContext(_ACTIVE.admission_id, _ACTIVE.wait_seconds, False)
+    return None
+
+
+@dataclasses.dataclass(frozen=True)
+class AdmissionContext:
+    """The admission a measurement run happened under (bead coding-harness-1um6).
+
+    `admission_id` is the non-secret admission UUID, `wait_seconds` the queue
+    plus memory wait measured by the admission that owns or owns the ancestor
+    lock. `reused` is True for an inherited admission (the wait is the
+    ancestor's shared context, never re-counted), False for a fresh one, and
+    None when no admission context is known at all.
+    """
+
+    admission_id: str | None
+    wait_seconds: float | None
+    reused: bool | None
+
+
+def _finite_wait(value: object) -> float | None:
+    """A published or inherited wait as a finite non-negative float, else None."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value) if math.isfinite(value) and value >= 0 else None
+
+
+def admission_context() -> AdmissionContext:
+    """The admission context this process runs under, whichever way it reaches it.
+
+    This process's own active admission first, then the context the admission
+    supervisor handed its protected command through the environment — the
+    runner decides once whether that context is its own fresh measurement or
+    an inherited one and clears the variables for its nested runs — then an
+    inherited marker, whose id and wait are read from the validated ownership
+    record, never measured again. Old ownership records published before this
+    field existed read as unknown values, never as guesses.
+    """
+    own = _active_context()
+    if own is not None:
+        return own
+    given = os.environ.get(ADMISSION_ID_ENV, "").strip()
+    if given:
+        return AdmissionContext(given, _parse_wait(os.environ.get(ADMISSION_WAIT_ENV)), False)
+    inherited = nested_holder_pid()
+    if inherited is not None:
+        holder = read_holder()
+        token = os.environ.get(TOKEN_ENV, "")
+        if holder is not None and _names(holder, inherited, token):
+            return AdmissionContext(
+                admission_id=holder.get("admission_id") if isinstance(holder.get("admission_id"), str) else None,
+                wait_seconds=_finite_wait(holder.get("admission_wait")),
+                reused=True,
+            )
+        return AdmissionContext(None, None, True)
+    return AdmissionContext(None, None, None)
+
+
+def _parse_wait(raw: str | None) -> float | None:
+    """An inherited wait from the environment as a float, else None."""
+    try:
+        value = float(raw or "")
+    except ValueError:
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
 class _Admission:
     """One entry's queue wait, ownership and memory gate on an opened state."""
 
@@ -421,6 +508,13 @@ class _Admission:
         self.record_name: str | None = None
         self.record_fd: int | None = None
         self.token = secrets.token_hex(16)
+        # The non-secret identity of this admission and its measured
+        # queue-plus-memory wait (bead coding-harness-1um6); the wait is only
+        # known once the memory gate has passed, so the first publish carries
+        # None and the second the measurement.
+        self.admission_id = uuid.uuid4().hex
+        self.wait_seconds: float | None = None
+        self.started = _stamp()
         self._published = False
         self._released = False
 
@@ -433,6 +527,10 @@ class _Admission:
             global _ACTIVE
             _ACTIVE = self
         self._memory_gate()
+        self.wait_seconds = _now() - self.entered
+        # The same ownership, republished with the measured wait: a nested
+        # entry resolves its shared context from this record.
+        self._publish()
 
     def release(self) -> None:
         """End the ownership in every ending; a second call does nothing."""
@@ -549,8 +647,15 @@ class _Admission:
         self.record_fd = None
 
     def _publish(self) -> None:
-        """Publish pid, token, command and start time while owning admission."""
-        record = {"pid": os.getpid(), "token": self.token, "command": self.command, "start": _stamp()}
+        """Publish pid, token, command, start time and the admission context while owning admission."""
+        record = {
+            "pid": os.getpid(),
+            "token": self.token,
+            "command": self.command,
+            "start": self.started,
+            "admission_id": self.admission_id,
+            "admission_wait": self.wait_seconds,
+        }
         payload = json.dumps(record).encode("utf-8")
         path = self.state.root / HOLDER_NAME
         # A fresh file renamed over the record replaces the directory entry itself, so a hard link
@@ -671,6 +776,20 @@ def inherit_env(env: dict[str, str]) -> dict[str, str]:
     else:
         env.pop(LOCK_ENV, None)
         env.pop(TOKEN_ENV, None)
+    # The admission context resolves the same way the child itself would: its
+    # own active admission, an inherited one, or nothing (bead
+    # coding-harness-1um6). A fresh context travels so the child records the
+    # measured wait as its own; an inherited one does not travel — the child
+    # resolves the shared context from the validated ownership record instead.
+    # Never the token.
+    context = admission_context()
+    if context.admission_id is not None and context.reused is False:
+        env[ADMISSION_ID_ENV] = context.admission_id
+        if context.wait_seconds is not None:
+            env[ADMISSION_WAIT_ENV] = repr(context.wait_seconds)
+    else:
+        env.pop(ADMISSION_ID_ENV, None)
+        env.pop(ADMISSION_WAIT_ENV, None)
     return env
 
 
@@ -740,6 +859,14 @@ def _spawn_child(
     if admission is not None:
         env[LOCK_ENV] = str(os.getpid())
         env[TOKEN_ENV] = admission.token
+        env[ADMISSION_ID_ENV] = admission.admission_id
+        if admission.wait_seconds is not None:
+            env[ADMISSION_WAIT_ENV] = repr(admission.wait_seconds)
+    else:
+        # A nested supervision inherits only the marker: the fresh context of
+        # an ancestor's admission must not pass itself off as this child's own.
+        env.pop(ADMISSION_ID_ENV, None)
+        env.pop(ADMISSION_WAIT_ENV, None)
     return subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
 
 

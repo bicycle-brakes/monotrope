@@ -484,6 +484,16 @@ pytest proof's execution timeout; the configured limits still bind the
 executing check. Hosted CI is untouched: its gate steps never enter the
 runner's shell path, and nothing disables admission because CI is set.
 
+Verification durations are appended locally to `verify-duration.jsonl` in
+that shared state directory. Each run records gate and execution durations,
+outcomes, revision, configuration and machine context; admission wait is
+reported separately, with inherited waits marked as reused. Read summaries
+with `python3 -m scripts.verify_duration report`, or inspect one run with
+`python3 -m scripts.verify_duration report --run <run-id>`. Interrupted runs
+remain incomplete, and malformed rows are diagnosed. Unusable measurement
+storage warns without changing gate execution or verdicts; raw history stays
+outside Git.
+
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
@@ -823,6 +833,19 @@ after two failed post-run checks, through the runner's `repair` verb — since t
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
+**One address record for OpenCode Go** (go-access-point, ADR 0024): every
+runner-controlled Go launch — a review-loop member, a probe, a research seat,
+an interactive session — reads its admitted address from the `adresse` record
+on the `opencode-go` entry of `model-endpoints.yaml` and follows one policy. A
+model that names another path on the recorded host runs on with a printed
+notice; any other destination (a foreign host or subdomain, plain HTTP, a
+non-default port, credentials, query or fragment in the URL) is refused before
+any model request — at selection, at activation, and again immediately before
+every send. The record holds no credentials and no model permissions, each
+base carries its documentation source and its reading date, and its
+maintenance route is an agent edit of the held entry through the orchestrator:
+no separate approval per documented same-host path move, and no catalog
+refresh ever writes the record by itself.
 **No Fable:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
@@ -966,8 +989,19 @@ Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
 content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
-the first live free call). Deadlines are monotonic — the judge keeps a reserved
-15 minutes inside a 150-minute run — with no retry and no debate. A failed
+the first live free call). Deadlines are monotonic — the judge keeps its
+configured allowance reserved (initially 15 minutes) inside the configured
+whole-run allowance (initially 160 minutes) — with no retry and no debate. The
+allowances live in `research-swarm-limits.yaml` at the worktree root:
+`run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
+`sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
+file once at its start. An edit during a run does not change its captured
+allowances, but the frozen-input drift check ends that invocation incomplete
+with exit 1; the next invocation applies the edited configuration. A missing,
+unknown or implausible value
+— every role at or below the run, the judge strictly below it — refuses the
+invocation with exit 2 before any participant starts
+(`scripts/stage2_research_limits.py`). A failed
 participant preserves its partial evidence; an incomplete run exits 1, a
 declaration or leak refusal records the blocked slot, exits 2 and makes no
 further call. Only the runner writes `research.md`: one buffered append at the
@@ -1419,7 +1453,7 @@ replacement (R-8).
 
 **The read boundary is a request today, not a mechanism (R-5, accepted in
 writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
-the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+the pinned Pi has no sandbox, and `read` resolves absolute paths without
 containment, so nothing keeps a member out of a sibling checkout — house rule 6
 (the customer instance out of bounds) has no mechanism on this path. The
 maintainer's answer to Q-3 of the night interview: document it here, and enforce
@@ -1536,8 +1570,9 @@ status (`fixed — …`) also fails when its id names no taken row, whatever
 the id's shape. Other prefixes (such as `ADR-0017:` or `UTF-8:`) remain
 report prose when their right side is not a fixed status. A hand
 repair books itself in the row's Status alone: replace the finished row's
-`taken — …` with one of the two fixed statuses and set the loop row's
-`Broke a test` mark from the evidence. A Status that still begins `taken`
+`taken — …` with one of the three fixed statuses and set the loop row's
+`Broke a test` mark from the evidence: `yes`, `no`, or
+`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. A Status that still begins `taken`
 while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
 `; repaired by …`) stops the repair before any call, and the row stands as it
 is. Backtick-quoted markers do not count; if the row is not repaired yet,
@@ -1587,6 +1622,27 @@ read-only Codex session, resuming neither the repair nor an earlier thread.
 The sandbox is the CLI's configured `workspace-write`; the tests show the
 configured call, not the CLI's confinement.
 
+**Guard test (ADR 0023).** A repair that lives only in test code has no
+baseline on which its test could be red, so ordinary red first cannot prove it.
+Only the orchestrator authorises the exception, by writing the row's Status
+`taken — guard test — <reason>` with a nonempty unquoted reason. A reason
+that is only quoted or backticked is not authorisation. The repair then answers `<ID>: fixed — guard
+test — tests/<path>::<function>`, and no other row may use that form. The
+named test must reference `STAGE2_PLANT_FAULT` and plant its real fault only
+under it. The runner proves the test twice on the attempt's own code: a
+qualifying red with `STAGE2_PLANT_FAULT=1`, then a clean green with the
+variable absent; the existing outcome, environment, runtime and integrity
+guards of red first apply to both runs. Only after both legs pass does it
+write `fixed — guard test — …` and the mark `yes — guard test — …` in the
+record's Broke-a-test cell. Phase 6 reads every added or changed guard test
+and records the real fault it plants and whether the test catches that fault
+without the switch; a guard whose failure is only conditional, with no real
+fault behind it, is a BLOCKER. The form applies to repairs alone: the first
+implementation and the criterion ledger keep their rules. Planting branches
+stay in the tests so the proof can be repeated, and the blocking gate
+`guard-test-environment` refuses any verification run, local or hosted,
+while the switch is present, whatever its value.
+
 ### When the same mechanism returns
 
 On 2026-10-27 three runner pull requests (#228, #250, #258) took 14 phase-6
@@ -1627,8 +1683,8 @@ When the orchestrator repairs a row itself instead of through `repair`
 each learned on the night of 2026-10-29/30:
 
 - **The loop record learns the repair.** The orchestrator sets the row's
-  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
-  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — guard
+  test — tests/<path>::<function>` or `fixed — not a test — <reason>`) and its `Broke a test` cell from the evidence, after a
   backup of `loop.md`. Otherwise the next round refuses with "taken rows are
   not repaired yet".
 - **A header or status edit regenerates the index.** After a hand edit of a

@@ -201,22 +201,22 @@ endpunkte:
       - beam-free
     modelle_terms:
       deepseek-v4.1-flash:
-        gelesen: "2026-10-29"
+        gelesen: "2026-11-06"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30; re-read 2026-11-06, the Go page now states it: 'The current agreement is valid through November 30, 2026.')"
         training: "Not used"
-        anfragen_5h: 34670
-        anfragen_gelesen: "2026-10-17"
+        anfragen_5h: 43330
+        anfragen_gelesen: "2026-11-06"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
-        gelesen: "2026-10-07"
-        valid_until: "2026-11-06"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        gelesen: "2026-11-03"
+        valid_until: "2026-12-03"
+        quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there); re-read 2026-11-03: 'MiMo-V2.6-Pro | Not used | 0 days', no end date stated, so gelesen plus 30 days (ADR 0022)"
         aufbewahrung: "0 days"
         training: "Not used"
         anfragen_5h: 3250
-        anfragen_gelesen: "2026-10-17"
+        anfragen_gelesen: "2026-11-03"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       longcat-2.0:
         gelesen: "2026-10-17"
@@ -281,10 +281,10 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       deepseek-v4-pro:
-        gelesen: "2026-10-29"
+        gelesen: "2026-11-06"
         valid_until: "2026-11-30"
         quelle: "privacy table of the Go page, https://opencode.ai/v2/docs/console/go/ (https://opencode.ai/docs/go redirects there)"
-        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30 as the maintainer stated on 2026-10-30; the Go page last read 2026-10-29 still showed 2026-10-31)"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, renewed monthly; the current agreement is valid through 2026-11-30; re-read 2026-11-06, the Go page now states it: 'The current agreement is valid through November 30, 2026.')"
         training: "Not used"
         anfragen_5h: 1050
         anfragen_gelesen: "2026-10-22"
@@ -491,6 +491,33 @@ endpunkte:
             with "Upstream request failed: Model is unavailable" (loop round 1
             and the runner's probe, both 2026-10-17); excluding it saves a
             call that fails every time until the model is served.
+        - id: iceman-contributor-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06 and picked as the whole
+            free swarm by prepare-loop; "contributor" ids on Go have meant
+            that request data may be used for training, and the maintainer's
+            decision of 2026-10-17 (question Q-12) keeps such models off. The
+            Go page's privacy table, read 2026-11-06, confirms it: 'Iceman
+            Contributor Free | Yes | Not ZDR'. A bridge until one central per-use-case model
+            policy exists (bead coding-harness-k0ub with coding-harness-wq1m);
+            maintainer, 2026-11-06, morning question Q-M9, option A.
+        - id: cat-jam-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06; the privacy table of the
+            Go page (https://opencode.ai/docs/go, read 2026-11-06) does not
+            list it, so its training and retention terms are unknown. Excluded
+            until the page lists it as not training on request data;
+            maintainer, 2026-11-06.
+        - id: longcat-2.5-preview-free
+          date: "2026-11-06"
+          reason: >-
+            New in the live Go catalog on 2026-11-06; the privacy table of the
+            Go page (https://opencode.ai/docs/go, read 2026-11-06) does not
+            list it (only LongCat-2.0), so its training and retention terms are
+            unknown. Excluded until the page lists it as not training on
+            request data; maintainer, 2026-11-06.
       input: implementation-diff
       hinweis: >-
         Class admission instead of individual declarations: every id this
@@ -500,6 +527,19 @@ endpunkte:
         these ids are NOT read; this acceptance covers the diff-only review
         purpose alone — no paid model, no Zen id and no interactive session
         runs on it.
+    # The one admitted Go address (ADR 0024, go-access-point Q-1 to Q-5): the
+    # runner, both swarms, the probes and the session read it; the
+    # orchestrating session maintains the path, a runner attempt never does.
+    # Only the measured wire API is mapped. A definition without a base under an
+    # unmapped wire API is refused; one that names a base is admitted only on
+    # the admitted host, like every other.
+    adresse:
+      host: opencode.ai
+      apis:
+        openai-completions:
+          basis: "https://opencode.ai/inference/go/openai/v1"
+          quelle: "https://opencode.ai/docs/go (the Go page: Chat Completions at https://opencode.ai/inference/go/openai/v1/chat/completions)"
+          gelesen: "2026-10-31"
     bemerkung: >-
       The review loop (phase 4b), the interactive session verb (`stage2.py
       session`, ADR 0012) and, since ADR 0020, the research swarm's Go calls
@@ -532,7 +572,8 @@ endpunkte:
       forced refresh skips that cache — and being an intermediary it does not
       measure what Go actually bills. A paid model enters only with a dated
       reading of its retention and training terms in `modelle_terms`; a model
-      without one is skipped and named for the handover. Address:
+      without one is skipped and named for the handover. Address until
+      2026-10-31 (history; the admitted address is the `adresse` record):
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
       page (read 2026-10-07) listed the three measured ids; the
       Anthropic-compatible
@@ -542,6 +583,12 @@ endpunkte:
       shipped catalog; `gpt-6-luna` uses openai-responses. All four are
       skipped: wire API not measured. Their data-terms admission under Q-11
       stands; a probe must measure their real address before use.
+      On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
+      Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
+      models `https://opencode.ai/inference/go/v1/models`) and Pi's live
+      catalog reports `https://opencode.ai/inference/go/v1`; the admitted host
+      and the known base stand in `adresse` (ADR 0024), where a path on that
+      host runs on with a notice and any other host is refused.
       The Go page lists Pi among its
       validated clients (read 2026-10-08), and Pi sends the
       `x-opencode-session` header the page asks for.
