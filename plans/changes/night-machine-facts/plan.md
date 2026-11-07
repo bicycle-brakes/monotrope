@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-yql7
@@ -109,7 +109,12 @@ No edits to `scripts/run_report.py`, `tests/test_run_report.py`,
 `scripts/stage2.py`, `scripts/verify_lock.py`, `scripts/verify_all.sh`,
 `scripts/verify_duration.py`, `AGENTS.md`, `docs/WORKFLOW.md`, `Makefile`,
 ADRs, prompts, templates, gate definitions, tracker data or harness
-configuration. There is no held-path bootstrap edit for the orchestrator.
+configuration — with one required exception: the new script's entry in
+`scripts/ci_gates.py` `OHNE_AUFRUFER` (with its reason), which
+`tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason`
+requires of every new script without a CI caller (maintainer answer Q-M1,
+2026-11-06, bead coding-harness-8sxb). There is no held-path bootstrap edit
+for the orchestrator.
 No design or ADR is due for this bounded change. Explore ran through Stage 2
 on 2026-11-06, route flash, endpoint `glm-coding-plan`, model
 `glm-5.3-flash`; no Stage-1 fallback is recorded. The interview was skipped
