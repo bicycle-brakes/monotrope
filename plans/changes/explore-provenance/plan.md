@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -259,33 +259,33 @@ make verify
 - 1: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — Flash or fallback leaves false provenance
 - 1: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — complete/incomplete swarm publication retains false provenance
 - 2: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — the publication's producer/date is wrong
-- 2: not yet written tests/test_stage2.py::test_research_publication_preserves_all_producers — repeated publication discards an earlier program/model contribution
-- 2: not yet written tests/test_stage2_swarm.py::test_swarm_publication_preserves_prior_producers — the swarm overwrites earlier authorship or is attributed to one model
+- 2: tests/test_stage2.py::test_research_publication_preserves_all_producers — repeated publication discards an earlier program/model contribution
+- 2: tests/test_stage2_swarm.py::test_swarm_publication_preserves_prior_producers — the swarm overwrites earlier authorship or is attributed to one model
 - 3: tests/test_stage2.py::test_explore_resets_review_without_changing_lifecycle — approval survives publication
 - 3: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — swarm research claims human approval
 - 4: tests/test_stage2.py::test_explore_removes_only_opening_skeleton_text — a notice survives or authored quotation disappears
 - 4: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — opening notices survive swarm publication
 - 5: tests/test_stage2_research_deep_review.py::test_research_publication_preserves_unrelated_bytes — unrelated metadata/body bytes or line endings change
 - 5: tests/test_explore_provenance.py::test_normaliser_preserves_research_and_is_idempotent — correction changes research or repeats a write
-- 5: not yet written tests/test_explore_provenance.py::test_normaliser_preserves_unrelated_metadata_bytes — correction rewrites class, lifecycle, owner or unrelated header formatting
+- 5: tests/test_explore_provenance.py::test_normaliser_preserves_unrelated_metadata_bytes — correction rewrites class, lifecycle, owner or unrelated header formatting
 - 6: tests/test_stage2_research_deep_review.py::test_research_publication_is_one_atomic_replacement — failed replacement changes bytes or success needs two replacements
 - 7: tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance — any active model-written research fails the whole contract
-- 7: not yet written tests/test_explore_provenance.py::test_normaliser_keeps_all_known_producers — compound model attribution is collapsed or an earlier contributor is lost
+- 7: tests/test_explore_provenance.py::test_normaliser_keeps_all_known_producers — compound model attribution is collapsed or an earlier contributor is lost
 - 7: not a test — phase-6 review compares every corrected research header with pre-correction Git attribution and publication evidence, rejecting lost contributors, invented facts, changed findings or archive edits
 - 8: tests/test_stage2_research_deep_review.py::test_corrected_skeleton_publication_keeps_swarm_resume — successful seats rerun solely because of corrected metadata
 - 8: tests/test_stage2_research_deep_review.py::test_resume_reuses_publication_bytes_and_day — a later day or crash changes prepared publication bytes
-- 8: not yet written tests/test_stage2_research_deep_review.py::test_producer_history_survives_swarm_resume — retaining historical producer lists changes the private brief hash and reruns successful seats
+- 8: tests/test_stage2_research_deep_review.py::test_producer_history_survives_swarm_resume — retaining historical producer lists changes the private brief hash and reruns successful seats
 - 8: tests/test_stage2_research_store.py::test_binding_accepts_only_exact_research_provenance_publication — foreign edits pass or the exact publication/crash state cannot resume
 - 9: tests/test_explore_provenance.py::test_normaliser_preserves_research_and_is_idempotent — repeated normalisation changes compliant bytes
-- 9: not yet written tests/test_explore_provenance.py::test_normaliser_dry_run_and_batch_preparation — default invocation writes or a preparation error leaves a partially corrected batch
-- 9: not yet written tests/test_explore_provenance.py::test_normaliser_refuses_unknown_historical_metadata — unsupported producer/date evidence is invented
+- 9: tests/test_explore_provenance.py::test_normaliser_dry_run_and_batch_preparation — default invocation writes or a preparation error leaves a partially corrected batch
+- 9: tests/test_explore_provenance.py::test_normaliser_refuses_unknown_historical_metadata — unsupported producer/date evidence is invented
 - 10: tests/test_explore_provenance.py::test_census_rejects_incomplete_publication_metadata — any owned field or date violation passes
 - 10: tests/test_explore_provenance.py::test_census_requires_publication_and_reads_scalar_spellings — quoted/fenced examples or failed audits count as publication
 - 10: tests/test_explore_provenance.py::test_census_names_unreadable_headers — an unreadable header is silently skipped
 - 10: tests/test_explore_provenance.py::test_census_reports_undecodable_research — undecodable bytes abort or escape the census
 - 10: tests/test_explore_provenance.py::test_census_reports_opening_skeleton_notices — a model-written file retains a generated opening notice
 - 10: tests/test_explore_provenance.py::test_active_census_is_enabled — the repository-data census is skipped
-- 10: not yet written tests/test_explore_provenance.py::test_census_accepts_and_checks_every_producer — a valid list is refused or one invalid/duplicate list member passes
+- 10: tests/test_explore_provenance.py::test_census_accepts_and_checks_every_producer — a valid list is refused or one invalid/duplicate list member passes
 
 ## Runner route — 2026-11-04
 
@@ -319,6 +319,7 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-06 01:01:07–05:50:49 UTC, 17380 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-11-06 15:40:31–16:10:43 UTC, 1812 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-06 16:10:52–16:52:51 UTC, 2518 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-06 22:12:15–2026-11-07 00:14:35 UTC, 7339 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 

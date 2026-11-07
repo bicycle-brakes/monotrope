@@ -1819,7 +1819,15 @@ def test_explore_publishes_truthful_research_provenance(world: World, off: bool)
     assert "provenance: ai-drafted-reviewed" in header
     assert "human-written" not in text, "the false declaration survives the publication"
     assert text.count("provenance:") == 1 and text.count("produced_by:") == 1 and text.count("review:") == 1
-    assert header.count(f'produced_by: {{kind: llm-session, name: claude-code, version: "{dt.date.today()}"}}') == 1
+    import yaml
+
+    producer = yaml.safe_load(header)["produced_by"]
+    assert producer == {
+        "kind": "llm-session",
+        "name": "claude-code",
+        "version": str(dt.date.today()),
+        "model": "claude-haiku-5-5" if off else "glm-5.3-flash",
+    }
     assert "review: {status: pending, approved_by: null, approved_at: null}" in header
     assert "class: bounded" in header and "bead: demo-1" in header, "unrelated header fields were touched"
     assert "# demo — Research" in text and "## Runner exploration" in text and answer in text
@@ -20850,3 +20858,32 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+@pytest.mark.parametrize("shape", ["inline", "block-list", "duplicate-field"])
+def test_research_publication_preserves_all_producers(shape):
+    import yaml
+
+    source = (
+        b'---\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n'
+        b"date: 2026-11-04\nupdated: 2026-11-04\n---\n# Research\n\nEarlier work.\n"
+    )
+    if shape == "block-list":
+        source = source.replace(
+            b'produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}',
+            b'produced_by:\n- kind: llm-session\n  name: codex\n  version: "gpt-6.1-sol, 2026-11-04"',
+        )
+    elif shape == "duplicate-field":
+        source = source.replace(
+            b"date: 2026-11-04",
+            b'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\ndate: 2026-11-04',
+            1,
+        )
+    corrected = stage2.research_publication(source, producer="pi", day="2026-11-05")
+    records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    assert records == [
+        {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05"},
+    ], "a new publication must extend earlier producer/model attribution"
+    assert stage2.research_publication(corrected, producer="pi", day="2026-11-05") == corrected
+    assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]

@@ -220,7 +220,9 @@ def _sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def stored_binding(manifest, research_path, research_bytes, *, append=None, publication=None, publication_day=None):
+def stored_binding(
+    manifest, research_path, research_bytes, *, append=None, publication=None, publication_day=None, brief=None
+):
     """The resume binding of one frozen state, in the shape the state store keeps (Q-13).
 
     ``research_bytes`` are the frozen bytes of ``research_path``; ``append`` are the exact bytes
@@ -253,7 +255,25 @@ def stored_binding(manifest, research_path, research_bytes, *, append=None, publ
             "base64": base64.b64encode(publication).decode("ascii"),
             "day": publication_day,
         }
+    if brief is not None:
+        if not isinstance(brief, bytes):
+            raise ResearchSnapshotError("invalid prepared research brief")
+        binding["research_brief"] = {"base64": base64.b64encode(brief).decode("ascii"), "sha256": _sha256(brief)}
     return binding
+
+
+def stored_brief(binding):
+    """Read the frozen research portion of a private brief, after source verification."""
+    record = binding.get("research_brief")
+    if record is None:
+        return None
+    try:
+        data = base64.b64decode(record["base64"], validate=True)
+        if _sha256(data) != record["sha256"]:
+            raise ValueError("brief digest mismatch")
+    except (KeyError, TypeError, ValueError, binascii.Error) as error:
+        raise ResearchSnapshotError("malformed stored research brief") from error
+    return data
 
 
 def stored_publication(binding):
@@ -302,6 +322,7 @@ def changed_against_stored(manifest, research_path, research_bytes, stored):
     }
     try:
         stored_publication(stored)
+        stored_brief(stored)
     except ResearchSnapshotError:
         # A corrupt publication cannot authorize reuse, even before its append was written.
         changed.add(research)

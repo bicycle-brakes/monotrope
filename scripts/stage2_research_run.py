@@ -54,6 +54,7 @@ from stage2_research_snapshot import (
     _without_updated,
     freeze_research_state,
     stored_binding,
+    stored_brief,
     stored_publication,
 )
 from stage2_research_store import STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
@@ -414,12 +415,18 @@ class Run:
                     self.publication_bytes = prefix + self.research_bytes[-length:]
                 else:
                     self.publication_bytes = prefix
+            self.brief_research = stored_brief(previous) if previous is not None else None
+            if self.brief_research is None:
+                research = BLOCK.sub("", self.research_bytes.decode("utf-8"))
+                corrected = runner.research_publication(research.encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY)
+                self.brief_research = _without_updated(corrected)
             self.binding = stored_binding(
                 self.manifest,
                 self.research_rel,
                 self.research_bytes,
                 publication=self.publication_bytes,
                 publication_day=self.publication_day,
+                brief=self.brief_research,
             )
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
         except StoreWriteError as error:
@@ -445,14 +452,9 @@ class Run:
 
     def build_brief(self) -> str:
         """The private brief: frozen research (without earlier runner blocks), decisions and spec, bead id only."""
-        research = self.research_bytes.decode("utf-8", errors="replace")
-        # The runner's own publication corrects the provenance header and removes the skeleton notices; the brief
-        # is built from the research as that correction leaves it, with a fixed day, so a resumed run after an
-        # incomplete publication hashes the same prompts and reuses its successful seats (spec criterion 8).
-        corrected = self.runner.research_publication(
-            BLOCK.sub("", research).encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY
-        )
-        research = _without_updated(corrected).decode(errors="replace").rstrip()
+        # Frozen alongside the prepared publication: adding a producer must never
+        # alter the prompts of otherwise reusable seats after publication.
+        research = self.brief_research.decode(errors="replace").rstrip()
         parts = [
             f"# Private brief for the change {self.change}",
             f"Bead: {self.ctx.bead}",
@@ -1380,6 +1382,7 @@ class Run:
                     append=separator + addition,
                     publication=prepared,
                     publication_day=self.publication_day,
+                    brief=self.brief_research,
                 ),
             )
 

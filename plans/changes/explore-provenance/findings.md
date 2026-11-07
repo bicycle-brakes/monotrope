@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -789,3 +789,5 @@ Stage-2 call, 2026-11-06: draft · attempt 3 · route glm · endpoint glm-coding
 > ````
 
 Stage-2 call, 2026-11-06: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 894 files, 3446 commits, 12 rules.
+
+Stage-2 call, 2026-11-06: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 894 files, 3447 commits, 12 rules.

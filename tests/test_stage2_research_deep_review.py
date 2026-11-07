@@ -798,3 +798,29 @@ def test_spec_covers_private_brief_normalization():
     assert "0000-00-00" in spec, "the spec must declare the brief's sentinel date"
     assert "private brief" in spec, "the spec must declare the changed model input"
     assert "No change to model selection, prompts," not in spec, "the prompt non-goal must allow this normalization"
+
+
+def test_producer_history_survives_swarm_resume(sworld: SwarmWorld, monkeypatch):
+    import yaml
+
+    text = swarm.swarm_skeleton().replace(
+        "provenance: human-written\n",
+        'provenance: ai-drafted-reviewed\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n',
+    )
+    sworld.research.write_text(text)
+    sworld.commit()
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-05")
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = sworld.research.read_bytes()
+    records = yaml.safe_load(first.decode().split("---", 2)[1])["produced_by"]
+    assert isinstance(records, list) and records[0]["name"] == "codex", "publication lost the earlier producer"
+    binding = json.loads(next(swarm.store_dir(sworld).glob("*/run.json")).read_text())["binding"]
+    assert "research_brief" in binding, "freeze the prepared research portion alongside publication bytes"
+    (sworld.bin / "calls.jsonl").unlink()
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-06")
+    sworld.complete()
+    assert sworld.run() == 0
+    assert [call["kind"] for call in sworld.calls()] == ["judge"], (
+        "producer history must not change reusable prompt hashes"
+    )

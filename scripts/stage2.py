@@ -1205,7 +1205,7 @@ RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?re
 
 def _header_field_span(key: str) -> re.Pattern[str]:
     """A complete header field span: the inline mapping on the key's line plus any indented block lines."""
-    return re.compile(rf"(?m)^{re.escape(key)}:[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*")
+    return re.compile(rf"(?m)^{re.escape(key)}:[^\r\n]*(?:\r?\n(?:[ \t]+[^\r\n]*|-[ \t]+[^\r\n]*))*")
 
 
 def skeleton_notices() -> list[str]:
@@ -1263,7 +1263,104 @@ def _without_skeleton_opening(text: str, body_start: int) -> str:
     return text[:region_start] + region + text[region_end:]
 
 
-def research_publication(existing: bytes, *, producer: str, day: str) -> bytes:
+RESEARCH_PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+
+
+def research_producers(value, *, program_hint=None) -> list[dict]:
+    """Retain evidence-backed contributors, separating legacy model/date spellings.
+
+    A model name alone never establishes a program: only publication evidence may
+    supply that program. Unknown or ambiguous historical attribution is refused.
+    """
+    if value is None:
+        return []
+    records = value if isinstance(value, list) else [value]
+    if not records:
+        raise ValueError("empty producer list")
+    result = []
+    for record in records:
+        if not isinstance(record, dict) or record.get("kind") != "llm-session":
+            raise ValueError("invalid historical producer")
+        name = record.get("name")
+        name = "claude-code" if name == "Claude Code" else name
+        version = str(record.get("version", ""))
+        days = re.findall(r"\d{4}-\d{2}-\d{2}", version)
+        if len(days) != 1:
+            raise ValueError("no unique historical producer date")
+        try:
+            dt.date.fromisoformat(days[0])
+        except ValueError as error:
+            raise ValueError("invalid historical producer date") from error
+        legacy = version.replace(days[0], "").strip(" ,")
+        models = record.get("model")
+        if not isinstance(name, str) or name not in RESEARCH_PROGRAMS:
+            if name == "glm-5.3-flash" and program_hint in RESEARCH_PROGRAMS:
+                models, name = name, program_hint
+            else:
+                raise ValueError("no program evidence for historical producer")
+        if legacy and not legacy.startswith("stage-2 explore"):
+            if models and models != legacy:
+                raise ValueError("conflicting historical model evidence")
+            models = legacy
+        if models is not None and (not isinstance(models, str) or not models.strip()):
+            raise ValueError("invalid historical model evidence")
+        for model in re.split(r" and ", models) if models else [None]:
+            entry = dict(record, name=name, version=days[0])
+            if model:
+                entry["model"] = model
+            if entry not in result:
+                result.append(entry)
+    return result
+
+
+def research_header_producers(raw_header: str, *, program_hint=None) -> list[dict]:
+    """Read every owned producer span without silently losing duplicate-key evidence."""
+    node = yaml.compose(raw_header)
+    if not isinstance(node, yaml.MappingNode):
+        raise ValueError("research header is not a mapping")
+
+    def unique(value):
+        if isinstance(value, yaml.MappingNode):
+            keys = [key.value for key, _ in value.value]
+            if len(keys) != len(set(keys)):
+                raise ValueError("duplicate historical producer keys")
+            for _, child in value.value:
+                unique(child)
+        elif isinstance(value, yaml.SequenceNode):
+            for child in value.value:
+                unique(child)
+
+    records = []
+    for key, value in node.value:
+        if key.value == "produced_by":
+            unique(value)
+            for record in research_producers(yaml.safe_load(yaml.serialize(value)), program_hint=program_hint):
+                if record not in records:
+                    records.append(record)
+    return records
+
+
+def research_producer_field(records: list[dict]) -> str:
+    """Render only the owned field; unrelated header bytes never pass through YAML."""
+
+    def inline(record):
+        # Quoting dates keeps them scalar strings, as the publication contract requires.
+        return (
+            "{"
+            + ", ".join(
+                f"{key}: {json.dumps(value) if key in {'version', 'model'} else value}" for key, value in record.items()
+            )
+            + "}"
+        )
+
+    if len(records) == 1:
+        return "produced_by: " + inline(records[0])
+    return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
+
+
+def research_publication(
+    existing: bytes, *, producer: str, day: str, model: str | None = None, producers=None
+) -> bytes:
     """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
 
     The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
@@ -1283,9 +1380,21 @@ def research_publication(existing: bytes, *, producer: str, day: str) -> bytes:
     start, end = header.span(1)
     block = text[start:end]
     eol = "\r\n" if "\r\n" in block else "\n"
+    try:
+        metadata = yaml.safe_load(block)
+        if not isinstance(metadata, dict):
+            raise ValueError("header is not a mapping")
+        records = research_header_producers(block, program_hint=producer) if producers is None else producers
+    except (ValueError, yaml.YAMLError) as error:
+        raise Refused(f"research publication refused: {error}") from error
+    contribution = {"kind": "llm-session", "name": producer, "version": day}
+    if model:
+        contribution["model"] = model
+    if producers is None and contribution not in records:
+        records.append(contribution)
     fields = {
         "provenance": "provenance: ai-drafted-reviewed",
-        "produced_by": f'produced_by: {{kind: llm-session, name: {producer}, version: "{day}"}}',
+        "produced_by": research_producer_field(records),
         "review": "review: {status: pending, approved_by: null, approved_at: null}",
         "updated": f"updated: {day}",
     }
@@ -7164,7 +7273,9 @@ def explore(
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
     # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
     # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
-    prepared = research_publication(ctx.research.read_bytes(), producer=producer_for(endpoint), day=today())
+    prepared = research_publication(
+        ctx.research.read_bytes(), producer=producer_for(endpoint), day=today(), model=endpoint[1]
+    )
     publish_research(
         ctx.research,
         prepared,

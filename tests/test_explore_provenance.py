@@ -54,7 +54,7 @@ def assert_active_model_research_has_no_false_human_provenance() -> None:
             affected.append(f"{relative}: {error}")
             program, publication_day = None, None
         producer = header.get("produced_by")
-        model_written = isinstance(producer, Mapping) and producer.get("kind") == "llm-session"
+        model_written = normalise.model_attribution(producer)
         if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
             affected.extend(
                 f"{relative}: {problem}"
@@ -313,7 +313,16 @@ def test_additional_backfills_identify_the_program_and_publication_day():
     }
     for name, day in expected.items():
         header = yaml.safe_load((PLANS / name / "research.md").read_text().split("---", 2)[1])
-        assert header["produced_by"] == {"kind": "llm-session", "name": "claude-code", "version": day}, name
+        records = header["produced_by"]
+        records = records if isinstance(records, list) else [records]
+        expected = {"kind": "llm-session", "name": "claude-code", "version": day}
+        assert any(all(record.get(key) == value for key, value in expected.items()) for record in records), name
+        # Prior contributions may accompany this publication, and every entry must
+        # remain a complete program/date record rather than a collapsed model label.
+        from normalise_active_research import metadata_problems
+
+        raw_header = (PLANS / name / "research.md").read_text().split("---", 2)[1]
+        assert metadata_problems(header, raw_header) == [], name
 
 
 def test_normaliser_preserves_research_and_is_idempotent():
@@ -338,3 +347,147 @@ def test_normaliser_preserves_research_and_is_idempotent():
     assert b"updated: 2026-11-06" in corrected
     assert corrected.split(b"---", 2)[2] == original.split(b"---", 2)[2]
     assert normalised_research(corrected, correction_day="2026-11-06") == corrected
+
+
+def test_normaliser_checks_authorised_scope(tmp_path):
+    import normalise_active_research as normalise
+
+    check = getattr(normalise, "authorised_research", None)
+    assert callable(check), "normalisation must check the maintainer-approved active research inventory"
+    folder = tmp_path / "plans/changes/explore-provenance"
+    folder.mkdir(parents=True)
+    (folder / "plan.md").write_text("- `plans/changes/demo/research.md` — approved\n")
+    demo = folder.parent / "demo"
+    demo.mkdir()
+    (demo / "research.md").write_text("approved")
+    archive = folder.parent / "archive"
+    archive.mkdir()
+    (archive / "research.md").write_text("historical")
+    assert check(tmp_path) == [demo / "research.md"]
+    foreign = folder.parent / "new-lane"
+    foreign.mkdir()
+    (foreign / "research.md").write_text("not approved")
+    with pytest.raises(ValueError, match="new-lane/research.md: outside authorised"):
+        check(tmp_path)
+    # The real active inventory must also match the newly approved scope.
+    assert set(check(REPO_ROOT)) == set(active_research_files())
+
+
+def test_normaliser_keeps_all_known_producers():
+    import normalise_active_research as normalise
+
+    original = (
+        valid_research_header()
+        .replace(
+            'name: claude-code, version: "2026-11-05"',
+            'name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-05"',
+        )
+        .encode()
+        + b"# Research\n\nAuthored research.\n"
+    )
+    corrected = normalise.normalised_research(original, correction_day="2026-11-06")
+    header = yaml.safe_load(corrected.decode().split("---", 2)[1])
+    assert header["produced_by"] == [
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05", "model": "GLM 5.3 Flash"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05", "model": "Claude Haiku 5.5"},
+    ], "normalisation must retain both known models and their actual program/date"
+    assert normalise.normalised_research(corrected, correction_day="2026-11-07") == corrected
+    # Already-collapsed branch metadata cannot serve as its own historical evidence.
+    collapsed = original.replace(b'pi, version: "GLM 5.3 Flash and Claude Haiku 5.5,', b'claude-code, version: "')
+    recovered = normalise.normalised_research(collapsed, correction_day="2026-11-06", historical=original)
+    assert yaml.safe_load(recovered.decode().split("---", 2)[1])["produced_by"] == header["produced_by"]
+
+
+def test_census_accepts_and_checks_every_producer(tmp_path, monkeypatch):
+    import normalise_active_research as normalise
+
+    producers = [
+        {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05", "model": "GLM 5.3 Flash"},
+    ]
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    text = re.sub(
+        r"produced_by:.*",
+        "produced_by: " + yaml.safe_dump(producers, default_flow_style=True).strip(),
+        valid_research_header(),
+    )
+    path = folder / "research.md"
+    path.write_text(text + "# Research\n")
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    assert_active_model_research_has_no_false_human_provenance()
+    for fault in (
+        text.replace("name: pi", "name: unknown"),
+        text.replace("name: pi", "name: [pi]"),
+        text.replace("2026-11-05", "2026-11-99", 1),
+        text.replace("name: pi", "name: codex, name: pi"),
+        text.replace("kind: llm-session", "kind: human", 1),
+        text.replace("version: '2026-11-04'", "version: '2026-10-01'"),
+    ):
+        assert fault != text, "each fixture must plant its intended metadata fault"
+        path.write_text(fault + "# Research\n")
+        with pytest.raises(AssertionError, match="demo/research.md"):
+            assert_active_model_research_has_no_false_human_provenance()
+    assert normalise.metadata_problems({"produced_by": []}, "produced_by: []")
+
+
+def test_normaliser_preserves_unrelated_metadata_bytes():
+    import normalise_active_research as normalise
+
+    original = (
+        valid_research_header()
+        .replace('name: claude-code, version: "2026-11-05"', 'name: pi, version: "GLM 5.3 Flash, 2026-11-05"')
+        .replace("---\nprovenance:", '---\nowner: "Owner" # keep\nclass: bounded\nstatus: draft\nprovenance:', 1)
+    )
+    original = (original + "# Research\n\nAuthored\rprose.\n").replace("\n", "\r\n").encode()
+    corrected = normalise.normalised_research(original, correction_day="2026-11-06")
+    for line in (b'owner: "Owner" # keep\r\n', b"class: bounded\r\n", b"status: draft\r\n"):
+        assert line in corrected
+    assert corrected.split(b"---", 2)[2] == original.split(b"---", 2)[2]
+
+
+@pytest.mark.parametrize("field", ["name: unknown", 'version: "unknown"', 'version: "2026-99-05"'])
+def test_normaliser_refuses_unknown_historical_metadata(field):
+    import normalise_active_research as normalise
+
+    original = valid_research_header()
+    key = field.split(":")[0]
+    original = re.sub(rf'{key}: (?:"[^"]*"|claude-code)', field, original)
+    original += "# Research\n"
+    with pytest.raises(ValueError, match="historical|evidence"):
+        normalise.normalised_research(original.encode(), correction_day="2026-11-06")
+
+
+def test_normaliser_dry_run_and_batch_preparation(tmp_path, monkeypatch, capsys):
+    import normalise_active_research as normalise
+
+    folder = tmp_path / "plans/changes/explore-provenance"
+    folder.mkdir(parents=True)
+    paths = []
+    for name in ("a", "b"):
+        directory = folder.parent / name
+        directory.mkdir()
+        path = directory / "research.md"
+        path.write_text(
+            valid_research_header().replace('version: "2026-11-05"', 'version: "Opus 5.5, 2026-11-05"') + "# Research\n"
+        )
+        paths.append(path)
+    (folder / "plan.md").write_text("\n".join(f"- `{p.relative_to(tmp_path)}` — approved" for p in paths))
+    history = getattr(normalise, "historical_research", None)
+    assert callable(history), "batch preparation must recover pre-correction attribution from Git"
+    monkeypatch.setattr(normalise, "historical_research", lambda *_: None)
+    before = [p.read_bytes() for p in paths]
+    normalise.main(tmp_path, [])
+    assert [p.read_bytes() for p in paths] == before, "default invocation must only report corrections"
+    assert "plans/changes/a/research.md" in capsys.readouterr().out
+    paths[1].write_text("invalid header")
+    with pytest.raises(ValueError, match="b/research.md: no research frontmatter"):
+        normalise.main(tmp_path, ["--write"])
+    assert paths[0].read_bytes() == before[0], "prepare the entire batch before the first write"
+    paths[1].write_bytes(before[1])
+    normalise.main(tmp_path, ["--write"])
+    after = [p.read_bytes() for p in paths]
+    assert after != before
+    normalise.main(tmp_path, ["--write"])
+    assert [p.read_bytes() for p in paths] == after

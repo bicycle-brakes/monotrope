@@ -3134,3 +3134,23 @@ def test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence(sworld: 
         stage2.declared_class(sworld.root, "demo", None)
     except stage2.Refused as error:
         assert "unterminated" not in str(error)
+
+
+def test_swarm_publication_preserves_prior_producers(sworld: SwarmWorld):
+    import yaml
+
+    text = swarm_skeleton().replace(
+        "provenance: human-written\n",
+        'provenance: ai-drafted-reviewed\nproduced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-04"}\n',
+    )
+    sworld.research.write_text(text)
+    sworld.commit()
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    records = yaml.safe_load(sworld.research.read_text().split("---", 2)[1])["produced_by"]
+    assert isinstance(records, list), "swarm publication must retain earlier contributors"
+    assert [(p["name"], p.get("model")) for p in records] == [
+        ("pi", "GLM 5.3 Flash"),
+        ("pi", "Claude Haiku 5.5"),
+        ("stage2-research-swarm", None),
+    ]
