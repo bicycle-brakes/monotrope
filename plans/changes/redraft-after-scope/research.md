@@ -4,33 +4,22 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-y0qm
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2-and-codex, version: "glm-5.3-flash exploration; claude-sonnet-5-5 implementation; gpt-6.1-sol repair, 2026-11-07"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # redraft after scope — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3374 commits, 12 rules.
 
 ## Runner exploration — 2026-11-06
-
-Die Exploration ist abgeschlossen. Der folgende Text ist fertig zum Anhang an `plans/changes/redraft-after-scope/research.md` (nach der vorhandenen „Stage-2 call"-Zeile); erfasst im Worktree `.claude/worktrees/redraft-after-scope`, Zweig `spike/redraft-after-scope`, ohne Tracker-, Netz- oder Schreibzugriff.
-
----
 
 ## What exists today — explored 2026-11-06 (branch `spike/redraft-after-scope`, worktree `redraft-after-scope`)
 
@@ -109,3 +98,35 @@ later interview skip adds and what the implementation re-checked.
 ### Neighbours (paths for the header, all read for this research)
 
 `plans/changes/guard-test/spec.md` (exists; its decisions.md is the canonical precedent record), `plans/changes/research-swarm/spec.md`, `plans/changes/loop-until-clean/spec.md`, `plans/changes/sol-effort/spec.md`, `plans/changes/interview-context/spec.md`. Not read, therefore not neighbours: the live tracker, hosted PR state, and any artifact outside this worktree.
+
+
+### Repair evidence — 2026-11-07 (baseline `5035bad0`)
+
+The historical exploration and phase-4 evidence check above retain what those
+attempts could read. Their incident-check gap is closed here with read-only Git
+commands; no historical change files were restored or edited.
+
+- Read `git show b04c119d`, and `spec.md` and `decisions.md` under
+  `plans/changes/handoff-new-feature/` at that revision. The revert dated
+  2026-11-06 removes seven lines documenting `research_swarm_exception` from
+  `prompts/01a-interview.md`. Its message rejects the prompt-documentation
+  finding L5-5 for this change because the spec protects prompts, and cites
+  loop row L6-1. The introducing commit `24371185` (also read, 2026-11-06)
+  explicitly calls this an orchestrator hand edit outside the runner's write
+  set. The spec at both revisions keeps prompts unchanged.
+- The authorized exception is different: the spec's Protected areas and
+  `decisions.md#Q-2` authorize the orchestrator to record Q-6 in
+  `plans/changes/go-access-point/decisions.md`. That grant does not authorize
+  a prompt edit. The original L6-1 row text was not found in the historical
+  `findings.md` read at `b04c119d`; its attribution rests on the revert message,
+  not a quotation of the row.
+- Read the second dated source, `docs/journal/handover/2026-11-06-heartbeat-night.md`,
+  Validation, lines 160–161 at `5035bad0`: it records the prompt edit's tests
+  and subsequent revert because the spec keeps prompts unchanged. Together
+  with Git, this confirms the incident, without establishing a late scope answer.
+- Read `scripts/check_research_handoff.py` at `5035bad0`, especially `_bases`
+  and `_parity`: for complete swarm runs it checks criterion Basis references
+  against answered Q-records or supported claims and neighbour paths against
+  run evidence and maintainer records. This corrects the exploration's broad
+  absence claim: structural linkage exists; semantic agreement of criterion
+  prose with answers is not measured by those checks.

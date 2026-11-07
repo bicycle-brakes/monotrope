@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-y0qm
@@ -35,9 +35,9 @@ Sources: `research.md` and the reasoned interview skip in `decisions.md`.
   and recorded answers, rather than semantic agreement between them
   (`research.md`, “The precedents” and “Adjacent mechanisms”).
 - The interview skip identifies a concrete protected-area conflict: the
-  research-handoff repair changed an interview prompt its spec protected,
-  then reverted that edit in `b04c119d` on 2026-11-06. A redraft after a late
-  answer and a check on protected-area conflicts address different possible
+  orchestrator of handoff-new-feature edited `prompts/`, which its spec
+  kept unchanged (loop row L6-1); the edit was reverted in `b04c119d` on
+  2026-11-06. A redraft after a late answer and a check on protected-area conflicts address different possible
   causes; the investigation must distinguish them before recommending either
   (`decisions.md`, “SKIP · interview”).
 

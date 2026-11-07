@@ -2,7 +2,7 @@
 title: "Redrafting after a scope change — three remedies compared on five documented cases"
 category: research
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 last_reviewed: 2026-11-06
 owner: framework-architect
 status: current
@@ -16,15 +16,16 @@ tags: [scope, redraft, spike, workflow]
 
 # Redrafting after a scope change
 
-**Result (a proposal; the maintainer decides).** Five cases are documented. Four
-(guard-test, research-swarm, sol-effort, loop-until-clean) are *artifacts that
-lagged a changed scope*; one (the protected prompt edit in handoff-new-feature)
-is *an edit that crossed a fence the spec already drew*. These are different
-faults. A redraft rule addresses the first group and a protected-area check
-addresses the second; neither covers the other. Recommendation: do not make
-redrafting mandatory by gate; write the existing, already-consistent redraft
-practice down as a short procedure, and treat a protected-area check as a
-separate, smaller follow-up. Nothing here is adopted.
+**Result (a proposal; the maintainer decides).** Five cases are documented,
+including the protected-prompt incident checked against Git on 2026-11-07.
+Cases 2–4 (research-swarm, sol-effort, loop-until-clean) show redrafting after
+late answers or rulings; case 1 (guard-test) is a stale-base redraft expressly
+authorized by the maintainer. Case 5 is an orchestrator edit that crossed an
+existing protected-area fence, subsequently reverted. Mandatory redrafting
+after a scope-changing answer does not cover the stale-base trigger or the
+protected-path violation. Recommendation: document the observed redraft
+procedure without adding a date gate, and consider protected-area checking
+as a separate follow-up. Nothing here is adopted.
 
 ## Scope of this report
 
@@ -32,18 +33,14 @@ separate, smaller follow-up. Nothing here is adopted.
   prevention rate (spec, Non-goals). Five cases cannot support a rate.
 - Read in the worktree `redraft-after-scope` on 2026-11-06 at baseline
   `3c1e2581`. A claim below names the file it rests on.
-- **Not read:** the tracker (`.beads/`, so the text of bead
-  `coding-harness-y0qm` itself); hosted PR state; and, for the prompt
-  incident, the contents of commit `b04c119d` and of
-  `plans/changes/handoff-new-feature/` — that folder is not present in this
-  worktree and no command tool was available to run `git show`. The incident
-  rests on one source, the reasoned interview skip
-  (`plans/changes/redraft-after-scope/decisions.md`, written 2026-11-06),
-  which states: the orchestrator edited `prompts/` that the spec keeps
-  unchanged (loop row L6-1), and the edit was reverted in `b04c119d`. The
-  row's text, the spec's exact fence and whether the edit was an authorized
-  cross-folder exception are therefore **not verified here**; a reviewer with
-  `git show b04c119d` should check them before the maintainer relies on case 5.
+- Repair source review on 2026-11-07 at `5035bad0` additionally read
+  `git show b04c119d`, the handoff-new-feature spec and decisions at that
+  revision, introducing commit `24371185` and its spec, and
+  `docs/journal/handover/2026-11-06-heartbeat-night.md`, Validation,
+  lines 160–161. These close the initial file-only attempt's incident gap.
+- **Not read:** the tracker (`.beads/`, including the bead's own wording)
+  and hosted PR state. The original loop row L6-1 text was not found in the
+  historical findings file read at `b04c119d`; the revert commit names it.
 
 ## Evidence
 
@@ -101,27 +98,45 @@ separate, smaller follow-up. Nothing here is adopted.
 
 ### Case 5 — handoff-new-feature: a protected prompt edit (2026-11-06)
 
-- Source: only the interview skip in this change's `decisions.md` (see
-  "Not read" above). Reported facts: the spec kept `prompts/` unchanged; the
-  orchestrator edited a prompt anyway (row L6-1); the edit was reverted in
-  `b04c119d`.
-- What is *not* established: whether the spec had an authorized exception for
-  a cross-folder edit (the plan for this spike asks the reviewer to separate
-  "the authorized cross-folder exception from the forbidden prompt edit");
-  whether the maintainer had answered anything that changed scope before the
-  edit; or whether the spec was out of date. Without these, the incident
-  cannot be classed as a *late scope answer* — and that is the point: the
-  evidence at hand is equally consistent with a plain fence violation.
+- `24371185` (2026-11-06) adds seven lines about
+  `research_swarm_exception` to `prompts/01a-interview.md`. Its message calls
+  this an orchestrator hand edit for loop row L5-5, taken outside the runner
+  because prompts are outside its write set. It was not a runner repair edit.
+- `b04c119d` (2026-11-06) removes exactly those lines. Its message cites
+  loop row L6-1, rejects L5-5 for this change and defers prompt documentation
+  to follow-up work. This verifies the edit and revert, though not the
+  original L6-1 wording, which was not found in the historical findings file.
+- `plans/changes/handoff-new-feature/spec.md` at both commits explicitly
+  keeps prompts unchanged. At `b04c119d`, its Protected areas and
+  `decisions.md#Q-2` authorize a different cross-folder edit: the orchestrator
+  may record structured exception Q-6 in
+  `plans/changes/go-access-point/decisions.md`, confirmed by the maintainer
+  on 2026-11-04. That exception does not permit editing a prompt.
+- A second dated narrative source,
+  `docs/journal/handover/2026-11-06-heartbeat-night.md`, Validation,
+  lines 160–161 at `5035bad0`, records the prompt edit's targeted tests and
+  revert because the spec protects prompts. The interview skip in this
+  change's `decisions.md` (2026-11-06) agrees with it.
+- Lesson: the historical spec already drew the fence when the edit was
+  made. The checked sources establish a protected-area violation; they do
+  not establish a late scope answer as its cause.
 
-### What the current tooling measures (all observed, 2026-11-06)
+### What the current tooling measures (2026-11-06; handoff check re-read 2026-11-07)
 
 - The word "redraft" appears in no gate, prompt, template or `docs/WORKFLOW.md`
   (grep over `prompts/`, `scripts/`, `templates/`: no match; see this change's
   `research.md`). It is practice carried by prose.
 - `scripts/check_interview_minimums.py` counts `status: answered`,
   `answered_by: maintainer` records regardless of when written; it is blind to
-  whether a spec still matches them. No checker compares artifact content
-  with `decisions.md`.
+  whether a spec still matches them semantically.
+- `scripts/check_research_handoff.py` already links spec content to answers
+  for changes with complete swarm runs: `_bases` requires every criterion's
+  `*Basis:*` to reference answered Q-records in that change's `decisions.md`
+  or supported run claims; `_parity` holds `neighbours:` to run paths and
+  maintainer keep/add/drop records (read at `5035bad0`, 2026-11-07).
+  This is structural criterion-to-answer and path linkage. These checks do
+  not determine whether criterion prose semantically agrees with an answer;
+  a proposed follow-up would extend existing linkage, not start from none.
 - Currency machinery (`prompts/research-recheck.md`,
   `scripts/check_research_currency.py`) covers `docs/research/` only.
 
@@ -134,7 +149,7 @@ review-led practice (phase 2a, phase 6 review, the maintainer's own reading).
 | Dimension | A: mandatory redraft | B: protected-area check | C: current practice |
 |---|---|---|---|
 | Trigger | A maintainer answer or ruling that changes behavior, criteria, exclusions or permitted edit areas | Any diff touching a path the spec's protected/non-goal section names | A reviewer or the maintainer notices a mismatch |
-| Detection boundary | Needs a judgment *that an answer changes scope*; only mechanical part is "a newer answer exists than the spec date" | Mechanical only if protected areas are machine-readable; today they are prose (spec "Protected areas" and Non-goals) | Whatever the reviewer reads; no systematic coverage |
+| Detection boundary | Needs a judgment *that an answer changes scope*; a date comparison would detect chronology only; existing Basis/neighbour checks provide structural linkage for complete swarm runs, not semantic scope detection | Mechanical only if protected areas are machine-readable; today they are prose (spec "Protected areas" and Non-goals) | Whatever the reviewer reads; no systematic coverage |
 | Actor | Orchestrator drafts; maintainer authorizes scope meaning | Gate or runner; orchestrator repairs | Reviewer, orchestrator, maintainer |
 | Cost | One more draft round per scope answer (draft is a paid Codex call); extra review of the delta | Needs a parseable fence format plus a gate; false positives on authorized exceptions | Zero marginal; cost falls on the reviewer's attention |
 | Residual risk | Over-triggering (every detail becomes a redraft); under-triggering when scope moves without a recorded answer; does nothing for a violation of an up-to-date fence | Cannot see a fence that is itself stale or missing; does not detect scope movement that stays inside allowed paths | Inconsistent; depends on who looks, when |
@@ -143,27 +158,28 @@ review-led practice (phase 2a, phase 6 review, the maintainer's own reading).
 
 | Case | A | B | C |
 |---|---|---|---|
-| 1 guard-test | **Demonstrated**: this is what happened, by maintainer decision | No effect: no fence was crossed | Caught by the stale-branch observation and the handover recommendation |
+| 1 guard-test | **Outside A's trigger**: a maintainer-authorized stale-base redraft, not a scope-changing answer | No effect: no fence was crossed | Caught by the stale-branch observation and the handover recommendation |
 | 2 research-swarm | **Demonstrated** four times, by hand | No effect | Phase 2a produced some of the rulings that triggered redrafts |
 | 3 sol-effort | **Demonstrated** | No effect | Same |
 | 4 loop-until-clean | **Demonstrated**, and shows a redraft may itself be overtaken; a mandatory rule must allow an addendum to a redraft | No effect | Maintainer's reading caught the wrong sentence |
 | 5 handoff-new-feature | **Hypothetical and weak**: a redraft prompted by an answer would not stop an edit to a path the spec already forbade; it helps only if the fence were missing or stale — **not established** | **Hypothetical, plausible**: would flag the edit if the fence were machine-readable and no exception was recorded; the actual catch was loop row L6-1 plus manual revert | **Demonstrated**: the review loop found it and `b04c119d` reverted it |
 
-Reading the table: A is the remedy for cases 1–4, which are already served by
-a consistent *practice*; B is the only remedy aimed at case 5; C is what
-actually worked in every case. No remedy is credited with preventing case 5
-beyond what is shown above. With five cases and a single source for the last,
-no prevention rate is claimed.
+Reading the table: cases 2–4 demonstrate manual redrafting after late
+answers or rulings. Case 1 supplies evidence for retaining answers during an
+explicitly authorized stale-base redraft, but does not demonstrate A's trigger.
+B targets case 5; C detected the protected-path violation and the revert
+corrected it, as the checked commits show. B's prevention remains hypothetical.
+No prevention rate is claimed from these five historical cases.
 
 ## Proposed procedure (a redraft, if the maintainer adopts one)
 
 Distinguish what a redraft is from what it is not, using only rules the
 repository already states:
 
-- **Is a scope change:** a maintainer answer, or an orchestrator ruling the
-  maintainer has not yet reversed, that changes intended behavior,
-  acceptance criteria, exclusions or permitted edit areas. A proposal alone is
-  not authorized by being proposed (spec, Terms).
+- **Is a scope change:** a proposed or maintainer-answered change to intended
+  behavior, acceptance criteria, exclusions or permitted edit areas (spec,
+  Terms). A proposal is not authorized by being proposed: record it as pending
+  and obtain maintainer authority before implementing its changed intent.
 - **Is not a scope change, so is not a redraft:**
   - an ordinary drafting detail (`[DETAIL]` — the agent decides, reason into
     the artifact; `AGENTS.md`);
@@ -177,7 +193,9 @@ repository already states:
     and does not re-scope (`prompts/01-explore.md`).
 - **Steps for a real scope change:**
   1. Record the answer in `decisions.md` as stated (never one of the
-     agent's own; `AGENTS.md`, house rule 8) and date it.
+     agent's own; `prompts/01a-interview.md`, record form
+     `answer: <the answer, as stated>`) and date it. An unanswered proposal
+     remains pending; do not invent an answer to advance the redraft.
   2. Redraft spec, and plan (and design where the class requires it), anchored
      to a named baseline commit, in a dated appendix or "Draft handoff"
      section, as in cases 2 and 3.
@@ -207,15 +225,16 @@ repository already states:
 
 1. **Adopt, as documentation only, the redraft procedure above** — the eight
    steps and the four non-redraft cases — in one place (candidate:
-   `prompts/02-spec.md` or `docs/WORKFLOW.md`, §4). Basis: cases 1–4 are
-   consistent in shape and no case shows harm from the practice; what they
-   lack is a stated trigger and a stated "is not". This traces to the
-   comparison: A's demonstrated value is in cases 1–4, and its cost is
-   lowest as a written procedure rather than a gate.
+   `prompts/02-spec.md` or `docs/WORKFLOW.md`, §4). Basis: cases 2–4 show
+   manual redrafting after late answers or rulings. Case 1 supports answer
+   retention under a separately authorized stale-base refresh, not A's
+   scope-answer trigger. Document that boundary with the procedure; the
+   cases demonstrate practice, not measured prevention by a mandatory rule.
 2. **Do not add a mechanical "answer newer than spec" gate now.** The
    detection boundary of A needs a judgment about meaning that no existing
-   script makes; a date comparison would over-trigger on details and
-   under-trigger on unrecorded scope movement.
+   script makes. Existing Basis/neighbour linkage checks references for
+   complete swarm runs, not semantic agreement; a date comparison would
+   over-trigger on details and under-trigger on unrecorded scope movement.
 3. **Treat B as a separate, smaller follow-up** only if the maintainer wants
    case 5 prevented rather than caught: it needs a machine-readable
    "protected areas" form in the spec first.
@@ -242,11 +261,13 @@ research-swarm handoff question above.
 
 ## Limits
 
-- Five cases, one of them from a single secondary source that this report
-  could not check against git (see "Not read").
+- Five historical cases, not controlled prevention trials. Case 5 is now
+  checked against the introducing and reverting commits, the historical spec
+  and decisions, and a dated handover. The original L6-1 row wording remains
+  unverified; its attribution is supplied by the revert message.
 - Historical observations are dated to the cited files and baseline
-  `3c1e2581`; the counts (1199 commits behind) are as the source states them
-  and were not re-measured.
+  `3c1e2581` and the repair baseline `5035bad0` as identified above. The count
+  of 1199 commits behind is as the source states it and was not re-measured.
 - The bead's own wording was not readable; if it names a trigger or scope
   beyond what the interview skip quotes, this comparison may miss it.
 - Nothing here changes workflow instructions, runner behavior, gates,
