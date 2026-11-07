@@ -8,7 +8,7 @@ owner: framework-architect
 status: current
 implementation_status: none
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Sonnet 5.5, 2026-11-06"}
+produced_by: [{kind: llm-session, name: claude-code, version: "Sonnet 5.5, 2026-11-06"}, {kind: llm-session, name: stage2-runner, model: gpt-6.1-sol, version: "repair, 2026-11-07"}]
 review: {status: pending, approved_by: null, approved_at: null}
 bead: coding-harness-y0qm
 tags: [scope, redraft, spike, workflow]
@@ -74,8 +74,11 @@ as a separate follow-up. Nothing here is adopted.
 - The spec states the convention: "This redraft specifies the amended
   behavior; existing code is an earlier slice" and keeps historical evidence
   in `research.md` (`plans/changes/research-swarm/spec.md`, lines 35–39).
-- Lesson: four redrafts of one change, each dated and baseline-anchored,
-  show the practice is stable; it also shows scope can move repeatedly.
+- Lesson: three answer-triggered redrafts (Q-7–Q-9 on 2026-10-15, Q-10 on
+  2026-10-16, Q-12/Q-13 on 2026-10-18), each dated and baseline-anchored, show
+  the practice is stable; the phase-2a incorporations of 2026-10-16/17
+  (rulings S-21–S-30, "without supplying a new human answer") fall outside
+  A's trigger. Scope can move repeatedly.
 
 ### Case 3 — sol-effort: answers after the first draft (2026-10-14)
 
@@ -159,7 +162,7 @@ review-led practice (phase 2a, phase 6 review, the maintainer's own reading).
 | Case | A | B | C |
 |---|---|---|---|
 | 1 guard-test | **Outside A's trigger**: a maintainer-authorized stale-base redraft, not a scope-changing answer | No effect: no fence was crossed | Caught by the stale-branch observation and the handover recommendation |
-| 2 research-swarm | **Demonstrated** four times, by hand | No effect | Phase 2a produced some of the rulings that triggered redrafts |
+| 2 research-swarm | **Demonstrated** three times, by hand (answer-triggered); the phase-2a incorporations are **outside A's trigger** | No effect | Phase 2a produced the rulings that triggered the other redrafts |
 | 3 sol-effort | **Demonstrated** | No effect | Same |
 | 4 loop-until-clean | **Demonstrated**, and shows a redraft may itself be overtaken; a mandatory rule must allow an addendum to a redraft | No effect | Maintainer's reading caught the wrong sentence |
 | 5 handoff-new-feature | **Hypothetical and weak**: a redraft prompted by an answer would not stop an edit to a path the spec already forbade; it helps only if the fence were missing or stale — **not established** | **Hypothetical, plausible**: would flag the edit if the fence were machine-readable and no exception was recorded; the actual catch was loop row L6-1 plus manual revert | **Demonstrated**: the review loop found it and `b04c119d` reverted it |
