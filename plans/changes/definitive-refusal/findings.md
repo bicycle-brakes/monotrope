@@ -316,3 +316,5 @@ Stage-2 call, 2026-11-07: repair · attempt 2 · route codex-repair · endpoint 
 > ````
 
 Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 915 files, 3475 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy3 · leak check clean over 915 files, 3481 commits, 12 rules.
