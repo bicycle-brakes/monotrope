@@ -331,8 +331,8 @@ Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/machine_facts.py:199,227 | Empty or malformed successful command output, such as `unexpected data\n`, becomes `0` registered worktrees or `none matched` jobs. Both cases were reproduced against the source functions. An unreadable table must produce a source-specific `not read`, preserving independent fields. [Acceptance criterion 6] | Codex | taken — reproduced, in spec: an empty or unparseable successful command output yields a source-specific `not read (…)` for that field, never 0 or `none matched`; one test per field | — |
-| F6-2 | MINOR | SPEC | Phase 6 | scripts/machine_facts.py:81 | For a worktree whose directory name ends in whitespace, `answer.strip()` removes part of the actual Git-reported path. Resolution then fails or selects an existing neighbouring directory, losing the readable worktree count or reporting another filesystem's disk space. Preserve path characters when removing Git's output terminator. [Acceptance criteria 2 and 4] | Codex | taken — keep the Git-reported path exactly: strip only the trailing newline; one test with a trailing-space directory name | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/machine_facts.py:199,227 | Empty or malformed successful command output, such as `unexpected data\n`, becomes `0` registered worktrees or `none matched` jobs. Both cases were reproduced against the source functions. An unreadable table must produce a source-specific `not read`, preserving independent fields. [Acceptance criterion 6] | Codex | fixed — tests/test_machine_facts.py::test_malformed_command_tables_are_not_read | — |
+| F6-2 | MINOR | SPEC | Phase 6 | scripts/machine_facts.py:81 | For a worktree whose directory name ends in whitespace, `answer.strip()` removes part of the actual Git-reported path. Resolution then fails or selects an existing neighbouring directory, losing the readable worktree count or reporting another filesystem's disk space. Preserve path characters when removing Git's output terminator. [Acceptance criteria 2 and 4] | Codex | fixed — tests/test_machine_facts.py::test_worktree_resolution_preserves_trailing_space | — |
 
 Phase 6 verdict: codex 01a1b631-5d3d-7270-9d7d-a92e308d0f81, 2026-11-07
 Reviewer session: codex 01a1b631-5d3d-7270-9d7d-a92e308d0f81 — a fresh session reviewed: no phase-2a session was recorded
@@ -392,3 +392,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-07: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3529 commits, 12 rules.
+
+Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3532 commits, 12 rules.

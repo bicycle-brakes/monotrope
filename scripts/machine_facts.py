@@ -78,7 +78,7 @@ def resolve_worktree(run: RunCommand, cwd: Path) -> Path | None:
         answer = run(["git", "-C", str(cwd), "rev-parse", "--show-toplevel"])
     except run_report.SourceError:
         return None
-    candidate = Path(answer.strip())
+    candidate = Path(answer.removesuffix("\n"))
     if not candidate.is_dir():
         return None
     return candidate
@@ -175,16 +175,18 @@ def worktree_records(raw: str) -> list[list[str]]:
     an empty attribute. A path stays intact, including newlines and leading
     or trailing whitespace; `bare` is a separate attribute (spec criterion 4).
     """
-    records: list[list[str]] = []
-    record: list[str] | None = None
-    for attribute in raw.split("\0"):
-        if not attribute:
-            record = None
-        elif attribute.startswith("worktree "):
-            record = [attribute]
-            records.append(record)
-        elif record is not None:
-            record.append(attribute)
+    malformed = f"{NOT_READ} (git worktree list: malformed table)"
+    if not raw.endswith("\0\0"):
+        raise run_report.SourceError(malformed)
+    records = [record.split("\0") for record in raw[:-2].split("\0\0")]
+    for record in records:
+        if (
+            not record[0].startswith("worktree ")
+            or not record[0][len("worktree ") :]
+            or not any(attribute == "bare" or attribute.startswith("HEAD ") for attribute in record[1:])
+            or any(not attribute or attribute.startswith("worktree ") for attribute in record[1:])
+        ):
+            raise run_report.SourceError(malformed)
     return records
 
 
@@ -194,9 +196,10 @@ def worktree_field(run: RunCommand, worktree: Path | None) -> str:
         return f"{NOT_READ} (worktree: not identified)"
     try:
         raw = run(["git", "-C", str(worktree), "worktree", "list", "--porcelain", "-z"])
+        records = worktree_records(raw)
     except run_report.SourceError as error:
         return str(error)
-    count = sum(1 for record in worktree_records(raw) if "bare" not in record)
+    count = sum(1 for record in records if "bare" not in record)
     return f"{count} (git worktree list; non-bare entries, stale registrations included)"
 
 
@@ -224,7 +227,24 @@ def jobs_field(run: RunCommand, worktree: Path | None) -> list[str]:
             # attribution stays `not read`; readable rows still render
             changes = frozenset(run_report.active_changes(worktree))
     try:
-        rows = run_report.parse_processes(run(["ps", "-axo", "pid,etime,command"]), changes)
+        raw = run(["ps", "-axo", "pid,etime,command"])
+        table = raw.splitlines()
+        # Validate source readability before the shared recognizer filters out
+        # unrelated processes. A readable header-only table can mean no matches.
+        if table and table[0].split() in (["PID", "ELAPSED", "COMMAND"], ["PID", "TIME", "COMMAND"]):
+            table = table[1:]
+        elif not table:
+            raise run_report.SourceError(f"{NOT_READ} (ps: malformed table)")
+        for line in table:
+            parts = line.split(None, 2)
+            if (
+                len(parts) != 3
+                or not parts[0].isdigit()
+                or not run_report.ETIME.fullmatch(parts[1])
+                or not parts[2].strip()
+            ):
+                raise run_report.SourceError(f"{NOT_READ} (ps: malformed table)")
+        rows = run_report.parse_processes(raw, changes)
     except run_report.SourceError as error:
         lines.append(str(error))
         return lines

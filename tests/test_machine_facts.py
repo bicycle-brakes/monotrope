@@ -378,6 +378,55 @@ def test_sources_fail_independently_without_becoming_a_gate(tmp_path: Path, caps
     assert "registered worktrees: 2 (git worktree list" in out
 
 
+@pytest.mark.parametrize("source", ["worktrees", "jobs"])
+@pytest.mark.parametrize("raw", ["", "\n", "unexpected data\n", "unexpected\0\0"])
+def test_malformed_command_tables_are_not_read(tmp_path: Path, source: str, raw: str) -> None:
+    """An unreadable successful table is not evidence of zero worktrees or no jobs."""
+    worktree = tmp_path / "repo"
+    worktree.mkdir()
+    worktrees_key = ("git", "-C", str(worktree), "worktree", "list", "--porcelain", "-z")
+    jobs_key = ("ps", "-axo", "pid,etime,command")
+    outputs = {
+        **git_keys(worktree),
+        worktrees_key: worktree_list_fixture(MAIN),
+        jobs_key: ps_output("123 00:01 make verify"),
+    }
+    outputs[worktrees_key if source == "worktrees" else jobs_key] = raw
+    facts = snapshot(
+        fake_run(outputs),
+        fake_statvfs({worktree: statvfs_result(GIB)}),
+        cwd=worktree,
+        proc_dir=proc_fixture(tmp_path),
+    )
+    assert facts.disk.startswith("1.0 GiB available")
+    assert facts.swap.startswith("0.5 GiB used")
+    if source == "worktrees":
+        assert facts.worktrees == "not read (git worktree list: malformed table)"
+        assert any("pid 123" in line for line in facts.jobs)
+    else:
+        assert facts.jobs == ["not read (ps: malformed table)"]
+        assert facts.worktrees.startswith("1 (git worktree list")
+
+
+def test_worktree_resolution_preserves_trailing_space(tmp_path: Path) -> None:
+    """Removing Git's newline must not select an existing neighbouring directory."""
+    worktree = tmp_path / "repo "
+    neighbour = tmp_path / "repo"
+    cwd = worktree / "nested"
+    cwd.mkdir(parents=True)
+    neighbour.mkdir()
+    outputs = {
+        ("git", "-C", str(cwd), "rev-parse", "--show-toplevel"): f"{worktree}\n",
+        ("git", "-C", str(worktree), "worktree", "list", "--porcelain", "-z"): worktree_list_fixture(MAIN, LINKED),
+        ("ps", "-axo", "pid,etime,command"): ps_output(),
+    }
+    statvfs = fake_statvfs({worktree: statvfs_result(GIB), neighbour: statvfs_result(9 * GIB)})
+    facts = snapshot(fake_run(outputs), statvfs, cwd=cwd, proc_dir=proc_fixture(tmp_path))
+    assert statvfs.asked == [worktree], "disk must use the exact Git-reported path"
+    assert facts.disk.startswith("1.0 GiB available (filesystem of the invoking worktree)")
+    assert facts.worktrees.startswith("2 (git worktree list")
+
+
 def test_snapshot_is_local_and_read_only(tmp_path: Path) -> None:
     """Fault: the snapshot writes a file (bytecode included), runs a mutation, network or tracker
     command beyond its read-only sources, or leaves state behind (spec criterion 7)."""
