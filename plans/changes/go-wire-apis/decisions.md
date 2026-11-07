@@ -49,4 +49,4 @@ context: |
   Repository change: spec criteria 3-4 and the Definition of Done name the two measured APIs; Google points to the follow-up bead.
   Architecture change: two new wire APIs in the runner instead of three.
 
-In the context of a Google endpoint without an admissible model, facing waiting for it or shipping what is measured, we decided to ship the two measured APIs and defer Google, to achieve five usable models now, accepting a second, smaller change for Google later.
+In the context of a Google endpoint without an admissible model, facing waiting for it or shipping what is measured, we decided to ship the two measured APIs and defer Google, to achieve five usable models now, accepting a second, smaller change for Google later. — 2026-11-07
