@@ -107,6 +107,12 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-06; no Stage-1 fallback.
    Verify the combined diff after bootstrap and backlog application. Report
    remaining unrelated strict drift separately; it is outside this repair.
 
+**Dependent consumers (recorded 2026-11-07).** Moving the backlog relocates
+specs that real-repository tests read by path. Those tests follow the move to
+the dated archive copy (`tests/test_stage2.py`, the paid-terms doctrine test;
+`tests/test_research_handoff.py`, the framework research contract) instead of
+skipping; no other test or script edit belongs to this change.
+
 ## Not touched
 
 No existing script or test deletion, new ADR/design/gate, tracker write,
