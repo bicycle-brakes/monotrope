@@ -11934,6 +11934,26 @@ def test_repair_lifecycle_recovery_keeps_safety_refusals(
     assert runner_entries(world.plan) == []
 
 
+def test_repair_lifecycle_crlf_documents_are_reported_unchanged(tmp_path: Path) -> None:
+    """Untouched CRLF lifecycle lines must not be rewritten or reported as restored."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    content = b"---\r\nstatus: draft\r\nimplementation_status: none\r\n---\r\n\r\n# Document\r\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_bytes(content)
+
+    for _ in range(2):
+        baseline = stage2.lifecycle_snapshot(folder)
+        report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+        assert not problems
+        assert report == [
+            "plans/changes/demo/design.md, plans/changes/demo/plan.md, "
+            f"plans/changes/demo/spec.md — {stage2.LIFECYCLE_UNCHANGED}"
+        ], "untouched CRLF fields must be reported unchanged on every attempt"
+        for name in stage2.LIFECYCLE_DOCS:
+            assert (folder / name).read_bytes() == content, name
+
+
 def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> None:
     """Criterion 3. Planted fault: the restoration reverts whole documents, unrelated header fields
     or the runner's own time bookkeeping, or an edit to the protected fields alone rejects the repair."""
@@ -12176,7 +12196,6 @@ def test_repair_status_changes_are_hand_repairs() -> None:
     needle = "is repaired by hand first: the runner restores those two fields after every repair attempt"
     assert needle in prompt
     assert prompt.index(needle) < prompt.index("Then hand the remaining taken rows to the repair")
-
 
 
 def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:

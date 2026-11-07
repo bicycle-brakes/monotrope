@@ -7256,7 +7256,7 @@ def lifecycle_snapshot(folder: Path) -> dict[Path, dict[str, str]]:
     for name in LIFECYCLE_DOCS:
         path = folder / name
         try:
-            fields = frontmatter_fields(path.read_text(encoding="utf-8"))
+            fields = frontmatter_fields(path.read_bytes().decode("utf-8"))
         except FileNotFoundError as error:
             if name == "design.md" and not path.is_symlink():
                 continue
