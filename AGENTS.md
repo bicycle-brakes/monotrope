@@ -148,23 +148,14 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
-  A worktree lives under `.claude/worktrees/<name>`, is branched from a
-  freshly fetched `origin/main`, and is removed after the merge. Sibling
-  directories are retired (D-5). `tools/bd` finds the main checkout's tracker
-  from there, and concurrent writers lose nothing
-  (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
-  still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  A worktree lives under `.claude/worktrees/<name>`, is branched from a freshly fetched `origin/main`,
+  and is removed after the merge; tracker access, claims and sibling directories: `docs/WORKFLOW.md` §3.
+  Each new checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
   (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
-- **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Its tools that write, run, spawn or change
-  state are denied by name in `.claude/settings.json`; the one that may send
-  task text to a routing judge (`sys_advise_models`) is asked each time. Its
-  Omnigent default policy (`tools/omnigent/`) is a second layer the maintainer
-  installs; nothing depends on it alone. The one list and details:
+- **Omnigent starts inside the worktree** (ADR 0006); which of its tools are denied or asked, and why:
   `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none"** — an unopened file
   and an empty query say different things.
@@ -175,10 +166,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   chat or rendered page is a view of it: it names the source path and commit,
   and a finding is never first written there. Personal reasons to care stay
   outside the repository.
-- **The maintainer's Claude Code display** (status line, session entry,
-  handover safety net, `/handover`) lives, documented, in `tools/claude-code/`;
-  change it there and reinstall with `tools/claude-code/install.sh`, never
-  only in `~/.claude`.
+- **The maintainer's Claude Code display** (status line, session entry, handover safety net, `/handover`) lives
+  in `tools/claude-code/`; change it there and reinstall with `tools/claude-code/install.sh`, never only in `~/.claude`.
 - **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
