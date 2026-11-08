@@ -1052,3 +1052,14 @@ Phase 6 verdict: codex 01a1b939-f346-7921-95e2-ae55e1f4e481, 2026-11-08
 Reviewer session: codex 01a1b939-f346-7921-95e2-ae55e1f4e481 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3626 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3638 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-3 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:187,429 | A closed folder whose artifacts use CRLF line endings is accepted by the registry but skipped by the archive command: `_split_front_matter()` requires LF bytes, and classification treats the unreadable artifacts as skipped rather than blocked when none loaded successfully. A write run can therefore succeed while leaving an eligible closed folder active. Reproduced with identical in-memory bytes through both parsers and classification. Preserve CRLF bodies while recognizing their headers, or refuse the batch before mutation. [Acceptance criteria 1, 3, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1bb54-70e8-79e1-b879-f0cee93e129c, 2026-11-08
+Reviewer session: codex 01a1bb54-70e8-79e1-b879-f0cee93e129c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
