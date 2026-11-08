@@ -402,6 +402,8 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
         ),
         selector_policy(),
         ["paid-seat"],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -426,6 +428,32 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
     activated = json.loads((agent / "models.json").read_text(encoding="utf-8"))
     (carried,) = activated["providers"]["opencode-go"]["models"]
     assert carried["id"] == "paid-seat" and carried["baseUrl"] == UNRECORDED_BASE
+
+
+def test_catalog_drift_notice_survives_a_free_selection_veto(world):
+    """Criterion 3 across the shared free selection: a vetoed free row keeps its notice, once.
+
+    Fault: research took its notices from the shared selection alone, which
+    keeps notices of eligible ids only, so a paid-admitted `-free` row lost
+    its address difference; or the two sources repeated one notice.
+    """
+    policy = stage2_go.load_address_policy(world.root)
+    result = swarm.select_research_catalog(
+        bridge_with(row("aa-free"), row("moved-free", baseUrl=MOVED_BASE)),
+        selector_policy(),
+        [],
+        paid=("moved-free",),
+        exclusion=None,
+        expected_version="test-pin",
+        address=policy,
+    )
+    reasons = {item["id"]: item["reason"] for item in result["candidates"]}
+    assert reasons["moved-free"] == "paid-admitted", "the shared veto no longer decides"
+    assert result["selected"] == ["aa-free"], "a notice changed the selection"
+    assert sum("opencode-go/moved-free:" in notice for notice in result["address_notices"]) == 1, (
+        "the vetoed row's notice was lost or repeated"
+    )
+    assert len(result["address_notices"]) == 1, "a drift notice was lost or invented"
 
 
 def test_api_notices_reach_launch_evidence(world, monkeypatch, capsys):
@@ -553,6 +581,8 @@ def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys, hosti
         bridge_with(row("paid-seat", api=hostile_api, baseUrl=UNRECORDED_BASE)),
         selector_policy(),
         ["paid-seat"],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -649,12 +679,14 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("aa-free"), row("bb-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
-    assert reasons["bb-free"] == "pi-malformed"
+    assert reasons["bb-free"] == "destination-refused"
     evidence = next(item for item in result["candidates"] if item["id"] == "bb-free")["evidence"]
     assert evidence["pi"]["baseUrl"]["value"] == "https://evil.test/x", "raw catalog evidence was rewritten"
     # An empty admitted set is not a clean selection: nothing stays selected.
@@ -662,6 +694,8 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("cc-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -679,6 +713,8 @@ def test_research_selector_skips_an_explicit_null_base(world):
         bridge_with(row("aa-free"), row("bb-free", baseUrl=None)),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -1060,6 +1096,8 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         bridge_with(row("paid-seat", api="anthropic-messages")),
         selector_policy(),
         ["paid-seat"],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )

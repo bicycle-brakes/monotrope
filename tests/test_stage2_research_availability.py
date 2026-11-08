@@ -1254,3 +1254,74 @@ def test_a_free_model_is_not_probed_when_it_is_excluded_for_the_public_web(fx: F
     fx.edit_declaration(exclude("alpha-"))
     assert fx.prepare() == 0
     assert [call["model"] for call in free_calls(fx)] == ["beta-free"]
+
+
+# ---------------------------------------------------------------------------
+# The paid/free collision of the shared free selection (bead coding-harness-wb40)
+# ---------------------------------------------------------------------------
+
+PAID_FREE_REASON = "a paid model; the free class does not admit it"
+
+
+def declare_paid_free(fx: Fixture) -> None:
+    """The Pi 1.5.0 collision: `beam-free` is in the fresh catalog and the declaration admits it as paid."""
+    fx.catalog.pi.append(pi_model("beam-free"))
+    fx.catalog.tools["beam-free"] = {"id": "beam-free", "tool_call": True}
+    fx.edit_declaration(
+        lambda data: next(e for e in data["endpunkte"] if e["name"] == GO)["modelle"].append("beam-free")
+    )
+
+
+def test_paid_free_candidate_is_dropped_before_research_probes(fx: Fixture) -> None:
+    # Planted fault: the research selection admits an id the endpoint declares paid, so it is probed and frozen.
+    declare_paid_free(fx)
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    probed = fx.probed()
+    assert "beam-free" not in probed, "a paid id received a free probe"
+    assert {"alpha-free", "beta-free"} <= set(probed), "the remaining free candidates were not probed"
+    assert state["free"]["selected"] == ["alpha-free", "beta-free"]
+    assert state["free"]["dropped"] == {"beam-free": PAID_FREE_REASON}
+    reasons = {item["id"]: item["reason"] for item in state["catalog"]["candidates"]}
+    assert reasons["beam-free"] == "paid-admitted"
+    assert "beam-free" not in json.dumps(state["audit"]), "a paid id entered the probe audit"
+
+
+def test_research_report_names_paid_free_drop(fx: Fixture, capsys) -> None:
+    # Planted fault: the report omits the id, calls it free, or hides the paid-admission reason.
+    declare_paid_free(fx)
+    assert fx.prepare() == 0
+    out = capsys.readouterr().out
+    assert f"Dropped (free): beam-free: {PAID_FREE_REASON}" in out
+    assert "Free selection: alpha-free, beta-free" in out
+    assert "beam-free" not in out.split("Free selection:")[1].splitlines()[0]
+
+
+def test_shared_selection_preserves_optional_research_eligibility(fx: Fixture) -> None:
+    # Planted fault: a free researcher without tool support or on a deprecated model is admitted, or an
+    # unavailable capability source or failed free probes block the required slots.
+    fx.catalog.tools["alpha-free"]["tool_call"] = False
+    fx.catalog.tools["beta-free"]["status"] = "deprecated"
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    reasons = {item["id"]: item["reason"] for item in state["catalog"]["candidates"]}
+    assert reasons["alpha-free"] == "no-tool-support" and reasons["beta-free"] == "deprecated"
+    assert state["free"]["selected"] == []
+    assert not {"alpha-free", "beta-free"} & set(fx.probed()), "an ineligible free researcher was probed"
+    # No capability evidence at all: the free members are optional, the required seats still fill.
+    fx.catalog.tools["alpha-free"]["tool_call"] = True
+    del fx.catalog.tools["beta-free"]["status"]
+    for item in fx.catalog.pi:
+        if item["id"] == "qwen3.8-flash":
+            item["api"] = "openai-completions"
+    fx.catalog.metadata_ok = False
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert state["catalog"]["capability_status"] == "capability-unavailable"
+    assert state["free"]["selected"] == []
+    # Eligible free members whose probes fail: removed one by one, never a stop.
+    fx.catalog.metadata_ok = True
+    fx.script(**{name: {"exit": 1, "stderr": "down"} for name in ("alpha-free", "beta-free")})
+    assert fx.prepare() == 0
+    free = fx.receipt()["state"]["free"]
+    assert free["selected"] == [] and set(free["unavailable"]) == {"alpha-free", "beta-free"}

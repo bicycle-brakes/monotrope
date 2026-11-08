@@ -3249,7 +3249,9 @@ def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
     )
     assert world.run("repair") == 2
     (call,) = repair_calls(world)
-    assert world.text() == call["findings"]
+    report = restored_line(world)
+    assert stage2.LIFECYCLE_UNCHANGED in report
+    assert world.text() == call["findings"].rstrip() + "\n\n" + report + "\n"
 
 
 @pytest.mark.parametrize("unusable_denylist", [False, True], ids=["nonsecret-match", "unusable-denylist"])
@@ -3276,7 +3278,11 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     monkeypatch.setattr(stage2, "launch", no_make)
     assert world.run("repair") == 2
     (call,) = repair_calls(world)
-    assert world.text() == call["findings"], "diagnostic refusal must restore the accepted findings"
+    report = restored_line(world)
+    assert stage2.LIFECYCLE_UNCHANGED in report
+    assert world.text() == call["findings"].rstrip() + "\n\n" + report + "\n", (
+        "diagnostic refusal must restore accepted findings and retain only the runner restoration report"
+    )
     assert world.calls("make") == []
     assert LEAK not in world.text() and LEAK not in capsys.readouterr().err
 
@@ -8709,6 +8715,61 @@ def repair_world(world: World, *record: tuple[str, str, str]) -> str:
     return git(world.root, "rev-parse", "HEAD")
 
 
+# The lifecycle states the status-fields-restore tests plant: every document its own pair, so one
+# document's values can never pass for another's. All pairs are registry-valid, so only the
+# restoration itself can make or break an assertion.
+LIFECYCLE_STATES = {
+    "plans/changes/demo/spec.md": ("accepted", "none"),
+    "plans/changes/demo/design.md": ("draft", "partial"),
+    "plans/changes/demo/plan.md": ("draft", "none"),
+}
+
+
+def plant_lifecycle(world: World, design: bool = True) -> dict[str, bytes]:
+    """Distinct valid lifecycle states in spec, optional design and plan, committed clean before the run."""
+    for relative, (status, implementation) in LIFECYCLE_STATES.items():
+        if relative.endswith("design.md") and not design:
+            continue
+        path = world.root / relative
+        if path.exists():
+            lines = path.read_text(encoding="utf-8").split("\n")
+            lines[1:1] = [f"status: {status}", f"implementation_status: {implementation}"]
+            path.write_text("\n".join(lines), encoding="utf-8")
+        else:
+            path.write_text(
+                "---\n"
+                f"title: Design\nstatus: {status}\nimplementation_status: {implementation}\n"
+                "bead: demo-1\n---\n\n# Design\n",
+                encoding="utf-8",
+            )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "distinct lifecycle states")
+    return {
+        relative: (world.root / relative).read_bytes()
+        for relative in LIFECYCLE_STATES
+        if (world.root / relative).exists()
+    }
+
+
+def lifecycle_damaged(world: World, relative: str, *, status: str | None, implementation: str | None) -> str:
+    """The document's text with the model's own lifecycle values, or without its `status:` line."""
+    text = (world.root / relative).read_text(encoding="utf-8")
+    if status is None:
+        text = re.sub(r"^status: .*\n", "", text, flags=re.M)
+    else:
+        text = re.sub(r"^status: .*$", f"status: {status}", text, flags=re.M)
+    if implementation is not None:
+        text = re.sub(r"^implementation_status: .*$", f"implementation_status: {implementation}", text, flags=re.M)
+    return text
+
+
+def restored_line(world: World) -> str:
+    """The run's last runner-owned restoration line in findings.md."""
+    lines = [line for line in world.text().splitlines() if line.startswith(stage2.RESTORATION_PREFIX)]
+    assert lines, "no restoration line stands in findings.md"
+    return lines[-1]
+
+
 def released_cells(ident: str, status: str, broke: str, finding: str) -> list[str]:
     return [ident, "MAJOR", "MAINT", "impl", "src/app.py:1", finding, "deepseek-v4.1-flash", status, broke, "—"]
 
@@ -9074,9 +9135,9 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
         assert f"Attempt {attempt} ({route}):" in retry_prompt
         assert f"post-run-check-{attempt}" in retry_prompt and f"post-run-check-{attempt}" in world.text()
     if "plans/changes/demo/plan.md" in deleted_inputs:
-        assert "plan.md cannot be read." in retry_prompt
-    else:
-        assert "`make verify` exited 1" in retry_prompt
+        assert "plan.md was deleted or lost its frontmatter" in retry_prompt
+        assert "plan.md — status, implementation_status; restored snapshotted input" in retry_prompt
+    assert "`make verify` exited 1" in retry_prompt
     for name in ("spec.md", "plan.md"):
         content = inputs[f"plans/changes/demo/{name}"].decode("utf-8")
         assert f"## Accepted {name.removesuffix('.md')}\n\n{content}" in retry_prompt
@@ -9130,12 +9191,13 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     baseline = repair_world(world)
     original = {relative: (world.root / relative).read_bytes() for relative in corrupted_inputs}
     failed_attempts = max(corrupted_attempts)
-    plans_corrupted = any(relative.startswith("plans/") for relative in original)
-    # A failed attempt is red at `make verify`, unless its preparation already failed on a corrupted plans/ file.
+    # Protected documents recover before verification; other broken inputs still fail preparation.
+    preparation_fails = "plans/changes/demo/decisions.md" in original
+    # Queue a failed verification for every attempt that reaches make after lifecycle recovery.
     reds = [
         {"stdout": f"post-run-check-{attempt}\n", "exit": 1}
         for attempt in range(1, failed_attempts + 1)
-        if not (attempt in corrupted_attempts and plans_corrupted)
+        if not (attempt in corrupted_attempts and preparation_fails)
     ]
     script_repair(
         world,
@@ -9184,10 +9246,15 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         route = "codex" if attempt == 1 else "codex-repair"
         assert f"Attempt {attempt} ({route}):" in final_prompt
         diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
-        if attempt in corrupted_attempts and plans_corrupted:
+        if attempt in corrupted_attempts and preparation_fails:
             assert "Derived-file preparation failed" in diagnostics
         else:
             assert "`make verify` exited 1" in diagnostics
+        if attempt in corrupted_attempts:
+            for relative in original:
+                if Path(relative).name in ("spec.md", "plan.md", "design.md"):
+                    assert f"{relative} was deleted or lost its frontmatter" in diagnostics
+                    assert f"{relative} — status, implementation_status; restored snapshotted input" in diagnostics
     for relative, content in original.items():
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
@@ -11612,6 +11679,1040 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
     ):
         with pytest.raises(AssertionError):
             check_workflow(broken)
+
+
+def test_repair_lifecycle_link_recovers_trusted_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A linked leaf must never supply either frontmatter or body to recovery."""
+    root = tmp_path / "repo"
+    folder = root / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = b"---\nstatus: draft\nimplementation_status: none\n---\nTrusted body\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_bytes(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    external = tmp_path / "external.md"
+    foreign = b"---\nstatus: accepted\nimplementation_status: done\n---\nExternal body\n"
+    external.write_bytes(foreign)
+    path.unlink()
+    path.symlink_to(external)
+    reads = []
+    read_bytes = Path.read_bytes
+
+    def observe_read(candidate):
+        if candidate == path and candidate.is_symlink():
+            reads.append(candidate)
+        return read_bytes(candidate)
+
+    monkeypatch.setattr(Path, "read_bytes", observe_read)
+    report, problems = stage2.restore_lifecycle_fields(root, baseline, ({}, {}), {path: original})
+    assert not reads, "recover linked leaves without reading their targets"
+    assert not path.is_symlink()
+    assert path.read_bytes() == original, "only trusted snapshot bytes may replace a linked input"
+    assert external.read_bytes() == foreign
+    assert problems == [
+        "plans/changes/demo/spec.md was replaced by a linked leaf; the snapshotted-input recovery owns it"
+    ], "a replaced input must reject the attempt after safe recovery"
+    assert (
+        "plans/changes/demo/spec.md — status, implementation_status; restored snapshotted input (linked leaf)" in report
+    )
+
+
+@pytest.mark.parametrize("lifecycle_edit", ["", "status: accepted\n"])
+def test_repair_lifecycle_header_edits_follow_effective_values(tmp_path: Path, lifecycle_edit: str) -> None:
+    """Keep unrelated header changes only when effective lifecycle values stay unchanged."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\ndefaults: &d {status: draft, implementation_status: none}\n<<: *d\ntitle: Original\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    attempted = original.replace("title: Original", lifecycle_edit + "title: Repaired").replace("Body", "Repaired body")
+    path.write_text(attempted)
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    assert not problems
+    expected = original.replace("Body", "Repaired body") if lifecycle_edit else attempted
+    assert path.read_text() == expected
+    assert plans_registry._frontmatter(path)["status"] == "draft"
+    assert any("status" in line if lifecycle_edit else "unchanged" in line for line in report)
+
+
+def test_repair_lifecycle_merge_values_are_restored(tmp_path: Path) -> None:
+    """Merge-inherited lifecycle values are the effective values the registry reads."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\ndefaults: &d {status: draft, implementation_status: none}\n<<: *d\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    path.write_text(original.replace("status: draft", "status: accepted").replace("Body", "Repaired body"))
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    assert not problems
+    assert plans_registry._frontmatter(path)["status"] == "draft", "restore effective inherited status"
+    assert path.read_text() == original.replace("Body", "Repaired body")
+    assert "plans/changes/demo/spec.md — status" in report
+
+
+def test_repair_lifecycle_anchor_restores_valid_header(tmp_path: Path) -> None:
+    """Restoring a changed anchor must not strand aliases in the attempted header."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\nstatus: draft\nimplementation_status: none\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    path.write_text(original.replace("status: draft", "status: &s accepted\nreview: {status: *s}"))
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    try:
+        header = yaml.safe_load(path.read_text().split("---")[1])
+    except yaml.composer.ComposerError as error:
+        pytest.fail(f"lifecycle restoration must leave valid YAML with no stranded alias: {error}")
+    assert not problems
+    assert header == {"status": "draft", "implementation_status": "none"}
+    assert path.read_text() == original
+    assert "plans/changes/demo/spec.md — status" in report
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "status : accepted",
+        '"status": accepted',
+        "'status': accepted",
+        "? status\n: accepted",
+        "?\n  status\n: accepted",
+        '"sta\\x74us": accepted',
+        "!!str status: accepted",
+    ],
+)
+def test_repair_lifecycle_yaml_keys_are_restored(spelling: str) -> None:
+    """YAML key syntax cannot hide a protected field or leave a duplicate."""
+    original = "---\nstatus: draft\nimplementation_status: none\ntitle: Keep this formatting\n---\nBody\n"
+    damaged = original.replace("status: draft", spelling).replace(
+        "implementation_status: none", '"implementation_status" : complete'
+    )
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
+    header = yaml.safe_load(restored.split("---")[1])
+    assert header["status"] == "draft", "restore YAML-spelled status before verification"
+    assert header["implementation_status"] == "none"
+    assert restored == original, "remove protected entries without altering unrelated text"
+
+
+def test_repair_lifecycle_alias_key_is_restored() -> None:
+    """A key alias refers to status but must not rewrite its unrelated anchor line."""
+    original = "---\nkey: &s status\nstatus: draft\nimplementation_status: none\n---\nBody\n"
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    damaged = original.replace("status: draft", "*s : accepted")
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
+    assert restored == original, "recognize the aliased key at its own source location"
+
+
+@pytest.mark.parametrize("baseline_flow", [False, True])
+def test_repair_lifecycle_flow_keys_are_restored(baseline_flow: bool) -> None:
+    """Flow-style top-level YAML keys are protected without reformatting unrelated pairs."""
+    original = (
+        '---\n{status: draft, implementation_status: none, title : "Keep formatting"}\n---\nBody\n'
+        if baseline_flow
+        else "---\nstatus: draft\nimplementation_status: none\ntitle: Keep formatting\n---\nBody\n"
+    )
+    damaged = '---\n{"status" : accepted, implementation_status : complete, title : "Keep formatting"}\n---\nBody\n'
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
+    header = yaml.safe_load(restored.split("---")[1])
+    assert header["status"] == "draft", "a flow mapping must not evade restoration"
+    assert header["implementation_status"] == "none"
+    assert restored == original, "restore the whole trusted header without rewriting its formatting"
+    assert restored.endswith("---\nBody\n")
+
+
+def test_repair_lifecycle_created_design_is_removed_before_retry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed attempt's new design cannot become the retry's lifecycle baseline."""
+    repair_world(world)
+    plant_lifecycle(world, design=False)
+    design = world.root / "plans/changes/demo/design.md"
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "plans/changes/demo/design.md": "---\nstatus: accepted\nimplementation_status: complete\n---\n# Design\n",
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                }
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    real_begin = stage2.begin_work_call
+    calls = []
+
+    def begin(*args, **kwargs):
+        assert not design.exists(), "remove a created design before the next attempt snapshots it"
+        calls.append(1)
+        return real_begin(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "begin_work_call", begin)
+    assert world.run("repair") == 0
+    assert len(calls) == 2
+    assert not design.exists(), "the checkpoint must not carry the model's invented lifecycle"
+    assert "design.md — removed" in world.text()
+
+
+def test_repair_lifecycle_fields_are_restored_before_verification(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 1. Planted fault: the restoration runs after the checks or never, so a verifier or
+    the checkpoint sees a model-written status, a removed key or another document's values."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    step = repair_step(
+        plant={
+            "plans/changes/demo/spec.md": lifecycle_damaged(
+                world, "plans/changes/demo/spec.md", status="superseded", implementation="partial"
+            ),
+            "plans/changes/demo/design.md": lifecycle_damaged(
+                world, "plans/changes/demo/design.md", status="accepted", implementation=None
+            ),
+            "plans/changes/demo/plan.md": lifecycle_damaged(
+                world, "plans/changes/demo/plan.md", status=None, implementation="partial"
+            ),
+            "src/app.py": "value = 2\n",
+            "tests/test_fix.py": FIX_TEST,
+        }
+    )
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    observed: dict[str, bytes] = {}
+    committed: dict[str, bytes] = {}
+    real_verify, real_checkpoint = stage2.verify_attempt, stage2.checkpoint
+
+    def verify(root, plan, *args, **kwargs):
+        for relative in LIFECYCLE_STATES:
+            observed[relative] = (world.root / relative).read_bytes()
+        return real_verify(root, plan, *args, **kwargs)
+
+    def checkpoint(root, change, *args, **kwargs):
+        for relative in LIFECYCLE_STATES:
+            committed[relative] = (world.root / relative).read_bytes()
+        return real_checkpoint(root, change, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 0
+    for relative, (status, implementation) in LIFECYCLE_STATES.items():
+        for seen in (observed[relative], committed[relative]):
+            assert f"status: {status}" in seen.decode("utf-8"), relative
+            assert f"implementation_status: {implementation}" in seen.decode("utf-8"), relative
+    # Whole-document equality where the fields were the only edit: no document carries another's pair.
+    assert observed["plans/changes/demo/spec.md"] == baseline_bytes["plans/changes/demo/spec.md"]
+    assert observed["plans/changes/demo/design.md"] == baseline_bytes["plans/changes/demo/design.md"]
+    assert "status: superseded" not in observed["plans/changes/demo/spec.md"].decode("utf-8")
+    assert "status: accepted" not in observed["plans/changes/demo/design.md"].decode("utf-8")
+    plan_text = committed["plans/changes/demo/plan.md"].decode("utf-8")
+    assert "implementation_status: partial" not in plan_text and "status: draft" in plan_text
+    # The plan's time section is the runner's bookkeeping: the model's in-section append went with
+    # the entry write, and the accepted entry stands beside the restored fields.
+    entries = runner_entries(world.plan)
+    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    # The checkpoint committed the restored bytes.
+    for relative, (status, implementation) in LIFECYCLE_STATES.items():
+        shown = git(world.root, "show", f"HEAD:{relative}")
+        assert f"status: {status}" in shown, relative
+        assert f"implementation_status: {implementation}" in shown, relative
+    # The repair's legal edits stand, one commit holds them, and the tree is clean.
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
+    assert git(world.root, "show", "HEAD:src/app.py") == "value = 2"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "status", "--porcelain") == ""
+    line = restored_line(world)
+    assert "plans/changes/demo/spec.md — status, implementation_status" in line
+    assert "plans/changes/demo/design.md — status" in line
+    assert "plans/changes/demo/plan.md — status, implementation_status" in line
+
+
+@pytest.mark.parametrize("scenario", ["retry", "moved-head", "exhausted"])
+def test_repair_lifecycle_fields_survive_failed_attempts(
+    world: World, monkeypatch: pytest.MonkeyPatch, scenario: str
+) -> None:
+    """Criterion 2. Planted fault: a rejected attempt's retry, a moved HEAD or an exhausted chain leaves the
+    model's lifecycle values in the working tree, or a retry starts from damaged fields."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    damage = {
+        "plans/changes/demo/spec.md": lifecycle_damaged(
+            world, "plans/changes/demo/spec.md", status="superseded", implementation=None
+        ),
+        "plans/changes/demo/plan.md": lifecycle_damaged(
+            world, "plans/changes/demo/plan.md", status=None, implementation="partial"
+        ),
+    }
+    real_begin = stage2.begin_work_call
+    begun: list[int] = []
+
+    def begin_work_call(*args, **kwargs):
+        # Every attempt starts from the committed baseline values, however the attempts before it
+        # reordered the header or appended lines beside them.
+        for relative, (status, implementation) in LIFECYCLE_STATES.items():
+            text = (world.root / relative).read_text(encoding="utf-8")
+            assert f"status: {status}" in text and f"implementation_status: {implementation}" in text, relative
+        begun.append(len(repair_calls(world)) + 1)
+        return real_begin(*args, **kwargs)
+
+    if scenario == "retry":
+        # A rejected attempt retries; a failed call stops without one (ADR 0017). The retry here
+        # is a post-run check failure whose next attempt starts from the restored fields.
+        script_repair(
+            world,
+            [
+                repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}),
+                repair_step(),
+            ],
+            make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+        )
+        monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+        assert world.run("repair") == 0
+        assert begun == [1, 2]
+        for relative, (status, implementation) in LIFECYCLE_STATES.items():
+            text = (world.root / relative).read_text(encoding="utf-8")
+            assert f"status: {status}" in text and f"implementation_status: {implementation}" in text, relative
+        # The failed call's git restore brought spec and design back whole; the accepted retry's own
+        # plan append and the runner's entry stand beside the restored fields.
+        spec_standing = (world.root / "plans/changes/demo/spec.md").read_bytes()
+        design_standing = (world.root / "plans/changes/demo/design.md").read_bytes()
+        assert spec_standing == baseline_bytes["plans/changes/demo/spec.md"]
+        assert design_standing == baseline_bytes["plans/changes/demo/design.md"]
+        assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    elif scenario == "moved-head":
+        script_repair(
+            world,
+            [{"stdout": "L1-1: fixed — tests/test_fix.py::test_fix", "plant": {**damage, "src/app.py": "value = 2\n"}}],
+            make=[{"stdout": "must not run\n"}],
+        )
+        real_launch = stage2.launch
+        moved: list[str] = []
+
+        def committing(command, cwd, env, *args, **kwargs):
+            done = real_launch(command, cwd, env, *args, **kwargs)
+            if command[0] == "codex":
+                git(Path(cwd), "add", "-A")
+                git(Path(cwd), "commit", "--quiet", "-m", "the model committed")
+                moved.append(git(Path(cwd), "rev-parse", "HEAD"))
+            return done
+
+        monkeypatch.setattr(stage2, "launch", committing)
+        assert world.run("repair") == 1
+        assert moved and git(world.root, "rev-parse", "HEAD") == moved[0]
+        for relative, (status, implementation) in LIFECYCLE_STATES.items():
+            # The safe working-tree documents carry the baseline values again.
+            text = (world.root / relative).read_text(encoding="utf-8")
+            assert f"status: {status}" in text and f"implementation_status: {implementation}" in text, relative
+        # The unverified commit keeps the model's values; history was not rewritten.
+        shown_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+        assert "implementation_status: partial" in shown_plan
+        assert "status: draft" not in shown_plan
+        assert "status: superseded" in git(world.root, "show", "HEAD:plans/changes/demo/spec.md")
+        # The model's other edit was never the runner's to restore.
+        assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
+        text = world.text()
+        assert "moved HEAD from" in text
+        assert f"{stage2.LIFECYCLE_LABEL}: plans/changes/demo/spec.md — status" in text
+        assert world.calls("make") == []
+    else:
+        script_repair(
+            world,
+            [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})] * 3,
+            make=[{"stdout": f"red-{number}\n", "exit": 1} for number in range(1, 4)],
+        )
+        monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+        assert world.run("repair") == 1
+        assert begun == [1, 2, 3]
+        for relative, (status, implementation) in LIFECYCLE_STATES.items():
+            text = (world.root / relative).read_text(encoding="utf-8")
+            assert f"status: {status}" in text and f"implementation_status: {implementation}" in text, relative
+        text = world.text()
+        assert text.count(f"{stage2.LIFECYCLE_LABEL}: plans/changes/demo/spec.md — status") == 3
+        assert text.count(f"{stage2.LIFECYCLE_LABEL}: plans/changes/demo/plan.md — status, implementation_status") == 3
+
+
+@pytest.mark.parametrize("failure", ["call", "evidence"])
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged", "restored"])
+def test_repair_lifecycle_early_failure_reports_restoration(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: str, changed: bool
+) -> None:
+    """Failed calls and evidence saves retain lifecycle values and name their recovery."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    damage = (
+        {
+            relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+            for relative in LIFECYCLE_STATES
+        }
+        if changed
+        else {}
+    )
+    script_repair(
+        world,
+        [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})],
+        make=[{"stdout": "must not run\n"}],
+    )
+    real_codex = stage2.run_codex
+
+    def codex(*args, **kwargs):
+        real_codex(*args, **kwargs)
+        raise stage2.CallFailed("planted transport failure")
+
+    def evidence(*_args, **_kwargs):
+        raise stage2.CallFailed("planted evidence failure")
+
+    monkeypatch.setattr(
+        stage2, "run_codex" if failure == "call" else "save_answer_evidence", codex if failure == "call" else evidence
+    )
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert f"planted {'transport' if failure == 'call' else 'evidence'} failure" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert world.calls("make") == []
+    assert len(repair_calls(world)) == 1
+    for relative, content in baseline_bytes.items():
+        standing = (world.root / relative).read_text(encoding="utf-8")
+        fields = stage2.frontmatter_fields(content.decode("utf-8"))
+        assert stage2.frontmatter_fields(standing) == fields, relative
+    report = restored_line(world)
+    if changed:
+        for relative in LIFECYCLE_STATES:
+            assert f"{relative} — status, implementation_status" in report
+    else:
+        assert stage2.LIFECYCLE_LABEL in report and stage2.LIFECYCLE_UNCHANGED in report
+
+
+def test_repair_lifecycle_checkpoint_rollback_reports_restoration(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A real held-path checkpoint refusal restores fields and retains its lifecycle report."""
+    repair_world(world)
+    baseline_bytes = plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    **damage,
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "model-endpoints.yaml": "tampered: true\n",
+                }
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert "the attempt changed paths a stage-2 run does not commit" in error
+    assert "model-endpoints.yaml" in error
+    assert world.calls("make"), "the passing attempt must reach the checkpoint guard"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+    for relative, content in baseline_bytes.items():
+        standing = (world.root / relative).read_text(encoding="utf-8")
+        assert stage2.frontmatter_fields(standing) == stage2.frontmatter_fields(content.decode("utf-8")), relative
+        assert f"{relative} — status, implementation_status" in restored_line(world)
+    assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+
+
+@pytest.mark.parametrize("name", ["spec.md", "plan.md", "design.md"])
+@pytest.mark.parametrize("damage", ["missing", "header", "unreadable"])
+def test_repair_lifecycle_snapshot_refuses_unusable_documents(world: World, name: str, damage: str) -> None:
+    """A protected document without a readable baseline cannot silently escape protection."""
+    repair_world(world)
+    plant_lifecycle(world)
+    path = world.plan.parent / name
+    if damage == "missing":
+        path.unlink()
+    elif damage == "header":
+        path.write_text("# Missing frontmatter\n", encoding="utf-8")
+    else:
+        path.write_bytes(b"\xff")
+    try:
+        stage2.lifecycle_snapshot(world.plan.parent)
+    except stage2.CallFailed as error:
+        assert name in str(error)
+    else:
+        assert name == "design.md" and damage == "missing", "unusable lifecycle baseline was silently skipped"
+
+
+def test_repair_lifecycle_recovery_keeps_safety_refusals(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 2. Planted fault: the field restoration writes through an aliased parent before the
+    preflight refuses, or the refusal claims a restoration it could not write."""
+    repair_world(world)
+    plant_lifecycle(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    folder = world.root / "plans" / "changes" / "demo"
+    step = repair_step(
+        plant={
+            "plans/changes/demo/spec.md": lifecycle_damaged(
+                world, "plans/changes/demo/spec.md", status="superseded", implementation=None
+            ),
+            "src/app.py": "value = 2\n",
+            "tests/test_fix.py": FIX_TEST,
+        }
+    )
+    script_repair(world, [step], make=[{"stdout": "must not run\n"}])
+    outside = tmp_path / "moved-demo"
+    real_codex = stage2.run_codex
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        # The model aliases the whole change folder; findings.md stands untouched, so the findings
+        # restore is skipped and the lifecycle preflight is the first recovery this attempt sees.
+        shutil.move(folder, outside)
+        folder.symlink_to(outside)
+        return result
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    assert world.run("repair") == 2
+    assert "lifecycle field restoration is refused" in capsys.readouterr().err
+    # Nothing was written through the alias: the model's values stand, un-restored, in the moved folder.
+    assert "status: superseded" in (outside / "spec.md").read_text(encoding="utf-8")
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert world.calls("make") == []
+    # A refusal writes no restoration claim, no report and no time entry after it.
+    assert stage2.LIFECYCLE_LABEL not in world.text()
+    assert stage2.RESTORATION_PREFIX not in world.text()
+    assert runner_entries(world.plan) == []
+
+
+@pytest.mark.parametrize("damage", ["deleted", "headerless", "unreadable"])
+def test_repair_lifecycle_broken_document_restored_on_every_attempt(
+    world: World, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    """Even the final rejected attempt restores broken inputs before verification."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    spec = world.plan.parent / "spec.md"
+    script_repair(world, [repair_step(), repair_step(), repair_step()])
+
+    def damage_after(call):
+        def model(*args, **kwargs):
+            result = call(*args, **kwargs)
+            if damage == "deleted":
+                spec.unlink()
+            else:
+                spec.write_bytes(b"# Header removed\n" if damage == "headerless" else b"\xff")
+            return result
+
+        return model
+
+    monkeypatch.setattr(stage2, "run_codex", damage_after(stage2.run_codex))
+    monkeypatch.setattr(stage2, "run_work_model", damage_after(stage2.run_work_model))
+    observed = []
+
+    def verify(*_args, **_kwargs):
+        try:
+            content = spec.read_bytes()
+        except FileNotFoundError:
+            pytest.fail("a deleted protected document must be restored before verification")
+        assert content == baseline["plans/changes/demo/spec.md"], "restore the safe snapshot before verification"
+        observed.append(content)
+        return []
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    assert world.run("repair") == 1, "structural damage still rejects the attempt after restoration"
+    assert len(observed) == 3
+    assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"]
+    assert world.text().count("spec.md — status, implementation_status") == 3
+
+
+@pytest.mark.parametrize(
+    ("header", "error_class"),
+    [
+        ('status: "\\q"', yaml.scanner.ScannerError),
+        ("status: [accepted", yaml.parser.ParserError),
+        ("status: *missing", yaml.composer.ComposerError),
+        ("status: !unknown accepted", yaml.constructor.ConstructorError),
+        ("status: accepted\x01", yaml.reader.ReaderError),
+        ("{status: !unknown accepted}", yaml.constructor.ConstructorError),
+        ("status: accepted\nother: !unknown value", yaml.constructor.ConstructorError),
+        ("status: accepted\nother: 2026-99-99", ValueError),
+    ],
+    ids=[
+        "scanner",
+        "parser",
+        "composer",
+        "constructor",
+        "reader",
+        "flow-constructor",
+        "other-constructor",
+        "invalid-date",
+    ],
+)
+def test_repair_lifecycle_yaml_errors_restore_snapshot(
+    world: World, monkeypatch: pytest.MonkeyPatch, header: str, error_class: type[Exception]
+) -> None:
+    """Every YAML error class rejects the attempt and restores safe inputs before checks."""
+    with pytest.raises(error_class):
+        yaml.safe_load(header)
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    spec = world.plan.parent / "spec.md"
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    damage["plans/changes/demo/spec.md"] = f"---\n{header}\n---\nAttempt body\n"
+    script_repair(world, [repair_step(plant=damage)] * 3)
+    observed = []
+
+    def verify(*_args, **_kwargs):
+        assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"], "restore unreadable YAML before checks"
+        for relative, content in baseline.items():
+            assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+                content.decode()
+            ), relative
+        observed.append(True)
+        return []
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    try:
+        result = world.run("repair")
+    except yaml.YAMLError as error:
+        pytest.fail(f"unreadable YAML must restore the snapshot instead of escaping recovery: {error}")
+    assert result == 1, "unreadable frontmatter must reject even an otherwise passing attempt"
+    assert len(observed) == 3
+    assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"]
+    assert world.text().count("spec.md — status, implementation_status; restored snapshotted input") == 3
+
+
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged", "restored"])
+def test_repair_lifecycle_verification_refusal_persists_report(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], changed: bool
+) -> None:
+    """A verifier refusal retains the already measured restoration, without restoring twice."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    damage = (
+        {
+            relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+            for relative in LIFECYCLE_STATES
+        }
+        if changed
+        else {}
+    )
+    script_repair(world, [repair_step(plant=damage)])
+    real_restore = stage2.restore_lifecycle_fields
+    restorations = []
+
+    def restore(*args, **kwargs):
+        report, problems = real_restore(*args, **kwargs)
+        restorations.append(report)
+        return report, problems
+
+    def verify(*_args, **_kwargs):
+        raise stage2.Refused("planted diagnostic protection refusal")
+
+    monkeypatch.setattr(stage2, "restore_lifecycle_fields", restore)
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    assert world.run("repair") == 2
+    assert "planted diagnostic protection refusal" in capsys.readouterr().err
+    assert len(restorations) == 1, "persist the original restoration rather than measuring unchanged fields again"
+    report = restored_line(world)
+    assert "; ".join(restorations[0]) in report
+    assert world.text().count(stage2.RESTORATION_PREFIX) == 1
+    for relative, content in baseline.items():
+        assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+            content.decode()
+        )
+        if changed:
+            assert f"{relative} — status, implementation_status" in report
+    if not changed:
+        assert stage2.LIFECYCLE_UNCHANGED in report
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert len(repair_calls(world)) == 1
+
+
+def test_repair_lifecycle_complete_preflight_precedes_field_writes(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unsafe prompt destination forbids even a safe lifecycle restoration write."""
+    repair_world(world)
+    plant_lifecycle(world)
+    damaged = lifecycle_damaged(world, "plans/changes/demo/spec.md", status="superseded", implementation="done")
+    script_repair(world, [repair_step(plant={"plans/changes/demo/spec.md": damaged})])
+    real_codex = stage2.run_codex
+    outside = tmp_path / "moved-prompts"
+
+    def model(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        shutil.move(world.root / "prompts", outside)
+        (world.root / "prompts").symlink_to(outside)
+        return result
+
+    monkeypatch.setattr(stage2, "run_codex", model)
+    assert world.run("repair") == 2
+    assert "refus" in capsys.readouterr().err
+    assert (world.plan.parent / "spec.md").read_text() == damaged, "complete preflight must precede any recovery write"
+    assert world.calls("make") == []
+    assert stage2.RESTORATION_PREFIX not in world.text()
+    assert runner_entries(world.plan) == []
+
+
+def test_repair_lifecycle_unreadable_head_restores_and_reports(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post-call HEAD read failure restores safe working-tree fields without touching history."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    script_repair(world, [repair_step(plant=damage)])
+    real_codex, real_git = stage2.run_codex, stage2._git_output
+    returned = False
+
+    def model(*args, **kwargs):
+        nonlocal returned
+        result = real_codex(*args, **kwargs)
+        returned = True
+        return result
+
+    def git_output(root, *args, **kwargs):
+        if returned and args == ("rev-parse", "HEAD"):
+            raise stage2.Refused("planted HEAD read failure")
+        return real_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", model)
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    assert world.run("repair") == 1
+    assert "HEAD could not be read" in capsys.readouterr().err
+    assert git(world.root, "rev-parse", "HEAD") == head
+    for relative, content in baseline.items():
+        assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+            content.decode()
+        )
+        assert f"{relative} — status, implementation_status" in restored_line(world)
+    assert world.calls("make") == []
+    assert len(repair_calls(world)) == 1
+
+
+def test_repair_lifecycle_crlf_documents_are_reported_unchanged(tmp_path: Path) -> None:
+    """Untouched CRLF lifecycle lines must not be rewritten or reported as restored."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    content = b"---\r\nstatus: draft\r\nimplementation_status: none\r\n---\r\n\r\n# Document\r\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_bytes(content)
+
+    for _ in range(2):
+        baseline = stage2.lifecycle_snapshot(folder)
+        report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+        assert not problems
+        assert report == [
+            "plans/changes/demo/design.md, plans/changes/demo/plan.md, "
+            f"plans/changes/demo/spec.md — {stage2.LIFECYCLE_UNCHANGED}"
+        ], "untouched CRLF fields must be reported unchanged on every attempt"
+        for name in stage2.LIFECYCLE_DOCS:
+            assert (folder / name).read_bytes() == content, name
+
+
+@pytest.mark.parametrize("field", ["status", "implementation_status"])
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged-first", "changed-first"])
+def test_repair_lifecycle_duplicate_removal_is_reported(tmp_path: Path, field: str, changed: bool) -> None:
+    """The registry's last effective value decides whether the complete header is restored."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    path = folder / "spec.md"
+    original = "---\nstatus: draft\nimplementation_status: none\n---\n\n# Spec\n"
+    path.write_text(original, encoding="utf-8")
+    baseline = {path: original.encode()}
+    fields = stage2.frontmatter_fields(original)
+    assert fields is not None
+    last_value = "superseded" if changed else fields[field]
+    damaged = original.replace("\n---\n\n", f"\n{field}: partial\n{field}: {last_value}\n---\n\n")
+    path.write_text(damaged, encoding="utf-8")
+
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+
+    assert not problems
+    assert path.read_text(encoding="utf-8") == (original if changed else damaged)
+    expected_fields = field if changed else stage2.LIFECYCLE_UNCHANGED
+    assert report == [f"plans/changes/demo/spec.md — {expected_fields}"]
+
+
+def test_repair_lifecycle_mixed_report_names_unchanged_documents(tmp_path: Path) -> None:
+    """Criterion 5: changed spec and untouched design/plan all appear in the same report."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\nstatus: draft\nimplementation_status: none\n---\n\n# Document\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original, encoding="utf-8")
+    baseline = stage2.lifecycle_snapshot(folder)
+    (folder / "spec.md").write_text(original.replace("status: draft", "status: accepted"), encoding="utf-8")
+
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+
+    assert not problems
+    assert report == [
+        "plans/changes/demo/spec.md — status",
+        "plans/changes/demo/design.md, plans/changes/demo/plan.md — unchanged",
+    ], "every protected document must be accounted for even when only one needed restoration"
+    for name in stage2.LIFECYCLE_DOCS:
+        assert (folder / name).read_text(encoding="utf-8") == original
+
+
+def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> None:
+    """Criterion 3. Planted fault: the restoration reverts whole documents, unrelated header fields
+    or runner time entries, or an edit to the protected fields alone rejects the repair.
+    The authorized mechanism repair restores the whole header when lifecycle values change."""
+    repair_world(world)
+    plant_lifecycle(world)
+    damaged_spec = lifecycle_damaged(world, "plans/changes/demo/spec.md", status="superseded", implementation=None)
+    damaged_spec = damaged_spec.replace("# Spec\n", "# Spec\n\nThe lifecycle pair keeps its own owners.\n")
+    damaged_plan = lifecycle_damaged(world, "plans/changes/demo/plan.md", status=None, implementation="partial")
+    damaged_plan = damaged_plan.replace("# Plan\n", "# Plan\n\nThe attempt also wrote this line.\n")
+    damaged_plan = damaged_plan.replace("bead: demo-1\n", "bead: demo-1\nlast_reviewed: 2026-11-01\n", 1)
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "plans/changes/demo/spec.md": damaged_spec,
+                    "plans/changes/demo/plan.md": damaged_plan,
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                }
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    spec_now = (world.root / "plans/changes/demo/spec.md").read_text(encoding="utf-8")
+    assert "status: accepted" in spec_now and "status: superseded" not in spec_now
+    assert "implementation_status: none" in spec_now
+    assert "The lifecycle pair keeps its own owners." in spec_now
+    plan_now = (world.root / "plans/changes/demo/plan.md").read_text(encoding="utf-8")
+    assert "status: draft" in plan_now and "implementation_status: none" in plan_now
+    assert "implementation_status: partial" not in plan_now
+    assert "last_reviewed: 2026-11-01" not in plan_now
+    assert "The attempt also wrote this line." in plan_now
+    committed_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "last_reviewed: 2026-11-01" not in committed_plan
+    assert "The attempt also wrote this line." in committed_plan
+    entries = runner_entries(world.plan)
+    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    # A second repair whose only plant is the protected fields passes the same checks.
+    world.write_record([("L1-2", "taken — not a test — the runner owns the transition", "no")])
+    script_repair(
+        world,
+        [
+            {
+                "stdout": "L1-2: fixed — not a test — the orchestrator owns the transition",
+                "plant": {
+                    "plans/changes/demo/spec.md": lifecycle_damaged(
+                        world, "plans/changes/demo/spec.md", status="superseded", implementation=None
+                    )
+                },
+                "append": {},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    spec_now = (world.root / "plans/changes/demo/spec.md").read_text(encoding="utf-8")
+    assert "status: accepted" in spec_now and "status: superseded" not in spec_now
+    assert "The lifecycle pair keeps its own owners." in spec_now
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-2"] == "fixed — not a test — the orchestrator owns the transition"
+    assert "plans/changes/demo/spec.md — status" in restored_line(world)
+
+
+@pytest.mark.parametrize("created", [False, True], ids=["absent", "created-by-the-attempt"])
+def test_repair_lifecycle_protection_allows_no_design(world: World, created: bool) -> None:
+    """Criterion 4. Planted fault: protection creates the absent optional design, refuses the repair
+    for its absence, or keeps a design without an orchestrator baseline."""
+    repair_world(world)
+    plant_lifecycle(world, design=False)
+    planted_design = (
+        "---\ntitle: Design\nstatus: draft\nimplementation_status: partial\nbead: demo-1\n---\n\n# Design\n"
+    )
+    plant = {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}
+    if created:
+        plant["plans/changes/demo/design.md"] = planted_design
+    script_repair(world, [repair_step(plant=plant)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert not (world.root / "plans/changes/demo/design.md").exists()
+    line = restored_line(world)
+    if created:
+        assert "design.md — removed" in line
+    else:
+        assert "design.md" not in line
+        assert "plans/changes/demo/plan.md, plans/changes/demo/spec.md — unchanged" in line
+    assert "plans/changes/demo/spec.md" in line
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    ["accepted", "rejected", "unchanged", "refused"],
+    ids=["restored", "rejected", "unchanged", "refused"],
+)
+def test_repair_lifecycle_report_describes_each_attempt(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    scenario: str,
+) -> None:
+    """Criterion 5. Planted fault: an attempt's bookkeeping stays silent, claims a restoration it did
+    not perform, or a refused restoration is reported as success."""
+    repair_world(world)
+    plant_lifecycle(world)
+    damage = {
+        "plans/changes/demo/spec.md": lifecycle_damaged(
+            world, "plans/changes/demo/spec.md", status="superseded", implementation=None
+        ),
+        "plans/changes/demo/plan.md": lifecycle_damaged(
+            world, "plans/changes/demo/plan.md", status=None, implementation="partial"
+        ),
+    }
+    spec_line = f"{stage2.LIFECYCLE_LABEL}: plans/changes/demo/spec.md — status"
+    unchanged = "plans/changes/demo/plan.md, plans/changes/demo/spec.md — unchanged"
+    if scenario == "accepted":
+        script_repair(
+            world,
+            [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})],
+            make=[{"stdout": "green\n"}],
+        )
+        assert world.run("repair") == 0
+        line = restored_line(world)
+        assert spec_line in line and "plans/changes/demo/plan.md — status, implementation_status" in line
+        assert "plans/changes/demo/design.md — unchanged" in line
+    elif scenario == "rejected":
+        script_repair(
+            world,
+            [
+                repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}),
+                repair_step(),
+            ],
+            make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+        )
+        assert world.run("repair") == 0
+        assert spec_line in world.text()
+        assert spec_line in prompt_of(world.calls("codex")[1])
+        assert restored_line(world).startswith(stage2.RESTORATION_PREFIX)
+    elif scenario == "unchanged":
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+        assert world.run("repair") == 0
+        assert unchanged in restored_line(world)
+        assert stage2.LIFECYCLE_UNCHANGED in restored_line(world)
+    else:
+        folder = world.root / "plans" / "changes" / "demo"
+        script_repair(
+            world,
+            [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})],
+            make=[{"stdout": "must not run\n"}],
+        )
+        outside = tmp_path / "moved-demo"
+        real_codex = stage2.run_codex
+
+        def codex(*args, **kwargs):
+            result = real_codex(*args, **kwargs)
+            shutil.move(folder, outside)
+            folder.symlink_to(outside)
+            return result
+
+        monkeypatch.setattr(stage2, "run_codex", codex)
+        assert world.run("repair") == 2
+        assert "lifecycle field restoration is refused" in capsys.readouterr().err
+        assert stage2.RESTORATION_PREFIX not in world.text()
+        assert unchanged not in world.text()
+
+
+def test_repair_lifecycle_prompts_name_the_protected_fields(world: World) -> None:
+    """Criterion 6. Planted fault: either repair route omits a protected field, a protected document
+    or the automatic restoration rule from its instructions."""
+    repair_world(world)
+    for prompt in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
+        text = flat(prompt)
+        for needle in (
+            "After every attempt the runner also restores `status` and `implementation_status`",
+            "in the change's `spec.md`, optional `design.md` and `plan.md`",
+            "to the values they had before the call",
+            "a repair whose remedy needs a lifecycle change is repaired by hand, not by an attempt",
+        ):
+            assert needle in text, needle
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    codex_prompt = flat(prompt_of(world.calls("codex")[0]))
+    assert "restores `status` and `implementation_status`" in codex_prompt
+    assert "`plan.md`" in codex_prompt
+    world.write_record([("L1-2", "taken — not a test — the runner owns the transition", "no")])
+    world.script(
+        claude=[{"stdout": "L1-2: fixed — not a test — the orchestrator owns the transition", "append": {}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair", "demo", "--stage2-off", "Codex unavailable") == 0
+    claude_prompt = flat(prompt_of(world.calls("claude")[0]))
+    assert "restores `status` and `implementation_status`" in claude_prompt
+    assert "`plan.md`" in claude_prompt
+
+
+def test_repair_status_changes_are_hand_repairs() -> None:
+    """Criterion 7. Planted fault: the workflow sends a lifecycle-changing finding to the model, or
+    leaves the transition's owner unspecified. The held prompt's sentence is the orchestrator's edit."""
+    workflow_text = section(WORKFLOW.read_text(encoding="utf-8"), "### Repairing taken findings")
+
+    def check_lifecycle(text: str) -> None:
+        workflow = flat(text)
+        for needle in (
+            "After every repair attempt the runner puts `status` and `implementation_status` in the change's "
+            "`spec.md`, optional `design.md` and `plan.md` back to the values they had before that attempt's call",
+            "the attempt's bookkeeping names what was restored, or says the fields stayed unchanged",
+            "A finding whose remedy requires changing one of those two fields is therefore repaired by hand: "
+            "the orchestrator repairs that finding itself before handing the remaining taken rows to the model",
+            "An approval or an implementation transition stays the orchestrator's act; a model attempt never makes one",
+        ):
+            assert needle in workflow, needle
+
+    check_lifecycle(workflow_text)
+    for broken in (
+        workflow_text.replace(
+            "the orchestrator repairs that finding itself before\nhanding the remaining taken rows to the model",
+            "the orchestrator sends that finding to the model with the rest",
+        ),
+        workflow_text.replace(
+            "is therefore repaired by hand: the orchestrator repairs that finding itself",
+            "is sent to the model with the rest of the taken rows",
+        ),
+        workflow_text.replace(
+            "a model attempt\nnever makes one",
+            "a model attempt\nmay make one when the checks pass",
+        ),
+    ):
+        with pytest.raises(AssertionError):
+            check_lifecycle(broken)
+    # The held prompt carries the same exception before the hand-off (plan step 4, orchestrator edit).
+    prompt = flat((REPO_ROOT / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8"))
+    needle = "is repaired by hand first: the runner restores those two fields after every repair attempt"
+    assert needle in prompt
+    assert prompt.index(needle) < prompt.index("Then hand the remaining taken rows to the repair")
 
 
 def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:
@@ -18413,7 +19514,9 @@ def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
     assert [row[6] for row in stage2.record_rows(text)] == ["acme-v1-free", "acme-v1-free"]
     assert (
         stage2.select_free(
-            {"provider": "opencode-go", "id_suffix": "-free"}, [{"provider": "opencode-go", "model": "a|b-free"}]
+            {"provider": "opencode-go", "id_suffix": "-free"},
+            [{"provider": "opencode-go", "model": "a|b-free"}],
+            root=world.root,
         )
         == []
     )
