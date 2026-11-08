@@ -562,6 +562,41 @@ def test_preflight_failure_leaves_entire_batch_unchanged(
     assert "archived plans/changes/good-one" not in combined, "a refusal still moved part of the batch"
 
 
+@pytest.mark.parametrize("key", archive.LIFECYCLE)
+@pytest.mark.parametrize("form", ["literal", "folded", "quoted", "multiline-plain", "mapping"])
+def test_lifecycle_values_must_be_single_line_plain_scalars(
+    plans_repo: Fixture, capsys: pytest.CaptureFixture[str], key: str, form: str
+) -> None:
+    fx = plans_repo
+    fx.add("alpha-good", files=_closed_files("b-good"))
+    text = _artefact("Unsupported lifecycle value", "b-bad")
+    original = {
+        "status": "draft",
+        "implementation_status": "none",
+        "updated": "2026-10-02",
+        "last_reviewed": "2026-10-02",
+    }[key]
+    value = {
+        "literal": f"|-\n  {original}",
+        "folded": f">-\n  {original}",
+        "quoted": f'"{original}"',
+        "multiline-plain": f"\n  {original}",
+        "mapping": f"\n  nested: {original}",
+    }[form]
+    text = text.replace(f"{key}: {original}\n", f"{key}: {value}\n")
+    fx.add("beta-bad", files={"spec.md": text})
+    fx.set_render({"b-good": "closed", "b-bad": "closed"})
+    before = _snapshot(fx.root)
+
+    assert archive.main(["--write"]) == 1, "unsupported lifecycle syntax must refuse the entire batch"
+    assert _snapshot(fx.root) == before, "preflight must reject the value before any move or rewrite"
+    captured = capsys.readouterr()
+    diagnostic = captured.out + captured.err
+    assert "plans/changes/beta-bad/spec.md" in diagnostic
+    assert f"'{key}'" in diagnostic
+    assert "single-line plain scalar" in diagnostic
+
+
 # ---------------------------------------------------------------------------
 # Criterion 7 — an I/O or index failure reports completed and unfinished work
 # ---------------------------------------------------------------------------

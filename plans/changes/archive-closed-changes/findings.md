@@ -950,7 +950,7 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:260,440 | A closed folder with valid YAML `status: \|-` followed by an indented `draft` passes preflight. Rewriting only the first line leaves `draft` underneath, so the archived status parses as `accepted draft`. The command can remove the source and return success with an invalid completion status. Reject unsupported multiline values before any move or rewrite their complete YAML value safely. [Acceptance criteria 4, 6] | Codex | taken — reproduced fault inside the spec, third case of one mechanism (L4-2, L6-1): preflight blocks any folder whose lifecycle keys (status, implementation_status, updated, last_reviewed) are not single-line plain scalars, naming the file and key, so no rewrite can leave a continuation line; one test with a block-scalar status | — |
+| R-1 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:260,440 | A closed folder with valid YAML `status: \|-` followed by an indented `draft` passes preflight. Rewriting only the first line leaves `draft` underneath, so the archived status parses as `accepted draft`. The command can remove the source and return success with an invalid completion status. Reject unsupported multiline values before any move or rewrite their complete YAML value safely. [Acceptance criteria 4, 6] | Codex | fixed — tests/test_archive_closed_changes.py::test_lifecycle_values_must_be_single_line_plain_scalars | — |
 
 Phase 6 verdict: codex 01a1b8d2-cdd5-7f82-a73f-812a92ad059c, 2026-11-08
 Reviewer session: codex 01a1b8d2-cdd5-7f82-a73f-812a92ad059c — a fresh session reviewed: no phase-2a session was recorded
@@ -1037,3 +1037,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3608 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3611 commits, 12 rules.

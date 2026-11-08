@@ -258,15 +258,29 @@ def _invalid_field(art: Artefact) -> str:
 
 
 def _uneditable(art: Artefact) -> str:
-    """'' when every lifecycle field maps to one findable top-level line.
+    """'' when every lifecycle field is a findable, single-line plain scalar.
 
     The edit is line surgery, so a quoted or otherwise unusual key spelling
-    would be appended as a second mapping key — refused, never guessed.
+    would be appended as a second mapping key. Non-plain or multiline values
+    could leave continuation lines behind; refuse them before any move.
     """
     line_keys = {key for line in art.header.split("\n") if (key := _header_key(line))}
     for name in LIFECYCLE:
         if (name in art.meta) != (name in line_keys):
             return f"the '{name}' header line cannot be edited safely (quoted or indented key)"
+    # Parsing preserves scalar style and source spans that the constructed
+    # Python values lose (e.g. `|-\n  draft` also constructs the string draft).
+    # The header has already passed the unique-key YAML loader.
+    node = yaml.compose(art.header, Loader=_UniqueKeyLoader)
+    for key, value in node.value:
+        if key.value in LIFECYCLE and (
+            not isinstance(value, yaml.ScalarNode)
+            or value.style is not None
+            or value.start_mark.line != key.start_mark.line
+            or value.end_mark.line != key.start_mark.line
+            or not value.value
+        ):
+            return f"the '{key.value}' header value must be a single-line plain scalar"
     return ""
 
 
@@ -423,7 +437,7 @@ def _classify(
         if status != "closed":
             skipped.append((where, f"bead {bead} is open (status: {status})"))
             continue
-        malformed = [(art, why) for art in loaded if (why := _invalid_field(art) or _uneditable(art))]
+        malformed = [(art, why) for art in loaded if (why := _uneditable(art) or _invalid_field(art))]
         if malformed:
             art, why = malformed[0]
             blocked.append((where, f"{_display(art.path)}: {why}"))
