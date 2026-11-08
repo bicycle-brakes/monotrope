@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ywbh
@@ -112,15 +112,21 @@ makes the commit; draft checks do not claim implementation evidence.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_origin_workflow_assigns_provenance_to_the_orchestrator — removing ownership or either causal meaning from the workflow passes
-- 2: not yet written tests/test_stage2.py::test_invalid_accepted_origins_hold_all_consuming_verbs — a taken/fixed row at any authoritative location permits a call, write, deletion or consumption
-- 2: not yet written tests/test_stage2.py::test_invalid_origin_holds_release_reconciliation — either already-released retry branch rewrites findings or removes the record before validation
-- 3: not yet written tests/test_stage2.py::test_origin_refusal_identifies_rows_sources_and_correction — one offending ID, source, allowed value or orchestrator instruction is omitted
-- 4: not yet written tests/test_stage2.py::test_valid_origins_preserve_existing_admission_checks — canonical values are refused or permit continuation without existing decision/test evidence
-- 5: not yet written tests/test_stage2.py::test_nonaccepted_rows_need_no_origin — arbitrary Origin on rejected/open rows triggers the new refusal, or bypasses the old undecided-row refusal
-- 6: not yet written tests/test_stage2.py::test_reviewer_origin_is_not_filled_automatically — initial intake changes arbitrary/blank Origin or the retained answer
-- 7: not yet written tests/test_stage2.py::test_origin_survives_repair_and_release — fixed marking, ordinary release or release reconciliation overwrites valid Origin
+- 1: tests/test_stage2.py::test_origin_workflow_assigns_provenance_to_the_orchestrator — removing ownership or either causal meaning from the workflow passes
+- 2: tests/test_stage2.py::test_invalid_accepted_origins_hold_all_consuming_verbs — a taken/fixed row at any authoritative location permits a call, write, deletion or consumption
+- 2: tests/test_stage2.py::test_invalid_origin_holds_release_reconciliation — either already-released retry branch rewrites findings or removes the record before validation
+- 3: tests/test_stage2.py::test_origin_refusal_identifies_rows_sources_and_correction — one offending ID, source, allowed value or orchestrator instruction is omitted
+- 4: tests/test_stage2.py::test_valid_origins_preserve_existing_admission_checks — canonical values are refused or permit continuation without existing decision/test evidence
+- 5: tests/test_stage2.py::test_nonaccepted_rows_need_no_origin — arbitrary Origin on rejected/open rows triggers the new refusal, or bypasses the old undecided-row refusal
+- 6: tests/test_stage2.py::test_reviewer_origin_is_not_filled_automatically — initial intake changes arbitrary/blank Origin or the retained answer
+- 7: tests/test_stage2.py::test_origin_survives_repair_and_release — fixed marking, ordinary release or release reconciliation overwrites valid Origin
 - 8: tests/test_stage2.py::test_two_fix_r_rounds_stop_the_loop — accepted repair findings do not stop the next round, or an accepted base row fails to quiet this brake
-- 8: not yet written tests/test_stage2.py::test_origin_brake_survives_released_history — releasing earlier rounds or changing taken to fixed resets the brake, or rejected arbitrary Origin counts as accepted
+- 8: tests/test_stage2.py::test_origin_brake_survives_released_history — releasing earlier rounds or changing taken to fixed resets the brake, or rejected arbitrary Origin counts as accepted
+
+## Runner route — 2026-11-08
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempts and one Sonnet attempt each failed one test; attempt 3 saved at refs/stage2/attempts/origin-cell/orchestrator-saved-20261108.
 
 ## Time used
+
+2026-11-08 10:39:31–11:22:03 UTC, 2552 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

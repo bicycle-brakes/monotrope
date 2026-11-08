@@ -3135,6 +3135,9 @@ def review(root: Path, change: str) -> None:
         if refusal:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
@@ -3424,6 +3427,41 @@ def accepted_row(row: list[str]) -> bool:
     decision 7; ADR 0015's three-round reading is superseded).
     """
     return row[7].lower().startswith(("taken", "fixed"))
+
+
+# The orchestrator, not a reviewer, sets a decided finding's provenance (bead coding-harness-ywbh): `base`
+# for a finding no repair caused, `fix-r<N>` for one that repair round N caused. The repair brake reads it.
+ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
+
+
+def origin_refusal(record: str | None, findings_text: str) -> str | None:
+    """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
+
+    Every authoritative accepted (`taken` or `fixed`) row of the change is read: the loop record's own
+    rows, the released loop rows and the phase-6 rows. A rejected or undecided row needs no provenance.
+    The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
+    values the orchestrator may write.
+    """
+    released, phase6 = findings_rows(findings_text)
+    places = (
+        ("loop record", record_rows(record) if record is not None else []),
+        ("released block", released),
+        ("phase-6 table", phase6),
+    )
+    found = [
+        f"{row[0]} ({place}, Origin `{row[3]}`)"
+        for place, rows in places
+        for row in rows
+        if accepted_row(row) and not ORIGIN_VALUE.fullmatch(row[3])
+    ]
+    if not found:
+        return None
+    return (
+        f"accepted rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it decides "
+        "a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without a "
+        "leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
+        "answer. Nothing is called, released, repaired or removed."
+    )
 
 
 CUT_LINE = "The diff was cut:"
@@ -3773,6 +3811,10 @@ def release(root: Path, change: str) -> list[list[str]]:
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = read_record(change, root)
+    # Before the reconciliation branch too: it rewrites findings.md and removes the record.
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None and (
         released_digest(text) == record_digest(record) or released_identity(text) == record_identity(record)
     ):
@@ -8247,6 +8289,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
+    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    refusal = origin_refusal(read_record(change, root), current)
+    if refusal:
+        raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
     ids = [row[0] for _, row in taken]
@@ -8374,6 +8420,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
+    refusal = origin_refusal(record, findings_text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None:
         refusal = released_overlap_refusal(record, findings_text)
         if refusal:
