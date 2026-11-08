@@ -121,7 +121,7 @@ this plan follows the phase-3 prompt, without claiming the missing gate ran.
    live evidence rows; offline green alone is insufficient.
 
 No deletions. Leave `research.md` and `decisions.md` unchanged during
-implementation. Leave production `scripts/`, Pi package/lock/install,
+implementation. Leave production `scripts/` (except the one research-selector signature line and its capture caller, spec "Protected areas", decision Q-3), Pi package/lock/install,
 `tests/pi_network_guard.mjs`, `tests/pi_contract_driver.mjs`, governance,
 ADRs, prompts, templates, CI, agent configuration, other change folders and
 `docs/WORKFLOW.md` untouched. A production adapter/runner defect or absent

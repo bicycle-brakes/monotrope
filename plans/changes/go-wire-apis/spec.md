@@ -100,6 +100,12 @@ their existing generic API and admission mechanisms are reused. The held
 `model-endpoints.yaml` is the sole configuration exception and belongs to the
 orchestrator, never an implement/repair attempt.
 
+One exception, decided by the maintainer on 2026-11-08 (decision Q-3): the
+research selector in `scripts/stage2_swarm.py` (`select_research_catalog`)
+takes `measured_wire_apis` as a required argument instead of defaulting to
+`openai-completions`, and its capture caller in `scripts/research_capture.py`
+passes the capture address's APIs; no other line of either file changes.
+
 ## Definition of Done
 
 - The offline contracts and `make verify` pass after the orchestrator's final

@@ -50,3 +50,18 @@ context: |
   Architecture change: two new wire APIs in the runner instead of three.
 
 In the context of a Google endpoint without an admissible model, facing waiting for it or shipping what is measured, we decided to ship the two measured APIs and defer Google, to achieve five usable models now, accepting a second, smaller change for Google later. — 2026-11-07
+
+## Q-3 · The research selector's measured-API argument becomes required
+
+asked: 2026-11-08
+answer: "Spec erweitern" — the spec's protected areas name the one signature change in scripts/stage2_swarm.py (select_research_catalog takes measured_wire_apis without a default) and its caller in scripts/research_capture.py as an allowed exception; the repair stays.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase 6 found F6-1 (MAJOR): the loop repair of row L3-6 made measured_wire_apis a required argument of the research selector and updated its capture caller, although the spec protects the swarm code.
+  Intention: the lane stood still on a scope question only the maintainer can answer.
+  Today: main defaults the argument to openai-completions; the live caller passes the APIs anyway.
+  Repository change: one exception paragraph in the spec's protected areas and one clause in the plan's boundaries.
+  Architecture change: none; a caller can no longer silently fall back to one wire API.
+
+In the context of a loop repair that touched protected swarm code, facing a choice between reverting it and widening the spec by one signature line, we decided to widen the spec, to achieve that no research selection silently falls back to one wire API, accepting a slightly larger change footprint. — 2026-11-08
