@@ -35,6 +35,7 @@ import json
 import math
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -86,9 +87,8 @@ LINK = re.compile(r"\[(?P<text>[^\]]*)\]\((?P<target>[^)\s]+)\)")
 DATED_PREFIX = re.compile(r"\d{4}-\d{2}-\d{2}")
 RUN_PLAN_NAME = re.compile(r"run[-_]plan")
 HANDOVER_PATH = re.compile(r"(?P<path>(?:[\w.-]+/)*<date>-<name>\.md)")
-FALLBACK = re.compile(r"(?P<name>[A-Z][A-Za-z0-9. -]*?)\s+(?:at effort\s+(?:`[^`]+`|[\w-]+)\s+)?after two failed")
 TRACKER_RULE = re.compile(r"Use `(?P<command>[^`]+)`, never bare `(?P<bare>[^`]+)`")
-DECLARATION = re.compile(r"is the only instruction file")
+DECLARATION = re.compile(r"(?P<name>`[^`]+`|[\w./-]+)\s+is the only instruction file")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
@@ -196,12 +196,22 @@ def _read_repair_fallback(workflow: str) -> Reading:
     row = _repair_row(workflow)
     if not row.read:
         return row
-    row_text = " | ".join(row.value)
-    names = sorted({match.group("name").strip() for match in FALLBACK.finditer(row_text)})
+    # Work within the routing row's explanatory cell, then isolate the
+    # identifier clause. Capitalisation is not a boundary for model names.
+    names: list[str] = []
+    for cell in row.value[2:]:
+        for match in re.finditer(r"\s+after two failed\b", cell):
+            prefix = cell[: match.start()]
+            prefix = re.sub(r"\s+at effort\s+(?:`[^`]+`|[\w-]+)\s*$", "", prefix)
+            clauses = re.split(r"[;,]|\b(?:and|then)\s+", prefix)
+            if len(clauses) < 2:
+                return Reading.unread("the fallback has no supported identifier clause")
+            clause = clauses[-1].strip()
+            name = _plain_text(clause)
+            if name:
+                names.append(name)
     if len(names) != 1:
-        return Reading.unread(
-            f"expected exactly one '... after two failed' fallback declaration in the routing row, found {len(names)}"
-        )
+        return Reading.unread("expected exactly one fallback identifier clause in the routing row")
     return Reading.ok(names[0])
 
 
@@ -306,33 +316,38 @@ def _read_instructions(agents: str, source: str) -> Reading:
         if re.match(r"^##\s", line):
             break
         opening.append(line)
-    count = len(DECLARATION.findall("\n".join(opening)))
+    declarations = list(DECLARATION.finditer("\n".join(opening)))
+    count = len(declarations)
     if count != 1:
         return Reading.unread(
             f"expected exactly one sole-instruction-file declaration in the opening of {source}, found {count}"
         )
-    return Reading.ok(PurePosixPath(source).name)
+    declared = declarations[0].group("name").strip("`")
+    # "This" names the document containing the declaration; explicit names
+    # refer to that named file, even when the source document stays in place.
+    return Reading.ok(PurePosixPath(source if declared == "This" else declared).name)
 
 
 def _expected_answer(qid: str, texts: dict[str, str], by_id: dict[str, dict[str, Any]]) -> Reading:
     """The live expected answer for one question id, derived from its named source."""
     question = by_id[qid]
     text = texts[question["source"]]
-    if qid == "repair-model":
+    resolver = question["resolver"]
+    if resolver == "repair-model":
         return _read_repair_model(text)
-    if qid == "repair-fallback":
+    if resolver == "repair-fallback":
         return _read_repair_fallback(text)
-    if qid == "verify-floor":
+    if resolver == "verify-floor":
         return _read_literal(text, "DEFAULT_MEMORY_FLOOR", "number")
-    if qid == "verify-floor-override":
+    if resolver == "verify-floor-override":
         return _read_literal(text, "FLOOR_ENV", "string")
-    if qid == "run-plans":
+    if resolver == "run-plans":
         return _read_run_plans(text)
-    if qid == "handovers":
+    if resolver == "handovers":
         return _read_handovers(text)
-    if qid == "tracker-command":
+    if resolver == "tracker-command":
         return _read_tracker_rule(text)
-    if qid == "instructions":
+    if resolver == "instructions":
         return _read_instructions(text, question["source"])
     return Reading.unread(f"no source reader is registered for '{qid}'")
 
@@ -402,9 +417,13 @@ def _escapes(relative: str) -> bool:
     return pure.is_absolute() or ".." in pure.parts
 
 
+def _supported_version(value: Any) -> bool:
+    return type(value) is int and value == SCHEMA_VERSION
+
+
 def _load_question_set() -> QuestionSet:
     document = _load_json_strict(QUESTION_FILE)
-    if not isinstance(document, dict) or document.get("schema_version") != SCHEMA_VERSION:
+    if not isinstance(document, dict) or not _supported_version(document.get("schema_version")):
         raise NotMeasured("the question set has an unsupported schema_version")
     questions = document.get("questions")
     if not isinstance(questions, list) or len(questions) != QUESTION_COUNT:
@@ -418,6 +437,8 @@ def _load_question_set() -> QuestionSet:
             if not isinstance(entry[field], str) or not entry[field].strip():
                 raise NotMeasured(f"a question entry carries a non-text {field!r}")
         qid = entry["id"]
+        if qid not in KNOWN_RESOLVERS:
+            raise NotMeasured("the question set carries an unknown question id")
         if entry["answer_type"] not in ANSWER_TYPES:
             raise NotMeasured(f"question '{qid}' carries an unsupported answer type")
         if entry["resolver"] not in KNOWN_RESOLVERS:
@@ -446,7 +467,7 @@ def _load_questionnaire(path: Path | None, qset: QuestionSet) -> dict[str, Any]:
     document = _load_json_strict(path)
     if not isinstance(document, dict):
         raise NotMeasured("the questionnaire is not a JSON object")
-    if document.get("schema_version") != SCHEMA_VERSION:
+    if not _supported_version(document.get("schema_version")):
         raise NotMeasured("the questionnaire has an unsupported schema_version")
     run_id = document.get("run_id")
     if not isinstance(run_id, str) or not run_id.strip():
@@ -598,6 +619,87 @@ def _reject_symlinks(path: Path) -> None:
             )
 
 
+def _validate_record(row: dict[str, Any]) -> None:
+    """Require the complete supported result shape, without deriving old answers."""
+    fields = {
+        "schema_version",
+        "run_id",
+        "prepared_at",
+        "recorded_at",
+        "commit",
+        "question_set_sha256",
+        "source_sha256",
+        "harness",
+        "model",
+        "context",
+        "access",
+        "fresh_session",
+        "purpose",
+        "target",
+        "answers",
+        "verdicts",
+        "correct",
+        "total",
+    }
+    if set(row) != fields:
+        raise NotMeasured("the result history carries an incomplete or unsupported record")
+    for name in ("run_id", "harness", "model", "context", "access"):
+        if not isinstance(row[name], str) or not row[name].strip():
+            raise NotMeasured("the result history carries an invalid session label or run id")
+    for name in ("prepared_at", "recorded_at"):
+        try:
+            stamp = datetime.fromisoformat(row[name])
+            if stamp.utcoffset() != UTC.utcoffset(None):
+                raise ValueError
+        except (TypeError, ValueError):
+            raise NotMeasured("the result history carries an invalid UTC date") from None
+    for name, pattern in (("commit", HEX40), ("question_set_sha256", HEX64)):
+        if not isinstance(row[name], str) or pattern.fullmatch(row[name]) is None:
+            raise NotMeasured("the result history carries an invalid commit or fingerprint")
+    sources = row["source_sha256"]
+    if (
+        not isinstance(sources, dict)
+        or not sources
+        or any(
+            not isinstance(path, str)
+            or _escapes(path)
+            or not isinstance(digest, str)
+            or HEX64.fullmatch(digest) is None
+            for path, digest in sources.items()
+        )
+    ):
+        raise NotMeasured("the result history carries invalid source fingerprints")
+    if row["fresh_session"] is not True or not isinstance(row["purpose"], str) or row["purpose"] not in PURPOSES:
+        raise NotMeasured("the result history carries invalid measurement metadata")
+    if (row["purpose"] == "baseline" and row["target"] is not None) or (
+        row["purpose"] == "pre-change" and (not isinstance(row["target"], str) or row["target"] not in TARGETS)
+    ):
+        raise NotMeasured("the result history carries an invalid target")
+    if not isinstance(row["answers"], dict) or set(row["answers"]) - KNOWN_RESOLVERS:
+        raise NotMeasured("the result history carries invalid submitted answers")
+    verdicts = row["verdicts"]
+    if (
+        not isinstance(verdicts, list)
+        or len(verdicts) != QUESTION_COUNT
+        or any(
+            not isinstance(item, dict)
+            or set(item) != {"id", "verdict"}
+            or not isinstance(item["id"], str)
+            or item["id"] not in KNOWN_RESOLVERS
+            or item["verdict"] not in ("correct", "incorrect")
+            for item in verdicts
+        )
+        or len({item["id"] for item in verdicts}) != QUESTION_COUNT
+    ):
+        raise NotMeasured("the result history carries invalid verdicts")
+    if (
+        type(row["total"]) is not int
+        or row["total"] != QUESTION_COUNT
+        or (type(row["correct"]) is not int or row["correct"] != sum(item["verdict"] == "correct" for item in verdicts))
+    ):
+        raise NotMeasured("the result history carries an invalid score")
+
+
 def _validate_history(raw: bytes) -> list[dict[str, Any]]:
     if raw == b"":
         return []
@@ -612,16 +714,17 @@ def _validate_history(raw: bytes) -> list[dict[str, Any]]:
         if not segment.strip():
             raise NotMeasured(f"result history line {number} is blank")
         try:
-            row = json.loads(segment)
-        except json.JSONDecodeError:
-            raise NotMeasured(f"result history line {number} is not valid JSON") from None
+            row = json.loads(segment, object_pairs_hook=_reject_duplicate_keys)
+        except (json.JSONDecodeError, DuplicateJsonKey):
+            raise NotMeasured(f"result history line {number} is not valid JSON with unique keys") from None
         if not isinstance(row, dict):
             raise NotMeasured(f"result history line {number} is not a JSON object")
-        if row.get("schema_version") != SCHEMA_VERSION:
+        if not _supported_version(row.get("schema_version")):
             raise NotMeasured(f"result history line {number} has an unsupported schema_version")
         run_id = row.get("run_id")
         if not isinstance(run_id, str) or not run_id:
             raise NotMeasured(f"result history line {number} carries no run id")
+        _validate_record(row)
         rows.append(row)
     return rows
 
@@ -655,35 +758,68 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
     """One serialized, rollback-able append to the real result file — nothing else is written."""
     line = (json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
     _reject_symlinks(RESULTS_PATH)
+    recheck()
+    created_dirs: list[Path] = []
+    handle: int | None = None
+    created_file = False
+    succeeded = False
+    end: int | None = None
+    writing = False
     try:
-        RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        raise NotMeasured("cannot create the result directory") from None
-    try:
-        handle = os.open(RESULTS_PATH, os.O_RDWR | os.O_CREAT, 0o644)
-    except OSError:
-        raise NotMeasured("cannot open the result history") from None
-    try:
+        missing = RESULTS_PATH.parent
+        while not missing.exists():
+            created_dirs.append(missing)
+            missing = missing.parent
+        # Track only directories this attempt actually creates.
+        pending = list(reversed(created_dirs))
+        created_dirs = []
+        for directory in pending:
+            try:
+                directory.mkdir()
+                created_dirs.append(directory)
+            except FileExistsError:
+                pass
+        flags = os.O_RDWR | os.O_NONBLOCK | os.O_NOFOLLOW
+        try:
+            handle = os.open(RESULTS_PATH, flags | os.O_CREAT | os.O_EXCL, 0o644)
+            created_file = True
+        except FileExistsError:
+            handle = os.open(RESULTS_PATH, flags)
+        if not stat.S_ISREG(os.fstat(handle).st_mode):
+            raise NotMeasured("the result history must be a regular file")
         _hold_lock(handle)
         end = os.fstat(handle).st_size
-        try:
-            rows = _validate_history(_read_all(handle, end))
-            if any(row.get("run_id") == record["run_id"] for row in rows):
-                raise NotMeasured("this run id is already in the result history")
-            recheck()
-            os.lseek(handle, 0, os.SEEK_END)
-            written = 0
-            while written < len(line):
-                written += os.write(handle, line[written:])
-            _fsync(handle)
-        except NotMeasured:
-            os.ftruncate(handle, end)
+        rows = _validate_history(_read_all(handle, end))
+        if any(row.get("run_id") == record["run_id"] for row in rows):
+            raise NotMeasured("this run id is already in the result history")
+        recheck()
+        os.lseek(handle, 0, os.SEEK_END)
+        writing = True
+        written = 0
+        while written < len(line):
+            count = os.write(handle, line[written:])
+            if count == 0:
+                raise OSError("zero-byte append")
+            written += count
+        _fsync(handle)
+        succeeded = True
+    except (OSError, NotMeasured) as exc:
+        if writing and handle is not None and end is not None:
+            try:
+                os.ftruncate(handle, end)
+            except OSError:
+                raise NotMeasured("writing the result history failed and rollback failed") from None
+        if isinstance(exc, NotMeasured):
             raise
-        except OSError as exc:
-            os.ftruncate(handle, end)
-            raise NotMeasured("writing the result history failed; the previous records stand unchanged") from exc
+        raise NotMeasured("cannot open or write the result history; no measurement recorded") from exc
     finally:
-        os.close(handle)
+        if not succeeded and created_file:
+            RESULTS_PATH.unlink()
+        if handle is not None:
+            os.close(handle)
+        if not succeeded:
+            for directory in reversed(created_dirs):
+                directory.rmdir()
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +828,11 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
 
 
 def _questionnaire_document(qset: QuestionSet) -> dict[str, Any]:
+    texts = {rel: _read_source(ROOT / rel) for rel in qset.sources}
+    for qid in qset.ids:
+        reading = _expected_answer(qid, texts, qset.by_id)
+        if not reading.read:
+            raise NotMeasured(f"cannot derive the expected answer for '{qid}': {reading.reason}")
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": str(uuid.uuid4()),
@@ -699,6 +840,8 @@ def _questionnaire_document(qset: QuestionSet) -> dict[str, Any]:
         "commit": _head_commit(),
         "question_set_sha256": _sha256_file(QUESTION_FILE),
         "source_sha256": {rel: _sha256_file(ROOT / rel) for rel in qset.sources},
+        "submission_format": "Submit only a JSON object keyed by question id, with each answer as its value. "
+        "Use strings for string/directory answers and a JSON number for number answers; no prose or list.",
         "questions": _question_entries(qset),
     }
 

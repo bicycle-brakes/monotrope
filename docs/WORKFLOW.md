@@ -282,6 +282,27 @@ session with its usual start context and read access to the repository
 (maintainer, 2026-11-08). The scope a run measured is carried in those labels,
 and comparisons hold only between runs that recorded the same scope.
 
+Export the questionnaire to a temporary file, then save the fresh session's
+submission to another temporary file. The submission must be a JSON object
+keyed by question ID: each value is its answer, strings for string/directory
+questions and a JSON number for the numeric question. Do not submit prose,
+a list or the questionnaire itself; missing answers count as incorrect.
+
+```sh
+python3 scripts/outcome_test.py questions > /tmp/outcome-questions.json
+# Hand the questionnaire to the fresh session; save its JSON answer object
+# as /tmp/outcome-answers.json, then record the actual model and session labels:
+python3 scripts/outcome_test.py record \
+  --questionnaire /tmp/outcome-questions.json --answers /tmp/outcome-answers.json \
+  --harness 'Claude Code' --model 'ACTUAL_MODEL_IDENTIFIER' \
+  --context 'Usual Claude Code startup context' --access 'Repository read access' \
+  --fresh-session --purpose baseline
+```
+
+For a pre-change run, replace `--purpose baseline` with
+`--purpose pre-change --target AGENTS.md` or
+`--purpose pre-change --target handover-convention` before editing that source.
+
 The tool runs on demand, never on a schedule: once as the baseline at an
 accepted commit, and before every change to `AGENTS.md` or the handover
 convention (`--purpose pre-change --target AGENTS.md|handover-convention`).

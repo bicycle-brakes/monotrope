@@ -44,8 +44,8 @@ QUESTION_IDS = (
 
 # Sentinel values the fixtures carry: deliberately unlike today's live answers,
 # so every assertion reads the tool's own derivation, never the repository's
-# current text. `instructions` is the one structural value — the fixture file
-# is named AGENTS.md, so its basename matches the live answer by construction.
+# current text. The declaration-change and questionnaire tests separately
+# plant another instruction filename, independent of the source basename.
 SENTINELS: dict[str, Any] = {
     "repair-model": "sentinel-repair-9",
     "repair-fallback": "Sentinel 9.9",
@@ -114,7 +114,7 @@ One verify at a time.
 
 AGENTS_FIXTURE = """# Fixture agents
 
-This is the only instruction file: a fresh reader starts here, and a foreign
+`{instructions}` is the only instruction file: a fresh reader starts here, and a foreign
 `OTHER.md` would silently replace it.
 
 ## House rules
@@ -139,6 +139,7 @@ def _sources_text(**overrides: Any) -> dict[str, str]:
         "handovers": "docs/journal/handovers-sentinel",
         "tracker_command": "tools/bt",
         "tracker_bare": "bt",
+        "instructions": "AGENTS.md",
     } | {key: str(value) for key, value in overrides.items()}
     return {
         "AGENTS.md": AGENTS_FIXTURE.format(**values),
@@ -150,7 +151,18 @@ def _sources_text(**overrides: Any) -> dict[str, str]:
 
 def _git(root: Path, *args: str) -> None:
     subprocess.run(
-        ["git", "-C", str(root), "-c", "user.name=fixture", "-c", "user.email=fixture@example.com", *args],
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -341,13 +353,11 @@ def test_questionnaire_contains_no_answer_key(tmp_path: Path) -> None:
     travelling with the questions.
     """
     root = _write_repo(tmp_path / "repo")
+    _overwrite(root, instructions="SENTINEL-INSTRUCTIONS.md")
+    sentinels = SENTINELS | {"instructions": "SENTINEL-INSTRUCTIONS.md"}
     document = _export(root)
     leaves = _leaves(document)
-    leaked = [
-        f"{qid}={value!r}"
-        for qid, value in SENTINELS.items()
-        if qid != "instructions" and any(leaf == value for leaf in leaves)
-    ]
+    leaked = [f"{qid}={value!r}" for qid, value in sentinels.items() if any(leaf == value for leaf in leaves)]
     assert leaked == [], f"derived values reached the questionnaire: {leaked}"
     assert set(document) == {
         "schema_version",
@@ -357,6 +367,7 @@ def test_questionnaire_contains_no_answer_key(tmp_path: Path) -> None:
         "question_set_sha256",
         "source_sha256",
         "questions",
+        "submission_format",
     }
     for question in document["questions"]:
         assert set(question) == {"id", "text", "answer_type", "source"}
@@ -468,25 +479,28 @@ def test_unread_or_changed_evidence_prevents_recording(tmp_path: Path) -> None:
     assert not history.exists()
 
     _overwrite(root)
+    valid = _export(root)
     conflicting = _sources_text()["AGENTS.md"].replace(
         "## Sessions",
         "4. **Use `other/bx`, never bare `bx`.** A second wrapper.\n\n## Sessions",
     )
     (root / "AGENTS.md").write_text(conflicting, encoding="utf-8")
     _commit(root, "second tracker rule")
-    done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+    done = _record(root, tmp_path, valid, dict(SENTINELS))
     assert done.returncode == 3
     assert "not measured" in done.stderr
 
+    _overwrite(root)
     reworded = _sources_text()["docs/WORKFLOW.md"].replace(
         "at effort `low` after two failed ones",
         "as the second reserve once two attempts have failed",
     )
     (root / "docs" / "WORKFLOW.md").write_text(reworded, encoding="utf-8")
     _commit(root, "reword the fallback clause")
-    done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+    done = _run_tool(root, "questions")
     assert done.returncode == 3
 
+    _overwrite(root)
     stale = _export(root)
     _overwrite(root, floor="12.5")
     done = _record(root, tmp_path, stale, dict(SENTINELS))
@@ -510,8 +524,8 @@ def test_measured_runs_append_one_dated_commit_bound_line(tmp_path: Path) -> Non
     root = _write_repo(tmp_path / "repo")
     history = root / HISTORY_REL
     history.parent.mkdir(parents=True)
-    seed = json.dumps({"schema_version": 1, "run_id": "seed-run", "note": "an earlier run"}) + "\n"
-    history.write_text(seed, encoding="utf-8")
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    seed = history.read_text(encoding="utf-8")
 
     questionnaire = _export(root)
     wrong = {qid: f"zzz-wrong-{qid}" for qid in QUESTION_IDS}
@@ -569,7 +583,8 @@ def test_bad_history_and_append_failure_preserve_old_records(tmp_path: Path, mon
     root = _write_repo(tmp_path / "repo")
     history = root / HISTORY_REL
     history.parent.mkdir(parents=True)
-    good = json.dumps({"schema_version": 1, "run_id": "seed-1"}) + "\n"
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    good = history.read_text(encoding="utf-8")
 
     cases = {
         "truncated": good + '{"schema_version": 1, "run_id": "trunc',
@@ -585,7 +600,9 @@ def test_bad_history_and_append_failure_preserve_old_records(tmp_path: Path, mon
         assert history.read_text(encoding="utf-8") == content, f"{name}: the history was changed"
 
     questionnaire = _export(root)
-    seed = json.dumps({"schema_version": 1, "run_id": questionnaire["run_id"]}) + "\n"
+    previous = json.loads(good)
+    previous["run_id"] = questionnaire["run_id"]
+    seed = json.dumps(previous) + "\n"
     history.write_text(seed, encoding="utf-8")
     done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
     assert done.returncode == 3
@@ -712,6 +729,7 @@ def test_tool_only_writes_explicit_history(tmp_path: Path) -> None:
         "pathlib",
         "re",
         "subprocess",
+        "stat",
         "sys",
         "time",
         "typing",
@@ -735,3 +753,175 @@ def test_tool_only_writes_explicit_history(tmp_path: Path) -> None:
     done = _record(root, tmp_path, _export(root), dict(SENTINELS))
     assert done.returncode == 3
     assert outside_file.read_text(encoding="utf-8") == "elsewhere\n", "the symlinked history was written through"
+
+
+def _module(root: Path) -> Any:
+    spec = importlib.util.spec_from_file_location("outcome_repair_fixture", root / "scripts" / SCRIPT_NAME)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_new_history_rollback_removes_created_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused recheck or failed first append leaves the original absent history absent."""
+    root = _write_repo(tmp_path / "repo")
+    module = _module(root)
+    history = root / HISTORY_REL
+
+    def refuse() -> None:
+        raise module.NotMeasured("snapshot moved")
+
+    with pytest.raises(module.NotMeasured):
+        module._append_record({"run_id": "new"}, refuse)
+    assert not history.parent.exists(), "a refused run created a result directory"
+
+    calls = 0
+
+    def refuse_second_check() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise module.NotMeasured("snapshot moved just before append")
+
+    with pytest.raises(module.NotMeasured):
+        module._append_record({"run_id": "new"}, refuse_second_check)
+    assert not history.parent.exists(), "a late refusal left newly created paths"
+
+    def fail_sync(_handle: int) -> None:
+        raise OSError("injected sync failure")
+
+    monkeypatch.setattr(module, "_fsync", fail_sync)
+    with pytest.raises(module.NotMeasured):
+        module._append_record({"run_id": "new"}, lambda: None)
+    assert not history.parent.exists(), "a failed run left its new file or directory"
+    history.parent.mkdir()
+    with pytest.raises(module.NotMeasured):
+        module._append_record({"run_id": "new"}, lambda: None)
+    assert history.parent.is_dir() and not history.exists(), "remove only paths created by this run"
+
+
+def test_history_requires_regular_file(tmp_path: Path) -> None:
+    """Directories and FIFOs refuse with exit 3, without an exception or unbounded wait."""
+    root = _write_repo(tmp_path / "repo")
+    history = root / HISTORY_REL
+    history.parent.mkdir()
+    questionnaire = _export(root)
+    history.mkdir()
+    done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+    assert done.returncode == 3 and "Traceback" not in done.stderr
+    history.rmdir()
+    os.mkfifo(history)
+    done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+    assert done.returncode == 3 and "Traceback" not in done.stderr, "a FIFO must be refused as not measured"
+    assert "regular file" in done.stderr, "a FIFO must be refused because it is not a regular file"
+    assert history.is_fifo()
+
+
+def test_declared_resolver_and_known_ids(tmp_path: Path) -> None:
+    """The declared resolver changes the reading; unknown identities refuse before export."""
+    root = _write_repo(tmp_path / "repo")
+    path = root / "scripts" / QUESTION_SET_NAME
+    document = json.loads(path.read_text())
+    document["questions"][0]["resolver"] = "repair-fallback"
+    path.write_text(json.dumps(document))
+    _commit(root, "switch resolver")
+    done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+    assert done.returncode == 1, "changing the declared resolver must change grading"
+    assert _verdict_map(_history(root)[-1])["repair-model"] == "incorrect"
+    document["questions"][0]["id"] = "unknown"
+    path.write_text(json.dumps(document))
+    _commit(root, "unknown identity")
+    assert _run_tool(root, "questions").returncode == 3
+
+
+def test_instruction_declaration_controls_answer(tmp_path: Path) -> None:
+    """A differently named declaration changes grading, while question text gives no solution."""
+    root = _write_repo(tmp_path / "repo")
+    path = root / "AGENTS.md"
+    path.write_text(path.read_text().replace("`AGENTS.md` is the only", "`policies/SESSION.md` is the only"))
+    _commit(root, "name another instruction file")
+    document = _export(root)
+    question = next(q for q in document["questions"] if q["id"] == "instructions")
+    assert "AGENTS.md" not in question["text"], "the eighth question must not print its answer"
+    done = _record(root, tmp_path, document, dict(SENTINELS) | {"instructions": "SESSION.md"})
+    assert done.returncode == 0, "the declared basename must be read instead of the source basename"
+    done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+    assert done.returncode == 1
+    assert _verdict_map(_history(root)[-1])["instructions"] == "incorrect"
+
+
+def test_fallback_identifier_ignores_surrounding_prose(tmp_path: Path) -> None:
+    """Capitalised multiword prose cannot become part of the fallback identifier."""
+    root = _write_repo(tmp_path / "repo")
+    for name in ("Sonnet 5.5", "glm_5_3", "openai/gpt-6"):
+        text = _sources_text(repair_fallback=name)["docs/WORKFLOW.md"]
+        text = text.replace(
+            f"one sandboxed attempt; one fresh retry after a failed check, and {name} at effort `low`",
+            f"One sandboxed attempt then {name}",
+        )
+        (root / "docs/WORKFLOW.md").write_text(text)
+        _commit(root, "fallback identifier changed")
+        done = _record(root, tmp_path, _export(root), dict(SENTINELS) | {"repair-fallback": name})
+        assert done.returncode == 0, f"the full fallback identifier {name!r} must be read: {done.stderr}"
+
+
+def test_history_requires_complete_record(tmp_path: Path) -> None:
+    """Syntactically valid history still needs all supported record fields."""
+    root = _write_repo(tmp_path / "repo")
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    history = root / HISTORY_REL
+    row = _history(root)[0]
+    questionnaire = _export(root)
+    for field in set(row) - {"schema_version", "run_id"}:
+        incomplete = {key: value for key, value in row.items() if key != field}
+        raw = json.dumps(incomplete) + "\n"
+        history.write_text(raw)
+        done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+        assert done.returncode == 3, f"history missing {field} must be refused"
+        assert history.read_text() == raw
+
+
+def test_schema_versions_require_integer(tmp_path: Path) -> None:
+    """True and 1.0 are not schema version integers, in any supported document."""
+    root = _write_repo(tmp_path / "repo")
+    module = _module(root)
+    qset = module._load_question_set()
+    questionnaire = _export(root)
+    qpath = tmp_path / "questionnaire.json"
+    question_path = root / "scripts" / QUESTION_SET_NAME
+    questions = json.loads(question_path.read_text())
+    for value in (True, 1.0):
+        question_path.write_text(json.dumps(questions | {"schema_version": value}))
+        with pytest.raises(module.NotMeasured, match="schema_version"):
+            module._load_question_set()
+        qpath.write_text(json.dumps(questionnaire | {"schema_version": value}))
+        with pytest.raises(module.NotMeasured, match="schema_version"):
+            module._load_questionnaire(qpath, qset)
+        with pytest.raises(module.NotMeasured, match="schema_version"):
+            module._validate_history((json.dumps({"schema_version": value, "run_id": "x"}) + "\n").encode())
+
+
+def test_history_rejects_duplicate_keys(tmp_path: Path) -> None:
+    """History uses the same duplicate-key refusal as input documents."""
+    root = _write_repo(tmp_path / "repo")
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    history = root / HISTORY_REL
+    row = _history(root)[0]
+    for field in ("run_id", "schema_version"):
+        raw = json.dumps(row)[:-1] + f', "{field}": ' + json.dumps(row[field]) + "}\n"
+        history.write_text(raw)
+        done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+        assert done.returncode == 3, f"duplicate {field} must refuse history"
+        assert history.read_text() == raw
+
+
+def test_questions_refuses_unread_readers(tmp_path: Path) -> None:
+    """Export refuses ambiguous live evidence before a subject session is started."""
+    root = _write_repo(tmp_path / "repo")
+    path = root / "AGENTS.md"
+    path.write_text(path.read_text() + "\nUse `another/bd`, never bare `bd`.\n")
+    _commit(root, "ambiguous tracker rule")
+    done = _run_tool(root, "questions")
+    assert done.returncode == 3 and done.stdout == "", "unread evidence must prevent questionnaire export"
+    assert "not measured" in done.stderr

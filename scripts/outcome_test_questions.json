@@ -52,7 +52,7 @@
     },
     {
       "id": "instructions",
-      "text": "AGENTS.md declares in its opening that exactly one file is this repository's instruction file: give that file's name.",
+      "text": "Give the name of the sole repository instruction file, as declared in its opening.",
       "answer_type": "string",
       "source": "AGENTS.md",
       "resolver": "instructions"
