@@ -50,3 +50,18 @@ context: |
   Architecture change: none.
 
 In the context of a baseline that could measure either the normal working start or start-context knowledge alone, facing that choice before building, we decided to measure the normal working start with read access to the repository, to achieve a test of whether a new session finds the current rules in everyday work, accepting that it no longer shows what the start context alone already holds. — 2026-11-08
+
+## Q-3 · What the repository history keeps when the session may read the repository
+
+asked: 2026-11-08
+answer: "Nur Punktzahl im Repo (Recommended)" — the history in the repository keeps date, commit, the four labels and a correct/incorrect mark per question, never the answer texts; the full submitted answers stay in a local file outside the repository. This narrows Q-1's history contents.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Q-1 placed the history, with submitted answers and verdicts, at docs/research/outcome-test-results.jsonl; Q-2 lets the answering session read the repository.
+  Intention: review loop round 2 (row L2-2, MAJOR) showed that from the second run on a session could read earlier correct answers, silently polluting the comparison.
+  Today: the history with answer texts lies in the readable repository.
+  Repository change: the repository record drops answer texts; a local file outside the repository keeps them.
+  Architecture change: none.
+
+In the context of a test session that may read the repository, facing a history that would hand it earlier answers, we decided to keep only scores per question in the repository and the answer texts locally outside it, to achieve comparable runs without an answer key in reach, accepting a second, unversioned file for the full answers. — 2026-11-08
