@@ -941,3 +941,5 @@ Stage-2 call, 2026-11-07: review-loop · endpoint opencode-go · model hy4-previ
 Stage-2 call, 2026-11-07: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3589 commits, 12 rules.
 
 Stage-2 call, 2026-11-08: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 917 files, 3600 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 917 files, 3603 commits, 12 rules.
