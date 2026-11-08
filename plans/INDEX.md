@@ -264,6 +264,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/mutation-evidence-module/plan.md`](changes/mutation-evidence-module/plan.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/research.md`](changes/mutation-evidence-module/research.md) | draft | partial | 2026-10-26 | coding-harness-diic |
 | [`changes/mutation-evidence-module/spec.md`](changes/mutation-evidence-module/spec.md) | draft | partial | 2026-10-26 | coding-harness-diic |
+| [`changes/night-heartbeat/decisions.md`](changes/night-heartbeat/decisions.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/findings.md`](changes/night-heartbeat/findings.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/plan.md`](changes/night-heartbeat/plan.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/research.md`](changes/night-heartbeat/research.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/spec.md`](changes/night-heartbeat/spec.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/pi-catalog-move/decisions.md`](changes/pi-catalog-move/decisions.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/findings.md`](changes/pi-catalog-move/findings.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/plan.md`](changes/pi-catalog-move/plan.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
