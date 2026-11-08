@@ -411,6 +411,7 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -424,9 +425,22 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
+
+
+def test_research_selector_requires_declared_measured_wire_apis(world):
+    """Omitting measurement evidence must fail, rather than apply a code default."""
+    with pytest.raises(TypeError, match="measured_wire_apis"):
+        swarm.select_research_catalog(
+            bridge_with(row("aa-free")),
+            selector_policy(),
+            [],
+            expected_version="test-pin",
+            address=stage2_go.load_address_policy(world.root),
+        )
 
 
 def test_research_selector_skips_an_explicit_null_base(world):
@@ -441,6 +455,7 @@ def test_research_selector_skips_an_explicit_null_base(world):
         selector_policy(),
         [],
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -822,6 +837,7 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         selector_policy(),
         ["paid-seat"],
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     seat = next(item for item in result["models"] if item["id"] == "paid-seat")
@@ -1029,8 +1045,10 @@ def test_native_api_probes_keep_their_assessed_destinations(world, monkeypatch, 
 
     The record maps the API; the probe dispatches on an explicit base and on an
     absent base, and the sending configuration Pi consumes carries that API's
-    own base each time. A configuration whose wire API was swapped behind
-    dispatch's back and a foreign-host row may not send.
+    own base each time. If the installed configuration changes its wire API
+    after the caller assessed the destination, dispatch refuses the mismatch
+    before sending. A foreign-host catalog row is also refused. This does not
+    prove that a catalog row pairs its API with a natively served base.
     """
     base = NEW_API_BASES[api]
     edit_entry(

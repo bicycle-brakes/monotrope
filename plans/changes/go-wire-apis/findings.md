@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -383,3 +383,5 @@ Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claud
 > - L3-1: tests/test_pi_contract.py::test_real_go_native_wire_api_exchange: the setup phase of `tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[anthropic-messages]` ended failed; red first needs passing setup and teardown
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261107T152519725158Z-2af224d9.md
 > ```
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3608 commits, 12 rules.

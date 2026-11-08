@@ -807,8 +807,9 @@ def test_real_catalog_move_contains_new_go_models() -> None:
 def test_real_catalog_move_keeps_messages_catalog_base() -> None:
     """Ledger 3: the shipped opencode-go Messages entries carry anthropic-messages on the moved base.
 
-    Catalog evidence for the separate Messages follow-up - no wire exchange is measured or
-    admitted here (spec criterion 3).
+    Messages is now measured and admitted by the go-wire-apis declaration.
+    This test checks the shipped catalog base; the native wire contract and
+    dated live measurement provide the exchange evidence (spec criterion 3).
     """
     catalog = {
         model["id"]: model
@@ -1498,9 +1499,12 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     )
     shipped = {}
     for api, models in provider_data("opencode-go").items():
-        for model in models.values():
-            assert model.get("id") not in shipped, f"{model['id']}: the shipped catalog files it under two wire APIs"
-            shipped[model["id"]] = (api, model)
+        for entry, model in models.items():
+            assert isinstance(model, dict), f"{api}/{entry}: the shipped catalog entry is not a model dictionary"
+            model_id = model.get("id")
+            assert isinstance(model_id, str) and model_id, f"{api}/{entry}: the shipped catalog entry has no valid id"
+            assert model_id not in shipped, f"{model_id}: the shipped catalog files it under two wire APIs"
+            shipped[model_id] = (api, model)
     # Every admitted rung must hold an exact shipped definition on a wire API the
     # address record measures, at that API's own recorded base - including ids an
     # older single-API declaration skipped. Missing ids fail closed too.
