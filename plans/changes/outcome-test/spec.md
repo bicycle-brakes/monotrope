@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-3nm5
@@ -146,8 +146,8 @@ the rules it measures. Other changes' artefacts and the tracker are untouched.
 ## Definition of Done
 
 - `make verify` green, including deterministic offline mechanism tests.
-- The open scope decision is answered by the maintainer and incorporated
-  into this spec before phase 4 starts; no answer or ADR answer is inferred.
+- The scope decision is answered (`decisions.md#Q-2`, 2026-11-08) and
+  incorporated above; no answer or ADR answer is inferred.
 - Documents moved with code: `docs/WORKFLOW.md` explains use, the two run
   triggers, source-read failures and the meaning and limits of a score.
 - The baseline result names the commit actually measured; the pull request
@@ -158,59 +158,11 @@ the rules it measures. Other changes' artefacts and the tracker are untouched.
 - The PR closes the outcome-test bead `coding-harness-3nm5`; its final commit
   carries `Closes-Bead: coding-harness-3nm5`.
 
-## Open decisions
+## Decided scope
 
-### [DECISION] What the fresh session is allowed to use
-
-Topic: Welche frische Sitzung die Ausgangsmessung abbildet.
-Intention: Vor dem Bau muss klar sein, ob der Test das Finden aktueller Regeln
-oder ausschließlich das Wissen aus dem Startkontext misst.
-Today: Es gibt noch keine Messung; verschiedene Sitzungsarten erhalten
-unterschiedlichen Startkontext. Die bisherige Antwort legt Umfang, Häufigkeit
-und Ablage fest, aber keinen Zugriff auf Repository-Dateien.
-Repository change: Acht feste Fragen und eine gemeinsame Ergebnisdatei;
-die gewählte Situation wird bei jedem Lauf mitgeführt.
-Architecture change: Keine neue Modellanbindung oder Sitzungsverwaltung;
-die vorhandenen Startwege bleiben bestehen.
-
-Goal in one sentence: Eine vergleichbare Ausgangsmessung für spätere Änderungen
-an Einstieg und Übergabe schaffen.
-
-Options:
-
-- Option 1 — Arbeitseinstieg messen: Eine neue Claude-Code-Sitzung erhält
-  ihren üblichen Startkontext und darf das Repository lesend erkunden. Das
-  misst, ob sie die Regeln im normalen Arbeitsablauf richtig findet.
-- Option 2 — Startwissen messen: Eine neue Claude-Code-Sitzung antwortet
-  allein aus ihrem üblichen Startkontext ohne weitere Dateizugriffe. Das
-  macht Lücken der Startinformationen sichtbar, misst aber keinen normalen
-  Arbeitsablauf mit Nachschlagen.
-
-Recommendation: Option 1, weil die Ausgangsfrage lautet, ob eine neue Sitzung
-mit den aktuellen Regeln arbeiten kann; der Kontext wird für Vergleiche
-mitgespeichert.
-If you say "ok": Gebaut wird die Messung für Option 1; die Ausgangsmessung
-und spätere Läufe benennen Claude Code, das tatsächlich verwendete Modell,
-den Startkontext und den erlaubten lesenden Zugriff.
-What is lost: Eine isolierte Aussage darüber, welche Antworten schon ohne
-Nachschlagen im Startkontext verfügbar waren.
-
-Soll die Ausgangsmessung den normalen Arbeitseinstieg mit lesendem Zugriff
-auf das Repository messen (Option 1)?
-
-### Agent details
-
-The following choices are proposed by the agent as reversible implementation
-details; they do not answer the scope decision above.
-
-- [DETAIL] Use a local question exporter and deterministic recorder, with the
-  orchestrator administering the quiz in an existing fresh-session workflow:
-  this adds a measurement without adding model routing or a new launcher.
-- [DETAIL] Select the eight topics in criterion 1 from the three originating
-  examples and the documented startup/tracker conventions; keep them fixed
-  across a comparison instead of silently adapting questions to improve scores.
-- [DETAIL] Request short typed answers and compare exact values with only
-  outer whitespace and harmless trailing path separators normalized; this
-  makes grading reproducible without a second model or a synonym dictionary.
-- [DETAIL] Use two hours of phase 4, repairs included, as the appetite: a stop
-  for a bounded exporter/recorder, not a promise about its duration.
+The fresh session is a new Claude Code session with its usual start context
+and read access to the repository (option 1, `decisions.md#Q-2`, maintainer
+2026-11-08). Every run records Claude Code, the model actually used, the start
+context and the permitted read access; comparisons hold only between runs with
+the same labels. What is given up: a separate statement of what the start
+context alone already holds.

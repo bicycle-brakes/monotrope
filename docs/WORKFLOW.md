@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-07
+updated: 2026-11-08
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -277,8 +277,10 @@ printed questionnaire to one separately started, memory-free session, and
 records its answers with `record`. Every run carries four attested labels —
 harness, model, startup context and permitted repository access;
 `--fresh-session` is the administrator's attestation, not proof of a context
-reset. The scope a run measured is carried in those labels, and comparisons
-hold only between runs that recorded the same scope.
+reset. The baseline measures the normal working start: a new Claude Code
+session with its usual start context and read access to the repository
+(maintainer, 2026-11-08). The scope a run measured is carried in those labels,
+and comparisons hold only between runs that recorded the same scope.
 
 The tool runs on demand, never on a schedule: once as the baseline at an
 accepted commit, and before every change to `AGENTS.md` or the handover

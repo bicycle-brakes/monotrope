@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-3nm5
@@ -35,3 +35,18 @@ context: |
   Architecture change: none.
 
 In the context of gates that measure artefacts but not what a fresh session knows, facing the cost of nightly runs, we decided on eight questions run on demand before handover or AGENTS.md changes plus one baseline, results in one dated JSONL file under docs/research/, to achieve a measurement exactly where knowledge changes, accepting no trend line between such changes. — 2026-11-06
+
+## Q-2 · What the fresh session may use
+
+asked: 2026-11-08
+answer: "Repo lesend erkunden (Recommended)" — option 1: a new Claude Code session gets its usual start context and may read the repository; the run records Claude Code, the model actually used, the start context and the permitted read access.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which fresh session the baseline measurement represents.
+  Intention: the spec carried this as an open decision; review loop round 1 marked it twice as a BLOCKER, and the implementation already assumed option 1.
+  Today: no measurement exists; different session kinds get different start contexts.
+  Repository change: the answer goes into this record; the spec and docs/WORKFLOW.md name the choice.
+  Architecture change: none.
+
+In the context of a baseline that could measure either the normal working start or start-context knowledge alone, facing that choice before building, we decided to measure the normal working start with read access to the repository, to achieve a test of whether a new session finds the current rules in everyday work, accepting that it no longer shows what the start context alone already holds. — 2026-11-08

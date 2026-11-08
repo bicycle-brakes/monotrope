@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-3nm5
@@ -26,10 +26,9 @@ Pre-mortem:  suppose it failed: most likely because copied expected answers hide
 Starts unless you say stop.
 ```
 
-This plan remains a draft: the unresolved measurement-scope decision in
-`spec.md` holds phase 4 regardless of the card's standard start line. The
-orchestrator obtains that answer and updates the spec and plan first; this
-attempt neither asks a new interview nor records an answer for the maintainer.
+The measurement scope is decided: a new Claude Code session with its usual
+start context and read access to the repository (`decisions.md#Q-2`,
+maintainer 2026-11-08); the spec records it under "Decided scope".
 
 ## Files and steps
 
