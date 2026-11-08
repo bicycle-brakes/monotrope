@@ -4,7 +4,8 @@ Every Go launch — review loop, research swarm, availability probe and the
 interactive session — assesses its effective destination against the single
 `adresse` record on the `opencode-go` entry of `model-endpoints.yaml`
 (bead coding-harness-4tr4, decisions Q-1/Q-2/Q-5). A different path on the
-admitted host runs on with a notice; any other destination is refused before
+admitted host runs on with a notice, and so does a definition that names a
+wire api the record does not map; any other destination is refused before
 a model request.
 
 The record is data, never a code default: a missing, unreadable or ambiguous
@@ -95,9 +96,10 @@ class Assessment:
     """The outcome of one destination assessment.
 
     `definition` is the effective definition with an explicit base; `notice`
-    names a same-host path move; `problem` is the sanitised refusal reason.
-    Exactly one of `notice` and `problem` reasons a departure from the record;
-    an admitted definition on the recorded path carries neither.
+    names a same-host path move or a wire api the record does not map;
+    `problem` is the sanitised refusal reason. Exactly one of `notice` and
+    `problem` reasons a departure from the record; an admitted definition on
+    the recorded path carries neither.
     """
 
     definition: dict
@@ -289,6 +291,32 @@ def _same_path(left: str | None, right: str | None) -> bool:
     return trim(left) == trim(right)
 
 
+def _shown_api(api: str) -> str:
+    """The wire-api name as a notice shows it, or a safe description.
+
+    The value comes from a catalog definition, so it is untrusted: a control
+    character or backslash is never echoed, and the notice describes the value
+    instead (the sanitisation boundary of `url_problem`).
+    """
+    if not api.strip() or _has_control_or_backslash(api):
+        return "<unreadable>"
+    return f'"{api}"'
+
+
+def _unrecorded_api_notice(policy: AddressPolicy, model: str, api: str) -> str:
+    """The drift notice for an explicit on-host base on a wire api the record does not map.
+
+    It names the model, the observed api and the record's declared api names,
+    and no path: the record holds none for this api, and borrowing another
+    api's base would invent an expected value.
+    """
+    declared = ", ".join(sorted(policy.apis))
+    return (
+        f"{PROVIDER}/{model}: wire api {_shown_api(api)} has no recorded base; "
+        f"the record declares {declared}; running on with the definition's own base"
+    )
+
+
 def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
     """Assess one Go model definition against the policy; the one check every launch shares.
 
@@ -296,10 +324,14 @@ def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
     from the record for the definition's resolved wire API, and an unmapped
     API has no default — the definition is refused rather than guessed at.
     A base on the admitted host under another path is admitted with a move
-    notice naming model, recorded path and observed path; every other
+    notice naming model, recorded path and observed path, and an explicit
+    base on a non-empty unmapped API is admitted with a drift notice naming
+    model, observed API and the record's declared API names; every other
     destination is refused with a sanitised reason before any model request.
-    A mapping in the record grants no model admission: terms, wire-API and
-    every other restriction stay with their own checks.
+    A notice is diagnostic only: it never changes admission, the effective
+    definition or any other restriction, and a mapping in the record grants
+    no model admission — terms, wire-API and every other restriction stay
+    with their own checks.
     """
     if not isinstance(definition, dict):
         return Assessment({}, problem=f"the model {model} has no usable definition")
@@ -326,9 +358,15 @@ def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
         return Assessment({}, problem=f"the model {model} is refused: {problem}")
     recorded = policy.recorded_path(api)
     observed = urlsplit(base).path
-    # Without a mapped api there is no recorded path to have moved from; the
-    # explicit on-host base is then admitted as it stands, no notice invented.
-    if recorded is None or _same_path(recorded, observed):
+    if recorded is None:
+        # Without a mapped api there is no recorded path to have moved from;
+        # the explicit on-host base is admitted as it stands. A non-empty api
+        # name is announced as unrecorded (the drift warning), never guessed
+        # at; an absent or empty one has no name to announce.
+        if api:
+            return Assessment({**definition, "baseUrl": base}, notice=_unrecorded_api_notice(policy, model, api))
+        return Assessment({**definition, "baseUrl": base})
+    if _same_path(recorded, observed):
         return Assessment({**definition, "baseUrl": base})
     return Assessment(
         {**definition, "baseUrl": base},

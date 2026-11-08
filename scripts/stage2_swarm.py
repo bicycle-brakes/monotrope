@@ -103,8 +103,11 @@ def select_research_catalog(
     evidence, never a failure of the whole preflight (Q-12, Q-14). Its
     destination is assessed against the one address record (`address`, the
     loaded `stage2_go` policy): any path on the recorded host is admissible, a
-    move from the recorded path is kept as a notice, a foreign destination
-    refuses the candidate alone (go-access-point).
+    move from the recorded path and an explicit base on an unrecorded wire api
+    are kept as notices, a foreign destination refuses the candidate alone
+    (go-access-point). Notices are collected before the eligibility filters:
+    a candidate excluded later — `wire-api-not-measured` included — keeps its
+    notice in `address_notices`, each model once.
     """
     validate_research_free_policy(policy)
     provider = policy["provider"]
@@ -253,16 +256,30 @@ def select_research_catalog(
         return None
 
     def address_notice(ident: str) -> str | None:
-        """The same-host move notice of an admissible candidate, or None."""
+        """The address-drift notice of an admissible candidate, or None."""
         item = models.get(ident)
         if item is None:
             return None
-        verdict = stage2_go.assess(address, ident, {"api": item.get("api"), "baseUrl": item.get("baseUrl")})
+        # The row's own keys only: an absent base stays absent and resolves
+        # from the record for its api, an explicit null is refused, and no
+        # absent base is turned into an explicit null here.
+        probe = {key: item[key] for key in ("api", "baseUrl") if key in item}
+        verdict = stage2_go.assess(address, ident, probe)
         return verdict.notice if verdict.admitted else None
 
     candidates = []
     eligible = set()
     notices: list[str] = []
+    noticed: set[str] = set()
+
+    def collect_notice(ident: str) -> None:
+        """Keep a candidate's drift notice once, ahead of every eligibility filter."""
+        if ident in noticed:
+            return
+        noticed.add(ident)
+        if (notice := address_notice(ident)) is not None:
+            notices.append(notice)
+
     ids = sorted(
         {ident for ident in models if ident.endswith("-free")}
         | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
@@ -275,14 +292,14 @@ def select_research_catalog(
             reason = metadata_reason(ident)
         if reason is None:
             eligible.add(ident)
-            if (notice := address_notice(ident)) is not None:
-                notices.append(notice)
+        # The notice is collected whatever the filters decide: an
+        # address-admissible row excluded later keeps its notice.
+        collect_notice(ident)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
         reason = seat_reason(ident)
-        if reason is None and (notice := address_notice(ident)) is not None:
-            notices.append(notice)
+        collect_notice(ident)
         seat_models.append(
             {
                 "id": ident,

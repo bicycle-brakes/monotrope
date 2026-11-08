@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-x2g9
@@ -80,16 +80,16 @@ regenerates the index before its full verification. The prompt's
 ## Criterion ledger
 
 - 1: tests/test_stage2_go_access.py::test_same_host_path_moves_run_with_notice — a same-host move loses its model or either path
-- 2: not yet written tests/test_stage2_go_access.py::test_unrecorded_api_warns_without_changing_definition — the explicit same-host unrecorded API stays silent or borrows another API's base
-- 3: not yet written tests/test_stage2_go_access.py::test_catalog_drift_notices_survive_eligibility_filters — review preparation loses a notice or research omits the excluded API row's notice
-- 4: not yet written tests/test_stage2_go_access.py::test_api_notices_reach_launch_evidence — review-round, probe or research-launch evidence loses the API notice
-- 4: not yet written tests/test_stage2_go_access.py::test_session_records_unrecorded_api_notice — the initial session audit loses its API notice
-- 5: not yet written tests/test_stage2_go_access.py::test_matching_recorded_addresses_do_not_warn — equivalent/defaulted bases or a second mapped API invent drift
-- 6: not yet written tests/test_stage2_go_access.py::test_unrecorded_api_warns_without_changing_definition — the warning drops or changes the effective API/base
+- 2: tests/test_stage2_go_access.py::test_unrecorded_api_warns_without_changing_definition — the explicit same-host unrecorded API stays silent or borrows another API's base
+- 3: tests/test_stage2_go_access.py::test_catalog_drift_notices_survive_eligibility_filters — review preparation loses a notice or research omits the excluded API row's notice
+- 4: tests/test_stage2_go_access.py::test_api_notices_reach_launch_evidence — review-round, probe or research-launch evidence loses the API notice
+- 4: tests/test_stage2_go_access.py::test_session_records_unrecorded_api_notice — the initial session audit loses its API notice
+- 5: tests/test_stage2_go_access.py::test_matching_recorded_addresses_do_not_warn — equivalent/defaulted bases or a second mapped API invent drift
+- 6: tests/test_stage2_go_access.py::test_unrecorded_api_warns_without_changing_definition — the warning drops or changes the effective API/base
 - 6: tests/test_stage2_go_access.py::test_unsafe_destinations_are_refused_before_any_send — a warning admits an unsafe destination
 - 6: tests/test_stage2_go_access.py::test_absent_bases_get_the_recorded_api_default — a missing base guesses an unmapped API default
 - 6: tests/test_stage2_go_access.py::test_admission_preserves_the_other_restrictions — address notice bypasses terms or measured-API exclusion
-- 7: not yet written tests/test_stage2_go_access.py::test_api_notices_sanitise_untrusted_values — control-bearing API text leaks into diagnostics
+- 7: tests/test_stage2_go_access.py::test_api_notices_sanitise_untrusted_values — control-bearing API text leaks into diagnostics
 - 7: tests/test_stage2_go_access.py::test_notices_are_kept_and_sanitised — credential-bearing URL text leaks into diagnostics
 
 ## Do not touch
@@ -103,3 +103,5 @@ Explore used Stage 2 Flash (`glm-5.3-flash`, `glm-coding-plan`, 2026-11-07);
 no Stage-1 fallback is recorded in research.
 
 ## Time used
+
+2026-11-08 10:43:13–12:04:40 UTC, 4887 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
