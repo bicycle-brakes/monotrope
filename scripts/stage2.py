@@ -4828,6 +4828,101 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     return entries
 
 
+_TIME_HEADING_BYTES = re.compile(rb"^## Time used[ \t]*\r?$", re.M)
+_FOLLOWING_HEADING_BYTES = re.compile(rb"^## [^#]", re.M)
+
+
+def outside_time_body(content: bytes) -> bytes:
+    """The plan bytes with the `## Time used` section's body taken out, as bytes.
+
+    The body is the bytes between the heading and the next level-two heading or the end - the
+    same boundaries `time_records` writes and reads. The runner restores that body from the
+    pre-call plan through the shared writer, so a model's forged measured line is bookkeeping
+    the attempt keeps none of; everything outside the section stays the attempt's own work.
+    """
+    match = _TIME_HEADING_BYTES.search(content)
+    if match is None:
+        return content
+    following = _FOLLOWING_HEADING_BYTES.search(content, match.end())
+    end = following.start() if following else len(content)
+    return content[: match.end()] + content[end:]
+
+
+def work_records(root: Path, before: str, after: str, findings: Path, plan: Path) -> list[str]:
+    """The paths between two trees that count as this call's own work, unbounded.
+
+    The comparison reads unbounded, NUL-delimited raw records, so binary bytes, mode-only
+    changes, additions and deletions all count; a same-byte rewrite is empty. The bounded
+    `attempt_files` display list never feeds a verdict. `findings` is discounted outright -
+    the runner restores it after the snapshot - and `plan` is compared outside its time-section
+    body; a mode-only plan change still counts, as does any difference elsewhere in the file.
+    A malformed record raises, so the caller can treat it as a measurement problem.
+    """
+    done = _git_output(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
+    findings_relative = findings.relative_to(root).as_posix()
+    plan_relative = plan.relative_to(root).as_posix()
+    changed: list[str] = []
+    parts = done.split("\0")
+    index = 0
+    while index < len(parts):
+        meta = parts[index]
+        index += 1
+        if not meta:
+            continue
+        fields = meta[1:].split(" ") if meta.startswith(":") else []
+        if len(fields) != 5 or index >= len(parts):
+            raise ValueError(f"git diff-tree --raw returned a record without five fields: {meta!r}")
+        old_mode, new_mode, old_sha, new_sha, _status = fields
+        relative = parts[index]
+        index += 1
+        if relative == findings_relative:
+            continue
+        if relative == plan_relative and old_sha == new_sha:
+            # Identical bytes: a mode-only change is the attempt's own, a plain rewrite is not.
+            if old_mode != new_mode:
+                changed.append(relative)
+            continue
+        if relative == plan_relative:
+            before_bytes = _git_bytes(root, "cat-file", "blob", old_sha) if old_sha.strip("0") else b""
+            after_bytes = _git_bytes(root, "cat-file", "blob", new_sha) if new_sha.strip("0") else b""
+            if outside_time_body(before_bytes) != outside_time_body(after_bytes):
+                changed.append(relative)
+            continue
+        changed.append(relative)
+    return changed
+
+
+def work_problem(
+    root: Path,
+    before: str,
+    after: str | None,
+    measurement: str | None,
+    findings: Path,
+    plan: Path,
+) -> str | None:
+    """Why the attempt produced no work of its own, or None when its diff carries a change.
+
+    Work is a non-empty Git-visible change this one call produced, judged against its own
+    pre-call tree - never the invocation's baseline - after discounting the runner-owned
+    writes the attempt keeps none of (`work_records`). An unreadable tree or comparison is a
+    measurement problem: it prevents acceptance with its reason, and never counts as work.
+    Under `STAGE2_PLANT_FAULT` the predicate is bypassed, so the guard test can show an empty
+    attempt reaching acceptance without it (bead coding-harness-te7q).
+    """
+    if os.environ.get(GUARD_SWITCH):
+        return None
+    if measurement is not None or after is None or not before:
+        reason = measurement or "the attempt tree could not be read"
+        return f"the work check could not run: {reason}"
+    try:
+        changed = work_records(root, before, after, findings, plan)
+    except (Refused, OSError, RuntimeError, ValueError) as error:
+        return f"the work check could not run: {' '.join(str(error).split())}"
+    if not changed:
+        return "no work done: the attempt changed no file of its own; only runner-owned bookkeeping moved"
+    return None
+
+
 def put_back_lines(paths: list[str]) -> list[str]:
     """The put-back list lines: every path in backticks, without a bound.
 
@@ -7315,6 +7410,12 @@ def run_attempts(
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
+    A completed call is accepted only when it changed something of its own: the attempt's tree is
+    compared with its own pre-call tree, the runner-owned bookkeeping (findings.md, the plan's
+    time-section body) discounted, and an empty comparison rejects the attempt as `no work done`
+    before the answer proofs - an unreadable comparison rejects it as a measurement problem
+    (bead coding-harness-te7q).
+
     A failed attempt leaves its diagnostics and the files its model changed, quoted, below its audit
     line in `findings.md`; the route block on `stage-1` names the verb. A verb that passes
     `snapshot_findings` and `restore_findings` puts findings.md back as it stood right before the model
@@ -7569,13 +7670,23 @@ def run_attempts(
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
                     raise error
+            after: str | None = None
+            measurement: str | None = unmeasured
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
+                # The trees are kept for the work verdict below; the bounded list stays a diagnostic.
                 try:
-                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    after = worktree_tree(root)
                 except (Refused, OSError) as error:
-                    files = str(error)
+                    measurement = str(error)
+                if after is not None:
+                    try:
+                        files: list[str] | str = attempt_files(root, before, after)
+                    except (Refused, OSError) as error:
+                        files = str(error)
+                else:
+                    files = measurement
             else:
                 files = unmeasured
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
@@ -7643,6 +7754,14 @@ def run_attempts(
                 # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
                 for path, content in batch.items():
                     restore_work_input(root, path, content)
+            # Work is decided before the answer proofs: an attempt that changed nothing of its
+            # own is rejected as `no work done` even when its answer is well-formed (bead
+            # coding-harness-te7q). A failing verifier still rejects first - work never
+            # bypasses the checks - and an unreadable comparison is a measurement problem.
+            if not problems:
+                no_work = work_problem(root, before, after, measurement, ctx.findings, ctx.plan)
+                if no_work:
+                    problems = [no_work]
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
             if problems:

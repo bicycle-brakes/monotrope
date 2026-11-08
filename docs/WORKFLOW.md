@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-08
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -977,6 +977,27 @@ rereads nothing its predecessor may have edited: a command-capable Codex runs
 ruff and the named tests itself before handing back, while the file-only Flash
 and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
+
+**An accepted implement or repair attempt must have done work of its own**
+(bead coding-harness-te7q). Once the post-run checks stand green, the runner
+compares the worktree against that one attempt's own pre-call tree — never the
+invocation's baseline, so a rejected attempt's retained edits cannot qualify an
+idle retry — over unbounded Git records that count additions, deletions, binary
+bytes and file-mode changes alike; a same-byte rewrite is empty. Runner-owned
+bookkeeping is discounted: the change's `findings.md` outright, and this
+change's `plan.md` outside its `## Time used` body, which the runner itself
+restores and writes. An attempt whose whole diff is empty is rejected as
+`no work done`, and the reason reaches the existing retry the way any post-run
+failure does — Flash, Flash-repair, Sonnet for implement; Codex, Codex-repair,
+Sonnet for repair — while an all-empty run ends failed with no checkpoint
+commit and no success report, its audit lines and one rejected measured entry
+per completed attempt kept. The verb's answer proofs still come after the work
+check: a repair that changed real code but answered no taken row is rejected
+for the answer, not accepted for its diff. A comparison the runner cannot read
+is a measurement problem: it prevents acceptance with its reason and never
+counts as work. Document changes, unplanned paths and non-code files count as
+work without a source whitelist; completeness — that every planned file
+changed, or that the change is useful — is never claimed from a non-empty diff.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
 is at most `39 + 3N` sequential-by-queue invocations for `N` selected free

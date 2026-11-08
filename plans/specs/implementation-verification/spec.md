@@ -4,7 +4,7 @@ status: accepted
 implementation_status: done
 date: 2026-10-08
 last_reviewed: 2026-10-08
-updated: 2026-10-08
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-mfv
@@ -26,7 +26,11 @@ call just to run a renderer. This contract was integrated by PR #102 at merge co
 ## Acceptance criteria
 
 1. A first Flash attempt that creates findings.md passes with a regenerated
-   plans/INDEX.md, without a repair or fallback solely for that index.
+   plans/INDEX.md, without a repair or fallback solely for that index. This
+   guarantee presupposes actual work (bead coding-harness-te7q): since the
+   no-work acceptance condition, the runner rejects an attempt whose own diff
+   is empty after discounting runner-owned bookkeeping, so findings creation
+   or index regeneration alone cannot carry acceptance or this criterion.
 2. Modified or new held documents get today's updated stamp; clean documents,
    unheld files, document bodies and review metadata are unchanged. Deleted
    files are skipped. Document and index paths may not alias another file.
