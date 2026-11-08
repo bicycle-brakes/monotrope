@@ -10,8 +10,8 @@ the session's submission deterministically, and appends exactly one JSONL line
 to `docs/research/outcome-test-results.jsonl`.
 
 No expected value is ever stored, cached or shipped: the questionnaire carries
-questions and answer shapes only, and the record carries the subject's own
-answers and the eight verdicts. Exit codes for `record`: 0 = eight correct,
+questions and answer shapes only. Repository records carry eight verdicts;
+submitted answers are retained only in the external user state directory. Exit codes for `record`: 0 = eight correct,
 1 = measured with incorrect answers, 3 = not measured (refusals and failures;
 nothing is appended).
 
@@ -22,7 +22,8 @@ Usage:
         --purpose baseline [--target AGENTS.md|handover-convention]
 
 A foreign session is started through the existing `scripts/stage2.py` path;
-this tool starts no session, calls no model and writes nothing but the history.
+this tool starts no session and calls no model. Its only repository write is
+the history; full answers stay in the external user state directory.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
@@ -595,7 +597,7 @@ def _check_snapshot(snapshot: dict[str, Any], questionnaire: dict[str, Any]) -> 
 
 
 # ---------------------------------------------------------------------------
-# the history — the tool's only persistent write
+# the repository history and external answer archive
 # ---------------------------------------------------------------------------
 
 
@@ -636,7 +638,6 @@ def _validate_record(row: dict[str, Any]) -> None:
         "fresh_session",
         "purpose",
         "target",
-        "answers",
         "verdicts",
         "correct",
         "total",
@@ -675,8 +676,6 @@ def _validate_record(row: dict[str, Any]) -> None:
         row["purpose"] == "pre-change" and (not isinstance(row["target"], str) or row["target"] not in TARGETS)
     ):
         raise NotMeasured("the result history carries an invalid target")
-    if not isinstance(row["answers"], dict) or set(row["answers"]) - KNOWN_RESOLVERS:
-        raise NotMeasured("the result history carries invalid submitted answers")
     verdicts = row["verdicts"]
     if (
         not isinstance(verdicts, list)
@@ -761,7 +760,6 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
     recheck()
     created_dirs: list[Path] = []
     handle: int | None = None
-    created_file = False
     succeeded = False
     end: int | None = None
     writing = False
@@ -782,7 +780,6 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
         flags = os.O_RDWR | os.O_NONBLOCK | os.O_NOFOLLOW
         try:
             handle = os.open(RESULTS_PATH, flags | os.O_CREAT | os.O_EXCL, 0o644)
-            created_file = True
         except FileExistsError:
             handle = os.open(RESULTS_PATH, flags)
         if not stat.S_ISREG(os.fstat(handle).st_mode):
@@ -813,13 +810,15 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
             raise
         raise NotMeasured("cannot open or write the result history; no measurement recorded") from exc
     finally:
-        if not succeeded and created_file:
-            RESULTS_PATH.unlink()
+        # Never unlink an opened history: peers may already hold this inode,
+        # including waiters that have not appended yet. An empty file is safe.
         if handle is not None:
             os.close(handle)
         if not succeeded:
             for directory in reversed(created_dirs):
-                directory.rmdir()
+                # Cleanup is best effort: a peer may have populated it.
+                with suppress(OSError):
+                    directory.rmdir()
 
 
 # ---------------------------------------------------------------------------
@@ -868,6 +867,48 @@ def _session_labels(args: argparse.Namespace) -> dict[str, str]:
     return labels
 
 
+def _store_answers(run_id: str, commit: str, answers: dict[str, Any]) -> None:
+    """Keep full submissions in a private file outside the measured repository."""
+    try:
+        if str(uuid.UUID(run_id)) != run_id:
+            raise ValueError
+    except ValueError:
+        raise NotMeasured("the answer archive requires a UUID run id") from None
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    if not state.is_absolute():
+        raise NotMeasured("the user state directory must be absolute and outside the repository")
+    directory = state / "coding-harness" / "outcome-test"
+    if directory.resolve().is_relative_to(ROOT.resolve()):
+        raise NotMeasured("the answer archive must be outside the repository")
+    path = directory / (run_id + ".json")
+    payload = (json.dumps({"run_id": run_id, "commit": commit, "answers": answers}, sort_keys=True) + "\n").encode()
+    handle: int | None = None
+    created = False
+    try:
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            handle = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            created = True
+        except FileExistsError:
+            # A refused history append may be retried with the same submission.
+            if path.is_symlink() or path.read_bytes() != payload:
+                raise NotMeasured("the local answer archive already contains a different submission") from None
+            return
+        with os.fdopen(handle, "wb") as stream:
+            handle = None
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError:
+        if created:
+            with suppress(OSError):
+                path.unlink()
+        raise NotMeasured("cannot retain submitted answers in the local user state directory") from None
+    finally:
+        if handle is not None:
+            os.close(handle)
+
+
 def _record(args: argparse.Namespace) -> int:
     labels = _session_labels(args)
     if not args.fresh_session:
@@ -911,7 +952,6 @@ def _record(args: argparse.Namespace) -> int:
         "context": labels["context"],
         "access": labels["access"],
         "fresh_session": True,
-        "answers": answers,
         "verdicts": verdict_list,
         "correct": correct,
         "total": QUESTION_COUNT,
@@ -921,6 +961,7 @@ def _record(args: argparse.Namespace) -> int:
         _refuse_dirty_measured_files(qset)
         _check_snapshot(_take_snapshot(qset), questionnaire)
 
+    _store_answers(questionnaire["run_id"], snapshot["commit"], answers)
     _append_record(record, _recheck)
     return correct
 

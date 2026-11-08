@@ -282,6 +282,11 @@ session with its usual start context and read access to the repository
 (maintainer, 2026-11-08). The scope a run measured is carried in those labels,
 and comparisons hold only between runs that recorded the same scope.
 
+Before both `questions` and `record`, commit the tool, the question file and
+every measured source, and keep those files clean; uncommitted edits to the
+result history alone are allowed. Run the pre-change measurement before
+starting the instruction or handover-convention edit.
+
 Export the questionnaire to a temporary file, then save the fresh session's
 submission to another temporary file. The submission must be a JSON object
 keyed by question ID: each value is its answer, strings for string/directory
@@ -316,8 +321,14 @@ failed implementation. Exit 3 means **not measured**: an unreadable or
 conflicting source, a stale snapshot, malformed input or an unwritable history
 appends nothing and must never be read as a score. The history,
 `docs/research/outcome-test-results.jsonl`, keeps one dated, commit-bound JSON
-line per run with the four labels, the submitted answers and the eight
-verdicts. Foreign sessions still start through
+line per run with the four labels, score and eight correct/incorrect verdicts,
+never answer texts. Full submitted answers stay outside the repository in
+`$XDG_STATE_HOME/coding-harness/outcome-test/<run-id>.json` (default:
+`~/.local/state/coding-harness/outcome-test/<run-id>.json`), with private file
+permissions. A state directory inside the repository is refused. This keeps
+earlier answers out of the next session's repository reading scope. A refused
+history append may leave a local submission and an empty history file; neither
+is a scored measurement. Foreign sessions still start through
 [`scripts/stage2.py`](../scripts/stage2.py); this tool starts none.
 
 ### The five rules that make the difference

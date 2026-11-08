@@ -208,7 +208,7 @@ def _head_of(root: Path) -> str:
 
 
 def _run_tool(root: Path, *args: str, env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ}
+    env = {**os.environ, "XDG_STATE_HOME": str(root.parent / "state")}
     if env_extra:
         env.update(env_extra)
     return subprocess.run(
@@ -548,7 +548,7 @@ def test_measured_runs_append_one_dated_commit_bound_line(tmp_path: Path) -> Non
         assert isinstance(record[field], str) and record[field]
     assert record["fresh_session"] is True
     assert record["purpose"] == "baseline" and record["target"] is None
-    assert record["answers"] == wrong
+    assert "answers" not in record
     assert [verdict["id"] for verdict in record["verdicts"]] == list(QUESTION_IDS)
     assert all(verdict["verdict"] == "incorrect" for verdict in record["verdicts"])
     assert record["correct"] == 0 and record["total"] == 8
@@ -619,6 +619,7 @@ def test_bad_history_and_append_failure_preserve_old_records(tmp_path: Path, mon
     def _broken_fsync(_handle: int) -> None:
         raise OSError("injected write failure")
 
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setattr(module, "_fsync", _broken_fsync)
     qpath = tmp_path / "questionnaire.json"
     qpath.write_text(json.dumps(_export(root)), encoding="utf-8")
@@ -720,6 +721,7 @@ def test_tool_only_writes_explicit_history(tmp_path: Path) -> None:
         "argparse",
         "ast",
         "collections",
+        "contextlib",
         "datetime",
         "fcntl",
         "hashlib",
@@ -764,7 +766,7 @@ def _module(root: Path) -> Any:
 
 
 def test_new_history_rollback_removes_created_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A refused recheck or failed first append leaves the original absent history absent."""
+    """A refusal before opening creates nothing; an opened inode stays safe for peers."""
     root = _write_repo(tmp_path / "repo")
     module = _module(root)
     history = root / HISTORY_REL
@@ -786,7 +788,7 @@ def test_new_history_rollback_removes_created_paths(tmp_path: Path, monkeypatch:
 
     with pytest.raises(module.NotMeasured):
         module._append_record({"run_id": "new"}, refuse_second_check)
-    assert not history.parent.exists(), "a late refusal left newly created paths"
+    assert history.read_bytes() == b"", "a late refusal must leave no scored result"
 
     def fail_sync(_handle: int) -> None:
         raise OSError("injected sync failure")
@@ -794,11 +796,10 @@ def test_new_history_rollback_removes_created_paths(tmp_path: Path, monkeypatch:
     monkeypatch.setattr(module, "_fsync", fail_sync)
     with pytest.raises(module.NotMeasured):
         module._append_record({"run_id": "new"}, lambda: None)
-    assert not history.parent.exists(), "a failed run left its new file or directory"
-    history.parent.mkdir()
+    assert history.read_bytes() == b"", "a failed run must roll back its bytes"
     with pytest.raises(module.NotMeasured):
         module._append_record({"run_id": "new"}, lambda: None)
-    assert history.parent.is_dir() and not history.exists(), "remove only paths created by this run"
+    assert history.read_bytes() == b"", "keep the opened inode for concurrent waiters"
 
 
 def test_history_requires_regular_file(tmp_path: Path) -> None:
@@ -925,3 +926,98 @@ def test_questions_refuses_unread_readers(tmp_path: Path) -> None:
     done = _run_tool(root, "questions")
     assert done.returncode == 3 and done.stdout == "", "unread evidence must prevent questionnaire export"
     assert "not measured" in done.stderr
+
+
+@pytest.mark.parametrize("failure", ["lock", "recheck", "sync"])
+def test_failed_creator_preserves_peer_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+    """A peer's completed line survives a creator's timeout, refusal or rollback."""
+    root = _write_repo(tmp_path / "repo")
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    history = root / HISTORY_REL
+    peer_line = history.read_bytes()
+    history.unlink()
+    module = _module(root)
+    hold = module._hold_lock
+
+    def peer_then_lock(handle: int) -> None:
+        # The peer opened the newly created inode and completed its append
+        # before this invocation obtained the lock.
+        history.write_bytes(peer_line)
+        if failure == "lock":
+            raise module.NotMeasured("lock timeout")
+        hold(handle)
+
+    monkeypatch.setattr(module, "_hold_lock", peer_then_lock)
+    calls = 0
+
+    def recheck() -> None:
+        nonlocal calls
+        calls += 1
+        if failure == "recheck" and calls == 2:
+            raise module.NotMeasured("snapshot changed")
+
+    def fail_sync(_handle: int) -> None:
+        raise OSError("sync failed")
+
+    monkeypatch.setattr(module, "_fsync", fail_sync)
+    with pytest.raises(module.NotMeasured):
+        module._append_record({"run_id": "new"}, recheck)
+    assert history.exists(), "a failed creator removed a peer's committed measurement"
+    assert history.read_bytes() == peer_line, "rollback discarded a peer's committed measurement"
+
+
+def test_failed_directory_cleanup_preserves_peer_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A peer filling a created directory does not turn refusal into a traceback."""
+    root = _write_repo(tmp_path / "repo")
+    module = _module(root)
+    history = root / HISTORY_REL
+    marker = history.parent / "peer.jsonl"
+
+    def refuse_open(*_args: Any, **_kwargs: Any) -> int:
+        marker.write_text("peer measurement\n")
+        raise OSError("cannot open history")
+
+    monkeypatch.setattr(module.os, "open", refuse_open)
+    try:
+        with pytest.raises(module.NotMeasured):
+            module._append_record({"run_id": "new"}, lambda: None)
+    except OSError:
+        pytest.fail("directory cleanup must preserve peer files and keep the bounded refusal")
+    assert marker.read_text() == "peer measurement\n"
+
+
+def test_repository_history_excludes_answer_texts(tmp_path: Path) -> None:
+    """Only the external, private state file carries submitted answer texts."""
+    root = _write_repo(tmp_path / "repo")
+    questionnaire = _export(root)
+    answers = dict(SENTINELS)
+    assert _record(root, tmp_path, questionnaire, answers).returncode == 0
+    record = _history(root)[0]
+    assert "answers" not in record, "repository history must never teach earlier answers"
+    assert not any(value in _leaves(record) for key, value in answers.items() if key != "instructions")
+    local = tmp_path / "state" / "coding-harness" / "outcome-test" / (questionnaire["run_id"] + ".json")
+    assert local.is_file(), "full answers must be retained outside the repository"
+    assert json.loads(local.read_text())["answers"] == answers
+    assert local.stat().st_mode & 0o777 == 0o600
+    assert len(record["verdicts"]) == 8 and record["correct"] == 8
+
+
+@pytest.mark.parametrize("destination", ["inside", "symlink-inside", "unwritable", "bad-run-id"])
+def test_answer_archive_refuses_unsafe_destination(tmp_path: Path, destination: str) -> None:
+    """An unsafe or unwritable answer archive refuses without a repository record."""
+    root = _write_repo(tmp_path / "repo")
+    questionnaire = _export(root)
+    state = tmp_path / "state"
+    if destination == "inside":
+        state = root / "local-state"
+    elif destination == "symlink-inside":
+        state.symlink_to(root, target_is_directory=True)
+    elif destination == "unwritable":
+        state.write_text("not a directory")
+    else:
+        questionnaire["run_id"] = "../../escaped"
+    done = _record(root, tmp_path, questionnaire, dict(SENTINELS), env_extra={"XDG_STATE_HOME": str(state)})
+    assert done.returncode == 3 and "Traceback" not in done.stderr
+    assert not (root / HISTORY_REL).exists()
+    assert not (root / "local-state").exists()
+    assert not (tmp_path / "escaped.json").exists()
