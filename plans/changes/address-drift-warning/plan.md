@@ -102,6 +102,13 @@ selection policy or predecessor artifacts. Existing caller modules
 Explore used Stage 2 Flash (`glm-5.3-flash`, `glm-coding-plan`, 2026-11-07);
 no Stage-1 fallback is recorded in research.
 
+## Runner route — 2026-11-08
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-08 10:43:13–12:04:40 UTC, 4887 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-11-08 14:21:20–16:02:43 UTC, 6083 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-08 16:03:02–16:50:44 UTC, 2862 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-08 16:50:56–17:35:45 UTC, 2689 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

@@ -4,9 +4,10 @@ Every Go launch — review loop, research swarm, availability probe and the
 interactive session — assesses its effective destination against the single
 `adresse` record on the `opencode-go` entry of `model-endpoints.yaml`
 (bead coding-harness-4tr4, decisions Q-1/Q-2/Q-5). A different path on the
-admitted host runs on with a notice, and so does a definition that names a
-wire api the record does not map; any other destination is refused before
-a model request.
+admitted host runs on with a notice, and so does a definition with an explicit,
+valid base on that host that names a non-empty wire api the record does not
+map. An unmapped api without an explicit base is refused before a model
+request, as is any inadmissible destination.
 
 The record is data, never a code default: a missing, unreadable or ambiguous
 record fails closed, and no literal base, host or cached policy exists in

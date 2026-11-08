@@ -408,7 +408,10 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
     reasons = {item["id"]: item["reason"] for item in result["models"]}
     assert reasons["paid-seat"] == "wire-api-not-measured", "the exclusion reason changed"
     assert result["selected"] == ["aa-free", "moved-free"], "a notice changed the selection"
-    assert result["address_notices"] == sorted(set(result["address_notices"])), "a model's notice repeated"
+    for model in ("paid-seat", "moved-free"):
+        assert sum(f"opencode-go/{model}:" in notice for notice in result["address_notices"]) == 1, (
+            f"{model}'s notice was lost or repeated"
+        )
     assert len(result["address_notices"]) == 2, "a drift notice was lost or invented"
     joined = "\n".join(result["address_notices"])
     assert "paid-seat" in joined and UNRECORDED_API in joined, "the excluded row's notice was lost"
@@ -527,6 +530,22 @@ def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys):
     read = capsys.readouterr()
     assert "\r" not in read.out + read.err, "the control character reached a diagnostic"
     assert len(harness.sent) == 1, "a safely described api stopped a permitted send"
+
+
+def test_non_string_api_is_refused_without_raising(world):
+    """Criterion 7: a non-string catalog api yields a sanitised refusal, not an exception.
+
+    Fault: the notice path called a string method on the api value and raised.
+    """
+    model = TEST_LADDER[0]
+    policy = stage2_go.load_address_policy(world.root)
+    for bad in (123, ["x"], {"a": 1}):
+        try:
+            verdict = stage2_go.assess(policy, model, row(model, api=bad, baseUrl=UNRECORDED_BASE))
+        except AttributeError:
+            pytest.fail("a non-string api raised instead of being refused")
+        assert not verdict.admitted and verdict.problem, "a non-string api was admitted"
+        assert "unreadable wire api" in verdict.problem
 
 
 # ---------------------------------------------------------------------------
