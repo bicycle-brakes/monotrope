@@ -645,3 +645,14 @@ Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-08: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3652 commits, 12 rules.
 
 Runner restoration, 2026-11-08: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3665 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R9 | BLOCKER | SPEC | implementation | scripts/stage2.py:7291; docs/WORKFLOW.md:1607; spec.md:71 | [DIVERGENT] An attempt changing both `status: draft` to `accepted` and `last_reviewed: 2026-11-01` to `2026-11-08` loses the unrelated date edit because restoration replaces the entire header. Reproduced directly with `reapply_lifecycle_fields()`. The workflow explicitly requires this loss, while the spec requires unrelated header edits to survive; the updated preservation test now asserts their removal. Resolve the conflicting contracts and align the implementation and tests. [Acceptance criterion 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1bc67-2429-7713-9f6f-f0d2d6764ad0, 2026-11-08
+Reviewer session: codex 01a1bc67-2429-7713-9f6f-f0d2d6764ad0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
