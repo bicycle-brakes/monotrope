@@ -1,0 +1,75 @@
+---
+title: "ADR 0025 — A runner repair passes a targeted check; one full make verify precedes phase 6"
+category: adr
+status: accepted
+created: 2026-11-08
+last_reviewed: 2026-11-08
+updated: 2026-11-08
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-08"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [adr, stage-2, repair, review-loop, verification]
+---
+
+# ADR 0025 — A runner repair passes a targeted check; one full make verify precedes phase 6
+
+* Status: accepted by the merge of the pull request that carries this file.
+  Until that merge, open is proposed and closed is rejected. Amends ADR 0021
+  decision 6; supersedes no ADR. Amends no D- or O-number.
+* Review: the maintainer decided on 2026-11-08, in the conversation, that
+  ADR 0021 decision 6 changes together with the runner change that makes a
+  repair pass on a targeted check (pull request #343, bead
+  coding-harness-gxwg), and that the amendment travels in a decision pull
+  request of its own (answer "Fertig machen + ADR-PR"). Decider: maintainer ·
+  prepared by Claude Code. Acceptance is the merge commit; the review header
+  remains pending.
+* Date: 2026-11-08 · takes effect on merge.
+
+## Context
+
+ADR 0021 decision 6 ends "requiring `make verify` green after repair as
+today". Every runner repair therefore paid for a full `make verify`, even for
+a narrow edit. Full checks run one at a time under the machine-wide verify
+admission (`docs/WORKFLOW.md`, "One admission per user and machine"), so a
+repair cycle waits for the lock and then for the whole suite. The workflow
+records a full run at 12 to 13 minutes (measured 2026-10-30); the lane times
+this decision should shorten are not measured.
+
+The maintainer had already let a targeted check stand in for a full one after
+a hand repair by the orchestrator (2026-10-30, bead coding-harness-24ag). The
+change `repair-targeted-check` extends that rule to runner repairs and adds an
+enforced full check before phase 6 (`plans/changes/repair-targeted-check/`,
+on the branch of #343). Without this amendment the ADR would contradict the
+gate the runner enforces (review-loop row L8-3 of that change; bead
+coding-harness-firy).
+
+## Decision
+
+ADR 0021 decision 6's last sentence is replaced by:
+
+1. After a runner repair the runner runs a targeted check: the tests linked
+   to the touched files, the prior retry selections, ruff on the touched
+   Python files, and the gates the touched file kinds feed.
+2. When that selection is not safe, the full `make verify` runs instead, as
+   the fallback for that repair.
+3. One fresh green full `make verify` on the head under review is required
+   before phase 6.
+
+The rest of ADR 0021 decision 6 stands unchanged.
+
+## Consequences
+
+* A repair cycle no longer waits for a full run unless its selection is
+  unsafe; the effect on cycle and lane times is not yet measured.
+* A targeted check can miss a test the touch map does not link to a touched
+  file. The full `make verify` before phase 6 catches such a miss before the
+  review, and CI remains the full gate of the pull request.
+* A repair can be marked fixed on a targeted result that the full check
+  later turns red; that red stops phase 6 until it is repaired.
+
+## Validation
+
+* #343 carries the runner implementation and its criterion tests; this
+  pull request carries only the ADR text.
+* CI on this pull request is its gate; merge, not this draft, accepts the ADR.
