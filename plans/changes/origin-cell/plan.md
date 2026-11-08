@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ywbh
@@ -123,4 +123,12 @@ makes the commit; draft checks do not claim implementation evidence.
 - 8: tests/test_stage2.py::test_two_fix_r_rounds_stop_the_loop — accepted repair findings do not stop the next round, or an accepted base row fails to quiet this brake
 - 8: not yet written tests/test_stage2.py::test_origin_brake_survives_released_history — releasing earlier rounds or changing taken to fixed resets the brake, or rejected arbitrary Origin counts as accepted
 
+## Runner route — 2026-11-08
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-08 03:38:54–04:42:09 UTC, 3794 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-08 04:42:26–05:27:56 UTC, 2730 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-08 05:28:07–05:29:01 UTC, 54 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

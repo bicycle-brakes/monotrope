@@ -3135,6 +3135,9 @@ def review(root: Path, change: str) -> None:
         if refusal:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
@@ -3484,6 +3487,42 @@ def fix_r_only(rows: list[list[str]], round_number: int) -> bool:
     return bool(took) and all(row[3].startswith("fix-r") for row in took)
 
 
+# The orchestrator owns the Origin cell of an accepted row (bead coding-harness-ywbh); the reviewer's
+# text is not a decision about provenance. The whole trimmed cell must say `base`, or `fix-r<N>` for
+# the repair round that caused the finding, with N positive and without leading zeroes (decisions.md#Q-1).
+VALID_ORIGIN = re.compile(r"base|fix-r[1-9][0-9]*")
+
+
+def origin_refusal(record: str | None, findings_text: str) -> str | None:
+    """The refusal that holds the consuming verbs while an accepted row carries no causal Origin.
+
+    Every authoritative row location of the selected change is read: the loop record, the released
+    loop rows and the phase-6 tables of findings.md, as the existing parsers recognize them. A row
+    whose Status begins `taken` or `fixed` must carry `base` or `fix-r<N>` in its Origin cell; a
+    rejected or undecided row needs no Origin. The refusal names each offending row with its source
+    and asks the orchestrator - never the reviewer - to set the value.
+    """
+    locations: list[tuple[str, list[list[str]]]] = []
+    if record is not None:
+        locations.append(("loop record", record_rows(record)))
+    released, phase6 = findings_rows(findings_text)
+    locations.append(("released block", released))
+    locations.append(("phase-6 table", phase6))
+    offending = [
+        f"{row[0]} ({source})"
+        for source, rows in locations
+        for row in rows
+        if accepted_row(row) and not VALID_ORIGIN.fullmatch(row[3].strip())
+    ]
+    if not offending:
+        return None
+    return (
+        "accepted rows carry an invalid Origin (" + ", ".join(offending) + "); the orchestrator owns the "
+        "Origin cell and writes the causal value itself: `base` for a finding the review found, `fix-r<N>` "
+        "for one that repair round N caused (N positive); set the Origin and run again."
+    )
+
+
 def history_rounds(record: str | None, findings_text: str) -> dict[int, list[list[str]]]:
     """Every round's rows, from the record and from every released block (criterion 13).
 
@@ -3773,6 +3812,11 @@ def release(root: Path, change: str) -> list[list[str]]:
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = read_record(change, root)
+    # Before either release branch: reconciliation and an ordinary release both rewrite or remove,
+    # and neither may pass an accepted row whose Origin cell carries no causal value.
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None and (
         released_digest(text) == record_digest(record) or released_identity(text) == record_identity(record)
     ):
@@ -8247,6 +8291,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
+    # Before the batch checks and any effect: an accepted row without its causal Origin is provenance
+    # the repair must not consume, taken or fixed, in the record and in findings.md alike
+    # (bead coding-harness-ywbh).
+    refusal = origin_refusal(
+        read_record(change, root), ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    )
+    if refusal:
+        raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
     ids = [row[0] for _, row in taken]
@@ -8374,6 +8426,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
+    # Before the stops and any stage: an accepted row without its causal Origin holds the loop, in
+    # the record and in released history alike (bead coding-harness-ywbh).
+    refusal = origin_refusal(record, findings_text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None:
         refusal = released_overlap_refusal(record, findings_text)
         if refusal:
@@ -8469,10 +8526,15 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                         )
             raise Refused(message)
         # The orchestrator decides and repairs before another review (ADR 0021, decision 6): a taken row of
-        # this run that no repair has marked `fixed` holds the next round (DL-A-8 of the deep review). Spent
-        # stages stop first: there is no next round to hold.
+        # this run that no repair has marked `fixed` holds the next round (DL-A-8 of the deep review). The
+        # hold reads the record and the released rows alike, after a restart only the rounds that followed
+        # it. Spent stages stop first: there is no next round to hold.
         unrepaired = [
-            row[0] for number in sorted(history) for row in history[number] if row[7].lower().startswith("taken")
+            row[0]
+            for number, rows in sorted(history.items())
+            if number > floor
+            for row in rows
+            if row[7].lower().startswith("taken")
         ]
         if unrepaired:
             raise Refused(

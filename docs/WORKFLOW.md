@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-08
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1501,7 +1501,14 @@ existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
-or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. Deciding a
+row also writes its `Origin`, and that cell is the orchestrator's: `base` for
+a finding the review found, `fix-r<N>` for a finding that repair round `N`
+produced; the reviewer's Origin text is not a decision about provenance. The
+runner refuses `review-loop`, `review`, `release-loop` and `repair` while an
+accepted row (`taken` or `fixed`) carries an Origin that is neither value —
+empty, unknown or malformed — and nothing is called, consumed, released or
+repaired until the orchestrator corrects the cell. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
