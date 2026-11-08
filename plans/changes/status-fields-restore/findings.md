@@ -511,9 +511,137 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6 | MAJOR | MAINT | implementation | scripts/stage2.py:7454 | If an attempt replaces `spec.md` with a symlink to external Markdown whose lifecycle values differ from baseline, recovery preflight permits the leaf link, then `read_bytes()` follows it. Restoration detaches the link but copies the external body into the worktree, allowing otherwise passing checks to commit external content. Recover linked leaves from trusted snapshot bytes before reading their targets. | Codex | taken — mechanism repair (third phase-6 round on lifecycle restoration; within the maintainer's four hours of 2026-11-08): stop splicing field lines — when an attempt changes a protected field's effective value (read with the registry's own parser, merge keys included), restore the file's whole front-matter block from the trusted baseline snapshot bytes, never reading through a link, and reject YAML the registry cannot read; a test per reproduced case | — |
-| R7 | MAJOR | SPEC | implementation | scripts/stage2.py:7263 | With baseline frontmatter `defaults: &d {status: draft, implementation_status: none}` followed by `<<: *d`, the parsed document has both protected fields, but `frontmatter_fields()` returns `{}`. Reproduced: changing the inherited status to `accepted` survives restoration with no touched fields and an unchanged report. Snapshot and restore the effective top-level values used by the registry. [Acceptance criteria 1, 5] | Codex | taken — mechanism repair (third phase-6 round on lifecycle restoration; within the maintainer's four hours of 2026-11-08): stop splicing field lines — when an attempt changes a protected field's effective value (read with the registry's own parser, merge keys included), restore the file's whole front-matter block from the trusted baseline snapshot bytes, never reading through a link, and reject YAML the registry cannot read; a test per reproduced case | — |
-| R8 | MAJOR | SPEC | implementation | scripts/stage2.py:7359 | Starting from ordinary lifecycle fields, an attempt can write valid YAML containing `status: &s accepted` and `review: {status: *s}`. Restoration replaces the status line and removes its anchor, leaving an undefined alias. Reproduced: the restored document becomes unreadable; verification receives it, and a final rejected attempt leaves it at handback. Preserve valid YAML and baseline field values when restoring anchored entries. [Acceptance criteria 1, 2, 3] | Codex | taken — mechanism repair (third phase-6 round on lifecycle restoration; within the maintainer's four hours of 2026-11-08): stop splicing field lines — when an attempt changes a protected field's effective value (read with the registry's own parser, merge keys included), restore the file's whole front-matter block from the trusted baseline snapshot bytes, never reading through a link, and reject YAML the registry cannot read; a test per reproduced case | — |
+| R6 | MAJOR | MAINT | implementation | scripts/stage2.py:7454 | If an attempt replaces `spec.md` with a symlink to external Markdown whose lifecycle values differ from baseline, recovery preflight permits the leaf link, then `read_bytes()` follows it. Restoration detaches the link but copies the external body into the worktree, allowing otherwise passing checks to commit external content. Recover linked leaves from trusted snapshot bytes before reading their targets. | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_link_recovers_trusted_bytes | — |
+| R7 | MAJOR | SPEC | implementation | scripts/stage2.py:7263 | With baseline frontmatter `defaults: &d {status: draft, implementation_status: none}` followed by `<<: *d`, the parsed document has both protected fields, but `frontmatter_fields()` returns `{}`. Reproduced: changing the inherited status to `accepted` survives restoration with no touched fields and an unchanged report. Snapshot and restore the effective top-level values used by the registry. [Acceptance criteria 1, 5] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_merge_values_are_restored | — |
+| R8 | MAJOR | SPEC | implementation | scripts/stage2.py:7359 | Starting from ordinary lifecycle fields, an attempt can write valid YAML containing `status: &s accepted` and `review: {status: *s}`. Restoration replaces the status line and removes its anchor, leaving an undefined alias. Reproduced: the restored document becomes unreadable; verification receives it, and a final rejected attempt leaves it at handback. Preserve valid YAML and baseline field values when restoring anchored entries. [Acceptance criteria 1, 2, 3] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_anchor_restores_valid_header | — |
 
 Phase 6 verdict: codex 01a1bb54-70e8-7e70-9e78-df2d8d35e280, 2026-11-08
 Reviewer session: codex 01a1bb54-70e8-7e70-9e78-df2d8d35e280 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3642 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +7 -2
+> - `plans/changes/status-fields-restore/plan.md` +21 -11
+> - `plans/changes/status-fields-restore/spec.md` +10 -5
+> - `scripts/plans_registry.py` +5 -1
+> - `scripts/stage2.py` +59 -188
+> - `tests/test_stage2.py` +119 -19
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 98 lines of this gate left out …]
+>             result = real_codex(*args, **kwargs)
+>             count = len(world.calls("codex"))
+>             if count == 1:
+>                 spec.unlink()
+>                 spec.symlink_to(outside)
+>             elif count == 2:
+>                 plan.unlink()
+>                 plan.mkdir()
+>             return result
+>     
+>         def begin_work_call(*args, **kwargs):
+>             observed.append(
+>                 (spec.read_bytes(), plan.read_bytes(), spec.is_symlink(), plan.is_file() and not plan.is_symlink())
+>             )
+>             real_begin(*args, **kwargs)
+>     
+>         monkeypatch.setattr(stage2, "run_codex", codex)
+>         monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+>         assert world.run("repair") == 0
+>         assert outside.read_bytes() == b"outside content\n", "restoration wrote through the symlink"
+> >       assert [call["name"] for call in repair_calls(world)] == ["codex", "codex", "claude"]
+> E       AssertionError: assert ['codex'] == ['codex', 'codex', 'claude']
+> E         
+> E         Right contains 2 more items, first extra item: 'codex'
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:9284: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-928/popen-gw1/test_repair_retry_restores_ali0/repo/.git/stage2/attempts/demo/attempt-1-20261108T144110771892Z-f8cc7184.md
+> repair: verified and committed · route codex · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=97240) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/status-fields-restore/tests/test_stage2.py:20032: DeprecationWarning: This process (pid=97258) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_retry_restores_aliased_and_directory_inputs_without_following
+> 1 failed, 4908 passed, 17 skipped, 5 warnings in 1083.25s (0:18:03)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32266 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/status-fields-restore/stage2/attempts/status-fields-restore/attempt-1-20261108T132809016497Z-715c6914.md
+> ````
+
+Stage-2 call, 2026-11-08: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3652 commits, 12 rules.
+
+Runner restoration, 2026-11-08: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged

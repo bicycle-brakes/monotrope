@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-07
+updated: 2026-11-08
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1603,7 +1603,12 @@ above. An approval or an implementation transition stays the orchestrator's act;
 never makes one. A protected document created by an attempt has no orchestrator lifecycle
 baseline: the runner removes it before checks and before a retry can snapshot it, and reports
 that removal explicitly. Existing documents have their fields restored; an absent optional
-design stays absent.
+design stays absent. Effective lifecycle values are read with the plans registry's
+YAML parser, including merge keys. When either protected value changes, the runner
+restores the whole frontmatter block from trusted snapshot bytes, preserving the
+attempt's body. Other header edits survive only when effective lifecycle values
+stay unchanged. A linked leaf recovers trusted whole-document bytes without reading
+its target; unreadable YAML is restored from the snapshot and rejects the attempt.
 
 When every post-run check passes —
 `make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the

@@ -11614,6 +11614,101 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
             check_workflow(broken)
 
 
+def test_repair_lifecycle_link_recovers_trusted_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A linked leaf must never supply either frontmatter or body to recovery."""
+    root = tmp_path / "repo"
+    folder = root / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = b"---\nstatus: draft\nimplementation_status: none\n---\nTrusted body\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_bytes(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    external = tmp_path / "external.md"
+    foreign = b"---\nstatus: accepted\nimplementation_status: done\n---\nExternal body\n"
+    external.write_bytes(foreign)
+    path.unlink()
+    path.symlink_to(external)
+    reads = []
+    read_bytes = Path.read_bytes
+
+    def observe_read(candidate):
+        if candidate == path and candidate.is_symlink():
+            reads.append(candidate)
+        return read_bytes(candidate)
+
+    monkeypatch.setattr(Path, "read_bytes", observe_read)
+    report, problems = stage2.restore_lifecycle_fields(root, baseline, ({}, {}), {path: original})
+    assert not reads, "recover linked leaves without reading their targets"
+    assert not path.is_symlink()
+    assert path.read_bytes() == original, "only trusted snapshot bytes may replace a linked input"
+    assert external.read_bytes() == foreign
+    assert problems == [
+        "plans/changes/demo/spec.md was replaced by a linked leaf; the snapshotted-input recovery owns it"
+    ], "a replaced input must reject the attempt after safe recovery"
+    assert (
+        "plans/changes/demo/spec.md — status, implementation_status; restored snapshotted input (linked leaf)" in report
+    )
+
+
+@pytest.mark.parametrize("lifecycle_edit", ["", "status: accepted\n"])
+def test_repair_lifecycle_header_edits_follow_effective_values(tmp_path: Path, lifecycle_edit: str) -> None:
+    """Keep unrelated header changes only when effective lifecycle values stay unchanged."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\ndefaults: &d {status: draft, implementation_status: none}\n<<: *d\ntitle: Original\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    attempted = original.replace("title: Original", lifecycle_edit + "title: Repaired").replace("Body", "Repaired body")
+    path.write_text(attempted)
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    assert not problems
+    expected = original.replace("Body", "Repaired body") if lifecycle_edit else attempted
+    assert path.read_text() == expected
+    assert plans_registry._frontmatter(path)["status"] == "draft"
+    assert any("status" in line if lifecycle_edit else "unchanged" in line for line in report)
+
+
+def test_repair_lifecycle_merge_values_are_restored(tmp_path: Path) -> None:
+    """Merge-inherited lifecycle values are the effective values the registry reads."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\ndefaults: &d {status: draft, implementation_status: none}\n<<: *d\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    path.write_text(original.replace("status: draft", "status: accepted").replace("Body", "Repaired body"))
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    assert not problems
+    assert plans_registry._frontmatter(path)["status"] == "draft", "restore effective inherited status"
+    assert path.read_text() == original.replace("Body", "Repaired body")
+    assert "plans/changes/demo/spec.md — status" in report
+
+
+def test_repair_lifecycle_anchor_restores_valid_header(tmp_path: Path) -> None:
+    """Restoring a changed anchor must not strand aliases in the attempted header."""
+    folder = tmp_path / "plans" / "changes" / "demo"
+    folder.mkdir(parents=True)
+    original = "---\nstatus: draft\nimplementation_status: none\n---\nBody\n"
+    for name in stage2.LIFECYCLE_DOCS:
+        (folder / name).write_text(original)
+    baseline = stage2.lifecycle_snapshot(folder)
+    path = folder / "spec.md"
+    path.write_text(original.replace("status: draft", "status: &s accepted\nreview: {status: *s}"))
+    report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
+    try:
+        header = yaml.safe_load(path.read_text().split("---")[1])
+    except yaml.composer.ComposerError as error:
+        pytest.fail(f"lifecycle restoration must leave valid YAML with no stranded alias: {error}")
+    assert not problems
+    assert header == {"status": "draft", "implementation_status": "none"}
+    assert path.read_text() == original
+    assert "plans/changes/demo/spec.md — status" in report
+
+
 @pytest.mark.parametrize(
     "spelling",
     [
@@ -11634,7 +11729,7 @@ def test_repair_lifecycle_yaml_keys_are_restored(spelling: str) -> None:
     )
     fields = stage2.frontmatter_fields(original)
     assert fields is not None
-    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
     header = yaml.safe_load(restored.split("---")[1])
     assert header["status"] == "draft", "restore YAML-spelled status before verification"
     assert header["implementation_status"] == "none"
@@ -11647,7 +11742,7 @@ def test_repair_lifecycle_alias_key_is_restored() -> None:
     fields = stage2.frontmatter_fields(original)
     assert fields is not None
     damaged = original.replace("status: draft", "*s : accepted")
-    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
     assert restored == original, "recognize the aliased key at its own source location"
 
 
@@ -11662,11 +11757,11 @@ def test_repair_lifecycle_flow_keys_are_restored(baseline_flow: bool) -> None:
     damaged = '---\n{"status" : accepted, implementation_status : complete, title : "Keep formatting"}\n---\nBody\n'
     fields = stage2.frontmatter_fields(original)
     assert fields is not None
-    restored, _, _ = stage2.reapply_lifecycle_fields(damaged, fields)
+    restored, _ = stage2.reapply_lifecycle_fields(damaged, original)
     header = yaml.safe_load(restored.split("---")[1])
     assert header["status"] == "draft", "a flow mapping must not evade restoration"
     assert header["implementation_status"] == "none"
-    assert 'title : "Keep formatting"' in restored
+    assert restored == original, "restore the whole trusted header without rewriting its formatting"
     assert restored.endswith("---\nBody\n")
 
 
@@ -12087,11 +12182,21 @@ def test_repair_lifecycle_broken_document_restored_on_every_attempt(
         ("status: accepted\x01", yaml.reader.ReaderError),
         ("{status: !unknown accepted}", yaml.constructor.ConstructorError),
         ("status: accepted\nother: !unknown value", yaml.constructor.ConstructorError),
+        ("status: accepted\nother: 2026-99-99", ValueError),
     ],
-    ids=["scanner", "parser", "composer", "constructor", "reader", "flow-constructor", "other-constructor"],
+    ids=[
+        "scanner",
+        "parser",
+        "composer",
+        "constructor",
+        "reader",
+        "flow-constructor",
+        "other-constructor",
+        "invalid-date",
+    ],
 )
 def test_repair_lifecycle_yaml_errors_restore_snapshot(
-    world: World, monkeypatch: pytest.MonkeyPatch, header: str, error_class: type[yaml.YAMLError]
+    world: World, monkeypatch: pytest.MonkeyPatch, header: str, error_class: type[Exception]
 ) -> None:
     """Every YAML error class rejects the attempt and restores safe inputs before checks."""
     with pytest.raises(error_class):
@@ -12264,29 +12369,25 @@ def test_repair_lifecycle_crlf_documents_are_reported_unchanged(tmp_path: Path) 
 @pytest.mark.parametrize("field", ["status", "implementation_status"])
 @pytest.mark.parametrize("changed", [False, True], ids=["unchanged-first", "changed-first"])
 def test_repair_lifecycle_duplicate_removal_is_reported(tmp_path: Path, field: str, changed: bool) -> None:
-    """Duplicate cleanup is reported separately from a net change to the surviving field."""
+    """The registry's last effective value decides whether the complete header is restored."""
     folder = tmp_path / "plans" / "changes" / "demo"
     folder.mkdir(parents=True)
     path = folder / "spec.md"
     original = "---\nstatus: draft\nimplementation_status: none\n---\n\n# Spec\n"
     path.write_text(original, encoding="utf-8")
+    baseline = {path: original.encode()}
     fields = stage2.frontmatter_fields(original)
     assert fields is not None
-    baseline = {path: fields}
-    standing = fields[field]
-    damaged = original.replace(standing, f"{field}: superseded" if changed else standing)
-    damaged = damaged.replace("\n---\n\n", f"\n{field}: partial\n{field}: draft\n---\n\n")
+    last_value = "superseded" if changed else fields[field]
+    damaged = original.replace("\n---\n\n", f"\n{field}: partial\n{field}: {last_value}\n---\n\n")
     path.write_text(damaged, encoding="utf-8")
 
     report, problems = stage2.restore_lifecycle_fields(tmp_path, baseline, ({}, {}))
 
     assert not problems
-    assert path.read_text(encoding="utf-8") == original
+    assert path.read_text(encoding="utf-8") == (original if changed else damaged)
     expected_fields = field if changed else stage2.LIFECYCLE_UNCHANGED
-    assert report == [
-        f"plans/changes/demo/spec.md — {expected_fields}; "
-        f"removed duplicate {field} line 4; removed duplicate {field} line 5"
-    ], "duplicate removal must identify each removed line without claiming an unchanged field was restored"
+    assert report == [f"plans/changes/demo/spec.md — {expected_fields}"]
 
 
 def test_repair_lifecycle_mixed_report_names_unchanged_documents(tmp_path: Path) -> None:
@@ -12312,7 +12413,8 @@ def test_repair_lifecycle_mixed_report_names_unchanged_documents(tmp_path: Path)
 
 def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> None:
     """Criterion 3. Planted fault: the restoration reverts whole documents, unrelated header fields
-    or the runner's own time bookkeeping, or an edit to the protected fields alone rejects the repair."""
+    or runner time entries, or an edit to the protected fields alone rejects the repair.
+    The authorized mechanism repair restores the whole header when lifecycle values change."""
     repair_world(world)
     plant_lifecycle(world)
     damaged_spec = lifecycle_damaged(world, "plans/changes/demo/spec.md", status="superseded", implementation=None)
@@ -12342,10 +12444,10 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
     plan_now = (world.root / "plans/changes/demo/plan.md").read_text(encoding="utf-8")
     assert "status: draft" in plan_now and "implementation_status: none" in plan_now
     assert "implementation_status: partial" not in plan_now
-    assert "last_reviewed: 2026-11-01" in plan_now
+    assert "last_reviewed: 2026-11-01" not in plan_now
     assert "The attempt also wrote this line." in plan_now
     committed_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
-    assert "last_reviewed: 2026-11-01" in committed_plan
+    assert "last_reviewed: 2026-11-01" not in committed_plan
     assert "The attempt also wrote this line." in committed_plan
     entries = runner_entries(world.plan)
     assert entries and entries[-1].endswith("accepted · measured by the runner")

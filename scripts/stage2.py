@@ -146,7 +146,6 @@ import argparse
 import ast
 import contextlib
 import contextvars
-import copy
 import datetime as dt
 import fcntl
 import functools
@@ -178,6 +177,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import plans_registry  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import verify_lock  # noqa: E402
@@ -7228,90 +7228,27 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         path.write_bytes(content)
 
 
-class LifecycleLoader(yaml.SafeLoader):
-    """Keep alias occurrences' source marks instead of their anchor's earlier marks."""
-
-    def compose_node(self, parent, index):
-        alias = self.peek_event() if self.check_event(yaml.AliasEvent) else None
-        node = super().compose_node(parent, index)
-        if alias is not None:
-            node = copy.copy(node)
-            node.start_mark, node.end_mark = alias.start_mark, alias.end_mark
-        return node
-
-
-def lifecycle_entries(text: str) -> tuple[list[str], int, list[tuple[str, int, int]]] | None:
-    """Parse YAML keys, retaining source line spans rather than rewriting unrelated metadata."""
-    lines = text.split("\n")
-    if not lines or lines[0].rstrip("\r") != "---":
-        return None
-    closing = next((i for i in range(1, len(lines)) if lines[i].rstrip("\r") == "---"), None)
-    if closing is None:
-        return None
-    header = "\n".join(lines[1:closing])
+def frontmatter_fields(text: str) -> dict[str, object] | None:
+    """Effective protected values, using the registry's parser (and its merge semantics)."""
+    # Path.read_text in the registry uses universal newlines. Match it for byte snapshots.
     try:
-        # Composition alone admits unknown tags and other values SafeLoader cannot
-        # construct. Treat every YAML error as unreadable before planning any writes.
-        yaml.safe_load(header)
-        node = yaml.compose(header, Loader=LifecycleLoader)
-        key_tokens = [token for token in yaml.scan(header) if isinstance(token, yaml.tokens.KeyToken)]
-    except yaml.YAMLError:
+        values = plans_registry.parse_frontmatter(text.replace("\r\n", "\n").replace("\r", "\n"))
+    except (ValueError, OverflowError, RecursionError):
+        # SafeLoader constructors can reject values (such as invalid dates) without a YAMLError.
         return None
-    if not isinstance(node, yaml.MappingNode):
+    if values is None:
         return None
-    entries = []
-    for key, value in node.value:
-        if key.tag == "tag:yaml.org,2002:str" and key.value in LIFECYCLE_FIELDS:
-            marker = max(
-                (token.start_mark for token in key_tokens if token.start_mark.index <= key.start_mark.index),
-                key=lambda mark: mark.index,
-                default=key.start_mark,
-            )
-            start = marker.line + 1
-            end = value.end_mark.line + 1 + bool(value.end_mark.column)
-            entries.append((key.value, start, max(start + 1, end)))
-    return lines, closing, entries
+    return {key: values[key] for key in LIFECYCLE_FIELDS if key in values}
 
 
-def frontmatter_fields(text: str) -> dict[str, str] | None:
-    """The exact source spans for parsed top-level protected YAML keys."""
-    parsed = lifecycle_entries(text)
-    if parsed is None:
-        return None
-    lines, closing, entries = parsed
-    header = "\n".join(lines[1:closing])
-    node = yaml.compose(header, Loader=LifecycleLoader)
-    if node.flow_style:
-        # Flow entries share lines; snapshot each parsed pair, not the surrounding mapping.
-        values = yaml.safe_load(header)
-        return {
-            key: yaml.safe_dump({key: values[key]}, sort_keys=False).rstrip("\n")
-            for key in LIFECYCLE_FIELDS
-            if key in values
-        }
-    fields = {}
-    for key, start, end in entries:
-        source = "\n".join(lines[start:end])
-        try:
-            yaml.safe_load(source)
-        except yaml.YAMLError:
-            # An alias may rely on an unprotected anchor elsewhere in this header.
-            source = yaml.safe_dump({key: yaml.safe_load(header)[key]}, sort_keys=False).rstrip("\n")
-        fields[key] = source
-    return fields
-
-
-def lifecycle_snapshot(folder: Path) -> dict[Path, dict[str, str] | None]:
-    """Each protected document's lifecycle lines as they stand right now - one attempt's baseline.
-
-    Spec and plan require readable frontmatter. An absent optional design is recorded as absent;
-    no baseline is invented for a document an attempt creates.
-    """
-    baseline: dict[Path, dict[str, str] | None] = {}
+def lifecycle_snapshot(folder: Path) -> dict[Path, bytes | None]:
+    """Trusted whole-document bytes before the attempt; absent optional design stays absent."""
+    baseline: dict[Path, bytes | None] = {}
     for name in LIFECYCLE_DOCS:
         path = folder / name
         try:
-            fields = frontmatter_fields(path.read_bytes().decode("utf-8"))
+            content = path.read_bytes()
+            fields = frontmatter_fields(content.decode("utf-8"))
         except FileNotFoundError as error:
             if name == "design.md" and not path.is_symlink():
                 baseline[path] = None
@@ -7321,117 +7258,49 @@ def lifecycle_snapshot(folder: Path) -> dict[Path, dict[str, str] | None]:
             raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
         if fields is None:
             raise CallFailed(f"lifecycle snapshot failed for {path}: missing frontmatter")
-        baseline[path] = fields
+        baseline[path] = content
     return baseline
 
 
-def reapply_lifecycle_fields(text: str, baseline: dict[str, str]) -> tuple[str, list[str], list[str]]:
-    """The restored text, fields whose surviving lines changed, and duplicate-line removals.
+def lifecycle_header_end(text: str) -> int:
+    """End of the registry's initial YAML block; keep all following body bytes intact."""
+    # Match the registry delimiter after normalizing only for locating the byte-preserving span.
+    match = re.match(r"---(?:\r\n|\n|\r)", text)
+    assert match is not None
+    opening = match.end()
+    end = re.search(r"(?:\r\n|\n|\r)---", text[opening:])
+    assert end is not None
+    return opening + end.end()
 
-    An edited baseline line goes back at its key's first top-level occurrence, a removed one at the
-    block's end; a protected line the baseline lacks goes, as does a duplicate beyond the first.
+
+def reapply_lifecycle_fields(text: str, baseline: str) -> tuple[str, list[str]]:
+    """Restore the trusted complete YAML block when an effective protected value changes.
+
+    YAML anchors and merge keys couple metadata entries: splicing individual field lines cannot
+    preserve validity. Header edits survive when the effective lifecycle is unchanged; body edits
+    always survive this restoration. Membership matters, so missing and explicit null differ.
     """
-    parsed = lifecycle_entries(text)
-    assert parsed is not None
-    lines, closing, entries = parsed
-    header = "\n".join(lines[1:closing])
-    node = yaml.compose(header, Loader=LifecycleLoader)
-    if node.flow_style:
-        return reapply_flow_lifecycle(text, lines, closing, header, node, baseline)
-    block: list[str] = []
-    seen: set[str] = set()
-    touched: list[str] = []
-    duplicates: list[str] = []
-    cursor = 1
-    for key, start, end in entries:
-        block.extend(lines[cursor:start])
-        cursor = end
-        if key in seen:
-            duplicates.append(f"removed duplicate {key} line {start + 1}")
-            continue
-        seen.add(key)
-        if key not in baseline:
-            touched.append(key)
-            continue
-        standing = "\n".join(lines[start:end])
-        if standing != baseline[key]:
-            touched.append(key)
-        block.extend(baseline[key].split("\n"))
-    block.extend(lines[cursor:closing])
-    for key, line in baseline.items():
-        if key not in seen:
-            block.extend(line.split("\n"))
-            touched.append(key)
-    if touched or duplicates:
-        lines[1:closing] = block
-    return "\n".join(lines), touched, duplicates
-
-
-def reapply_flow_lifecycle(
-    text: str, lines: list[str], closing: int, header: str, node: yaml.MappingNode, baseline: dict[str, str]
-) -> tuple[str, list[str], list[str]]:
-    """Rewrite only protected pairs in a flow mapping, preserving other pairs' source bytes."""
-    parts: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    touched: list[str] = []
-    duplicates: list[str] = []
-    values = yaml.safe_load(header)
-    for index, (key, value) in enumerate(node.value):
-        source = header[key.start_mark.index : value.end_mark.index]
-        following = node.value[index + 1][0].start_mark.index if index + 1 < len(node.value) else value.end_mark.index
-        separator = header[value.end_mark.index : following] or ", "
-        if key.tag != "tag:yaml.org,2002:str" or key.value not in LIFECYCLE_FIELDS:
-            parts.append((source, separator))
-            continue
-        name = key.value
-        if name in seen:
-            duplicates.append(f"removed duplicate {name} line {key.start_mark.line + 2}")
-            continue
-        seen.add(name)
-        if name not in baseline:
-            touched.append(name)
-            continue
-        restored = yaml.safe_dump(yaml.safe_load(baseline[name]), default_flow_style=True, sort_keys=False).strip()[
-            1:-1
-        ]
-        if values[name] != yaml.safe_load(baseline[name])[name] or source != restored:
-            touched.append(name)
-        parts.append((restored, separator))
-    for name, source in baseline.items():
-        if name not in seen:
-            parts.append(
-                (yaml.safe_dump(yaml.safe_load(source), default_flow_style=True, sort_keys=False).strip()[1:-1], ", ")
-            )
-            touched.append(name)
-    if not touched and not duplicates:
-        return text, [], []
-    prefix = header[: node.value[0][0].start_mark.index] if node.value else header[: node.end_mark.index - 1]
-    suffix = header[node.value[-1][1].end_mark.index :] if node.value else header[node.end_mark.index - 1 :]
-    if not parts:
-        suffix = suffix.lstrip().removeprefix(",")
-    rewritten = (
-        prefix
-        + "".join(source + (separator if i < len(parts) - 1 else "") for i, (source, separator) in enumerate(parts))
-        + suffix
-    )
-    lines[1:closing] = rewritten.split("\n")
-    return "\n".join(lines), touched, duplicates
+    before = frontmatter_fields(baseline)
+    after = frontmatter_fields(text)
+    assert before is not None and after is not None
+    touched = [
+        key for key in LIFECYCLE_FIELDS if (key in before) != (key in after) or before.get(key) != after.get(key)
+    ]
+    if not touched:
+        return text, []
+    return baseline[: lifecycle_header_end(baseline)] + text[lifecycle_header_end(text) :], touched
 
 
 def restore_lifecycle_fields(
     root: Path,
-    baseline: dict[Path, dict[str, str] | None],
+    baseline: dict[Path, bytes | None],
     aliases: AliasBaseline,
     recovery_inputs: dict[Path, bytes] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """Put each snapshotted lifecycle field line back before a check or the checkpoint reads it.
+    """Restore trusted frontmatter on effective lifecycle changes, before verification.
 
-    Only the protected lines move; every other edit the attempt made stands. A snapshotted document
-    that is gone or lost its frontmatter is structurally broken: the snapshotted-input recovery owns
-    its bytes, and the problem returned here rejects the attempt instead of inventing surrounding
-    content. The complete batch stands checked before its first write, and a refusal leaves it
-    unwritten with a diagnostic that names the lifecycle protection. Returns the restoration report -
-    changed documents (including duplicate cleanup), every unchanged document, and structural problems.
+    Linked leaves recover whole trusted inputs without reading their targets. Unreadable metadata
+    rejects the attempt and recovers trusted bytes. Preflight the complete batch before any writes.
     """
     # A safe lifecycle destination does not authorize recovery when a different snapshotted
     # input is unsafe. Check the entire recovery boundary before reading or writing fields.
@@ -7443,12 +7312,17 @@ def restore_lifecycle_fields(
     report: list[str] = []
     unchanged: list[str] = []
     problems: list[str] = []
-    for path, fields in baseline.items():
+    for path, content_before in baseline.items():
         relative = path.relative_to(root).as_posix()
-        if fields is None:
+        if content_before is None:
             if path.exists() or path.is_symlink():
                 changes[path] = None
                 report.append(f"{relative} — removed (absent before the attempt; no lifecycle baseline)")
+            continue
+        if path.is_symlink() or (path.is_file() and path.stat().st_nlink > 1):
+            problems.append(f"{relative} was replaced by a linked leaf; the snapshotted-input recovery owns it")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input (linked leaf)")
             continue
         try:
             text = path.read_bytes().decode("utf-8")
@@ -7456,18 +7330,15 @@ def restore_lifecycle_fields(
             text = None
         if text is None or frontmatter_fields(text) is None:
             problems.append(f"{relative} was deleted or lost its frontmatter; the snapshotted-input recovery owns it")
-            if recovery_inputs is not None and path in recovery_inputs:
-                changes[path] = recovery_inputs[path]
-                report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input")
             continue
-        updated, touched, duplicates = reapply_lifecycle_fields(text, fields)
-        if touched or duplicates:
+        updated, touched = reapply_lifecycle_fields(text, content_before.decode("utf-8"))
+        if touched:
             changes[path] = updated.encode("utf-8")
-            # The fields read in their fixed order, however the attempt's header ordered them.
-            # Duplicate cleanup is a separate action, not a net change to the surviving field.
+            # Report effective changed fields in their fixed order.
             restored = ", ".join(field for field in LIFECYCLE_FIELDS if field in touched)
-            details = "; ".join([restored or LIFECYCLE_UNCHANGED, *duplicates])
-            report.append(f"{relative} — {details}")
+            report.append(f"{relative} — {restored}")
         else:
             unchanged.append(relative)
     if unchanged or not baseline:
@@ -7612,8 +7483,9 @@ def run_attempts(
     coding-harness-hgvp). A failed call keeps the output it returned.
 
     A verb that passes `protect_lifecycle` snapshots the change's lifecycle fields (`status`,
-    `implementation_status`) in spec, optional design and plan right before every call and puts just
-    those lines back once the attempt's changed-file measurement stands - before verification, the
+    `implementation_status`) in spec, optional design and plan right before every call. Once the
+    attempt's changed-file measurement stands, changed effective values restore the trusted whole
+    frontmatter block, preserving body edits and YAML anchors - before verification, the
     derived preparation or the checkpoint reads the documents. The same per-attempt snapshot serves
     the early exits: a failed call and a retry recover whole snapshotted inputs, a moved HEAD keeps
     its commit while the safe working-tree fields go back, a refused checkpoint puts the fields back
