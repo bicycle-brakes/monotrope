@@ -256,7 +256,7 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_go.py:302–304 | A catalog row with a valid same-host base and an `api` value that is a URL with a user and password in its host part (literal removed by the orchestrator, 2026-11-08: it tripped the leak check) exposes the credentials verbatim in its warning. Reproduced through research selection: the row is excluded as `wire-api-not-measured`, but `address_notices` still contains the complete credential-bearing URL. Render unsafe API values as a safe description before adding them to diagnostics. [Acceptance criterion 7] | Codex | taken — reproduced security fault in spec (criterion 7): every catalog-supplied api value passes through one safe renderer before any diagnostic or notice — a value that is not a plain wire-api token is shown as a redacted description, never verbatim; test with a credential-bearing URL | — |
+| P6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_go.py:302–304 | A catalog row with a valid same-host base and an `api` value that is a URL with a user and password in its host part (literal removed by the orchestrator, 2026-11-08: it tripped the leak check) exposes the credentials verbatim in its warning. Reproduced through research selection: the row is excluded as `wire-api-not-measured`, but `address_notices` still contains the complete credential-bearing URL. Render unsafe API values as a safe description before adding them to diagnostics. [Acceptance criterion 7] | Codex | fixed — tests/test_stage2_go_access.py::test_api_notices_sanitise_untrusted_values | — |
 
 Phase 6 verdict: codex 01a1bc6b-7826-75f2-8afe-cedbaaae2125, 2026-11-08
 Reviewer session: codex 01a1bc6b-7826-75f2-8afe-cedbaaae2125 — a fresh session reviewed: no phase-2a session was recorded
@@ -337,3 +337,5 @@ Kept from the loop record:
 > Address notice: opencode-go/qwen3.8-max: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3671 commits, 12 rules.

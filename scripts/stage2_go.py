@@ -295,11 +295,11 @@ def _same_path(left: str | None, right: str | None) -> bool:
 def _shown_api(api: str) -> str:
     """The wire-api name as a notice shows it, or a safe description.
 
-    The value comes from a catalog definition, so it is untrusted: a control
-    character or backslash is never echoed, and the notice describes the value
-    instead (the sanitisation boundary of `url_problem`).
+    The value comes from an untrusted catalog definition. Only plain wire-api
+    tokens may be echoed; everything else gets a safe description, including
+    URLs that could carry credentials (the boundary of `url_problem`).
     """
-    if not api.strip() or _has_control_or_backslash(api):
+    if not _API.fullmatch(api):
         return "<unreadable>"
     return f'"{api}"'
 

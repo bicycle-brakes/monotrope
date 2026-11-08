@@ -525,22 +525,48 @@ def test_non_string_catalog_api_is_refused(world, api):
     assert verdict.notice is None
 
 
-def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    "hostile_api",
+    [
+        "openai\r-completions",
+        "https://synthetic-user:synthetic-password@example.invalid/wire",
+        "openai completions",
+        'openai"completions',
+        "openai\\completions",
+    ],
+)
+def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys, hostile_api):
     """Criterion 7: an unreadable api value is described safely in a notice, never echoed.
 
-    Fault: a control-bearing api string entered a diagnostic verbatim.
+    Fault: a non-token api string, including a credential-bearing URL,
+    entered a diagnostic verbatim, even when research excluded the row.
     """
     model = TEST_LADDER[0]
     policy = stage2_go.load_address_policy(world.root)
-    hostile_api = "openai\r-completions"
     verdict = stage2_go.assess(policy, model, row(model, api=hostile_api, baseUrl=UNRECORDED_BASE))
     assert verdict.admitted and verdict.notice, "an unreadable api name silenced an on-host base"
     assert hostile_api not in verdict.notice and "\r" not in verdict.notice
     assert model in verdict.notice and "openai-completions" in verdict.notice, "the declared names were not shown"
+    assert "<unreadable>" in verdict.notice, "a non-token api must have a safe description"
+    assert verdict.definition["api"] == hostile_api, "rendering a warning must not rewrite the definition"
+    result = swarm.select_research_catalog(
+        bridge_with(row("paid-seat", api=hostile_api, baseUrl=UNRECORDED_BASE)),
+        selector_policy(),
+        ["paid-seat"],
+        expected_version="test-pin",
+        address=policy,
+    )
+    assert result["models"][0]["reason"] == "wire-api-not-measured"
+    assert len(result["address_notices"]) == 1
+    notice = result["address_notices"][0]
+    assert hostile_api not in notice and "<unreadable>" in notice
+    assert "synthetic-user" not in notice and "synthetic-password" not in notice
     harness = Harness(world, monkeypatch)
     capsys.readouterr()
     harness.reviewer(model, go_store(row(model, api=hostile_api, baseUrl=UNRECORDED_BASE)))()
     read = capsys.readouterr()
+    assert hostile_api not in read.out + read.err, "an unsafe api reached a diagnostic verbatim"
+    assert "synthetic-user" not in read.out + read.err and "synthetic-password" not in read.out + read.err
     assert "\r" not in read.out + read.err, "the control character reached a diagnostic"
     assert len(harness.sent) == 1, "a safely described api stopped a permitted send"
 
