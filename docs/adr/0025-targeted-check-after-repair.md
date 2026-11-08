@@ -21,7 +21,9 @@ tags: [adr, stage-2, repair, review-loop, verification]
   ADR 0021 decision 6 changes together with the runner change that makes a
   repair pass on a targeted check (pull request #343, bead
   coding-harness-gxwg), and that the amendment travels in a decision pull
-  request of its own (answer "Fertig machen + ADR-PR"). Decider: maintainer ·
+  request of its own (answer "Fertig machen + ADR-PR"), and answered its
+  interview the same day (`plans/changes/adr-repair-check/decisions.md`,
+  Q-1 to Q-5). Decider: maintainer ·
   prepared by Claude Code. Acceptance is the merge commit; the review header
   remains pending.
 * Date: 2026-11-08 · takes effect on merge.
@@ -54,7 +56,15 @@ ADR 0021 decision 6's last sentence is replaced by:
 2. When that selection is not safe, the full `make verify` runs instead, as
    the fallback for that repair.
 3. One fresh green full `make verify` on the head under review is required
-   before phase 6.
+   before phase 6. A red, unstartable or timed-out run stops the review;
+   runner audit lines in `findings.md` do not count as a new head.
+4. The orchestrator measures repair duration, verify-lock wait and every
+   failure the full check before phase 6 finds that a targeted check missed,
+   over five changes or two weeks, whichever comes first, and reports the
+   result to the maintainer.
+5. This rule holds from the merge. The testing-strategy spike (bead
+   coding-harness-1ga5) may amend or replace it with an ADR of its own; the
+   measurement of point 4 enters that spike as a finding.
 
 The rest of ADR 0021 decision 6 stands unchanged.
 
