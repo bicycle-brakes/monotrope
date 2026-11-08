@@ -1078,3 +1078,15 @@ Phase 6 verdict: codex 01a1bc3b-9204-7a11-a557-516a3fe2d5a9, 2026-11-08
 Reviewer session: codex 01a1bc3b-9204-7a11-a557-516a3fe2d5a9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3663 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3682 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-5 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:431–445 | A closed folder whose sole artifact has duplicate `status` keys is skipped rather than blocked. The registry still reads its closed bead, but the archive reader discards that metadata upon detecting the duplicate. Reproduced through `main(["--write"])`: it returns 0 and claims nothing remains eligible. With other eligible folders present, this permits batch mutation despite malformed evidence. Refuse the batch before writing. [Acceptance criteria 1, 6] | Codex | open | — |
+| R-6 | MINOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:630–636 | An existing index containing the generator’s text with CRLF line endings is reported as “already current” because `read_text()` normalizes newlines. The command succeeds while its bytes differ from the generator’s output. Reproduced with CRLF bytes through universal-newline decoding. Compare encoded bytes before deciding to skip regeneration. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1bce9-aaf6-7af2-9ea5-dcd5b506c424, 2026-11-08
+Reviewer session: codex 01a1bce9-aaf6-7af2-9ea5-dcd5b506c424 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
