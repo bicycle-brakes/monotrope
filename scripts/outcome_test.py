@@ -90,7 +90,11 @@ DATED_PREFIX = re.compile(r"\d{4}-\d{2}-\d{2}")
 RUN_PLAN_NAME = re.compile(r"run[-_]plan")
 HANDOVER_PATH = re.compile(r"(?P<path>(?:[\w.-]+/)*<date>-<name>\.md)")
 TRACKER_RULE = re.compile(r"Use `(?P<command>[^`]+)`, never bare `(?P<bare>[^`]+)`")
-DECLARATION = re.compile(r"(?P<name>`[^`]+`|[\w./-]+)\s+is the only instruction file")
+DECLARATION = re.compile(r"\bis the only instruction file\b")
+FALLBACK_MODEL = re.compile(
+    r"(?<![\w./-])(?:[A-Za-z][\w-]* [0-9]+(?:\.[0-9]+)+|"
+    r"(?=[A-Za-z0-9_./-]*[0-9])[A-Za-z][A-Za-z0-9]*(?:[-_/][\w.-]+)+)(?![\w./-])"
+)
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
@@ -188,8 +192,8 @@ def _read_repair_model(workflow: str) -> Reading:
     cells: list[str] = row.value
     if len(cells) < 2:
         return Reading.unread("the routing row carries no model cell")
-    name = _plain_text(cells[1])
-    if name is None or re.fullmatch(r"\S+", name) is None:
+    name = _strip_emphasis(_plain_text(cells[1]) or "")
+    if not name or re.fullmatch(r"\S+", name) is None:
         return Reading.unread("the routing row's model cell is not exactly one identifier")
     return Reading.ok(name)
 
@@ -198,22 +202,12 @@ def _read_repair_fallback(workflow: str) -> Reading:
     row = _repair_row(workflow)
     if not row.read:
         return row
-    # Work within the routing row's explanatory cell, then isolate the
-    # identifier clause. Capitalisation is not a boundary for model names.
-    names: list[str] = []
-    for cell in row.value[2:]:
-        for match in re.finditer(r"\s+after two failed\b", cell):
-            prefix = cell[: match.start()]
-            prefix = re.sub(r"\s+at effort\s+(?:`[^`]+`|[\w-]+)\s*$", "", prefix)
-            clauses = re.split(r"[;,]|\b(?:and|then)\s+", prefix)
-            if len(clauses) < 2:
-                return Reading.unread("the fallback has no supported identifier clause")
-            clause = clauses[-1].strip()
-            name = _plain_text(clause)
-            if name:
-                names.append(name)
+    # The documented pattern is one versioned model identifier in the
+    # explanatory cells: a family plus dotted version, or a technical slug
+    # containing a digit and a hyphen, underscore or slash. Prose order is free.
+    names = [match.group() for cell in row.value[2:] for match in FALLBACK_MODEL.finditer(_plain_text(cell) or "")]
     if len(names) != 1:
-        return Reading.unread("expected exactly one fallback identifier clause in the routing row")
+        return Reading.unread("expected exactly one versioned fallback model identifier in the routing row")
     return Reading.ok(names[0])
 
 
@@ -324,10 +318,7 @@ def _read_instructions(agents: str, source: str) -> Reading:
         return Reading.unread(
             f"expected exactly one sole-instruction-file declaration in the opening of {source}, found {count}"
         )
-    declared = declarations[0].group("name").strip("`")
-    # "This" names the document containing the declaration; explicit names
-    # refer to that named file, even when the source document stays in place.
-    return Reading.ok(PurePosixPath(source if declared == "This" else declared).name)
+    return Reading.ok(PurePosixPath(source).name)
 
 
 def _expected_answer(qid: str, texts: dict[str, str], by_id: dict[str, dict[str, Any]]) -> Reading:
@@ -359,7 +350,14 @@ def _expected_answer(qid: str, texts: dict[str, str], by_id: dict[str, dict[str,
 # ---------------------------------------------------------------------------
 
 
-def _grade(answer: Any, expected: Any, answer_type: str) -> bool:
+def _strip_emphasis(text: str) -> str:
+    """Remove paired outer Markdown emphasis, preserving internal identifier bytes."""
+    while match := re.fullmatch(r"(\*\*|__|\*|_)(.+)\1", text):
+        text = match[2]
+    return text
+
+
+def _grade(answer: Any, expected: Any, answer_type: str, *, markdown_emphasis: bool = False) -> bool:
     """One verdict: exact per shape, no substring, no synonyms, no partial credit."""
     if answer_type == "number":
         if isinstance(answer, bool) or not isinstance(answer, int | float):
@@ -374,13 +372,20 @@ def _grade(answer: Any, expected: Any, answer_type: str) -> bool:
         return False
     if answer_type == "directory":
         return text.rstrip("/") == str(expected).rstrip("/")
+    if markdown_emphasis:
+        return _strip_emphasis(text) == _strip_emphasis(str(expected).strip())
     return text == str(expected)
 
 
 def _verdicts(answers: dict[str, Any], expected: dict[str, Any], qset: QuestionSet) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for qid in qset.ids:
-        passed = _grade(answers.get(qid), expected[qid], qset.by_id[qid]["answer_type"])
+        passed = _grade(
+            answers.get(qid),
+            expected[qid],
+            qset.by_id[qid]["answer_type"],
+            markdown_emphasis=qset.by_id[qid]["resolver"] == "repair-model",
+        )
         out.append({"id": qid, "verdict": "correct" if passed else "incorrect"})
     return out
 

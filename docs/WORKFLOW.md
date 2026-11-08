@@ -315,7 +315,18 @@ Expected answers are derived anew from the same commit's sources at recording
 time — never stored, in the questionnaire or in the history. Answers are
 graded exactly: case-sensitive strings, directories up to an optional trailing
 slash, the memory floor as a finite number; no synonyms, no partial credit, no
-model judging another model. `record` exits 0 at eight of eight, and 1 when
+model judging another model. The primary repair identifier accepts paired
+outer Markdown emphasis on both the source cell and the submitted answer;
+internal identifier characters still match exactly. The fallback reader requires
+exactly one versioned model identifier in the repair row's explanatory cells:
+a single family word followed by a dotted numeric version, or a technical
+identifier starting with a letter, containing a digit and a hyphen, underscore
+or slash (for example, `Example 1.2` or `vendor/model-1`). The surrounding prose
+and position of the identifier do not matter; missing or multiple matches
+leave the source unread. The instruction-file answer is the basename of the
+question's source file, after confirming exactly one opening declaration
+containing "is the only instruction file"; the declaration's subject is not
+used as a filename. `record` exits 0 at eight of eight, and 1 when
 the run was measured with incorrect answers — a low score is evidence, not a
 failed implementation. Exit 3 means **not measured**: an unreadable or
 conflicting source, a stale snapshot, malformed input or an unwritable history

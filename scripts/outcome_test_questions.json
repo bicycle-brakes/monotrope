@@ -3,7 +3,7 @@
   "questions": [
     {
       "id": "repair-model",
-      "text": "docs/WORKFLOW.md, the routing section ('The routing'), the row whose first cell reads 'Repair after 4b and 6': give the primary repair model's exact identifier as written in that row's model cell.",
+      "text": "docs/WORKFLOW.md, the routing section ('The routing'), the row whose first cell reads 'Repair after 4b and 6': give the primary repair model's exact identifier as written in that row's model cell (surrounding Markdown emphasis is optional).",
       "answer_type": "string",
       "source": "docs/WORKFLOW.md",
       "resolver": "repair-model"
@@ -52,7 +52,7 @@
     },
     {
       "id": "instructions",
-      "text": "Give the name of the sole repository instruction file, as declared in its opening.",
+      "text": "Read the source file named for this question and confirm its opening declares it the only instruction file; give that source file's basename.",
       "answer_type": "string",
       "source": "AGENTS.md",
       "resolver": "instructions"

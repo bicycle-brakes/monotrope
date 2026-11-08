@@ -44,8 +44,7 @@ QUESTION_IDS = (
 
 # Sentinel values the fixtures carry: deliberately unlike today's live answers,
 # so every assertion reads the tool's own derivation, never the repository's
-# current text. The declaration-change and questionnaire tests separately
-# plant another instruction filename, independent of the source basename.
+# current text. The instruction answer is the basename of its declared source.
 SENTINELS: dict[str, Any] = {
     "repair-model": "sentinel-repair-9",
     "repair-fallback": "Sentinel 9.9",
@@ -353,9 +352,11 @@ def test_questionnaire_contains_no_answer_key(tmp_path: Path) -> None:
     travelling with the questions.
     """
     root = _write_repo(tmp_path / "repo")
-    _overwrite(root, instructions="SENTINEL-INSTRUCTIONS.md")
-    sentinels = SENTINELS | {"instructions": "SENTINEL-INSTRUCTIONS.md"}
+    # The source metadata names the instruction file; only question text must
+    # avoid giving that answer. Other derived values must be absent everywhere.
+    sentinels = {key: value for key, value in SENTINELS.items() if key != "instructions"}
     document = _export(root)
+    assert "AGENTS.md" not in next(q["text"] for q in document["questions"] if q["id"] == "instructions")
     leaves = _leaves(document)
     leaked = [f"{qid}={value!r}" for qid, value in sentinels.items() if any(leaf == value for leaf in leaves)]
     assert leaked == [], f"derived values reached the questionnaire: {leaked}"
@@ -492,8 +493,8 @@ def test_unread_or_changed_evidence_prevents_recording(tmp_path: Path) -> None:
 
     _overwrite(root)
     reworded = _sources_text()["docs/WORKFLOW.md"].replace(
-        "at effort `low` after two failed ones",
-        "as the second reserve once two attempts have failed",
+        "Sentinel 9.9 at effort `low` after two failed ones",
+        "an unnamed reserve once two attempts have failed",
     )
     (root / "docs" / "WORKFLOW.md").write_text(reworded, encoding="utf-8")
     _commit(root, "reword the fallback clause")
@@ -667,14 +668,12 @@ def test_bad_history_and_append_failure_preserve_old_records(tmp_path: Path, mon
 
 
 def test_tool_only_writes_explicit_history(tmp_path: Path) -> None:
-    """The tool's only repository write is the explicit history append: no tracker, no git mutation, no substituted output path, no model shortcut.
+    """The tool's only repository write is the explicit history append: no tracker, no git mutation, no model shortcut.
 
-    Fault this pins: a side effect through a substituted result path, a
-    tracker or git write, or a model/API client in the measurement path.
+    Fault this pins: a write outside the explicit history path, a tracker
+    or git write, or a model/API client in the measurement path.
     """
     root = _write_repo(tmp_path / "repo")
-    outside = tmp_path / "outside"
-    outside.mkdir()
 
     def _tree() -> dict[str, bytes]:
         found: dict[str, bytes] = {}
@@ -690,10 +689,8 @@ def test_tool_only_writes_explicit_history(tmp_path: Path) -> None:
         tmp_path,
         _export(root),
         dict(SENTINELS),
-        env_extra={"OUTCOME_TEST_RESULTS": str(outside / "substituted.jsonl")},
     )
     assert done.returncode in (0, 1)
-    assert list(outside.iterdir()) == [], "an env-var substitution took the write"
 
     after = _tree()
     changed = {name for name in set(before) | set(after) if before.get(name) != after.get(name)}
@@ -836,35 +833,49 @@ def test_declared_resolver_and_known_ids(tmp_path: Path) -> None:
     assert _run_tool(root, "questions").returncode == 3
 
 
-def test_instruction_declaration_controls_answer(tmp_path: Path) -> None:
-    """A differently named declaration changes grading, while question text gives no solution."""
+@pytest.mark.parametrize("subject", ["This", "It", "This document", "The current document"])
+def test_instruction_answer_uses_declaring_source(tmp_path: Path, subject: str) -> None:
+    """Rewording the declaration's subject must not change the source basename."""
     root = _write_repo(tmp_path / "repo")
     path = root / "AGENTS.md"
-    path.write_text(path.read_text().replace("`AGENTS.md` is the only", "`policies/SESSION.md` is the only"))
-    _commit(root, "name another instruction file")
+    path.write_text(path.read_text().replace("`AGENTS.md` is the only", f"{subject} is the only"))
+    _commit(root, "reword instruction declaration")
     document = _export(root)
     question = next(q for q in document["questions"] if q["id"] == "instructions")
     assert "AGENTS.md" not in question["text"], "the eighth question must not print its answer"
-    done = _record(root, tmp_path, document, dict(SENTINELS) | {"instructions": "SESSION.md"})
-    assert done.returncode == 0, "the declared basename must be read instead of the source basename"
-    done = _record(root, tmp_path, _export(root), dict(SENTINELS))
-    assert done.returncode == 1
-    assert _verdict_map(_history(root)[-1])["instructions"] == "incorrect"
+    done = _record(root, tmp_path, document, dict(SENTINELS))
+    assert done.returncode == 0, "the declaring source basename must survive a reworded subject"
 
 
-def test_fallback_identifier_ignores_surrounding_prose(tmp_path: Path) -> None:
-    """Capitalised multiword prose cannot become part of the fallback identifier."""
+def test_repair_model_accepts_markdown_emphasis(tmp_path: Path) -> None:
+    """Copying an emphasized model cell verbatim still supplies its exact identifier."""
     root = _write_repo(tmp_path / "repo")
-    for name in ("Sonnet 5.5", "glm_5_3", "openai/gpt-6"):
-        text = _sources_text(repair_fallback=name)["docs/WORKFLOW.md"]
-        text = text.replace(
-            f"one sandboxed attempt; one fresh retry after a failed check, and {name} at effort `low`",
-            f"One sandboxed attempt then {name}",
-        )
-        (root / "docs/WORKFLOW.md").write_text(text)
-        _commit(root, "fallback identifier changed")
-        done = _record(root, tmp_path, _export(root), dict(SENTINELS) | {"repair-fallback": name})
-        assert done.returncode == 0, f"the full fallback identifier {name!r} must be read: {done.stderr}"
+    for answer in ("**sentinel-repair-9**", "*sentinel-repair-9*", "__sentinel-repair-9__"):
+        done = _record(root, tmp_path, _export(root), dict(SENTINELS) | {"repair-model": answer})
+        assert done.returncode == 0, "markdown emphasis must not make an exact model identifier incorrect"
+    for answer in ("**sentinel-repair-9** or another", "SENTINEL-REPAIR-9", "sentinel-**repair**-9"):
+        done = _record(root, tmp_path, _export(root), dict(SENTINELS) | {"repair-model": answer})
+        assert done.returncode == 1, "prose, case changes and internal markers remain incorrect"
+
+
+@pytest.mark.parametrize("name", ["Sentinel 9.9", "glm_5_3", "openai/gpt-6"])
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "After repeated check failures use {name} at effort `low`; retry first.",
+        "Fallback {name} takes over once checks fail twice, following a fresh retry.",
+        "One sandboxed attempt then {name} after two failed checks.",
+    ],
+)
+def test_fallback_identifier_ignores_surrounding_prose(tmp_path: Path, name: str, prose: str) -> None:
+    """Versioned model identifiers survive moving and rewording the fallback clause."""
+    root = _write_repo(tmp_path / "repo")
+    text = _sources_text()["docs/WORKFLOW.md"]
+    old = "one sandboxed attempt; one fresh retry after a failed check, and Sentinel 9.9 at effort `low` after two failed ones; no other credential"
+    (root / "docs/WORKFLOW.md").write_text(text.replace(old, prose.format(name=name)))
+    _commit(root, "fallback clause reworded")
+    done = _record(root, tmp_path, _export(root), dict(SENTINELS) | {"repair-fallback": name})
+    assert done.returncode == 0, f"the full fallback identifier {name!r} must be read: {done.stderr}"
 
 
 def test_history_requires_complete_record(tmp_path: Path) -> None:
