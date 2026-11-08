@@ -20,10 +20,12 @@ import contextlib
 import copy
 import datetime as dt
 import fcntl
+import inspect
 import json
 import multiprocessing
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -42,6 +44,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import check_criterion_ledger  # noqa: E402
 import check_decision_continuity  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
@@ -58,6 +61,10 @@ def isolated_launch_cancellation(monkeypatch):
     """Each test represents a separate runner process, including its cancellation latch."""
     if hasattr(stage2, "_LAUNCH_STOPPED"):
         monkeypatch.setattr(stage2, "_LAUNCH_STOPPED", threading.Event())
+
+
+# The phase-6 boundary as the runner has it, kept before any test replaces it (bead coding-harness-gxwg).
+REAL_FULL_GATE = stage2.require_fresh_full_verification
 
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
@@ -664,7 +671,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # `bash` stands in for the draft's document check: `verify_draft` launches
     # `bash scripts/verify_all.sh --job docs`, so the stand-in records the check under its program
     # name and reads its scripted output and status from the scenario's `docs` key.
-    for name in ("bash", "codex", "claude", "pi", "make", "pin-pi"):
+    for name in ("bash", "sh", "codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
         program.write_text(
             STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
@@ -767,6 +774,7 @@ def full_flow(w: World) -> None:
     assert w.run("spec-review") == 0
     assert w.run("review-loop") == 0
     w.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "rejected — out of scope", "")])
+    commit_review_findings(w)
     assert w.run("review") == 0
 
 
@@ -1734,6 +1742,7 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     decide_record(world)
 
     world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
@@ -2886,7 +2895,7 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
         code, name = world.run("draft"), "codex"
     elif verb == "repair":
         repair_world(world)
-        script_repair(world, [repair_step(), repair_step()], make=[bad, green])
+        script_repair(world, [repair_step(), repair_step()], full_check=True, make=[bad, green])
         code, name = world.run("repair"), "codex"
     else:
         first = {
@@ -3245,6 +3254,7 @@ def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
     script_repair(
         world,
         [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        full_check=True,
         make=[{"stdout": LEAK, "exit": 1}],
     )
     assert world.run("repair") == 2
@@ -3264,6 +3274,7 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     script_repair(
         world,
         [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        full_check=True,
         make=[{"stdout": "must not run"}],
     )
     original_launch = stage2.launch
@@ -3960,9 +3971,16 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
     assert order == [], "the document check ran despite the rejected artefacts"
 
 
-def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) -> None:
-    # Criterion 6 (draft-gates-only). Planted fault: implement or repair selects the document
-    # subset, or omits full verification because a draft's document check already passed.
+def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: World) -> None:
+    # Criterion 6 (draft-gates-only). Planted fault: implement or a repair with unsupported
+    # scope omits full verification because a draft's document check already passed.
+    # The renamed contract must travel with its criterion ledger: otherwise the old
+    # promise that every repair runs full verification survives in the accepted plan.
+    ledger = (REPO_ROOT / "plans/changes/draft-gates-only/plan.md").read_text(encoding="utf-8")
+    assert "tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft —" in ledger, (
+        "criterion 6 must name the fallback-specific repair contract"
+    )
+    assert "tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft —" not in ledger
     successful_implementation(world)
     assert world.run("implement") == 0
     assert [call["argv"] for call in world.calls("make")] == [["verify"]], "implement left the full suite"
@@ -3976,12 +3994,17 @@ def test_implement_and_repair_keep_full_verify_after_docs_draft(world: World) ->
     world.write_record([("L2-1", "taken — test_b", "no")])
     step = {
         "stdout": "L2-1: fixed — tests/test_other.py::test_other",
-        "plant": {"src/other.py": "value = 2\n", "tests/test_other.py": OTHER_TEST},
+        "plant": {
+            "src/other.py": "value = 2\n",
+            "tests/test_other.py": OTHER_TEST,
+            "verification-scope.txt": "requires full verification\n",
+        },
         "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
     }
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair left the full suite"
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair skipped required full fallback"
+    assert "verification-scope.txt" in world.text(), "the fallback must report its unsupported input"
     assert world.calls("bash") == [], "repair ran the document subset"
 
 
@@ -5299,7 +5322,7 @@ def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world
         make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    first = "- Runner format before `make verify`: ruff changed `scripts/a.py`."
+    first = "- Runner format before post-run verification: ruff changed `scripts/a.py`."
     entry = quote_blocks(world.text())[0]
     assert entry[entry.index("```text") + 1] == first
     assert prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")[0] == first
@@ -5331,7 +5354,7 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
     assert world.run("implement") == 0
     assert git(world.root, "log", "-1", "--format=%B") == (
         "feat(demo): implement accepted plan\n\n"
-        "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):\n"
+        "Runner format before post-run verification (ruff check --fix with safe fixes only, then ruff format):\n"
         "- Attempt 1 (flash): ruff changed `scripts/b.py`.\n"
         "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
     )
@@ -5379,7 +5402,7 @@ def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: st
     assert len(world.calls("claude")) == 3 and world.calls("make") == []
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     text = world.text()
-    assert "Runner cheap checks before `make verify`" in text
+    assert "Runner cheap checks before post-run verification" in text
     expected = {
         "no-ruff": "no ruff at `.venv/bin/ruff`",
         "not-executable": "could not be run",
@@ -5408,7 +5431,7 @@ def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str
     text = world.text()
     line = next(line for line in text.splitlines() if "not run —" in line)
     assert "no ruff at" in line or "could not be started" in line
-    assert "Runner cheap checks before `make verify`" in text
+    assert "Runner cheap checks before post-run verification" in text
     assert "no ruff at" in text or "could not be run" in text
 
 
@@ -5537,7 +5560,9 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(
         stage2.subprocess,
         "run",
-        lambda *args, **_kwargs: subprocess.CompletedProcess(args[0], ancestor, b"", b""),
+        lambda *args, **_kwargs: subprocess.CompletedProcess(
+            args[0], ancestor if "merge-base" in args[0] else 0, b"", b""
+        ),
     )
     with pytest.raises(stage2.CallFailed):
         stage2.checkpoint(tmp_path, "demo", "base")
@@ -6680,6 +6705,14 @@ def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World)
     assert header is not None and header["produced_by"]["name"] == "claude-code"
 
 
+def commit_review_findings(world: World) -> None:
+    """Review scenarios commit their inputs before exercising the model/answer boundary."""
+    relative = world.findings.relative_to(world.root)
+    if relative in stage2.changed_paths(world.root):
+        git(world.root, "add", "-A", "--", str(relative))
+        git(world.root, "commit", "--quiet", "-m", "commit review findings")
+
+
 def seed_2a_session(world: World, session: str = "T1") -> None:
     """A findings.md whose last phase-2a block is a Codex one with its session line (criteria 30 and 31)."""
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex {session}")
@@ -6689,6 +6722,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
     # Criterion 2. Planted fault: `review` passes `workspace-write`, a bypass flag or another pin.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         argv = call["argv"]
@@ -6704,6 +6738,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
 def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         disabled = [call["argv"][i + 1] for i, word in enumerate(call["argv"]) if word == "--disable"]
@@ -6713,6 +6748,7 @@ def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
 def test_the_codex_prompt_carries_its_phase_prompt_in_full(world: World) -> None:
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     for call in world.calls("codex"):
         prompt = call["argv"][-1]
@@ -6724,6 +6760,7 @@ def test_review_resumes_the_recorded_session(world: World) -> None:
     # Criterion 31. Planted fault: the last phase-2a block is not read, so a recorded session is not resumed.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:3] == ["exec", "resume", "T1"]
     text = world.text()
@@ -6734,6 +6771,7 @@ def test_review_resumes_the_recorded_session(world: World) -> None:
 def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     # Criterion 30. Planted fault: the last `Reviewer session: codex` line anywhere is resumed.
     world.script(codex=[codex_ok("T5", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"]
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
@@ -6746,6 +6784,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
         f"## Phase 2a — Opus 5.5, 2026-10-13\n\n{rows(1)}",
     )
     world.script(codex=[codex_ok("T5", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"], "an Opus block after the line is no resume"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
@@ -6755,6 +6794,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     (world.bin / "calls.jsonl").unlink()
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
     world.script(codex=[codex_ok("T2", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
@@ -6769,6 +6809,7 @@ def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World
         + "\n\nPhase 6 verdict: codex T7, 2026-10-12",
     )
     world.script(codex=[codex_ok("T9", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     (call,) = world.calls("codex")
     argv = call["argv"]
@@ -6784,7 +6825,9 @@ def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: 
     """L2-4. Planted fault: a second verdict claims a repair ran, although only an earlier verdict exists."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T9", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
+    commit_review_findings(world)
     assert world.run("review") == 0
     first, second = world.calls("codex")
     for call in (first, second):  # both review calls keep the review entry (bead coding-harness-yzk)
@@ -6797,13 +6840,15 @@ def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: 
         in text
     )
     assert "after a repair" not in text and "fixed —" not in text
-    assert world.calls("claude") == [] and world.calls("make") == []
+    assert world.calls("claude") == []
+    assert [call["argv"] for call in world.calls("make")] == [["verify"], ["verify"]]
 
 
 def test_the_first_phase6_review_still_resumes_the_recorded_2a_session(world: World) -> None:
     # Criterion 18, the other side (ADR 0016, decision 6). Planted fault: every review starts fresh.
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:3] == ["exec", "resume", "T1"]
 
@@ -6813,6 +6858,7 @@ def test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread(world: W
     world.write_findings(phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase finding")]))
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call, mark_call = world.calls("codex")
     for call in (verdict_call, mark_call):  # both review calls keep the review entry (bead coding-harness-yzk)
@@ -6824,6 +6870,7 @@ def test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread(world: W
 def test_no_loop_row_reaches_the_verdict_call(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")], finding="LOOPMARK-7")
     world.script(marker="LOOPMARK-7", codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call, mark_call = world.calls("codex")
     assert "LOOPMARK-7" not in verdict_call["argv"][-1] and verdict_call["marker_paths"] == []
@@ -6835,6 +6882,7 @@ def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     before = verdict_block(world.calls("codex")[1]["findings"])
@@ -6852,6 +6900,7 @@ def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
 def test_a_failed_mark_call_leaves_the_marks_empty(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert "| — |" in world.text() and "agree" not in world.text()
 
@@ -6966,6 +7015,7 @@ def test_review_holds_record_lock_through_release(world: World, monkeypatch: pyt
     for name, spy in (("read_record", read_record), ("run_codex", run_codex), ("append", append), ("release", release)):
         monkeypatch.setattr(stage2, name, spy)
 
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert seen == [
         "the first record read",
@@ -6988,6 +7038,7 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert text.index("Phase 6 verdict:") < text.index(stage2.RELEASE_HEADING), "the release ran before the verdict"
@@ -7003,6 +7054,7 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T2", rows(1))])
+    commit_review_findings(world)
     assert world.run("review") == 0
     assert stage2.NO_LOOP_LINE in world.text()
     assert len(world.calls("codex")) == 1, "a no-record release asked for marks"
@@ -7013,8 +7065,9 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
-    assert len(world.calls()) == 2 and not world.record().exists()
+    assert len(world.calls()) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
     world.write_record([("L1-1", "", "")])
@@ -7026,12 +7079,14 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     # The call log is cleared before `script`, which counts the calls already logged.
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
-    assert world.run("review") == 1 and len(world.calls()) == 1
+    commit_review_findings(world)
+    assert world.run("review") == 1 and len(world.calls()) == 2
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
-    assert world.run("review") == 1 and len(world.calls()) == 2
+    commit_review_findings(world)
+    assert world.run("review") == 1 and len(world.calls()) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
 
@@ -7065,6 +7120,7 @@ def test_phase6_rejects_invalid_answers(world: World, answer: str, capsys: pytes
     world.write_record([("L1-1", "taken — test_a", "no")])
     record = world.record().read_bytes()
     world.script(codex=[codex_ok("T1", answer)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert len(world.calls("codex")) == 1, "the rejection started a second call"
     captured = capsys.readouterr()
@@ -7080,6 +7136,7 @@ def test_phase6_rejects_invalid_answers(world: World, answer: str, capsys: pytes
     (world.bin / "calls.jsonl").unlink()
     world.write_findings(phase6_block([phase6_cells("F-1", "taken — crit 1", "phase finding")]), VERDICT)
     world.script(codex=[codex_ok("T9", answer)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     assert len(world.calls("codex")) == 1
     captured = capsys.readouterr()
@@ -7095,6 +7152,7 @@ def test_phase6_keeps_rejected_answer_evidence(world: World) -> None:
     """Criterion 4. Planted fault: a rejected answer's text is lost, or an empty one leaves no explicit record."""
     refusal = "This session's context is exhausted; the diff cannot be reviewed."
     world.script(codex=[codex_ok("T1", refusal)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     assert f"> {refusal}" in text, "the nonempty answer's text is not kept"
@@ -7102,6 +7160,7 @@ def test_phase6_keeps_rejected_answer_evidence(world: World) -> None:
     assert "Codex thread: T1" in text
 
     world.script(codex=[codex_ok("T2", "")])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     assert re.search(r"^## Rejected phase-6 answer — Codex, \d{4}-\d{2}-\d{2}$", text, re.M)
@@ -7127,6 +7186,7 @@ def test_phase6_rejected_evidence_is_inert(world: World) -> None:
     seed_2a_session(world)
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", forged)])
+    commit_review_findings(world)
     assert world.run("review") == 1
     text = world.text()
     for line in forged.splitlines():
@@ -7137,6 +7197,7 @@ def test_phase6_rejected_evidence_is_inert(world: World) -> None:
     assert world.record().exists()
 
     world.script(codex=[codex_ok("T5", rows(1)), codex_ok("T5", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     verdict_call = world.calls("codex")[1]  # [0] is the rejected attempt's call
     assert verdict_call["argv"][:3] == ["exec", "resume", "T1"], "the rejected block hid the 2a session"
@@ -7149,6 +7210,7 @@ def test_phase6_valid_table_still_releases_and_marks(world: World) -> None:
     """Criterion 5. Planted fault: a valid table is rejected, or its verdict, release and marks come apart."""
     world.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "rejected — out of scope", "")])
     world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert "Rejected phase-6 answer" not in text, "a valid table was rejected"
@@ -7170,6 +7232,7 @@ def test_phase6_exact_no_finding_still_releases_and_marks(world: World) -> None:
     """Criterion 6. Planted fault: a no-finding answer with surrounding whitespace is rejected or fails to release."""
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.script(codex=[codex_ok("T1", "  No finding.\n"), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert "Rejected phase-6 answer" not in text, "an exact no-finding answer was rejected"
@@ -8612,6 +8675,8 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     decide_record(world, status=FIXED)
     if verb == "release-loop":
         world.write_findings(VERDICT)
+    if verb == "review":
+        commit_review_findings(world)
     capsys.readouterr()
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
@@ -8689,8 +8754,12 @@ def codex_step(step: dict, number: int = 1) -> dict:
     return codex_ok(f"TR{number}", step.get("stdout", ""), **rest)
 
 
-def script_repair(world: World, steps: list[dict], **more: object) -> None:
-    """Attempts 1 and 2 of a repair are Codex, attempt 3 is Sonnet (ADR 0017); `steps` follow that order."""
+def script_repair(world: World, steps: list[dict], *, full_check: bool = False, **more: object) -> None:
+    """Script repairs; full-check scenarios plant an unsupported input to exercise real fallback."""
+    if full_check:
+        steps = copy.deepcopy(steps)
+        for step in steps:
+            step.setdefault("plant", {})["verification-scope.txt"] = "requires full verification\n"
     scripted: dict[str, object] = {"codex": [codex_step(s, n) for n, s in enumerate(steps[:2], 1)], **more}
     if steps[2:]:
         scripted["claude"] = steps[2:]
@@ -8859,6 +8928,63 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_seed.py::test_seed"
     assert record["L1-4"] == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS"])
+def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
+    """Neither tool route may promise unconditional full verification after a repair."""
+    text = getattr(stage2, block)
+    assert "before full verification" not in text
+    assert "checks and full `make verify` after the call" not in text
+    assert "targeted check for repair" in text
+    assert "full `make verify` for implement" in text
+    assert "full fallback" in text
+    assert "before phase 6" in text
+
+
+@pytest.mark.parametrize("endpoint", [stage2.CODEX, stage2.SONNET])
+def test_repair_prompt_consistently_describes_targeted_verification(
+    world: World, monkeypatch: pytest.MonkeyPatch, endpoint: tuple[str, str, str | None]
+) -> None:
+    """F6-2: the assembled repair prompt must not contradict its must-run checks."""
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo")
+
+    def check_prompt() -> None:
+        prompt = stage2.repair_prompt(ctx, "baseline", [], [], endpoint=endpoint)
+        instructions = prompt.split("## Accepted spec", 1)[0]
+        block = instructions.split("Repair only the taken rows below", 1)[1].split("Answer with one fixed line", 1)[0]
+        assert "the runner runs `make verify` and makes the one commit" not in instructions
+        assert "targeted check" in block
+        assert "full `make verify`" in block and "fallback" in block
+        assert "before phase 6" in block
+        assert "targeted check for repair" in instructions
+
+    check_prompt()
+    # Plant the original promise beside the otherwise-correct must-run instructions.
+    name = "REPAIR_FORMAT" if endpoint == stage2.CODEX else "REPAIR_FORMAT_FILE_TOOLS"
+    monkeypatch.setattr(
+        stage2,
+        name,
+        getattr(stage2, name).replace(
+            "Repair only the taken rows below",
+            "Repair only the taken rows below: the runner runs `make verify` and makes the one commit.",
+            1,
+        ),
+    )
+    with pytest.raises(AssertionError):
+        check_prompt()
+
+
+def test_draft_verification_documentation_describes_targeted_repairs() -> None:
+    """The adjacent comment and docstring must preserve the repair/full-check boundary."""
+    source = inspect.getsource(stage2)
+    comment = source[source.index("# The draft's post-run check") : source.index("DOCS_VERIFY =")]
+    for text in (comment, inspect.getdoc(stage2.verify_draft)):
+        words = " ".join(text.replace("#", "").split())
+        assert "repair takes the targeted check" in words
+        assert "full suite as its fallback and before phase 6" in words
+        assert "Implement and repair keep the full" not in words
+        assert "implement, repair and the orchestrator" not in words
 
 
 def test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request(world: World) -> None:
@@ -9037,6 +9163,7 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     script_repair(
         world,
         [{"stdout": "still looking"}, repair_step()],
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -9099,6 +9226,7 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": f"post-run-check-{n}\n", "exit": 1} for n in range(1, deleted_attempt + 1)]
         + [{"stdout": "green\n"}],
     )
@@ -9202,6 +9330,7 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     script_repair(
         world,
         [repair_step() for _ in range(failed_attempts)] + [repair_step()],
+        full_check=True,
         make=[*reds, {"stdout": "green\n"}],
     )
     real_codex, real_begin = stage2.run_codex, stage2.begin_work_call
@@ -9378,6 +9507,7 @@ def test_repair_prompts_keep_the_initial_input_snapshot(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": f"snapshot-diagnostic-{n}\n", "exit": 1} for n in range(1, edited_attempt + 1)]
         + [{"stdout": "green\n"}],
     )
@@ -9413,6 +9543,7 @@ def test_two_failed_codex_repairs_fall_back_to_sonnet(world: World) -> None:
     script_repair(
         world,
         [{"stdout": "still looking"}, {"stdout": "still stuck"}, repair_step(), {"stdout": "must not run"}],
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -9633,6 +9764,7 @@ def test_a_repair_retry_cannot_remove_earlier_attempt_evidence(
     script_repair(
         world,
         [repair_step()] * 3,
+        full_check=True,
         make=[
             {"stdout": f"DIAGNOSTIC-ATTEMPT-{number}\n", "exit": 1} if number < attempt else {"stdout": "green\n"}
             for number in range(1, 4)
@@ -9751,6 +9883,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     script_repair(
         world,
         steps,
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}] * (attempt - 1) + [{"stdout": "green\n"}],
     )
     real_codex, real_claude, real_checkpoint = stage2.run_codex, stage2.run_work_model, stage2.checkpoint
@@ -11070,6 +11203,7 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
             {"stdout": "attempt one", "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}},
             repair_step(),
         ],
+        full_check=True,
         make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
@@ -11078,7 +11212,9 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
     assert "`make verify` exited 1" in prompt
     assert "attempt 2 · route codex-repair" in world.text()
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
-    assert len(quote_blocks(world.text())) == 1, "the failed attempt left no block"
+    failed = [block for block in quote_blocks(world.text()) if block[0].startswith("Attempt ")]
+    assert len(failed) == 1, "the failed attempt left no block"
+    assert failed[0][0] == "Attempt 1 (codex) failed its post-run checks."
 
 
 @pytest.mark.parametrize(
@@ -11849,6 +11985,7 @@ def test_repair_lifecycle_created_design_is_removed_before_retry(world: World, m
             ),
             repair_step(),
         ],
+        full_check=True,
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     real_begin = stage2.begin_work_call
@@ -11976,6 +12113,7 @@ def test_repair_lifecycle_fields_survive_failed_attempts(
                 repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}),
                 repair_step(),
             ],
+            full_check=True,
             make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
         )
         monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
@@ -12030,6 +12168,7 @@ def test_repair_lifecycle_fields_survive_failed_attempts(
         script_repair(
             world,
             [repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST})] * 3,
+            full_check=True,
             make=[{"stdout": f"red-{number}\n", "exit": 1} for number in range(1, 4)],
         )
         monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
@@ -12611,6 +12750,7 @@ def test_repair_lifecycle_report_describes_each_attempt(
                 repair_step(plant={**damage, "src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}),
                 repair_step(),
             ],
+            full_check=True,
             make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
         )
         assert world.run("repair") == 0
@@ -12859,14 +12999,14 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
 def test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt(world: World) -> None:
     """Phase 6, F-1. Planted fault: an interpreter whose pytest never starts, exit 1, read as red first.
 
-    The stand-in plays both python3 callers of an attempt: the runner's cheap pytest over the
-    selected tests first (green), then the red-first probe, whose exit 1 must fail the attempt
+    The stand-in plays the python3 callers of an attempt: the runner's cheap pytest and whole-file
+    targeted pytest first (both green), then the red-first probe, whose exit 1 must fail the attempt
     before any named test is trusted - and before anything is checkpointed.
     """
     repair_world(world)
     probe = {"exit": 1, "stderr": "No module named pytest"}
     head = git(world.root, "rev-parse", "HEAD")
-    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3, python3=[{}, probe] * 3)
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3, python3=[{}, {}, probe] * 3)
     assert world.run("repair") == 1
     prompt = prompt_of(world.calls("codex")[1])
     assert "L1-1: tests/test_fix.py::test_fix: the red-first interpreter cannot start pytest (exit 1)" in prompt
@@ -15312,6 +15452,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     unrelated malformed prose passes."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", f"{rows(1)}\n{GUARD_EVIDENCE_TEXT}"), codex_ok("T1", "X1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     text = world.text()
     assert text.index(GUARD_EVIDENCE_TEXT) < text.index("Phase 6 verdict: codex T1")
@@ -15321,6 +15462,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     (world.bin / "calls.jsonl").unlink()
     seed_2a_session(world)
     world.script(codex=[codex_ok("T2", f"No finding.\n{GUARD_EVIDENCE_TEXT}")])
+    commit_review_findings(world)
     assert world.run("review") == 0, "evidence beside `No finding.` was refused"
     text = world.text()
     assert GUARD_EVIDENCE_TEXT in text and "No finding." in text
@@ -15329,6 +15471,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T3", GUARD_EVIDENCE_TEXT)])
+    commit_review_findings(world)
     assert world.run("review") != 0, "evidence alone became a verdict"
     text = world.text()
     assert "Phase 6 verdict" not in text
@@ -15338,6 +15481,7 @@ def test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts(world: 
     (world.bin / "calls.jsonl").unlink()
     malformed = "Guard evidence: tests/test_fix.py::test_fix — fault: x — catches without switch: maybe"
     world.script(codex=[codex_ok("T4", malformed)])
+    commit_review_findings(world)
     assert world.run("review") != 0, "a malformed evidence line passed as a verdict"
     assert "Phase 6 verdict" not in world.text()
 
@@ -15353,6 +15497,7 @@ def test_phase6_refuses_malformed_guard_evidence_beside_findings(world: World, e
     """A finding row must not hide an invalid or reasonless guard-evidence line."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", f"{rows(1)}\n{evidence}")])
+    commit_review_findings(world)
     assert world.run("review") != 0, "malformed guard evidence passed beside a finding"
     text = world.text()
     assert "Phase 6 verdict" not in text
@@ -15363,6 +15508,7 @@ def test_phase6_guard_instructions_cover_every_changed_test_without_loop_rows(wo
     """Criterion 9. Planted fault: the prompt allows sampling or exposes loop rows before the verdict."""
     seed_2a_session(world)
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "X1: agree")])
+    commit_review_findings(world)
     assert world.run("review") == 0
     prompt = world.calls("codex")[0]["argv"][-1]
     assert stage2.PHASE6_GUARD_INSTRUCTION in prompt
@@ -16272,6 +16418,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
         )
         world.write_record([("L1-1", "taken — test_a", "no")])
         world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
+        commit_review_findings(world)
         assert world.run("review") == 0
         verdict_call, mark_call = world.calls("codex")
         for call in (verdict_call, mark_call):  # the re-check and its resumed marks keep the substituted entry
@@ -16283,6 +16430,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
         (world.bin / "calls.jsonl").unlink()
         world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
         world.script(codex=[codex_ok("T1", rows(1))])
+        commit_review_findings(world)
         assert world.run("review") == 0
         (resumed,) = world.calls("codex")  # the historical resume keeps it too
         assert f'model_reasoning_effort="{review_effort}"' in resumed["argv"]
@@ -16290,6 +16438,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
 
         (world.bin / "calls.jsonl").unlink()
         world.script(codex=[codex_ok("T8", rows(1))])
+        commit_review_findings(world)
         assert world.run("review") == 0  # the repeated review re-checks fresh, at the same entry
         (recheck,) = world.calls("codex")
         assert f'model_reasoning_effort="{review_effort}"' in recheck["argv"]
@@ -16382,8 +16531,12 @@ def draft_document_check_problems(workflow: str) -> list[str]:
     found = []
     if "`bash scripts/verify_all.sh --job docs`" not in prose:
         found.append("the draft prose does not name the document check")
-    if "full `make verify`" not in prose or "repair" not in prose:
-        found.append("the draft prose does not keep the full suite for implement and repair alone")
+    if "`implement` keeps the full `make verify`" not in prose:
+        found.append("the draft prose does not keep implement's full check")
+    if "`repair` takes the targeted check" not in prose or "full suite as its fallback and before phase 6" not in prose:
+        found.append("the draft prose lost the targeted repair and final full-check boundary")
+    if "`implement` and `repair` keep the full" in prose:
+        found.append("the draft prose still requires unconditional full repair verification")
     if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
         found.append("the draft prose does not make the check's exit code the verdict")
     if "ADR_ANSWERS_TOLERATE_CHANGE" not in prose:
@@ -16402,10 +16555,12 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
     # The sentence is matched across any line wrapping, so rewrapping WORKFLOW.md cannot turn this
     # planted fault into a no-op.
-    full_suite = r"\s+".join(map(re.escape, "`implement` and `repair` keep the full `make verify`:".split()))
+    full_suite = r"\s+".join(map(re.escape, "`implement` keeps the full `make verify`;".split()))
     dropped = re.sub(full_suite + r"[^.]*\.\s*", "", text, count=1)
     assert dropped != text, "the full-suite sentence was not found to drop"
     assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
+    obsolete = re.sub(full_suite + r"[^.]*\.", "`implement` and `repair` keep the full `make verify`.", text, count=1)
+    assert obsolete != text and draft_document_check_problems(obsolete)
 
 
 def test_the_drafting_prompts_name_the_draft_verb() -> None:
@@ -16417,6 +16572,18 @@ def test_the_drafting_prompts_name_the_draft_verb() -> None:
         assert "GLM 5.3 after two failed attempts" in line, name
         planted = line.replace("python3 scripts/stage2.py draft <change>", "the model writes them by hand", 1)
         assert "python3 scripts/stage2.py draft <change>" not in planted, name
+
+
+def repair_verification_gate_problems(gate: str) -> list[str]:
+    """Pin both repair routes and the final full check in a phase-table gate cell."""
+    return [
+        f"the 4b gate lacks '{needle}'"
+        for needle in (
+            "a targeted check after each runner repair and each orchestrator hand repair",
+            "the full `make verify` before phase 6",
+        )
+        if needle not in flat(gate)
+    ]
 
 
 def phase_table_problems(workflow: str) -> list[str]:
@@ -16434,8 +16601,9 @@ def phase_table_problems(workflow: str) -> list[str]:
         return [f"the 4b row has {len(cells)} cells, not 5"]
     if "findings.md" not in cells[2] or "release-loop" not in cells[2]:
         found.append("the 4b artefact is not the loop rows in findings.md after release-loop")
-    if "until a clean round" not in cells[3] or "make verify" not in cells[3]:
-        found.append("the 4b gate is not rounds until a clean round with make verify after each repair")
+    if "until a clean round" not in cells[3]:
+        found.append("the 4b gate does not require rounds until a clean round")
+    found.extend(repair_verification_gate_problems(cells[3]))
     if "free swarm" not in cells[3] or "Flash swarm" not in cells[3] or "ladder" not in cells[3]:
         found.append("the 4b gate does not name the two swarms and the ladder bound")
     if "04b-review-loop.md" not in cells[4] or not (PROMPTS / "04b-review-loop.md").is_file():
@@ -16453,6 +16621,67 @@ def test_the_phase_table_has_the_review_loop() -> None:
     assert phase_table_problems(text.replace("Flash swarm", "second model", 1))
     assert phase_table_problems(text.replace("(`release-loop`)", "", 1))
     assert phase_table_problems(text.replace("04b-review-loop.md", "04c-review-loop.md"))
+
+
+def repair_verification_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    found = phase_table_problems(workflow)
+    rows = [line for line in agents.splitlines() if line.startswith("| 4b |")]
+    if len(rows) != 1:
+        found.append("AGENTS.md must have exactly one 4b row")
+    else:
+        cells = [cell.strip() for cell in rows[0].strip().strip("|").split("|")]
+        if len(cells) != 4:
+            found.append("AGENTS.md's 4b row must have four cells")
+        else:
+            found.extend(repair_verification_gate_problems(cells[3]))
+    fixing = flat(section(workflow, "### Repairing taken findings"))
+    for needle in (
+        "the repair's targeted check",
+        "full `make verify` on fallback",
+        "a fresh full `make verify` before phase 6",
+    ):
+        if needle not in fixing:
+            found.append(f"the repair subsection lacks '{needle}'")
+    return found
+
+
+def test_repair_verification_doctrine_requires_targeted_and_final_full_checks() -> None:
+    """Repair-targeted-check: planted omissions and the old gate must fail in each location."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert repair_verification_doctrine_problems(workflow, agents) == []
+    for name, text in (("workflow", workflow), ("agents", agents)):
+        row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
+        for needle in (
+            "a targeted check after each runner repair and each orchestrator hand repair",
+            "the full `make verify` before phase 6",
+        ):
+            assert needle in row
+            planted = text.replace(row, row.replace(needle, "", 1), 1)
+            pair = (planted, agents) if name == "workflow" else (workflow, planted)
+            assert repair_verification_doctrine_problems(*pair), (name, needle)
+        old_gate = "`make verify` green after each runner repair; a targeted check after an orchestrator hand repair"
+        current_gate = (
+            "a targeted check after each runner repair and each orchestrator hand repair, "
+            "the full `make verify` before phase 6"
+        )
+        assert current_gate in row
+        planted = text.replace(row, row.replace(current_gate, old_gate, 1), 1)
+        pair = (planted, agents) if name == "workflow" else (workflow, planted)
+        assert repair_verification_doctrine_problems(*pair), name
+    fixing = section(workflow, "### Repairing taken findings")
+    for needle in (
+        "the repair's targeted check",
+        "full `make verify` on fallback",
+        "a fresh full `make verify` before phase 6",
+    ):
+        # Normalize this subsection only: another section cannot satisfy its requirements.
+        assert needle in flat(fixing)
+        pattern = r"\s+".join(map(re.escape, needle.split()))
+        omitted = re.sub(pattern, "", fixing, count=1)
+        assert omitted != fixing
+        planted = workflow.replace(fixing, omitted, 1)
+        assert repair_verification_doctrine_problems(planted, agents), needle
 
 
 EVIDENCE_TEXTS = {
@@ -21916,3 +22145,1087 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+# ---------------------------------------------------------------------------
+# A repair's targeted post-run check and phase 6's fresh full check
+# (spec repair-targeted-check, criteria 1-11, bead coding-harness-gxwg)
+# ---------------------------------------------------------------------------
+
+
+class LocalCommands:
+    """The local commands the runner starts after a model call: recorded in order, answered, never run.
+
+    The model, the index renderer and the red-first proofs still run for real, so the answer check
+    and the checkpoint stay what they are; ruff, pytest, the gates and `make` are only recorded, and
+    each answers `(exit code, output)`, an exception to raise, or the default green. A test sets
+    `outcomes[kind]` to a value or to a function of the command.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.real = stage2.launch
+        self.records: list[dict] = []
+        self.order: list[str] = []
+        self.outcomes: dict[str, object] = {}
+        monkeypatch.setattr(stage2, "launch", self)
+
+    @staticmethod
+    def kind(command: list[str], env: dict[str, str]) -> str | None:
+        if "STAGE2_RED_REPORT" in env:
+            return None
+        program = command[0]
+        if program.endswith(".venv/bin/ruff"):
+            return "ruff"
+        if program.endswith(".venv/bin/python3") and command[1:3] == ["-m", "pytest"]:
+            return "pytest"
+        if program == "sh" and command[1:2] == ["-c"]:
+            return "gate"
+        if program == "make":
+            return "make"
+        return None
+
+    def of(self, kind: str) -> list[dict]:
+        return [record for record in self.records if record["kind"] == kind]
+
+    def __call__(self, command, cwd, env, *args, **kwargs):
+        kind = self.kind(command, env)
+        derived = any("plans_registry.py" in part for part in command)
+        self.order.append("derived" if derived else kind or Path(command[0]).name)
+        if kind is None:
+            return self.real(command, cwd, env, *args, **kwargs)
+        self.records.append(
+            {
+                "kind": kind,
+                "command": list(command),
+                "env": dict(env),
+                "pass_fds": tuple(kwargs.get("pass_fds", ())),
+                "timeout": kwargs.get("timeout"),
+            }
+        )
+        outcome = self.outcomes.get(kind)
+        if callable(outcome):
+            outcome = outcome(command)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        code, output = outcome if outcome is not None else (0, "")
+        return subprocess.CompletedProcess(command, code, output, "")
+
+
+def targeted_mode(monkeypatch: pytest.MonkeyPatch) -> LocalCommands:
+    """Record local commands while keeping the repair's production dispatch unchanged."""
+    return LocalCommands(monkeypatch)
+
+
+RED_PYTEST = (1, "FAILED tests/test_fix.py::test_fix - AssertionError\n1 failed in 0.1s\n")
+
+# A committed test with an unchanged, failing sibling: it links to `scripts/helper.py` by its path.
+LINKED_TEST = (
+    "from pathlib import Path\n\n\ndef test_linked_ok():\n    assert Path('scripts/helper.py').name\n\n\n"
+    "def test_linked_sibling():\n    assert False, 'an unchanged sibling of a linked test'\n"
+)
+HELPER_FIX_TEST = (
+    "from pathlib import Path\n\n\ndef test_helper_fix():\n"
+    '    value = (Path(__file__).resolve().parent.parent / "scripts" / "helper.py").read_text(encoding="utf-8")\n'
+    '    assert "VALUE = 3" in value\n'
+)
+
+
+def helper_repair_world(world: World) -> str:
+    """A repair of `scripts/helper.py`, which the committed `tests/test_linked.py` also names."""
+    seed_tests(world)
+    (world.root / "tests" / "test_linked.py").write_text(LINKED_TEST, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a linked test")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    step = repair_step(
+        stdout="L1-1: fixed — tests/test_helper_fix.py::test_helper_fix",
+        plant={"scripts/helper.py": "VALUE = 3\n", "tests/test_helper_fix.py": HELPER_FIX_TEST},
+    )
+    script_repair(world, [step], make=[{"stdout": "green\n"}])
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def pytest_targets(commands: LocalCommands) -> list[list[str]]:
+    """The explicit targets of every recorded pytest command, in order."""
+    return [record["command"][len(stage2.PYTEST) :] for record in commands.of("pytest")]
+
+
+def docs_gates() -> list[dict]:
+    """The declared document subset a repair's metadata always needs, as the one gate list gives it."""
+    return [
+        gate
+        for gate in ci_gates.gates()
+        if gate["job"] == "verify"
+        and gate["local_runnable"]
+        and gate["placement"] != "hosted"
+        and "docs" in gate["subsets"]
+    ]
+
+
+def gate_command(world: World, gate: dict) -> list[str]:
+    """The shell command the targeted check runs for a gate: its declared command through the locked interpreter."""
+    python = world.root / stage2.PYTEST[0]
+    command = str(gate["command"])
+    tokens = shlex.split(command)
+    if tokens and tokens[0] == "python3":
+        command = shlex.join([str(python), *tokens[1:]])
+    return ["sh", "-c", command]
+
+
+def loop_status(world: World) -> str:
+    rows_ = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    return rows_["L1-1"]
+
+
+def test_standard_world_preserves_repair_and_review_dispatch(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary World tests exercise both production boundaries, without a full-mode test switch."""
+    assert stage2.require_fresh_full_verification is REAL_FULL_GATE
+    repair_world(world)
+    commands = LocalCommands(monkeypatch)
+    # Plant the old module-wide fixture's switch: it must no longer change repair dispatch.
+    monkeypatch.setattr(stage2, "REPAIR_VERIFY_MODE", "full", raising=False)
+    assert world.run("repair") == 0
+    assert commands.of("make") == [], "a test-only switch hid the targeted repair boundary"
+    assert commands.of("gate"), "the real targeted gate dispatch did not run"
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
+    assert world.run("review") == 0
+    assert len(commands.of("make")) == 1, "ordinary review tests did not measure the fresh full check"
+
+
+def test_covered_repair_uses_targeted_verification(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault: a narrow, covered Python repair invokes the full `make verify`."""
+    baseline = repair_world(world)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0
+    assert commands.of("make") == [], "a covered repair ran the full check"
+    assert ["tests/test_fix.py"] in pytest_targets(commands)
+    assert commands.of("gate"), "the targeted check ran no gate"
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+    assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize("case", ["linked-sibling", "retained-retry", "staged-only", "untracked"])
+def test_targeted_repair_runs_whole_touched_and_linked_test_files(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 2. Planted fault: a linked test's failing sibling is omitted (selection by changed function),
+    an index-only or untracked touch is missed, or a retry loses the earlier attempt's retained edit."""
+    if case in ("staged-only", "untracked"):
+        seed_tests(world)
+        baseline = git(world.root, "rev-parse", "HEAD")
+        seed = world.root / "tests" / "test_seed.py"
+        if case == "staged-only":
+            original = seed.read_text(encoding="utf-8")
+            seed.write_text(original + "\n\ndef test_extra():\n    assert True\n", encoding="utf-8")
+            git(world.root, "add", "tests/test_seed.py")
+            seed.write_text(original, encoding="utf-8")  # the file is back; only the index differs
+            expected = ["tests/test_seed.py"]
+        else:
+            (world.root / "tests" / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+            expected = ["tests/test_new.py"]
+        chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+        assert chosen.fallback is None, chosen.fallback
+        assert chosen.tests == expected
+        return
+    if case == "linked-sibling":
+        helper_repair_world(world)
+        commands = targeted_mode(monkeypatch)
+        assert world.run("repair") == 0
+        assert ["tests/test_helper_fix.py", "tests/test_linked.py"] in pytest_targets(commands)
+        assert commands.of("make") == []
+        return
+    repair_world(world)
+    answer = "L1-1: fixed — tests/test_fix.py::test_fix"
+    # Attempt 2 writes no test of its own: the file attempt 1 left is still the repair's delta.
+    second = {"stdout": answer, "append": {"plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n"}}
+    script_repair(world, [repair_step(), second], make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    # Cheap runs are the odd pytest calls, the targeted ones the even: attempt 1's targeted run is red.
+    commands.outcomes["pytest"] = lambda _command: RED_PYTEST if len(commands.of("pytest")) == 2 else None
+    assert world.run("repair") == 0
+    runs = pytest_targets(commands)
+    assert len(runs) == 4 and runs[3] == ["tests/test_fix.py"], runs
+    assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize("mode", ["targeted", "full"])
+def test_undecodable_changed_path_keeps_cheap_checks_and_full_fallback(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """F6-8: unsafe targeted coverage must not prevent cheap checks or full verification."""
+    seed_tests(world)
+    relative = "tests/test_new.py"
+    (world.root / relative).write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    real_git_bytes = stage2._git_bytes
+
+    def raw_paths(root: Path, *args: str, **kwargs) -> bytes:
+        output = real_git_bytes(root, *args, **kwargs)
+        if args[0] == "diff":
+            # No invalid filename need exist: macOS filesystems can reject it.
+            output += b"assets/new\xff.txt\0tests/test_\xff.py\0"
+        return output
+
+    monkeypatch.setattr(stage2, "_git_bytes", raw_paths)
+    commands = targeted_mode(monkeypatch)
+    scope: list[str] = []
+    problems = stage2.verify_attempt(world.root, world.plan, mode=mode, scope=scope)
+    assert problems == [], f"undecodable paths blocked verification instead of full fallback: {problems}"
+    assert pytest_targets(commands) == [[relative]], "the decodable cheap test target was lost"
+    assert commands.of("ruff"), "cheap lint/format checks were skipped"
+    assert all(relative in call["command"] for call in commands.of("ruff"))
+    assert len(commands.of("make")) == 1, "unsafe coverage must run full make verify"
+    if mode == "targeted":
+        assert any("decoded safely" in line and "green" in line for line in scope), scope
+    paths = stage2.changed_paths(world.root)
+    assert {b"assets/new\xff.txt", b"tests/test_\xff.py"} <= {
+        path.as_posix().encode("utf-8", errors="surrogateescape") for path in paths
+    }, "changed paths must preserve the original bytes for callers outside cheap selection"
+
+
+@pytest.mark.parametrize("case", ["working-tree", "staged-only", "untracked", "undecodable"])
+def test_targeted_repair_preserves_carriage_return_test_paths(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """A path's carriage return must survive Git output; undecodable paths require full verification."""
+    seed_tests(world)
+    if case == "undecodable":
+        real_git_bytes = stage2._git_bytes
+
+        def bad_path(root: Path, *args: str, **kwargs) -> bytes:
+            if args[0] == "diff":
+                return b"tests/test_\xffname.py\0"
+            return real_git_bytes(root, *args, **kwargs)
+
+        monkeypatch.setattr(stage2, "_git_bytes", bad_path)
+        chosen = stage2.targeted_selection(world.root, dict(os.environ), "HEAD")
+        assert chosen.fallback is not None, "an undecodable path received targeted acceptance"
+        assert chosen.tests == []
+        return
+    relative = "tests/test_\rname.py"
+    path = world.root / relative
+    original = "def test_original():\n    assert True\n"
+    path.write_text(original, encoding="utf-8")
+    if case != "untracked":
+        git(world.root, "add", "--", relative)
+        git(world.root, "commit", "--quiet", "-m", "a test with a special filename")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    path.write_text(original + "\n\ndef test_changed():\n    assert False\n", encoding="utf-8")
+    if case == "staged-only":
+        git(world.root, "add", "--", relative)
+        path.write_text(original, encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    assert chosen.tests == [relative], "the surviving changed test was omitted or its name changed"
+
+
+@pytest.mark.parametrize("byte_class", [b"\r", b"\n", b"\xff", b"\xc3\x28"], ids=["cr", "lf", "ff", "invalid-utf8"])
+@pytest.mark.parametrize("inventory", ["worktree", "baseline-only"])
+def test_targeted_repair_requires_byte_exact_inventory_paths(world: World, byte_class: bytes, inventory: str) -> None:
+    """F6-7: an unchanged linked test must survive byte-exactly, or require full verification.
+
+    A second ordinary linked test prevents missing coverage from accidentally forcing fallback.
+    The baseline-only case removes the odd path from both disk and index before the repair starts.
+    """
+    seed_tests(world)
+    relative = os.fsdecode(b"tests/test_" + byte_class + b"name.py")
+    odd_test = world.root / relative
+    invalid = byte_class in (b"\xff", b"\xc3\x28")
+    if not invalid:
+        odd_test.write_text(LINKED_TEST, encoding="utf-8")
+    (world.root / "tests" / "test_ok.py").write_text(LINKED_TEST, encoding="utf-8")
+    git(world.root, "add", "-A")
+    if invalid:
+        # macOS cannot create these names on disk. Git objects and its index can
+        # still carry the real raw bytes, without mocking the inventory or links.
+        oid = stage2._git_bytes(world.root, "hash-object", "-w", "--stdin", stdin=LINKED_TEST.encode()).strip()
+        stage2._git_bytes(
+            world.root,
+            "update-index",
+            "-z",
+            "--index-info",
+            stdin=b"100644 " + oid + b"\t" + os.fsencode(relative) + b"\0",
+        )
+        git(world.root, "update-index", "--assume-unchanged", "--", relative)
+    git(world.root, "commit", "--quiet", "-m", "linked tests with raw path bytes")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    if inventory == "baseline-only":
+        if not invalid:
+            odd_test.unlink()
+        git(world.root, "update-index", "--force-remove", "--", relative)
+    (world.root / "scripts" / "helper.py").write_text("VALUE = 3\n", encoding="utf-8")
+
+    if invalid and inventory == "worktree":
+        with pytest.raises(stage2.touch_map.CannotMeasure, match="byte-exact"):
+            stage2.touch_map.WorktreeSnapshot(str(world.root))
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    if invalid:
+        assert chosen.fallback is not None, "a lossy inventory omitted a linked failing test without full verification"
+        if inventory == "worktree":
+            assert "inventory" in chosen.fallback and "byte-exact" in chosen.fallback, chosen.fallback
+        assert chosen.tests == [] and chosen.gates == [] and chosen.ruff == []
+    else:
+        assert chosen.fallback is None, chosen.fallback
+        expected = ["tests/test_ok.py", *([relative] if inventory == "worktree" else [])]
+        assert chosen.tests == sorted(expected), "a round-trippable linked test path was changed or omitted"
+        assert {path.encode("utf-8") for path in chosen.tests} == {path.encode("utf-8") for path in expected}
+
+
+def test_targeted_repair_keeps_baseline_links_for_removed_paths(world: World) -> None:
+    """Criterion 2. Planted fault: only the working tree's links are read, so deleting code loses its tests."""
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_linked.py").write_text(LINKED_TEST, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a linked test")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "scripts" / "helper.py").unlink()
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    assert chosen.tests == ["tests/test_linked.py"]
+
+
+def test_targeted_repair_checks_touched_python_after_formatting(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 3. Planted fault: ruff runs before the format step, or a surviving touched file is not a target."""
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0
+    ruff = commands.of("ruff")
+    writing = [
+        index
+        for index, record in enumerate(ruff)
+        if "--fix" in record["command"] or (record["command"][1] == "format" and "--check" not in record["command"])
+    ]
+    reading = [index for index in range(len(ruff)) if index not in writing]
+    assert writing and reading and max(writing) < min(reading), "a read-only ruff run came before the formatter"
+    for target in ("src/app.py", "tests/test_fix.py"):
+        for verb in ("check", "format"):
+            assert any(ruff[index]["command"][1] == verb and target in ruff[index]["command"] for index in reading), (
+                target,
+                verb,
+            )
+
+
+@pytest.mark.parametrize(("script", "blocks"), [("check_docs.py", False), ("check_criterion_ledger.py", True)])
+def test_targeted_repair_selects_declared_gates_and_enforcement(
+    world: World, monkeypatch: pytest.MonkeyPatch, script: str, blocks: bool
+) -> None:
+    """Criterion 4. Planted fault: the document gates are left out, a changed gate's own check is not selected,
+    a command is copied instead of read from the one list, or a blocking gate's red does not block."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step(), repair_step(), repair_step()], make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["gate"] = lambda command: (1, "gate red\n") if script in command[2] else None
+    declared = [gate for gate in docs_gates() if script in str(gate["command"])]
+    assert [gate["enforcement"] for gate in declared] == ["block" if blocks else "report"]
+    assert world.run("repair") == (1 if blocks else 0)
+    ran = [record["command"] for record in commands.of("gate")]
+    # The document subset always stands; the repair adds a test file, so the kit probe joins it.
+    wanted = {gate["id"] for gate in docs_gates()} | {"leerprobe"}
+    expected = [
+        gate_command(world, gate)
+        for gate in ci_gates.gates()
+        if gate["id"] in wanted and gate["local_runnable"] and gate["placement"] != "hosted"
+    ]
+    if blocks:
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert ran and all(command in expected for command in ran)
+        assert any(script in command[2] for command in ran)
+        return
+    assert ran == expected, "the targeted check did not run exactly the selected gates, in list order"
+    head = git(world.root, "rev-parse", "HEAD")
+    (world.root / "scripts" / "ramp_valves.py").write_text("V = 1\n", encoding="utf-8")
+    (world.root / "tests" / "test_ramp.py").write_text(
+        "def test_ramp():\n    assert 'scripts/ramp_valves.py'\n", encoding="utf-8"
+    )
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), head)
+    assert chosen.fallback is None, chosen.fallback
+    selected = [gate["id"] for gate in chosen.gates]
+    for needed in ("ramp-valves", "leerprobe", "criterion-ledger"):
+        assert needed in selected, (needed, selected)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "prompt",
+        "unknown-kind",
+        "uncovered-code",
+        "unreadable-links",
+        "shared-test-config",
+        "execution-infrastructure",
+        "aliased-file",
+    ],
+)
+def test_targeted_repair_falls_back_to_full_on_uncovered_inputs(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 5. Planted fault: a prompt edit, an unclassified input, an unreadable link inventory, shared
+    configuration, an alias or production code with no linked test receives targeted acceptance."""
+    seed_tests(world)
+    root = world.root
+    baseline = git(root, "rev-parse", "HEAD")
+    if case == "prompt":
+        prompt = root / "prompts" / "04-implement.md"
+        prompt.write_text(prompt.read_text(encoding="utf-8") + "\nOne more line.\n", encoding="utf-8")
+        reason = "a prompt changed"
+    elif case == "unknown-kind":
+        (root / "notes.txt").write_text("a note\n", encoding="utf-8")
+        reason = "notes.txt"
+    elif case == "uncovered-code":
+        (root / "scripts" / "lonely.py").write_text("X = 1\n", encoding="utf-8")
+        reason = "has no linked test"
+    elif case == "unreadable-links":
+        (root / "docs").mkdir()
+        (root / "docs" / "note.md").write_text("# A note\n", encoding="utf-8")
+
+        def unreadable(_repo: str, **_kwargs) -> None:
+            raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+        monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+        reason = "the link inventory could not be read"
+    elif case == "shared-test-config":
+        (root / "tests" / "conftest.py").write_text("# shared\n", encoding="utf-8")
+        reason = "shared test configuration"
+    elif case == "execution-infrastructure":
+        (root / "scripts" / "ci_gates.py").write_text("X = 1\n", encoding="utf-8")
+        reason = "shared execution infrastructure"
+    else:
+        (root / "scripts" / "alias.py").symlink_to(root / "scripts" / "helper.py")
+        reason = "is a link"
+    chosen = stage2.targeted_selection(root, dict(os.environ), baseline)
+    assert chosen.fallback is not None and reason in chosen.fallback, chosen.fallback
+    assert chosen.tests == [] and chosen.gates == [] and chosen.ruff == []
+
+
+def test_targeted_commands_run_without_verify_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 6. Planted fault: a targeted command enters the machine admission or carries its marker, or the
+    full check stops acquiring the admission it owes."""
+    repair_world(world)
+    entered: list[list[str]] = []
+    real_hold = verify_lock.hold_admission
+
+    @contextlib.contextmanager
+    def spy(command: list[str]):
+        entered.append(list(command))
+        with real_hold(command) as owned:
+            yield owned
+
+    monkeypatch.setattr(verify_lock, "hold_admission", spy)
+    commands = targeted_mode(monkeypatch)
+    # A real outer admission is active in this state root, as when make verify starts the runner.
+    # inherit_env can recover it even though the targeted body stripped its explicit environment.
+    with real_hold(["outer", "verify"]), monkeypatch.context() as inherited:
+        admission = verify_lock.inherit_env(dict(os.environ))
+        for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV):
+            inherited.setenv(name, admission[name])
+        assert world.run("repair") == 0
+    assert commands.records
+    for record in commands.records:
+        assert verify_lock.LOCK_ENV not in record["env"] and verify_lock.TOKEN_ENV not in record["env"], record["kind"]
+        assert record["pass_fds"] == (), record["kind"]
+    assert ["make", "verify"] not in entered, "the targeted check took the full check's admission"
+    entered.clear()
+    commands.records.clear()
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    assert stage2.full_verify(world.root, env, None) == []
+    assert entered == [["make", "verify"]], "the full check did not acquire its admission"
+    (make,) = commands.of("make")
+    assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+
+
+@pytest.mark.parametrize("selection", ["touched", "linked"])
+@pytest.mark.parametrize("full_result", [0, 1])
+def test_targeted_stage2_test_file_requires_full_verification(
+    world: World, monkeypatch: pytest.MonkeyPatch, selection: str, full_result: int
+) -> None:
+    """Row L4-1: selecting the large stage2 test file must use admitted full verification before any timeout."""
+    seed_tests(world)
+    large_test = world.root / "tests" / "test_stage2.py"
+    large_test.write_text("def test_link():\n    assert 'scripts/helper.py'\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "stage2 test file linked to helper")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target = large_test if selection == "touched" else world.root / "scripts" / "helper.py"
+    target.write_text(target.read_text(encoding="utf-8") + "\n# repaired\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is not None and "tests/test_stage2.py" in chosen.fallback
+    assert chosen.tests == []
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["make"] = (full_result, "full verification result\n")
+    scope: list[str] = []
+    problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope)
+    assert bool(problems) == bool(full_result), problems
+    (make,) = commands.of("make")
+    assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert commands.of("gate") == []
+    assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
+    assert any(
+        "full `make verify` ran" in line
+        and "tests/test_stage2.py" in line
+        and f"result: {'red' if full_result else 'green'}" in line
+        for line in scope
+    ), scope
+
+
+def test_targeted_pytest_timeout_rejects_without_full_fallback(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A required targeted timeout rejects even when a full check would be green."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["pytest"] = lambda _command: (
+        stage2.StepTimedOut("whole linked test file exceeded five minutes")
+        if len(commands.of("pytest")) % 2 == 0
+        else None
+    )
+    assert world.run("repair") == 1
+    assert commands.of("make") == [], "a targeted timeout must fail instead of falling back"
+    assert commands.of("gate") == [], "targeted gates continued after the timeout"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert loop_status(world) == "taken — test_a"
+    assert "whole linked test file exceeded five minutes" in world.text()
+    assert "targeted verification, not the full `make verify`; result: red" in world.text()
+
+
+@pytest.mark.parametrize(
+    "path", ["scripts/stage2.py", "scripts/verify_lock.py", "scripts/touch_map.py", "scripts/leakcheck.py"]
+)
+def test_targeted_repair_verification_stack_requires_full_check(
+    world: World, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """A linked test must not allow shared verification infrastructure onto the targeted path."""
+    seed_tests(world)
+    target = world.root / path
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    linked = world.root / "tests" / "test_stack.py"
+    linked.write_text(f"def test_stack():\n    assert {path!r}\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked verification infrastructure")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    commands = targeted_mode(monkeypatch)
+    scope = []
+    assert stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope) == []
+    assert len(commands.of("make")) == 1, "shared infrastructure requires full verification"
+    assert commands.of("make")[0]["pass_fds"]
+    assert commands.of("gate") == []
+    assert any(path in line and "shared execution infrastructure" in line for line in scope)
+
+
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("tests/test_repo_settings.py", {"ruleset"}),
+        ("pytest.py", {"pytest", "ruleset"}),
+        ("ruff/__main__.py", {"ruff-check", "ruff-format"}),
+        ("ruff/__init__.py", {"ruff-check", "ruff-format"}),
+        ("tests/test_unrelated.py", set()),
+    ],
+)
+def test_targeted_gate_selection_handles_module_commands(world: World, path: str, expected: set[str]) -> None:
+    """Row L6-1: the real gate list selects module entrypoints and env-prefixed pytest file arguments."""
+    seed_tests(world)
+    target = world.root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    (world.root / "tests" / "test_module_link.py").write_text(
+        f"def test_module_link():\n    assert {path!r}\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked module gate input")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    module_gates = {"pytest", "ruff-check", "ruff-format", "ruleset"}
+    selected = {gate["id"] for gate in chosen.gates}
+    assert selected & module_gates == expected
+    declared = {gate["id"]: gate for gate in ci_gates.gates()}
+    for gate in chosen.gates:
+        assert gate == declared[gate["id"]], "selection must preserve the declared command and enforcement"
+
+
+def test_targeted_ruleset_gate_uses_locked_interpreter(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L7-1: selection and execution agree on the real env-prefixed module command."""
+    seed_tests(world)
+    target = world.root / "tests" / "test_repo_settings.py"
+    target.write_text("def test_settings():\n    assert True\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ruleset gate input")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text(target.read_text() + "\n# repaired\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    ruleset = next(gate for gate in chosen.gates if gate["id"] == "ruleset")
+    declared = next(gate for gate in ci_gates.gates() if gate["id"] == "ruleset")
+    assert ruleset == declared
+    commands = targeted_mode(monkeypatch)
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    assert stage2.run_targeted(world.root, env, None, stage2.Targeted([], [], [ruleset])) == ([], [])
+    (call,) = commands.of("gate")
+    assert shlex.split(call["command"][2]) == [
+        "RULESET_ASSERT=1",
+        str(world.root / ".venv/bin/python3"),
+        "-m",
+        "pytest",
+        "tests/test_repo_settings.py",
+        "-q",
+        "-rs",
+    ], "an env-prefixed Python gate must use the same locked interpreter as other gates"
+
+
+@pytest.mark.parametrize("path, selects_probe", [("probe.py", False), ("scripts/kit/probe.py", True)])
+def test_targeted_gate_selection_matches_command_entrypoint(world: World, path: str, selects_probe: bool) -> None:
+    """An existing root probe is not the kit probe's command entrypoint."""
+    seed_tests(world)
+    target = world.root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    (world.root / "tests" / "test_probe_link.py").write_text(
+        f"def test_probe_link():\n    assert {path!r}\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "linked existing probe")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+    chosen = stage2.targeted_selection(world.root, dict(os.environ), baseline)
+    assert chosen.fallback is None, chosen.fallback
+    assert ("leerprobe" in {gate["id"] for gate in chosen.gates}) is selects_probe
+
+
+def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L1-3. Planted fault: the targeted pytest keeps xdist's raw `auto` of every core."""
+    readings = {"hw.logicalcpu": "16\n", "hw.memsize": str(8 * 2147483648) + "\n"}
+
+    def fake_launch(command, *_args, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=readings[command[-1]], stderr="")
+
+    monkeypatch.setattr(stage2, "launch", fake_launch)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    env = stage2.targeted_pytest_env(tmp_path, {"PATH": "/usr/bin"})
+    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "8", "the smaller of half the cores and the memory bound"
+    readings["hw.memsize"] = str(3 * 2147483648) + "\n"
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3"
+    chosen = stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
+    assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
+
+
+@pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])
+def test_targeted_failure_never_checkpoints_or_marks_fixed(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Criterion 7. Planted fault: a red, a timeout or a launch error of a required targeted command still reaches
+    a checkpoint or a fixed row, or arrives in the retry flow unprotected."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step(), repair_step(), repair_step()], make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    # Cheap runs are the odd pytest calls, the targeted ones the even.
+    even = lambda: len(commands.of("pytest")) % 2 == 0  # noqa: E731
+    if failure == "red-pytest":
+        commands.outcomes["pytest"] = lambda _command: RED_PYTEST if even() else None
+    elif failure == "timeout":
+        commands.outcomes["gate"] = lambda _command: stage2.StepTimedOut(
+            "gate was stopped by the runner's tool limit after 5 minutes"
+        )
+    elif failure == "launch-error":
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.CallFailed("python3 could not be started: planted") if even() else None
+        )
+    else:
+        commands.outcomes["gate"] = (
+            lambda command: (1, "gate red\n") if "check_criterion_ledger.py" in command[2] else None
+        )
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "a failed targeted check was checkpointed"
+    assert loop_status(world) == "taken — test_a"
+    text = world.text()
+    assert stage2.TARGETED_LABEL in text and "fixed —" not in text
+    assert "targeted verification, not the full `make verify`; result: red" in text
+    assert commands.of("make") == []
+
+
+@pytest.mark.parametrize("case", ["derived-refresh", "ledger-selection", "invalid-answer", "failed-proof"])
+def test_targeted_repair_preserves_preparation_and_answer_proofs(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 8. Planted fault: targeted green skips the derived refresh, a ledger-selected failure, the fixed-line
+    validation or the red-first proof."""
+    baseline = repair_world(world)
+    if case == "ledger-selection":
+        world.plan.write_text(
+            "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+            "- 1: tests/test_seed.py::test_seed — the planted ledger-selected test\n\n## Time used\n",
+            encoding="utf-8",
+        )
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "a ledger")
+        baseline = git(world.root, "rev-parse", "HEAD")
+    commands = targeted_mode(monkeypatch)
+    if case == "ledger-selection":
+        script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}])
+        commands.outcomes["pytest"] = lambda command: (
+            (1, "FAILED tests/test_seed.py::test_seed - assert\n")
+            if "tests/test_seed.py::test_seed" in command
+            else None
+        )
+    if case == "invalid-answer":
+        script_repair(world, [repair_step(stdout="L1-1: done")] * 3, make=[{"stdout": "green\n"}])
+    if case == "failed-proof":
+        # The planted test is green on the baseline too: the red-first proof must refuse it.
+        green = repair_step(
+            plant={"src/app.py": "value = 2\n", "tests/test_fix.py": "def test_fix():\n    assert True\n"}
+        )
+        script_repair(world, [green] * 3, make=[{"stdout": "green\n"}])
+    code = world.run("repair")
+    if case == "derived-refresh":
+        assert code == 0
+        assert "derived" in commands.order and "gate" in commands.order
+        assert commands.order.index("derived") < commands.order.index("gate"), commands.order
+        return
+    assert code == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert loop_status(world) == "taken — test_a"
+    # A findings row never turns fixed; the runner's own diagnostics may quote the answer format.
+    assert "| fixed —" not in world.text()
+    if case == "ledger-selection":
+        assert stage2.CHEAP_LABEL in world.text() and commands.of("gate") == []
+
+
+def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 10. Planted fault: implement checkpoints after targeted checks alone, or a draft loses its
+    document check or its admission."""
+    for function in (stage2.run_attempts, stage2.verify_attempt):
+        name = "verify_mode" if function is stage2.run_attempts else "mode"
+        assert inspect.signature(function).parameters[name].default == "full"
+    commands = targeted_mode(monkeypatch)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    (make,) = commands.of("make")
+    assert make["command"] == ["make", "verify"] and make["pass_fds"], "implement left the admitted full check"
+    assert commands.of("gate") == [], "implement ran the repair's targeted gates"
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    (docs,) = world.calls("bash")
+    assert docs["argv"][-2:] == ["--job", "docs"] and verify_lock.LOCK_ENV in docs["env"]
+    assert commands.of("gate") == []
+    # `repair` alone asks for the targeted mode, and by default it does.
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert "REPAIR_VERIFY_MODE" not in source
+    assert source.count('verify_mode="targeted"') == 1
+
+
+@pytest.mark.parametrize("mode", ["targeted", "fallback", "fallback-launch-failure"])
+def test_repair_records_verification_scope_and_outcome(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Criterion 11. Planted fault: a successful repair leaves no scope evidence, a fallback its reason, or targeted
+    output claims full green."""
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+    if mode.startswith("fallback"):
+
+        def unreadable(_repo: str, **_kwargs) -> None:
+            raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+        monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+    if mode == "fallback-launch-failure":
+        baseline = git(world.root, "rev-parse", "HEAD")
+        commands.outcomes["make"] = stage2.CallFailed("make could not be started: planted launch fault")
+        assert world.run("repair") == 1
+        text = world.text()
+        assert f"{stage2.SCOPE_LABEL}:" in text
+        assert "full `make verify` selected (result: not completed)" in text
+        assert "the targeted coverage was not safe" in text
+        assert "the link inventory could not be read" in text and "planted inventory fault" in text
+        assert "planted launch fault" in text
+        assert "full `make verify` ran" not in text
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert loop_status(world) == "taken — test_a"
+        assert len(commands.of("make")) == 1
+        return
+    assert world.run("repair") == 0
+    body = git(world.root, "log", "-1", "--format=%B")
+    text = world.text()
+    assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" in text
+    if mode == "targeted":
+        assert "targeted verification, not the full `make verify`; result: green" in body
+        assert "`tests/test_fix.py`" in body and "a fresh full `make verify` is still required before phase 6" in body
+        assert commands.of("make") == []
+    else:
+        assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in body
+        assert "the link inventory could not be read" in body and "planted inventory fault" in body
+        assert len(commands.of("make")) == 1
+    assert "VERIFY GREEN" not in body and "full verification green" not in body.lower()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "green-first",
+        "green-recheck",
+        "red",
+        "timeout",
+        "unstartable",
+        "refused-admission",
+        "head-moved",
+        "tree-moved",
+        "dirty-before",
+    ],
+)
+def test_review_requires_fresh_full_verification_before_model_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 9. Planted fault: the reviewer starts after a red, unstartable or timed-out full check, after the
+    head or the substantive tree moved, on a dirty tree, or without a fresh check on a first review or a re-check."""
+    monkeypatch.setattr(stage2, "require_fresh_full_verification", REAL_FULL_GATE)
+    make = [{"stdout": "red\n", "exit": 1}] if case == "red" else [{"stdout": "green\n"}]
+    world.script(make=make, codex=[codex_ok("T1", rows(1))])
+    if case == "green-recheck":
+        world.write_findings(
+            phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase finding")])
+            + "\n\nPhase 6 verdict: codex T7, 2026-10-12"
+        )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "--allow-empty", "-m", "commit review inputs")
+    real = stage2.launch
+
+    def launch(command, cwd, env, *args, **kwargs):
+        if command[0] != "make":
+            return real(command, cwd, env, *args, **kwargs)
+        if case == "head-moved":
+            git(Path(cwd), "commit", "--quiet", "--allow-empty", "-m", "moved while the check ran")
+        if case == "tree-moved":
+            (Path(cwd) / "src" / "app.py").write_text("value = 9\n", encoding="utf-8")
+        if case == "timeout":
+            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+        if case == "unstartable":
+            raise stage2.CallFailed("make could not be started: planted")
+        return real(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    if case == "refused-admission":
+
+        def refuse(_command: list[str]):
+            raise verify_lock.VerifyLockRefused("planted refusal")
+
+        monkeypatch.setattr(verify_lock, "hold_admission", refuse)
+    if case == "dirty-before":
+        (world.root / "src" / "app.py").write_text("value = 5\n", encoding="utf-8")
+    code = world.run("review")
+    names = [call["name"] for call in world.calls() if call["name"] in ("make", "codex")]
+    if case.startswith("green"):
+        assert code == 0 and names == ["make", "codex"], names
+        assert world.calls("make")[0]["argv"] == ["verify"] and verify_lock.LOCK_ENV in world.calls("make")[0]["env"]
+        return
+    assert code == (2 if case == "dirty-before" else 1)
+    assert "codex" not in names, "the reviewer started after a failed full check"
+    if world.findings.exists():
+        assert "Stage-2 call" not in world.text() and "Phase 6 verdict" not in world.text()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "append",
+        "staged",
+        "remove",
+        "replace",
+        "multiple",
+        "phase6-audit",
+        "phase6-edit",
+        "phase6-newline",
+        "phase6-remove",
+        "session",
+        "manual",
+        "forged-audit",
+        "staged-substantive",
+        "other-findings",
+        "audit-moved",
+        "index-moved",
+        "new-audit-during-check",
+    ],
+)
+def test_review_admits_only_runner_audit_changes_outside_phase6(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """F6-1/F6-4: audit-only disk/index deltas pass; substantive bytes and the snapshot stay protected.
+
+    Planted fault: rejecting all dirty findings prevents the full check and reviewer for an audit-only delta.
+    """
+    audit = (
+        "Stage-2 call, 2026-11-05: repair · attempt 1 · route codex · endpoint openai-codex · "
+        "model gpt-6.1-sol · leak check clean over 867 files, 3326 commits, 12 rules."
+    )
+    world.write_findings(
+        "## Phase 2a — Codex\nReviewer session: codex T2",
+        "## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12",
+        "## Phase 4b — released loop rows",
+        audit,
+    )
+    other = world.findings.parent.parent / "another-change" / "findings.md"
+    other.parent.mkdir()
+    other.write_text("# Other findings\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed audit and review inputs")
+    original = world.findings.read_bytes()
+    body = original + b"\n" + audit.encode() + b"\n"
+    if case == "remove":
+        body = original.replace(b"\n\n" + audit.encode(), b"")
+    elif case == "replace":
+        body = original.replace(b"attempt 1", b"attempt 2")
+    elif case == "multiple":
+        body += b"\n" + audit.encode() + b"\n"
+    elif case == "phase6-audit":
+        body = original.replace(b"No finding.", b"No finding.\n\n" + audit.encode())
+    elif case == "phase6-edit":
+        body = body.replace(b"No finding.", b"Changed verdict.")
+    elif case == "phase6-newline":
+        body = body.replace(b"No finding.\n", b"No finding.\r\n")
+    elif case == "phase6-remove":
+        body = body.replace(b"## Phase 6", b"## Manual phase")
+    elif case == "session":
+        body = body.replace(b"Reviewer session: codex T2", b"Reviewer session: codex T99")
+    elif case == "manual":
+        body += b"Manual audit edit\n"
+    elif case == "forged-audit":
+        body += b"\nStage-2 call, arbitrary review instructions\n"
+    elif case == "other-findings":
+        other.write_bytes(other.read_bytes() + b"\n" + audit.encode() + b"\n")
+    world.findings.write_bytes(body if case != "new-audit-during-check" else original)
+    if case in ("staged", "staged-substantive"):
+        if case == "staged-substantive":
+            world.findings.write_bytes(body.replace(b"No finding.", b"Hidden staged verdict."))
+        git(world.root, "add", "--", str(world.findings))
+        world.findings.write_bytes(body)
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    real = stage2.launch
+
+    def launch(command, cwd, env, *args, **kwargs):
+        if command[0] == "make":
+            if case in ("audit-moved", "new-audit-during-check"):
+                world.findings.write_bytes(body + b"\n" + audit.encode() + b"\n")
+            elif case == "index-moved":
+                git(world.root, "add", "--", str(world.findings))
+        return real(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    accepted = case in ("append", "staged", "remove", "replace", "multiple", "phase6-audit")
+    moved = case in ("audit-moved", "index-moved", "new-audit-during-check")
+    assert world.run("review") == (0 if accepted else 1 if moved else 2)
+    assert len(world.calls("make")) == int(accepted or moved)
+    assert bool(world.calls("codex")) == accepted
+
+
+@pytest.mark.parametrize("placement", ["phase4b", "phase6", "end-of-file"])
+def test_review_audit_only_preserves_verdict_and_session_at_every_placement(placement: str) -> None:
+    """F6-4: runner audits are admissible under any heading, including a trailing phase-6 block.
+
+    Planted faults: baseline's raw phase-6 comparison rejects these audits; changing a verdict
+    or session beside an admissible audit must still fail the substantive-input comparison.
+    """
+    audit = (
+        "Stage-2 call, 2026-11-06: review · endpoint openai-codex · model gpt-6.1-sol"
+        " · leak check clean over 867 files, 3326 commits, 12 rules."
+    ).encode()
+    phase6 = b"## Phase 6\n\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n\nReviewer session: codex T7"
+    if placement == "phase4b":
+        before = phase6 + b"\n\n## Phase 4b\n\nReleased loop rows."
+        after = before + b"\n\n" + audit
+    elif placement == "phase6":
+        before = phase6 + b"\n\n## Phase 4b\n\nReleased loop rows."
+        after = before.replace(b"\n\n## Phase 4b", b"\n\n" + audit + b"\n\n## Phase 4b")
+    else:
+        before = phase6
+        after = before + b"\n\n" + audit
+    assert stage2.review_audit_only(before, after)
+    assert not stage2.review_audit_only(before, after.replace(b"verdict: codex T7", b"verdict: codex T8"))
+    assert not stage2.review_audit_only(before, after.replace(b"session: codex T7", b"session: codex T8"))
+    assert not stage2.review_audit_only(before, after.replace(b"No finding.", b"Changed verdict."))
+
+
+@pytest.mark.parametrize("case", ["disk", "staged", "wrong-date", "other-header", "phase6"])
+def test_review_accepts_runner_audit_date_stamp(world: World, case: str) -> None:
+    """F6-3: append's next-day stamp passes, but other header dates/inputs and phase-6 edits do not.
+
+    Planted fault: stripping only the call line rejects the real append's updated header before make runs.
+    """
+    yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    world.findings.write_text(
+        old_header(yesterday)
+        + "\n## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n"
+        + "\n## Phase 4b — released loop rows\n"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed yesterday's committed review inputs")
+    stage2.append(
+        world.findings,
+        f"Stage-2 call, {stage2.today()}: repair · attempt 1 · route codex · endpoint openai-codex · "
+        "model gpt-6.1-sol · leak check clean over 867 files, 3326 commits, 12 rules.",
+    )
+    body = world.text()
+    assert f"updated: {stage2.today()}\n" in body
+    if case == "wrong-date":
+        body = body.replace(f"updated: {stage2.today()}", "updated: 2099-01-01")
+    elif case == "other-header":
+        body = body.replace("title: Findings", "title: Changed")
+    elif case == "phase6":
+        body = body.replace("No finding.", "Changed verdict.")
+    world.findings.write_text(body)
+    if case == "staged":
+        git(world.root, "add", "--", str(world.findings))
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    accepted = case in ("disk", "staged")
+    assert world.run("review") == (0 if accepted else 2)
+    assert len(world.calls("make")) == int(accepted)
+    assert bool(world.calls("codex")) == accepted
+
+
+@pytest.mark.parametrize("change", ["remove-phase6", "edit-phase6", "delete", "append"])
+def test_review_refuses_dirty_findings_inputs(world: World, change: str) -> None:
+    world.write_findings("## Phase 2a — Codex\nReviewer session: codex T2", "## Phase 6 — Codex\nNo finding.")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed committed review inputs")
+    if change == "delete":
+        world.findings.unlink()
+    elif change == "remove-phase6":
+        world.findings.write_text(world.text().partition("## Phase 6")[0])
+    elif change == "edit-phase6":
+        world.findings.write_text(world.text().replace("## Phase 6", "## Manual phase"))
+    else:
+        world.findings.write_text(world.text() + "\nManual audit edit\n")
+    world.script(make=[{"stdout": "green\n"}], codex=[codex_ok("T1", "No finding.")])
+    assert world.run("review") == 2
+    assert not world.calls("make") and not world.calls("codex")
+
+
+@pytest.mark.parametrize("fault", ["environment", "timeout"])
+def test_targeted_inventory_uses_bounded_sanitized_git(
+    world: World, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    seed_tests(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "tests" / "test_seed.py").write_text("def test_seed():\n    assert 1 == 1\n")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    real = subprocess.run
+    seen = []
+
+    def run(command, *args, **kwargs):
+        if command[0] == "git" and any(part in command for part in ("ls-files", "ls-tree", "cat-file")):
+            seen.append(command)
+            assert kwargs.get("env") == env
+            assert kwargs.get("timeout") == stage2.GIT_SECONDS
+            if fault == "timeout" and "cat-file" in command:
+                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+        return real(command, *args, **kwargs)
+
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.setenv(name, str(world.root / "wrong"))
+    monkeypatch.setattr(subprocess, "run", run)
+    chosen = stage2.targeted_selection(world.root, env, baseline)
+    assert seen
+    if fault == "timeout":
+        assert chosen.fallback and "link inventory could not be read" in chosen.fallback
+    else:
+        assert chosen.fallback is None, chosen.fallback
+        assert chosen.tests == ["tests/test_seed.py"]
