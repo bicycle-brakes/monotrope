@@ -9062,9 +9062,9 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
         assert f"Attempt {attempt} ({route}):" in retry_prompt
         assert f"post-run-check-{attempt}" in retry_prompt and f"post-run-check-{attempt}" in world.text()
     if "plans/changes/demo/plan.md" in deleted_inputs:
-        assert "plan.md cannot be read." in retry_prompt
-    else:
-        assert "`make verify` exited 1" in retry_prompt
+        assert "plan.md was deleted or lost its frontmatter" in retry_prompt
+        assert "plan.md — status, implementation_status; restored snapshotted input" in retry_prompt
+    assert "`make verify` exited 1" in retry_prompt
     for name in ("spec.md", "plan.md"):
         content = inputs[f"plans/changes/demo/{name}"].decode("utf-8")
         assert f"## Accepted {name.removesuffix('.md')}\n\n{content}" in retry_prompt
@@ -9118,12 +9118,13 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     baseline = repair_world(world)
     original = {relative: (world.root / relative).read_bytes() for relative in corrupted_inputs}
     failed_attempts = max(corrupted_attempts)
-    plans_corrupted = any(relative.startswith("plans/") for relative in original)
-    # A failed attempt is red at `make verify`, unless its preparation already failed on a corrupted plans/ file.
+    # Protected documents recover before verification; other broken inputs still fail preparation.
+    preparation_fails = "plans/changes/demo/decisions.md" in original
+    # Queue a failed verification for every attempt that reaches make after lifecycle recovery.
     reds = [
         {"stdout": f"post-run-check-{attempt}\n", "exit": 1}
         for attempt in range(1, failed_attempts + 1)
-        if not (attempt in corrupted_attempts and plans_corrupted)
+        if not (attempt in corrupted_attempts and preparation_fails)
     ]
     script_repair(
         world,
@@ -9172,10 +9173,15 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         route = "codex" if attempt == 1 else "codex-repair"
         assert f"Attempt {attempt} ({route}):" in final_prompt
         diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
-        if attempt in corrupted_attempts and plans_corrupted:
+        if attempt in corrupted_attempts and preparation_fails:
             assert "Derived-file preparation failed" in diagnostics
         else:
             assert "`make verify` exited 1" in diagnostics
+        if attempt in corrupted_attempts:
+            for relative in original:
+                if Path(relative).name in ("spec.md", "plan.md", "design.md"):
+                    assert f"{relative} was deleted or lost its frontmatter" in diagnostics
+                    assert f"{relative} — status, implementation_status; restored snapshotted input" in diagnostics
     for relative, content in original.items():
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
@@ -12022,6 +12028,113 @@ def test_repair_lifecycle_recovery_keeps_safety_refusals(
     assert stage2.LIFECYCLE_LABEL not in world.text()
     assert stage2.RESTORATION_PREFIX not in world.text()
     assert runner_entries(world.plan) == []
+
+
+@pytest.mark.parametrize("damage", ["deleted", "headerless", "unreadable"])
+def test_repair_lifecycle_broken_document_restored_on_every_attempt(
+    world: World, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    """Even the final rejected attempt restores broken inputs before verification."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    spec = world.plan.parent / "spec.md"
+    script_repair(world, [repair_step(), repair_step(), repair_step()])
+
+    def damage_after(call):
+        def model(*args, **kwargs):
+            result = call(*args, **kwargs)
+            if damage == "deleted":
+                spec.unlink()
+            else:
+                spec.write_bytes(b"# Header removed\n" if damage == "headerless" else b"\xff")
+            return result
+
+        return model
+
+    monkeypatch.setattr(stage2, "run_codex", damage_after(stage2.run_codex))
+    monkeypatch.setattr(stage2, "run_work_model", damage_after(stage2.run_work_model))
+    observed = []
+
+    def verify(*_args, **_kwargs):
+        try:
+            content = spec.read_bytes()
+        except FileNotFoundError:
+            pytest.fail("a deleted protected document must be restored before verification")
+        assert content == baseline["plans/changes/demo/spec.md"], "restore the safe snapshot before verification"
+        observed.append(content)
+        return []
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    assert world.run("repair") == 1, "structural damage still rejects the attempt after restoration"
+    assert len(observed) == 3
+    assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"]
+    assert world.text().count("spec.md — status, implementation_status") == 3
+
+
+def test_repair_lifecycle_complete_preflight_precedes_field_writes(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unsafe prompt destination forbids even a safe lifecycle restoration write."""
+    repair_world(world)
+    plant_lifecycle(world)
+    damaged = lifecycle_damaged(world, "plans/changes/demo/spec.md", status="superseded", implementation="done")
+    script_repair(world, [repair_step(plant={"plans/changes/demo/spec.md": damaged})])
+    real_codex = stage2.run_codex
+    outside = tmp_path / "moved-prompts"
+
+    def model(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        shutil.move(world.root / "prompts", outside)
+        (world.root / "prompts").symlink_to(outside)
+        return result
+
+    monkeypatch.setattr(stage2, "run_codex", model)
+    assert world.run("repair") == 2
+    assert "refus" in capsys.readouterr().err
+    assert (world.plan.parent / "spec.md").read_text() == damaged, "complete preflight must precede any recovery write"
+    assert world.calls("make") == []
+    assert stage2.RESTORATION_PREFIX not in world.text()
+    assert runner_entries(world.plan) == []
+
+
+def test_repair_lifecycle_unreadable_head_restores_and_reports(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A post-call HEAD read failure restores safe working-tree fields without touching history."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    script_repair(world, [repair_step(plant=damage)])
+    real_codex, real_git = stage2.run_codex, stage2._git_output
+    returned = False
+
+    def model(*args, **kwargs):
+        nonlocal returned
+        result = real_codex(*args, **kwargs)
+        returned = True
+        return result
+
+    def git_output(root, *args, **kwargs):
+        if returned and args == ("rev-parse", "HEAD"):
+            raise stage2.Refused("planted HEAD read failure")
+        return real_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", model)
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    assert world.run("repair") == 1
+    assert "HEAD could not be read" in capsys.readouterr().err
+    assert git(world.root, "rev-parse", "HEAD") == head
+    for relative, content in baseline.items():
+        assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+            content.decode()
+        )
+        assert f"{relative} — status, implementation_status" in restored_line(world)
+    assert world.calls("make") == []
+    assert len(repair_calls(world)) == 1
 
 
 def test_repair_lifecycle_crlf_documents_are_reported_unchanged(tmp_path: Path) -> None:

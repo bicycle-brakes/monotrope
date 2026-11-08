@@ -187,9 +187,9 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | SPEC | implementation | scripts/stage2.py:7447 | If an attempt deletes `spec.md` or removes its frontmatter, restoration only records a problem and verification reads the damaged document. On the final attempt, input recovery is skipped because it runs only before retries, leaving the protected fields absent at terminal handback. Restore the safely writable baseline before verification and terminal exit. [Acceptance criteria 1, 2] | Codex | taken — reproduced fault inside the spec: a deleted or headerless protected document is restored from the snapshot on every attempt, the last included, before verification reads it; one test | — |
-| R2 | MAJOR | SPEC | implementation | scripts/stage2.py:7465 | If the model changes spec lifecycle fields, replaces the snapshotted `prompts/` parent with a symlink, and leaves findings unchanged, lifecycle restoration writes the spec before the complete recovery preflight detects the unsafe prompt destination at line 7960. Checking only changed lifecycle destinations breaks the required all-destinations boundary: an unsafe destination must stop recovery before any recovery write. [Boundary; Protected areas] | Codex | taken — reproduced, same mechanism as R1 (restoration ordered against recovery): the complete recovery preflight runs before any lifecycle write; one test with a symlinked prompts parent | — |
-| R3 | MAJOR | SPEC | implementation | scripts/stage2.py:7788 | If Codex changes lifecycle fields and the subsequent `git rev-parse HEAD` fails, the runner exits before restoring those fields. The exception handler only persists a rejected time entry; changed spec/design values remain and no lifecycle report is produced, even when their destinations are safely writable. Restore and report the working-tree fields on this failure path without rewriting history. [Acceptance criteria 2, 5] | Codex | taken — reproduced, same mechanism as R1: lifecycle restoration runs in the attempt's cleanup path, so an exit after the model call (e.g. git rev-parse failing) still restores the fields; one test | — |
+| R1 | MAJOR | SPEC | implementation | scripts/stage2.py:7447 | If an attempt deletes `spec.md` or removes its frontmatter, restoration only records a problem and verification reads the damaged document. On the final attempt, input recovery is skipped because it runs only before retries, leaving the protected fields absent at terminal handback. Restore the safely writable baseline before verification and terminal exit. [Acceptance criteria 1, 2] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_broken_document_restored_on_every_attempt | — |
+| R2 | MAJOR | SPEC | implementation | scripts/stage2.py:7465 | If the model changes spec lifecycle fields, replaces the snapshotted `prompts/` parent with a symlink, and leaves findings unchanged, lifecycle restoration writes the spec before the complete recovery preflight detects the unsafe prompt destination at line 7960. Checking only changed lifecycle destinations breaks the required all-destinations boundary: an unsafe destination must stop recovery before any recovery write. [Boundary; Protected areas] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_complete_preflight_precedes_field_writes | — |
+| R3 | MAJOR | SPEC | implementation | scripts/stage2.py:7788 | If Codex changes lifecycle fields and the subsequent `git rev-parse HEAD` fails, the runner exits before restoring those fields. The exception handler only persists a rejected time entry; changed spec/design values remain and no lifecycle report is produced, even when their destinations are safely writable. Restore and report the working-tree fields on this failure path without rewriting history. [Acceptance criteria 2, 5] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_unreadable_head_restores_and_reports | — |
 
 Phase 6 verdict: codex 01a1b8d2-cdd5-7c31-8ddb-1ae9ebf01f0a, 2026-11-08
 Reviewer session: codex 01a1b8d2-cdd5-7c31-8ddb-1ae9ebf01f0a — a fresh session reviewed: no phase-2a session was recorded
@@ -243,3 +243,127 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3608 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3611 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +34 -5
+> - `tests/test_stage2.py` +107 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1584 lines of this gate left out …]
+>             assert f"Attempt {attempt} ({route}):" in final_prompt
+>             diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
+>             if attempt in corrupted_attempts and plans_corrupted:
+> >               assert "Derived-file preparation failed" in diagnostics
+> E               AssertionError: assert 'Derived-file preparation failed' in '- lifecycle fields: plans/changes/demo/design.md — status, implementation_status; restored snapshotted input\n- lifec...popen-gw0/test_repair_retry_restores_non11/repo/.git/stage2/attempts/demo/attempt-1-20261108T031600046786Z-6f684d0a.md'
+>
+> tests/test_stage2.py:9176: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 32 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 35 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 35 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-792/popen-gw0/test_repair_retry_restores_non11/repo/.git/stage2/attempts/demo/attempt-3-20261108T031600046786Z-6f684d0a.md
+> repair: verified and committed · route stage-1 · attempt 3
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=16340) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/status-fields-restore/tests/test_stage2.py:19822: DeprecationWarning: This process (pid=16340) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[plan-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[plan-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[all-inputs-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[all-inputs-2]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[spec-first]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[spec-second]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[spec-both]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[plan-first]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[plan-second]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[plan-both]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[design-first]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[design-second]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[design-both]
+> 13 failed, 4881 passed, 17 skipped, 5 warnings in 1063.84s (0:17:43)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32108 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/status-fields-restore/stage2/attempts/status-fields-restore/attempt-1-20261108T015705614395Z-75d4bc9b.md
+> ````
+
+Stage-2 call, 2026-11-08: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3617 commits, 12 rules.
+
+Runner restoration, 2026-11-08: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged

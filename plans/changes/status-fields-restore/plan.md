@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ljmi
@@ -132,3 +132,5 @@ request.
 2026-11-07 08:28:14–11:26:24 UTC, 10689 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-07 11:38:24–12:55:38 UTC, 4633 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-07 13:52:22–16:43:50 UTC, 10288 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-08 01:57:28–03:31:56 UTC, 5667 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-08 03:32:10–05:29:59 UTC, 7069 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
