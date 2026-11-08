@@ -8714,7 +8714,9 @@ def repair_step(**more: object) -> dict:
     return {
         "stdout": "L1-1: fixed — tests/test_fix.py::test_fix",
         "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
-        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+        # Appending, not planting: a retry after a rejected attempt must still change bytes, or the
+        # runner's no-work rule (bead coding-harness-te7q) rejects it as a same-byte rewrite.
+        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n", "src/repair-work.txt": "work\n"},
         **more,
     }
 
