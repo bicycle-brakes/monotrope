@@ -1,10 +1,10 @@
 ---
 title: "Spec — origin-cell"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ywbh
@@ -146,10 +146,13 @@ the missing precondition of the existing brake; it does not replace its rule.
 None open. The maintainer's answer remains unchanged in `decisions.md#Q-1`.
 The following reversible execution details are explicit agent choices.
 
-- [DETAIL] Apply the check to taken and fixed rows in all three existing row
-  locations of the selected change, including existing released rows: all
-  carry accepted decisions, and moving or repairing one must not bypass the
-  precondition. Other changes are not scanned or backfilled.
+- [DETAIL] Apply the check to taken and fixed rows of the selected change's
+  loop record and phase-6 table. A released row is checked once, by the
+  ordinary `release-loop` before it writes the block; already released history
+  is not re-checked, so legacy rows released before this change (for example
+  in attempt-diagnostics and malformed-answer-retry) never block a verb, and no
+  history is backfilled (loop row L1-4, 2026-11-08). Other changes are not
+  scanned.
 - [DETAIL] Require canonical lowercase whole-cell values and positive decimal
   repair numbers without leading zeroes. This matches the existing `fix-r`
   comparison and round spelling without silently normalizing provenance.
