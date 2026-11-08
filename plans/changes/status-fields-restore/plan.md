@@ -134,3 +134,5 @@ request.
 2026-11-07 13:52:22–16:43:50 UTC, 10288 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 01:57:28–03:31:56 UTC, 5667 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-08 03:32:10–05:29:59 UTC, 7069 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-08 10:44:57–11:42:41 UTC, 3463 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-08 11:42:54–12:28:09 UTC, 2715 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

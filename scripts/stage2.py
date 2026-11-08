@@ -7250,6 +7250,9 @@ def lifecycle_entries(text: str) -> tuple[list[str], int, list[tuple[str, int, i
         return None
     header = "\n".join(lines[1:closing])
     try:
+        # Composition alone admits unknown tags and other values SafeLoader cannot
+        # construct. Treat every YAML error as unreadable before planning any writes.
+        yaml.safe_load(header)
         node = yaml.compose(header, Loader=LifecycleLoader)
         key_tokens = [token for token in yaml.scan(header) if isinstance(token, yaml.tokens.KeyToken)]
     except yaml.YAMLError:
@@ -7722,7 +7725,17 @@ def run_attempts(
         answer = ""
         evidence: str | None = None
         lifecycle_report: list[str] = []
+        lifecycle_report_persisted = False
         broken: list[str] = []
+
+        def persist_lifecycle_report(
+            report: list[str], destinations=(*inputs_before, ctx.findings), attempt=attempt, route=route
+        ) -> None:
+            nonlocal lifecycle_report_persisted
+            preflight_recovery(root, destinations, aliases=aliases)
+            append(ctx.findings, restoration_line(verb, attempt, route, report))
+            lifecycle_report_persisted = True
+
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
         # A completed call keeps its measured entry whatever post-call check then stops the run; a
         # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
@@ -7792,7 +7805,7 @@ def run_attempts(
                         else restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                     )
                     if protect_lifecycle:
-                        append(ctx.findings, restoration_line(verb, attempt, route, [*lifecycle_report, *broken]))
+                        persist_lifecycle_report([*lifecycle_report, *broken])
                     failures = [str(call_error)] if call_error is not None else []
                     failures += [str(evidence_error), saved, restored]
                     failures += [f"{LIFECYCLE_LABEL}: {line}" for line in [*broken, *lifecycle_report]]
@@ -7858,6 +7871,7 @@ def run_attempts(
                             whole=[line for line in listing.splitlines() if evidence and evidence in line],
                         ),
                     )
+                    lifecycle_report_persisted = protect_lifecycle
                     raise CallFailed(problem) from call_error
             if call_error is not None:
                 error = call_error
@@ -7879,7 +7893,7 @@ def run_attempts(
                     lifecycle_report, broken = restore_attempt_lifecycle()
                 restored = restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                 if protect_lifecycle:
-                    append(ctx.findings, restoration_line(verb, attempt, route, [*lifecycle_report, *broken]))
+                    persist_lifecycle_report([*lifecycle_report, *broken])
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 ended = f"{error}; {saved}; {restored}{leaked}"
                 for line in [*lifecycle_report, *broken]:
@@ -8082,7 +8096,7 @@ def run_attempts(
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
-                    append(ctx.findings, restoration_line(verb, attempt, route, lifecycle_report))
+                    persist_lifecycle_report(lifecycle_report)
                 if before_commit is not None:
                     before_commit()
                 message = commit_message
@@ -8117,10 +8131,7 @@ def run_attempts(
                     if kept is not None and not moved:
                         restore_findings(kept)
                     if protect_lifecycle:
-                        append(
-                            ctx.findings,
-                            restoration_line(verb, attempt, route, [*lifecycle_report, *rollback_report, *broken]),
-                        )
+                        persist_lifecycle_report([*lifecycle_report, *rollback_report, *broken])
                     raise
                 if after_commit is not None:
                     after_commit()
@@ -8148,17 +8159,19 @@ def run_attempts(
             # stop, so it propagates without an entry (spec, criterion 5).
             if isinstance(error, RestorationRefused) and call_error is not None:
                 preserve_attempt_failure(error, call_error)
-            if protect_lifecycle and not lifecycle_report and not isinstance(error, RestorationRefused):
-                # A post-call failure (including an unreadable HEAD) can precede the normal
-                # restoration boundary. Recover only working-tree inputs, never history, and
-                # report the actual result before the original failure leaves this attempt.
+            if protect_lifecycle and not isinstance(error, RestorationRefused):
+                # A terminal failure can precede restoration or follow it (for example a
+                # verifier refusal). Keep the original report: restoring twice would replace
+                # actual changes with an inaccurate "unchanged" result.
                 try:
-                    lifecycle_report, broken = restore_attempt_lifecycle()
-                    put_findings_back(original=error)
+                    if not lifecycle_report:
+                        lifecycle_report, broken = restore_attempt_lifecycle()
+                        put_findings_back(original=error)
+                    if not lifecycle_report_persisted:
+                        persist_lifecycle_report([*lifecycle_report, *broken])
                 except RestorationRefused as safety_error:
                     preserve_attempt_failure(safety_error, error)
                     raise
-                append(ctx.findings, restoration_line(verb, attempt, route, [*lifecycle_report, *broken]))
             if completed and not logged and not isinstance(error, RestorationRefused):
                 try:
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)

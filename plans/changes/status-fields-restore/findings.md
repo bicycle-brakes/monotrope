@@ -374,8 +374,133 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R4 | MAJOR | SPEC | implementation | scripts/stage2.py:7296 | If an attempt writes `status: !unknown accepted`, YAML composition succeeds but `frontmatter_fields()` raises `ConstructorError`. Recovery retries the same parser and fails again, leaving the changed fields in safely writable documents. Reproduced with this exact header. Treat construction errors as unreadable frontmatter and restore the snapshotted input before handback. [Acceptance criteria 1, 2, 5] | Codex | taken — part of the restore mechanism (maintainer 2026-11-08, four more hours): any YAML composition or construction error counts as unreadable front matter and the snapshotted input is restored, with a test per error class | — |
-| R5 | MAJOR | SPEC | implementation | scripts/stage2.py:8151 | If lifecycle restoration succeeds and verification then raises `Refused`, for example when diagnostic protection rejects test output, the runner exits without reporting the restoration. The exception handler skips reporting because `lifecycle_report` is already nonempty. Reproduced at the attempt boundary: one restoration, zero report writes. Persist the existing report before terminal handback when recovery remains safe. [Acceptance criterion 5] | Codex | taken — reproduced (maintainer 2026-11-08, four more hours): the restoration report is persisted before every terminal handback, a Refused from verification included, with a test | — |
+| R4 | MAJOR | SPEC | implementation | scripts/stage2.py:7296 | If an attempt writes `status: !unknown accepted`, YAML composition succeeds but `frontmatter_fields()` raises `ConstructorError`. Recovery retries the same parser and fails again, leaving the changed fields in safely writable documents. Reproduced with this exact header. Treat construction errors as unreadable frontmatter and restore the snapshotted input before handback. [Acceptance criteria 1, 2, 5] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_yaml_errors_restore_snapshot | — |
+| R5 | MAJOR | SPEC | implementation | scripts/stage2.py:8151 | If lifecycle restoration succeeds and verification then raises `Refused`, for example when diagnostic protection rejects test output, the runner exits without reporting the restoration. The exception handler skips reporting because `lifecycle_report` is already nonempty. Reproduced at the attempt boundary: one restoration, zero report writes. Persist the existing report before terminal handback when recovery remains safe. [Acceptance criterion 5] | Codex | fixed — tests/test_stage2.py::test_repair_lifecycle_verification_refusal_persists_report | — |
 
 Phase 6 verdict: codex 01a1babc-b3ab-7ee2-adce-88c145b5d3e5, 2026-11-08
 Reviewer session: codex 01a1babc-b3ab-7ee2-adce-88c145b5d3e5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3634 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/status-fields-restore/plan.md` +2 -0
+> - `scripts/stage2.py` +27 -14
+> - `tests/test_stage2.py` +98 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 164 lines of this gate left out …]
+>         world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], unusable_denylist: bool
+>     ) -> None:
+>         """A make-start failure whose protection refuses must discard the model's row edits."""
+>         repair_world(world)
+>         vandal = "# Findings\n\nmodel overwrote the accepted statuses\n"
+>         script_repair(
+>             world,
+>             [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+>             make=[{"stdout": "must not run"}],
+>         )
+>         original_launch = stage2.launch
+>     
+>         def no_make(command, root, env, secret=None, **kwargs):
+>             if command[:2] == ["make", "verify"]:
+>                 if unusable_denylist:
+>                     set_denylist("")
+>                 raise stage2.CallFailed(f"make could not be started: {LEAK}")
+>             return original_launch(command, root, env, secret, **kwargs)
+>     
+>         monkeypatch.setattr(stage2, "launch", no_make)
+>         assert world.run("repair") == 2
+>         (call,) = repair_calls(world)
+> >       assert world.text() == call["findings"], "diagnostic refusal must restore the accepted findings"
+> E       AssertionError: diagnostic refusal must restore the accepted findings
+> E       assert '---\ntitle: ...— unchanged\n' == '---\ntitle: ...s, 1 rules.\n'
+> E         
+> E         Skipping 606 identical leading characters in diff, use -v to show
+> E           , 1 rules.
+> E         + 
+> E         + Runner restoration, 2026-11-08: repair · attempt 1 · route codex — lifecycle fields: plans/changes/demo/plan.md, plans/changes/demo/spec.md — unchanged
+>
+> tests/test_stage2.py:3265: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> refused: the failed-check diagnostics cannot be checked: the denylist /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-867/popen-gw2/test_a_make_start_diagnostic_r1/denylist.txt holds no rule
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=76149) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/status-fields-restore/tests/test_stage2.py:19926: DeprecationWarning: This process (pid=76152) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_diagnostic_refusal_restores_repair_findings
+> FAILED tests/test_stage2.py::test_a_make_start_diagnostic_refusal_restores_repair_findings[nonsecret-match]
+> FAILED tests/test_stage2.py::test_a_make_start_diagnostic_refusal_restores_repair_findings[unusable-denylist]
+> 3 failed, 4900 passed, 17 skipped, 5 warnings in 982.67s (0:16:22)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32184 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/status-fields-restore/stage2/attempts/status-fields-restore/attempt-1-20261108T104442301672Z-36e6b9f0.md
+> ````
+
+Stage-2 call, 2026-11-08: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3635 commits, 12 rules.
+
+Runner restoration, 2026-11-08: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged

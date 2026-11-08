@@ -3235,7 +3235,9 @@ def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
     )
     assert world.run("repair") == 2
     (call,) = repair_calls(world)
-    assert world.text() == call["findings"]
+    report = restored_line(world)
+    assert stage2.LIFECYCLE_UNCHANGED in report
+    assert world.text() == call["findings"].rstrip() + "\n\n" + report + "\n"
 
 
 @pytest.mark.parametrize("unusable_denylist", [False, True], ids=["nonsecret-match", "unusable-denylist"])
@@ -3262,7 +3264,11 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     monkeypatch.setattr(stage2, "launch", no_make)
     assert world.run("repair") == 2
     (call,) = repair_calls(world)
-    assert world.text() == call["findings"], "diagnostic refusal must restore the accepted findings"
+    report = restored_line(world)
+    assert stage2.LIFECYCLE_UNCHANGED in report
+    assert world.text() == call["findings"].rstrip() + "\n\n" + report + "\n", (
+        "diagnostic refusal must restore accepted findings and retain only the runner restoration report"
+    )
     assert world.calls("make") == []
     assert LEAK not in world.text() and LEAK not in capsys.readouterr().err
 
@@ -12069,6 +12075,104 @@ def test_repair_lifecycle_broken_document_restored_on_every_attempt(
     assert len(observed) == 3
     assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"]
     assert world.text().count("spec.md — status, implementation_status") == 3
+
+
+@pytest.mark.parametrize(
+    ("header", "error_class"),
+    [
+        ('status: "\\q"', yaml.scanner.ScannerError),
+        ("status: [accepted", yaml.parser.ParserError),
+        ("status: *missing", yaml.composer.ComposerError),
+        ("status: !unknown accepted", yaml.constructor.ConstructorError),
+        ("status: accepted\x01", yaml.reader.ReaderError),
+        ("{status: !unknown accepted}", yaml.constructor.ConstructorError),
+        ("status: accepted\nother: !unknown value", yaml.constructor.ConstructorError),
+    ],
+    ids=["scanner", "parser", "composer", "constructor", "reader", "flow-constructor", "other-constructor"],
+)
+def test_repair_lifecycle_yaml_errors_restore_snapshot(
+    world: World, monkeypatch: pytest.MonkeyPatch, header: str, error_class: type[yaml.YAMLError]
+) -> None:
+    """Every YAML error class rejects the attempt and restores safe inputs before checks."""
+    with pytest.raises(error_class):
+        yaml.safe_load(header)
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    spec = world.plan.parent / "spec.md"
+    damage = {
+        relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+        for relative in LIFECYCLE_STATES
+    }
+    damage["plans/changes/demo/spec.md"] = f"---\n{header}\n---\nAttempt body\n"
+    script_repair(world, [repair_step(plant=damage)] * 3)
+    observed = []
+
+    def verify(*_args, **_kwargs):
+        assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"], "restore unreadable YAML before checks"
+        for relative, content in baseline.items():
+            assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+                content.decode()
+            ), relative
+        observed.append(True)
+        return []
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    try:
+        result = world.run("repair")
+    except yaml.YAMLError as error:
+        pytest.fail(f"unreadable YAML must restore the snapshot instead of escaping recovery: {error}")
+    assert result == 1, "unreadable frontmatter must reject even an otherwise passing attempt"
+    assert len(observed) == 3
+    assert spec.read_bytes() == baseline["plans/changes/demo/spec.md"]
+    assert world.text().count("spec.md — status, implementation_status; restored snapshotted input") == 3
+
+
+@pytest.mark.parametrize("changed", [False, True], ids=["unchanged", "restored"])
+def test_repair_lifecycle_verification_refusal_persists_report(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], changed: bool
+) -> None:
+    """A verifier refusal retains the already measured restoration, without restoring twice."""
+    repair_world(world)
+    baseline = plant_lifecycle(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    damage = (
+        {
+            relative: lifecycle_damaged(world, relative, status="superseded", implementation="done")
+            for relative in LIFECYCLE_STATES
+        }
+        if changed
+        else {}
+    )
+    script_repair(world, [repair_step(plant=damage)])
+    real_restore = stage2.restore_lifecycle_fields
+    restorations = []
+
+    def restore(*args, **kwargs):
+        report, problems = real_restore(*args, **kwargs)
+        restorations.append(report)
+        return report, problems
+
+    def verify(*_args, **_kwargs):
+        raise stage2.Refused("planted diagnostic protection refusal")
+
+    monkeypatch.setattr(stage2, "restore_lifecycle_fields", restore)
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    assert world.run("repair") == 2
+    assert "planted diagnostic protection refusal" in capsys.readouterr().err
+    assert len(restorations) == 1, "persist the original restoration rather than measuring unchanged fields again"
+    report = restored_line(world)
+    assert "; ".join(restorations[0]) in report
+    assert world.text().count(stage2.RESTORATION_PREFIX) == 1
+    for relative, content in baseline.items():
+        assert stage2.frontmatter_fields((world.root / relative).read_text()) == stage2.frontmatter_fields(
+            content.decode()
+        )
+        if changed:
+            assert f"{relative} — status, implementation_status" in report
+    if not changed:
+        assert stage2.LIFECYCLE_UNCHANGED in report
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert len(repair_calls(world)) == 1
 
 
 def test_repair_lifecycle_complete_preflight_precedes_field_writes(
