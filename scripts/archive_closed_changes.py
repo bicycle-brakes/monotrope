@@ -461,7 +461,11 @@ def _classify(
         if status != "closed":
             skipped.append((where, f"bead {bead} is open (status: {status})"))
             continue
-        malformed = [(art, why) for art in loaded if (why := _uneditable(art) or _invalid_field(art))]
+        malformed = [
+            (art, why)
+            for art in loaded
+            if (why := _uneditable(art) or _invalid_field(art) or _round_trip_error(art, day))
+        ]
         if malformed:
             art, why = malformed[0]
             blocked.append((where, f"{_display(art.path)}: {why}"))
@@ -504,6 +508,33 @@ def _edited_text(art: Artefact, day: dt.date) -> str:
         else:
             lines.extend([newline, target])
     return prefix + "".join(lines) + art.tail
+
+
+def _round_trip_error(art: Artefact, day: dt.date) -> str:
+    """Refuse any edit the registry cannot read back with exactly the expected metadata.
+
+    Exercise the actual file reader on a temporary copy during whole-batch
+    preflight. Never use a source or destination as the validation scratchpad:
+    a later invalid header must leave even earlier eligible folders untouched.
+    """
+    expected = dict(art.meta)
+    expected.update(
+        status=NEW_STATUS,
+        implementation_status=NEW_IMPLEMENTATION,
+        updated=day,
+        last_reviewed=day,
+    )
+    with tempfile.NamedTemporaryFile(prefix="archive-header-", suffix=".md") as scratch:
+        scratch.write(_edited_text(art, day).encode("utf-8"))
+        scratch.flush()
+        reread, reason = _load_artefact(Path(scratch.name))
+    if reread is None:
+        return f"header round-trip failed: edited front matter {reason}"
+    if reread.meta != expected:
+        return (
+            "header round-trip failed: edited metadata differs from the expected lifecycle fields and preserved values"
+        )
+    return ""
 
 
 def _manifest(entry: Eligible) -> list[str]:

@@ -562,6 +562,34 @@ def test_preflight_failure_leaves_entire_batch_unchanged(
     assert "archived plans/changes/good-one" not in combined, "a refusal still moved part of the batch"
 
 
+@pytest.mark.parametrize("layout", ["yaml-end-marker", "unicode-line-separator"])
+def test_header_round_trip_refuses_lossy_edits_before_any_move(
+    plans_repo: Fixture, capsys: pytest.CaptureFixture[str], layout: str
+) -> None:
+    fx = plans_repo
+    fx.add("alpha-good", files=_closed_files("b-good"))
+    text = _artefact("Valid YAML with an unsafe edit layout", "b-bad")
+    if layout == "yaml-end-marker":
+        text = text.replace("updated: 2026-10-02\n", "").replace("tags: [fixture]\n", "tags: [fixture]\n...\n")
+    else:
+        text = text.replace("last_reviewed: 2026-10-02\nbead:", "last_reviewed: 2026-10-02\u2028bead:")
+    src = fx.add("beta-bad", files={"spec.md": text})
+    fx.set_render({"b-good": "closed", "b-bad": "closed"})
+    art, reason = archive._load_artefact(src / "spec.md")
+    assert art is not None, f"the original valid YAML must load: {reason}"
+    assert art.meta["bead"] == "b-bad"
+    assert not archive._uneditable(art) and not archive._invalid_field(art)
+    before = _snapshot(fx.root)
+
+    assert archive.main(["--write"]) == 1, "a lossy header edit must refuse the entire batch before moving"
+    assert _snapshot(fx.root) == before, "round-trip refusal must preserve both source folders and the index"
+    captured = capsys.readouterr()
+    assert "write refused" in captured.err
+    assert "beta-bad/spec.md" in captured.err
+    assert "round-trip" in captured.err
+    assert "archiving " not in captured.out
+
+
 @pytest.mark.parametrize("key", archive.LIFECYCLE)
 @pytest.mark.parametrize(
     "form",
