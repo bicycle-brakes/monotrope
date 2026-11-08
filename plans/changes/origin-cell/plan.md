@@ -39,18 +39,22 @@ writes no implementation and makes no commit.
 1. Add one shared Origin-refusal helper in `scripts/stage2.py`, using
    `accepted_row` and the existing row parsers. Validate the trimmed complete
    cell against `base` or `fix-r[1-9][0-9]*`, case-sensitively. Collect every
-   invalid accepted row with its source (loop record, released loop block or
-   phase-6 table) and ID; return a `Refused` diagnostic explaining that the
+   invalid accepted row with its source (loop record or phase-6 table) and ID;
+   return a `Refused` diagnostic explaining that the
    orchestrator must write the causal value. Do not change status parsing,
    `undecided`, `marks_a_test`, `fix_r_only` or row layouts.
-2. Invoke that helper over the selected change's record and both groups from
+2. Invoke that helper over the selected change's record and the phase-6 group from
    `findings_rows` at `review_loop`, `review`, `release` and `repair` before
    model/probe calls, audit appends, attempt execution, consumption or data
    mutation. In `release`, place it before the already-released digest/identity
    branch: both reconciliation and ordinary release must validate before any
    rewrite or removal. Reuse the same check for `review`'s internal release.
-   Check all authoritative accepted rows, including earlier released rows;
-   leave parsers permissive and restart/stage-retirement semantics unchanged.
+   Check accepted rows in the record and phase-6 table only; released history
+   is never re-checked, including legacy invalid Origins (revised spec detail,
+   loop row L1-4). Leave parsers permissive and restart/stage-retirement
+   semantics unchanged.
+   Exclude the mutable Origin cell from record identity so correcting it
+   preserves release reconciliation (loop row L1-5).
 3. Extend local `World` fixtures in `tests/test_stage2.py` to model the real
    orchestrator: `decide_record` explicitly sets Origin when deciding an
    accepted row (default `base`, overridable), and `World.write_record` seeds
@@ -59,12 +63,14 @@ writes no implementation and makes no commit.
    literals in affected tests; give them explicit causal values rather than
    relaxing validation. Retain all existing test names used by other ledgers.
 4. Add the ledger tests below with local stand-ins. Parameterize all four
-   verbs against all three row locations, taken/fixed statuses and invalid
+   verbs against record and phase-6 row locations, taken/fixed statuses and invalid
    values. Meet other preconditions so failures reach the Origin guard; assert
    exit 2, no calls, unchanged record/findings bytes and unchanged stage state.
-   Exercise an already-released record with matching digest, and a changed
-   record with matching identity that would reconcile. Test valid values,
-   status case handling, rejected/open exemptions, quoted non-rows, unchanged
+   Exercise a legacy release with an invalid record, then correct its Origin
+   and retry successfully, also after changing its repair status. Verify
+   legacy invalid released Origins admit all four verbs. Test valid values,
+   status case handling (with a planted case-sensitive acceptance fault),
+   rejected/open exemptions, quoted non-rows, unchanged
    intake and preservation through repair/release. Retain existing evidence
    refusals; a valid Origin must not make an unmarked accepted row decidable.
 5. Extend the existing two-round brake regression with split released/record
@@ -113,8 +119,8 @@ makes the commit; draft checks do not claim implementation evidence.
 ## Criterion ledger
 
 - 1: tests/test_stage2.py::test_origin_workflow_assigns_provenance_to_the_orchestrator — removing ownership or either causal meaning from the workflow passes
-- 2: tests/test_stage2.py::test_invalid_accepted_origins_hold_all_consuming_verbs — a taken/fixed row at any authoritative location permits a call, write, deletion or consumption
-- 2: tests/test_stage2.py::test_invalid_origin_holds_release_reconciliation — either already-released retry branch rewrites findings or removes the record before validation
+- 2: tests/test_stage2.py::test_invalid_accepted_origins_hold_all_consuming_verbs — a taken/fixed row in the record or phase-6 table permits a call, write, deletion or consumption
+- 2: tests/test_stage2.py::test_invalid_origin_holds_release_reconciliation — release retry mutates before validation, or correcting Origin prevents reconciliation
 - 3: tests/test_stage2.py::test_origin_refusal_identifies_rows_sources_and_correction — one offending ID, source, allowed value or orchestrator instruction is omitted
 - 4: tests/test_stage2.py::test_valid_origins_preserve_existing_admission_checks — canonical values are refused or permit continuation without existing decision/test evidence
 - 5: tests/test_stage2.py::test_nonaccepted_rows_need_no_origin — arbitrary Origin on rejected/open rows triggers the new refusal, or bypasses the old undecided-row refusal
@@ -123,6 +129,9 @@ makes the commit; draft checks do not claim implementation evidence.
 - 8: tests/test_stage2.py::test_two_fix_r_rounds_stop_the_loop — accepted repair findings do not stop the next round, or an accepted base row fails to quiet this brake
 - 8: tests/test_stage2.py::test_origin_brake_survives_released_history — releasing earlier rounds or changing taken to fixed resets the brake, or rejected arbitrary Origin counts as accepted
 
+- 2: tests/test_stage2.py::test_legacy_released_origin_does_not_hold_verbs — legacy invalid released provenance blocks one of the four verbs
+- 2: tests/test_stage2.py::test_uppercase_accepted_status_holds_invalid_origin — removing case-insensitive acceptance admits uppercase TAKEN with invalid provenance; STAGE2_PLANT_FAULT plants that fault
+
 ## Runner route — 2026-11-08
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempts and one Sonnet attempt each failed one test; attempt 3 saved at refs/stage2/attempts/origin-cell/orchestrator-saved-20261108.
@@ -130,3 +139,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempt
 ## Time used
 
 2026-11-08 10:39:31–11:22:03 UTC, 2552 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-11-08 16:35:49–18:24:12 UTC, 6503 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

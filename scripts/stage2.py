@@ -2929,9 +2929,9 @@ def released_digest(text: str) -> str | None:
 
 
 def record_identity(record: str) -> str:
-    """Identify completed rounds independently of repair marks and the mutable stage snapshot."""
+    """Identify completed rounds independently of Origin corrections, repair marks and stage state."""
     rounds = [line for line in record.splitlines() if ROUND_HEADING.match(line)]
-    rows = [row[:7] for row in record_rows(record)]
+    rows = [row[:3] + row[4:7] for row in record_rows(record)]
     return record_digest(json.dumps([rounds, rows], sort_keys=True))
 
 
@@ -3437,15 +3437,15 @@ ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
 def origin_refusal(record: str | None, findings_text: str) -> str | None:
     """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
 
-    Every authoritative accepted (`taken` or `fixed`) row of the change is read: the loop record's own
-    rows, the released loop rows and the phase-6 rows. A rejected or undecided row needs no provenance.
+    Accepted (`taken` or `fixed`) rows in the loop record and phase-6 table are checked. Released
+    history was checked before release and is never re-checked; legacy rows need no backfill.
+    A rejected or undecided row needs no provenance.
     The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
     values the orchestrator may write.
     """
-    released, phase6 = findings_rows(findings_text)
+    _released, phase6 = findings_rows(findings_text)
     places = (
         ("loop record", record_rows(record) if record is not None else []),
-        ("released block", released),
         ("phase-6 table", phase6),
     )
     found = [

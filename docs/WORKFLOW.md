@@ -1506,10 +1506,13 @@ orchestrator also sets each accepted row's `Origin`, the provenance the repair
 brake reads, and never leaves it to a reviewer: `base` for a finding that
 existed before any repair and that no repair caused, or `fix-r<N>` (N a
 positive whole number without a leading zero) for a finding that repair round
-N caused. `review-loop`, `review`, `release-loop` and `repair` refuse, naming
-the row and its place, while a taken or fixed row in the loop record, a
-released block or a phase-6 table carries any other value; the orchestrator
-corrects the cell and runs the verb again. A round whose
+N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
+naming the row and its place, while a taken or fixed row in the loop record
+or a phase-6 table carries any other value; the orchestrator corrects the cell
+and runs the verb again. Ordinary release checks the record before writing
+the released block; already released history is never re-checked, including
+legacy rows released before this check existed. `release-loop --restart` and
+`release-loop --stage-failed` do not check Origin. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and

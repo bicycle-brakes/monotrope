@@ -8138,7 +8138,7 @@ def test_two_fix_r_rounds_stop_the_loop(world: World, capsys: pytest.CaptureFixt
 
 INVALID_ORIGINS = ("", "criterion 1", "fix-r", "fix-r0", "fix-r01", "fix-r-1", "fix-r1x", "FIX-R1", "BASE")
 ORIGIN_VERBS = ("review-loop", "review", "release-loop", "repair")
-ORIGIN_PLACES = ("record", "released", "phase-6")
+ORIGIN_PLACES = ("record", "phase-6")
 MODEL_STANDINS = ("pi", "codex", "claude")
 
 
@@ -8218,27 +8218,70 @@ def test_invalid_accepted_origins_hold_all_consuming_verbs(
     assert [call for call in world.calls() if call["name"] in MODEL_STANDINS] == []
 
 
+@pytest.mark.parametrize("verb", ORIGIN_VERBS)
+def test_legacy_released_origin_does_not_hold_verbs(world: World, verb: str) -> None:
+    """Released legacy provenance never blocks continuation, review, release or repair."""
+    seed_tests(world)
+    legacy = released_cells("L1-3", FIXED, "no", "legacy finding")
+    legacy[3] = "diff reading"
+    world.write_findings(released_block([legacy]), VERDICT)
+    world.write_record([("L2-1", "taken — test_a" if verb == "repair" else FIXED, "no")], number=2)
+    if verb == "repair":
+        script_repair(
+            world,
+            [repair_step(stdout="L2-1: fixed — tests/test_fix.py::test_fix")],
+            make=[{"stdout": "green\n"}],
+        )
+    else:
+        world.script(
+            pi=[{"stdout": rows(1)}] * 4,
+            codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+        )
+    assert world.run(verb) == 0
+    assert stage2.findings_rows(world.text())[0][0][3] == "diff reading"
+
+
+@pytest.mark.parametrize("verb", ORIGIN_VERBS)
+def test_uppercase_accepted_status_holds_invalid_origin(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    """Plant loss of case-insensitive acceptance; uppercase TAKEN must still hold all verbs."""
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(stage2, "accepted_row", lambda row: row[7].startswith(("taken", "fixed")))
+    seed_tests(world)
+    plant_origin(world, "record", "TAKEN — test_a", "invalid")
+    before = origin_state(world)
+    capsys.readouterr()
+    assert world.run(verb) == 2
+    assert "invalid Origin" in capsys.readouterr().err
+    assert origin_state(world) == before
+    assert [call for call in world.calls() if call["name"] in MODEL_STANDINS] == []
+
+
 def test_invalid_origin_holds_release_reconciliation(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 2. Planted fault: either already-released retry branch rewrites findings.md or removes the record before the check."""
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.write_findings(VERDICT)
+    # A release written before Origin validation can retain invalid provenance.
+    set_row_origin(world, "L1-1", "criterion 1")
     saved = world.record().read_text(encoding="utf-8")
-    assert world.run("release-loop") == 0
-    assert not world.record().exists()
-    spoiled = world.text().replace("| base |", "| criterion 1 |", 1)
-    assert spoiled != world.text()
-    changed = saved.replace("| taken — test_a |", f"| {FIXED} |")
-    assert changed != saved
-    # the first record matches the released digest; the second only the identity, so release would reconcile
-    for restored in (saved, changed):
-        world.findings.write_text(spoiled, encoding="utf-8")
+    legacy = stage2.release_block(saved, world.text())
+    for restored in (saved, saved.replace("| taken — test_a |", f"| {FIXED} |")):
+        world.write_findings(VERDICT, legacy)
         world.record().parent.mkdir(parents=True, exist_ok=True)
         world.record().write_text(restored, encoding="utf-8")
+        before = origin_state(world)
         capsys.readouterr()
         assert world.run("release-loop") == 2
         assert "invalid Origin" in capsys.readouterr().err
-        assert world.findings.read_text(encoding="utf-8") == spoiled
-        assert world.record().read_text(encoding="utf-8") == restored
+        assert origin_state(world) == before
+        # The documented remedy must reconcile, without duplicating the released block.
+        set_row_origin(world, "L1-1", "base")
+        assert world.run("release-loop") == 0
+        assert not world.record().exists()
+        released = stage2.findings_rows(world.text())[0]
+        assert [(row[0], row[3]) for row in released] == [("L1-1", "base")]
+        assert world.text().count(stage2.RELEASE_HEADING) == 1
 
 
 def test_origin_refusal_identifies_rows_sources_and_correction(
@@ -8258,7 +8301,7 @@ def test_origin_refusal_identifies_rows_sources_and_correction(
     assert world.run("review-loop") == 2
     error = capsys.readouterr().err
     assert "L1-1 (loop record, Origin `oops`)" in error
-    assert "L2-1 (released block, Origin ``)" in error
+    assert "L2-1" not in error, "released history must not be re-checked"
     assert "F-1 (phase-6 table, Origin `fix-r0`)" in error
     assert "L1-2" not in error and "F-2" not in error, "a valid or rejected row was named"
     assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
