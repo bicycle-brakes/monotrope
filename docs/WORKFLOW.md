@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-05
+updated: 2026-11-07
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1715,6 +1715,82 @@ day session would ask:
 2. **A further case of the same mechanism at a phase-6 re-check:** record
    the finding, park that pull request and continue with the next queue
    item; the maintainer decides it in the morning.
+
+**The 30-minute wake (standing since 2026-11-05/06; bead
+coding-harness-7x3c).** Supervision of an unattended run rests on scheduled
+returns of control, not on session-only timers that die with their session
+and not on idle polling. A **wake** is a scheduled return of control to the
+orchestrating session; elapsed time or a printed message alone does not
+establish delivery. A **lane** is one worktree with the change it serves;
+the run's active lanes — those with authorised work still eligible to run —
+form the watch list. Before a run enters unattended operation, its session
+creates a run-specific state directory under
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/night/<run-id>/` holding
+`lanes.txt`, a `busy/` directory and an append-only `lane-watch.log`, so a
+successor session can resume the run from the files without chat memory.
+Choose `<run-id>` as the UTC start date plus an unused letter, for example
+`2026-11-06-a`; concurrent runs on that date take different letters. Record
+the run id and state-directory path in the run's handover file under
+`docs/journal/handover/<date>-<name>.md`. This is the record for parked
+questions, completed-lane outcomes and the end reason throughout this
+routine, not a change's `handover.md` or the session-notes safety net.
+A successor finds the run id in that handover and reuses its directory,
+never creating a second directory for the resumed run. The state directory
+records the run's wake and keep-awake handles and busy-marker ownership;
+a successor taking over that run uses this record to manage its resources,
+including handles started by the preceding session. A lane entry names the
+lane id, its worktree, the current item and the next authorised action, and is updated whenever the work changes. These files
+are session state: never a replacement tracker and never a committed task
+list.
+
+The same setup schedules the first return 30 minutes ahead and verifies
+delivery through an existing session scheduler wake, or a background tool
+job running `sleep 1800` whose completion the harness delivers to the
+orchestrating session. Check the scheduler's registered target session and
+due time, or the background job's retained handle and enabled completion
+delivery — never `&` or `nohup` inside a command (the standing background-mode rule, AGENTS.md
+2026-11-04). A background process without delivery is not a wake. The
+returned handle and due time are recorded in the run state; if no delivery
+facility is available, the session reports the missing supervision instead
+of declaring the run ready. It also starts keep-awake bounded to the
+intended run period — on macOS, `caffeinate -i -t <remaining-run-seconds>`
+as a separately owned background job — records that handle and expiry, and
+verifies both before unattended work begins. Where no keep-awake command
+exists, the session reports the missing keep-awake, as it does a missing
+delivery facility, instead of declaring the run ready. No scheduler adapter is
+introduced for this. The wake is time-based: it returns even when every
+lane looks busy, and lane idleness alone triggers nothing.
+
+At each wake the session works one fixed order: rearm once for 30 minutes
+and retain the new handle before any lane work; read the lane file; check
+each lane's actual job completion and activity and each busy marker's
+ownership; serve an idle lane's next authorised step during that same wake
+when the step is eligible; park what needs a maintainer decision — its
+question into the run's handover record, the lane off the watch list —
+instead of starting it; take a lane whose authorised work is complete off
+the watch list likewise, its outcome into the handover record; and append
+exactly one UTC summary line to `lane-watch.log` covering every watched
+lane's observed state and action plus the next due time (or
+`run ended: <reason>` at teardown), logging a lane it could not check as
+`unknown` rather than healthy. A **busy marker** at
+`busy/<lane-id>` records actual orchestrator work outside a runner call;
+it names its owner and current activity and is cleared when that work
+finishes. An apparent leftover marker is checked against its owner's
+current activity before anything is dispatched: never launch a duplicate
+on a marker's strength, never treat a marker as permanent proof of work,
+and never kill by broad pattern.
+
+If a usage limit, a stopped session or a missed wake interrupts
+supervision, the resuming session first rearms for 30 minutes and retains
+the handle before any lane work, then refreshes the lane state from the
+files and actual job activity and records the unobserved interval since
+the last actual check as a gap in its first summary line; missed
+wakes are never backfilled as successful checks, and the gap is not
+claimed as service. When the run ends or all remaining work is parked, the
+session cancels the run's own wake and keep-awake handles, clears the
+run's own busy markers using its state-directory ownership record, records
+in the run's handover file why the run ended, and leaves another run's
+handles and markers untouched.
 
 ### Two columns for every stage-2 change
 

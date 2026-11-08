@@ -177,6 +177,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import verify_lock  # noqa: E402
@@ -2007,11 +2008,16 @@ def free_admission_problem(root: Path, model: str, selected: list[str]) -> str |
     residency = entry.get("residenz")
     if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {OPENCODE} states no data residency"
-    excluded = excluded_problem(root, model)
-    if excluded:
-        return excluded
-    if model in [str(item) for item in entry.get("modelle") or []]:
-        return f"the model {model} is a paid model; the free class does not admit it"
+    # The per-id vetoes (declaration exclusion, paid admission) are the shared component's, read from the
+    # declaration as it stands now, never from the frozen selection.
+    veto = stage2_free.model_veto(
+        model,
+        paid=[str(item) for item in entry.get("modelle") or []],
+        exclusion=lambda ident: excluded_problem(root, ident),
+        plain=False,
+    )
+    if veto:
+        return veto.reason if veto.kind == "excluded" else f"the model {model} is {veto.reason}"
     if model not in selected:
         return f"the model {model} is not in this run's discovered free selection"
     return None
@@ -2042,59 +2048,58 @@ def parse_catalog(output: str) -> list[dict]:
     return rows
 
 
-# A catalog id the runner may select: third-party catalog text never carries a `|` or other markup into
-# the record's cells (DL-B-7 of the loop's deep review).
-MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+MODEL_ID = stage2_free.MODEL_ID
 
 
-def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> dict[str, str]:
-    """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7).
+def free_policy(rule: dict) -> stage2_free.Policy:
+    """The review loop's `free_stage` rule as the shared free policy: its includes add to the suffix's ids."""
+    return stage2_free.Policy(
+        provider=rule["provider"],
+        suffix=rule.get("id_suffix", ""),
+        include=tuple(str(record["id"]) for record in rule.get("include") or []),
+        exclude=tuple(str(record["id"]) for record in rule.get("exclude") or []),
+        include_adds=True,
+    )
+
+
+def free_selection(
+    root: Path,
+    rule: dict,
+    catalog: list[dict],
+    fresh: set[str],
+    definitions: dict[str, object] | None = None,
+    policy: stage2_go.AddressPolicy | None = None,
+) -> stage2_free.Result:
+    """The free members and drops of the fresh catalog, decided by the shared selection (DL-B-2, DL-B-7).
 
     A candidate is an id of the rule's provider that its suffix or include would select. An id outside
     `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names or one the entry declares paid
     in `modelle`: a shipped catalog id can carry the free suffix and still be a paid model, and the
-    declaration leaves that id out, not the whole stage (bead coding-harness-vku6).
+    declaration leaves that id out, not the whole stage (bead coding-harness-vku6). The paid and
+    exclusion check is the one research uses as well (bead coding-harness-wb40).
     """
-    paid = {str(item) for item in endpoint_entry(root).get("modelle") or []}
-    suffix = rule.get("id_suffix", "")
-    includes = {str(record["id"]) for record in rule.get("include") or []}
-    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
-    dropped: dict[str, str] = {}
-    for row in catalog:
-        model = row["model"]
-        if row["provider"] != rule["provider"] or model in excludes or model not in fresh or model in dropped:
-            continue
-        if not (model in includes or (suffix and model.endswith(suffix))):
-            continue
-        if not MODEL_ID.fullmatch(model):
-            dropped[model] = "not a plain model id"
-        elif model in paid:
-            dropped[model] = "a paid model; the free class does not admit it"
-        elif problem := excluded_problem(root, model):
-            dropped[model] = problem
-    return dropped
+    paid = [str(item) for item in endpoint_entry(root).get("modelle") or []]
+    candidates = [
+        stage2_free.Candidate(row["provider"], row["model"], (definitions or {}).get(row["model"])) for row in catalog
+    ]
+    return stage2_free.select(
+        candidates,
+        free_policy(rule),
+        fresh=fresh,
+        paid=paid,
+        exclusion=lambda model: excluded_problem(root, model),
+        address=policy,
+    )
 
 
-def select_free(rule: dict, catalog: list[dict]) -> list[str]:
-    """The catalog ids of the rule's provider matching suffix or include, minus excludes, in catalog order.
+def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> dict[str, str]:
+    """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7)."""
+    return free_selection(root, rule, catalog, fresh).dropped
 
-    Exclusions win, also over an include; a Zen id cannot pass, because only
-    the configured provider's rows are read; an include for an id the catalog
-    does not hold selects nothing (spec, criterion 5).
-    """
-    suffix = rule.get("id_suffix", "")
-    includes = {str(record["id"]) for record in rule.get("include") or []}
-    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
-    chosen: list[str] = []
-    for row in catalog:
-        if row["provider"] != rule["provider"]:
-            continue
-        model = row["model"]
-        if model in excludes or not MODEL_ID.fullmatch(model):
-            continue
-        if (model in includes or (suffix and model.endswith(suffix))) and model not in chosen:
-            chosen.append(model)
-    return chosen
+
+def select_free(rule: dict, catalog: list[dict], *, root: Path) -> list[str]:
+    """Compatibility selection using the explicitly named repository's paid and exclusion vetoes."""
+    return free_selection(root, rule, catalog, {row["model"] for row in catalog}).selected
 
 
 def overlay_store(agent: Path, provider: str) -> dict:
@@ -2381,19 +2386,30 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
     # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
-    dropped = free_drops(
-        root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
+    definitions: dict[str, object] = {}
+    for definition in store.get(rule["provider"], {}).get("models", []):
+        if isinstance(definition, dict) and isinstance(definition.get("id"), str):
+            definitions.setdefault(definition["id"], definition)
+    chosen = free_selection(
+        root,
+        rule,
+        [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))],
+        fresh,
+        definitions,
+        policy,
     )
+    dropped = dict(chosen.dropped)
     # Only assessed definitions become selectable: a fresh catalog row whose
     # destination the record refuses is named as a drop and never reaches a
-    # launch, however the rule filters (criterion 5).
+    # launch, however the rule filters (criterion 5). The shared selection assessed the free
+    # candidates; the other rows of the store are named here as before.
     for definition in store.get(rule["provider"], {}).get("models", []):
         if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
             continue
         verdict = stage2_go.assess(policy, definition["id"], definition)
         if not verdict.admitted:
             dropped.setdefault(definition["id"], verdict.problem)
-    selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
+    selected = [model for model in chosen.selected if model not in dropped]
     if dropped:
         print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
     if not selected and not allow_empty:

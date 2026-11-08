@@ -18413,7 +18413,9 @@ def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
     assert [row[6] for row in stage2.record_rows(text)] == ["acme-v1-free", "acme-v1-free"]
     assert (
         stage2.select_free(
-            {"provider": "opencode-go", "id_suffix": "-free"}, [{"provider": "opencode-go", "model": "a|b-free"}]
+            {"provider": "opencode-go", "id_suffix": "-free"},
+            [{"provider": "opencode-go", "model": "a|b-free"}],
+            root=world.root,
         )
         == []
     )
