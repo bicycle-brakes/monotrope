@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-05
 created: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-wb40
@@ -398,7 +398,7 @@ Stage-2 call, 2026-11-07: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Offline preparation contract | tests/test_pi_contract.py:1592 | `offline_world` inherits the `world` fixture, which replaces production `stage2.check_overlay` with a no-op (tests/test_stage2.py:665), and never restores it. If the pinned Pi rejects the activated catalog configuration, production review preparation refuses, but this contract still accepts its synthetic listing and seals a receipt. The promised preparation gate therefore cannot detect failures in the real overlay validator. [Acceptance criteria 9–10] | Codex | taken — not a test — the repair lives only in test code (maintainer 2026-11-08): offline_world restores the production stage2.check_overlay that the inherited world fixture replaced, so the contract fails when the pinned Pi would reject the activated catalog | — |
+| F6-1 | MAJOR | SPEC | Offline preparation contract | tests/test_pi_contract.py:1592 | `offline_world` inherits the `world` fixture, which replaces production `stage2.check_overlay` with a no-op (tests/test_stage2.py:665), and never restores it. If the pinned Pi rejects the activated catalog configuration, production review preparation refuses, but this contract still accepts its synthetic listing and seals a receipt. The promised preparation gate therefore cannot detect failures in the real overlay validator. [Acceptance criteria 9–10] | Codex | fixed — not a test — offline_world restores production stage2.check_overlay; ruff checks and all 17 required test cases pass. | — |
 
 Phase 6 verdict: codex 01a1b74d-5b3c-7a80-a357-d4e1d2abe210, 2026-11-07
 Reviewer session: codex 01a1b74d-5b3c-7a80-a357-d4e1d2abe210 — a fresh session reviewed: no phase-2a session was recorded
@@ -456,3 +456,5 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-07: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 919 files, 3590 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 919 files, 3608 commits, 12 rules.

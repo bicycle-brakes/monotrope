@@ -58,6 +58,8 @@ world = stage2_world
 catalog_sources = research_catalog_sources
 # The repository's own Pi wrapper, read before any test world re-points `stage2.PI_WRAPPER` at a stand-in.
 REAL_PI_WRAPPER = stage2.PI_WRAPPER
+# Preserve the production validator before the inherited world fixture replaces it.
+REAL_CHECK_OVERLAY = stage2.check_overlay
 # The runtime search path before a test world replaces it: the real Pi wrapper needs Node on it.
 REAL_PATH = os.environ.get("PATH", "")
 
@@ -1602,6 +1604,7 @@ def offline_world(
     the listing is the real pinned Pi's own, the capability evidence is synthetic, every model request is
     answered by the world's stand-in program, and Python may reach no non-loopback address.
     """
+    monkeypatch.setattr(stage2, "check_overlay", REAL_CHECK_OVERLAY)
     models = shipped_go_models()
     ids = {m["id"] for m in models}
     if "beam-free" not in ids:
