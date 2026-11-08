@@ -967,3 +967,11 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a1b8b4-6b60-78c2-ade1-85f2462acf49, 2026-11-08
 Reviewer session: codex 01a1b8b4-6b60-78c2-ade1-85f2462acf49 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+## Phase 6 — orchestrator (CI on Linux), 2026-11-08
+
+Recorded by the orchestrator from the hosted CI run 42486828056 on 10651f67 (Ubuntu 26.04, Python 3.12); the test skips on macOS, whose filesystem refuses non-UTF-8 names, so the local `make verify` stayed green.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-8 | MAJOR | SPEC | implementation | scripts/stage2.py `changed_paths` (the `UnicodeDecodeError` → `Refused("a changed Git path cannot be decoded safely")` added by the F6-5 repair, abbe92af) | An untracked asset whose name holds byte `0xff` (`assets/new\xff.txt`) makes `verify_attempt` return `Runner cheap checks before post-run verification: the cheap lint targets could not be listed: a changed Git path cannot be decoded safely`, so main's `tests/test_stage2.py::test_make_verify_preserves_raw_byte_paths_and_drops_both_entries[assets/new\xff.txt]` (verify-stages-new-files F6-3) fails on Linux: 1 failed, 4945 passed. A non-UTF-8 path must not refuse verification; it must make the targeted selection unsafe (full `make verify` fallback, F6-5 and F6-7 still hold) while the cheap checks and the raw-byte intent-to-add path keep working. The fix must be provable on macOS too, e.g. by a test that feeds `changed_paths` undecodable Git output without creating the file. | orchestrator | taken — undecodable changed paths fall back to the full check instead of refusing; cheap lint targets skip a path they cannot decode | |
