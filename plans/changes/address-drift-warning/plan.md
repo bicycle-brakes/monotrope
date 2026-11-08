@@ -1,7 +1,7 @@
 ---
 title: "Plan — address-drift-warning"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-07
 last_reviewed: 2026-11-07
 updated: 2026-11-08
