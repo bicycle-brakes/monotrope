@@ -90,7 +90,8 @@ explicitly, do not delete them.
    `fixed — guard test — tests/<path>::<function>`, with the mark
    `yes — guard test — …` written only after both proof legs passed.
    Record each decision with `python3 scripts/stage2.py triage <change>
-   <row>=<status> <reason>`, never by hand: the command calls no model,
+   '<row>=<status>' '<reason>'` (both quoted: statuses and reasons hold
+   spaces), never by hand: the command calls no model,
    changes only that row's `Status` cell and refuses a plain `taken` on a
    row whose finding touches only tests, naming the corrective form
    `taken — not a test — <reason>`. The `Broke a test` mark stays yours to
