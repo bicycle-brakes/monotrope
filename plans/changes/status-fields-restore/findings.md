@@ -656,3 +656,14 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1bc67-2429-7713-9f6f-f0d2d6764ad0, 2026-11-08
 Reviewer session: codex 01a1bc67-2429-7713-9f6f-f0d2d6764ad0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3671 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R10 | BLOCKER | SPEC | plan | plans/changes/status-fields-restore/plan.md:36; plans/changes/status-fields-restore/plan.md:55; plans/changes/status-fields-restore/spec.md:71 | [DIVERGENT] A repair changing both `status` and `last_reviewed` must discard the date edit under the revised spec, but the plan still requires restoring “just those fields” and preserving unrelated header metadata. New evidence beyond R9: these contradictory plan instructions remain after the spec amendment. Align the plan and its criterion-3 ledger entry with the settled whole-header restoration rule. [Acceptance criterion 3] | Codex | fixed — orchestrator hand edit: plan step 2, implementation constraints and the criterion-3 ledger line now state the whole-header rule of decisions.md#Q-1 (2026-11-08) | no |
+
+Phase 6 verdict: codex 01a1bc74-4dab-7461-94c1-a91b7cb62c68, 2026-11-08
+Reviewer session: codex 01a1bc74-4dab-7461-94c1-a91b7cb62c68 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

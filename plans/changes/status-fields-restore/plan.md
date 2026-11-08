@@ -33,8 +33,10 @@ Starts unless you say stop.
    and plan; assert the verifier's observed bytes and the committed result.
 2. `scripts/stage2.py`: snapshot the two top-level frontmatter fields of
    existing spec, design and plan immediately before each repair call;
-   restore just those fields before verification and at failed-attempt
-   exits, and append a runner-owned per-attempt restoration report.
+   when an attempt changes a protected value, return that document's whole
+   header to its snapshot (its other header edits are discarded,
+   decisions.md#Q-1) before verification and at failed-attempt exits, and
+   append a runner-owned per-attempt restoration report.
 3. `docs/WORKFLOW.md`: document lifecycle protection in "Repairing taken
    findings" and direct status-changing findings to orchestrator hand repair,
    with the existing row-booking and index-refresh follow-ups.
@@ -52,10 +54,12 @@ Starts unless you say stop.
 
 ## Implementation constraints
 
-Keep this extension repair-only in the shared `run_attempts` loop. Capture
-each document's field lines separately; avoid serializing the whole YAML
-header, which would alter unrelated metadata and formatting. Restore edited
-or removed protected keys inside the initial frontmatter, never body text.
+Keep this extension repair-only in the shared `run_attempts` loop. The
+header belongs to the runner (decisions.md#Q-1): snapshot each document's
+header as text; when an attempt changes or removes a protected key, restore
+the whole snapshotted header, discarding the attempt's other header edits;
+when the protected values stay unchanged, leave the attempt's header edits
+alone. Never touch body text.
 Use the existing snapshotted-input recovery for a deleted document or an
 unreadable/missing header; reject that structurally broken attempt rather
 than accept invented surrounding content. Do not create an absent optional
@@ -104,7 +108,7 @@ endpoint `glm-coding-plan`, on 2026-11-06.
 - 2: tests/test_stage2.py::test_repair_lifecycle_checkpoint_rollback_reports_restoration — a refused checkpoint leaves changed fields or drops its restoration report.
 - 1: tests/test_stage2.py::test_repair_lifecycle_snapshot_refuses_unusable_documents — unreadable protected documents or missing frontmatter are silently omitted from the baseline.
 - 2: tests/test_stage2.py::test_repair_lifecycle_recovery_keeps_safety_refusals — an unsafe destination is written or moved HEAD is reset.
-- 3: tests/test_stage2.py::test_repair_lifecycle_restoration_preserves_other_edits — valid body/header edits or runner time disappear, or a field edit alone rejects the repair.
+- 3: tests/test_stage2.py::test_repair_lifecycle_restoration_preserves_other_edits — a valid body edit or runner time disappears, a header edit survives beside a changed protected value, or a field edit alone rejects the repair.
 - 4: tests/test_stage2.py::test_repair_lifecycle_protection_allows_no_design — absent optional design is created or the repair is refused.
 - 5: tests/test_stage2.py::test_repair_lifecycle_early_failure_reports_restoration — failed calls or evidence-save failures omit the restoration report.
 - 5: tests/test_stage2.py::test_repair_lifecycle_checkpoint_rollback_reports_restoration — a refused checkpoint drops its restoration report.
