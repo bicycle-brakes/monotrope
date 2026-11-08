@@ -297,3 +297,40 @@ Stage-2 call, 2026-11-08: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2.py::test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics
 > 1 failed, 125 passed in 88.83s (0:01:28)
 > ```
+
+Stage-2 call, 2026-11-08: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash attempts and one Sonnet attempt each failed one test; attempt 3 saved at refs/stage2/attempts/no-work-done/orchestrator-saved-20261108 · leak check clean over 926 files, 3628 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +11 -0
+> - `plans/changes/no-work-done/plan.md` +10 -10
+> - `plans/specs/implementation-verification/spec.md` +4 -1
+> - `scripts/stage2.py` +79 -1
+> - `tests/test_stage2.py` +275 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before `make verify`: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:9968:31: PTH101 `os.chmod()` should be replaced by `Path.chmod()`
+>      |
+> 9966 |     "tracked-deletion": lambda root: (root / "src" / "app.py").unlink(),
+> 9967 |     "binary": lambda root: (root / "src" / "blob.bin").write_bytes(b"\x00\x01\x02"),
+> 9968 |     "file-mode": lambda root: os.chmod(root / "src" / "app.py", 0o755),
+>      |                               ^^^^^^^^ PTH101
+> 9969 |     "plan-mode": lambda root: os.chmod(root / "plans" / "changes" / "demo" / "plan.md", 0o755),
+> 9970 | }
+>      |
+>
+> tests/test_stage2.py:9969:31: PTH101 `os.chmod()` should be replaced by `Path.chmod()`
+>      |
+> 9967 |     "binary": lambda root: (root / "src" / "blob.bin").write_bytes(b"\x00\x01\x02"),
+> 9968 |     "file-mode": lambda root: os.chmod(root / "src" / "app.py", 0o755),
+> 9969 |     "plan-mode": lambda root: os.chmod(root / "plans" / "changes" / "demo" / "plan.md", 0o755),
+>      |                               ^^^^^^^^ PTH101
+> 9970 | }
+>      |
+>
+> Found 2 errors.
+> ```

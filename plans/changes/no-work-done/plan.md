@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-te7q
@@ -93,19 +93,19 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_no_work_attempt_is_rejected — no edit, same bytes or discarded bookkeeping passes on either verb
-- 1: not yet written tests/test_stage2.py::test_no_work_guard_detects_bypassed_check — bypassing the real predicate accepts the empty fixture
-- 1: not yet written tests/test_stage2.py::test_idle_retry_cannot_reuse_previous_work — retained edits from the rejected call qualify an idle retry
-- 2: not yet written tests/test_stage2.py::test_work_check_accepts_nonempty_changes — code, documents, plan prose, unplanned paths, binary or mode changes are rejected
-- 2: not yet written tests/test_stage2.py::test_work_check_uses_unbounded_changes — a real edit beyond the diagnostic limit is missed
+- 1: tests/test_stage2.py::test_no_work_attempt_is_rejected — no edit, same bytes or discarded bookkeeping passes on either verb
+- 1: tests/test_stage2.py::test_no_work_guard_detects_bypassed_check — bypassing the real predicate accepts the empty fixture
+- 1: tests/test_stage2.py::test_idle_retry_cannot_reuse_previous_work — retained edits from the rejected call qualify an idle retry
+- 2: tests/test_stage2.py::test_work_check_accepts_nonempty_changes — code, documents, plan prose, unplanned paths, binary or mode changes are rejected
+- 2: tests/test_stage2.py::test_work_check_uses_unbounded_changes — a real edit beyond the diagnostic limit is missed
 - 2: tests/test_stage2.py::test_runner_accepts_attempt_without_model_time_entry — real work is refused for lacking a model-written time line
 - 2: tests/test_stage2.py::test_first_implement_refreshes_derived_files_without_a_model_repair — real work requires a repair solely for the generated index
-- 3: not yet written tests/test_stage2.py::test_no_work_rejection_reaches_existing_retry — reason is absent from findings or retry prompt, routes change, or a working retry cannot pass
-- 4: not yet written tests/test_stage2.py::test_all_empty_attempts_leave_no_checkpoint — default or explicit Stage-2-off exhaustion reports success or moves HEAD
-- 5: not yet written tests/test_stage2.py::test_empty_attempt_keeps_rejected_records — audit or measured entry is lost, duplicated or accepted, or repair status becomes fixed
-- 6: not yet written tests/test_stage2.py::test_work_measurement_failure_prevents_acceptance — unreadable snapshots or comparison errors reach a checkpoint
+- 3: tests/test_stage2.py::test_no_work_rejection_reaches_existing_retry — reason is absent from findings or retry prompt, routes change, or a working retry cannot pass
+- 4: tests/test_stage2.py::test_all_empty_attempts_leave_no_checkpoint — default or explicit Stage-2-off exhaustion reports success or moves HEAD
+- 5: tests/test_stage2.py::test_empty_attempt_keeps_rejected_records — audit or measured entry is lost, duplicated or accepted, or repair status becomes fixed
+- 6: tests/test_stage2.py::test_work_measurement_failure_prevents_acceptance — unreadable snapshots or comparison errors reach a checkpoint
 - 7: tests/test_stage2.py::test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic — work bypasses a failing verifier
-- 7: not yet written tests/test_stage2.py::test_nonempty_repair_still_requires_answer_proof — actual work bypasses the existing repair proof
+- 7: tests/test_stage2.py::test_nonempty_repair_still_requires_answer_proof — actual work bypasses the existing repair proof
 
 ## Verification
 
@@ -130,4 +130,10 @@ Research records Stage-2 exploration on 2026-11-07, route `flash`, model
 `glm-5.3-flash`; no Stage-1 exploration fallback is recorded. Phase 2b is
 omitted for the answered bounded class, and no ADR is due.
 
+## Runner route — 2026-11-08
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempts and one Sonnet attempt each failed one test; attempt 3 saved at refs/stage2/attempts/no-work-done/orchestrator-saved-20261108.
+
 ## Time used
+
+2026-11-08 10:39:31–11:00:29 UTC, 1257 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

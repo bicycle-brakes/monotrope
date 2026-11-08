@@ -4828,6 +4828,55 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     return entries
 
 
+NO_WORK = "no work done"
+
+
+def _minus_time_body(data: bytes) -> str:
+    """A plan's text without the body of its `## Time used` section: the one part the runner restores."""
+    text = data.decode("utf-8", "surrogateescape")
+    match = time_records.TIME_HEADING.search(text)
+    if match is None:
+        return text
+    following = time_records.FOLLOWING_HEADING.search(text[match.end() :])
+    end = match.end() + following.start() if following else len(text)
+    return text[: match.end()] + text[end:]
+
+
+def attempt_has_work(root: Path, before: str, after: str, findings: Path, plan: Path) -> bool:
+    """Whether the model call between two trees changed anything the runner does not own (bead coding-harness-te7q).
+
+    Every record of an unbounded, NUL-delimited `git diff-tree --raw` counts - an addition, a
+    modification, a deletion, a binary change or a file-mode change, in any path, planned or not. Two
+    things are discounted because the runner puts them back: the findings file, and the plan when its
+    bytes differ only inside the `## Time used` body with the same mode. The display list of
+    `attempt_files` is never read: it is bounded and meant for people. A git or filesystem failure
+    raises, so an unreadable comparison can never read as work.
+    """
+    done = _git_bytes(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
+    fields = done.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2:
+        raise Refused("git diff-tree --raw returned a record without its path")
+    findings_path = findings.relative_to(root).as_posix()
+    plan_path = plan.relative_to(root).as_posix()
+    for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
+        parts = header.decode("ascii").lstrip(":").split(" ")
+        if len(parts) != 5:
+            raise Refused(f"git diff-tree --raw returned a malformed record: {header!r}")
+        old_mode, new_mode, old_id, new_id, status = parts
+        path = os.fsdecode(raw_path)
+        if path == findings_path:
+            continue
+        if path == plan_path and status == "M" and old_mode == new_mode:
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            if _minus_time_body(old) == _minus_time_body(new):
+                continue
+        return True
+    return False
+
+
 def put_back_lines(paths: list[str]) -> list[str]:
     """The put-back list lines: every path in backticks, without a bound.
 
@@ -7569,15 +7618,41 @@ def run_attempts(
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
                     raise error
+            files: list[str] | str
+            work_unmeasured: str | None = None
+            worked = False
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
                 try:
-                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    after = worktree_tree(root)
                 except (Refused, OSError) as error:
                     files = str(error)
+                    work_unmeasured = str(error)
+                else:
+                    try:
+                        files = attempt_files(root, before, after)
+                    except (Refused, OSError) as error:
+                        files = str(error)
+                    # The verdict reads its own unbounded comparison, never the display list above.
+                    try:
+                        worked = attempt_has_work(root, before, after, ctx.findings, ctx.plan)
+                    except (Refused, OSError, ValueError) as error:
+                        work_unmeasured = str(error)
             else:
                 files = unmeasured
+                work_unmeasured = unmeasured
+            if work_unmeasured is not None:
+                work_problems = [
+                    f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
+                ]
+            elif not worked:
+                work_problems = [
+                    f"{NO_WORK}: the attempt changed nothing beyond the runner's own records "
+                    "(findings.md and the plan's time section); make the change the plan names"
+                ]
+            else:
+                work_problems = []
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -7615,6 +7690,9 @@ def run_attempts(
                 # back through the batch restore below, and the verdict stays rejected (F-5).
                 put_findings_back()
                 problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            # An attempt without work is rejected whatever verification said; the reason leads the list,
+            # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
+            problems = [*work_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
