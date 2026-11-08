@@ -6834,34 +6834,39 @@ _WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
 _WHERE_SUFFIX = re.compile(r"(?:(?:::[^\s:]+)|(?::\d+(?:[-–—]\d+)?)|(?:#L?\d+(?:[-–—]\d+)?))+$")
 
 
-def where_locations(cell: str) -> list[str]:
+def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     """The repository file locations a `Where` cell names, Markdown delimiters and line suffixes stripped.
 
     A token counts when it carries a `/` and names a relative path of this repository: prose, bare
-    names without a directory, absolute paths and paths that climb out stay out, so the classification
-    below reads locations and never what a reviewer's words suggest.
+    names without a directory and paths that climb out stay out. Absolute paths below the worktree
+    are made relative without reading the named files; Markdown links contribute their target only.
     """
     locations = []
+    cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
     for token in _WHERE_TOKEN_SPLIT.split(cell):
-        token = token.lstrip("`*_\"'(")
+        token = token.strip("`*_\"'()<>")
         while token.startswith("./"):
             token = token[2:]
-        if not token or "/" not in token or token.startswith(("../", "/")):
-            continue
         token = _WHERE_SUFFIX.sub("", token).rstrip(".,:;)")
-        if token:
-            locations.append(token)
+        if not token or "/" not in token or ".." in Path(token).parts:
+            continue
+        if Path(token).is_absolute():
+            try:
+                token = Path(token).relative_to(root).as_posix()
+            except ValueError:
+                continue
+        locations.append(token)
     return locations
 
 
-def where_is_test_only(cell: str) -> bool:
+def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
     """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
 
     A mechanical trigger on paths, not on words: prose that only says "test", a mixture with a
     production location and a cell without any location stay the orchestrator's judgment - the command
     cannot establish what a later repair will touch.
     """
-    locations = where_locations(cell)
+    locations = where_locations(cell, root)
     return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
 
 
@@ -6874,24 +6879,23 @@ def triage_status(decision: str, reason: str) -> str:
 def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
     """Splice one row's Status cell in its own physical line and publish the record whole.
 
-    Exactly nine physical cells make a row editable: a line whose `Broke a test` mark has moved out of
-    its column is damaged, and this command refuses instead of mending a record it cannot read. Every
-    other byte stays as the record was read, the final newline included.
+    Status may span several physical cells when a hand-typed pipe is accepted by `record_rows`.
+    Replace that entire span, preserving the other cells, line spacing and line endings verbatim.
+    The caller has already validated the record with the shared reader under its lock.
     """
-    ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
     written = False
-    for line, reviewer in _record_lines(record):
-        if not reviewer:
-            cells = split_row(line)
-            if cells and len(cells) == len(ROW_COLUMNS) and LOOP_ID.fullmatch(cells[0]) and cells[0] == ident:
-                cells[7] = status
-                line = "| " + " | ".join(cells) + " |"
-                written = True
-        lines.append(line)
+    for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
+        cells = None if reviewer else split_row(line)
+        if cells and len(cells) >= len(ROW_COLUMNS) and cells[0] == ident:
+            separators = list(_PIPE.finditer(line))
+            start, end = separators[7].end(), separators[-2].start()
+            original = original[:start] + " " + status + " " + original[end:]
+            written = True
+        lines.append(original)
     if not written:
-        raise Refused(f"loop row `{ident}` is no nine-cell line; mend the record first, nothing has been written.")
-    replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
+        raise Refused(f"loop row `{ident}` has no editable line; mend the record first, nothing has been written.")
+    replace_record(record_dir(change, root) / "loop.md", "".join(lines))
 
 
 def triage(root: Path, change: str, row_status: str | None, reason: str | None) -> None:
@@ -6908,9 +6912,9 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
         raise Refused("triage needs a first operand '<row>=<status>' and a second operand <reason>.")
     if not reason or not reason.strip():
         raise Refused("triage needs a nonempty reason; an empty decision says nothing a later round can read.")
-    reason = reason.strip()
-    if "\n" in reason or "\r" in reason:
+    if reason.splitlines() != [reason]:
         raise Refused("triage takes a single-line reason; a line break would break the record's table shape.")
+    reason = reason.strip()
     row, equals, given = row_status.partition("=")
     row = row.strip()
     if not equals or not LOOP_ID.fullmatch(row):
@@ -6942,7 +6946,7 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
                 raise Refused(
                     f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
                 )
-            if decision == "taken" and where_is_test_only(targets[0][4]):
+            if decision == "taken" and where_is_test_only(targets[0][4], root):
                 raise Refused(
                     f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
                     "a repair that cannot exist. Write `taken — not a test — <reason>` instead."

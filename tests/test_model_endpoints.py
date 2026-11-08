@@ -264,11 +264,15 @@ def routing_models(text: str) -> list[str]:
     """The model names of the routing rows in `text`.
 
     A routing row starts with a phase number and an optional letter (`2a`,
-    `4b`), then a phase name of one or more words, then the model in bold. The
+    `4b`), then a phase name of one or more words, then the model or local-command cell. The
     pattern used to read one digit and one word, and skipped the rows a stage 2
     adds.
     """
-    return re.findall(r"^\| \d[a-z]? [A-Za-z][A-Za-z ]*? \| \*\*([^*]+)\*\* \|", text, re.M)
+    return [
+        model.strip("*")
+        for phase, model in re.findall(r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| ([^|]+) \|", text, re.M)
+        if phase == "4b Triage" or (model.startswith("**") and model.endswith("**"))
+    ]
 
 
 def test_every_model_in_the_routing_table_resolves() -> None:
@@ -283,8 +287,8 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     # The table names display names ("Haiku 4.5"), the declaration ids.
     ids = zugelassene_modelle()
     for anzeige in tabelle:
-        if anzeige in {"the ladder", "the swarms, then the ladder"}:
-            continue  # no model id: the ids live in the `opencode-go` entry, checked by its own test
+        if anzeige in {"the ladder", "the swarms, then the ladder", "none (a local command)"}:
+            continue  # a local command has no model; ladder ids are checked in the endpoint declaration
         if anzeige == "the research swarm":
             # No single model id: the swarm is a declared role roster. The row
             # resolves only while the declaration itself is complete and every
@@ -322,6 +326,8 @@ def test_the_routing_check_reads_lettered_and_multi_word_rows() -> None:
     text = "| 2a Spec review | **k3** | x |\n| 4b Review loop | **k3** | x |\n"
     assert routing_models(text) == ["k3", "k3"]
     assert routing_models("| 1 | Explore | x |\n") == []
+    assert routing_models("| 4b Triage | none (a local command) | local |\n") == ["none (a local command)"]
+    assert routing_models("| 4b Triage | misspelled-model | local |\n") == ["misspelled-model"]
 
 
 # ---------------------------------------------------------------------------

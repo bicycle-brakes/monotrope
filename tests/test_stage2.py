@@ -14796,8 +14796,12 @@ def section(text: str, title: str) -> str:
 
 def routing_rows(text: str) -> dict[str, tuple[str, str]]:
     """Phase cell -> (model, why) for every routing row `| 2a Spec review | **model** | why |`."""
-    pattern = r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| \*\*([^*]+)\*\* \| (.*) \|$"
-    return {m[1]: (m[2], m[3]) for m in re.finditer(pattern, text, re.M)}
+    pattern = r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| ([^|]+) \| (.*) \|$"
+    return {
+        m[1]: (m[2].strip("*"), m[3])
+        for m in re.finditer(pattern, text, re.M)
+        if m[1] == "4b Triage" or (m[2].startswith("**") and m[2].endswith("**"))
+    }
 
 
 STAGE2_ROUTING = {
@@ -14808,6 +14812,7 @@ STAGE2_ROUTING = {
     "3 Plan": "gpt-6.1-sol",
     "4 Implement": "GLM 5.3 Flash",
     "4b Review loop": "the swarms, then the ladder",
+    "4b Triage": "none (a local command)",
     "6 Review": "gpt-6.1-sol",
 }
 
@@ -14997,7 +15002,7 @@ SOL_EFFORT_PLACES = (
 
 
 def routing_problems(workflow: str) -> list[str]:
-    """What the routing rows of the doctrine get wrong: section 4's eight rows and section 3's two."""
+    """What the routing rows of the doctrine get wrong: section 4's routing rows and section 3's two."""
     found = []
     stage2_rows = routing_rows(section(workflow, "## 4 · "))
     for phase, model in STAGE2_ROUTING.items():
@@ -15006,6 +15011,8 @@ def routing_problems(workflow: str) -> list[str]:
             found.append(f"section 4 has no routing row {phase}")
         elif row[0] != model:
             found.append(f"section 4 routes {phase} to {row[0]}, not {model}")
+        elif phase == "4b Triage":
+            continue  # local command: no model or effort
         elif phase == "2a Spec review":
             if "effort `xhigh`" not in row[1]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
@@ -15041,6 +15048,7 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
         ("| 4b Review loop | **the swarms, then the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 4b Triage | none (a local command) |", "| 4b Triage | misspelled-model |"),
         (
             f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
             f"| 2 Spec | **Opus 5.5** | effort {effort_reference('draft')}, one call",
@@ -19148,13 +19156,29 @@ def test_triage_records_each_supported_decision_in_the_worktree_record(
     assert sibling.read_bytes() == sibling_before, "a sibling worktree's record was written"
 
 
+@pytest.mark.parametrize("layout", ["canonical", "padded", "typed-pipe", "wide-undecided"])
+@pytest.mark.parametrize("final_newline", [True, False])
 def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
-    world: World, monkeypatch: pytest.MonkeyPatch
+    world: World, monkeypatch: pytest.MonkeyPatch, layout: str, final_newline: bool
 ) -> None:
     """Criterion 2. Planted fault: the reason's pipes reach the record raw, and `Broke a test` leaves its column."""
     cells = "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding of L1-1 | deepseek-v4.1-flash"
-    undecided, escaped = f"{cells} |  |  |", r"a \| b"
-    decided = f"{cells} | taken — {escaped} |  |"
+    canonical = f"{cells} |  |  |"
+    escaped = r"a \| b"
+    mark = "no" if layout == "typed-pipe" else ""
+    if layout == "padded":
+        prefix = "  |L1-1   | MAJOR| MAINT    |impl | src/app.py:1| finding of L1-1   |deepseek-v4.1-flash|"
+        undecided = prefix + "    |    |  "
+        decided = prefix + f" taken — {escaped} |    |  "
+    elif layout == "typed-pipe":
+        undecided = f"{cells} | taken — old | reason | no |"
+        decided = f"{cells} | taken — {escaped} | no |"
+    elif layout == "wide-undecided":
+        undecided = f"{cells} | old | reason |  |"
+        decided = f"{cells} | taken — {escaped} |  |"
+    else:
+        undecided = canonical
+        decided = f"{cells} | taken — {escaped} |  |"
 
     def seeded() -> None:
         triage_record(
@@ -19163,14 +19187,19 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
         )
 
     seeded()
+    original = world.record().read_text(encoding="utf-8")
+    original = original.replace(canonical, undecided)
+    if not final_newline:
+        original = original.removesuffix("\n")
+    world.record().write_text(original, encoding="utf-8")
     before = world.record().read_text(encoding="utf-8")
     assert undecided in before, "the expectation names no undecided row line"
     assert world.run("triage", "demo", "L1-1=taken", "a | b") == 0
     text = world.record().read_text(encoding="utf-8")
     assert text == before.replace(undecided, decided), "another byte than the target's Status cell changed"
     rows = stage2.record_rows(text)
-    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == ""
-    physical = next(line for line in text.splitlines() if line.startswith("| L1-1 "))
+    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == mark
+    physical = next(line for line in text.splitlines() if (stage2.split_row(line) or [""])[0] == "L1-1")
     assert len(stage2.split_row(physical)) == len(stage2.ROW_COLUMNS), "`Broke a test` moved out of its column"
     assert stage2.triage_status("rejected", escaped) == f"rejected — {escaped}", "an escaped reason was escaped twice"
     # the counterpart: a status without the runner's escaping damages the record, and the reader refuses it
@@ -19185,6 +19214,12 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
     ("where", "decision", "code"),
     [
         ("tests/test_stage2.py::test_x", "taken", 2),
+        ("[test location](tests/test_stage2.py::test_x)", "taken", 2),
+        ("`[test location](tests/test_stage2.py:12)`", "taken", 2),
+        ("{root}/tests/test_stage2.py:12", "taken", 2),
+        ("[test location]({root}/tests/test_stage2.py#L12)", "taken", 2),
+        ("[test](tests/helper.py) and [production](src/app.py)", "taken", 0),
+        ("{root}/src/app.py:12 and tests/helper.py", "taken", 0),
         ("tests/test_stage2.py::test_x", "taken — not a test", 0),
         ("tests/test_stage2.py::test_x", "taken — guard test", 0),
         ("tests/helper.py and src/app.py", "taken", 0),
@@ -19196,6 +19231,7 @@ def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
     world: World, where: str, decision: str, code: int, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Criterion 3 (decisions.md#Q-1). Planted fault: the ordinary status written with a warning, or the explicit form refused."""
+    where = where.replace("{root}", str(world.root))
     triage_record(world, [triage_row(where=where)])
     before = world.record().read_bytes()
     capsys.readouterr()
@@ -19217,13 +19253,15 @@ def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
         ("no-loop-id", "R2-2=taken", "r"),
         ("unsupported-status", "L1-1=decided", "r"),
         ("empty-reason", "L1-1=taken", "   "),
-        ("multiline-reason", "L1-1=taken", "line one\nline two"),
+        *[
+            ("multiline-reason", "L1-1=taken", f"line one{separator}line two")
+            for separator in ("\n", "\r", "\r\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")
+        ],
         ("unknown-row", "L1-9=taken", "r"),
         ("duplicate-row", "L1-1=taken", "r"),
         ("fixed-row", "L1-1=taken", "r"),
         ("short-row", "L1-1=taken", "r"),
         ("moved-mark", "L1-1=taken", "r"),
-        ("wide-undecided-row", "L1-1=taken", "r"),
         ("unreadable-record", "L1-1=taken", "r"),
         ("no-record", "L1-1=taken", "r"),
     ],
@@ -19237,12 +19275,11 @@ def test_triage_invalid_requests_leave_the_record_unchanged(
         triage_record(world, [triage_row("L1-1"), triage_row("L1-1", where="src/other.py:2")])
     elif fault == "fixed-row":
         triage_record(world, [triage_row(status="fixed — tests/test_stage2.py::test_fixes_it", broke="yes")])
-    elif fault in {"short-row", "moved-mark", "wide-undecided-row"}:
+    elif fault in {"short-row", "moved-mark"}:
         directory.mkdir(parents=True, exist_ok=True)
         body = {
             "short-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |",
             "moved-mark": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — x | yes | extra |",
-            "wide-undecided-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | a | b |  |",
         }[fault]
         world.record().write_text(
             f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}\n\n"
@@ -19413,10 +19450,17 @@ def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
         stage2.main(["--help"])
     usage = capsys.readouterr().out
     assert "triage" in usage and "ROW=STATUS" in usage and "REASON" in usage, usage
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert triage_instruction_problems(workflow) == []
-    planted = workflow.replace("taken — not a test — <reason>", "taken")
-    assert triage_instruction_problems(planted), "the corrective form is not what the instruction is held by"
+    for path in (WORKFLOW, PROMPTS / "04b-review-loop.md"):
+        text = path.read_text(encoding="utf-8")
+        assert triage_instruction_problems(text) == [], str(path)
+        for phrase in (
+            "python3 scripts/stage2.py triage <change>",
+            "taken — not a test — <reason>",
+            "no model",
+            "`Broke a test`",
+        ):
+            planted = flat(text).replace(phrase, "omitted")
+            assert triage_instruction_problems(planted), f"{path}: {phrase} is not held by the instruction test"
 
 
 @pytest.mark.parametrize("heading", ["## Phase 2a — spec review", "## Phase 6 — review"])
