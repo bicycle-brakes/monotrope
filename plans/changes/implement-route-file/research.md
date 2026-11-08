@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-9ycy
@@ -102,3 +102,33 @@ Runner and constants: `scripts/stage2.py` (`GLM_FLASH`…`OPUS` constants, `impl
 - `scripts/validate_change_artefacts.py` is absent at this base.
   `templates/` contains the spec and design forms but no plan template; the
   plan form therefore follows `prompts/03-plan.md` and existing plans.
+
+
+## Redrafting gap checks — 2026-11-08, base `924729ad`
+
+- Read Q-2 in `decisions.md`: the maintainer explicitly splits every ADR
+  wording edit into a separate PR with its own five-answer interview. This
+  supersedes the earlier draft's ADR scope and prerequisite; it does not
+  relax the interview gate. The bounded class, initial GLM 5.3 selection,
+  ordinary route-update authority and three-hour appetite remain unchanged.
+- Re-read `scripts/stage2.py:implement`, `run_work_model` and `RUNNER_HELD`:
+  the current implementation still selects Flash twice, then native Sonnet;
+  the existing work transport already consumes endpoint/model/effort tuples.
+  The route reader and frozen ladder can stay in `scripts/stage2.py`.
+- `scripts/check_adr_answers.py:strict_load` supplies a duplicate-rejecting
+  safe YAML reader; no new parsing dependency or helper file is needed.
+- Re-read the living implementation-verification spec and the existing
+  Stage-2-off, preparation, leak and doctrine tests. The attempt limit and
+  guards remain requirements; only current primary-selection wording and
+  its assertions change. Historical records and all ADR files stay intact.
+- `templates/spec.md` and `templates/design.md` exist; `templates/plan.md`
+  and `scripts/validate_change_artefacts.py` do not exist in this tree.
+  The plan therefore follows the phase-3 prompt, including the opening card,
+  criterion ledger and initially empty time section. No design is due for
+  the unchanged bounded class, and findings.md holds audit lines, no open
+  phase-2a review rows.
+- Working tree at entry: only runner-added `findings.md` audit metadata was
+  modified; branch `feat/implement-route-file`, HEAD `924729ad`, with the same
+  locally recorded remote branch head. Hosted PR state and the external
+  live-session registry were not read: this drafting call is restricted to
+  this worktree and the repository git directory. No tracker write is made.

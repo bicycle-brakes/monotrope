@@ -3,14 +3,14 @@ title: "Plan — implement-route-file"
 status: draft
 implementation_status: none
 date: 2026-11-06
-last_reviewed: 2026-11-06
-updated: 2026-11-06
+last_reviewed: 2026-11-08
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-9ycy
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-08"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, stage-2, implement, routing]
 ---
@@ -19,121 +19,122 @@ tags: [plan, stage-2, implement, routing]
 
 ```text
 For you:     One central file selects the implementer, initially GLM 5.3, and records your instruction behind each switch.
-Done when:   File-driven routing, preserved safeguards and matching instructions pass make verify after the ADR-edit interview prerequisite is met.
+Done when:   File-driven routing, preserved safeguards and matching operational instructions pass make verify.
 Appetite:    3 h of phase 4, repair rounds included; a stop, not an estimate.
-Not now:     New endpoints, other runner verbs, different retry limits or a general routing engine.
-Pre-mortem:  suppose it failed: most likely because a current instruction still selects a different implementer.
+Not now:     ADR edits, new endpoints, other runner verbs, different retry limits or a general routing engine.
+Pre-mortem:  suppose it failed: most likely because a current operational instruction still selects a different implementer.
 Starts unless you say stop.
 ```
 
 Implements [spec.md](spec.md); no design phase for this bounded change.
-The orchestrator must return the five-answer ADR-edit prerequisite to phase
-1a before its ADR bootstrap edit: one answer stands at `ff012eba`, 2026-11-06.
-Do not ask an implementing model to fill that gap or weaken the gate.
+The maintainer's Q-2 in `decisions.md` leaves all ADRs untouched and assigns
+ADR 0007's pointer amendment to a separate PR with its own interview. This
+plan replaces the earlier draft's ADR-edit prerequisite, not an interview rule.
 
 ## Steps and ownership
 
-1. **Worker — `scripts/stage2.py`:** add a strict, side-effect-free route
-   reader using the repository's duplicate-key-rejecting YAML loader.
-   Schema: `schema_version: 1`, `changes: [record, ...]`; each record has
-   `date`, `stated_words`, `reason`, `primary` and `fallback`; each selection
-   has `endpoint`, `model`, `effort`. Require exactly these keys, a nonempty
-   sequence, valid nondecreasing ISO dates, nonblank text, and effort in
-   `low`, `medium`, `high`, `max`. The last record alone selects the current
-   route. Primary accepts only `glm-coding-plan` or `claude-code-plan`;
-   fallback accepts only `claude-code-plan`, using existing file-tool work
-   transports. Reject unsupported versions, wrong types, duplicate keys and
-   unreadable files as `Refused` naming `implement-route.yaml`, before any
-   secret read; endpoint/model admission remains the existing per-call check.
-2. **Worker — `scripts/stage2.py`:** read once before `implement` preflight,
-   use the primary tuple twice then the fallback tuple, and use fallback alone
-   for explicit Stage 2 off. Read `GLM_KEY` only when a selected attempt needs
-   the GLM transport; preserve scrubbing and the native fallback's clean
-   environment. Use labels `configured`, `configured-repair`, `stage-1` and
-   model-neutral diagnostic reasons. Keep fresh retry, post-check-only
-   transitions, `run_attempts` protections, preparation and verification;
-   do not route other verbs through this reader. Add `implement-route.yaml`
-   to `RUNNER_HELD`, covering implement and repair through the existing
-   case-insensitive prefix guard. No implementing attempt writes the file.
-3. **Worker — `tests/test_stage2.py`:** seed valid route files in temporary
-   worlds, adapt initial-model and label assertions, preserve existing test
-   function names cited by other ledgers, and add the ledger's tests below.
-   Vary valid configured models/efforts on both supported transports;
-   parameterize malformed history, schema, missing file and duplicate-key
-   cases. Test declaration/leak refusal on each rung, credential isolation,
-   attempt-time configuration tampering and the held-path guard on both
-   implement and repair. Retain current call-failure and rollback tests.
-   Add a doctrine test taking candidate texts so its planted stale-model and
-   missing-link faults can be checked before bootstrap; keep existing
-   repository-reading doctrine assertions at baseline until bootstrap.
-4. **Worker — `tests/test_stage2_runs.py`:** add mixed old/new audit and time
-   label coverage using the existing parsers; keep historical foreign-route
-   declaration probes unchanged. GLM 5.3 is already in their `FOREIGN_ROUTES`
-   via `stage2.GLM`; no report implementation change is needed.
+1. **Worker — `scripts/stage2.py`:** add a side-effect-free reader for
+   `implement-route.yaml`, using the existing duplicate-rejecting safe YAML
+   loader (`check_adr_answers.strict_load`). Schema: `schema_version: 1`,
+   `changes: [record, ...]`; each record has `date`, `stated_words`, `reason`,
+   `primary`, `fallback`; each selection has `endpoint`, `model`, `effort`.
+   Require exact keys, integer version (not boolean), a nonempty history,
+   valid nondecreasing ISO dates, nonblank text, and effort in `low`, `medium`,
+   `high`, `max`. The last record supplies the active selection. Primary
+   accepts `glm-coding-plan` or `claude-code-plan`; fallback accepts only
+   `claude-code-plan`. Both use existing Claude Code file-tool transports.
+   Reject missing/unreadable files, invalid encoding, malformed YAML,
+   duplicate keys, invalid history or unsupported selections with `Refused`
+   naming the file, before secrets or calls; never default to constants.
+2. **Worker — `scripts/stage2.py`:** read once before implement preflight;
+   build primary, fresh primary retry, fallback from that snapshot, or fallback
+   alone for explicit `--stage2-off`. Read `GLM_KEY` only for a selected GLM
+   transport; preserve scrubbing and a clean native environment. Use labels
+   `configured`, `configured-repair`, `stage-1` and model-neutral reasons.
+   Keep post-check-only retries, call-failure stops, per-call declaration and
+   leak checks, preparation, full verification, timing and checkpoints.
+   Add `implement-route.yaml` to `RUNNER_HELD`, using its case-insensitive
+   prefix guard for implement and repair; do not redirect any other verb.
+3. **Worker — `tests/test_stage2.py`:** seed route files in temporary worlds;
+   adapt primary/label assertions without removing functions used by other
+   ledgers. Add the tests below: multiple valid history entries; file-only
+   model/effort switches on both transports; invalid schema/history/files;
+   credentials; each rung's admission and leak refusal; retries and call
+   failures; snapshot tampering; held route edits in implement and repair.
+   Include a configured native primary with no GLM secret read and a changed
+   native fallback with Stage 2 off. Keep existing rollback and preparation
+   cases. Candidate-text doctrine checks can run before bootstrap; leave the
+   real repository instruction assertions at baseline until bootstrap.
+4. **Worker — `tests/test_stage2_runs.py`:** add mixed historical Flash and
+   configured-label coverage using actual generated audit/time records,
+   checking recorded endpoint/model as well as report counting. Leave the
+   historical foreign-route probes unchanged: their tuple already includes
+   `stage2.GLM`, and the existing record grammar accepts the new labels.
 5. **Orchestrator bootstrap after the accepted attempt — `implement-route.yaml`
-   (new):** write the initial schema record dated `2026-11-06`, primary
+   (new, held by step 2):** add the initial complete record with date
+   `"2026-11-06"`, primary
    `{endpoint: glm-coding-plan, model: glm-5.3, effort: max}`, fallback
    `{endpoint: claude-code-plan, model: claude-sonnet-5-5, effort: medium}`.
    Copy Q-1's exact maintainer words (`agent auf mein wort, aber es muss eine
-   zentrales artifact dafür geben`), with a reason distinguishing its update
-   authority from the GLM 5.3 switch stated in that record's context.
-   Document that future changes append complete instruction-backed records
-   and use ordinary PRs, never fabricate another quote or old history.
+   zentrales artifact dafür geben`); the reason distinguishes this edit
+   authority from the GLM 5.3 switch stated in that record's context. Comments
+   require future changes to append dated complete records with stated words
+   and reason, through ordinary PRs on the maintainer's instruction. Do not
+   invent an earlier history or a quotation of the contextual model switch.
 6. **Orchestrator bootstrap — `AGENTS.md`, `prompts/04-implement.md`,
-   `model-endpoints.yaml`:** replace current primary-selection statements
-   with the central file's authority and update rule; preserve explore's
-   Flash route, the file-tool contract, fallback operation and endpoint
-   admissions. These are held files, never worker edits. The orchestrator
-   updates the corresponding real-text expectations in `tests/test_stage2.py`
-   together with these edits, after the accepted worker attempt.
-7. **Orchestrator bootstrap — `docs/WORKFLOW.md`:** replace all current
-   implementation-selection prose and phase-table entries with the route-file
-   reference, retaining the existing retry ceiling and Stage-2-off behavior.
-   **`docs/adr/0007-stage-2-reviews-by-codex-and-glm.md`:** after the interview
-   prerequisite, amend only operative implementer-selection statements to
-   defer to the file and its ordinary-PR update rule under Q-1; preserve
-   historical decisions, explore routing and disclosure boundaries with a
-   dated amendment note. No new ADR, ADR answer or decision-PR conversion.
-   **`plans/specs/implementation-verification/spec.md`:** replace current
-   Flash-only implementation wording with configured-primary wording,
-   retaining its initial/retry/fallback counts, preparation order and guards.
-8. **Worker — `plans/changes/implement-route-file/plan.md`:** remove each
-   `not yet written` marker once its test exists; leave runner-measured
-   phase-4 entries to the runner. **Runner/orchestrator —
-   `plans/changes/implement-route-file/findings.md`:** retain audit, checks and
-   review evidence. **Runner — `plans/INDEX.md`:** regenerate derived metadata.
-   No files are deleted. The orchestrator reruns verification after bootstrap.
+   `model-endpoints.yaml` (held):** replace operative primary selections with
+   the file pointer and update rule; preserve Flash's Explore role, other
+   verbs, fallback behavior, file-tool contract and endpoint admission.
+   **`docs/WORKFLOW.md`:** update every current implement-selection passage
+   and any model-selecting table entry to the file pointer, retaining retry
+   limits and Stage-2-off behavior. Explain the temporary ADR 0007 discrepancy
+   and separate follow-up without changing an ADR. **`tests/test_stage2.py`:**
+   the orchestrator updates real instruction-text expectations alongside these
+   bootstrap edits, retaining test names cited by other ledgers.
+7. **Worker — `plans/specs/implementation-verification/spec.md`:** replace
+   obsolete Flash-specific current implementation wording with configured
+   primary wording; preserve all attempt counts, preparation order and guards.
+   **`plans/changes/implement-route-file/plan.md`:** remove each ledger's
+   `not yet written` marker when its test exists; keep `## Time used` for
+   runner-measured phase-4 entries. **Runner/orchestrator —
+   `plans/changes/implement-route-file/findings.md`:** retain audit and review
+   evidence. **Runner — `plans/INDEX.md`:** regenerate derived metadata.
+   No files are deleted.
 
-The worker's suite uses fixture route files and candidate doctrine texts;
-no test requires the new repository-root file before bootstrap. After
-bootstrap, the orchestrator runs the same reader on the real route file,
-checks the real doctrine against criterion 10, and runs full verification.
+The worker is not asked to edit any held path, including the new route file.
+Its tests use fixture routes and candidate texts, so its check does not depend
+on the later bootstrap. After bootstrap the orchestrator validates the real
+file with the same reader, checks the four real instruction surfaces, and
+reruns verification; worker acceptance alone does not complete the change.
 
 ## Do not touch
 
-Keep endpoint admissions, `provenance.yaml`, `decisions/gates.yaml`, permission
-settings, other ADRs, tracker state and every other verb's routes unchanged.
-No edits to `scripts/time_records.py`, `scripts/run_report.py` or
-`scripts/stage2_runs.py`: their route grammar and existing model declarations
-already cover this change. No failed-edit-continuation change is bundled;
-the old measurement's sequencing recommendation concerned a different ladder.
-The research records a successful Flash Explore, so no Stage-1 fallback is
-carried forward. Drafting does not start implementation or make commits.
+All `docs/adr/` files, `provenance.yaml`, `decisions/gates.yaml`, permission
+settings, tracker state, endpoint admissions and every other verb's routing
+stay untouched. No changes to `scripts/time_records.py`, `scripts/run_report.py`
+or `scripts/stage2_runs.py`: existing labels and declared foreign routes suffice.
+No retry-policy or failed-edit-continuation change is bundled; the older
+measurement's sequencing recommendation concerned a different ladder.
+Explore succeeded through Flash, so there is no Stage-1 Explore fallback to
+carry forward. This runner draft writes planning artifacts only; the
+orchestrator presents the card and starts phase 4 without another approval.
 
 ## Verification
 
 ```sh
 .venv/bin/python -m pytest tests/test_stage2.py tests/test_stage2_runs.py tests/test_model_endpoints.py -q
 python3 scripts/check_interview_minimums.py --change implement-route-file
+python3 scripts/check_research_handoff.py --change implement-route-file
 python3 scripts/check_criterion_ledger.py
 make verify
 ```
 
-The requested `python3 scripts/validate_change_artefacts.py --check` is not
-available in this tree; do not claim it passed. The runner prepares derived
-files and runs its document check for this draft. Once the ADR diff exists,
-the interview gate requires five answered records; the current one is not
-enough, even though it passes the bounded-only check before that edit.
+These are phase-4 checks, after worker edits and again after bootstrap.
+The requested `python3 scripts/validate_change_artefacts.py --check` does not
+exist at drafting base `924729ad` (2026-11-08); do not claim it passed.
+The runner prepares derived files and runs its document check for this draft.
+There is no ADR-edit interview prerequisite in this slice: Q-2 explicitly
+splits that work, and both recorded answers remain untouched.
 
 ## Criterion ledger
 
@@ -147,7 +148,7 @@ enough, even though it passes the bounded-only check before that edit.
 - 8: not yet written tests/test_stage2_runs.py::test_configured_implement_records_mix_with_historical_flash — actual-model evidence is wrong or either generation stops counting
 - 9: not yet written tests/test_stage2.py::test_implement_freezes_route_and_holds_route_edits — tampering redirects a retry or survives a worker checkpoint
 - 10: not yet written tests/test_stage2.py::test_implement_doctrine_uses_the_central_route_authority — candidate current instructions retain a competing primary or omit the update rule
-- 10: not a test — orchestrator/phase-6 review checks all five real bootstrap surfaces against the tested text contract; an obsolete current instruction refutes it
+- 10: not a test — orchestrator/phase-6 review checks all four real instruction surfaces against the tested text contract; an obsolete current instruction refutes it
 - 11: not yet written tests/test_stage2.py::test_implement_route_does_not_select_other_verbs — a route-only edit changes another verb's dispatch
 - 12: tests/test_stage2.py::test_first_implement_refreshes_derived_files_without_a_model_repair — a good first attempt needs a retry for generated metadata
 - 12: tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft — full verification is weakened

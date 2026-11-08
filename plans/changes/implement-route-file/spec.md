@@ -3,19 +3,19 @@ title: "Spec — implement-route-file"
 status: draft
 implementation_status: none
 date: 2026-11-06
-last_reviewed: 2026-11-06
-updated: 2026-11-06
+last_reviewed: 2026-11-08
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-9ycy
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-08"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, implement, routing]
 class: bounded
 appetite: 3
-adr_files: [docs/adr/0007-stage-2-reviews-by-codex-and-glm.md]
+adr_files: []
 neighbours: [plans/specs/implementation-verification/spec.md, plans/changes/research-swarm/spec.md, plans/changes/codex-repairs/spec.md, plans/changes/kimi-admission/spec.md]
 ---
 
@@ -24,7 +24,8 @@ neighbours: [plans/specs/implementation-verification/spec.md, plans/changes/rese
 Implementation uses one central, auditable route file, initially selecting
 GLM 5.3 instead of Flash, editable on the maintainer's stated instruction
 (bead `coding-harness-9ycy` — central implementation routing).
-Research: [research.md](research.md). Authority: [decisions.md](decisions.md#q-1--who-may-change-the-route-file).
+Research: [research.md](research.md). Authority: [decisions.md](decisions.md), Q-1 (central route and update authority)
+and Q-2 (separate ADR wording follow-up).
 
 ## Problem
 
@@ -38,6 +39,9 @@ Research: [research.md](research.md). Authority: [decisions.md](decisions.md#q-1
 - The interview requires one central artifact with the current route and
   each change's date, stated words and reason, and ordinary pull requests
   for subsequent route edits (decisions Q-1, answered 2026-11-06).
+- Q-2, answered 2026-11-06, explicitly separates the ADR wording amendment
+  from this change; the earlier draft still included it. This revision follows
+  that answer, leaving every ADR untouched rather than seeking a gate exemption.
 
 ## Terms
 
@@ -87,9 +91,10 @@ with explicit `--stage2-off`.
    *Refuted by:* an in-run edit redirects a retry or a worker's route edit is accepted into its checkpoint.
 10. When this change is complete, current implementation instructions in
     `AGENTS.md`, `docs/WORKFLOW.md`, `prompts/04-implement.md`,
-    `model-endpoints.yaml` and ADR 0007 point to the route file as the selection
+    and `model-endpoints.yaml` point to the route file as the selection
     authority, including its instruction-backed ordinary-PR update rule.
     *Refuted by:* one of those current instructions still independently selects the primary model or requires an ADR edit for a later route-only switch.
+    *Basis:* decisions.md#Q-1 and decisions.md#Q-2; ADR wording is explicitly deferred.
 11. When another runner verb executes, its model selection remains unchanged.
     *Refuted by:* editing the implementation route changes explore, draft, repair, a review or a research seat.
 12. When implementation attempts pass or fail, their existing preparation,
@@ -107,34 +112,41 @@ with explicit `--stage2-off`.
 - Automatically authenticating a maintainer quotation; the conversation and
   pull-request review establish authority, not a self-asserted YAML field.
 - Rewriting historical findings, research, time records or previous decisions.
-  ADR 0007 receives only the explicitly authorised current-routing wording
-  amendment, with a dated note preserving the previous decision's history.
+  All files under `docs/adr/` remain untouched; Q-2 defers the pointer to the
+  route file to a separate small PR with its own five-answer interview.
 
 Phase 2b does not run because this change is `bounded`.
 
 ## Protected areas
 
 Endpoint admission, leak rules, gates, provenance rules, permission settings,
-other ADRs and the tracker remain unchanged: moving selection does not admit
+all ADRs and the tracker remain unchanged: moving selection does not admit
 an endpoint or change the workflow's governance. Held files are edited only
 by the orchestrator, as the plan assigns them.
+
+## Boundary
+
+ADR 0007 will still name Flash after this slice, as Q-2 explicitly accepts.
+The operational instructions named in criterion 10 identify the route file
+and this temporary discrepancy; removing the ADR wording belongs to the
+separate follow-up, not to this change. Historical records retain their models.
 
 ## Definition of Done
 
 - `make verify` is green after code and orchestrator bootstrap edits.
-- The route file, runner, tests and the five instruction surfaces named in
+- The route file, runner, tests and the four instruction surfaces named in
   criterion 10 move together; the living implementation-verification spec
   replaces only obsolete model-specific wording, preserving its attempt limits.
 - The PR file list respects the protected areas and non-goals.
 - The PR closes the central-route work item (`coding-harness-9ycy`) and its
   final commit carries `Closes-Bead: coding-harness-9ycy`.
 - No live model experiment is required; offline stand-ins verify dispatch.
-- Before the ADR edit, phase 1a meets the five-answer ADR-edit minimum; the
-  one recorded answer is not duplicated or supplemented by agent answers.
 
 ## Open decisions
 
-None open about intent; Q-1 supplies the authority and initial model choice.
+None open. Q-1 supplies the authority and initial model choice; Q-2 settles
+the split of the ADR amendment. The details below are agent decisions,
+chosen because they are reversible within this change.
 
 - [DETAIL] Use `implement-route.yaml` and generic primary/retry route labels:
   a root YAML file fits existing declarations and labels must survive a model swap.
@@ -142,7 +154,3 @@ None open about intent; Q-1 supplies the authority and initial model choice.
   and their history in the file: configuration need not become executable policy.
 - [DETAIL] Three hours of phase 4, including repairs, is the stop; no earlier
   appetite is stated in the supplied research or interview.
-- [GAP] The interview gate requires five maintainer-answered records once
-  this change edits its claimed ADR; `decisions.md` currently has one.
-  Return this prerequisite to phase 1a before that bootstrap edit. This draft
-  neither invents four answers nor treats ordinary-PR authority as a gate exemption.
