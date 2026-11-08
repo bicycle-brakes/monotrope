@@ -367,3 +367,15 @@ Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-08: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 915 files, 3617 commits, 12 rules.
 
 Runner restoration, 2026-11-08: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/status-fields-restore/plan.md, plans/changes/status-fields-restore/spec.md — unchanged
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 915 files, 3626 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R4 | MAJOR | SPEC | implementation | scripts/stage2.py:7296 | If an attempt writes `status: !unknown accepted`, YAML composition succeeds but `frontmatter_fields()` raises `ConstructorError`. Recovery retries the same parser and fails again, leaving the changed fields in safely writable documents. Reproduced with this exact header. Treat construction errors as unreadable frontmatter and restore the snapshotted input before handback. [Acceptance criteria 1, 2, 5] | Codex | open | — |
+| R5 | MAJOR | SPEC | implementation | scripts/stage2.py:8151 | If lifecycle restoration succeeds and verification then raises `Refused`, for example when diagnostic protection rejects test output, the runner exits without reporting the restoration. The exception handler skips reporting because `lifecycle_report` is already nonempty. Reproduced at the attempt boundary: one restoration, zero report writes. Persist the existing report before terminal handback when recovery remains safe. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1babc-b3ab-7ee2-adce-88c145b5d3e5, 2026-11-08
+Reviewer session: codex 01a1babc-b3ab-7ee2-adce-88c145b5d3e5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
