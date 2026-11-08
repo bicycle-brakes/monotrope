@@ -392,7 +392,7 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_swarm.py:92; scripts/research_capture.py:827 | The diff changes the production research selector’s required arguments and updates its capture caller, although the specification explicitly protects the swarm implementation and the plan prohibits production-script edits. The final file list therefore violates the promised scope. [Spec: Protected areas; Definition of Done] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2_swarm.py:92; scripts/research_capture.py:827 | The diff changes the production research selector’s required arguments and updates its capture caller, although the specification explicitly protects the swarm implementation and the plan prohibits production-script edits. The final file list therefore violates the promised scope. [Spec: Protected areas; Definition of Done] | Codex | fixed — orchestrator hand edit 099e1321: the maintainer widened the spec's protected areas by this one signature change (decision Q-3, 2026-11-08) | no |
 
 Phase 6 verdict: codex 01a1b939-f346-7ac1-9788-2b832a4f1c97, 2026-11-08
 Reviewer session: codex 01a1b939-f346-7ac1-9788-2b832a4f1c97 — a fresh session reviewed: no phase-2a session was recorded
