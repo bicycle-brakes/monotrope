@@ -410,12 +410,14 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("aa-free"), row("bb-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
-    assert reasons["bb-free"] == "pi-malformed"
+    assert reasons["bb-free"] == "destination-refused"
     evidence = next(item for item in result["candidates"] if item["id"] == "bb-free")["evidence"]
     assert evidence["pi"]["baseUrl"]["value"] == "https://evil.test/x", "raw catalog evidence was rewritten"
     # An empty admitted set is not a clean selection: nothing stays selected.
@@ -423,6 +425,8 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("cc-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -440,6 +444,8 @@ def test_research_selector_skips_an_explicit_null_base(world):
         bridge_with(row("aa-free"), row("bb-free", baseUrl=None)),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
@@ -821,6 +827,8 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         bridge_with(row("paid-seat", api="anthropic-messages")),
         selector_policy(),
         ["paid-seat"],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         address=policy,
     )
