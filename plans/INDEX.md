@@ -269,6 +269,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-heartbeat/plan.md`](changes/night-heartbeat/plan.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/research.md`](changes/night-heartbeat/research.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/spec.md`](changes/night-heartbeat/spec.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-machine-facts/decisions.md`](changes/night-machine-facts/decisions.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/findings.md`](changes/night-machine-facts/findings.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/pi-catalog-move/decisions.md`](changes/pi-catalog-move/decisions.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/findings.md`](changes/pi-catalog-move/findings.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/plan.md`](changes/pi-catalog-move/plan.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
