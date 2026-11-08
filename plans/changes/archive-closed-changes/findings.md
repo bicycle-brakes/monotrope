@@ -1039,3 +1039,14 @@ Kept from the loop record:
 Stage-2 call, 2026-11-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3608 commits, 12 rules.
 
 Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3611 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3619 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-2 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:276,473 | A closed artifact containing valid YAML `status: &state draft` and `review: {status: *state}` passes preflight. Rewriting the status removes the anchor but retains its alias, making the archived header unreadable. The source is deleted and index generation succeeds with placeholder metadata. Reproduced using the actual preflight, rewrite and registry parser. Reject this input before modifying the batch or preserve the unrelated field's meaning. [Acceptance criteria 4, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1b939-f346-7921-95e2-ae55e1f4e481, 2026-11-08
+Reviewer session: codex 01a1b939-f346-7921-95e2-ae55e1f4e481 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
