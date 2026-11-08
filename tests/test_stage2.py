@@ -16022,8 +16022,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Eleven verbs exist" in four or "Twelve verbs exist" not in four:
-        found.append("section 4 does not say twelve verbs")
+    if "Eleven verbs exist" in four or "Thirteen verbs exist" not in four:
+        found.append("section 4 does not say thirteen verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
@@ -16050,7 +16050,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Twelve verbs exist", "Eleven verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Thirteen verbs exist", "Eleven verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — Codex, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -19076,6 +19076,347 @@ def test_marking_a_vanished_record_names_the_ids(world: World) -> None:
     assert "record is gone" in str(raised.value)
     assert "findings.md already carries the fixed status" in str(raised.value)
     assert "mark them by hand" not in str(raised.value)
+
+
+# ---------------------------------------------------------------------------
+# triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+def triage_record(w: World, rows_: list[list[str]]) -> None:
+    """A loop record of one round whose rows carry the Where locations and statuses triage reads."""
+    directory = w.record().parent
+    directory.mkdir(parents=True, exist_ok=True)
+    snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(loop_state(), sort_keys=True)}"
+    w.record().write_text(
+        f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
+        f"## Round 1 — deepseek-v4.1-flash, 2026-09-30\n\n"
+        f"{stage2.render_table(stage2.ROW_COLUMNS, rows_)}\n",
+        encoding="utf-8",
+    )
+
+
+def triage_row(
+    ident: str = "L1-1", where: str = "src/app.py:1", status: str = "", broke: str = "", finding: str = ""
+) -> list[str]:
+    """One nine-cell loop row; the Status and `Broke a test` cells default to undecided and empty."""
+    return [
+        ident,
+        "MAJOR",
+        "MAINT",
+        "impl",
+        where,
+        (finding or f"finding of {ident}").strip(),
+        "deepseek-v4.1-flash",
+        status,
+        broke,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("decision", "where"),
+    [
+        ("taken", "src/app.py:1"),
+        ("rejected", "src/app.py:1"),
+        ("taken — not a test", "tests/test_stage2.py::test_x"),
+        ("taken — guard test", "tests/test_stage2.py::test_x"),
+    ],
+)
+def test_triage_records_each_supported_decision_in_the_worktree_record(
+    world: World, tmp_path: Path, decision: str, where: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Planted fault: no verb, a valid form refused, or a sibling worktree's record written."""
+    triage_record(world, [triage_row(where=where)])
+    sibling = stage2.record_dir("demo", tmp_path / "sibling-repo") / "loop.md"
+    sibling.parent.mkdir(parents=True, exist_ok=True)
+    sibling_rows = [triage_row(finding="the sibling worktree's own row")]
+    sibling.write_text(
+        f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}\n\n"
+        + stage2.render_table(stage2.ROW_COLUMNS, sibling_rows)
+        + "\n",
+        encoding="utf-8",
+    )
+    sibling_before = sibling.read_bytes()
+    reason = "the orchestrator decided this row"
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", reason) == 0
+    out = capsys.readouterr().out
+    assert "L1-1" in out and decision in out
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == f"{decision} — {reason}", "the decision was not recorded as given"
+    assert rows[0][4] == where and rows[0][8] == "", "another cell of the row changed"
+    assert sibling.read_bytes() == sibling_before, "a sibling worktree's record was written"
+
+
+def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 2. Planted fault: the reason's pipes reach the record raw, and `Broke a test` leaves its column."""
+    cells = "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding of L1-1 | deepseek-v4.1-flash"
+    undecided, escaped = f"{cells} |  |  |", r"a \| b"
+    decided = f"{cells} | taken — {escaped} |  |"
+
+    def seeded() -> None:
+        triage_record(
+            world,
+            [triage_row("L1-1"), triage_row("L1-2", where="src/db.py:9", status="rejected — out of scope", broke="no")],
+        )
+
+    seeded()
+    before = world.record().read_text(encoding="utf-8")
+    assert undecided in before, "the expectation names no undecided row line"
+    assert world.run("triage", "demo", "L1-1=taken", "a | b") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert text == before.replace(undecided, decided), "another byte than the target's Status cell changed"
+    rows = stage2.record_rows(text)
+    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == ""
+    physical = next(line for line in text.splitlines() if line.startswith("| L1-1 "))
+    assert len(stage2.split_row(physical)) == len(stage2.ROW_COLUMNS), "`Broke a test` moved out of its column"
+    assert stage2.triage_status("rejected", escaped) == f"rejected — {escaped}", "an escaped reason was escaped twice"
+    # the counterpart: a status without the runner's escaping damages the record, and the reader refuses it
+    seeded()
+    monkeypatch.setattr(stage2, "triage_status", lambda decision, why: f"{decision} — {why}")
+    assert world.run("triage", "demo", "L1-1=taken", "a | b") == 0
+    with pytest.raises(stage2.Refused):
+        stage2.record_rows(world.record().read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("where", "decision", "code"),
+    [
+        ("tests/test_stage2.py::test_x", "taken", 2),
+        ("tests/test_stage2.py::test_x", "taken — not a test", 0),
+        ("tests/test_stage2.py::test_x", "taken — guard test", 0),
+        ("tests/helper.py and src/app.py", "taken", 0),
+        ("the test helpers mislead the reader", "taken", 0),
+        ("src/app.py:12", "taken", 0),
+    ],
+)
+def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
+    world: World, where: str, decision: str, code: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3 (decisions.md#Q-1). Planted fault: the ordinary status written with a warning, or the explicit form refused."""
+    triage_record(world, [triage_row(where=where)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "the orchestrator decided this row") == code
+    err = capsys.readouterr().err
+    if code == 2:
+        assert "refused:" in err and "taken — not a test —" in err, err
+        assert world.record().read_bytes() == before, "the refusal wrote the record"
+    else:
+        assert "refused:" not in err
+        rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+        assert rows[0][7].startswith(decision), "an explicitly supplied form was refused for the location"
+
+
+@pytest.mark.parametrize(
+    ("fault", "operand", "reason"),
+    [
+        ("no-equals", "L1-1taken", "r"),
+        ("no-loop-id", "R2-2=taken", "r"),
+        ("unsupported-status", "L1-1=decided", "r"),
+        ("empty-reason", "L1-1=taken", "   "),
+        ("multiline-reason", "L1-1=taken", "line one\nline two"),
+        ("unknown-row", "L1-9=taken", "r"),
+        ("duplicate-row", "L1-1=taken", "r"),
+        ("fixed-row", "L1-1=taken", "r"),
+        ("short-row", "L1-1=taken", "r"),
+        ("moved-mark", "L1-1=taken", "r"),
+        ("wide-undecided-row", "L1-1=taken", "r"),
+        ("unreadable-record", "L1-1=taken", "r"),
+        ("no-record", "L1-1=taken", "r"),
+    ],
+)
+def test_triage_invalid_requests_leave_the_record_unchanged(
+    world: World, fault: str, operand: str, reason: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a partial mutation, a created record, or a silent success."""
+    directory = world.record().parent
+    if fault == "duplicate-row":
+        triage_record(world, [triage_row("L1-1"), triage_row("L1-1", where="src/other.py:2")])
+    elif fault == "fixed-row":
+        triage_record(world, [triage_row(status="fixed — tests/test_stage2.py::test_fixes_it", broke="yes")])
+    elif fault in {"short-row", "moved-mark", "wide-undecided-row"}:
+        directory.mkdir(parents=True, exist_ok=True)
+        body = {
+            "short-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |",
+            "moved-mark": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — x | yes | extra |",
+            "wide-undecided-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | a | b |  |",
+        }[fault]
+        world.record().write_text(
+            f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}\n\n"
+            f"## Round 1 — deepseek-v4.1-flash, 2026-09-30\n\n{body}\n",
+            encoding="utf-8",
+        )
+    elif fault == "unreadable-record":
+        directory.mkdir(parents=True, exist_ok=True)
+        world.record().write_bytes(b"\xff\xfe not utf-8")
+    elif fault != "no-record":
+        triage_record(world, [triage_row()])
+    before = world.record().read_bytes() if world.record().exists() else None
+    capsys.readouterr()
+    assert world.run("triage", "demo", operand, reason) == 2, f"{fault} did not refuse"
+    err = capsys.readouterr().err
+    assert "refused:" in err, err
+    if before is None:
+        assert not world.record().exists(), "a missing record was created"
+        assert not directory.exists(), "a missing record's directory was created"
+    else:
+        assert world.record().read_bytes() == before, f"{fault} changed the record"
+
+
+def test_triage_holds_the_record_lock_and_replaces_atomically(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5. Planted fault: triage edits without the lock, or a failed replacement loses the prior record."""
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+    # while another runner holds the record, triage refuses and writes nothing
+    capsys.readouterr()
+    with stage2.holding_record("demo", world.root):
+        assert holds_record_lock(world, "demo")
+        assert world.run("triage", "demo", "L1-1=taken", "r") == 2
+        err = capsys.readouterr().err
+    assert "another run holds the loop record" in err, err
+    assert world.record().read_bytes() == before, "the held-lock refusal wrote the record"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after the refusal"
+    # the lock spans the record's read and its replacement
+    real = {name: getattr(stage2, name) for name in ("read_record", "replace_record")}
+    seen: list[str] = []
+
+    def observe(where: str) -> None:
+        assert holds_record_lock(world, "demo"), f"the record lock was free at {where}"
+        seen.append(where)
+
+    def read_record(change: str, root: Path) -> str | None:
+        observe("the record read")
+        return real["read_record"](change, root)
+
+    def replace_record(path: Path, text: str) -> None:
+        observe("the replacement")
+        real["replace_record"](path, text)
+
+    monkeypatch.setattr(stage2, "read_record", read_record)
+    monkeypatch.setattr(stage2, "replace_record", replace_record)
+    assert world.run("triage", "demo", "L1-1=taken", "the orchestrator decided this row") == 0
+    assert seen == ["the record read", "the replacement"], seen
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after the command"
+    monkeypatch.undo()
+    # an injected replacement failure reports exit 1 and keeps the prior record whole, no temp file left
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+
+    def failing(_path: Path, _text: str) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(stage2, "replace_record", failing)
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "r") == 1
+    err = capsys.readouterr().err
+    assert "failed:" in err and "disk full" in err, err
+    assert world.record().read_bytes() == before, "a failed write changed the record"
+    assert sorted(path.name for path in world.record().parent.iterdir()) == ["loop.md"], "a temporary file stayed"
+
+
+def test_triage_is_local_and_does_not_write_proof_or_repository_state(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 6. Planted fault: triage demands a credential or a clean tree, or starts a call or an append."""
+    triage_record(world, [triage_row("L1-1"), triage_row("L1-2", where="tests/test_stage2.py::test_y")])
+    (world.root / "model-endpoints.yaml").unlink()
+    (world.root / "src" / "untracked.patch").write_text("a dirty tree\n", encoding="utf-8")
+
+    def no_call(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("triage started a model call, a call line or a findings append")
+
+    for name in ("begin_call", "run_codex", "append"):
+        monkeypatch.setattr(stage2, name, no_call)
+    tree = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "no test can show it") == 0
+    after = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
+    assert after == tree, "triage changed a repository file"
+    assert not world.findings.exists(), "triage wrote findings.md"
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == "taken — not a test — no test can show it"
+    assert rows[0][8] == "", "triage filled the proof mark"
+    assert rows[1][7] == "", "triage decided a row the orchestrator did not name"
+
+
+@pytest.mark.parametrize(
+    ("decision", "where"),
+    [
+        ("taken", "src/app.py:1"),
+        ("taken — not a test", "tests/test_stage2.py::test_x"),
+        ("taken — guard test", "tests/test_stage2.py::test_x"),
+        ("rejected", "src/app.py:1"),
+    ],
+)
+def test_triage_preserves_guard_authority_and_existing_loop_rules(world: World, decision: str, where: str) -> None:
+    """Criterion 7. Planted fault: the status rewritten, plain guard authority, or a taken row counted as clean."""
+    triage_record(world, [triage_row(where=where)])
+    reason = "the orchestrator decided this row"
+    assert world.run("triage", "demo", f"L1-1={decision}", reason) == 0
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    status = rows[0][7]
+    assert status == f"{decision} — {reason}", "triage rewrote the decision's status"
+    assert stage2.guard_authorised(status) is (decision == "taken — guard test")
+    assert stage2.accepted_row(rows[0]) is decision.startswith("taken")
+    assert rows[0][8] == "", "triage wrote the proof mark"
+    if decision == "rejected":
+        assert stage2.clean_round(rows, 1), "a rejected row does not clean its round"
+        assert stage2.undecided(rows) == []
+    else:
+        assert stage2.undecided(rows) == ["L1-1"], "a taken row without its mark counts as decided"
+        assert not stage2.clean_round(rows, 1), "a taken row counted as a clean round"
+        refusal = stage2.undecided_refusal(rows, "the loop cannot go on")
+        assert refusal is not None and "L1-1" in refusal
+
+
+def test_triage_refuses_a_quoted_guard_reason(world: World) -> None:
+    """Criterion 7. A guard status whose reason is only quoted opens no planted run, so triage refuses it."""
+    triage_record(world, [triage_row(where="tests/test_stage2.py::test_x")])
+    before = world.record().read_bytes()
+    assert world.run("triage", "demo", "L1-1=taken — guard test", '"the planted fault"') == 2
+    assert world.record().read_bytes() == before
+    assert not holds_record_lock(world, "demo")
+
+
+def triage_instruction_problems(text: str) -> list[str]:
+    """What makes the doctrine's triage instruction unusable: no command, no refusal, no mark boundary, no locality."""
+    flat_text = flat(text)
+    found = []
+    if "python3 scripts/stage2.py triage <change>" not in flat_text:
+        found.append("the doctrine names no triage command")
+    if "taken — not a test — <reason>" not in flat_text:
+        found.append("the doctrine omits the test-only refusal's corrective form")
+    if "no model" not in flat_text:
+        found.append("the doctrine does not say triage calls no model")
+    if "`Broke a test`" not in flat_text:
+        found.append("the doctrine omits the proof mark's owner")
+    return found
+
+
+def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 8. Planted fault: the documented example fails the parser, or the instructions omit refusal and marks."""
+    example = re.search(r"stage2\.py triage\s+<change> '(?P<row>[^']+)' '(?P<reason>[^']+)'", stage2.__doc__ or "")
+    assert example, "the runner help shows no triage example"
+    assert example.group("row").startswith("L1-1=")
+    triage_record(world, [triage_row(where="tests/test_stage2.py::test_x")])
+    capsys.readouterr()
+    example_code = world.run("triage", "demo", example.group("row"), example.group("reason"))
+    assert example_code == 0, "the documented example fails the parser"
+    assert stage2.record_rows(world.record().read_text(encoding="utf-8"))[0][7].startswith("taken — not a test")
+    with pytest.raises(SystemExit):
+        stage2.main(["--help"])
+    usage = capsys.readouterr().out
+    assert "triage" in usage and "ROW=STATUS" in usage and "REASON" in usage, usage
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert triage_instruction_problems(workflow) == []
+    planted = workflow.replace("taken — not a test — <reason>", "taken")
+    assert triage_instruction_problems(planted), "the corrective form is not what the instruction is held by"
 
 
 @pytest.mark.parametrize("heading", ["## Phase 2a — spec review", "## Phase 6 — review"])

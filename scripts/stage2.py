@@ -25,6 +25,7 @@ between the rule and the call.
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
+    python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -6819,6 +6820,139 @@ def _mark_record_rows(
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
+# ---------------------------------------------------------------------------
+# Triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+TRIAGE_STATUSES = ("taken", "rejected", "taken — not a test", "taken — guard test")
+
+# A Where cell splits on whitespace, commas and semicolons, and on the escaped pipe a cell carries.
+_WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
+# A location's line suffixes: `file.py:12`, `file.py:12-14`, `file.py#L12`, `file.py#L12-L14`,
+# `tests/test_x.py::test_name` - stacked suffixes included, each with an en or em dash allowed.
+_WHERE_SUFFIX = re.compile(r"(?:(?:::[^\s:]+)|(?::\d+(?:[-–—]\d+)?)|(?:#L?\d+(?:[-–—]\d+)?))+$")
+
+
+def where_locations(cell: str) -> list[str]:
+    """The repository file locations a `Where` cell names, Markdown delimiters and line suffixes stripped.
+
+    A token counts when it carries a `/` and names a relative path of this repository: prose, bare
+    names without a directory, absolute paths and paths that climb out stay out, so the classification
+    below reads locations and never what a reviewer's words suggest.
+    """
+    locations = []
+    for token in _WHERE_TOKEN_SPLIT.split(cell):
+        token = token.lstrip("`*_\"'(")
+        while token.startswith("./"):
+            token = token[2:]
+        if not token or "/" not in token or token.startswith(("../", "/")):
+            continue
+        token = _WHERE_SUFFIX.sub("", token).rstrip(".,:;)")
+        if token:
+            locations.append(token)
+    return locations
+
+
+def where_is_test_only(cell: str) -> bool:
+    """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
+
+    A mechanical trigger on paths, not on words: prose that only says "test", a mixture with a
+    production location and a cell without any location stay the orchestrator's judgment - the command
+    cannot establish what a later repair will touch.
+    """
+    locations = where_locations(cell)
+    return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
+
+
+def triage_status(decision: str, reason: str) -> str:
+    """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
+    escaped = reason.replace("\\|", "|").replace("|", "\\|")
+    return f"{decision} — {escaped}"
+
+
+def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
+    """Splice one row's Status cell in its own physical line and publish the record whole.
+
+    Exactly nine physical cells make a row editable: a line whose `Broke a test` mark has moved out of
+    its column is damaged, and this command refuses instead of mending a record it cannot read. Every
+    other byte stays as the record was read, the final newline included.
+    """
+    ending = "\n" if record.endswith("\n") else ""
+    lines: list[str] = []
+    written = False
+    for line, reviewer in _record_lines(record):
+        if not reviewer:
+            cells = split_row(line)
+            if cells and len(cells) == len(ROW_COLUMNS) and LOOP_ID.fullmatch(cells[0]) and cells[0] == ident:
+                cells[7] = status
+                line = "| " + " | ".join(cells) + " |"
+                written = True
+        lines.append(line)
+    if not written:
+        raise Refused(f"loop row `{ident}` is no nine-cell line; mend the record first, nothing has been written.")
+    replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
+
+
+def triage(root: Path, change: str, row_status: str | None, reason: str | None) -> None:
+    """Record one already-made loop-row decision in this worktree's own loop record, and nothing else.
+
+    The orchestrator has decided; this local command writes the decision down. It starts no model and
+    reads no credential, works on a dirty tree, and changes no repository file and no git state. Only
+    the named row's `Status` cell changes; every proof mark stays where it is, so a row marked `taken`
+    still waits for its `Broke a test` mark before the next round or the release. Invalid input, a
+    damaged record and a held lock refuse with exit 2; a failed replacement reports exit 1 and leaves
+    the prior record whole.
+    """
+    if not row_status:
+        raise Refused("triage needs a first operand '<row>=<status>' and a second operand <reason>.")
+    if not reason or not reason.strip():
+        raise Refused("triage needs a nonempty reason; an empty decision says nothing a later round can read.")
+    reason = reason.strip()
+    if "\n" in reason or "\r" in reason:
+        raise Refused("triage takes a single-line reason; a line break would break the record's table shape.")
+    row, equals, given = row_status.partition("=")
+    row = row.strip()
+    if not equals or not LOOP_ID.fullmatch(row):
+        raise Refused(f"`{row_status}` is no '<row>=<status>' operand: name a loop id like `L1-1`.")
+    decision = given.strip()
+    if decision not in TRIAGE_STATUSES:
+        raise Refused(
+            f"unsupported status `{decision}`; triage takes: "
+            + ", ".join(f"`{item}`" for item in TRIAGE_STATUSES)
+            + "."
+        )
+    folder_of(root, change)
+    status = triage_status(decision, reason)
+    if decision == "taken — guard test" and not guard_authorised(status):
+        raise Refused("`taken — guard test` needs a nonempty unquoted reason; a quoted reason opens no guard proof.")
+    try:
+        with holding_record(change, root):
+            record = read_record(change, root)
+            if record is None:
+                raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
+            targets = [item for item in record_rows(record) if item[0] == row]
+            if not targets:
+                raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
+            if len(targets) > 1:
+                raise Refused(
+                    f"two loop rows carry `{row}`; mend the record first, triage would not know which to decide."
+                )
+            if targets[0][7].lower().startswith("fixed"):
+                raise Refused(
+                    f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
+                )
+            if decision == "taken" and where_is_test_only(targets[0][4]):
+                raise Refused(
+                    f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
+                    "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
+                )
+            _write_triage_row(change, row, status, record, root)
+    except OSError as error:
+        raise CallFailed(f"the loop record could not be replaced ({error}); the prior record stands.") from error
+    print(f"triage: {row} recorded as {status}")
+
+
 # The explorer's role, stated by the runner in every exploration prompt (bead coding-harness-e7m): on
 # 2026-10-20 a `--stage2-off` model took itself for the orchestrator, said its Bash tool was disabled and
 # asked to be rerun, and wrote no research.
@@ -8919,6 +9053,7 @@ VERBS = {
     "draft": draft,
     "implement": implement,
     "repair": repair,
+    "triage": triage,
     "spec-review": spec_review,
     "review-loop": review_loop,
     "release-loop": release_loop,
@@ -8936,6 +9071,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument(
+        "row_status",
+        nargs="?",
+        default=None,
+        metavar="ROW=STATUS",
+        help="triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'",
+    )
+    parser.add_argument(
+        "reason_text",
+        nargs="?",
+        default=None,
+        metavar="REASON",
+        help="triage only: the decision's own single-line reason",
+    )
     parser.add_argument(
         "--stage2-off",
         nargs="?",
@@ -9046,12 +9195,14 @@ def _run(args: argparse.Namespace) -> int:
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+        if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
+            raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair"}:
+        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
             # The name is checked before the lock: the lock's path is built from it, and a name that
             # escapes the state directory must create nothing there (DL-A-9 of the deep review).
             folder_of(Path(args.root), args.change)
@@ -9060,6 +9211,10 @@ def _run(args: argparse.Namespace) -> int:
             # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
             with holding_record(args.change, Path(args.root)):
                 repair(Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "triage":
+            # A local record write, dispatched before any preflight or model call: no endpoint, no leak
+            # check, no credential - the record lock is triage's only shared resource.
+            triage(Path(args.root), args.change, args.row_status, args.reason_text)
         elif args.verb == "prepare-explore":
             prepare_explore(Path(args.root), args.change, args.klass, args.seats)
         elif args.verb == "explore":

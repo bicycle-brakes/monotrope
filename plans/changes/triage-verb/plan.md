@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-o2s1
@@ -118,13 +118,21 @@ never the maintainer's real loop record, for tests.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_triage_records_each_supported_decision_in_the_worktree_record — dispatch refuses a valid form or writes a sibling worktree's row
-- 2: not yet written tests/test_stage2.py::test_triage_changes_only_the_target_status_and_escapes_pipes_once — another byte changes or a pipe moves the mark column
-- 3: not yet written tests/test_stage2.py::test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction — ordinary taken is written, the correction is absent, or explicit not-a-test is refused
-- 4: not yet written tests/test_stage2.py::test_triage_invalid_requests_leave_the_record_unchanged — invalid syntax, damaged/missing records, duplicate/unknown IDs or fixed targets succeed or mutate state
-- 5: not yet written tests/test_stage2.py::test_triage_holds_the_record_lock_and_replaces_atomically — a lock competitor writes or injected replacement failure loses the old record
-- 6: not yet written tests/test_stage2.py::test_triage_is_local_and_does_not_write_proof_or_repository_state — credentials/clean-tree checks, a model call, commit or unrelated write occurs
-- 7: not yet written tests/test_stage2.py::test_triage_preserves_guard_authority_and_existing_loop_rules — quoted guard text gains authority, explicit guard is rewritten or taken counts as clean
-- 8: not yet written tests/test_stage2.py::test_triage_help_and_instructions_match_the_cli_and_proof_ownership — the example fails parsing or operative instructions omit the refusal/mark boundary
+- 1: tests/test_stage2.py::test_triage_records_each_supported_decision_in_the_worktree_record — dispatch refuses a valid form or writes a sibling worktree's row
+- 2: tests/test_stage2.py::test_triage_changes_only_the_target_status_and_escapes_pipes_once — another byte changes or a pipe moves the mark column
+- 3: tests/test_stage2.py::test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction — ordinary taken is written, the correction is absent, or explicit not-a-test is refused
+- 4: tests/test_stage2.py::test_triage_invalid_requests_leave_the_record_unchanged — invalid syntax, damaged/missing records, duplicate/unknown IDs or fixed targets succeed or mutate state
+- 5: tests/test_stage2.py::test_triage_holds_the_record_lock_and_replaces_atomically — a lock competitor writes or injected replacement failure loses the old record
+- 6: tests/test_stage2.py::test_triage_is_local_and_does_not_write_proof_or_repository_state — credentials/clean-tree checks, a model call, commit or unrelated write occurs
+- 7: tests/test_stage2.py::test_triage_preserves_guard_authority_and_existing_loop_rules — quoted guard text gains authority, explicit guard is rewritten or taken counts as clean
+- 8: tests/test_stage2.py::test_triage_help_and_instructions_match_the_cli_and_proof_ownership — the example fails parsing or operative instructions omit the refusal/mark boundary
+
+## Runner route — 2026-11-08
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-11-08 01:59:33–03:32:07 UTC, 5554 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-08 03:32:36–04:19:14 UTC, 2798 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-08 04:19:38–05:04:02 UTC, 2664 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
