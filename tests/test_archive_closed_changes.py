@@ -563,7 +563,22 @@ def test_preflight_failure_leaves_entire_batch_unchanged(
 
 
 @pytest.mark.parametrize("key", archive.LIFECYCLE)
-@pytest.mark.parametrize("form", ["literal", "folded", "quoted", "multiline-plain", "mapping"])
+@pytest.mark.parametrize(
+    "form",
+    [
+        "literal",
+        "folded",
+        "quoted",
+        "multiline-plain",
+        "mapping",
+        "anchor",
+        "alias",
+        "tag",
+        "non-specific-tag",
+        "flow-mapping",
+        "flow-sequence",
+    ],
+)
 def test_lifecycle_values_must_be_single_line_plain_scalars(
     plans_repo: Fixture, capsys: pytest.CaptureFixture[str], key: str, form: str
 ) -> None:
@@ -582,8 +597,21 @@ def test_lifecycle_values_must_be_single_line_plain_scalars(
         "quoted": f'"{original}"',
         "multiline-plain": f"\n  {original}",
         "mapping": f"\n  nested: {original}",
+        "anchor": f"&state {original}",
+        "alias": "*state",
+        "tag": f"!!str {original}",
+        "non-specific-tag": f"! {original}",
+        "flow-mapping": f"{{nested: {original}}}",
+        "flow-sequence": f"[{original}]",
     }[form]
     text = text.replace(f"{key}: {original}\n", f"{key}: {value}\n")
+    if form == "anchor":
+        # Removing the lifecycle anchor would strand this unrelated alias.
+        text = text.replace("tags: [fixture]", "tags: [fixture]\nreview: {status: *state}")
+    elif form == "alias":
+        text = text.replace(f"{key}: *state", f"lifecycle_source: &state {original}\n{key}: *state")
+    # All forms are valid YAML; the refusal must be about safe editing.
+    assert isinstance(yaml.safe_load(archive._split_front_matter(text)[0]), dict)
     fx.add("beta-bad", files={"spec.md": text})
     fx.set_render({"b-good": "closed", "b-bad": "closed"})
     before = _snapshot(fx.root)

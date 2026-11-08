@@ -262,7 +262,8 @@ def _uneditable(art: Artefact) -> str:
 
     The edit is line surgery, so a quoted or otherwise unusual key spelling
     would be appended as a second mapping key. Non-plain or multiline values
-    could leave continuation lines behind; refuse them before any move.
+    could leave continuation lines behind; anchors could leave dangling aliases.
+    Refuse these forms and explicit tags before any move.
     """
     line_keys = {key for line in art.header.split("\n") if (key := _header_key(line))}
     for name in LIFECYCLE:
@@ -272,9 +273,19 @@ def _uneditable(art: Artefact) -> str:
     # Python values lose (e.g. `|-\n  draft` also constructs the string draft).
     # The header has already passed the unique-key YAML loader.
     node = yaml.compose(art.header, Loader=_UniqueKeyLoader)
+    # A composed scalar's style does not reveal anchors or explicit tags.
+    # Require its entire source span to be exactly one plain scalar token:
+    # properties such as &state or !!str extend the node beyond that token.
+    # Aliases resolve to the original node, whose line fails the check below.
+    plain_scalar_spans = {
+        (token.start_mark.index, token.end_mark.index)
+        for token in yaml.scan(art.header, Loader=_UniqueKeyLoader)
+        if isinstance(token, yaml.ScalarToken) and token.plain
+    }
     for key, value in node.value:
         if key.value in LIFECYCLE and (
             not isinstance(value, yaml.ScalarNode)
+            or (value.start_mark.index, value.end_mark.index) not in plain_scalar_spans
             or value.style is not None
             or value.start_mark.line != key.start_mark.line
             or value.end_mark.line != key.start_mark.line
