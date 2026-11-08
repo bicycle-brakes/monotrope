@@ -4352,11 +4352,21 @@ def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
     return {**env, "PATH": os.pathsep.join(kept), "PYTHONDONTWRITEBYTECODE": "1"}
 
 
-def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
+def changed_paths(
+    root: Path,
+    env: dict[str, str] | None = None,
+    against: str = "HEAD",
+    *,
+    skip_undecodable: bool = False,
+) -> set[Path]:
     """Tracked changes against `against`, in the working tree or the index, and untracked files.
 
     `git diff <commit>` reads only the working tree, so a path staged and then put back in the file
     differs from the commit in the index alone; `--cached` lists it (bead coding-harness-0c8).
+
+    Preserve undecodable bytes with surrogate escapes so other callers still see every path.
+    Preliminary formatting/test selection may skip them; targeted coverage must reject them and
+    require full verification. Intent-to-add handles the raw bytes independently.
     """
     # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
     # Text-mode subprocess output translates CR to LF even with NUL delimiters.
@@ -4369,8 +4379,10 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
             continue
         try:
             name = raw.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise Refused("a changed Git path cannot be decoded safely") from error
+        except UnicodeDecodeError:
+            if skip_undecodable:
+                continue
+            name = raw.decode("utf-8", errors="surrogateescape")
         path = Path(name)
         # Git lists an untracked nested repository as a directory ending in '/'.
         # That suffix is an inventory marker, not an unsafe pathname conversion.
@@ -5262,7 +5274,7 @@ def format_targets(root: Path, env: dict[str, str]) -> list[str]:
     stays unformatted.
     """
     targets: list[str] = []
-    for relative in changed_paths(root, env=env):
+    for relative in changed_paths(root, env=env, skip_undecodable=True):
         posix = relative.as_posix()
         if not posix.endswith(".py") or not posix.startswith(FORMAT_DIRS):
             continue
@@ -5556,7 +5568,7 @@ def selected_tests(
     selection failure is a diagnostic, never an empty green set (spec, criterion 3).
     """
     try:
-        changed = changed_paths(root, env=env)
+        changed = changed_paths(root, env=env, skip_undecodable=True)
     except (Refused, OSError) as error:
         return None, str(error)
     targets: set[str] = set()
@@ -5772,6 +5784,8 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
 
     try:
         touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
+        if any(0xDC80 <= ord(char) <= 0xDCFF for path in touched for char in path):
+            return full("a changed Git path cannot be decoded safely")
         before = _baseline_inventory(root, env, against)
     except (Refused, OSError, touch_map.CannotMeasure) as error:
         return full(f"the touched paths could not be listed ({error})")

@@ -21242,6 +21242,40 @@ def test_targeted_repair_runs_whole_touched_and_linked_test_files(
     assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
 
 
+@pytest.mark.parametrize("mode", ["targeted", "full"])
+def test_undecodable_changed_path_keeps_cheap_checks_and_full_fallback(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """F6-8: unsafe targeted coverage must not prevent cheap checks or full verification."""
+    seed_tests(world)
+    relative = "tests/test_new.py"
+    (world.root / relative).write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    real_git_bytes = stage2._git_bytes
+
+    def raw_paths(root: Path, *args: str, **kwargs) -> bytes:
+        output = real_git_bytes(root, *args, **kwargs)
+        if args[0] == "diff":
+            # No invalid filename need exist: macOS filesystems can reject it.
+            output += b"assets/new\xff.txt\0tests/test_\xff.py\0"
+        return output
+
+    monkeypatch.setattr(stage2, "_git_bytes", raw_paths)
+    commands = targeted_mode(monkeypatch)
+    scope: list[str] = []
+    problems = stage2.verify_attempt(world.root, world.plan, mode=mode, scope=scope)
+    assert problems == [], f"undecodable paths blocked verification instead of full fallback: {problems}"
+    assert pytest_targets(commands) == [[relative]], "the decodable cheap test target was lost"
+    assert commands.of("ruff"), "cheap lint/format checks were skipped"
+    assert all(relative in call["command"] for call in commands.of("ruff"))
+    assert len(commands.of("make")) == 1, "unsafe coverage must run full make verify"
+    if mode == "targeted":
+        assert any("decoded safely" in line and "green" in line for line in scope), scope
+    paths = stage2.changed_paths(world.root)
+    assert {b"assets/new\xff.txt", b"tests/test_\xff.py"} <= {
+        path.as_posix().encode("utf-8", errors="surrogateescape") for path in paths
+    }, "changed paths must preserve the original bytes for callers outside cheap selection"
+
+
 @pytest.mark.parametrize("case", ["working-tree", "staged-only", "untracked", "undecodable"])
 def test_targeted_repair_preserves_carriage_return_test_paths(
     world: World, monkeypatch: pytest.MonkeyPatch, case: str
