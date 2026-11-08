@@ -9726,7 +9726,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     """F-7/F-12: the runner measures every retry itself; the model writes no entry, and a rejected attempt's entry stays."""
     baseline = repair_world(world)
     steps = [repair_step()] * 3
-    steps[attempt - 1] = repair_step(append={})
+    steps[attempt - 1] = repair_step(append={"src/repair-work.txt": "work\n"})
     script_repair(
         world,
         steps,
