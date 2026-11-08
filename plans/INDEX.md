@@ -435,6 +435,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/status-fields-restore/decisions.md`](changes/status-fields-restore/decisions.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/findings.md`](changes/status-fields-restore/findings.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |

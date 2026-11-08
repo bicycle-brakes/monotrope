@@ -89,7 +89,11 @@ explicitly, do not delete them.
    authorisation. A guard row ends as
    `fixed — guard test — tests/<path>::<function>`, with the mark
    `yes — guard test — …` written only after both proof legs passed.
-2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
+2. A row whose remedy changes `status` or `implementation_status` in the
+   change's `spec.md`, `design.md` or `plan.md` is repaired by hand first: the
+   runner restores those two fields after every repair attempt, so the model
+   cannot make that change (`docs/WORKFLOW.md` §4, "Repairing taken findings").
+   Then hand the remaining taken rows to the repair: `python3 scripts/stage2.py repair
    <change>` gives them to Codex in one call; the runner runs `make verify`
    and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
    findings").

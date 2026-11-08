@@ -177,6 +177,7 @@ import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import plans_registry  # noqa: E402
 import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
@@ -333,7 +334,11 @@ REPAIR_ANSWER = (
     "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
     "in the kept test so the proof can be repeated. Only a row taken as\n"
     f"`taken — not a test — <reason>` may be answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
-    "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
+    "edit of it is restored before the checks, so the edit alone never fails the attempt. After every\n"
+    "attempt the runner also restores `status` and `implementation_status` in the change's `spec.md`,\n"
+    "optional `design.md` and `plan.md` to the values they had before the call, so never edit those\n"
+    "fields; a repair whose remedy needs a lifecycle change is repaired by hand, not by an attempt.\n"
+    "A hand repair\n"
     "is booked in the row's own Status as\n"
     "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
@@ -4052,6 +4057,16 @@ FINDINGS_RESTORED_NOTICE = (
     "The attempt edited findings.md; the runner restored it before the post-run checks, and the attempt passed them."
 )
 
+# The lifecycle fields a repair may not change (status-fields-restore): the runner puts the pre-call lines
+# back after every attempt, before a post-run check, the derived preparation or the checkpoint reads the
+# documents, and the attempt's bookkeeping names what moved or says the fields stayed unchanged. A review
+# table's Status cell is a different thing entirely and stays out of scope here.
+LIFECYCLE_FIELDS = ("status", "implementation_status")
+LIFECYCLE_DOCS = ("spec.md", "design.md", "plan.md")
+LIFECYCLE_LABEL = "lifecycle fields"
+LIFECYCLE_UNCHANGED = "unchanged"
+RESTORATION_PREFIX = "Runner restoration, "
+
 
 # The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
 # before the model ran: a step that hangs, and a tool the attempt overwrote, both abort the attempt
@@ -7233,6 +7248,146 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         path.write_bytes(content)
 
 
+def frontmatter_fields(text: str) -> dict[str, object] | None:
+    """Effective protected values, using the registry's parser (and its merge semantics)."""
+    # Path.read_text in the registry uses universal newlines. Match it for byte snapshots.
+    try:
+        values = plans_registry.parse_frontmatter(text.replace("\r\n", "\n").replace("\r", "\n"))
+    except (ValueError, OverflowError, RecursionError):
+        # SafeLoader constructors can reject values (such as invalid dates) without a YAMLError.
+        return None
+    if values is None:
+        return None
+    return {key: values[key] for key in LIFECYCLE_FIELDS if key in values}
+
+
+def lifecycle_snapshot(folder: Path) -> dict[Path, bytes | None]:
+    """Trusted whole-document bytes before the attempt; absent optional design stays absent."""
+    baseline: dict[Path, bytes | None] = {}
+    for name in LIFECYCLE_DOCS:
+        path = folder / name
+        try:
+            content = path.read_bytes()
+            fields = frontmatter_fields(content.decode("utf-8"))
+        except FileNotFoundError as error:
+            if name == "design.md" and not path.is_symlink():
+                baseline[path] = None
+                continue
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        except (OSError, UnicodeDecodeError) as error:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        if fields is None:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: missing frontmatter")
+        baseline[path] = content
+    return baseline
+
+
+def lifecycle_header_end(text: str) -> int:
+    """End of the registry's initial YAML block; keep all following body bytes intact."""
+    # Match the registry delimiter after normalizing only for locating the byte-preserving span.
+    match = re.match(r"---(?:\r\n|\n|\r)", text)
+    assert match is not None
+    opening = match.end()
+    end = re.search(r"(?:\r\n|\n|\r)---", text[opening:])
+    assert end is not None
+    return opening + end.end()
+
+
+def reapply_lifecycle_fields(text: str, baseline: str) -> tuple[str, list[str]]:
+    """Restore the trusted complete YAML block when an effective protected value changes.
+
+    YAML anchors and merge keys couple metadata entries: splicing individual field lines cannot
+    preserve validity. Header edits survive when the effective lifecycle is unchanged; body edits
+    always survive this restoration. Membership matters, so missing and explicit null differ.
+    """
+    before = frontmatter_fields(baseline)
+    after = frontmatter_fields(text)
+    assert before is not None and after is not None
+    touched = [
+        key for key in LIFECYCLE_FIELDS if (key in before) != (key in after) or before.get(key) != after.get(key)
+    ]
+    if not touched:
+        return text, []
+    return baseline[: lifecycle_header_end(baseline)] + text[lifecycle_header_end(text) :], touched
+
+
+def restore_lifecycle_fields(
+    root: Path,
+    baseline: dict[Path, bytes | None],
+    aliases: AliasBaseline,
+    recovery_inputs: dict[Path, bytes] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Restore trusted frontmatter on effective lifecycle changes, before verification.
+
+    Linked leaves recover whole trusted inputs without reading their targets. Unreadable metadata
+    rejects the attempt and recovers trusted bytes. Preflight the complete batch before any writes.
+    """
+    # A safe lifecycle destination does not authorize recovery when a different snapshotted
+    # input is unsafe. Check the entire recovery boundary before reading or writing fields.
+    try:
+        preflight_recovery(root, {*baseline, *(recovery_inputs or {})}, aliases=aliases)
+    except RestorationRefused as safety_error:
+        raise RestorationRefused(f"lifecycle field restoration is refused: {safety_error}") from safety_error
+    changes: dict[Path, bytes | None] = {}
+    report: list[str] = []
+    unchanged: list[str] = []
+    problems: list[str] = []
+    for path, content_before in baseline.items():
+        relative = path.relative_to(root).as_posix()
+        if content_before is None:
+            if path.exists() or path.is_symlink():
+                changes[path] = None
+                report.append(f"{relative} — removed (absent before the attempt; no lifecycle baseline)")
+            continue
+        if path.is_symlink() or (path.is_file() and path.stat().st_nlink > 1):
+            problems.append(f"{relative} was replaced by a linked leaf; the snapshotted-input recovery owns it")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input (linked leaf)")
+            continue
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = None
+        if text is None or frontmatter_fields(text) is None:
+            problems.append(f"{relative} was deleted or lost its frontmatter; the snapshotted-input recovery owns it")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input")
+            continue
+        updated, touched = reapply_lifecycle_fields(text, content_before.decode("utf-8"))
+        if touched:
+            changes[path] = updated.encode("utf-8")
+            # Report effective changed fields in their fixed order.
+            restored = ", ".join(field for field in LIFECYCLE_FIELDS if field in touched)
+            report.append(f"{relative} — {restored}")
+        else:
+            unchanged.append(relative)
+    if unchanged or not baseline:
+        relatives = ", ".join(sorted(unchanged)) or "no protected document"
+        report.append(f"{relatives} — {LIFECYCLE_UNCHANGED}")
+    if changes:
+        try:
+            preflight_recovery(root, changes, aliases=aliases)
+        except RestorationRefused as safety_error:
+            raise RestorationRefused(f"lifecycle field restoration is refused: {safety_error}") from safety_error
+        for path, content in changes.items():
+            if content is None:
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            else:
+                restore_work_input(root, path, content)
+    return report, problems
+
+
+def restoration_line(verb: str, attempt: int, route: str, report: list[str]) -> str:
+    """The runner-owned per-attempt restoration line: what moved, or that nothing did."""
+    return (
+        f"{RESTORATION_PREFIX}{today()}: {verb} · attempt {attempt} · route {route} — "
+        f"{LIFECYCLE_LABEL}: {'; '.join(report)}"
+    )
+
+
 def preserve_attempt_failure(error: RestorationRefused, original: BaseException | None) -> None:
     """Keep both causes visible without permitting recovery or hiding a call's failure exit."""
     if original is not None:
@@ -7328,6 +7483,7 @@ def run_attempts(
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
     retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
+    protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -7345,6 +7501,18 @@ def run_attempts(
     answer is saved as local evidence and its location joins the attempt's diagnostics - the parser's
     rejections, the call and verify failures included - and is printed on success (bead
     coding-harness-hgvp). A failed call keeps the output it returned.
+
+    A verb that passes `protect_lifecycle` snapshots the change's lifecycle fields (`status`,
+    `implementation_status`) in spec, optional design and plan right before every call. Once the
+    attempt's changed-file measurement stands, changed effective values restore the trusted whole
+    frontmatter block, preserving body edits and YAML anchors - before verification, the
+    derived preparation or the checkpoint reads the documents. The same per-attempt snapshot serves
+    the early exits: a failed call and a retry recover whole snapshotted inputs, a moved HEAD keeps
+    its commit while the safe working-tree fields go back, a refused checkpoint puts the fields back
+    before the run stops, and every attempt's bookkeeping names what was restored or says the fields
+    stayed unchanged (status-fields-restore). A deleted document or an unreadable header is the
+    existing snapshotted-input recovery's to repair; the attempt is rejected, never accepted on
+    invented surrounding content.
 
     The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
     every route, the keyless ones included; the block in findings.md and the retry prompt both take that
@@ -7412,6 +7580,17 @@ def run_attempts(
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         findings_before = ctx.findings.read_bytes()
+        # The lifecycle baseline is this attempt's own: a retry's documents stand at their restored
+        # pre-call bytes, so the fields protected here are the values this attempt saw.
+        lifecycle_before = lifecycle_snapshot(ctx.folder) if protect_lifecycle else {}
+        recovery_inputs = {**inputs_before, ctx.findings: findings_before}
+
+        def restore_attempt_lifecycle(
+            lifecycle_before=lifecycle_before,
+            recovery_inputs=recovery_inputs,
+        ) -> tuple[list[str], list[str]]:
+            """One recovery boundary for normal verification and exceptional handback alike."""
+            return restore_lifecycle_fields(root, lifecycle_before, aliases, recovery_inputs)
 
         def put_findings_back(
             original: BaseException | None = None,
@@ -7437,6 +7616,18 @@ def run_attempts(
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
+        lifecycle_report: list[str] = []
+        lifecycle_report_persisted = False
+        broken: list[str] = []
+
+        def persist_lifecycle_report(
+            report: list[str], destinations=(*inputs_before, ctx.findings), attempt=attempt, route=route
+        ) -> None:
+            nonlocal lifecycle_report_persisted
+            preflight_recovery(root, destinations, aliases=aliases)
+            append(ctx.findings, restoration_line(verb, attempt, route, report))
+            lifecycle_report_persisted = True
+
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
         # A completed call keeps its measured entry whatever post-call check then stops the run; a
         # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
@@ -7491,13 +7682,25 @@ def run_attempts(
                         saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                     except OSError as save_error:
                         saved = f"saving the attempt failed ({save_error})"
+                    if protect_lifecycle:
+                        try:
+                            # Measure recovery before generic input restoration removes the edits.
+                            # A moved HEAD is never reset or amended.
+                            preflight_recovery(root, (*inputs_before, ctx.findings), aliases=aliases)
+                            lifecycle_report, broken = restore_attempt_lifecycle()
+                        except RestorationRefused as safety_error:
+                            preserve_attempt_failure(safety_error, evidence_error)
+                            raise
                     restored = (
                         "HEAD moved or could not be read; history was not rewritten"
                         if moved
                         else restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                     )
+                    if protect_lifecycle:
+                        persist_lifecycle_report([*lifecycle_report, *broken])
                     failures = [str(call_error)] if call_error is not None else []
                     failures += [str(evidence_error), saved, restored]
+                    failures += [f"{LIFECYCLE_LABEL}: {line}" for line in [*broken, *lifecycle_report]]
                     if exposed:
                         failures.append(credential_message(exposed))
                     failure_type = Refused if isinstance(evidence_error, Refused) else CallFailed
@@ -7522,6 +7725,16 @@ def run_attempts(
                             moved_files = str(error)
                     else:
                         moved_files = unmeasured
+                    if protect_lifecycle:
+                        try:
+                            # The commit stays the maintainer's; the safe working-tree fields go
+                            # back before the audit names the stop (status-fields-restore).
+                            lifecycle_report, broken = restore_attempt_lifecycle()
+                        except RestorationRefused as safety_error:
+                            # No audit may be written after this refusal either: the moved-HEAD
+                            # problem travels in the refusal's terminal diagnostic.
+                            safety_error.args = (f"{safety_error}; {problem}",)
+                            raise
                     try:
                         put_findings_back()
                     except RestorationRefused as safety_error:
@@ -7532,6 +7745,8 @@ def run_attempts(
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"
+                    for line in [*lifecycle_report, *broken]:
+                        listing += f"\n- {LIFECYCLE_LABEL}: {line}"
                     if retain_answer and evidence is not None:
                         listing += f"\n- the attempt's protected answer is saved at {evidence}"
                     append(
@@ -7548,6 +7763,7 @@ def run_attempts(
                             whole=[line for line in listing.splitlines() if evidence and evidence in line],
                         ),
                     )
+                    lifecycle_report_persisted = protect_lifecycle
                     raise CallFailed(problem) from call_error
             if call_error is not None:
                 error = call_error
@@ -7565,9 +7781,15 @@ def run_attempts(
                     saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                 except OSError as save_error:
                     saved = f"saving the attempt failed ({save_error})"
+                if protect_lifecycle:
+                    lifecycle_report, broken = restore_attempt_lifecycle()
                 restored = restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
+                if protect_lifecycle:
+                    persist_lifecycle_report([*lifecycle_report, *broken])
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 ended = f"{error}; {saved}; {restored}{leaked}"
+                for line in [*lifecycle_report, *broken]:
+                    ended += f"; {LIFECYCLE_LABEL}: {line}"
                 if retain_answer and evidence is not None:
                     ended += f"\nthe attempt's protected answer is saved at {evidence}"
                 raise CallFailed(ended) from error
@@ -7611,6 +7833,13 @@ def run_attempts(
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
                     restore_findings(kept)
                     findings_restored = True
+            # The lifecycle fields go back before any post-run check, the derived preparation or the
+            # checkpoint reads the documents; the changed-file measurement above still names the
+            # model's edit (status-fields-restore). The whole batch stands checked before its first
+            # write; a refusal propagates unwritten, as every recovery refusal does.
+            lifecycle_problems: list[str] = []
+            if protect_lifecycle:
+                lifecycle_report, lifecycle_problems = restore_attempt_lifecycle()
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             try:
@@ -7631,6 +7860,9 @@ def run_attempts(
                 # back through the batch restore below, and the verdict stays rejected (F-5).
                 put_findings_back()
                 problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            # A structurally broken protected document rejects the attempt even when every check
+            # would pass on the restored bytes (status-fields-restore).
+            problems = [*lifecycle_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -7663,10 +7895,12 @@ def run_attempts(
                 problems = answer_check(answer)
             if problems:
                 previous_failures = failed_test_ids(problems)
-                # The restore note stands first, then the format line: the next model learns that its
-                # findings edits went back, that the runner formatted, and what failed after.
+                # The restore notes stand first, then the format line: the next model learns that its
+                # findings edits and lifecycle fields went back, that the runner formatted, and what
+                # failed after.
                 problems = [
                     *([FINDINGS_RESTORED] if findings_restored else []),
+                    *(f"{LIFECYCLE_LABEL}: {line}" for line in lifecycle_report),
                     *(f"{FORMAT_LABEL}: {line}" for line in formatted),
                     *problems,
                 ]
@@ -7751,6 +7985,10 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
+                if protect_lifecycle:
+                    # The attempt's own record line, committed with the checkpoint: what moved, or
+                    # that the fields stayed unchanged (status-fields-restore).
+                    persist_lifecycle_report(lifecycle_report)
                 if before_commit is not None:
                     before_commit()
                 message = commit_message
@@ -7760,7 +7998,7 @@ def run_attempts(
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
                 try:
                     checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
-                except CheckpointRolledBack:
+                except CheckpointRolledBack as error:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
                     # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
@@ -7773,8 +8011,19 @@ def run_attempts(
                         moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
                     except Refused:
                         moved = True
+                    if protect_lifecycle:
+                        # The rollback's own restore already put the tree back; when it failed, the
+                        # protected fields still go back before the run stops. A refusal propagates
+                        # before the findings write below (status-fields-restore).
+                        rollback_report, broken = restore_attempt_lifecycle()
+                        # Restoring findings below removes the earlier report too. Keep both the
+                        # pre-check restoration and rollback outcome in the terminal diagnostic.
+                        for line in [*lifecycle_report, *rollback_report, *broken]:
+                            error.args = (f"{error}; {LIFECYCLE_LABEL}: {line}",)
                     if kept is not None and not moved:
                         restore_findings(kept)
+                    if protect_lifecycle:
+                        persist_lifecycle_report([*lifecycle_report, *rollback_report, *broken])
                     raise
                 if after_commit is not None:
                     after_commit()
@@ -7802,6 +8051,19 @@ def run_attempts(
             # stop, so it propagates without an entry (spec, criterion 5).
             if isinstance(error, RestorationRefused) and call_error is not None:
                 preserve_attempt_failure(error, call_error)
+            if protect_lifecycle and not isinstance(error, RestorationRefused):
+                # A terminal failure can precede restoration or follow it (for example a
+                # verifier refusal). Keep the original report: restoring twice would replace
+                # actual changes with an inaccurate "unchanged" result.
+                try:
+                    if not lifecycle_report:
+                        lifecycle_report, broken = restore_attempt_lifecycle()
+                        put_findings_back(original=error)
+                    if not lifecycle_report_persisted:
+                        persist_lifecycle_report([*lifecycle_report, *broken])
+                except RestorationRefused as safety_error:
+                    preserve_attempt_failure(safety_error, error)
+                    raise
             if completed and not logged and not isinstance(error, RestorationRefused):
                 try:
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
@@ -8337,6 +8599,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
         retain_answer=True,
+        protect_lifecycle=True,
     )
 
 
