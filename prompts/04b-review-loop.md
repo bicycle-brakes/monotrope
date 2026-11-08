@@ -89,6 +89,12 @@ explicitly, do not delete them.
    authorisation. A guard row ends as
    `fixed — guard test — tests/<path>::<function>`, with the mark
    `yes — guard test — …` written only after both proof legs passed.
+   Record each decision with `python3 scripts/stage2.py triage <change>
+   <row>=<status> <reason>`, never by hand: the command calls no model,
+   changes only that row's `Status` cell and refuses a plain `taken` on a
+   row whose finding touches only tests, naming the corrective form
+   `taken — not a test — <reason>`. The `Broke a test` mark stays yours to
+   write after the repair, as step 3 says.
 2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
    <change>` gives them to Codex in one call; the runner runs `make verify`
    and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
