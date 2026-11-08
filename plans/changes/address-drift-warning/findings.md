@@ -243,3 +243,7 @@ Stage-2 call, 2026-11-08: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/address-drift-warning/stage2/attempts/address-drift-warning/attempt-3-20261108T142102303880Z-3bb4b6d9.md
 > ````
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3659 commits, 12 rules.
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3660 commits, 12 rules.

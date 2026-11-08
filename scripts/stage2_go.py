@@ -4,8 +4,9 @@ Every Go launch — review loop, research swarm, availability probe and the
 interactive session — assesses its effective destination against the single
 `adresse` record on the `opencode-go` entry of `model-endpoints.yaml`
 (bead coding-harness-4tr4, decisions Q-1/Q-2/Q-5). A different path on the
-admitted host runs on with a notice, and so does a definition that names a
-wire api the record does not map; any other destination is refused before
+admitted host runs on with a notice, and so does a definition with an explicit
+valid on-host base that names a wire api the record does not map. An unmapped
+api without an explicit base is refused, as is any other destination, before
 a model request.
 
 The record is data, never a code default: a missing, unreadable or ambiguous
@@ -336,7 +337,7 @@ def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
     if not isinstance(definition, dict):
         return Assessment({}, problem=f"the model {model} has no usable definition")
     api = definition.get("api")
-    if api is not None and not isinstance(api, str):
+    if "api" in definition and not isinstance(api, str):
         return Assessment({}, problem=f"the model {model} has an unreadable wire api")
     base = definition.get("baseUrl")
     if "baseUrl" in definition and not isinstance(base, str):

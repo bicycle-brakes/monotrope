@@ -408,7 +408,10 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
     reasons = {item["id"]: item["reason"] for item in result["models"]}
     assert reasons["paid-seat"] == "wire-api-not-measured", "the exclusion reason changed"
     assert result["selected"] == ["aa-free", "moved-free"], "a notice changed the selection"
-    assert result["address_notices"] == sorted(set(result["address_notices"])), "a model's notice repeated"
+    for model in ("paid-seat", "moved-free"):
+        assert sum(f"opencode-go/{model}:" in notice for notice in result["address_notices"]) == 1, (
+            f"{model}'s notice was lost or repeated"
+        )
     assert len(result["address_notices"]) == 2, "a drift notice was lost or invented"
     joined = "\n".join(result["address_notices"])
     assert "paid-seat" in joined and UNRECORDED_API in joined, "the excluded row's notice was lost"
@@ -507,6 +510,19 @@ def test_matching_recorded_addresses_do_not_warn(world):
     verdict = stage2_go.assess(policy, model, row(model, api="anthropic-messages", baseUrl=RECORDED_BASE))
     assert verdict.admitted and verdict.notice
     assert "/inference/go/v1" in verdict.notice and "/zen/go/v1" in verdict.notice
+
+
+@pytest.mark.parametrize("api", [123, True, [], {}, None])
+def test_non_string_catalog_api_is_refused(world, api):
+    """A non-string catalog api is refused safely instead of crashing or being admitted."""
+    policy = stage2_go.load_address_policy(world.root)
+    try:
+        verdict = stage2_go.assess(policy, TEST_LADDER[0], row(TEST_LADDER[0], api=api, baseUrl=UNRECORDED_BASE))
+    except AttributeError:
+        pytest.fail("a non-string catalog api must yield a sanitised refusal, not AttributeError")
+    assert not verdict.admitted, "a non-string catalog api must be refused"
+    assert verdict.problem == f"the model {TEST_LADDER[0]} has an unreadable wire api"
+    assert verdict.notice is None
 
 
 def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys):

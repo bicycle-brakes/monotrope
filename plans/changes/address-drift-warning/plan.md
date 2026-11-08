@@ -105,3 +105,4 @@ no Stage-1 fallback is recorded in research.
 ## Time used
 
 2026-11-08 10:43:13–12:04:40 UTC, 4887 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-11-08 17:41:57–18:22:39 UTC, 2441 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
