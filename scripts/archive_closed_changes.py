@@ -185,23 +185,34 @@ def _first_line(text: str) -> str:
 
 
 def _split_front_matter(text: str) -> tuple[str, str] | None:
-    """(header lines, tail from the closing fence), or None without front matter.
+    """Locate the registry-readable header without normalizing original bytes.
 
-    The boundaries mirror `plans_registry._frontmatter`, so a report and a
-    write always agree on where a header ends.
+    Path.read_text in the registry uses universal newlines (LF, CRLF, CR).
+    Keep an offset map so its fence search also works on the original text;
+    this splitter only locates editable spans, never decides metadata.
     """
-    if not text.startswith("---\n"):
+    normalized: list[str] = []
+    offsets: list[int] = []
+    for match in re.finditer(r"\r\n|\r|[^\r]", text):
+        offsets.append(match.start())
+        normalized.append("\n" if match.group().startswith("\r") else match.group())
+    offsets.append(len(text))
+    view = "".join(normalized)
+    if not view.startswith("---\n"):
         return None
-    end = text.find("\n---", 4)
+    end = view.find("\n---", 4)
     if end == -1:
         return None
-    return text[4:end], text[end:]
+    return text[offsets[4] : offsets[end]], text[offsets[end] :]
 
 
 def _load_artefact(path: Path) -> tuple[Artefact | None, str]:
     """Read and parse one artefact; (None, reason) when it cannot be interpreted."""
     try:
+        meta = plans_registry._frontmatter(path)
         raw = path.read_bytes()
+    except UnicodeDecodeError:
+        return None, "is not valid UTF-8"
     except OSError as exc:
         return None, f"cannot be read ({exc.strerror or exc})"
     try:
@@ -209,11 +220,13 @@ def _load_artefact(path: Path) -> tuple[Artefact | None, str]:
     except UnicodeDecodeError:
         return None, "is not valid UTF-8"
     split = _split_front_matter(text)
-    if split is None:
+    if meta is None or split is None:
         return None, "has no readable front-matter block"
     header, tail = split
     try:
-        meta = yaml.load(header, Loader=_UniqueKeyLoader)
+        # Metadata comes from the registry; this additional load only refuses
+        # duplicate keys that its read-only parser tolerates.
+        yaml.load(header, Loader=_UniqueKeyLoader)
     except (yaml.YAMLError, TypeError) as exc:
         # TypeError: an unhashable mapping key — the header cannot become the
         # mapping the registry fields live in, so it is malformed evidence.
@@ -265,7 +278,7 @@ def _uneditable(art: Artefact) -> str:
     could leave continuation lines behind; anchors could leave dangling aliases.
     Refuse these forms and explicit tags before any move.
     """
-    line_keys = {key for line in art.header.split("\n") if (key := _header_key(line))}
+    line_keys = {key for line in re.split(r"\r\n|\r|\n", art.header) if (key := _header_key(line))}
     for name in LIFECYCLE:
         if (name in art.meta) != (name in line_keys):
             return f"the '{name}' header line cannot be edited safely (quoted or indented key)"
@@ -475,17 +488,22 @@ def _edited_text(art: Artefact, day: dt.date) -> str:
         "updated": day.isoformat(),
         "last_reviewed": day.isoformat(),
     }
-    lines = art.header.split("\n")
+    prefix = art.text[: len(art.text) - len(art.header) - len(art.tail)]
+    newline = prefix[3:]
+    # Keep separators as tokens: mixed line endings and unrelated header
+    # lines must survive too. Newly inserted lines use the opening newline.
+    lines = re.split(r"(\r\n|\r|\n)", art.header)
     for key, value in values.items():
         target = f"{key}: {value}"
-        for index, line in enumerate(lines):
+        for index in range(0, len(lines), 2):
+            line = lines[index]
             if _header_key(line) == key:
                 if line != target:
                     lines[index] = target
                 break
         else:
-            lines.append(target)
-    return "---\n" + "\n".join(lines) + art.tail
+            lines.extend([newline, target])
+    return prefix + "".join(lines) + art.tail
 
 
 def _manifest(entry: Eligible) -> list[str]:

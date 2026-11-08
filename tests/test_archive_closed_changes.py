@@ -944,3 +944,66 @@ def test_unreadable_subtree_refuses_entire_batch(plans_repo, monkeypatch, capsys
     assert archive.main(["--write"]) == 1, "an unreadable subtree must refuse the batch"
     assert _snapshot(fx.root) == before, "all walks needed for preflight must finish before any move"
     assert str(src / "hidden") in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r", "mixed"], ids=["lf", "crlf", "cr", "mixed"])
+@pytest.mark.parametrize("missing_updated", [False, True], ids=["complete", "insert-updated"])
+def test_archive_uses_registry_reader_and_preserves_encoding(
+    plans_repo: Fixture, monkeypatch: pytest.MonkeyPatch, newline: str, missing_updated: bool
+) -> None:
+    fx = plans_repo
+    text = _artefact("Spec — café", "b", updated=None if missing_updated else "2026-10-02")
+    parts = text.splitlines(keepends=True)
+    raw = "".join(
+        part.removesuffix("\n") + (("\r\n", "\r", "\n")[i % 3] if newline == "mixed" else newline)
+        if part.endswith("\n")
+        else part
+        for i, part in enumerate(parts)
+    ).encode("utf-8")
+    folder = fx.add("encoded", companions={"spec.md": raw, "payload.bin": b"\x00\xff\r\n"})
+    source = folder / "spec.md"
+    fx.set_render({"b": "closed"})
+    reader = reg._frontmatter
+    expected_meta = reader(source)
+    assert expected_meta and expected_meta["bead"] == "b", "the registry must recognize the fixture"
+    reads = []
+
+    def record(path):
+        reads.append(path)
+        return reader(path)
+
+    monkeypatch.setattr(reg, "_frontmatter", record)
+    before = _snapshot(fx.root)
+    assert archive.main([]) == 0
+    assert _snapshot(fx.root) == before, "reporting must preserve encoded bytes"
+    assert archive.main(["--write"]) == 0
+    moved = fx.archive / "2026-03-04-encoded" / "spec.md"
+    assert moved.exists() and not folder.exists(), "every registry-readable closed folder must move"
+    assert source in reads, "archive classification must use the registry's own reader"
+    expected = raw
+    for key, old, new in (
+        ("status", "draft", "accepted"),
+        ("implementation_status", "none", "done"),
+        ("last_reviewed", "2026-10-02", "2026-03-04"),
+        ("updated", "2026-10-02", "2026-03-04"),
+    ):
+        expected = expected.replace(f"{key}: {old}".encode(), f"{key}: {new}".encode())
+    actual = moved.read_bytes()
+    if missing_updated:
+        # A missing field may add one line; all pre-existing bytes must survive.
+        opening_newline = "\r\n" if newline == "mixed" else newline
+        actual = actual.replace((opening_newline + "updated: 2026-03-04").encode(), b"", 1)
+    assert actual == expected, "only lifecycle values and a missing lifecycle line may change"
+    meta = reader(moved)
+    assert meta == {
+        **expected_meta,
+        "status": "accepted",
+        "implementation_status": "done",
+        "updated": DAY,
+        "last_reviewed": DAY,
+    }
+    assert moved.with_name("payload.bin").read_bytes() == b"\x00\xff\r\n"
+    assert reg.INDEX.read_text(encoding="utf-8") == reg.render_index()
+    after = _snapshot(fx.root)
+    assert archive.main(["--write"]) == 0
+    assert _snapshot(fx.root) == after, "a repeat must preserve every archived byte"
