@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ljmi
@@ -68,11 +68,16 @@ leaves an intentional lifecycle transition to the orchestrator.
    evidence-save failure, moved HEAD or refused checkpoint leaves changed
    fields in a safely writable protected document.
 
-3. When an otherwise passing repair changes content outside the protected
-   fields, field restoration preserves those otherwise permitted edits.
-   *Refuted by:* an accepted body edit, unrelated header field or runner time
-   entry disappears solely because the lifecycle fields were restored, or
-   an edit to the protected fields alone causes rejection.
+3. When an otherwise passing repair changes content outside the header,
+   field restoration preserves those edits. The header belongs to the
+   runner (decisions.md#Q-1): when an attempt changes a protected value, the
+   whole header returns to its snapshot and the attempt's other header edits
+   are discarded; when the protected values stay unchanged, header edits
+   survive.
+   *Refuted by:* an accepted body edit or runner time entry disappears
+   solely because the lifecycle fields were restored, a header edit survives
+   beside a changed protected value, or an edit to the protected fields alone
+   causes rejection.
 
 4. If `design.md` is absent before a repair attempt and the attempt does not
    create it, lifecycle protection leaves it absent.
