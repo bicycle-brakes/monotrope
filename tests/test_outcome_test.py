@@ -44,7 +44,7 @@ QUESTION_IDS = (
 
 # Sentinel values the fixtures carry: deliberately unlike today's live answers,
 # so every assertion reads the tool's own derivation, never the repository's
-# current text. The instruction answer is the basename of its declared source.
+# current text. The instruction answer is the replacement named in the opening.
 SENTINELS: dict[str, Any] = {
     "repair-model": "sentinel-repair-9",
     "repair-fallback": "Sentinel 9.9",
@@ -53,7 +53,7 @@ SENTINELS: dict[str, Any] = {
     "run-plans": "docs/runs",
     "handovers": "docs/journal/handovers-sentinel",
     "tracker-command": "tools/bt",
-    "instructions": "AGENTS.md",
+    "instructions": "OTHER.md",
 }
 
 VERIFY_LOCK_FIXTURE = """FLOOR_ENV = "{floor_env}"
@@ -352,9 +352,8 @@ def test_questionnaire_contains_no_answer_key(tmp_path: Path) -> None:
     travelling with the questions.
     """
     root = _write_repo(tmp_path / "repo")
-    # The source metadata names the instruction file; only question text must
-    # avoid giving that answer. Other derived values must be absent everywhere.
-    sentinels = {key: value for key, value in SENTINELS.items() if key != "instructions"}
+    # Every derived answer, including the replacement filename, must be absent.
+    sentinels = SENTINELS
     document = _export(root)
     assert "AGENTS.md" not in next(q["text"] for q in document["questions"] if q["id"] == "instructions")
     leaves = _leaves(document)
@@ -834,8 +833,8 @@ def test_declared_resolver_and_known_ids(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("subject", ["This", "It", "This document", "The current document"])
-def test_instruction_answer_uses_declaring_source(tmp_path: Path, subject: str) -> None:
-    """Rewording the declaration's subject must not change the source basename."""
+def test_instruction_answer_survives_reworded_subject(tmp_path: Path, subject: str) -> None:
+    """Rewording the declaration's subject must not change the replacement filename."""
     root = _write_repo(tmp_path / "repo")
     path = root / "AGENTS.md"
     path.write_text(path.read_text().replace("`AGENTS.md` is the only", f"{subject} is the only"))
@@ -844,7 +843,7 @@ def test_instruction_answer_uses_declaring_source(tmp_path: Path, subject: str) 
     question = next(q for q in document["questions"] if q["id"] == "instructions")
     assert "AGENTS.md" not in question["text"], "the eighth question must not print its answer"
     done = _record(root, tmp_path, document, dict(SENTINELS))
-    assert done.returncode == 0, "the declaring source basename must survive a reworded subject"
+    assert done.returncode == 0, "the replacement filename must survive a reworded subject"
 
 
 def test_repair_model_accepts_markdown_emphasis(tmp_path: Path) -> None:
@@ -1032,3 +1031,35 @@ def test_answer_archive_refuses_unsafe_destination(tmp_path: Path, destination: 
     assert not (root / HISTORY_REL).exists()
     assert not (root / "local-state").exists()
     assert not (tmp_path / "escaped.json").exists()
+
+
+@pytest.mark.parametrize("prepared_at", ["2026-11-08", "2026-11-08T12:00:00+02:00"])
+def test_outgoing_record_is_validated_before_append(tmp_path: Path, prepared_at: str) -> None:
+    """A readable questionnaire must never append a row the history reader refuses."""
+    root = _write_repo(tmp_path / "repo")
+    assert _record(root, tmp_path, _export(root), {}).returncode == 1
+    history = root / HISTORY_REL
+    original = history.read_bytes()
+    questionnaire = _export(root)
+    questionnaire["prepared_at"] = prepared_at
+    done = _record(root, tmp_path, questionnaire, {})
+    assert done.returncode == 3, "a non-UTC preparation timestamp must refuse recording before append"
+    assert history.read_bytes() == original, "a refused outgoing record must preserve readable history"
+    assert _record(root, tmp_path, _export(root), {}).returncode == 1
+
+
+def test_instruction_question_requires_reading_replacement_declaration(tmp_path: Path) -> None:
+    """The printed source basename is not the answer; the opening supplies the replacement name."""
+    root = _write_repo(tmp_path / "repo")
+    answers = dict(SENTINELS) | {"instructions": "OTHER.md"}
+    questionnaire = _export(root)
+    question = next(q for q in questionnaire["questions"] if q["id"] == "instructions")
+    assert "OTHER.md" not in json.dumps(questionnaire), "question material must not disclose the answer"
+    done = _record(root, tmp_path, questionnaire, answers)
+    assert done.returncode == 0, "the instruction question must grade the replacement declared in the source"
+    assert _record(root, tmp_path, _export(root), answers | {"instructions": question["source"]}).returncode == 1
+    path = root / "AGENTS.md"
+    path.write_text(path.read_text().replace("`OTHER.md`", "`NEXT.md`"))
+    _commit(root, "change replacement declaration")
+    assert _record(root, tmp_path, _export(root), answers).returncode == 1
+    assert _record(root, tmp_path, _export(root), answers | {"instructions": "NEXT.md"}).returncode == 0

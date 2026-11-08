@@ -52,7 +52,7 @@
     },
     {
       "id": "instructions",
-      "text": "Read the source file named for this question and confirm its opening declares it the only instruction file; give that source file's basename.",
+      "text": "Read the opening sole-instruction-file declaration in the named source: which filename does it say would silently replace the repository instructions? Give that replacement filename exactly.",
       "answer_type": "string",
       "source": "AGENTS.md",
       "resolver": "instructions"

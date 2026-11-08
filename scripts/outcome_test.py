@@ -318,7 +318,10 @@ def _read_instructions(agents: str, source: str) -> Reading:
         return Reading.unread(
             f"expected exactly one sole-instruction-file declaration in the opening of {source}, found {count}"
         )
-    return Reading.ok(PurePosixPath(source).name)
+    replacements = re.findall(r"`([^`]+)`\s+would silently replace it\b", "\n".join(opening))
+    if len(replacements) != 1 or PurePosixPath(replacements[0]).name != replacements[0]:
+        return Reading.unread(f"expected exactly one replacement instruction filename in the opening of {source}")
+    return Reading.ok(replacements[0])
 
 
 def _expected_answer(qid: str, texts: dict[str, str], by_id: dict[str, dict[str, Any]]) -> Reading:
@@ -966,6 +969,7 @@ def _record(args: argparse.Namespace) -> int:
         _refuse_dirty_measured_files(qset)
         _check_snapshot(_take_snapshot(qset), questionnaire)
 
+    _validate_record(record)
     _store_answers(questionnaire["run_id"], snapshot["commit"], answers)
     _append_record(record, _recheck)
     return correct

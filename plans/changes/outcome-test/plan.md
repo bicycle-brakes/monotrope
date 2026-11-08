@@ -89,7 +89,7 @@ existing runner modules, verification admission or startup hooks.
 | run-plans | Repository-relative directory containing dated run plans | `docs/orchestration.md`, dated run-plan links under “What a lane is”; resolve links relative to that file and require one common directory |
 | handovers | Repository-relative session-handover directory | `docs/WORKFLOW.md`, “The eighth movement”, the handover table's date/name path |
 | tracker-command | Repository-relative tracker executable | `AGENTS.md`, the `Use ... never bare ...` house rule |
-| instructions | Sole repository instruction file's name | `AGENTS.md`, its opening sole-instruction-file declaration; require that declaration and read the named file's basename |
+| instructions | Filename that would replace the repository instructions | `AGENTS.md`, its opening sole-instruction-file declaration; require that declaration and read the filename explicitly said to silently replace it |
 
 - AST-read the two Python literals without importing or executing their
   module. Prose readers require one unambiguous supported declaration in
@@ -109,14 +109,20 @@ existing runner modules, verification admission or startup hooks.
   synonym, prose, partial-credit or model-based grading.
 - Append schema version, run ID, preparation/recording UTC times, full commit,
   question and source hashes, the four session labels and freshness
-  attestation, purpose/target, submitted answers, eight ID/verdict pairs and
-  `correct`/`total` counts. Do not persist expected values or source excerpts;
-  a subject's own correct answer may of course equal a live expected value.
+  attestation, purpose/target, eight ID/verdict pairs and `correct`/`total`
+  counts. Repository history contains neither submitted answer texts nor
+  expected values or source excerpts (`decisions.md#Q-3`, maintainer,
+  2026-11-08). Retain submitted answers only in the external user state
+  directory with private file permissions; refuse a state directory inside
+  the repository.
   Summary exit codes: 0 = eight correct, 1 = measured with incorrect answers,
   3 = not measured/recording failed. Both measured outcomes append one record.
-- The only persistent destination is
-  `docs/research/outcome-test-results.jsonl`. Validate existing rows and refuse
-  malformed/unsupported history or duplicate run IDs before writing. Serialize
+- The only repository destination is
+  `docs/research/outcome-test-results.jsonl`; the external answer archive is
+  the second persistent destination. Validate the outgoing record with the
+  history reader's validator before retaining answers or appending. Validate
+  existing rows and refuse malformed/unsupported history or duplicate run IDs
+  before writing. Serialize
   appends under a lock on the real regular result file; reject symlinks in its
   path. Save the original end position and roll back a failed append while
   holding that lock; never rewrite older lines or claim crash-proof storage.
@@ -178,3 +184,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-08 00:50:05–01:37:24 UTC, 2839 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 01:56:56–05:28:36 UTC, 12699 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 13:24:08–18:22:14 UTC, 17886 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-08 18:45:00–20:52:37 UTC, 7657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

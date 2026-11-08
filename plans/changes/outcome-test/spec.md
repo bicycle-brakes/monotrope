@@ -59,7 +59,7 @@ not a failed implementation or permission to change the questions.
    questions covering the primary repair model, repair fallback model,
    default verification memory floor, its override variable, run-plan
    directory, handover directory, tracker command and repository instruction
-   file.
+   replacement filename.
    *Refuted by:* a source-value change changes the question identities, one
    topic is missing, or the questionnaire contains seven or nine questions.
 
@@ -97,11 +97,14 @@ not a failed implementation or permission to change the questions.
 
 7. When a measured run is recorded, exactly one JSON line is appended to
    `docs/research/outcome-test-results.jsonl` with its UTC date, full commit,
-   question-set and source fingerprints, session metadata, purpose, submitted
-   answers, eight verdicts and score, without storing the derived answer key.
+   question-set and source fingerprints, session metadata, purpose, eight
+   verdicts and score. Submitted answer texts
+   stay only in the external user state directory, as decided in
+   `decisions.md#Q-3` (maintainer, 2026-11-08); neither answer texts nor the
+   derived answer key enter repository history.
    *Refuted by:* a record lacks its commit or date, grading another submission
    overwrites history, one run occupies multiple lines, or expected-value
-   fields are persisted alongside the subject's own answers.
+   fields or submitted answer texts are persisted in repository history.
 
 8. If an existing result history cannot be read as the supported JSONL
    format or an append cannot be completed, the tool reports failure without
