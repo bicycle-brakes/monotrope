@@ -129,6 +129,12 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
 - A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
+- **Night runs stay plain** (maintainer, 2026-10-12): `ROADMAP.md` is the one map and the
+  morning handover the one report; no Kanban board, canvas or dashboard (Grafana included)
+  is proposed or built for the night run until the maintainer states that the plain form
+  has carried. Collecting data is not covered: a structured event log (JSONL with
+  OpenTelemetry GenAI field names, bead coding-harness-oebl) is allowed; a service that
+  shows it is not. Reason: everything is built for an ADHD reader, no feature creep.
 
 ## Tracker quick reference
 
@@ -172,7 +178,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
-  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04).
+  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
   days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
