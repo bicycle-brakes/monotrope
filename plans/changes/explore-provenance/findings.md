@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-09
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -2093,3 +2093,14 @@ Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claud
 > 3 failed, 104 passed in 38.41s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261109T200535851717Z-110681e8.md
 > ```
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 986 files, 3792 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-6 | BLOCKER | SPEC | Phase 6 | tests/test_explore_provenance.py:18 | [DIVERGENT] The spec freezes the exemption set at commit `0a5aeb3f`, but commit `1cbeed87` moves its cutoff and adds research files for `address-drift-warning`, `archive-closed-changes` and `outcome-test`. Reproduced: the census reports producer metadata violations in all three, plus a retained skeleton notice in `outcome-test`, while both the repository census test and the shrink test pass. These additions hide defects that the fixed exemption contract requires to fail. [AC7, AC9] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c2bb-dc11-7001-9e36-e88f59e27d82, 2026-11-10
+Reviewer session: codex 01a1c2bb-dc11-7001-9e36-e88f59e27d82 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
