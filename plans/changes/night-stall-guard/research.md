@@ -9,20 +9,16 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-ibde
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2, version: "GLM 5.3 Flash exploration; gpt-6.1-sol gap closure, 2026-11-09"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # night stall guard — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 exploration and the dated drafting gap closure below are model-written;
+human review remains pending.
 
 Stage-2 call, 2026-11-09: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 959 files, 3718 commits, 12 rules.
 
@@ -74,3 +70,44 @@ Depends on the unresolved scope, by today's layout: a doctrine/practice change t
 ---
 
 *Exploration report ends here. Prepared by the phase-1 explorer (glm-5.3-flash, 2026-11-09); all paths verified in this worktree at branch `fix/night-stall-guard`.*
+
+## Drafting gap closure — 2026-11-09
+
+The answered interview now supplies the scope that the explorer could not
+read: `decisions.md#Q-1` explicitly declares a bounded change, immediate
+night refusal and precise merge matching first, with the phone alert later.
+It records the permission-prompt incident and excludes moving heartbeats
+into headless calls. This supersedes the exploration's inference from the
+change's name; runner process supervision is not the selected work.
+
+At `e6ce9677`, read during drafting on 2026-11-09:
+
+- `.claude/settings.json` holds the broad API patterns
+  `Bash(gh api *merge*)` and `Bash(gh api *Merge*)`, alongside direct merge,
+  alias-definition, main-push, MCP, Codex and Omnigent rules.
+- `scripts/merge_guard.py` is the single merge-rule list and a limited
+  text matcher. `tests/test_merge_guard.py` compares the project settings
+  with it and tests rule preservation by `scripts/omnigent_policy.py`.
+  Existing tests cover repository-flag reads but no inline GraphQL read
+  with `mergedAt` and `isInMergeQueue`; the rule-count assertion pins eight
+  rules. Its current mutation samples omit `enqueuePullRequest`.
+- `tools/claude-code/install.sh` copies six user-level assets and merges
+  only the status line and hooks; its `--check` is read-only and changed
+  installed files receive timestamped backups. `tools/claude-code/settings.json`
+  has no permission profile. No night launcher is present in that directory.
+- Historical permission documentation is already retained in
+  `plans/changes/harness-decide-adr/research.md`, gap closure item 10, and
+  `docs/research/2026-09-30-decision-pull-requests.md`: deny precedes ask,
+  scope lists combine, and `dontAsk` refuses unapproved calls. This is a
+  record of documentation read on 2026-09-30, not a fresh runtime check.
+  Current Claude Code behavior and installed user/managed settings were
+  not read in this worktree-only drafting call.
+- `templates/spec.md` exists; no `templates/plan.md` exists. The prompt's
+  `scripts/validate_change_artefacts.py` is absent, so that named gate cannot
+  be reported green. Interview and criterion-ledger checkers are present.
+- The latest handover available here is
+  `docs/journal/handover/2026-11-06-heartbeat-night.md`; its historical lane
+  ownership does not measure current sessions. The supplied runner context
+  owns this drafting attempt; no tracker or external session-state write is
+  part of it. Current pull-request state was not read: `gh pr view` failed
+  to connect to GitHub on 2026-11-09.
