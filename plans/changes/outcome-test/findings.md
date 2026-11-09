@@ -339,10 +339,10 @@ Stage-2 call, 2026-11-09: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | docs/research/outcome-test-results.jsonl | At commit b81f5a9d, the required history file is absent. No recorded fresh-session baseline is available to verify its score, measured commit or session provenance. The actual baseline must be recorded before completion. [AC 4, 9] | Codex | open | — |
-| F6-2 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:422 | An answer file containing `{"verify-floor": NaN}` is accepted despite being invalid JSON. In-memory reproduction reached the append callback, printed `measured: 0/8 correct` and returned 1; `Infinity` and `-Infinity` behave identically. Malformed input must return 3 without recording a score. [AC 6] | Codex | open | — |
-| F6-3 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:374 | Submitting the valid JSON integer consisting of 1 followed by 400 zeros for `verify-floor` raises an uncaught `OverflowError` in `math.isfinite`. Reproduced directly against `_grade`: the readable submission receives no deterministic verdict. This finite, incorrect answer must be graded incorrect. [AC 5] | Codex | open | — |
-| F6-4 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:141–155 | When the workflow contains two “The routing” sections with conflicting repair models, `_section` silently selects the first. Reproduction with an appended conflicting routing table still derived `gpt-6.1-sol` without reporting ambiguity. Conflicting source evidence must prevent measurement rather than select a passing answer by document order. [AC 6] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | docs/research/outcome-test-results.jsonl | At commit b81f5a9d, the required history file is absent. No recorded fresh-session baseline is available to verify its score, measured commit or session provenance. The actual baseline must be recorded before completion. [AC 4, 9] | Codex | rejected — not a model repair: the baseline is the orchestrator's measurement with a fresh session before the pull request (spec, Definition of Done); it is done before the PR opens | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:422 | An answer file containing `{"verify-floor": NaN}` is accepted despite being invalid JSON. In-memory reproduction reached the append callback, printed `measured: 0/8 correct` and returned 1; `Infinity` and `-Infinity` behave identically. Malformed input must return 3 without recording a score. [AC 6] | Codex | taken — reject NaN and ±Infinity in answer submissions as malformed input (exit 3, nothing appended) | — |
+| F6-3 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:374 | Submitting the valid JSON integer consisting of 1 followed by 400 zeros for `verify-floor` raises an uncaught `OverflowError` in `math.isfinite`. Reproduced directly against `_grade`: the readable submission receives no deterministic verdict. This finite, incorrect answer must be graded incorrect. [AC 5] | Codex | taken — a huge integer answer gets an incorrect verdict instead of raising OverflowError | — |
+| F6-4 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:141–155 | When the workflow contains two “The routing” sections with conflicting repair models, `_section` silently selects the first. Reproduction with an appended conflicting routing table still derived `gpt-6.1-sol` without reporting ambiguity. Conflicting source evidence must prevent measurement rather than select a passing answer by document order. [AC 6] | Codex | taken — conflicting routing sections refuse measurement instead of picking the first | — |
 
 Phase 6 verdict: codex 01a1bf04-7bc1-7751-bfc8-dd1d39c85864, 2026-11-09
 Reviewer session: codex 01a1bf04-7bc1-7751-bfc8-dd1d39c85864 — a fresh session reviewed: no phase-2a session was recorded
@@ -426,3 +426,17 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-09: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 929 files, 3712 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 929 files, 3713 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-09
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | Phase 6 | docs/research/outcome-test-results.jsonl | At commit `8d87d263`, the required history file remains absent. No actual fresh-session baseline is recorded; completion requires its score, measured commit and session metadata. [AC 4, 9] | Codex | rejected — not a model repair: the baseline is the orchestrator's measurement with a fresh session before the pull request (spec, Definition of Done); it is done before the PR opens | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:422 | Answer submissions containing `NaN`, `Infinity` or `-Infinity` are accepted and graded despite being invalid JSON. Reproduced through `_load_answers` and `_verdicts`; malformed input must return 3 without appending a scored result. [AC 6] | Codex | taken — reject NaN and ±Infinity in answer submissions as malformed input (exit 3, nothing appended) | — |
+| F6-3 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:374 | A valid JSON integer consisting of 1 followed by 400 zeros for `verify-floor` raises an uncaught `OverflowError` in `math.isfinite`. Reproduced against `_grade`; this finite, incorrect answer must receive an incorrect verdict. [AC 5] | Codex | taken — a huge integer answer gets an incorrect verdict instead of raising OverflowError | — |
+| F6-4 | MAJOR | SPEC | Phase 6 | scripts/outcome_test.py:141 | With two conflicting “The routing” sections, `_section` silently chooses the first. Appending a table naming `conflicting-repair-1` still derives `gpt-6.1-sol`. Conflicting evidence must prevent measurement instead of selecting an answer by document order. [AC 6] | Codex | taken — conflicting routing sections refuse measurement instead of picking the first | — |
+
+Phase 6 verdict: codex 01a1bf0f-51e2-7db1-b94a-6c17f32bf6c5, 2026-11-09
+Reviewer session: codex 01a1bf0f-51e2-7db1-b94a-6c17f32bf6c5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
