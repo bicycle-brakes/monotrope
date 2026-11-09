@@ -964,7 +964,10 @@ def test_amended_criteria_after_main_headings_require_basis(world: World, capsys
 
 
 def test_research_swarm_seat_amendment_has_answered_bases(world: World, capsys) -> None:
-    source = Path(__file__).resolve().parents[1] / "plans/changes/research-swarm/spec.md"
+    root = Path(__file__).resolve().parents[1]
+    source = root / "plans/changes/research-swarm/spec.md"
+    if not source.exists():
+        source = root / "plans/changes/archive/2026-11-06-research-swarm/spec.md"
     if not source.exists():
         pytest.skip("the framework research spec is not shipped in the kit")
     amendment = (

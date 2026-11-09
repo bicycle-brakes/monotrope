@@ -84,9 +84,18 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
         "tests/test_adoption.py runs it"
     ),
+    "archive_closed_changes.py": (
+        "Local command — `make archive` and the post-merge procedure in prompts/07-commit.md run it; "
+        "it moves completed change folders by design, so CI never does "
+        "(tests/test_archive_closed_changes.py runs it)"
+    ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
+    ),
+    "outcome_test.py": (
+        "On-demand administrator measurement — a fresh session answers `questions`, the administrator records it with `record` "
+        "(docs/WORKFLOW.md, 'The outcome test'); it runs only read-only git, never on a schedule, so CI never runs it (tests/test_outcome_test.py runs it)"
     ),
     "close_merged_beads.py": (
         "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
@@ -126,6 +135,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
         "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
     ),
+    "machine_facts.py": (
+        "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
+        "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "
+        "which no CI checkout can stand in for; tests/test_machine_facts.py runs it against stand-ins"
+    ),
     "run_report.py": (
         "Entry point, not a gate — the local, read-only run report (make report); it snapshots the "
         "maintainer's working tree and live system figures, which no CI checkout can stand in for; "
@@ -149,6 +163,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "stand-in-testable launch path. tests/test_stage2_availability.py exercises the review loop's preparation "
         "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
         "swarm's against stand-ins and a fixture catalog"
+    ),
+    "stage2_free.py": (
+        "Helper imported by scripts/stage2.py and scripts/stage2_swarm.py for the shared free-model "
+        "selection of the review loop and the research swarm; never an entry point of its own. "
+        "tests/test_stage2_free.py runs it, tests/test_pi_contract.py checks both preparations offline"
     ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
