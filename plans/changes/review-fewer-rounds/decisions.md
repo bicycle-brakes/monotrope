@@ -131,6 +131,45 @@ context: |
   Repository change: a seating constraint the validator checks; gate scope on changed files.
   Architecture change: none.
 
+## Q-9 · The form of a lens
+
+asked: 2026-11-09
+answer: "Fehlerklassen + Prüffragen" — each lens is a defect class with a list of concrete check questions, not a role the reviewer plays.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the five lenses of Q-1 need a form in the reviewer prompt.
+  Intention: follow the stronger evidence in research.md (scenario reading by defect class found more defects than ad hoc or checklist reading, Porter, Votta and Basili 1995; perspective-based reading showed no clear gain, Ciolkowski 2009).
+  Today: reviewers read without focus.
+  Repository change: one prompt per lens with its check questions.
+  Architecture change: part of the ADR 0021 amendment.
+
+## Q-10 · Where the check questions come from
+
+asked: 2026-11-09
+answer: "Aus unseren Funden + Literatur, du gibst frei" — an agent derives the questions per lens from the repository's measured loop and phase-6 rows and from the literature; the maintainer approves the list.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: good check questions target the defects this repository actually has (measured 2026-11-08: 86% of phase-6 rows are SPEC, 65% of loop rows MAINT).
+  Intention: questions that fit real defects, approved by the maintainer.
+  Today: no check questions.
+  Repository change: a question list per lens, held in the central configuration (bead coding-harness-twvx) or the prompt.
+  Architecture change: none beyond Q-9.
+
+## Q-11 · What triggers a second round
+
+asked: 2026-11-09
+answer: "Einzelfund-Anteil, Jackknife nur protokolliert" — the share of accepted findings that only one reviewer of the lens reported decides; the Mh-jackknife and Chao estimates are computed and recorded only.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the remaining-defect estimate per lens from the overlap of its three reviewers (Q-3).
+  Intention: a rule that is simple and explainable; the Mh-jackknife, best at three reviewers, still runs about 27% low in the median (Briand et al. 2000) and correlated model errors push it lower.
+  Today: no estimator.
+  Repository change: a small computation in the runner; both estimates logged.
+  Architecture change: part of the ADR 0021 amendment.
+
 ## Open — not counted
 
 - The research questions of 2026-11-08 are not answered: (a) evidence for
@@ -139,4 +178,6 @@ context: |
   ensembles and model diversity of LLM reviewers; (d) cost of 15 round-1
   calls against today's rounds and verify runs. The stage-1 exploration of
   2026-11-09 (research.md) did not read the bead and covers the repository
-  only.
+  only. Answered on 2026-11-09 by the Opus research section of research.md.
+- Q-12 (the threshold and how it is introduced, shadow run or live) is open:
+  the maintainer asked to clarify it first (2026-11-09).
