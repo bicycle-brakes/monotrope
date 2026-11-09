@@ -102,6 +102,8 @@ def build_overlay(fragment: dict, layers: list[dict]) -> dict:
     """
     overlay = json.loads(json.dumps(fragment))
     permissions = overlay.setdefault("permissions", {})
+    if not isinstance(permissions, dict):
+        raise ValueError("the night settings fragment: 'permissions' is not an object")
     asks = permissions.get("ask")
     if asks:
         raise ValueError(f"the night settings fragment must not carry ask rules: {asks}")
@@ -171,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
             done = subprocess.run([CLAUDE, "--settings", str(overlay_path), "--permission-mode", "dontAsk", *argv])
         except FileNotFoundError:
             print("night.py: 'claude' was not found on the PATH", file=sys.stderr)
+            return 127
+        except OSError as exc:
+            print(f"night.py: cannot launch 'claude': {exc}", file=sys.stderr)
             return 127
         return done.returncode if done.returncode >= 0 else 128 - done.returncode
     finally:

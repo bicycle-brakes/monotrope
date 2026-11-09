@@ -275,3 +275,54 @@ Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 966 files, 3734 commits, 12 rules.
 
 Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 966 files, 3741 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 966 files, 3744 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_merge_guard.py` +38 -20
+> - `tests/test_night_profile.py` +45 -0
+> - `tools/claude-code/README.md` +3 -2
+> - `tools/claude-code/night.py` +5 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/night-stall-guard/plan.md, plans/changes/night-stall-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `tools/claude-code/README.md` is an input kind the targeted selector does not cover
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-stall-guard/stage2/attempts/night-stall-guard/attempt-1-20261109T133011619229Z-322d197f.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 975 files, 3750 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/merge_guard.py` +3 -0
+> - `tests/test_merge_guard.py` +14 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/night-stall-guard/plan.md, plans/changes/night-stall-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `.codex/agents/code-generation-orchestrator.toml` is an input kind the targeted selector does not cover
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-stall-guard/stage2/attempts/night-stall-guard/attempt-2-20261109T133011619229Z-322d197f.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 975 files, 3752 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/night-stall-guard/plan.md, plans/changes/night-stall-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `.codex/agents/code-generation-orchestrator.toml` is an input kind the targeted selector does not cover
+> - L1-7: tests/test_merge_guard.py::test_held_profile_regressions_are_detected: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/night-stall-guard/stage2/attempts/night-stall-guard/attempt-3-20261109T133011619229Z-322d197f.md
+> ```

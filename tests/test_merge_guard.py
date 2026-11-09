@@ -6,11 +6,9 @@ from the module, so a rule dropped from the list still fails against an independ
 The night overlay checks come from `tools/claude-code/night.py`, which turns the day asks into denies.
 The Omnigent ask rule beside them is held by `tests/test_omnigent_deny_layers.py`.
 
-`test_settings_ask_before_every_merge` and `test_no_deny_or_allow_rule_covers_a_merge` read the held
-`.claude/settings.json`; the plan keeps that file out of the runner attempt and hands it to the
-orchestrator's bootstrap (plan step 5), so they stand red until the held ask list carries exactly the
-rules of `scripts/merge_guard.py`. Every other test holds its own fixture, so the checks of the runner
-attempt run green before that bootstrap.
+The held day settings have been bootstrapped to the narrowed merge rules. Both independent command
+matrices exercise that actual profile and the night overlay derived from it. Policy rendering uses
+an isolated copy of the held settings, preserving the source file and its unrelated settings.
 """
 
 from __future__ import annotations
@@ -18,6 +16,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
@@ -45,15 +45,18 @@ def _proposed_day_settings() -> dict:
 
 
 def _night_denies() -> list[str]:
-    """The deny rules a night overlay derives from the proposed day asks (the fragment adds the mode)."""
+    """The deny rules a night overlay derives from the held day asks (the fragment adds the mode)."""
     fragment = json.loads(NIGHT_FRAGMENT.read_text(encoding="utf-8"))
-    return night.build_overlay(fragment, [_proposed_day_settings()])["permissions"]["deny"]
+    return night.build_overlay(fragment, [_settings()])["permissions"]["deny"]
 
 
 def test_settings_ask_before_every_merge() -> None:
     ask = _settings()["permissions"]["ask"]
     missing = [rule for rule in mg.MERGE_ASK_RULES if rule not in ask]
     assert not missing, f".claude/settings.json does not ask before: {missing}"
+    assert not {"Bash(gh api *merge*)", "Bash(gh api *Merge*)"}.intersection(ask), (
+        "the held day settings still ask on merge-field reads"
+    )
 
 
 def test_no_deny_or_allow_rule_covers_a_merge() -> None:
@@ -149,12 +152,12 @@ MERGE_FIELD_READS = (
 
 def test_direct_merge_actions_are_guarded() -> None:
     """Criterion 3: every independently written merge action is stopped by the day asks and by the night denies."""
-    day = _proposed_day_settings()
+    day = _settings()
     night_denies = _night_denies()
     assert mg.problems(day) == [], "a day deny or allow rule covers a merge sample"
     for behavior, calls in MERGE_ACTIONS.items():
         for call in calls:
-            day_hit = [rule for rule in mg.MERGE_ASK_RULES if mg.covers(rule, call)]
+            day_hit = [rule for rule in day["permissions"]["ask"] if mg.covers(rule, call)]
             assert day_hit, f"no merge rule asks before the {behavior} {call!r}"
             assert any(mg.covers(rule, call) for rule in night_denies), (
                 f"the night overlay would not deny the {behavior} {call!r}"
@@ -163,9 +166,10 @@ def test_direct_merge_actions_are_guarded() -> None:
 
 def test_merge_field_reads_do_not_trigger_the_brake() -> None:
     """Criterion 4: a read naming merge fields prompts nowhere - not through a day ask, not through a night deny."""
+    day = _settings()
     night_denies = _night_denies()
     for call in MERGE_FIELD_READS:
-        day_hit = [rule for rule in mg.MERGE_ASK_RULES if mg.covers(rule, call)]
+        day_hit = [rule for rule in day["permissions"]["ask"] if mg.covers(rule, call)]
         night_hit = [rule for rule in night_denies if mg.covers(rule, call)]
         assert not day_hit and not night_hit, f"the read {call!r} would prompt through {day_hit + night_hit}"
 
@@ -255,16 +259,8 @@ def test_the_matcher_follows_the_documented_forms() -> None:
 
 
 def test_the_omnigent_render_keeps_the_merge_rules(tmp_path: Path) -> None:
-    """Criterion 5: regenerating the Omnigent rules keeps every merge ask and the unrelated day brakes.
-
-    The fixture carries the day settings this change proposes - exactly the merge asks of
-    `scripts/merge_guard.py` beside the unrelated brakes - so the render is held without reading the
-    held `.claude/settings.json`, which still carries the stale broad rules until the orchestrator's
-    bootstrap (plan step 5).
-    """
-    proposed = _proposed_day_settings()
-    proposed["permissions"]["ask"] += ["Bash(codex *)", "mcp__omnigent__sys_advise_models"]
-    proposed["permissions"]["deny"] = op.layer1_rules()
+    """Criterion 5: render a copy of the held settings, keeping merge rules and unrelated settings."""
+    proposed = _settings()
     target = tmp_path / ".claude" / "settings.json"
     target.parent.mkdir(parents=True)
     target.write_text(json.dumps(proposed, indent=2) + "\n", encoding="utf-8")
@@ -276,3 +272,39 @@ def test_the_omnigent_render_keeps_the_merge_rules(tmp_path: Path) -> None:
     assert "Bash(codex *)" in ask, "the render lost the unrelated Codex brake"
     assert op.check(tmp_path) == []
     assert mg.problems(rendered) == []
+    for call in MERGE_FIELD_READS:
+        hit = [rule for rule in ask if mg.covers(rule, call)]
+        assert not hit, f"the rendered read {call!r} would prompt through {hit}"
+    assert {key: value for key, value in rendered.items() if key != "permissions"} == {
+        key: value for key, value in proposed.items() if key != "permissions"
+    }
+    assert rendered["permissions"] == proposed["permissions"]
+
+
+@pytest.mark.parametrize("broad_rule", ["Bash(gh api *merge*)", "Bash(gh api *Merge*)"])
+def test_day_checker_rejects_broad_merge_asks(broad_rule: str) -> None:
+    """The day checker must reject a return of either incident rule, beside the held read matrices."""
+    settings = _settings()
+    assert mg.problems(settings) == []
+    settings["permissions"]["ask"].append(broad_rule)
+    assert any(broad_rule in problem and "reads" in problem for problem in mg.problems(settings)), (
+        f"the day checker accepted {broad_rule}, which prompts on merge-field reads"
+    )
+
+
+@pytest.mark.parametrize("broad_rule", ["Bash(gh api *merge*)", "Bash(gh api *Merge*)"])
+@pytest.mark.parametrize("check", ["reads", "render"])
+def test_held_profile_regressions_are_detected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, broad_rule: str, check: str
+) -> None:
+    """Plant the incident in a copy of the held day file; both consumers must reject it."""
+    settings = _settings()
+    settings["permissions"]["ask"].append(broad_rule)
+    target = tmp_path / "held-settings.json"
+    target.write_text(json.dumps(settings), encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "SETTINGS", target)
+    with pytest.raises(AssertionError, match="read"):
+        if check == "reads":
+            test_merge_field_reads_do_not_trigger_the_brake()
+        else:
+            test_the_omnigent_render_keeps_the_merge_rules(tmp_path / "render")

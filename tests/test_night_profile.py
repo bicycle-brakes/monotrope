@@ -376,3 +376,48 @@ def test_install_backup_and_check_cover_night_assets(tmp_path: Path) -> None:
     assert checked.returncode == 1
     assert "missing" in checked.stdout and "night.py" in checked.stdout and "night-settings.json" in checked.stdout
     assert not (fresh / ".claude").exists(), "the check created the target"
+
+
+@pytest.mark.parametrize("permissions", [None, [], "dontAsk", 42])
+def test_malformed_fragment_permissions_are_refused(workspace: SimpleNamespace, permissions: object) -> None:
+    """An installed fragment with a malformed permissions value fails before launch."""
+    launcher = workspace.home / "night.py"
+    launcher.write_bytes(NIGHT_PY.read_bytes())
+    write_settings(launcher.with_name("night-settings.json"), {"permissions": permissions})
+    done = subprocess.run(
+        [sys.executable, str(launcher)],
+        cwd=workspace.project,
+        env=workspace.env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 3, done.stderr
+    assert "permissions" in done.stderr and "not an object" in done.stderr
+    assert "Traceback" not in done.stderr
+    assert not recorded(workspace, ".argv").exists()
+
+
+@pytest.mark.parametrize("failure", [PermissionError("not executable"), OSError("launch failed")])
+def test_child_launch_errors_are_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: OSError
+) -> None:
+    """OS launch errors use the launcher diagnostic and 127, and clean the overlay."""
+    monkeypatch.setattr(night, "project_root", lambda _cwd: tmp_path)
+    monkeypatch.setattr(night, "user_settings_path", lambda: tmp_path / "absent.json")
+    overlays = []
+
+    def fail_launch(argv: list[str]) -> None:
+        overlays.append(Path(argv[2]))
+        raise failure
+
+    monkeypatch.setattr(night.subprocess, "run", fail_launch)
+    try:
+        result = night.main([])
+    except OSError as exc:
+        pytest.fail(f"launcher must report OS launch errors with exit 127, raised {exc!r}")
+    assert result == 127
+    assert "night.py:" in capsys.readouterr().err
+    assert len(overlays) == 1
+    assert not overlays[0].parent.exists()

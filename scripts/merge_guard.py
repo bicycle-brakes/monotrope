@@ -156,6 +156,9 @@ def problems(settings: dict) -> list[str]:
         for rule, (reason, _) in MERGE_ASK_RULES.items()
         if rule not in ask
     ]
+    for rule in ("Bash(gh api *merge*)", "Bash(gh api *Merge*)"):
+        if rule in ask:
+            found.append(f".claude/settings.json has the broad ask rule {rule}, which prompts on merge-field reads")
     for kind in ("deny", "allow"):
         for rule in permissions.get(kind) or []:
             hit = [call for call in samples() if covers(rule, call)]

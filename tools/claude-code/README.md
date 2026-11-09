@@ -92,8 +92,9 @@ not there yet; everything else in the file stays. A replaced file is kept as
 Change a file here and reinstall — a change made only in `~/.claude` is
 overwritten by the next install, which `--check` shows first.
 
-Needs `jq`, `git` and `perl`. Without `claude` on the PATH the recap and the
-note stay empty; without `bd` the beads line stays hidden.
+Needs `jq`, `git`, `perl` and Python 3 (`python3`, for the night launcher).
+Without `claude` on the PATH the recap and the note stay empty; without `bd`
+the beads line stays hidden.
 
 ## Night runs (unattended)
 
