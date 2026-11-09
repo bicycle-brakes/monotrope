@@ -1508,3 +1508,29 @@ Address notice: opencode-go/space-bunny: the recorded base path is /inference/go
 Address notice: opencode-go/step-5-preview-free: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
 
 Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 965 files, 3736 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 965 files, 3740 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +8 -6
+> - `scripts/research_census.py` +0 -2
+> - `tests/test_explore_provenance.py` +100 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_explore_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L9-1: tests/test_explore_provenance.py::test_census_reports_read_errors: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L9-2: tests/test_explore_provenance.py::test_census_reports_read_errors: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261109T124548150370Z-8ab224f3.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 965 files, 3758 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): targeted verification, not the full `make verify`; result: green; test files `tests/test_explore_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+
+Runner restoration, 2026-11-09: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged

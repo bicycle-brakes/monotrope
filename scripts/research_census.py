@@ -7,8 +7,9 @@ It only reads; correcting existing research files is a separate change (bead cod
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import date
+from pathlib import Path
 
 import stage2
 import yaml
@@ -40,8 +41,6 @@ def publication_evidence(body: str) -> tuple[str | None, str | None]:
     if not calls:
         raise ValueError("runner publication has no producing endpoint evidence")
     endpoint = calls[-1].group(1)
-    if endpoint not in {"glm-coding-plan", "claude-code-plan", "openai-codex", "opencode-go"}:
-        raise ValueError(f"unknown producing endpoint: {endpoint}")
     return stage2.producer_for((endpoint, "", None)), answer.group(1)
 
 
@@ -127,3 +126,47 @@ def metadata_problems(
 def model_attribution(producer) -> bool:
     records = producer if isinstance(producer, list) else [producer]
     return any(isinstance(record, Mapping) and record.get("kind") == "llm-session" for record in records)
+
+
+def census_findings(paths: Iterable[Path], root: Path) -> list[str]:
+    """Read current research and report every path-specific defect before exemptions."""
+    affected = []
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except UnicodeDecodeError:
+            affected.append(f"{relative}: unreadable file (not UTF-8)")
+            continue
+        except OSError as error:
+            affected.append(f"{relative}: unreadable file ({error})")
+            continue
+        frontmatter = FRONTMATTER.match(text)
+        if frontmatter is None:
+            affected.append(f"{relative}: unreadable header (no frontmatter)")
+            continue
+        try:
+            header = yaml.safe_load(frontmatter.group(1))
+        except (yaml.YAMLError, ValueError):
+            affected.append(f"{relative}: unreadable header (malformed YAML)")
+            continue
+        if not isinstance(header, Mapping):
+            affected.append(f"{relative}: unreadable header (not a mapping)")
+            continue
+        body = text[frontmatter.end() :]
+        try:
+            program, publication_day = publication_evidence(body)
+        except ValueError as error:
+            affected.append(f"{relative}: {error}")
+            program, publication_day = None, None
+        producer = header.get("produced_by")
+        model_written = model_attribution(producer)
+        if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
+            affected.extend(
+                f"{relative}: {problem}"
+                for problem in metadata_problems(header, frontmatter.group(1), program, publication_day)
+            )
+            notices = stage2.research_opening_notices(text, frontmatter.end())
+            if notices:
+                affected.append(f"{relative}: opening skeleton notice over published research")
+    return affected

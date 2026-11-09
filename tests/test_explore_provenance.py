@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -93,49 +92,13 @@ def active_research_files() -> list[Path]:
 
 
 def census_findings() -> list[str]:
-    """Every census finding over active research, as `<relative path>: <problem>` lines."""
+    """Every census finding over active research, before applying legacy exemptions."""
     import research_census as census
 
-    affected = []
-    for path in active_research_files():
-        relative = path.relative_to(REPO_ROOT).as_posix()
-        try:
-            text = path.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
-            affected.append(f"{relative}: unreadable file (not UTF-8)")
-            continue
-        frontmatter = census.FRONTMATTER.match(text)
-        if frontmatter is None:
-            affected.append(f"{relative}: unreadable header (no frontmatter)")
-            continue
-        try:
-            header = yaml.safe_load(frontmatter.group(1))
-        except (yaml.YAMLError, ValueError):
-            affected.append(f"{relative}: unreadable header (malformed YAML)")
-            continue
-        if not isinstance(header, Mapping):
-            affected.append(f"{relative}: unreadable header (not a mapping)")
-            continue
-        body = text[frontmatter.end() :]
-        try:
-            program, publication_day = census.publication_evidence(body)
-        except ValueError as error:
-            affected.append(f"{relative}: {error}")
-            program, publication_day = None, None
-        producer = header.get("produced_by")
-        model_written = census.model_attribution(producer)
-        if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
-            affected.extend(
-                f"{relative}: {problem}"
-                for problem in census.metadata_problems(header, frontmatter.group(1), program, publication_day)
-            )
-            try:
-                notices = stage2.research_opening_notices(text, frontmatter.end())
-            except AttributeError as error:
-                pytest.fail(f"The census requires the publisher's opening-notice detector: {error}")
-            if notices:
-                affected.append(f"{relative}: opening skeleton notice over published research")
-    return affected
+    try:
+        return census.census_findings(active_research_files(), REPO_ROOT)
+    except AttributeError as error:
+        pytest.fail(f"The read-only census library must report current research defects: {error}")
 
 
 def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
@@ -267,6 +230,103 @@ def test_active_census_is_enabled():
     marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
     assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
     test_active_model_research_has_no_false_human_provenance()
+
+
+@pytest.mark.parametrize("error_type", [PermissionError, FileNotFoundError, OSError])
+def test_census_reports_read_errors(tmp_path, monkeypatch, error_type):
+    paths = []
+    for name in ("a-unreadable", "z-later"):
+        folder = tmp_path / name
+        folder.mkdir()
+        path = folder / "research.md"
+        path.write_text("# Missing frontmatter\n")
+        paths.append(path)
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    original_read = Path.read_bytes
+
+    def read_bytes(path):
+        if path == paths[0]:
+            raise error_type("planted read failure")
+        return original_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    try:
+        findings = census_findings()
+    except OSError as error:
+        pytest.fail(f"The census must report the unreadable path and continue: {error}")
+    assert any(line.startswith("a-unreadable/research.md: unreadable file") for line in findings)
+    assert "z-later/research.md: unreadable header (no frontmatter)" in findings
+    with pytest.raises(AssertionError, match="z-later/research.md") as raised:
+        assert_active_model_research_has_no_false_human_provenance(exempt=frozenset({"a-unreadable/research.md"}))
+    assert "a-unreadable/research.md" not in str(raised.value)
+
+
+def test_census_is_read_only_without_history(tmp_path, monkeypatch):
+    import builtins
+    import io
+    import os
+    import subprocess
+
+    import research_census as census
+
+    paths = []
+    for name, header in (("valid", valid_research_header()), ("fault", "---\nprovenance: human-written\n---\n")):
+        folder = tmp_path / name
+        folder.mkdir()
+        path = folder / "research.md"
+        path.write_text(
+            header + "# Research\nStage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
+            "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
+        )
+        paths.append(path)
+    before = {path: path.read_bytes() for path in paths}
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("The census must only read current files, without writes or history commands")
+
+    def read_only_open(original):
+        def checked(file, mode="r", *args, **kwargs):
+            if any(flag in mode for flag in "wax+"):
+                forbidden()
+            return original(file, mode, *args, **kwargs)
+
+        return checked
+
+    # Import dependencies before denying process creation; the fixture deliberately has no Git history.
+    assert census.stage2 is stage2
+    with monkeypatch.context() as guard:
+        guard.setattr(builtins, "open", read_only_open(builtins.open))
+        guard.setattr(io, "open", read_only_open(io.open))
+        guard.setattr(subprocess, "Popen", forbidden)
+        guard.setattr(os, "system", forbidden)
+        for name in ("write_bytes", "write_text", "unlink", "rename", "replace", "touch"):
+            guard.setattr(Path, name, forbidden)
+        findings = census_findings()
+    assert findings and all(line.startswith("fault/research.md: ") for line in findings)
+    assert any("provenance: expected" in line for line in findings)
+    assert {path: path.read_bytes() for path in paths} == before
+
+
+@pytest.mark.parametrize("endpoint", ["opencode-go", "newly-admitted-endpoint", "future_pi_2"])
+def test_census_accepts_unnamed_endpoint_producers(tmp_path, monkeypatch, endpoint):
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    path = folder / "research.md"
+    header = valid_research_header().replace("name: claude-code", "name: pi")
+    body = (
+        f"# Research\nStage-2 call, 2026-11-05: explore · endpoint {endpoint}\n"
+        "## Runner exploration — 2026-11-05\n\nAccepted research.\n"
+    )
+    path.write_text(header + body)
+    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    assert_active_model_research_has_no_false_human_provenance()
+    path.write_text(header.replace("name: pi", "name: codex") + body)
+    with pytest.raises(AssertionError, match="missing publication program/date"):
+        assert_active_model_research_has_no_false_human_provenance()
 
 
 def valid_research_header():

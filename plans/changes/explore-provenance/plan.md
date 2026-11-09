@@ -69,8 +69,9 @@ not renew implementation time or erase the previous attempts' measurements.
    paths as they become compliant or archived; no expansion or automatic
    date/directory exception is authorised. Retain complete producer/list,
    duplicate-key, date, notice, quoted/failed evidence and unreadable-input
-   cases. The ledger marks the missing I/O-error and read-only regressions
-   explicitly; report them at the spent appetite rather than claiming coverage.
+   cases. Repair rows L9-1 and L9-2 authorise the I/O-error and read-only
+   regressions below; the census scan lives in the library so baseline proofs
+   exercise production code rather than copying its repair with the tests.
 5. Verify `tests/test_stage2.py` for Flash and explicit Haiku fallback, pending
    review, opening-only removal and producer preservation; verify
    `tests/test_stage2_swarm.py` for complete/incomplete publication and several
@@ -113,8 +114,8 @@ The historical implementation/repair fallback receipts remain below.
 ## Verification
 
 Run the following offline checks, then the runner's full verification.
-The missing I/O-error and read-only tests are phase-4 work and must be reported
-if not written; ledger validity alone does not prove a criterion passes. Reject any
+The I/O-error and read-only regressions are authorised by repair rows L9-1
+and L9-2; ledger validity alone does not prove a criterion passes. Reject any
 legacy-list additions relative to `0a5aeb3f` in the final diff review.
 
 ```sh
@@ -175,8 +176,8 @@ Keep the Definition of Done pending until the runner's full run is green.
 - 10: tests/test_explore_provenance.py::test_census_names_unreadable_headers — a bad header is silently skipped
 - 10: tests/test_explore_provenance.py::test_census_reports_undecodable_research — invalid UTF-8 aborts or escapes the census
 - 10: tests/test_explore_provenance.py::test_census_reports_opening_skeleton_notices — an opening notice goes unreported
-- 10: not yet written tests/test_explore_provenance.py::test_census_reports_read_errors — an OSError aborts without a path-specific census finding
-- 10: not yet written tests/test_explore_provenance.py::test_census_is_read_only_without_history — the census writes research or requires Git-history reconstruction
+- 10: tests/test_explore_provenance.py::test_census_reports_read_errors — an OSError aborts without a path-specific census finding
+- 10: tests/test_explore_provenance.py::test_census_is_read_only_without_history — the census writes research or requires Git-history reconstruction
 
 ## Runner route — 2026-11-04
 
@@ -211,6 +212,8 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-06 15:40:31–16:10:43 UTC, 1812 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-06 16:10:52–16:52:51 UTC, 2518 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-06 22:12:15–2026-11-07 00:14:35 UTC, 7339 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-09 12:45:59–17:54:05 UTC, 18485 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 17:54:20–18:00:14 UTC, 354 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 
