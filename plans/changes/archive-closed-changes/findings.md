@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-08
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-cqun
@@ -1085,8 +1085,10 @@ Stage-2 call, 2026-11-08: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-5 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:431–445 | A closed folder whose sole artifact has duplicate `status` keys is skipped rather than blocked. The registry still reads its closed bead, but the archive reader discards that metadata upon detecting the duplicate. Reproduced through `main(["--write"])`: it returns 0 and claims nothing remains eligible. With other eligible folders present, this permits batch mutation despite malformed evidence. Refuse the batch before writing. [Acceptance criteria 1, 6] | Codex | taken — refuse the whole batch before any write when a closed folder's artifact has malformed metadata (duplicate keys included); never skip it silently (maintainer 2026-11-08: repair, +1 h, then PR) | — |
-| R-6 | MINOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:630–636 | An existing index containing the generator’s text with CRLF line endings is reported as “already current” because `read_text()` normalizes newlines. The command succeeds while its bytes differ from the generator’s output. Reproduced with CRLF bytes through universal-newline decoding. Compare encoded bytes before deciding to skip regeneration. [Acceptance criterion 5] | Codex | taken — compare the generator's encoded bytes with the existing index bytes before reporting it current (maintainer 2026-11-08) | — |
+| R-5 | MAJOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:431–445 | A closed folder whose sole artifact has duplicate `status` keys is skipped rather than blocked. The registry still reads its closed bead, but the archive reader discards that metadata upon detecting the duplicate. Reproduced through `main(["--write"])`: it returns 0 and claims nothing remains eligible. With other eligible folders present, this permits batch mutation despite malformed evidence. Refuse the batch before writing. [Acceptance criteria 1, 6] | Codex | fixed — tests/test_archive_closed_changes.py::test_malformed_sole_artifact_blocks_closed_folder | — |
+| R-6 | MINOR | SPEC | Phase 6 | scripts/archive_closed_changes.py:630–636 | An existing index containing the generator’s text with CRLF line endings is reported as “already current” because `read_text()` normalizes newlines. The command succeeds while its bytes differ from the generator’s output. Reproduced with CRLF bytes through universal-newline decoding. Compare encoded bytes before deciding to skip regeneration. [Acceptance criterion 5] | Codex | fixed — tests/test_archive_closed_changes.py::test_index_with_noncanonical_newlines_is_regenerated | — |
 
 Phase 6 verdict: codex 01a1bce9-aaf6-7af2-9ea5-dcd5b506c424, 2026-11-08
 Reviewer session: codex 01a1bce9-aaf6-7af2-9ea5-dcd5b506c424 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-08: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 917 files, 3690 commits, 12 rules.

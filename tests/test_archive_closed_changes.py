@@ -462,6 +462,23 @@ def test_index_matches_registry_after_archive(plans_repo: Fixture, index_mode: i
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("newline", [b"\r\n", b"\r"])
+def test_index_with_noncanonical_newlines_is_regenerated(
+    plans_repo: Fixture, capsys: pytest.CaptureFixture[str], newline: bytes
+) -> None:
+    fx = plans_repo
+    fx.set_render({"b-open": "open"})
+    index = fx.root / "plans" / "INDEX.md"
+    expected = reg.render_index().encode("utf-8")
+    index.write_bytes(expected.replace(b"\n", newline))
+    assert index.read_bytes() != expected
+
+    assert archive.main(["--write"]) == 0
+
+    assert index.read_bytes() == expected, "a successful write must match the generator byte for byte"
+    assert "already current" not in capsys.readouterr().out
+
+
 def test_archiving_does_not_exempt_criterion_ledger(plans_repo: Fixture, capsys: pytest.CaptureFixture[str]) -> None:
     fx = plans_repo
     plan_text = (
@@ -560,6 +577,31 @@ def test_preflight_failure_leaves_entire_batch_unchanged(
     elif case == "symlink-member":
         assert "symlink inside the folder" in combined
     assert "archived plans/changes/good-one" not in combined, "a refusal still moved part of the batch"
+
+
+@pytest.mark.parametrize("other_eligible", [False, True])
+@pytest.mark.parametrize("duplicate", ["status: accepted", "review: {status: pending, status: approved}"])
+def test_malformed_sole_artifact_blocks_closed_folder(
+    plans_repo: Fixture, capsys: pytest.CaptureFixture[str], other_eligible: bool, duplicate: str
+) -> None:
+    fx = plans_repo
+    text = _artefact("Spec — malformed closed evidence", "b-bad")
+    text = text.replace("status: draft\n", f"status: draft\n{duplicate}\n", 1)
+    fx.add("bad-one", files={"spec.md": text})
+    rows = {"b-bad": "closed"}
+    if other_eligible:
+        fx.add("aaa-good", files=_closed_files("b-good"))
+        rows["b-good"] = "closed"
+    fx.set_render(rows)
+    assert reg._frontmatter(fx.changes / "bad-one" / "spec.md")["bead"] == "b-bad"
+    before = _snapshot(fx.root)
+
+    assert archive.main(["--write"]) == 1, "malformed closed evidence must refuse the whole batch"
+
+    captured = capsys.readouterr()
+    assert "blocked plans/changes/bad-one" in captured.err
+    assert "duplicate mapping key" in captured.err
+    assert _snapshot(fx.root) == before, "no eligible folder may move when closed evidence is malformed"
 
 
 @pytest.mark.parametrize("layout", ["yaml-end-marker", "unicode-line-separator"])

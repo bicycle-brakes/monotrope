@@ -427,10 +427,21 @@ def _classify(
             continue
         loaded: list[Artefact] = []
         broken: list[tuple[str, str]] = []
+        broken_closed_evidence = False
         for path in artefact_paths:
             art, reason = _load_artefact(path)
             if art is None:
                 broken.append((_display(path), reason))
+                # Strict validation may reject metadata the registry can still
+                # read (notably duplicate YAML keys). Retain its closed-bead
+                # evidence for refusal only, never as permission to archive.
+                try:
+                    meta = plans_registry._frontmatter(path)
+                except (OSError, UnicodeError):
+                    meta = None
+                bead = meta.get("bead") if meta else None
+                if isinstance(bead, str) and statuses.get(bead) == "closed":
+                    broken_closed_evidence = True
             else:
                 loaded.append(art)
         beads = sorted({_artefact_bead(art) for art in loaded} - {""})
@@ -439,7 +450,7 @@ def _classify(
         if broken:
             where_broken, reason = broken[0]
             finding = f"{where_broken} {reason}"
-            if otherwise_eligible:
+            if otherwise_eligible or broken_closed_evidence:
                 blocked.append((where, finding))
             else:
                 skipped.append((where, finding))
@@ -627,8 +638,8 @@ def _regenerate_index() -> tuple[str, str | None]:
     """
     index = plans_registry.INDEX
     try:
-        rendered = plans_registry.render_index()
-        current = index.read_text(encoding="utf-8") if index.exists() else None
+        rendered = plans_registry.render_index().encode("utf-8")
+        current = index.read_bytes() if index.exists() else None
         mode = index.stat().st_mode & 0o7777 if current is not None else None
     except Exception as exc:
         return "", f"not regenerated — the registry generator failed: {exc}"
@@ -636,7 +647,7 @@ def _regenerate_index() -> tuple[str, str | None]:
         return "already current", None
     temporary: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=index.parent, delete=False) as stream:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=index.parent, delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(rendered)
         if mode is not None:
