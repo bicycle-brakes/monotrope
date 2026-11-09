@@ -137,15 +137,15 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_night_profile.py::test_inherited_asks_become_denies — a newly added ask in one supported scope is absent from the deny overlay
-- 2: not yet written tests/test_night_profile.py::test_launcher_forces_noninteractive_permissions — the launched argv or overlay permits an interactive permission wait
+- 1: tests/test_night_profile.py::test_inherited_asks_become_denies — a newly added ask in one supported scope is absent from the deny overlay
+- 2: tests/test_night_profile.py::test_launcher_forces_noninteractive_permissions — the launched argv or overlay permits an interactive permission wait
 - 2: not a test — the bounded isolated Claude Code probe above observes refusal without execution or a permission wait; missing runtime evidence leaves this pending
-- 3: not yet written tests/test_merge_guard.py::test_direct_merge_actions_are_guarded — an independently written merge/auto-merge/enqueue command or MCP merge tool misses every ask rule
-- 4: not yet written tests/test_merge_guard.py::test_merge_field_reads_do_not_trigger_the_brake — the incident query or another merge-field read matches a day ask or night deny merge rule
+- 3: tests/test_merge_guard.py::test_direct_merge_actions_are_guarded — an independently written merge/auto-merge/enqueue command or MCP merge tool misses every ask rule
+- 4: tests/test_merge_guard.py::test_merge_field_reads_do_not_trigger_the_brake — the incident query or another merge-field read matches a day ask or night deny merge rule
 - 5: tests/test_merge_guard.py::test_the_omnigent_render_keeps_the_merge_rules — policy regeneration drops a merge rule or corrupts the day settings
-- 5: not yet written tests/test_night_profile.py::test_day_permissions_remain_intact — unrelated asks or denies disappear from the day configuration
-- 6: not yet written tests/test_night_profile.py::test_activation_is_scoped_and_refuses_invalid_overrides — a source file changes or an invalid/conflicting invocation starts Claude Code
-- 7: not yet written tests/test_night_profile.py::test_install_backup_and_check_cover_night_assets — install omits an asset, overwrites without backup or check misses drift/writes files
+- 5: tests/test_night_profile.py::test_day_permissions_remain_intact — unrelated asks or denies disappear from the day configuration
+- 6: tests/test_night_profile.py::test_activation_is_scoped_and_refuses_invalid_overrides — a source file changes or an invalid/conflicting invocation starts Claude Code
+- 7: tests/test_night_profile.py::test_install_backup_and_check_cover_night_assets — install omits an asset, overwrites without backup or check misses drift/writes files
 - 8: not a test — phase-6 review compares both documentation changes with the explicit launch command, authorised-alternative/park response and deferred-alert non-goal; contrary instructions refute it
 
 ## Do not touch
@@ -174,4 +174,12 @@ These are not passing checks. The named
 `make verify`, implementation tests and the live Claude Code probe were
 not run in phase 2/3; the runner owns full verification and the commit.
 
+## Runner route — 2026-11-09
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-09 09:29:45–10:40:52 UTC, 4267 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-09 10:41:04–11:35:09 UTC, 3245 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-09 11:35:24–11:57:29 UTC, 1326 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
