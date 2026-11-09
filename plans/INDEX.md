@@ -449,6 +449,21 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/night-heartbeat/decisions.md`](changes/night-heartbeat/decisions.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/findings.md`](changes/night-heartbeat/findings.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/plan.md`](changes/night-heartbeat/plan.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/research.md`](changes/night-heartbeat/research.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-heartbeat/spec.md`](changes/night-heartbeat/spec.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
+| [`changes/night-machine-facts/decisions.md`](changes/night-machine-facts/decisions.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/findings.md`](changes/night-machine-facts/findings.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/pi-no-compaction/decisions.md`](changes/pi-no-compaction/decisions.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/findings.md`](changes/pi-no-compaction/findings.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/plan.md`](changes/pi-no-compaction/plan.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/research.md`](changes/pi-no-compaction/research.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
+| [`changes/pi-no-compaction/spec.md`](changes/pi-no-compaction/spec.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/raising-fault-test/decisions.md`](changes/raising-fault-test/decisions.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
 | [`changes/raising-fault-test/findings.md`](changes/raising-fault-test/findings.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
 | [`changes/raising-fault-test/plan.md`](changes/raising-fault-test/plan.md) | draft | none | 2026-11-03 | coding-harness-xrzf |
@@ -459,11 +474,27 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/red-first-own-refs/plan.md`](changes/red-first-own-refs/plan.md) | draft | partial | 2026-11-01 | coding-harness-wkxm |
 | [`changes/red-first-own-refs/research.md`](changes/red-first-own-refs/research.md) | draft | partial | 2026-11-01 | coding-harness-wkxm |
 | [`changes/red-first-own-refs/spec.md`](changes/red-first-own-refs/spec.md) | draft | partial | 2026-11-01 | coding-harness-wkxm |
+| [`changes/redraft-after-scope/decisions.md`](changes/redraft-after-scope/decisions.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/findings.md`](changes/redraft-after-scope/findings.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/plan.md`](changes/redraft-after-scope/plan.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/research.md`](changes/redraft-after-scope/research.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/redraft-after-scope/spec.md`](changes/redraft-after-scope/spec.md) | draft | none | 2026-11-06 | coding-harness-y0qm |
+| [`changes/repair-targeted-check/decisions.md`](changes/repair-targeted-check/decisions.md) | draft | none | 2026-10-31 | coding-harness-gxwg |
+| [`changes/repair-targeted-check/findings.md`](changes/repair-targeted-check/findings.md) | draft | none | 2026-10-31 | coding-harness-gxwg |
+| [`changes/repair-targeted-check/plan.md`](changes/repair-targeted-check/plan.md) | draft | none | 2026-10-31 | coding-harness-gxwg |
+| [`changes/repair-targeted-check/research.md`](changes/repair-targeted-check/research.md) | draft | none | 2026-10-31 | coding-harness-gxwg |
+| [`changes/repair-targeted-check/spec.md`](changes/repair-targeted-check/spec.md) | draft | partial | 2026-10-31 | coding-harness-gxwg |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-free-paid/decisions.md`](changes/research-free-paid/decisions.md) | draft | none | 2026-11-05 | coding-harness-wb40 |
+| [`changes/research-free-paid/design.md`](changes/research-free-paid/design.md) | draft | none | 2026-11-05 | coding-harness-wb40 |
+| [`changes/research-free-paid/findings.md`](changes/research-free-paid/findings.md) | draft | none | 2026-11-05 | coding-harness-wb40 |
+| [`changes/research-free-paid/plan.md`](changes/research-free-paid/plan.md) | draft | none | 2026-11-05 | coding-harness-wb40 |
+| [`changes/research-free-paid/research.md`](changes/research-free-paid/research.md) | draft | none | 2026-11-05 | coding-harness-wb40 |
+| [`changes/research-free-paid/spec.md`](changes/research-free-paid/spec.md) | draft | partial | 2026-11-05 | coding-harness-wb40 |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
@@ -476,6 +507,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/status-fields-restore/decisions.md`](changes/status-fields-restore/decisions.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/findings.md`](changes/status-fields-restore/findings.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |

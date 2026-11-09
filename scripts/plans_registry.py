@@ -56,7 +56,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 def _frontmatter(path: Path) -> dict | None:
     """The YAML block at the start of the file, or None if there is none."""
-    text = path.read_text(encoding="utf-8")
+    return parse_frontmatter(path.read_text(encoding="utf-8"))
+
+
+def parse_frontmatter(text: str) -> dict | None:
+    """Parse registry metadata from text, including YAML merge keys and aliases."""
     if not text.startswith("---\n"):
         return None
     end = text.find("\n---", 4)
