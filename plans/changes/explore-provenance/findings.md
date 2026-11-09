@@ -1506,3 +1506,5 @@ Address notice: opencode-go/mimo-v2.6-pro: the recorded base path is /inference/
 Address notice: opencode-go/space-bunny: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
 
 Address notice: opencode-go/step-5-preview-free: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 965 files, 3736 commits, 12 rules.
