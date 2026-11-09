@@ -20,10 +20,12 @@ named in the test.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -42,8 +44,24 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_availability as availability  # noqa: E402
+import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
+import stage2_swarm  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+from test_stage2 import World  # noqa: E402
+from test_stage2 import git as run_git  # noqa: E402
+from test_stage2 import world as stage2_world  # noqa: E402
+from test_stage2_research_catalog import sources as research_catalog_sources  # noqa: E402
+
+world = stage2_world
+catalog_sources = research_catalog_sources
+# The repository's own Pi wrapper, read before any test world re-points `stage2.PI_WRAPPER` at a stand-in.
+REAL_PI_WRAPPER = stage2.PI_WRAPPER
+# Preserve the production validator before the inherited world fixture replaces it.
+REAL_CHECK_OVERLAY = stage2.check_overlay
+# The runtime search path before a test world replaces it: the real Pi wrapper needs Node on it.
+REAL_PATH = os.environ.get("PATH", "")
 
 PKG = "@earendil-works/pi-coding-agent"
 GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
@@ -1604,3 +1622,282 @@ console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefine
     assert "catalog-command-ran" not in done.stdout and "catalog-value" not in done.stdout
     assert "headers" not in (tmp_path / "models.json").read_text()
     assert json.dumps(store) == evidence
+
+
+# ---------------------------------------------------------------------------
+# Both free-model preparations on the shipped Go catalog (bead coding-harness-wb40, spec criteria 9-10)
+# ---------------------------------------------------------------------------
+
+GO = "opencode-go"
+CONTRACT_NOW = dt.datetime(2026, 11, 5, 12, 0, tzinfo=dt.UTC)
+
+
+def shipped_go_models() -> list[dict]:
+    """Every opencode-go model of the installed Pi's own catalog, one row per id, whatever its wire API.
+
+    The rows are the shipped data itself - the contract invents no roster. An id the package files under
+    two wire APIs keeps its first row, as a fresh catalog holds one row per id.
+    """
+    rows: dict[str, dict] = {}
+    for section in provider_data(GO).values():
+        if not isinstance(section, dict):
+            continue
+        for model in section.values():
+            if isinstance(model, dict) and isinstance(model.get("id"), str):
+                rows.setdefault(model["id"], {**model, "provider": GO})
+    if not rows:
+        pytest.fail("the installed Pi's opencode-go catalog holds no model; run bash tools/pi/install.sh")
+    return list(rows.values())
+
+
+@pytest.fixture
+def offline_world(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog_sources
+) -> types.SimpleNamespace:
+    """A test world holding the repository's current declaration and the installed Pi's shipped Go catalog.
+
+    Only the sources are local stand-ins: the forced refresh writes the shipped rows as the fresh overlay,
+    the listing is the real pinned Pi's own, the capability evidence is synthetic, every model request is
+    answered by the world's stand-in program, and Python may reach no non-loopback address.
+    """
+    monkeypatch.setattr(stage2, "check_overlay", REAL_CHECK_OVERLAY)
+    models = shipped_go_models()
+    ids = {m["id"] for m in models}
+    if "beam-free" not in ids:
+        pytest.fail("the installed Pi's catalog no longer carries beam-free; the collision is not exercised")
+    scratch = scratch_of(tmp_path)
+    with monkeypatch.context() as real:
+        real.setattr(stage2, "PI_WRAPPER", REAL_PI_WRAPPER)
+        done = run_pi(scratch, scratch, "--list-models", timeout=120, env_extra={"PATH": REAL_PATH})
+    if done.returncode != 0:
+        pytest.fail(f"the real Pi listing ended {done.returncode}: {done.stderr[-600:]}")
+    listing = done.stdout
+
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", world.root / "model-endpoints.yaml")
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: feature\nneighbours: []")
+    world.research.write_text(text, encoding="utf-8")
+    run_git(world.root, "add", "-A")
+    run_git(world.root, "commit", "--quiet", "-m", "the repository's current declaration")
+    declaration = yaml.safe_load((world.root / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(item for item in declaration["endpunkte"] if item["name"] == GO)
+
+    real_connect = socket.socket.connect
+
+    def loopback_only(self, address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] not in ("127.0.0.1", "::1", "localhost"):
+            raise AssertionError(f"the offline contract tried to reach {address[0]}")
+        return real_connect(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", loopback_only)
+
+    def no_intelligence(_key):
+        raise AssertionError("the offline contract tried to read the intelligence source")
+
+    monkeypatch.delenv(availability.INTELLIGENCE_KEY_ENV, raising=False)
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", no_intelligence)
+    monkeypatch.setattr(availability, "now", lambda: CONTRACT_NOW)
+    monkeypatch.setattr(stage2, "terms_today", lambda: CONTRACT_NOW.date())
+    # The real catalog_bridge launches the production helper's CLI, which imports the pinned
+    # runtime, reads its baseline and constructs the bridge. Only HTTP transport is redirected:
+    # Pi's source serves unmodified shipped rows as a synthetic fresh response; models.dev's
+    # tool support is labelled synthetic evidence, not a capability claim about these models.
+    catalog_sources.pi_models = models
+    catalog_sources.metadata = {
+        "source": "synthetic successful capability evidence for the offline preparation contract",
+        GO: {"models": {m["id"]: {"id": m["id"], "tool_call": True} for m in models}},
+    }
+    preload = tmp_path / "synthetic-catalog-transport.mjs"
+    preload.write_text(
+        f"import {json.dumps(GUARD.as_uri())};\n"
+        "const fetch = globalThis.fetch;\n"
+        f"const local = {json.dumps(catalog_sources.url)};\n"
+        "globalThis.fetch = (input, init) => {\n"
+        "  const url = new URL(input instanceof Request ? input.url : input);\n"
+        "  if (url.origin === 'https://pi.dev' && url.pathname === '/api/models/providers/opencode-go')\n"
+        "    return fetch(local + url.pathname + url.search, init);\n"
+        "  if (url.href === 'https://models.dev/api.json') return fetch(local + '/metadata', init);\n"
+        "  return fetch(input, init);\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    real_run = subprocess.run
+    helper = REPO_ROOT / "scripts" / "stage2_research_catalog.mjs"
+
+    def local_catalog_transport(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(helper):
+            command = [shutil.which("node", path=REAL_PATH), command[1]]
+            kwargs["env"] = {
+                **kwargs["env"],
+                "PATH": REAL_PATH,
+                "NODE_OPTIONS": f"--import {preload}",
+            }
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", local_catalog_transport)
+    monkeypatch.setenv("PATH", os.environ["PATH"] + os.pathsep + REAL_PATH)
+    real_launch = stage2.launch
+
+    def local_sources(command, cwd, env, *args, **kwargs):
+        if "update" in command and "--models" in command:
+            store = {GO: {"models": models, "lastModified": 0, "checkedAt": 1}}
+            (Path(env["PI_CODING_AGENT_DIR"]) / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        if "--list-models" in command:
+            return subprocess.CompletedProcess(command, 0, listing, "")
+        return real_launch(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", local_sources)
+    return types.SimpleNamespace(
+        world=world,
+        catalog_sources=catalog_sources,
+        paid={str(model) for model in entry["modelle"]},
+        free_ids=sorted(i for i in ids if i.endswith("-free")),
+    )
+
+
+def probed_models(calls: list[dict]) -> set[str]:
+    return {
+        call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in calls if "--model" in call["argv"]
+    }
+
+
+def run_offline_contract(setup: types.SimpleNamespace) -> None:
+    """Run both production preparations on the shipped catalog; an AssertionError names what broke.
+
+    The preparations are the production `prepare-loop` and `prepare-explore` paths; the contract checks the
+    complete receipts and that no paid id is a free member of either.
+    """
+    w = setup.world
+    w.script(pi=[{"stdout": "OK"}] * 400, claude=[{"stdout": "OK"}] * 12)
+    start = len(w.reviews())
+    assert w.run("prepare-loop") == 0, "the review preparation refused the shipped Go catalog"
+    review = json.loads(w.record().with_name("availability.json").read_text(encoding="utf-8"))
+    assert availability.verify(review, review["report_id"]), "the review receipt is not a valid sealed receipt"
+    state = review["state"]
+    assert not set(state["free"]["selected"]) & setup.paid, "a paid id is a free member of the review swarm"
+    assert "paid model" in state["availability"]["skipped"].get("beam-free", ""), "review hides the paid drop"
+    assert f"Skipped: beam-free: {stage2_free.PAID_REASON}" in availability.report(state)
+    review_calls = w.reviews()[start:]
+    assert "beam-free" not in probed_models(review_calls), "review probed a paid id as a free candidate"
+
+    middle = len(w.reviews())
+    assert w.run("prepare-explore", "demo") == 0, "the research preparation refused the shipped Go catalog"
+    path = availability.research_receipt_path("demo", stage2, w.root)
+    research = json.loads(path.read_text(encoding="utf-8"))
+    assert availability.verify(research, research["report_id"]), "the research receipt is not a valid sealed receipt"
+    state = research["state"]
+    reasons = {item["id"]: item["reason"] for item in state["catalog"]["candidates"]}
+    assert reasons.get("beam-free") == "paid-admitted", f"research kept the paid id: {reasons.get('beam-free')}"
+    assert not set(state["free"]["selected"]) & setup.paid, "a paid id is a free member of the research swarm"
+    assert f"Dropped (free): beam-free: {stage2_free.PAID_REASON}" in availability.research_report(state)
+    source_requests = setup.catalog_sources.requests
+    assert any(path.startswith("/api/models/providers/opencode-go") for path, _ in source_requests), (
+        "the research catalog helper did not retrieve the shipped rows through the local Pi source"
+    )
+    assert any(path == "/metadata" for path, _ in source_requests), "synthetic capability evidence was not read"
+    research_calls = w.reviews()[middle:]
+    assert "beam-free" not in probed_models(research_calls), "research probed a paid id as a free candidate"
+    for call in [*review_calls, *research_calls]:
+        assert call["path"] == str(w.bin / "pin-pi"), "a model request left the stand-in program"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_shipped_catalog_prepares_both_swarms_offline(offline_world: types.SimpleNamespace) -> None:
+    """Criterion 9: both production preparations run on the installed Pi's shipped Go catalog, offline.
+
+    The shipped catalog carries `beam-free`, which the declaration admits as paid: both preparations drop it
+    before any probe and still finish with a sealed receipt. A catalog move that breaks either preparation
+    fails here, before merge; missing prerequisites fail the test, they never skip it.
+    """
+    run_offline_contract(offline_world)
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize(
+    "fault_name, expected, diagnostic",
+    [
+        (
+            "review preparation refuses",
+            "the review preparation refused the shipped Go catalog",
+            "planted: the review preparation refuses",
+        ),
+        (
+            "research preparation refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the research preparation refuses",
+        ),
+        (
+            "research catalog helper refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the production research catalog helper refuses",
+        ),
+        (
+            "review bypasses the shared selection",
+            "the review preparation refused the shipped Go catalog",
+            f"refused: the model beam-free is {stage2_free.PAID_REASON}",
+        ),
+        (
+            "research bypasses the shared selection",
+            "the research preparation refused the shipped Go catalog",
+            f"refused: beam-free is {stage2_free.PAID_REASON}",
+        ),
+    ],
+)
+def test_both_preparation_contracts_detect_planted_faults(
+    offline_world: types.SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    fault_name: str,
+    expected: str,
+    diagnostic: str,
+) -> None:
+    """Criterion 10: the same contract assertions fail for a refusing or bypassing preparation, on either path.
+
+    Planted faults, one at a time: the review preparation refuses, the research preparation refuses, the
+    review preparation skips the shared selection's paid veto, the research preparation does the same.
+    """
+    # Parametrization gives every fault a fresh world and a clean control.
+    run_offline_contract(offline_world)  # no fault, no failure
+    capsys.readouterr()  # Only the fault run may supply its diagnostic.
+
+    def refuse_review(*_args, **_kwargs):
+        raise stage2.Refused("planted: the review preparation refuses")
+
+    def refuse_research(*_args, **_kwargs):
+        raise stage2_swarm.ResearchCatalogError("planted: the research preparation refuses")
+
+    def bypass(include_adds: bool):
+        real = stage2_free.select
+
+        def planted(candidates, policy, **kwargs):
+            if policy.include_adds == include_adds:
+                kwargs["paid"] = ()
+            return real(candidates, policy, **kwargs)
+
+        return planted
+
+    real_run = subprocess.run
+
+    def refuse_catalog_helper(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(REPO_ROOT / "scripts/stage2_research_catalog.mjs"):
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                json.dumps({"exit_code": 1, "reason": "planted: the production research catalog helper refuses"}),
+                "",
+            )
+        return real_run(command, *args, **kwargs)
+
+    faults = {
+        "research catalog helper refuses": (subprocess, "run", refuse_catalog_helper),
+        "review preparation refuses": (stage2, "discover_free", refuse_review),
+        "research preparation refuses": (stage2_swarm, "select_research_catalog", refuse_research),
+        "review bypasses the shared selection": (stage2_free, "select", bypass(True)),
+        "research bypasses the shared selection": (stage2_free, "select", bypass(False)),
+    }
+    target, attribute, planted = faults[fault_name]
+    with monkeypatch.context() as fault:
+        fault.setattr(target, attribute, planted)
+        with pytest.raises(AssertionError, match="^" + re.escape(expected) + r"(?:\n|$)"):
+            run_offline_contract(offline_world)
+        assert diagnostic in capsys.readouterr().err, "the contract failed for a different cause than the planted fault"

@@ -437,21 +437,23 @@ endpunkte:
         anfragen_gelesen: "2026-10-30"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       minimax-m3.1-flash:
-        uebersprungen: "2026-10-30"
-        grund: "not in the live Go catalog (2026-10-30)"
-        gelesen: "2026-10-30"
-        valid_until: "2026-11-29"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        gelesen: "2026-11-08"
+        valid_until: "2026-12-08"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go; re-read 2026-11-08: 'MiniMax M3.1 Flash | Not used | 0 days'; listed in the live Go catalog 2026-11-08; endpoint OpenAI-compatible chat completions"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 3880
+        anfragen_gelesen: "2026-11-08"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       step-5-preview:
-        uebersprungen: "2026-10-30"
-        grund: "not in the live Go catalog (2026-10-30); the catalog lists step-5-preview-free"
-        gelesen: "2026-10-30"
-        valid_until: "2026-11-29"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
+        gelesen: "2026-11-08"
+        valid_until: "2026-12-08"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go; re-read 2026-11-08: 'Step 5 Preview | Not used | 0 days'; listed in the live Go catalog 2026-11-08; endpoint OpenAI-compatible chat completions"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 430
+        anfragen_gelesen: "2026-11-08"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       beam-free:
         uebersprungen: "2026-10-30"
         grund: "not in the live Go catalog (2026-10-30)"

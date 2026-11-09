@@ -39,7 +39,7 @@ RESTORED = (
     "before the call, and the attempt failed for the reasons below"
 )
 NOTICE = "The attempt edited findings.md; the runner restored it before the post-run checks"
-CHEAP = "Runner cheap checks before `make verify`"
+CHEAP = "Runner cheap checks before post-run verification"
 
 
 def one_test_step(**more: object) -> dict:
