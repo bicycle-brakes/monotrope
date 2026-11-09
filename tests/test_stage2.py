@@ -8284,6 +8284,42 @@ def test_invalid_origin_holds_release_reconciliation(world: World, capsys: pytes
         assert world.text().count(stage2.RELEASE_HEADING) == 1
 
 
+@pytest.mark.parametrize("changed_part", ["repair marks", "stage snapshot"])
+def test_legacy_release_identity_reconciles_crash_leftover(world: World, changed_part: str) -> None:
+    """L2-2: retain reconciliation with the pre-Origin-change identity formula."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(()))
+    world.write_findings(VERDICT)
+    original = world.record().read_text(encoding="utf-8")
+    # Freeze the earlier formula independently of the production identity helper.
+    headings = [line for line in original.splitlines() if stage2.ROUND_HEADING.match(line)]
+    cells = [row[:7] for row in stage2.record_rows(original)]
+    legacy_identity = stage2.record_digest(json.dumps([headings, cells], sort_keys=True))
+    block = stage2.release_block(original, world.text())
+    block = re.sub(r"(?m)^Record identity: .*$", f"Record identity: {legacy_identity}", block)
+    block = block.replace("| — |", "| agree |")
+    world.write_findings(VERDICT, block)
+    if changed_part == "repair marks":
+        changed = original.replace("| taken — test_a |", f"| {FIXED} |")
+    else:
+        changed = original.replace('"consumed": []', '"consumed": ["free"]')
+    assert changed != original
+    assert stage2.record_digest(changed) != stage2.record_digest(original)
+    world.record().write_text(changed, encoding="utf-8")
+
+    assert world.run("release-loop") == 0, "a legacy identity must reconcile without another phase-6 verdict"
+    assert not world.record().exists()
+    assert world.text().count(stage2.RELEASE_HEADING) == 1
+    released = stage2.findings_rows(world.text())[0]
+    assert len(released) == 1 and released[0][3] == "base"
+    assert released[0][-1] == "agree"
+    assert f"Record digest: {stage2.record_digest(changed)}" in world.text()
+    assert f"Record identity: {stage2.record_identity(changed)}" in world.text()
+    if changed_part == "repair marks":
+        assert released[0][7] == FIXED
+    else:
+        assert stage2.read_state(None, world.text())["consumed"] == ["free"]
+
+
 def test_origin_refusal_identifies_rows_sources_and_correction(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:

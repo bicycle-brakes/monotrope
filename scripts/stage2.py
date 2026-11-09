@@ -2928,10 +2928,10 @@ def released_digest(text: str) -> str | None:
     return match.group(1) if match else None
 
 
-def record_identity(record: str) -> str:
-    """Identify completed rounds independently of Origin corrections, repair marks and stage state."""
+def record_identity(record: str, *, include_origin: bool = False) -> str:
+    """Identify rounds without mutable cells; include Origin only to match older releases."""
     rounds = [line for line in record.splitlines() if ROUND_HEADING.match(line)]
-    rows = [row[:3] + row[4:7] for row in record_rows(record)]
+    rows = [row[:7] if include_origin else row[:3] + row[4:7] for row in record_rows(record)]
     return record_digest(json.dumps([rounds, rows], sort_keys=True))
 
 
@@ -3816,7 +3816,8 @@ def release(root: Path, change: str) -> list[list[str]]:
     if refusal:
         raise Refused(refusal)
     if record is not None and (
-        released_digest(text) == record_digest(record) or released_identity(text) == record_identity(record)
+        released_digest(text) == record_digest(record)
+        or released_identity(text) in (record_identity(record), record_identity(record, include_origin=True))
     ):
         # The block stands already: a run stopped between the append and the removal (DL-A-3 of the
         # deep review). Appending it again would count its rounds twice and double its ids.

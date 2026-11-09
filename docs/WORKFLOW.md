@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-08
+updated: 2026-11-09
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1538,7 +1538,11 @@ runner's line `Record digest: sha256:<hex>` of the record it released; a
 second `release-loop` over a record whose digest equals the last released
 block's appends nothing, removes the record and says so. Each block also
 carries `Record identity: sha256:<hex>`, a hash of the round headings and the
-first seven cells of each record row, excluding Status and Broke a test.
+ID, Severity, Dimension, Where, Finding and Reviewer cells of each record row,
+excluding Origin, Status and Broke a test. For compatibility, reconciliation
+also accepts the earlier identity formula: the round headings and the first
+seven cells of each row, including Origin but excluding Status and Broke a
+test. New and reconciled blocks carry the identity that excludes Origin.
 When identity matches the last released block but digest differs (for example
 after repair or stage retirement), `release-loop` rewrites that block in
 place from the record, including statuses, snapshot, kept words and digest,
