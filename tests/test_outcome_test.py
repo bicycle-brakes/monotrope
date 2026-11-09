@@ -185,6 +185,9 @@ def _write_repo(root: Path) -> Path:
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    run_plan = root / "docs/runs/2026-10-28-night-run-plan.md"
+    run_plan.parent.mkdir()
+    run_plan.write_text("# Fixture run plan\n")
     _commit(root, "fixture tree")
     return root
 
@@ -1063,3 +1066,91 @@ def test_instruction_question_requires_reading_replacement_declaration(tmp_path:
     _commit(root, "change replacement declaration")
     assert _record(root, tmp_path, _export(root), answers).returncode == 1
     assert _record(root, tmp_path, _export(root), answers | {"instructions": "NEXT.md"}).returncode == 0
+
+
+@pytest.mark.parametrize("target", ["missing", "escape", "moved-source"])
+def test_run_plan_links_use_source_directory_and_existing_targets(tmp_path: Path, target: str) -> None:
+    """Stale or escaping links refuse measurement; relocated sources resolve their own links."""
+    root = _write_repo(tmp_path / "repo")
+    if target == "missing":
+        questionnaire = _export(root)
+        (root / "docs/runs/2026-10-28-night-run-plan.md").unlink()
+        # Link targets are evidence even when the source text and HEAD did not change.
+        done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+        assert done.returncode == 3, "a missing dated run plan must prevent recording"
+        assert not (root / HISTORY_REL).exists()
+        assert _run_tool(root, "questions").returncode == 3
+    elif target == "escape":
+        outside = tmp_path / "2026-10-28-run-plan.md"
+        outside.write_text("outside the measured tree")
+        (root / "docs/runs/2026-10-28-night-run-plan.md").unlink()
+        (root / "docs/runs/2026-10-28-night-run-plan.md").symlink_to(outside)
+        assert _run_tool(root, "questions").returncode == 3, "symlink targets outside the tree are not evidence"
+    else:
+        source = root / "guides/nested/orchestration.md"
+        source.parent.mkdir(parents=True)
+        (root / "docs/orchestration.md").rename(source)
+        source.write_text(source.read_text().replace("runs/2026", "../../docs/runs/2026"))
+        questions = root / "scripts" / QUESTION_SET_NAME
+        questions.write_text(questions.read_text().replace("docs/orchestration.md", "guides/nested/orchestration.md"))
+        _commit(root, "move measured documentation")
+        done = _record(root, tmp_path, _export(root), dict(SENTINELS))
+        assert done.returncode == 0, "links must resolve from their measured source directory"
+
+
+def test_refused_append_allows_corrected_answers(tmp_path: Path) -> None:
+    """A failed history append must not reserve the run id in the answer archive."""
+    root = _write_repo(tmp_path / "repo")
+    questionnaire = _export(root)
+    history = root / HISTORY_REL
+    history.parent.mkdir(parents=True)
+    history.write_text("broken history\n")
+    archive = tmp_path / "state/coding-harness/outcome-test" / (questionnaire["run_id"] + ".json")
+    done = _record(root, tmp_path, questionnaire, {})
+    assert done.returncode == 3
+    assert not archive.exists(), "a refused append must not retain answers and lock out corrected submissions"
+    history.write_text("")
+    done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+    assert done.returncode == 0, "the same questionnaire must accept corrected answers after a refusal"
+    assert json.loads(archive.read_text())["answers"] == SENTINELS
+    assert len(_history(root)) == 1
+
+
+@pytest.mark.parametrize("input_name", ["questionnaire", "answers"])
+@pytest.mark.parametrize("symlink", [False, True])
+def test_record_refuses_repository_input_paths(tmp_path: Path, input_name: str, symlink: bool) -> None:
+    """Both inputs must stay external, including paths resolving through symlinks."""
+    root = _write_repo(tmp_path / "repo")
+    questionnaire = _export(root)
+    paths = {"questionnaire": tmp_path / "q.json", "answers": tmp_path / "a.json"}
+    paths["questionnaire"].write_text(json.dumps(questionnaire))
+    paths["answers"].write_text(json.dumps(SENTINELS))
+    inside = root / (input_name + ".json")
+    inside.write_bytes(paths[input_name].read_bytes())
+    if symlink:
+        paths[input_name].unlink()
+        paths[input_name].symlink_to(inside)
+    else:
+        paths[input_name] = inside
+    done = _run_tool(
+        root,
+        "record",
+        "--questionnaire",
+        str(paths["questionnaire"]),
+        "--answers",
+        str(paths["answers"]),
+        "--harness",
+        "claude-code",
+        "--model",
+        "fixture",
+        "--context",
+        "usual startup",
+        "--access",
+        "read",
+        "--fresh-session",
+        "--purpose",
+        "baseline",
+    )
+    assert done.returncode == 3, "repository-local input files must be refused before grading"
+    assert "outside" in done.stderr and "Traceback" not in done.stderr
+    assert not (root / HISTORY_REL).exists()

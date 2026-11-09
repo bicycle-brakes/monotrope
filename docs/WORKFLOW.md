@@ -323,10 +323,10 @@ a single family word followed by a dotted numeric version, or a technical
 identifier starting with a letter, containing a digit and a hyphen, underscore
 or slash (for example, `Example 1.2` or `vendor/model-1`). The surrounding prose
 and position of the identifier do not matter; missing or multiple matches
-leave the source unread. The instruction-file answer is the basename of the
-question's source file, after confirming exactly one opening declaration
-containing "is the only instruction file"; the declaration's subject is not
-used as a filename. `record` exits 0 at eight of eight, and 1 when
+leave the source unread. The instruction-file answer is the replacement
+filename explicitly named by the opening declaration containing "is the only
+instruction file" and "would silently replace it"; the source file's own
+basename is not the answer. `record` exits 0 at eight of eight, and 1 when
 the run was measured with incorrect answers — a low score is evidence, not a
 failed implementation. Exit 3 means **not measured**: an unreadable or
 conflicting source, a stale snapshot, malformed input or an unwritable history
@@ -336,10 +336,13 @@ line per run with the four labels, score and eight correct/incorrect verdicts,
 never answer texts. Full submitted answers stay outside the repository in
 `$XDG_STATE_HOME/coding-harness/outcome-test/<run-id>.json` (default:
 `~/.local/state/coding-harness/outcome-test/<run-id>.json`), with private file
-permissions. A state directory inside the repository is refused. This keeps
-earlier answers out of the next session's repository reading scope. A refused
-history append may leave a local submission and an empty history file; neither
-is a scored measurement. Foreign sessions still start through
+permissions. Both input files (`--questionnaire` and `--answers`) and the
+state directory must be outside the measured repository; paths resolving
+inside it through symlinks are refused. This keeps earlier answers out of the
+next session's repository reading scope. Answers are archived only after a
+successful history append, under the same lock; an archive failure rolls that append back. A refused append may leave
+an empty history file, but retains no new submission, so the same questionnaire
+can be retried with corrected answers. Foreign sessions still start through
 [`scripts/stage2.py`](../scripts/stage2.py); this tool starts none.
 
 ### The five rules that make the difference

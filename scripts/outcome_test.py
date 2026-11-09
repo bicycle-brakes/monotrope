@@ -261,21 +261,27 @@ def _resolve_link(base_parts: list[str], target: str) -> str | None:
     return "/".join(resolved) if resolved else None
 
 
-def _read_run_plans(orchestration: str) -> Reading:
+def _read_run_plans(orchestration: str, source: str) -> Reading:
     section = _section(orchestration, RUN_PLAN_HEADING)
     if section is None:
         return Reading.unread("the 'What a lane is' section is absent from docs/orchestration.md")
     directories: set[str] = set()
     for match in LINK.finditer(section):
-        target = match.group("target")
+        target = match.group("target").split("#", 1)[0]
         if target.startswith("/"):
             continue
         stem = target.split("#", 1)[0].rsplit("/", 1)[-1]
         if DATED_PREFIX.match(stem) is None or RUN_PLAN_NAME.search(target) is None:
             continue
-        resolved = _resolve_link(["docs"], target)
+        resolved = _resolve_link(list(PurePosixPath(source).parent.parts), target)
         if resolved is None:
             return Reading.unread("a dated run-plan link resolves outside the repository")
+        try:
+            path = (ROOT / resolved).resolve(strict=True)
+            if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
+                return Reading.unread("a dated run-plan link does not name a file in the repository")
+        except (OSError, RuntimeError):
+            return Reading.unread("a dated run-plan link target cannot be read in the repository")
         directories.add("/".join(resolved.split("/")[:-1]))
     if len(directories) != 1:
         return Reading.unread(
@@ -338,7 +344,7 @@ def _expected_answer(qid: str, texts: dict[str, str], by_id: dict[str, dict[str,
     if resolver == "verify-floor-override":
         return _read_literal(text, "FLOOR_ENV", "string")
     if resolver == "run-plans":
-        return _read_run_plans(text)
+        return _read_run_plans(text, question["source"])
     if resolver == "handovers":
         return _read_handovers(text)
     if resolver == "tracker-command":
@@ -761,7 +767,9 @@ def _hold_lock(handle: int) -> None:
             time.sleep(LOCK_RETRY_PAUSE)
 
 
-def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
+def _append_record(
+    record: dict[str, Any], recheck: Callable[[], None], retain_answers: Callable[[], None] | None = None
+) -> None:
     """One serialized, rollback-able append to the real result file — nothing else is written."""
     line = (json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
     _reject_symlinks(RESULTS_PATH)
@@ -807,6 +815,8 @@ def _append_record(record: dict[str, Any], recheck: Callable[[], None]) -> None:
                 raise OSError("zero-byte append")
             written += count
         _fsync(handle)
+        if retain_answers is not None:
+            retain_answers()
         succeeded = True
     except (OSError, NotMeasured) as exc:
         if writing and handle is not None and end is not None:
@@ -875,8 +885,8 @@ def _session_labels(args: argparse.Namespace) -> dict[str, str]:
     return labels
 
 
-def _store_answers(run_id: str, commit: str, answers: dict[str, Any]) -> None:
-    """Keep full submissions in a private file outside the measured repository."""
+def _answer_archive_path(run_id: str) -> Path:
+    """Validate the archive destination before opening the repository history."""
     try:
         if str(uuid.UUID(run_id)) != run_id:
             raise ValueError
@@ -888,7 +898,18 @@ def _store_answers(run_id: str, commit: str, answers: dict[str, Any]) -> None:
     directory = state / "coding-harness" / "outcome-test"
     if directory.resolve().is_relative_to(ROOT.resolve()):
         raise NotMeasured("the answer archive must be outside the repository")
-    path = directory / (run_id + ".json")
+    ancestor = directory
+    while not ancestor.exists():
+        ancestor = ancestor.parent
+    if not ancestor.is_dir():
+        raise NotMeasured("cannot retain submitted answers in the local user state directory")
+    return directory / (run_id + ".json")
+
+
+def _store_answers(run_id: str, commit: str, answers: dict[str, Any]) -> None:
+    """Keep full submissions in a private file outside the measured repository."""
+    path = _answer_archive_path(run_id)
+    directory = path.parent
     payload = (json.dumps({"run_id": run_id, "commit": commit, "answers": answers}, sort_keys=True) + "\n").encode()
     handle: int | None = None
     created = False
@@ -930,6 +951,12 @@ def _record(args: argparse.Namespace) -> int:
             raise NotMeasured("a pre-change run requires --target AGENTS.md or --target handover-convention")
     elif target is not None:
         raise NotMeasured("--target belongs to pre-change runs only")
+    for name in ("questionnaire", "answers"):
+        path = getattr(args, name)
+        if path is not None and (
+            path.absolute().is_relative_to(ROOT.resolve()) or path.resolve().is_relative_to(ROOT.resolve())
+        ):
+            raise NotMeasured(f"--{name} must be outside the measured repository")
     qset = _load_question_set()
     questionnaire = _load_questionnaire(args.questionnaire, qset)
     answers = _load_answers(args.answers, qset)
@@ -970,8 +997,8 @@ def _record(args: argparse.Namespace) -> int:
         _check_snapshot(_take_snapshot(qset), questionnaire)
 
     _validate_record(record)
-    _store_answers(questionnaire["run_id"], snapshot["commit"], answers)
-    _append_record(record, _recheck)
+    _answer_archive_path(questionnaire["run_id"])
+    _append_record(record, _recheck, lambda: _store_answers(questionnaire["run_id"], snapshot["commit"], answers))
     return correct
 
 
