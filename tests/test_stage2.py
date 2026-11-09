@@ -3976,7 +3976,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
     # scope omits full verification because a draft's document check already passed.
     # The renamed contract must travel with its criterion ledger: otherwise the old
     # promise that every repair runs full verification survives in the accepted plan.
-    ledger = (REPO_ROOT / "plans/changes/draft-gates-only/plan.md").read_text(encoding="utf-8")
+    ledger = (REPO_ROOT / "plans/changes/archive/2026-11-06-draft-gates-only/plan.md").read_text(encoding="utf-8")
     assert "tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft —" in ledger, (
         "criterion 6 must name the fallback-specific repair contract"
     )
