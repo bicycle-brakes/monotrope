@@ -535,4 +535,5 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/time-records-data/plan.md`](changes/time-records-data/plan.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/research.md`](changes/time-records-data/research.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/spec.md`](changes/time-records-data/spec.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/verify-slots/research.md`](changes/verify-slots/research.md) | draft | none | 2026-11-09 | coding-harness-u1ha |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
