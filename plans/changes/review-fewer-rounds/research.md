@@ -61,3 +61,306 @@ I could not run the phase's commands. The appended instructions make me the read
 1. The `research.md` header has no `neighbours:` list and no `class:` declaration. The runner refuses a swarm run without them, so add both before `prepare-explore`. A `feature` or `architectural` class goes to the research swarm; a `bounded` or `spike` class goes to the single explorer.
 2. Run `python3 scripts/stage2.py prepare-explore review-fewer-rounds`, show its report unchanged, then `explore review-fewer-rounds --availability-reported <id>`. Those are the orchestrator's steps; I could not run them.
 3. Read bead `coding-harness-3rtn` (`tools/bd show coding-harness-3rtn`) to settle what "fewer rounds" means. That is the question that decides the open points above.
+
+## Research — public evidence (Opus 5.5, 2026-11-09)
+
+Scope: the four open research questions of `decisions.md` ("Open — not
+counted"). Public sources only, read on 2026-11-09. Labels: **Evidence** =
+stated in the cited source (where only the abstract or a summary was read,
+it says so); **Inference** = this session's reasoning, not a source's claim;
+**Not found** = searched for and not located, which is not the same as "does
+not exist". Sources are listed at the end as [S1]…[S17].
+
+### (a) Lens-based (focused) review against unfocused review
+
+**Evidence — human inspection literature.**
+- Scenario-based reading, where each reviewer hunts one defect class, found
+  more requirements defects per team than ad hoc or checklist reading;
+  scenario reviewers were better at their own class and no worse at others;
+  checklists were no better than ad hoc [S1] (abstract read).
+- Perspective-based reading (PBR: tester, designer, user viewpoints) was
+  proposed on the premise that a team of distinct perspectives covers more of
+  the document than an equal team reading its usual way [S2] (abstract read).
+- A replication with stricter statistics found the perspectives did *not*
+  differ significantly in which defects they found, and that combining
+  perspectives "may not give higher coverage" than single-perspective
+  reading [S3] (abstract read).
+- A quantitative aggregation of the PBR experiments found no clear positive
+  effect: PBR teams beat ad hoc reading on requirements but trailed
+  checklist-based reading, with signs of researcher bias in the primary
+  studies [S4] (abstract read).
+- On UML design documents, PBR scenarios outperformed checklist-based
+  reading [S5] (abstract read; numbers not read).
+
+**Evidence — LLM reviewers.**
+- RevAgent: five category-specific reviewer agents plus a critic, against one
+  agent trained on all categories; the specialised set scored higher on
+  prediction accuracy for all four base models (+3.1 to +13.9 points) and on
+  most text metrics; no significance test reported [S6]. These are small
+  fine-tuned models, not prompted frontier models.
+- A controlled study (900 sessions, 150 planted errors) found that *what the
+  reviewer is given* changes results: withholding requirements raised F1 for
+  the two weaker reviewer tiers but not for the top tier (point estimates,
+  untested) [S7] (abstract read).
+- Controlled comparisons of *prompted* frontier LLMs with a single focus
+  against the same model unfocused: **not found**. Vendor write-ups claiming
+  fewer false positives from "micro-agents" exist but are not peer-reviewed
+  and are not used here.
+
+**Inference.** The human evidence for focus is mixed: the gain is strongest
+when the lens names a defect *class* with a procedure (scenarios [S1]) and
+weakest when it names a *viewpoint* (perspectives [S3][S4]). The five lenses
+of Q-1 are defect classes, closer to [S1]. The evidence does not show that a
+lens loses defects outside it [S1], but neither does it show the lens set is
+complete.
+
+Implication for the spec:
+- Write each lens prompt as a defect class with concrete questions to ask of
+  the diff (scenario style [S1]), not as a role or viewpoint.
+- Keep an explicit "outside your lens, report only BLOCKER" clause, so a lens
+  reviewer still reports a severe defect it trips over [S1].
+- Treat "lenses find more" as a hypothesis to measure on this repository's
+  own rows (taken findings per lens, overlap between lenses), not as settled.
+
+### (b) Capture-recapture with two or three reviewers
+
+**Evidence — estimators and their behaviour.**
+- Capture-recapture entered software inspection in 1992 to estimate faults
+  left after an inspection; a ten-year review found most software studies
+  recommend the Mh jackknife estimator (Mh-JK) and calls for application
+  experience; it sketches an inspection process with decision points based on
+  the estimates [S8] (abstract read).
+- Models evaluated on real inspection data [S9]: M0 (one detection
+  probability), Mt (reviewers differ; MLE and Chao), Mh (defects differ;
+  jackknife and Chao), Mth (both; Chao). Findings, read in the report
+  version of the paper:
+  - all estimators tend to **underestimate**; fewer than four inspectors
+    gives "rather inaccurate estimates";
+  - at **three** inspectors Mh-JK was best on bias and variability, yet its
+    median relative error was still **−27%**, "might not be usable in practice
+    for three inspectors" without calibration; calibration has theoretical
+    limits the data confirmed;
+  - Chao estimators have the median error closest to zero but rare, extreme
+    overestimates at few inspectors; Mh-Chao fails (no estimate) when no
+    defect was found by exactly two inspectors — 20.2% failures when the
+    document held fewer than 12 defects;
+  - Mth-Chao gives no estimate at two inspectors (a k−2 term).
+- For exactly two inspectors, a Monte Carlo study found an estimator that
+  allows inspectors of different ability (attributed to Chapman) the most
+  suitable, with relatively high *decision* accuracy [S10] (abstract read).
+- The detection profile method (curve fitting over how many reviewers found
+  each defect) makes fewer assumptions [S11]; a later study found no single
+  model superior and the most robust results from combining estimators with
+  the detection profile method [S12] (abstract read).
+- Older re-inspection rules compared a document's defect count with a
+  historical benchmark [S13] (secondary account); such rules can send a good
+  document back and let a poor one pass [S9].
+
+**Evidence — assumptions.** Closure (the defect population does not change
+during the review) holds when all reviewers read the same artefact [S9].
+Independence between reviewers is the assumption most at risk for LLMs: when
+two models both err they pick the *same* wrong answer about 60% of the time on
+one benchmark, and correlation is higher for stronger, newer and same-provider
+models [S14].
+
+**The formulas for k = 3 reviewers per lens.** S = distinct taken findings,
+f1 = found by exactly one reviewer, f2 = by exactly two.
+- Mh-JK (first order, Burnham and Overton, as used in [S9]):
+  N̂ = S + f1·(k−1)/k = S + ⅔·f1; estimated remaining = ⅔·f1.
+- Mh-Chao (Chao 1987, as used in [S9]): N̂ = S + f1²/(2·f2); undefined when
+  f2 = 0.
+- Completeness Ĉ = S / N̂.
+
+**Inference — how the lens design meets or breaks the assumptions.**
+- Within one lens, three reviewers search one defect class over one diff:
+  closure holds, and the population is narrower and more homogeneous than
+  "all defects", which favours the estimate.
+- Reviewers differ in ability by design (best precision, cheap other lineage,
+  Codex): that is Mt-style heterogeneity, and defects differ in difficulty
+  (Mh). Mh-JK tolerates the second, not the first; Mth needs more reviewers
+  than three to be stable [S9].
+- Correlated errors [S14] inflate overlap, so the estimate falls and the
+  lens looks complete when it is not. Together with the general
+  underestimation [S9], **both biases point the same way: toward skipping
+  a needed second round.** The threshold must lean toward re-review.
+- False positives are not "captures". A finding counts only after the
+  orchestrator takes it, and two rows count as one capture only when they
+  name the same defect. Raw rows would inflate f1 with the low-precision
+  reviewers' noise (the repository measured 30% to 91% taken shares,
+  2026-11-08, `decisions.md` Q-2).
+- Per-lens counts are small (round 1 today yields 5–22 rows for the whole
+  change, 2026-11-08). Below about twelve defects estimates are unstable and
+  Chao fails often [S9]. A per-lens point estimate is therefore a coarse
+  signal, not a measurement.
+
+Implication for the spec:
+- Use Mh-JK as the trigger estimator (best behaved at k = 3 [S9][S8]);
+  log Chao alongside when f2 > 0, never as the trigger.
+- Count only taken, de-duplicated findings per lens; the de-duplication
+  rule ("same defect") is part of the spec, not left to the estimator.
+- State the known bias (−27% median at three inspectors [S9], plus
+  correlation [S14]) in the spec as a `Boundary`, and set the threshold to
+  lean toward a second round.
+- Record the per-lens estimate on every run before it gates anything, so
+  the threshold can be calibrated on this repository's data.
+
+### (c) Ensembles and model diversity of LLM reviewers
+
+**Evidence.**
+- Different LLMs on a real code-review benchmark overlapped little in the
+  defects they found, and five runs of the *same* model overlapped little
+  too; aggregating ten runs of one model raised recall by 118.8% and F1 by
+  43.7% relative to a single pass [S15].
+- With two review calls, one same-model plus one cross-model review matched
+  more planted errors than two same-model reviews (56.7% vs 42.7%,
+  Holm-adjusted p = .006); a top-tier cross-model reviewer and same-model
+  review overlapped with Jaccard 41.2%; a lightweight cross-model reviewer
+  did no better than same-model review [S7] (abstract read).
+- Errors correlate across models, more so for stronger models, the same
+  provider and newer releases [S14].
+- A majority-vote ensemble of ten open models (five families) for
+  vulnerability detection beat the *average* member by 10–12 points of
+  accuracy, but at a 70% threshold several single models beat the ensemble
+  on two of four tasks; raising the vote threshold cut false positives and
+  lowered detection [S16]. Union ("any reviewer") was not tested.
+- Head-to-head union against majority for LLM code review, and published
+  cross-reviewer duplicate rates on a public code-review benchmark:
+  **not found**.
+
+**Inference.**
+- For finding defects, union is the right rule and majority is wrong: a
+  majority throws away exactly the singletons that capture-recapture reads
+  as the signal of missed defects. Precision is restored by the
+  orchestrator's take/reject step, not by voting.
+- Lineage diversity helps, but less than its name suggests [S14]; capability
+  of the second reviewer matters as much [S7]. A cheap other-lineage seat is
+  justified mainly by cost per extra capture, and should be measured as such.
+- Same-model run-to-run variance is large [S15]; part of what looks like
+  "a reviewer missed it" is sampling noise, which makes singletons less
+  telling and supports a lenient (re-review-leaning) threshold.
+
+Implication for the spec:
+- Merge reviewer output by union per lens; never require agreement for a
+  finding to reach triage.
+- Keep three distinct models per lens, as Q-2 decided; record per seat the
+  taken findings that no other seat found (unique yield), the number to
+  re-seat by.
+- Do not add a fourth model per lens on this evidence: [S7] points to
+  diminishing returns past two; a fourth would help the estimator [S9] but
+  doubles nothing else.
+
+### (d) Cost of 15 round-1 calls against today's rounds
+
+Repository data (measured 2026-11-08 over 63 changes and 1205 loop rows,
+from the brief of this session): round 1 about 3 reviewers and 5–22 rows;
+later rounds 1 reviewer and 1–6 rows; typically 4–8 rounds; each round with
+findings costs a repair plus a full `make verify` of about 22 minutes plus
+4–35 minutes waiting for the verify lock.
+
+| | Today (4–8 rounds) | Proposed (round 1 + optional round 2) |
+|---|---|---|
+| Review calls | about 3 + 3…7 = 6–10 | 15 + 0…15 = 15–30 |
+| Codex calls | 0 in the loop | 5, up to 10 with every lens re-run |
+| Repair + verify cycles | 3–8 (the clean last round has none) | 1–2 (Q-6: round-2 findings go into one last repair) |
+| Verify wall clock | 3×26 = 78 min … 8×57 = 456 min | 26 … 114 min |
+
+**Evidence — price.** `gpt-6.1-terra` standard API list price: $1.00 per
+million input tokens, $0.05 cached input, $5.00 output [S17] (official model
+page read 2026-11-09; the page carries no date). Per-call token counts of a
+review call: **not measured** in this repository (the 2026-10-08 study says
+so; see the stage-1 notes above). Whether Codex runs here on API billing or a
+plan quota: not read.
+
+**Inference — an illustrative figure, not a measurement.** If a lens call
+reads 60,000 input tokens and writes 4,000, one Codex call costs about
+$0.06 + $0.02 = $0.08, so five calls about $0.40 and ten about $0.80 at list
+price. The assumption is this session's; the spec should replace it with
+logged token counts.
+
+**Inference — where the cost moves.** Calls rise by 1.5× to 5×, but they run
+in parallel within a round, so wall clock grows little. Verify cycles fall
+from 3–8 to 1–2; each saved cycle frees the shared verify lock for the other
+lanes, which is where today's 4–35 minute waits come from. The binding
+budget for Codex is its quota, not its list price.
+
+Implication for the spec:
+- Log tokens and seconds per call and per verify cycle from the first run,
+  so the comparison above becomes a measured one.
+- Report per change: calls, Codex calls, verify cycles, verify minutes
+  including lock wait, and taken findings per call.
+- State a stop condition if Codex quota runs out mid-round (the lens keeps
+  its two other seats; the estimate then uses k = 2 and Chapman [S10]).
+
+### Proposed threshold
+
+Per lens, over taken and de-duplicated round-1 findings with S ≥ 1: run a
+second round for that lens when **f1 ≥ 2 and f1 > S/2** — equivalently, the
+Mh-JK estimate of remaining defects is at least 1.33 and estimated
+completeness Ĉ = S/(S + ⅔·f1) is below 0.75. Also run it when S ≥ 2 and no
+finding was seen by two reviewers (f2 = f3 = 0: overlap zero, the estimate is
+unbounded in spirit). A lens with S = 0 gets no second round, but its zero is
+logged as weak evidence, not as "clean". **Evidence grade: low.** The
+estimator choice rests on direct evidence [S8][S9]; the direction of bias
+(underestimation, worsened by correlated errors) rests on evidence
+[S9][S14]; the numbers 2, ½ and 0.75 are this session's inference — no
+public source states a re-inspection threshold for three reviewers
+(**not found**). The threshold belongs in the central configuration (Q-4)
+and should run in shadow mode — estimate logged, second round decided as
+the spec says — for the first 10–20 changes, then be recalibrated against
+how often a second round actually found taken MAJOR+ rows.
+
+### Sources
+
+- [S1] Porter, Votta, Basili (1995), "Comparing Detection Methods for
+  Software Requirements Inspections: A Replicated Experiment", IEEE TSE
+  21(6). https://sites.umiacs.umd.edu/node/16314
+- [S2] Basili, Green, Laitenberger, Lanubile, Shull, Sørumgård, Zelkowitz
+  (1996), "The Empirical Investigation of Perspective-Based Reading",
+  Empirical Software Engineering 1(2). https://dblp.org/rec/journals/ese/BasiliGLLSSZ96
+- [S3] Regnell, Runeson, Thelin (2000), "Are the Perspectives Really
+  Different? Further Experimentation on Scenario-Based Reading of
+  Requirements", Empirical Software Engineering 5(4).
+  https://core.ac.uk/download/83782514.pdf
+- [S4] Ciolkowski (2009), "What Do We Know About Perspective-Based Reading?
+  An Approach for Quantitative Aggregation in Software Engineering", ESEM
+  2009. https://researchr.org/publication/Ciolkowski09
+- [S5] Laitenberger, Atkinson, Schlich, El Emam (2000), "An Experimental
+  Comparison of Reading Techniques for Defect Detection in UML Design
+  Documents", Journal of Systems and Software 53(2).
+  https://www.ehealthinformation.ca/web/default/files/wp-files/1069.pdf
+- [S6] Li, Wang, Thongtanunam, Wang, Yu, Chen (2025), "Issue-Oriented
+  Agent-Based Framework for Automated Review Comment Generation", arXiv
+  2511.00517. https://arxiv.org/html/2511.00517v1
+- [S7] Song (2026), "When Does a Second Model Help? Cross-Model Review in LLM
+  Verification", arXiv 2610.01471 (preprint). https://arxiv.org/abs/2610.01471
+- [S8] Petersson, Thelin, Runeson, Wohlin (2004), "Capture-Recapture in
+  Software Inspections after 10 Years Research — Theory, Evaluation and
+  Application", Journal of Systems and Software 72(2).
+  https://lup.lub.lu.se/search/publication/282e2518-f7d2-49e0-bd9c-49934bcf9849
+- [S9] Briand, El Emam, Freimut, Laitenberger (2000), "A Comprehensive
+  Evaluation of Capture-Recapture Models for Estimating Software Defect
+  Content", IEEE TSE 26(6); read in the report version:
+  https://www.ehealthinformation.ca/web/default/files/wp-files/2001-A-Comprehensive-Evaluation.pdf
+- [S10] El Emam, Laitenberger (2001), "Evaluating Capture-Recapture Models
+  with Two Inspectors", IEEE TSE 27(9).
+  https://ehealthinformation.ca/web/default/files/wp-files/1068.pdf
+- [S11] Wohlin, Runeson (1998), "Defect Content Estimations from Review
+  Data", ICSE 1998.
+  https://lup.lub.lu.se/record/ecdabe1d-b126-40f4-be11-3cb9d2e047ab
+- [S12] "Robust Estimations of Fault Content with Capture-Recapture and
+  Detection Profile Estimators", Journal of Systems and Software (2000),
+  Lund group (authors not read). https://unpaywall.org/10.1016%2FS0164-1212%2899%2900140-5
+- [S13] Eick et al. (1992) and Vander Wiel, Votta (1993), as described in
+  Briand, El Emam, Freimut (1998), "A Comparison and Integration of
+  Capture-Recapture Models and the Detection Profile Method", ISERN-98-11.
+  https://ehealthinformation.ca/web/default/files/wp-files/isern-98-11.pdf
+- [S14] Kim, Garg, Peng, Garg (2025), "Correlated Errors in Large Language
+  Models", ICML 2025. https://arxiv.org/abs/2506.07962v1
+- [S15] Zeng et al. (2025), "SWR-Bench: Assessing LLM Performance in
+  Real-World Code Review Comment Generation", arXiv 2509.01494 (FSE).
+  https://arxiv.org/html/2509.01494
+- [S16] Zibaeirad, Vieira (2025), "Diverse LLMs vs. Vulnerabilities: Who
+  Detects and Fixes Them Better?", arXiv 2512.12536.
+  https://arxiv.org/html/2512.12536v1
+- [S17] OpenAI, "GPT-6.1 Terra" model page, read 2026-11-09.
+  https://developers.openai.com/api/docs/models/gpt-6.1-terra
