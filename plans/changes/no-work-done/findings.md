@@ -639,7 +639,7 @@ Stage-2 call, 2026-11-09: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4890–4899 | A rejected attempt can leave a newly written test while the retry restores the plan’s `not yet written` marker. If the next model call only appends discarded time-body text, verification clears that marker again. The path-only candidate filter then counts this runner-owned ledger edit as model work, allowing acceptance after green verification. An in-memory reproduction using the actual `clear_written` and `attempt_has_work` functions returned `True` despite no model change outside the time body. Discount ledger clearing before deciding work. [Acceptance criteria 1 and 4] | Codex | open | — |
+| F-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4890–4899 | A rejected attempt can leave a newly written test while the retry restores the plan’s `not yet written` marker. If the next model call only appends discarded time-body text, verification clears that marker again. The path-only candidate filter then counts this runner-owned ledger edit as model work, allowing acceptance after green verification. An in-memory reproduction using the actual `clear_written` and `attempt_has_work` functions returned `True` despite no model change outside the time body. Discount ledger clearing before deciding work. [Acceptance criteria 1 and 4] | Codex | accepted limit — follow-up bead coding-harness-twbl (maintainer 2026-11-09: PR now, MAJOR as follow-up bead) | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
