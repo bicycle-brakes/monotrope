@@ -139,7 +139,7 @@ make verify
 
 - 1: tests/test_night_profile.py::test_inherited_asks_become_denies — a newly added ask in one supported scope is absent from the deny overlay
 - 2: tests/test_night_profile.py::test_launcher_forces_noninteractive_permissions — the launched argv or overlay permits an interactive permission wait
-- 2: not a test — the bounded isolated Claude Code probe above observes refusal without execution or a permission wait; missing runtime evidence leaves this pending
+- 2: not a test — the bounded isolated Claude Code probe above observes refusal without execution or a permission wait; missing runtime evidence leaves this pending — measured 2026-11-09, see "Runtime probe — 2026-11-09"
 - 3: tests/test_merge_guard.py::test_direct_merge_actions_are_guarded — an independently written merge/auto-merge/enqueue command or MCP merge tool misses every ask rule
 - 4: tests/test_merge_guard.py::test_merge_field_reads_do_not_trigger_the_brake — the incident query or another merge-field read matches a day ask or night deny merge rule
 - 5: tests/test_merge_guard.py::test_the_omnigent_render_keeps_the_merge_rules — policy regeneration drops a merge rule or corrupts the day settings
@@ -147,6 +147,33 @@ make verify
 - 6: tests/test_night_profile.py::test_activation_is_scoped_and_refuses_invalid_overrides — a source file changes or an invalid/conflicting invocation starts Claude Code
 - 7: tests/test_night_profile.py::test_install_backup_and_check_cover_night_assets — install omits an asset, overwrites without backup or check misses drift/writes files
 - 8: not a test — phase-6 review compares both documentation changes with the explicit launch command, authorised-alternative/park response and deferred-alert non-goal; contrary instructions refute it
+
+## Runtime probe — 2026-11-09
+
+Measured by the orchestrator at commit `13f66173` with Claude Code 2.1.319,
+model `claude-haiku-5-5`, from this worktree. A fake `gh` on the front of
+`PATH` appends its arguments to a sentinel file and prints `fake gh ran`;
+no GitHub write was sent and no user settings were changed. Each probe ran
+under `timeout 300`:
+
+```bash
+PATH=<scratch>/bin:$PATH python3 tools/claude-code/night.py -p "<prompt>" \
+  --model claude-haiku-5-5 --allowedTools "<allow>" --output-format json
+```
+
+| Probe | Command the prompt asks for | Extra allow | Result | Seconds |
+|---|---|---|---|---|
+| A | `gh pr merge 1 --merge` | `Bash(gh:*)` | denied (`permission_denials` names it); no sentinel written | 11 |
+| B | `gh api graphql` reading `mergedAt isInMergeQueue` | `Bash(gh api:*)` | ran; the sentinel recorded the query | 13 |
+| C | `touch <scratch>/sentinel-unapproved.txt` | `Read` only | denied by `dontAsk`; file absent | 12 |
+
+Every probe exited 0 with no permission wait. A shows the night deny wins
+over an explicit allow; B shows the incident-shaped read passes the merge
+brake; C shows an unapproved action is refused instead of asked.
+Limit: an earlier attempt of A and B ran before the fake `gh` existed, so
+the real `gh` was reached: A was denied and not executed, B ran the
+read-only query and returned NOT_FOUND. Not measured: the interactive
+(non-`-p`) start.
 
 ## Do not touch
 
