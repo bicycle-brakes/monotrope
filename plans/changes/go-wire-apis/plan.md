@@ -170,9 +170,12 @@ Keep final verification and live evidence tied to their exact code commits.
 
 ## Time used
 
-Appetite overrun, 2026-11-07: 14684 s recorded against the 3 h card; parked at
-loop round 3, the maintainer granted one more hour (repair, phase 6, pull
-request).
+Appetite overrun: 3 h card. On 2026-11-07, at 14,684 s recorded, the lane was
+parked at loop round 3 and the maintainer granted one more hour (repair, phase
+6, pull request). The 2026-11-08 repair brought the measured total to 21,380 s
+(about 5.9 h). On 2026-11-09 the maintainer granted one more hour for the repair
+of review-loop round 4 (fresh run), then phase 6 and the pull request. Failed
+repair attempts recorded in `findings.md` carry no time line of their own.
 
 2026-11-06 16:19:48–17:39:18 UTC, 4769 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-06 17:39:28–18:44:18 UTC, 3890 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner
