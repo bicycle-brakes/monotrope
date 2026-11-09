@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -415,6 +416,57 @@ def test_session_metadata_and_fresh_attestation_are_required(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 # Criterion 5 — exact grading, fixed denominator
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("nested", [False, True])
+def test_nonstandard_json_constants_refuse_recording(tmp_path: Path, value: float, nested: bool) -> None:
+    """NaN and either infinity are malformed JSON, even inside a wrong-type answer."""
+    root = _write_repo(tmp_path / "repo")
+    assert _record(root, tmp_path, _export(root), dict(SENTINELS)).returncode == 0
+    history = root / HISTORY_REL
+    original = history.read_bytes()
+    answers = dict(SENTINELS, **{"verify-floor": [value] if nested else value})
+    done = _record(root, tmp_path, _export(root), answers)
+    assert done.returncode == 3, "nonstandard JSON constants must refuse measurement"
+    assert "not valid JSON" in done.stderr
+    assert history.read_bytes() == original, "malformed answers must append nothing"
+
+
+def test_huge_integer_answer_is_incorrect(tmp_path: Path) -> None:
+    """A finite JSON integer must receive a verdict without float conversion overflow."""
+    root = _write_repo(tmp_path / "repo")
+    answers = dict(SENTINELS, **{"verify-floor": 10**400})
+    try:
+        verdict = _module(root)._grade(answers["verify-floor"], SENTINELS["verify-floor"], "number")
+    except OverflowError:
+        pytest.fail("a finite huge integer must receive an incorrect verdict without OverflowError")
+    assert verdict is False
+    done = _record(root, tmp_path, _export(root), answers)
+    assert done.returncode == 1, f"a huge integer must be measured as incorrect: {done.stderr}"
+    assert done.stdout == "measured: 7/8 correct\n"
+    record = _history(root)[0]
+    assert record["total"] == 8 and record["correct"] == 7
+    assert _verdict_map(record)["verify-floor"] == "incorrect"
+
+
+def test_conflicting_routing_sections_refuse_measurement(tmp_path: Path) -> None:
+    """Duplicate routing sections must refuse export and recording on a matching snapshot."""
+    root = _write_repo(tmp_path / "repo")
+    questionnaire = _export(root)
+    path = root / "docs/WORKFLOW.md"
+    path.write_text(
+        path.read_text() + "\n### The routing\n\n| Phase | Model | Why |\n|---|---|---|\n"
+        "| Repair after 4b and 6 | conflicting-repair-1 | Sentinel 9.9 after two failed checks |\n"
+    )
+    _commit(root, "conflicting routing section")
+    questionnaire["commit"] = _head_of(root)
+    questionnaire["source_sha256"]["docs/WORKFLOW.md"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    done = _record(root, tmp_path, questionnaire, dict(SENTINELS))
+    assert done.returncode == 3, "conflicting routing sections must refuse recording on the current snapshot"
+    assert not (root / HISTORY_REL).exists()
+    done = _run_tool(root, "questions")
+    assert done.returncode == 3 and done.stdout == "", "ambiguous routing must prevent questionnaire export"
 
 
 def test_grading_is_exact_and_keeps_denominator_eight(tmp_path: Path) -> None:

@@ -176,6 +176,10 @@ complete `research-swarm/v2` run and therefore no swarm handoff to invent.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-09
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-06 16:19:48–16:56:45 UTC, 2217 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -186,3 +190,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-08 13:24:08–18:22:14 UTC, 17886 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 18:45:00–20:52:37 UTC, 7657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 21:51:57–2026-11-09 00:30:27 UTC, 9509 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-09 06:50:16–08:44:20 UTC, 6843 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 08:44:34–09:28:46 UTC, 2652 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 09:28:57–09:52:07 UTC, 1391 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
