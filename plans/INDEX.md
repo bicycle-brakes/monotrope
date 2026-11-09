@@ -17,6 +17,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/adr-owning-change/plan.md`](changes/adr-owning-change/plan.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/research.md`](changes/adr-owning-change/research.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/spec.md`](changes/adr-owning-change/spec.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-repair-check/decisions.md`](changes/adr-repair-check/decisions.md) | draft | none | 2026-11-08 | coding-harness-firy |
+| [`changes/adr-repair-check/research.md`](changes/adr-repair-check/research.md) | draft | none | 2026-11-08 | coding-harness-firy |
+| [`changes/adr-repair-check/spec.md`](changes/adr-repair-check/spec.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/architecture-reconcile/decisions.md`](changes/architecture-reconcile/decisions.md) | draft | none | 2026-10-31 | coding-harness-190 |
 | [`changes/architecture-reconcile/findings.md`](changes/architecture-reconcile/findings.md) | draft | none | 2026-10-31 | coding-harness-190 |
 | [`changes/architecture-reconcile/plan.md`](changes/architecture-reconcile/plan.md) | draft | none | 2026-10-31 | coding-harness-190 |
