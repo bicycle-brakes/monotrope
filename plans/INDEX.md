@@ -467,6 +467,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/outcome-test/decisions.md`](changes/outcome-test/decisions.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/findings.md`](changes/outcome-test/findings.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/plan.md`](changes/outcome-test/plan.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/research.md`](changes/outcome-test/research.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/outcome-test/spec.md`](changes/outcome-test/spec.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/pi-no-compaction/decisions.md`](changes/pi-no-compaction/decisions.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/pi-no-compaction/findings.md`](changes/pi-no-compaction/findings.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/pi-no-compaction/plan.md`](changes/pi-no-compaction/plan.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
