@@ -8310,6 +8310,9 @@ def test_legacy_released_origin_does_not_hold_verbs(world: World, verb: str, new
             pi=[{"stdout": rows(1)}] * 4,
             codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
         )
+        if verb == "review":
+            # Phase 6 reads the committed head for its full check (repair-targeted-check).
+            commit_review_findings(world)
     assert world.run(verb) == 0
     assert stage2.findings_rows(world.text())[0][0][3] == "diff reading"
 
