@@ -10152,16 +10152,52 @@ WORK_EDITS = {
     "binary": lambda root: (root / "src" / "blob.bin").write_bytes(b"\x00\x01\x02"),
     "file-mode": lambda root: (root / "src" / "app.py").chmod(0o755),
     "plan-mode": lambda root: (root / "plans" / "changes" / "demo" / "plan.md").chmod(0o755),
+    "held-body-reversion": lambda root: (root / "README.md").write_text(
+        old_header().replace("updated: 2026-09-29", "updated: 2026-10-01"), encoding="utf-8"
+    ),
 }
 
 
 @pytest.mark.parametrize("edit", sorted(WORK_EDITS))
 def test_work_check_accepts_nonempty_changes(world: World, edit: str) -> None:
     """Criterion 2. Planted fault: an addition, change, deletion, binary or mode change is refused for its kind or path."""
+    if edit == "held-body-reversion":
+        _seed_retained_held_body_edit(world)
     before = stage2.worktree_tree(world.root)
     WORK_EDITS[edit](world.root)
     after = stage2.worktree_tree(world.root)
-    assert stage2.attempt_has_work(world.root, before, after, world.findings, world.plan), edit
+    assert stage2.attempt_has_work(world.root, before, after, world.findings, world.plan, model_after=after), edit
+
+
+def _seed_retained_held_body_edit(world: World) -> None:
+    """A rejected call retained body work; a retry can undo it and leave only a stamp versus HEAD."""
+    path = world.root / "README.md"
+    original = old_header()
+    path.write_text(original, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "-qm", "seed held document")
+    path.write_text(original + "\nEarlier attempt's retained body edit.\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("relative", ["docs/note.md", "README.md", "plans/changes/demo/plan.md"])
+@pytest.mark.parametrize("updated", ["not-a-date", "", "2026-10-01"])
+def test_stamp_only_work_discount_is_symmetric(world: World, relative: str, updated: str) -> None:
+    """Only changing an existing updated line is no work, even when its new value is malformed."""
+    path = world.root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = old_header()
+    if path == world.plan:
+        original += "\n## Time used\n\nPrevious runner record.\n"
+    path.write_text(original, encoding="utf-8")
+    before = stage2.worktree_tree(world.root)
+    changed = original.replace("updated: 2026-09-29", f"updated: {updated}")
+    if path == world.plan:
+        changed += "Forged time record.\n"
+    path.write_text(changed, encoding="utf-8")
+    after = stage2.worktree_tree(world.root)
+    assert not stage2.attempt_has_work(world.root, before, after, world.findings, world.plan, model_after=after), (
+        "changing only a stamp and discarded time records must not qualify as work"
+    )
 
 
 def test_work_check_uses_unbounded_changes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

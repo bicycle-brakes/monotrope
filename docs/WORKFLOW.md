@@ -937,7 +937,9 @@ changed at least one Git-visible thing beyond the runner's own records — the
 change's `findings.md` and the body of the plan's `## Time used` section, both
 put back by the runner, do not count. The verdict measures surviving model work
 after formatting and derived preparation, discounting the generated index and
-stamp-only changes the checkpoint restores. An edit formatting erases is no work.
+stamp-only changes in any document, whether or not checkpoint preparation restores
+them. Replacing only an existing `updated:` value does not count as work, even
+when the replacement is not a date. An edit formatting erases is no work.
 Any other addition, edit, deletion, binary or file-mode change counts, code or
 document, planned path or not. Each call is compared with its own pre-call state,
 so an earlier attempt's retained edits never qualify a later idle one. An

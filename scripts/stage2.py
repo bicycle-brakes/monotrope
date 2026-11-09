@@ -4848,8 +4848,9 @@ def attempt_has_work(
     """Measure surviving model work after verification, excluding writes the runner owns.
 
     Only paths changed by this call qualify. The final tree includes formatting and derived
-    preparation; the index and held stamp-only changes will not carry model work into the
-    checkpoint. The unbounded raw comparison also preserves binary and mode-only work.
+    preparation; the generated index and stamp-only changes in any document are excluded
+    from work, whether or not checkpoint preparation restores them. The unbounded raw
+    comparison also preserves binary and mode-only work.
     """
     candidates = None
     if model_after is not None:
@@ -4858,7 +4859,6 @@ def attempt_has_work(
             .rstrip(b"\0")
             .split(b"\0")
         )
-    held = _held_prefixes(root)
     done = _git_bytes(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
     fields = done.split(b"\0")
     if fields and fields[-1] == b"":
@@ -4877,16 +4877,15 @@ def attempt_has_work(
             continue
         if path in (findings_path, "plans/INDEX.md"):
             continue
-        if any(path.casefold().startswith(prefix) for prefix in held) and derived_leftover(root, Path(path)):
-            continue
         if status == "M" and old_mode == new_mode and old_mode in ("100644", "100755"):
             old = _git_bytes(root, "cat-file", "blob", old_id)
             new = _git_bytes(root, "cat-file", "blob", new_id)
-            # Preparation refreshes document dates; those bytes cannot create work.
+            # Ignore stamp-only edits on every document, including malformed replacement
+            # values and stamps outside held paths that the checkpoint does not restore.
             old_text = old.decode("utf-8", "surrogateescape")
             new_text = new.decode("utf-8", "surrogateescape")
             masked = _mask_stamp(old_text, dated=False)
-            if masked is not None and _mask_stamp(new_text, dated=True) == masked:
+            if masked is not None and _mask_stamp(new_text, dated=False) == masked:
                 continue
         if path == plan_path and status == "M" and old_mode == new_mode:
             old = _git_bytes(root, "cat-file", "blob", old_id)
@@ -4895,7 +4894,7 @@ def attempt_has_work(
             if old_body == new_body:
                 continue
             masked = _mask_stamp(old_body, dated=False)
-            if masked is not None and _mask_stamp(new_body, dated=True) == masked:
+            if masked is not None and _mask_stamp(new_body, dated=False) == masked:
                 continue
         return True
     return False
