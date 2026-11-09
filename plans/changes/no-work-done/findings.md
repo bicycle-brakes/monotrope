@@ -628,3 +628,5 @@ Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3734 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 926 files, 3753 commits, 12 rules.
