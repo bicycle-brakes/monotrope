@@ -1725,7 +1725,7 @@ def capture_address_notices() -> Iterator[list[str]]:
 
 
 def retain_address_notices(notices: list[str]) -> list[str]:
-    """Keep assessed, path-only diagnostics for the operation's durable evidence."""
+    """Keep assessed path-move and unrecorded-wire-api notices for durable evidence."""
     evidence = _address_notice_evidence.get()
     if evidence is None:
         return notices
@@ -2170,9 +2170,10 @@ def activate_overlay(
     """Activate fetched definitions through Pi's explicit model configuration.
 
     Returns the fields dropped per id and the address notices of same-host
-    path moves. Pi 1.2.0 restores its remote cache only for server dates newer
-    than its shipped catalog. A successful fresh retrieval need not carry such
-    a date. Keep models-store.json as retrieval evidence and use models.json's
+    path moves and unrecorded wire apis. Pi 1.2.0 restores its remote cache
+    only for server dates newer than its shipped catalog. A successful fresh
+    retrieval need not carry such a date. Keep models-store.json as retrieval
+    evidence and use models.json's
     model definitions to activate that exact catalog independently of cache
     age. Only the fields of `OVERLAY_FIELDS` cross, never provider auth
     configuration, request-body parameters or headers; the fetched store is

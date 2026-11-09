@@ -268,6 +268,83 @@ it leaves behind goes into a pull request that a person reviews and merges. The
 first one is [`prompts/research-recheck.md`](../prompts/research-recheck.md):
 it re-checks one research note on the web and appends a dated addendum to it.
 
+### The outcome test: a fresh session against the current rules
+
+The gates check artefacts; the outcome test checks what a freshly started
+session can still answer about the harness itself. An administrator runs
+[`scripts/outcome_test.py`](../scripts/outcome_test.py) `questions`, hands the
+printed questionnaire to one separately started, memory-free session, and
+records its answers with `record`. Every run carries four attested labels —
+harness, model, startup context and permitted repository access;
+`--fresh-session` is the administrator's attestation, not proof of a context
+reset. The baseline measures the normal working start: a new Claude Code
+session with its usual start context and read access to the repository
+(maintainer, 2026-11-08). The scope a run measured is carried in those labels,
+and comparisons hold only between runs that recorded the same scope.
+
+Before both `questions` and `record`, commit the tool, the question file and
+every measured source, and keep those files clean; uncommitted edits to the
+result history alone are allowed. Run the pre-change measurement before
+starting the instruction or handover-convention edit.
+
+Export the questionnaire to a temporary file, then save the fresh session's
+submission to another temporary file. The submission must be a JSON object
+keyed by question ID: each value is its answer, strings for string/directory
+questions and a JSON number for the numeric question. Do not submit prose,
+a list or the questionnaire itself; missing answers count as incorrect.
+
+```sh
+python3 scripts/outcome_test.py questions > /tmp/outcome-questions.json
+# Hand the questionnaire to the fresh session; save its JSON answer object
+# as /tmp/outcome-answers.json, then record the actual model and session labels:
+python3 scripts/outcome_test.py record \
+  --questionnaire /tmp/outcome-questions.json --answers /tmp/outcome-answers.json \
+  --harness 'Claude Code' --model 'ACTUAL_MODEL_IDENTIFIER' \
+  --context 'Usual Claude Code startup context' --access 'Repository read access' \
+  --fresh-session --purpose baseline
+```
+
+For a pre-change run, replace `--purpose baseline` with
+`--purpose pre-change --target AGENTS.md` or
+`--purpose pre-change --target handover-convention` before editing that source.
+
+The tool runs on demand, never on a schedule: once as the baseline at an
+accepted commit, and before every change to `AGENTS.md` or the handover
+convention (`--purpose pre-change --target AGENTS.md|handover-convention`).
+Expected answers are derived anew from the same commit's sources at recording
+time — never stored, in the questionnaire or in the history. Answers are
+graded exactly: case-sensitive strings, directories up to an optional trailing
+slash, the memory floor as a finite number; no synonyms, no partial credit, no
+model judging another model. The primary repair identifier accepts paired
+outer Markdown emphasis on both the source cell and the submitted answer;
+internal identifier characters still match exactly. The fallback reader requires
+exactly one versioned model identifier in the repair row's explanatory cells:
+a single family word followed by a dotted numeric version, or a technical
+identifier starting with a letter, containing a digit and a hyphen, underscore
+or slash (for example, `Example 1.2` or `vendor/model-1`). The surrounding prose
+and position of the identifier do not matter; missing or multiple matches
+leave the source unread. The instruction-file answer is the replacement
+filename explicitly named by the opening declaration containing "is the only
+instruction file" and "would silently replace it"; the source file's own
+basename is not the answer. `record` exits 0 at eight of eight, and 1 when
+the run was measured with incorrect answers — a low score is evidence, not a
+failed implementation. Exit 3 means **not measured**: an unreadable or
+conflicting source, a stale snapshot, malformed input or an unwritable history
+appends nothing and must never be read as a score. The history,
+`docs/research/outcome-test-results.jsonl`, keeps one dated, commit-bound JSON
+line per run with the four labels, score and eight correct/incorrect verdicts,
+never answer texts. Full submitted answers stay outside the repository in
+`$XDG_STATE_HOME/coding-harness/outcome-test/<run-id>.json` (default:
+`~/.local/state/coding-harness/outcome-test/<run-id>.json`), with private file
+permissions. Both input files (`--questionnaire` and `--answers`) and the
+state directory must be outside the measured repository; paths resolving
+inside it through symlinks are refused. This keeps earlier answers out of the
+next session's repository reading scope. Answers are archived only after a
+successful history append, under the same lock; an archive failure rolls that append back. A refused append may leave
+an empty history file, but retains no new submission, so the same questionnaire
+can be retried with corrected answers. Foreign sessions still start through
+[`scripts/stage2.py`](../scripts/stage2.py); this tool starts none.
+
 ### The five rules that make the difference
 
 **`/clear` between phases 3 and 4.** The plan is a file. Whoever implements it
