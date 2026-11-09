@@ -277,6 +277,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-stall-guard/research.md`](changes/night-stall-guard/research.md) | draft | none | 2026-11-09 | coding-harness-ibde |
 | [`changes/pi-catalog-move/decisions.md`](changes/pi-catalog-move/decisions.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/findings.md`](changes/pi-catalog-move/findings.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
 | [`changes/pi-catalog-move/plan.md`](changes/pi-catalog-move/plan.md) | draft | none | 2026-11-04 | coding-harness-vku6 |
