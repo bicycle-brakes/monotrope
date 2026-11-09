@@ -374,7 +374,7 @@ Stage-2 call, 2026-11-09: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | — | scripts/stage2.py:3467–3470 | An earlier phase-6 row with Status `taken — test_a` and Origin `invalid` escapes validation once a newer phase-6 block exists, even if that block says `No finding.`. Reproduced with the source functions: `origin_refusal(None, text)` returns `None`, while `repair_targets` still selects that earlier row with no waiting decision. Consequently, `repair` can call a model to repair an accepted finding whose provenance remains invalid. Validate outstanding repair targets across phase-6 blocks before allowing effects. [Acceptance criterion 2] | Codex | open | — |
+| F-1 | MAJOR | SPEC | — | scripts/stage2.py:3467–3470 | An earlier phase-6 row with Status `taken — test_a` and Origin `invalid` escapes validation once a newer phase-6 block exists, even if that block says `No finding.`. Reproduced with the source functions: `origin_refusal(None, text)` returns `None`, while `repair_targets` still selects that earlier row with no waiting decision. Consequently, `repair` can call a model to repair an accepted finding whose provenance remains invalid. Validate outstanding repair targets across phase-6 blocks before allowing effects. [Acceptance criterion 2] | Codex | accepted limit — follow-up bead coding-harness-3h96 (maintainer 2026-11-09: PR now, MAJOR as follow-up bead) | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
