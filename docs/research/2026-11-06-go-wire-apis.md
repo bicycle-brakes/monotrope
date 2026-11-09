@@ -2,7 +2,7 @@
 title: "Go wire APIs — live measurement 2026-11-06"
 category: research
 created: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-09
 last_reviewed: 2026-11-06
 status: draft
 implementation_status: partial
@@ -43,7 +43,7 @@ other APIs, which Console translates:
 |---|---|---|---|
 | anthropic-messages | https://opencode.ai/inference/go/anthropic | **measured** — answers from qwen3.8-flash, qwen3.7-plus, qwen3.8-max, minimax-m3 | qwen3.8-flash (the preferred claude-haiku-5-5 failed, see below) |
 | openai-responses | https://opencode.ai/inference/go/openai/v1 | **measured** — answer from grok-4.7 | grok-4.7 (the preferred gpt-6-luna is disabled) |
-| google-generative-ai | not declared | **blocked** — the live catalog lists only gemini-4-argon-contributor, no exact admitted id | none |
+| google-generative-ai | not declared | **unmeasured** — the 2026-11-08 catalog lists the exact gemini-4-argon again, but no successful live Google probe is recorded (Q-2; bead coding-harness-twdu) | none |
 
 Models that stay skipped, with the measured reason:
 
@@ -52,8 +52,12 @@ Models that stay skipped, with the measured reason:
   refuses. A Pi adapter setting, not the address; the plan returns such a
   defect to the orchestrator instead of widening this change.
 - gpt-6-luna, gpt-5.6-luna — 403 `Model access is disabled`.
-- gemini-4-argon — not in the live catalog (only the contributor alias, which
-  trains on request data and is not admitted).
+- gemini-4-argon — the 2026-11-08 catalog snapshot retained in
+  `plans/changes/go-wire-apis/findings.md` lists this exact id on
+  `google-generative-ai` at `https://opencode.ai/inference/go/google/v1beta`
+  and contains no contributor alias. Its skip remains because the Google
+  wire API has no successful live measurement, not because the id is absent
+  or because contributor training terms apply to this exact id.
 
 Now qualifying (wire skip removed): qwen3.8-flash, qwen3.7-plus, qwen3.8-max,
 minimax-m3 (Messages) and grok-4.7 (Responses); fresh preparation places them
@@ -62,15 +66,22 @@ on the paid ladder.
 ### Routes
 
 The offline contracts (`GO_NATIVE_ROUTES` in
-`tests/test_pi_contract.py`) prove that the pinned Pi appends `/v1/messages` to the Messages base
+`tests/test_pi_contract.py`) use a Messages base without a trailing `/v1`
+and assert the full captured path `/v1/messages`; the duplicate
+`/v1/v1/messages` is rejected by the regression contract. They prove that
+the pinned Pi appends `/v1/messages` to the Messages base
 `https://opencode.ai/inference/go/anthropic` and `/responses` to the
 Responses base `https://opencode.ai/inference/go/openai/v1`; the expected
 live routes are therefore the two documented page endpoints in the table
-above. Google has no route here: no admissible model (decisions.md Q-2).
+above. Google has an offline stand-in contract only; its base remains
+undeclared without a successful live measurement (decisions.md Q-2).
 
 ## Open
 
-Google has no admissible representative, so it is not measured. The
-maintainer decided on 2026-11-07 to ship the two measured APIs
-(`plans/changes/go-wire-apis/decisions.md`, Q-2); Google follows in its own
-change once Go offers an admissible Google model (bead coding-harness-twdu).
+Google remains unmeasured. The maintainer decided on 2026-11-07 to ship the
+two measured APIs (`plans/changes/go-wire-apis/decisions.md`, Q-2). That
+decision records the earlier contributor-only catalog premise; the retained
+2026-11-08 catalog supersedes that premise with the exact `gemini-4-argon`
+id. Catalog presence alone is no live measurement or new terms reading. The
+follow-up must check current terms and measure the Google wire API before
+removing its skip or declaring its base (bead coding-harness-twdu).

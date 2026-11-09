@@ -1,9 +1,9 @@
 """The offline Pi contracts: the real pinned Pi against a loopback stand-in.
 
 Every case here starts the actual installed Pi through the repository wrapper
-(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers the four
-measured wire APIs from a script: OpenAI-style chat completions, Anthropic
-Messages, OpenAI Responses and Google generateContent — a tool call, a stop,
+(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers the three
+measured wire APIs (OpenAI-style chat completions, Anthropic Messages and
+OpenAI Responses) plus an offline-only Google generateContent contract — a tool call, a stop,
 an error, per route. No hosted model, no user configuration, no external
 network: the credentials are synthetic, the HOME and agent directories are
 scratch, and a test-only preload (`tests/pi_network_guard.mjs`) denies every
@@ -67,7 +67,8 @@ ZEN_SHIPPED = "https://opencode.ai/inference/openai/v1"
 GO_SHIPPED = "https://opencode.ai/inference/go/openai/v1"
 GO_SHIPPED_MESSAGES = "https://opencode.ai/inference/go/anthropic"
 PI_MOVED_PIN = "1.5.0"
-# The three native Go wire APIs this change measures (go-wire-apis, criteria 1-2).
+# Native contracts for Messages and Responses plus offline-only Google
+# (go-wire-apis, criteria 1-2); Google live measurement is deferred by Q-2.
 # Each keeps its own protocol route, native body schema and credential header;
 # a translation into Chat Completions, a wrong route or a credential in the
 # request body fails these contracts.
@@ -303,7 +304,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class StandIn:
-    """A loopback stand-in with a script, answering the four measured wire APIs.
+    """Answer the three measured wire APIs plus the offline-only Google contract.
 
     Each POST is routed by protocol: `/chat/completions` (OpenAI Chat
     Completions), `/v1/messages` (Anthropic Messages), `/responses` (OpenAI
@@ -1551,6 +1552,32 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def assert_native_route(api: str, model_id: str, path: str) -> None:
+    """Hold the captured request path to the API's full native route, not a suffix of it.
+
+    The Messages stand-in base mirrors the declared one (no `/v1`), so the whole
+    path must be `/v1/messages`: an adapter appending `/v1/messages` to a `/v1`
+    base produces `/v1/v1/messages` and fails here.
+    """
+    route = path.split("?", 1)[0]
+    if api == "google-generative-ai":
+        assert f"/models/{model_id}:streamGenerateContent" in route, f"{api}: the request took the foreign route {path}"
+        assert "alt=sse" in path, f"{api}: the streaming query is missing: {path}"
+        return
+    expected_route = GO_NATIVE_ROUTES[api]
+    if api == "openai-responses":
+        expected_route = "/v1" + expected_route
+    assert route == expected_route, f"{api}: the request took the foreign route {path}"
+
+
+def test_messages_route_assertion_takes_the_full_path() -> None:
+    """The route check accepts `/v1/messages` exactly and refuses a duplicated version segment."""
+    assert_native_route("anthropic-messages", GO_NATIVE_MODELS["anthropic-messages"], "/v1/messages?beta=true")
+    for wrong in ("/v1/v1/messages", "/messages", "/anthropic/v1/messages"):
+        with pytest.raises(AssertionError, match="the request took the foreign route"):
+            assert_native_route("anthropic-messages", GO_NATIVE_MODELS["anthropic-messages"], wrong)
+
+
 @pytest.mark.usefixtures("installed_pi")
 @pytest.mark.parametrize("api", sorted(GO_NATIVE_MODELS))
 def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: str) -> None:
@@ -1563,6 +1590,8 @@ def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: st
     """
     model_id = GO_NATIVE_MODELS[api]
     standin = StandIn([{"content": NATIVE_ANSWER}])
+    # Mirror the declared Messages base: Pi appends /v1/messages itself.
+    base = standin.url.removesuffix("/v1") if api == "anthropic-messages" else standin.url
     try:
         done = run_pi(
             project,
@@ -1571,20 +1600,13 @@ def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: st
             "--model",
             f"opencode-go/{model_id}",
             "answer on the native wire API",
-            providers={"opencode-go": {"baseUrl": standin.url, "models": [native_contract_model(api, standin.url)]}},
+            providers={"opencode-go": {"baseUrl": base, "models": [native_contract_model(api, base)]}},
         )
         assert done.returncode == 0, f"{api} ended {done.returncode}: {done.stderr[-600:]}"
         assert NATIVE_ANSWER in done.stdout, f"{api}: the streamed reply was never decoded: {done.stdout[-400:]}"
         assert len(standin.requests) == 1, f"{api}: expected one exchange, saw {len(standin.requests)}"
         (exchange,) = standin.requests
-        route = exchange.path.split("?", 1)[0]
-        if api == "google-generative-ai":
-            assert f"/models/{model_id}:streamGenerateContent" in route, (
-                f"{api}: the request took the foreign route {exchange.path}"
-            )
-            assert "alt=sse" in exchange.path, f"{api}: the streaming query is missing: {exchange.path}"
-        else:
-            assert route.endswith(GO_NATIVE_ROUTES[api]), f"{api}: the request took the foreign route {exchange.path}"
+        assert_native_route(api, model_id, exchange.path)
         credential = GO_NATIVE_CREDENTIALS[api]
         expected = f"Bearer {SYNTHETIC_KEY}" if api == "openai-responses" else SYNTHETIC_KEY
         assert exchange.headers.get(credential) == expected, (

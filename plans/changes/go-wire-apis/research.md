@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -17,22 +17,13 @@ tags: [research]
 
 # go wire apis — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase-1 exploration recorded below, with AI drafting and pending review
+declared in the frontmatter. The observations describe the 2026-11-06
+exploration baseline; later scope decisions are recorded in `decisions.md`.
 
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3349 commits, 12 rules.
 
 ## Runner exploration — 2026-11-06
-
-The exploration is complete. Here is the research, ready to append to `plans/changes/go-wire-apis/research.md`.
-
----
 
 ## What exists today
 
@@ -78,10 +69,6 @@ The exploration is complete. Here is the research, ready to append to `plans/cha
 `plans/changes/go-access-point/spec.md` (the built address record; its design defers "another API … when it is measured") · `plans/changes/pi-catalog-move/spec.md` (the Pi 1.5.0 pin; its non-goals hand "measuring the Messages wire API" to "the separate model-admission decision pull request") · `plans/changes/research-swarm/spec.md` (the measured-wire-API seat rule of ADR 0020) · `plans/changes/kimi-admission/spec.md` (the 2026-10-30 unreachable marks beside the newest skip records) · `plans/changes/terms-expiry/spec.md` (ADR 0022; the skips' readings expire from 2026-11-16) · `plans/changes/pi-pin/spec.md` (the pin the shipped catalog rides on) · `plans/changes/pi-catalog-redirect/spec.md` (the merged catalog-source policy upstream of the seats).
 
 ---
-
-**Where we are:** phase-1 exploration for `go-wire-apis` is complete; the prose above is ready to append to `plans/changes/go-wire-apis/research.md` (whose frontmatter then needs `provenance: ai-drafted-reviewed` with `produced_by:` and `review:`, per its own note).
-**Next step:** the runner appends this, sets the `neighbours:` header, and the interview (phase 1a) takes the open questions above — first of all what the bead names and what counts as "measured".
-**Needed from you:** nothing right now.
 
 ## Drafting follow-up — 2026-11-06
 
