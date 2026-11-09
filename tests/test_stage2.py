@@ -19156,6 +19156,50 @@ def test_triage_records_each_supported_decision_in_the_worktree_record(
     assert sibling.read_bytes() == sibling_before, "a sibling worktree's record was written"
 
 
+@pytest.mark.parametrize("layout", ["inserted", "reordered", "trailing"])
+def test_triage_splices_status_using_the_declared_columns(
+    world: World, monkeypatch: pytest.MonkeyPatch, layout: str
+) -> None:
+    """A changed schema must not redirect the Status splice into a neighbouring cell."""
+    values = dict(zip(stage2.ROW_COLUMNS, triage_row(status="open", broke="no"), strict=True))
+    columns = list(stage2.ROW_COLUMNS)
+    if layout == "inserted":
+        columns.insert(columns.index("Status"), "Context")
+        values["Context"] = "preserve this context"
+    elif layout == "reordered":
+        columns[7], columns[8] = columns[8], columns[7]
+    else:
+        columns.append("Context")
+        values["Context"] = "preserve this trailing cell"
+    monkeypatch.setattr(stage2, "ROW_COLUMNS", columns)
+    triage_record(world, [[values[column] for column in columns]])
+    before = world.record().read_text(encoding="utf-8")
+    stage2._write_triage_row("demo", "L1-1", "rejected — reason", before, world.root)
+    after = world.record().read_text(encoding="utf-8")
+    assert after == before.replace("| open |", "| rejected — reason |"), (
+        "the Status splice must follow ROW_COLUMNS and preserve every other cell"
+    )
+
+
+@pytest.mark.parametrize("status", ["open", "taken — old reason", "rejected — old reason"])
+@pytest.mark.parametrize("mark", ["yes", "no", "YES — demonstrated", "no — no regression needed"])
+@pytest.mark.parametrize("decision", ["taken", "rejected", "taken — not a test", "taken — guard test"])
+def test_triage_refuses_to_redecide_a_row_with_a_proof_mark(
+    world: World, capsys: pytest.CaptureFixture[str], status: str, mark: str, decision: str
+) -> None:
+    """A new decision must not inherit the proof mark of an earlier decision."""
+    triage_record(world, [triage_row(status=status, broke=mark)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "a new decision") == 2, (
+        "triage must refuse to re-decide a row carrying a proof mark"
+    )
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "Status" in error and "Broke a test" in error
+    assert status in error and mark in error, "the refusal must name the existing decision/proof pair"
+    assert world.record().read_bytes() == before, "a refusal must preserve the entire record"
+
+
 @pytest.mark.parametrize("layout", ["canonical", "padded"])
 @pytest.mark.parametrize("final_newline", [True, False])
 def test_triage_changes_only_the_target_status_and_escapes_pipes_once(

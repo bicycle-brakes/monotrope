@@ -6882,16 +6882,17 @@ def triage_status(decision: str, reason: str) -> str:
 def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
     """Splice one row's Status cell in its own physical line and publish the record whole.
 
-    The caller has validated exactly nine physical cells with the strict reader under its lock.
+    The caller has validated the physical cells against ROW_COLUMNS with the strict reader under its lock.
     Preserve the other cells, line spacing and line endings verbatim.
     """
     lines: list[str] = []
     written = False
+    status_column = ROW_COLUMNS.index("Status")
     for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
         cells = None if reviewer else split_row(line)
         if cells and len(cells) == len(ROW_COLUMNS) and cells[0] == ident:
             separators = list(_PIPE.finditer(line))
-            start, end = separators[7].end(), separators[-2].start()
+            start, end = separators[status_column].end(), separators[status_column + 1].start()
             original = original[:start] + " " + status + " " + original[end:]
             written = True
         lines.append(original)
@@ -6944,9 +6945,16 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
                 raise Refused(
                     f"two loop rows carry `{row}`; mend the record first, triage would not know which to decide."
                 )
-            if targets[0][7].lower().startswith("fixed"):
+            existing_status = targets[0][ROW_COLUMNS.index("Status")]
+            existing_mark = targets[0][ROW_COLUMNS.index("Broke a test")]
+            if existing_status.lower().startswith("fixed"):
                 raise Refused(
                     f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
+                )
+            if marks_a_test(existing_mark):
+                raise Refused(
+                    f"loop row `{row}` already pairs Status `{existing_status}` with Broke a test `{existing_mark}`; "
+                    "triage cannot re-decide a row carrying repair evidence."
                 )
             if decision == "taken" and where_is_test_only(targets[0][4], root):
                 raise Refused(
