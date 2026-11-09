@@ -1227,9 +1227,45 @@ RESEARCH_TITLE = re.compile(r"(?m)^#[ \t][^\n]*\n")
 RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
 
 
-def _header_field_span(key: str) -> re.Pattern[str]:
-    """A complete header field span: the inline mapping on the key's line plus any indented block lines."""
-    return re.compile(rf"(?m)^{re.escape(key)}:[^\r\n]*(?:\r?\n(?:[ \t]+[^\r\n]*|-[ \t]+[^\r\n]*))*")
+def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
+    """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
+    node = yaml.compose(block)
+    spans = []
+    for field, value in node.value:
+        if field.value == key:
+            start = block.rfind("\n", 0, field.start_mark.index) + 1
+            end = value.end_mark.index
+            # A block mapping's end mark includes its final line ending; keep that separator.
+            while end > start and block[end - 1] in "\r\n":
+                end -= 1
+            spans.append((start, end))
+    return spans
+
+
+def research_visible_text(text: str) -> str:
+    """Mask Markdown fenced code (including unclosed fences) without moving source offsets.
+
+    CommonMark permits up to three leading spaces and a closing fence at least as long
+    as the opener. Keeping line endings makes this useful for both evidence and edits.
+    """
+    marker = None
+    width = 0
+    visible = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if marker is None:
+            opening = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", content)
+            if opening and not (opening[1][0] == "`" and "`" in opening[2]):
+                marker, width = opening[1][0], len(opening[1])
+            else:
+                visible.append(line)
+                continue
+        else:
+            closing = re.fullmatch(r" {0,3}([`~]+)[ \t]*", content)
+            if closing and set(closing[1]) == {marker} and len(closing[1]) >= width:
+                marker = None
+        visible.append("".join(char if char in "\r\n" else " " for char in line))
+    return "".join(visible)
 
 
 def skeleton_notices() -> list[str]:
@@ -1245,9 +1281,9 @@ def skeleton_notices() -> list[str]:
 
 
 def _notice_pattern(notice: str) -> re.Pattern[str]:
-    """A notice as a byte-tolerant pattern: its lines joined, with the blank line(s) around it."""
+    """An exact opening notice at line start, including its own trailing line endings."""
     lines = [re.escape(line) for line in notice.split("\n")]
-    return re.compile(r"(?:\r?\n)?" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
+    return re.compile(r"(?m)^" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
 
 
 def research_opening_notices(text: str, body_start: int) -> list[str]:
@@ -1258,8 +1294,10 @@ def research_opening_notices(text: str, body_start: int) -> list[str]:
     """
     title = RESEARCH_TITLE.search(text, body_start)
     start = title.end() if title else body_start
-    boundary = RESEARCH_OPENING_END.search(text, start)
-    opening = text[start : boundary.start() if boundary else len(text)]
+    visible = research_visible_text(text[body_start:])
+    visible = text[:body_start] + visible
+    boundary = RESEARCH_OPENING_END.search(visible, start)
+    opening = visible[start : boundary.start() if boundary else len(text)]
     return [notice for notice in skeleton_notices() if _notice_pattern(notice).search(opening)]
 
 
@@ -1274,13 +1312,18 @@ def _without_skeleton_opening(text: str, body_start: int) -> str:
     if title is None or text[body_start : title.start()].strip():
         raise Refused("research publication requires an opening title heading after the frontmatter")
     region_start = title.end()
-    boundary = RESEARCH_OPENING_END.search(text, region_start)
+    visible = text[:body_start] + research_visible_text(text[body_start:])
+    boundary = RESEARCH_OPENING_END.search(visible, region_start)
     region_end = boundary.start() if boundary else len(text)
     region = text[region_start:region_end]
-    removed = False
-    for notice in research_opening_notices(text, body_start):
-        region, count = _notice_pattern(notice).subn("", region, count=1)
-        removed = removed or count > 0
+    spans = []
+    for notice in skeleton_notices():
+        match = _notice_pattern(notice).search(visible[region_start:region_end])
+        if match:
+            spans.append(match.span())
+    for start, end in sorted(spans, reverse=True):
+        region = region[:start] + region[end:]
+    removed = bool(spans)
     if removed and not region.strip():
         # Nothing authored is left: keep the one blank line between the title and what follows.
         region = ("\r\n" if "\r\n" in text[region_start:region_end] else "\n") if boundary else ""
@@ -1337,7 +1380,7 @@ def research_producers(value, *, program_hint=None) -> list[dict]:
     return result
 
 
-def research_header_producers(raw_header: str, *, program_hint=None) -> list[dict]:
+def research_header_producers(raw_header: str, *, body="") -> list[dict]:
     """Read every owned producer span without silently losing duplicate-key evidence."""
     node = yaml.compose(raw_header)
     if not isinstance(node, yaml.MappingNode):
@@ -1354,13 +1397,36 @@ def research_header_producers(raw_header: str, *, program_hint=None) -> list[dic
             for child in value.value:
                 unique(child)
 
+    # Only historical accepted publications can establish a legacy model-only producer's
+    # program. The program making this new publication says nothing about earlier work.
+    visible = research_visible_text(body)
+    programs: dict[str, set[str]] = {}
+    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
+        calls = list(
+            re.finditer(
+                r"(?m)^Stage-2 call, (\d{4}-\d{2}-\d{2}): explore ·[^\r\n]*?endpoint ([\w-]+)",
+                visible[: answer.start()],
+            )
+        )
+        if calls and calls[-1][1] == answer[1]:
+            programs.setdefault(answer[1], set()).add(producer_for((calls[-1][2], "", None)))
+
     records = []
     for key, value in node.value:
         if key.value == "produced_by":
             unique(value)
-            for record in research_producers(yaml.safe_load(yaml.serialize(value)), program_hint=program_hint):
-                if record not in records:
-                    records.append(record)
+            loaded = yaml.safe_load(yaml.serialize(value))
+            if loaded == []:
+                raise ValueError("empty producer list")
+            for entry in loaded if isinstance(loaded, list) else [loaded]:
+                days = (
+                    re.findall(r"\d{4}-\d{2}-\d{2}", str(entry.get("version", ""))) if isinstance(entry, dict) else []
+                )
+                evidence = programs.get(days[0], set()) if len(days) == 1 else set()
+                hint = next(iter(evidence)) if len(evidence) == 1 else None
+                for record in research_producers(entry, program_hint=hint):
+                    if record not in records:
+                        records.append(record)
     return records
 
 
@@ -1406,7 +1472,7 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
         metadata = yaml.safe_load(block)
         if not isinstance(metadata, dict):
             raise ValueError("header is not a mapping")
-        records = research_header_producers(block, program_hint=producer)
+        records = research_header_producers(block, body=text[header.end() :])
     except (ValueError, yaml.YAMLError) as error:
         raise Refused(f"research publication refused: {error}") from error
     contribution = {"kind": "llm-session", "name": producer, "version": day}
@@ -1423,20 +1489,20 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
     edits: list[tuple[int, int, str]] = []
     inserted: list[str] = []
     for key, replacement in fields.items():
-        matches = list(_header_field_span(key).finditer(block))
+        matches = _header_field_spans(block, key)
         if not matches:
             inserted.append(replacement)
             continue
         first = matches[0]
-        edits.append((first.start(), first.end(), replacement))
+        edits.append((*first, replacement))
         for extra in matches[1:]:
-            drop_end = extra.end()
+            drop_end = extra[1]
             follow = block[drop_end : drop_end + 2]
             if follow == "\r\n":
                 drop_end += 2
             elif follow[:1] in ("\n", "\r"):
                 drop_end += 1
-            edits.append((extra.start(), drop_end, ""))
+            edits.append((extra[0], drop_end, ""))
     edits.sort(key=lambda edit: edit[0])
     pieces: list[str] = []
     position = 0

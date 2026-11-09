@@ -1541,10 +1541,10 @@ Stage-2 call, 2026-11-09: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| EP6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1321 | Historical attribution is inferred from the new publisher. Reproduced by preparing `architecture-reconcile/research.md` for swarm publication: its existing audit identifies `glm-coding-plan`, but the 2026-10-31 Flash contribution becomes `name: stage2-research-swarm`. Preserve the evidenced historical program, or refuse ambiguous attribution; the current publisher cannot establish it. [AC2] | Codex | taken — reproduced MAJOR inside the spec (maintainer 2026-11-09: repair tonight) | — |
-| EP6-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1232 | Valid quoted YAML keys escape replacement. With `'provenance': human-written`, publication retains that field and inserts `provenance: ai-drafted-reviewed`; the census then reports duplicate provenance. Quoted `produced_by` keys likewise survive beside newly inserted attribution. Publication must recognize equivalent YAML key spellings and leave exactly one owned field. [AC1–2] | Codex | taken — reproduced MAJOR inside the spec (maintainer 2026-11-09: repair tonight) | — |
-| EP6-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1281 | Publication deletes authored quotations before the first section. Reproduced with an introduction explicitly presenting the generated empty-file paragraph inside a Markdown code block: correction removes the quoted paragraph and joins the fences into ` ```markdown``` `. The example is authored research, whose bytes must remain unchanged. [AC5] | Codex | taken — reproduced MAJOR inside the spec (maintainer 2026-11-09: repair tonight) | — |
-| EP6-4 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:24 | Valid fenced examples falsely establish publication. A three-backtick opening closed by four backticks, or fences indented three spaces, survives fence removal. An example containing an exploration audit and heading then returns `('claude-code', '2026-11-05')`, making unpublished human research fail the census. Fenced examples must not count as publication evidence. [AC10] | Codex | taken — reproduced MAJOR inside the spec (maintainer 2026-11-09: repair tonight) | — |
+| EP6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1321 | Historical attribution is inferred from the new publisher. Reproduced by preparing `architecture-reconcile/research.md` for swarm publication: its existing audit identifies `glm-coding-plan`, but the 2026-10-31 Flash contribution becomes `name: stage2-research-swarm`. Preserve the evidenced historical program, or refuse ambiguous attribution; the current publisher cannot establish it. [AC2] | Codex | fixed — tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher | yes — tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher |
+| EP6-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1232 | Valid quoted YAML keys escape replacement. With `'provenance': human-written`, publication retains that field and inserts `provenance: ai-drafted-reviewed`; the census then reports duplicate provenance. Quoted `produced_by` keys likewise survive beside newly inserted attribution. Publication must recognize equivalent YAML key spellings and leave exactly one owned field. [AC1–2] | Codex | fixed — tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys | yes — tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys |
+| EP6-3 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1281 | Publication deletes authored quotations before the first section. Reproduced with an introduction explicitly presenting the generated empty-file paragraph inside a Markdown code block: correction removes the quoted paragraph and joins the fences into ` ```markdown``` `. The example is authored research, whose bytes must remain unchanged. [AC5] | Codex | fixed — tests/test_stage2_research_deep_review.py::test_publication_preserves_fenced_opening_notice_quotes | yes — tests/test_stage2_research_deep_review.py::test_publication_preserves_fenced_opening_notice_quotes |
+| EP6-4 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:24 | Valid fenced examples falsely establish publication. A three-backtick opening closed by four backticks, or fences indented three spaces, survives fence removal. An example containing an exploration audit and heading then returns `('claude-code', '2026-11-05')`, making unpublished human research fail the census. Fenced examples must not count as publication evidence. [AC10] | Codex | fixed — tests/test_explore_provenance.py::test_census_ignores_commonmark_fenced_publication_examples | yes — tests/test_explore_provenance.py::test_census_ignores_commonmark_fenced_publication_examples |
 | EP6-5 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:126 | Missing producer `kind` disables validation of manually seeded model research. Reproduced with `provenance: human-written` and `produced_by: {name: codex, model: gpt-6.1-sol, version: "2026-11-04"}`: the census returns no findings despite missing kind, review and dates. Existing explicit model attribution must trigger validation even when its kind or provenance is defective. [AC7, AC10] | Codex | rejected — accepted limit, repaired in follow-up bead coding-harness-4bhp (maintainer 2026-11-09) | — |
 
 Phase 6 verdict: codex 01a1c199-0565-7a20-a11b-e75edba501a2, 2026-11-09
@@ -1807,3 +1807,289 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-09: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 965 files, 3766 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 986 files, 3782 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_census.py` +1 -1
+> - `scripts/stage2.py` +87 -21
+> - `tests/test_explore_provenance.py` +23 -0
+> - `tests/test_stage2_research_deep_review.py` +77 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [ 67%]
+> ...........F......F.F..............                                      [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:232: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_explore_provenance.py:164: in test_active_model_research_has_no_false_human_provenance
+>     assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> _____________________ test_uncorrected_stock_only_shrinks ______________________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_uncorrected_stock_only_shrinks():
+>         # A listed file that now passes the census, or no longer is active research, leaves the list.
+>         failing = {finding.split(": ", 1)[0] for finding in census_findings()}
+>         stale = sorted(UNCORRECTED - failing)
+> >       assert stale == [], f"remove corrected or archived research from UNCORRECTED: {stale}"
+> E       AssertionError: remove corrected or archived research from UNCORRECTED: ['plans/changes/architecture-reconcile/research.md', 'plans/changes/beads-close-themselves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/draft-gates-only/research.md', 'plans/changes/explore-role/research.md', 'plans/changes/explorer-reviewer-agents/research.md', 'plans/changes/fail-fast-attempts/research.md', 'plans/changes/failed-check-spans/research.md', 'plans/changes/free-member-rate-limi [… 1805 characters left out …]
+> E       assert ['plans/chang...arch.md', ...] == []
+> E         
+> E         Left contains 46 more items, first extra item: 'plans/changes/architecture-reconcile/research.md'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:171: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         # Every research file outside the recorded uncorrected stock must meet the contract: a new
+>         # explore publication cannot add to the stock.
+> >       assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+>
+> tests/test_explore_provenance.py:164: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_uncorrected_stock_only_shrinks
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 104 passed in 41.88s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261109T200535851717Z-110681e8.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 986 files, 3783 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [ 67%]
+> .............F..FF.................                                      [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:232: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_explore_provenance.py:164: in test_active_model_research_has_no_false_human_provenance
+>     assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> _____________________ test_uncorrected_stock_only_shrinks ______________________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_uncorrected_stock_only_shrinks():
+>         # A listed file that now passes the census, or no longer is active research, leaves the list.
+>         failing = {finding.split(": ", 1)[0] for finding in census_findings()}
+>         stale = sorted(UNCORRECTED - failing)
+> >       assert stale == [], f"remove corrected or archived research from UNCORRECTED: {stale}"
+> E       AssertionError: remove corrected or archived research from UNCORRECTED: ['plans/changes/architecture-reconcile/research.md', 'plans/changes/beads-close-themselves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/draft-gates-only/research.md', 'plans/changes/explore-role/research.md', 'plans/changes/explorer-reviewer-agents/research.md', 'plans/changes/fail-fast-attempts/research.md', 'plans/changes/failed-check-spans/research.md', 'plans/changes/free-member-rate-limi [… 1805 characters left out …]
+> E       assert ['plans/chang...arch.md', ...] == []
+> E         
+> E         Left contains 46 more items, first extra item: 'plans/changes/architecture-reconcile/research.md'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:171: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         # Every research file outside the recorded uncorrected stock must meet the contract: a new
+>         # explore publication cannot add to the stock.
+> >       assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+>
+> tests/test_explore_provenance.py:164: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_uncorrected_stock_only_shrinks
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 104 passed in 35.42s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-2-20261109T200535851717Z-110681e8.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 986 files, 3783 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......................................................................FF [ 67%]
+> ............F......................                                      [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:232: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_explore_provenance.py:164: in test_active_model_research_has_no_false_human_provenance
+>     assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> _____________________ test_uncorrected_stock_only_shrinks ______________________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_uncorrected_stock_only_shrinks():
+>         # A listed file that now passes the census, or no longer is active research, leaves the list.
+>         failing = {finding.split(": ", 1)[0] for finding in census_findings()}
+>         stale = sorted(UNCORRECTED - failing)
+> >       assert stale == [], f"remove corrected or archived research from UNCORRECTED: {stale}"
+> E       AssertionError: remove corrected or archived research from UNCORRECTED: ['plans/changes/architecture-reconcile/research.md', 'plans/changes/beads-close-themselves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/draft-gates-only/research.md', 'plans/changes/explore-role/research.md', 'plans/changes/explorer-reviewer-agents/research.md', 'plans/changes/fail-fast-attempts/research.md', 'plans/changes/failed-check-spans/research.md', 'plans/changes/free-member-rate-limi [… 1805 characters left out …]
+> E       assert ['plans/chang...arch.md', ...] == []
+> E         
+> E         Left contains 46 more items, first extra item: 'plans/changes/architecture-reconcile/research.md'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:171: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         # Every research file outside the recorded uncorrected stock must meet the contract: a new
+>         # explore publication cannot add to the stock.
+> >       assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+>
+> tests/test_explore_provenance.py:164: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> exempt = frozenset({'plans/changes/adr-0016-docs-check/research.md', 'plans/changes/adr-repair-check/research.md', 'plans/chang...selves/research.md', 'plans/changes/dirty-index/research.md', 'plans/changes/docs-job-report-header/research.md', ...})
+>
+>     def assert_active_model_research_has_no_false_human_provenance(exempt: frozenset[str] = frozenset()) -> None:
+>         affected = [finding for finding in census_findings() if finding.split(": ", 1)[0] not in exempt]
+> >       assert affected == [], (
+>             f"active research has unreadable files, false provenance or opening skeleton notices: {affected}"
+>         )
+> E       AssertionError: active research has unreadable files, false provenance or opening skeleton notices: ['plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program', 'plans/changes/address-drift-warning/research.md: produced_by: missing publication program/date', 'plans/changes/archive-closed-changes/research.md: produced_by.version: expected one publication date', 'plans/changes/archive-closed-changes/research.md: produced_by: missing publication program/ [… 280 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 7 more items, first extra item: 'plans/changes/address-drift-warning/research.md: produced_by.name: expected producing program'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:106: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_uncorrected_stock_only_shrinks
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 3 failed, 104 passed in 38.41s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261109T200535851717Z-110681e8.md
+> ```

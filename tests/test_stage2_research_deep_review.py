@@ -827,3 +827,80 @@ def test_producer_history_survives_swarm_resume(sworld: SwarmWorld, monkeypatch)
     assert [call["kind"] for call in sworld.calls()] == ["judge"], (
         "producer history must not change reusable prompt hashes"
     )
+
+
+@pytest.mark.parametrize("evidence", ["accepted", "missing", "quoted", "conflicting"])
+def test_publication_never_infers_historical_program_from_publisher(evidence):
+    import yaml
+
+    source = (
+        '---\nproduced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, 2026-10-31"}\n'
+        "---\n# Research\n\n"
+    )
+    audit = (
+        "Stage-2 call, 2026-10-31: explore · endpoint glm-coding-plan\n\n"
+        "## Runner exploration — 2026-10-31\n\nAccepted research.\n"
+    )
+    if evidence == "accepted":
+        source += audit
+    elif evidence == "quoted":
+        source += "```markdown\n" + audit + "````\n"
+    elif evidence == "conflicting":
+        source += audit + audit.replace("glm-coding-plan", "openai-codex")
+    try:
+        corrected = stage2.research_publication(source.encode(), producer="stage2-research-swarm", day="2026-11-09")
+    except stage2.Refused as error:
+        assert evidence != "accepted", f"an evidenced historical program must be retained: {error}"
+        return
+    assert evidence == "accepted", "ambiguous historical attribution must be refused before publication"
+    records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    assert records[0] == {
+        "kind": "llm-session",
+        "name": "claude-code",
+        "version": "2026-10-31",
+        "model": "glm-5.3-flash",
+    }, "the new swarm publisher cannot establish the historical Flash program"
+    assert records[1]["name"] == "stage2-research-swarm"
+
+
+@pytest.mark.parametrize("quote", ["'", '"'])
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
+def test_publication_replaces_quoted_owned_yaml_keys(quote, eol):
+    import yaml
+
+    source = (
+        (
+            "---\n"
+            f"{quote}provenance{quote}: human-written\n"
+            f"{quote}produced_by{quote}: {{kind: llm-session, name: codex, version: '2026-11-04'}}\n"
+            '"produced_\\x62y": {kind: llm-session, name: pi, version: "2026-11-05"}\n'
+            f"{quote}review{quote}:\n  status: approved\n  approved_by: Human\n  approved_at: 2026-11-04\n"
+            f"{quote}updated{quote}: 2026-11-04\n"
+            'title: "Kept exactly"\n---\n# Research\n\nAuthored text.\n'
+        )
+        .replace("\n", eol)
+        .encode()
+    )
+    corrected = stage2.research_publication(source, producer="pi", day="2026-11-09")
+    raw_header = corrected.decode().split("---", 2)[1]
+    keys = [key.value for key, _ in yaml.compose(raw_header).value]
+    for key in ("provenance", "produced_by", "review", "updated"):
+        assert keys.count(key) == 1, f"quoted YAML key left duplicate {key} metadata"
+    header = yaml.safe_load(raw_header)
+    assert header["provenance"] == "ai-drafted-reviewed"
+    assert header["review"] == {"status": "pending", "approved_by": None, "approved_at": None}
+    assert [record["name"] for record in header["produced_by"]] == ["codex", "pi", "pi"]
+    assert f'title: "Kept exactly"{eol}'.encode() in corrected
+    assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
+    assert stage2.research_publication(corrected, producer="pi", day="2026-11-09") == corrected
+
+
+@pytest.mark.parametrize("notice", stage2.skeleton_notices())
+@pytest.mark.parametrize("fence", ["```", "~~~", "   ```"])
+def test_publication_preserves_fenced_opening_notice_quotes(notice, fence):
+    closing = fence + fence.strip()[0]
+    authored = "The generated notice is quoted here:\n\n" + fence + "markdown\n" + notice + "\n\n" + closing + "\n\n"
+    source = ("---\nprovenance: human-written\n---\n# Research\n\n" + authored + notice + "\n\n").encode()
+    corrected = stage2.research_publication(source, producer="codex", day="2026-11-09")
+    assert authored.encode() in corrected, "authored fenced opening quotations must keep every byte"
+    assert corrected.count(notice.encode()) == 1, "remove only the actual generated notice outside the fence"

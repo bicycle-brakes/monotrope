@@ -21,7 +21,7 @@ PENDING = {"status": "pending", "approved_by": None, "approved_at": None}
 
 def publication_evidence(body: str) -> tuple[str | None, str | None]:
     """Return the latest visible runner publication's program and date, not quoted examples."""
-    visible = re.sub(r"(?ms)^(`{3,}|~{3,})[^\r\n]*\r?\n.*?^\1[ \t]*\r?$", "", body)
+    visible = stage2.research_visible_text(body)
     singles = list(re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible))
     swarms = list(
         re.finditer(

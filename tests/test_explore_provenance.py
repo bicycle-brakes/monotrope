@@ -15,73 +15,30 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 
-# Research files written before explore published truthful metadata (cut-off: merge of origin/main
-# into fix/explore-provenance, 2026-11-09). The maintainer decided to ship without correcting them
+# Research files written before explore published truthful metadata (cut-off: the second merge of origin/main
+# into fix/explore-provenance, 2026-11-09 evening). The maintainer decided to ship without correcting them
 # (plans/changes/explore-provenance/decisions.md, Q-4); their correction is its own change (bead
 # coding-harness-2i7x). The list only shrinks: a corrected or archived file must leave it.
 UNCORRECTED = frozenset(
     f"plans/changes/{name}/research.md"
     for name in (
+        "address-drift-warning",
         "adr-0016-docs-check",
         "adr-repair-check",
-        "architecture-reconcile",
-        "beads-close-themselves",
-        "dirty-index",
+        "archive-closed-changes",
         "docs-job-report-header",
-        "draft-gates-only",
-        "explore-role",
-        "explorer-reviewer-agents",
-        "fail-fast-attempts",
-        "failed-check-spans",
-        "free-member-rate-limit",
-        "go-access-point",
-        "haiku-5-5",
-        "index-merge-regenerates",
-        "interview-context",
-        "interview-fenced-examples",
-        "kimi-admission",
-        "ledger-marker",
-        "loop-until-clean",
-        "malformed-answer-retry",
-        "mutation-evidence-module",
         "night-heartbeat",
         "night-machine-facts",
-        "pi-catalog-move",
+        "outcome-test",
         "pi-no-compaction",
-        "plan-held-paths",
         "raising-fault-test",
-        "ratchet-mutation-evidence",
         "red-first-own-refs",
-        "red-first-pytest-failed",
         "redraft-after-scope",
-        "registry-block-last",
-        "repair-fixed-line-format",
-        "repair-restore-status",
         "repair-targeted-check",
-        "research-swarm",
-        "restore-symlink-parent",
         "review-loop-deep-a",
-        "review-loop-deep-b",
-        "review-release-lock",
-        "review-verdict-validated",
-        "run-report",
-        "runner-time-line-exits",
-        "runner-time-line",
         "status-fields-restore",
         "swarm-test-speed",
-        "swarm-time-limits",
-        "terms-expiry",
-        "terms-test-fixtures",
-        "test-key-runtime",
         "time-records-data",
-        "tolerate-derived-leftovers",
-        "venv-pycache",
-        "verify-absolute-python",
-        "verify-duration",
-        "verify-machine-lock",
-        "verify-stages-new-files",
-        "verify-worker-cap",
-        "workflow-promises",
     )
 )
 
@@ -473,3 +430,26 @@ def test_census_accepts_and_checks_every_producer(tmp_path, monkeypatch):
         with pytest.raises(AssertionError, match="demo/research.md"):
             assert_active_model_research_has_no_false_human_provenance()
     assert census.metadata_problems({"produced_by": []}, "produced_by: []")
+
+
+@pytest.mark.parametrize(
+    "opener,closer", [("```markdown", "````"), ("   ```text", "   ```"), ("~~~text", "~~~~"), ("```", "")]
+)
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
+@pytest.mark.parametrize("kind", ["single", "swarm"])
+def test_census_ignores_commonmark_fenced_publication_examples(tmp_path, opener, closer, eol, kind):
+    import research_census as census
+
+    example = (
+        "Stage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n\n"
+        "## Runner exploration — 2026-11-05\n\nExample answer.\n"
+    )
+    if kind == "swarm":
+        example = "<!-- research-swarm/v2 run abc123 -->\n## Research swarm\nExample.\n<!-- /research-swarm/v2 -->\n"
+    body = "# Human research\n\n" + opener + "\n" + example + closer + "\n"
+    assert census.publication_evidence(body.replace("\n", eol)) == (None, None), (
+        "a fenced example cannot establish runner publication"
+    )
+    path = tmp_path / "research.md"
+    path.write_bytes(("---\nprovenance: human-written\n---\n" + body).replace("\n", eol).encode())
+    assert census.census_findings([path], tmp_path) == [], "unpublished human research must pass the census"
