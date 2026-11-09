@@ -26,6 +26,8 @@ between the rule and the call.
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
     python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
+    # Triage refuses ordinary taken for test-only locations; use taken — not a test — <reason>.
+    # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -3319,7 +3321,7 @@ def marks_a_test(cell: str) -> bool:
     return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
 
 
-def record_rows(record: str) -> list[list[str]]:
+def record_rows(record: str, *, strict: bool = False) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
     Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
@@ -3328,14 +3330,15 @@ def record_rows(record: str) -> list[list[str]]:
     Nine cells are known. A `|` the orchestrator typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
     than a row has is not skipped, which would let the release delete it with the record: it is refused,
-    by its id.
+    by its id. Triage uses `strict` to refuse any non-nine-cell row before editing;
+    the compatibility reader for other verbs still accepts typed Status pipes.
     """
     rows = []
     for line, reviewer in _record_lines(record):
         cells = None if reviewer else split_row(line)
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
-        if len(cells) < len(ROW_COLUMNS):
+        if len(cells) < len(ROW_COLUMNS) or (strict and len(cells) != len(ROW_COLUMNS)):
             raise Refused(
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
@@ -6879,15 +6882,14 @@ def triage_status(decision: str, reason: str) -> str:
 def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
     """Splice one row's Status cell in its own physical line and publish the record whole.
 
-    Status may span several physical cells when a hand-typed pipe is accepted by `record_rows`.
-    Replace that entire span, preserving the other cells, line spacing and line endings verbatim.
-    The caller has already validated the record with the shared reader under its lock.
+    The caller has validated exactly nine physical cells with the strict reader under its lock.
+    Preserve the other cells, line spacing and line endings verbatim.
     """
     lines: list[str] = []
     written = False
     for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
         cells = None if reviewer else split_row(line)
-        if cells and len(cells) >= len(ROW_COLUMNS) and cells[0] == ident:
+        if cells and len(cells) == len(ROW_COLUMNS) and cells[0] == ident:
             separators = list(_PIPE.finditer(line))
             start, end = separators[7].end(), separators[-2].start()
             original = original[:start] + " " + status + " " + original[end:]
@@ -6935,7 +6937,7 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
             record = read_record(change, root)
             if record is None:
                 raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
-            targets = [item for item in record_rows(record) if item[0] == row]
+            targets = [item for item in record_rows(record, strict=True) if item[0] == row]
             if not targets:
                 raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
             if len(targets) > 1:
@@ -9080,14 +9082,20 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         default=None,
         metavar="ROW=STATUS",
-        help="triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'",
+        help=(
+            "triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'; "
+            "refuses ordinary taken for test-only locations: use taken — not a test — <reason>"
+        ),
     )
     parser.add_argument(
         "reason_text",
         nargs="?",
         default=None,
         metavar="REASON",
-        help="triage only: the decision's own single-line reason",
+        help=(
+            "triage only: the decision's own single-line reason; "
+            "the Broke a test proof mark stays the runner's; triage supplies no repair evidence"
+        ),
     )
     parser.add_argument(
         "--stage2-off",

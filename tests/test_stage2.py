@@ -19156,7 +19156,7 @@ def test_triage_records_each_supported_decision_in_the_worktree_record(
     assert sibling.read_bytes() == sibling_before, "a sibling worktree's record was written"
 
 
-@pytest.mark.parametrize("layout", ["canonical", "padded", "typed-pipe", "wide-undecided"])
+@pytest.mark.parametrize("layout", ["canonical", "padded"])
 @pytest.mark.parametrize("final_newline", [True, False])
 def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
     world: World, monkeypatch: pytest.MonkeyPatch, layout: str, final_newline: bool
@@ -19165,17 +19165,10 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
     cells = "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding of L1-1 | deepseek-v4.1-flash"
     canonical = f"{cells} |  |  |"
     escaped = r"a \| b"
-    mark = "no" if layout == "typed-pipe" else ""
     if layout == "padded":
         prefix = "  |L1-1   | MAJOR| MAINT    |impl | src/app.py:1| finding of L1-1   |deepseek-v4.1-flash|"
         undecided = prefix + "    |    |  "
         decided = prefix + f" taken — {escaped} |    |  "
-    elif layout == "typed-pipe":
-        undecided = f"{cells} | taken — old | reason | no |"
-        decided = f"{cells} | taken — {escaped} | no |"
-    elif layout == "wide-undecided":
-        undecided = f"{cells} | old | reason |  |"
-        decided = f"{cells} | taken — {escaped} |  |"
     else:
         undecided = canonical
         decided = f"{cells} | taken — {escaped} |  |"
@@ -19198,7 +19191,7 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
     text = world.record().read_text(encoding="utf-8")
     assert text == before.replace(undecided, decided), "another byte than the target's Status cell changed"
     rows = stage2.record_rows(text)
-    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == mark
+    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == ""
     physical = next(line for line in text.splitlines() if (stage2.split_row(line) or [""])[0] == "L1-1")
     assert len(stage2.split_row(physical)) == len(stage2.ROW_COLUMNS), "`Broke a test` moved out of its column"
     assert stage2.triage_status("rejected", escaped) == f"rejected — {escaped}", "an escaped reason was escaped twice"
@@ -19262,6 +19255,11 @@ def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
         ("fixed-row", "L1-1=taken", "r"),
         ("short-row", "L1-1=taken", "r"),
         ("moved-mark", "L1-1=taken", "r"),
+        ("pipe-in-where", "L1-1=taken", "r"),
+        ("pipe-in-finding", "L1-1=taken", "r"),
+        ("typed-status-pipe", "L1-1=taken", "r"),
+        ("wide-undecided", "L1-1=taken", "r"),
+        ("damaged-other-row", "L1-1=taken", "r"),
         ("unreadable-record", "L1-1=taken", "r"),
         ("no-record", "L1-1=taken", "r"),
     ],
@@ -19275,9 +19273,25 @@ def test_triage_invalid_requests_leave_the_record_unchanged(
         triage_record(world, [triage_row("L1-1"), triage_row("L1-1", where="src/other.py:2")])
     elif fault == "fixed-row":
         triage_record(world, [triage_row(status="fixed — tests/test_stage2.py::test_fixes_it", broke="yes")])
-    elif fault in {"short-row", "moved-mark"}:
+    elif fault in {
+        "short-row",
+        "moved-mark",
+        "pipe-in-where",
+        "pipe-in-finding",
+        "typed-status-pipe",
+        "wide-undecided",
+        "damaged-other-row",
+    }:
         directory.mkdir(parents=True, exist_ok=True)
         body = {
+            "pipe-in-where": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | extra | finding | reviewer | taken — x | yes |",
+            "pipe-in-finding": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | extra | reviewer | taken — x | yes |",
+            "typed-status-pipe": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — old | reason | no |",
+            "wide-undecided": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | old | reason |  |",
+            "damaged-other-row": (
+                "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |  |\n"
+                "| L1-2 | MAJOR | MAINT | impl | src/app.py:1 | finding | extra | reviewer | taken — x | yes |"
+            ),
             "short-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |",
             "moved-mark": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — x | yes | extra |",
         }[fault]
@@ -19296,6 +19310,8 @@ def test_triage_invalid_requests_leave_the_record_unchanged(
     assert world.run("triage", "demo", operand, reason) == 2, f"{fault} did not refuse"
     err = capsys.readouterr().err
     assert "refused:" in err, err
+    if fault in {"pipe-in-where", "pipe-in-finding", "typed-status-pipe", "wide-undecided", "damaged-other-row"}:
+        assert "cells" in err and "loop row" in err, err
     if before is None:
         assert not world.record().exists(), "a missing record was created"
         assert not directory.exists(), "a missing record's directory was created"
@@ -19450,6 +19466,15 @@ def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
         stage2.main(["--help"])
     usage = capsys.readouterr().out
     assert "triage" in usage and "ROW=STATUS" in usage and "REASON" in usage, usage
+    argument_help = usage.split("positional arguments:", 1)[1].split("options:", 1)[0]
+    for text in (stage2.__doc__ or "", argument_help):
+        for phrase in (
+            "refuses ordinary taken for test-only locations",
+            "taken — not a test — <reason>",
+            "Broke a test proof mark stays the runner's",
+            "triage supplies no repair evidence",
+        ):
+            assert phrase in flat(text), f"the command help omits: {phrase}"
     for path in (WORKFLOW, PROMPTS / "04b-review-loop.md"):
         text = path.read_text(encoding="utf-8")
         assert triage_instruction_problems(text) == [], str(path)
