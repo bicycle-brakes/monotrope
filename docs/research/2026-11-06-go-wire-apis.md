@@ -2,7 +2,7 @@
 title: "Go wire APIs — live measurement 2026-11-06"
 category: research
 created: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-09
 last_reviewed: 2026-11-06
 status: draft
 implementation_status: partial
