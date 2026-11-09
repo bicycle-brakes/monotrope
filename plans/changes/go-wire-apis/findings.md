@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-06
 created: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-08
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -511,3 +511,53 @@ Stage-2 call, 2026-11-08: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-08: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 922 files, 3696 commits, 12 rules.
 
 Stage-2 call, 2026-11-08: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 922 files, 3696 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3712 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/research/2026-11-06-go-wire-apis.md` +21 -10
+> - `model-endpoints.yaml` +4 -3
+> - `plans/changes/go-wire-apis/plan.md` +8 -5
+> - `plans/changes/go-wire-apis/research.md` +3 -16
+> - `plans/changes/go-wire-apis/spec.md` +6 -4
+> - `tests/test_pi_contract.py` +39 -7
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-1-20261109T063708514302Z-977e9c1b.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 922 files, 3720 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-wire-apis/plan.md` +9 -6
+> - `plans/changes/go-wire-apis/spec.md` +7 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L4-3: tests/test_pi_contract.py::test_messages_contract_rejects_a_duplicated_version_path: the setup phase of `tests/test_pi_contract.py::test_messages_contract_rejects_a_duplicated_version_path` ended failed; red first needs passing setup and teardown
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-2-20261109T063708514302Z-977e9c1b.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 922 files, 3725 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-wire-apis/plan.md` +9 -5
+> - `plans/changes/go-wire-apis/spec.md` +2 -2
+> - `tests/test_pi_contract.py` +27 -37
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L4-3: tests/test_pi_contract.py::test_messages_route_assertion_takes_the_full_path: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261109T063708514302Z-977e9c1b.md
+> ```
