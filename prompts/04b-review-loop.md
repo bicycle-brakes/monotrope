@@ -28,8 +28,8 @@ hunks, no tools, no repository access, and nothing else in its prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6
 verdict.
 **Gate:** rounds until a clean round, bounded by the declared ladder; the
-repair brake and the maintainer stop stand above it; `make verify` green after
-each repair.
+repair brake and the maintainer stop stand above it; the repair's targeted
+check green after each repair (the full `make verify` on any fallback of the runner's targeted selection), and one full `make verify` on the final head before phase 6.
 
 ## For the reviewer
 
@@ -96,14 +96,20 @@ explicitly, do not delete them.
    row whose finding touches only tests, naming the corrective form
    `taken — not a test — <reason>`. The `Broke a test` mark stays yours to
    write after the repair, as step 3 says.
-2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
-   <change>` gives them to Codex in one call; the runner runs `make verify`
-   and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
+2. A row whose remedy changes `status` or `implementation_status` in the
+   change's `spec.md`, `design.md` or `plan.md` is repaired by hand first: the
+   runner restores those two fields after every repair attempt, so the model
+   cannot make that change (`docs/WORKFLOW.md` §4, "Repairing taken findings").
+   Then hand the remaining taken rows to the repair: `python3 scripts/stage2.py repair
+   <change>` gives them to Codex in one call; the runner runs the repair's
+   targeted check (the full `make verify` on any fallback of the runner's targeted selection) and
+   writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
    findings").
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's
    evidence: `yes` when its repair turned a test red that was green before it,
    `no` when it did not, or `yes — guard test — tests/<path>::<function>`
-   after both guard proof legs pass; the next round starts only when `make verify` is
+   after both guard proof legs pass; the next round starts only when the repair's
+   check (targeted, or the full `make verify` on any fallback of the runner's targeted selection) is
    green. After a repair the orchestrator made by hand, a targeted check
    stands in for it: the touched and linked test files, `ruff` and the
    gates the touched files feed; one full `make verify` runs on the final

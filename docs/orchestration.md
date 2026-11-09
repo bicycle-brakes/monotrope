@@ -3,8 +3,8 @@ title: "Lanes — how one session runs several changes at once"
 category: architecture
 status: proposed
 created: 2026-10-28
-last_reviewed: 2026-11-02
-updated: 2026-11-02
+last_reviewed: 2026-11-06
+updated: 2026-11-06
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -21,7 +21,7 @@ so parallel lanes keep the work moving. The trial began with three lanes on
 night names how many. The limits are the machine's memory,
 the one local verification slot and the maintainer's attention, not the
 number of lanes. This page describes how this repository runs it as of
-2026-11-02. Much of it is still kept by hand.
+2026-11-06. Much of it is still kept by hand.
 
 ## What a lane is
 
@@ -59,6 +59,41 @@ then:
    leftovers are committed unchanged, and the lane moves to its next remote
    step.
 
+## Machine facts at the start of a night run
+
+Before the first lane of a night run starts, the orchestrator reads the
+machine once and shows the result in the main conversation (bead
+coding-harness-yql7):
+
+```sh
+python3 scripts/machine_facts.py
+```
+
+The command runs from the worktree the night run drives and prints one dated
+block: free disk on the worktree's filesystem (the invoking directory's,
+labelled so, when Git cannot identify the worktree), host-wide swap used
+and total, the repository's registered non-bare worktrees (main checkout
+included, stale registrations counted, bare entries not), and the runner and
+verification invocations the existing run report recognizes (one `ps`
+snapshot; each row carries process id, elapsed time, verb and change
+attribution where known, and a verify wrapper and its child are two
+invocations, not one logical job). Three lines under `running jobs:` carry no
+process: `none matched` when no runner or verification job runs, the source
+error of the process table when the snapshot itself failed, and
+`runner recognition: not read (…)` when the runner's verb definitions could
+not be loaded. Any field may read `not read (…: internal error: <Type>)`: then
+the script itself failed on that field, not the source, and the fault belongs
+in a bead.
+
+Show the block in the main conversation before any lane starts, and copy it
+into the night plan's “State at the start”. The block is an **observation,
+not an admission verdict**: nothing is compared against a floor, nothing is
+refused, cleaned up, started, stopped or admitted. A source the command
+cannot read says `not read` with a short reason — never a zero — and the
+readable fields stay. The readings describe the one invocation only;
+rerunning the command later, for example the next morning, gives a fresh
+observation and adds no automation.
+
 ## Keeping every lane busy
 
 When an item waits for the slot, for an answer or for CI, its lane takes the
@@ -91,6 +126,7 @@ handover.
 
 | Rule | Today | Planned |
 | --- | --- | --- |
+| Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
 | One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
