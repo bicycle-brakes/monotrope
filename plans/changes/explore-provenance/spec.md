@@ -3,14 +3,14 @@ title: "Spec — explore-provenance"
 status: draft
 implementation_status: partial
 date: 2026-11-04
-last_reviewed: 2026-11-06
-updated: 2026-11-06
+last_reviewed: 2026-11-09
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-11-06"}
+produced_by: {kind: llm-session, name: codex, version: "2026-11-09"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, explore, provenance]
 class: bounded
@@ -21,50 +21,57 @@ neighbours: []
 
 # Spec — `explore-provenance`
 
-Explore publishes truthful research metadata; a one-time normalisation brings
-all active model-written research to the same contract without losing known
-producers (bead coding-harness-g19n — truthful Explore provenance).
-Research: [research.md](research.md). Scope: [decisions.md](decisions.md),
-maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
+Explore publishes truthful research metadata, and a read-only census prevents
+new research files from inheriting false metadata (bead coding-harness-g19n —
+truthful Explore provenance). Research: [research.md](research.md).
+Scope: [decisions.md](decisions.md), maintainer answers Q-1 through Q-4,
+2026-11-04 through 2026-11-07. Q-4 supersedes the one-time normalisation scope
+of Q-1 through Q-3; their publication and producer-preservation requirements
+remain. Criteria 7 and 9 below reflect that explicit scope reduction.
 
 ## Problem
 
 - Research dated 2026-11-04 records that both Explore routes append model output
   while leaving the generated `human-written` header and empty-file notices;
   the read-only explorer cannot repair the runner's output (“What exists today”).
-- That research records that the existing checks hold only selected header
+- The same research records that existing checks hold only selected header
   fields, allowing false provenance to survive until another review and repair.
-- The maintainer's 2026-11-06 answers record repeated gaps in a census limited
-  to `human-written`, an unplanned normalisation script touching other active
-  research, and loss of multiple-model attribution. Q-2 requires the whole
-  metadata contract and Q-3 explicitly authorises the wider scope and producer
-  lists; the old two-file backfill no longer describes the agreed change.
+- The maintainer's answers of 2026-11-06 require the whole metadata contract and
+  preservation of multiple producers after repeated census and attribution
+  failures (Q-2 and Q-3). On 2026-11-07 the maintainer separated the difficult
+  history-based correction of existing files from this change (Q-4). Shipping
+  must therefore prevent new debt without claiming that old files were fixed.
 
 ## Terms
 
 - **Publication** — an accepted single-model answer or a runner-written swarm
   record, including an incomplete swarm publication; a call audit alone, a
   failed answer, quoted text or a fenced example is not publication.
-- **Active research** — every `plans/changes/<name>/research.md` directly under
-  a change folder, excluding `archive/`; eligibility does not depend on the
-  current provenance label. Existing model attribution or accepted publication
-  evidence establishes model-written research, including manually seeded work.
+- **Active research** — `plans/changes/<name>/research.md` directly under each
+  active change folder, excluding `archive/`. Existing model attribution or
+  accepted publication evidence establishes model-written research regardless
+  of its current provenance label, including manually seeded work.
+- **Legacy exemption** — the fixed full-path set `UNCORRECTED` in
+  `tests/test_explore_provenance.py`, recorded at the 2026-11-09 merge of
+  `origin/main` into this branch (`0a5aeb3f`). These existing files await the
+  separate history-based correction (bead coding-harness-2i7x — normalise
+  existing research). The set only shrinks; a new file cannot join it.
 - **Skeleton text** — only the generated opening empty-file paragraph and
   provenance-instruction blockquote from `scripts/new_change.py`; the title and
   authored quotations of those notices remain research.
-- **Producer attribution** — one producer record, or a non-empty list for several
-  known contributions. Records identify the producing program or swarm
+- **Producer attribution** — one producer record, or a non-empty list for
+  several known contributions. Records identify the producing program or swarm
   orchestration and its evidence-backed date; known model identities and earlier
-  contributions remain represented. A swarm orchestration record does not claim
-  that one participant wrote the whole document.
+  contributions remain represented. A swarm record does not attribute the
+  whole document to one participant.
 - **Metadata contract** — exactly one top-level `provenance`, `produced_by`,
-  `review`, `date`, `last_reviewed` and `updated` field, no duplicate keys inside
-  producer/review mappings, `ai-drafted-reviewed` provenance, non-empty producer
-  attribution, and pending review with null approver and approval date. Every
-  producer has `kind: llm-session`, an evidence-backed program name and an ISO
-  calendar date in `version`; known models are retained separately. Dates obey
-  `date <= last_reviewed <= updated`, and producer dates lie within
-  `date..updated`; the correction stamp is the actual edit day, not an invented
+  `review`, `date`, `last_reviewed` and `updated` field, without duplicate keys
+  inside producer/review mappings; `ai-drafted-reviewed` provenance; non-empty
+  producer attribution; pending review with null approver and approval date.
+  Every producer has `kind: llm-session`, an evidence-backed program name and
+  an ISO calendar date string in `version`; known models are retained separately.
+  Dates obey `date <= last_reviewed <= updated`, and producer dates lie within
+  `date..updated`. The edit stamp is the actual edit day, without inventing a
   historical publication or human review date.
 
 ## Acceptance criteria
@@ -74,15 +81,14 @@ maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
    `provenance: ai-drafted-reviewed`.
    *Refuted by:* any route publishes with missing, conflicting or human-written
    provenance.
-   *Basis:* decisions.md#Q-1.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-4.
 
 2. When Explore publishes model research, the header identifies its producing
    program or swarm orchestration and evidence-backed publication date without
    discarding previously known producer or model contributions.
-   *Refuted by:* missing or conflicting producer metadata, unrelated authorship,
-   a wrong date, an entire swarm attributed to one model, or a multi-producer
-   history collapsed into one entry.
-   *Basis:* decisions.md#Q-1; decisions.md#Q-3.
+   *Refuted by:* missing or conflicting attribution, a wrong date, an entire
+   swarm attributed to one model, or several known producers collapsed into one.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-3; decisions.md#Q-4.
 
 3. When Explore publishes model research, the resulting document's review is
    pending with no claimed human approval.
@@ -95,13 +101,12 @@ maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
    *Refuted by:* either notice remains or a second publication reintroduces it.
    *Basis:* decisions.md#Q-1.
 
-5. While publication or normalisation corrects research metadata and opening
-   notices, unrelated header fields and existing research body bytes remain
-   unchanged.
-   *Refuted by:* altered class, bead, owner, lifecycle state, authored prose,
-   audit lines, prior swarm envelopes, title or line endings outside the
-   metadata and generated opening spans; historical dates changed without evidence.
-   *Basis:* decisions.md#Q-1; decisions.md#Q-2; decisions.md#Q-3.
+5. While publication corrects research metadata and opening notices, unrelated
+   header fields and existing research body bytes remain unchanged.
+   *Refuted by:* altered class, bead, owner, lifecycle state, historical dates,
+   authored prose, audit lines, prior swarm envelopes, title or line endings
+   outside the owned metadata and generated opening spans.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-3; decisions.md#Q-4.
 
 6. If replacement of an existing research file fails before the replacement
    completes, its previous bytes remain intact.
@@ -109,11 +114,11 @@ maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
    header, removed notices and appended publication.
    *Basis:* decisions.md#Q-1; research.md, “What exists today”.
 
-7. When this change is completed, every active model-written research file
-   satisfies the metadata contract and has no opening skeleton text.
-   *Refuted by:* any active model-written file fails the contract, a compound
-   attribution loses a known contributor, or an archived file is corrected.
-   *Basis:* decisions.md#Q-1; decisions.md#Q-2; decisions.md#Q-3.
+7. When the active-research census runs, every reported metadata or opening-notice
+   violation outside the fixed legacy exemption makes its repository test fail.
+   *Refuted by:* a new violating file passes, another provenance label hides a
+   model-written file, or the census is skipped.
+   *Basis:* decisions.md#Q-2; decisions.md#Q-4.
 
 8. When an incomplete swarm publication is corrected and resumed, the runner's
    own correction preserves reuse of otherwise unchanged results.
@@ -121,31 +126,31 @@ maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
    later calendar day, or foreign header/body/tail edits pass as the same input.
    *Basis:* decisions.md#Q-1; research.md, “Where it lives”.
 
-9. When the one-time normalisation is invoked, it reports proposed corrections
-   without writing by default and applies only evidence-backed corrections when
-   explicitly requested.
-   *Refuted by:* default invocation writes, a repeated correction changes an
-   already compliant file, missing evidence is guessed, or invalid input causes
-   a partial batch before preparation has completed.
-   *Basis:* decisions.md#Q-2; decisions.md#Q-3.
+9. While existing research correction is deferred, the census's full-path legacy
+   exemption only shrinks as listed files become compliant or leave active work.
+   *Refuted by:* a new exemption, a directory-wide or date-based exemption, or
+   a compliant or archived path remaining in the set.
+   *Basis:* decisions.md#Q-4.
 
-10. When the active-research census runs, it reports each unreadable active file
-    and each model-written file violating any part of the metadata contract or
-    retaining an opening skeleton notice, regardless of its current provenance label.
+10. When the read-only census examines active research, it reports each unreadable
+    file and each model-written file violating the metadata contract or retaining
+    an opening skeleton notice before applying the legacy exemption.
     *Refuted by:* a bad producer-list member, missing field, duplicate nested
-    key, retained approval, impossible/inconsistent date or unreadable header
-    passes, or failed-call/quoted evidence falsely classifies an untouched
-    human-written skeleton as published model research.
-    *Basis:* decisions.md#Q-2; decisions.md#Q-3.
+    key, retained approval, inconsistent date or unreadable file goes unreported;
+    failed-call or quoted evidence falsely establishes publication; or the
+    census writes research files or requires historical producer reconstruction.
+    *Basis:* decisions.md#Q-2; decisions.md#Q-3; decisions.md#Q-4.
 
 ## Non-goals
 
-- No new provenance class, repository-wide provenance validator or enforcement
-  of `allowed:` in the provenance map; the census measures active research only.
-- No archive cleanup, living-spec edits or changes to other changes' research
-  findings, specifications, plans or decisions.
+- No one-time normaliser, Git-history reconstruction or bulk correction of
+  existing research. Q-4 moves that work to its own spec and bead; it resumes
+  there with evidence-backed historical producers, not as a repair here.
+- No new provenance class, general provenance validator or enforcement of
+  `allowed:` in the provenance map; the census measures active research only.
 - No model selection, prompt-file, leak-check, admission, swarm-record-format,
-  interview-rule or human-approval policy change.
+  interview-rule or human-approval policy change. The existing private brief's
+  publication normalisation is covered by criterion 8.
 - No alteration of the deterministic new-change skeleton: an untouched,
   unpublished human-issued skeleton may remain `human-written`.
 - No design phase or ADR: this remains the maintainer's `bounded` correction
@@ -153,58 +158,52 @@ maintainer answers Q-1 through Q-3, dated 2026-11-04 and 2026-11-06.
 
 ## Protected areas
 
+- Other changes' checked-in research and all their other artifacts — the former
+  cross-folder correction authorisation is superseded by Q-4.
 - `plans/changes/archive/` and `plans/specs/` — historical evidence and unrelated
-  capability contracts remain outside the active-research correction.
+  capability contracts are outside this correction.
 - `provenance.yaml`, `decisions/`, `docs/adr/`, `AGENTS.md`, `prompts/`,
   `templates/`, settings and model declarations — no policy or routing edit.
-- Other active changes' files except `research.md` — Q-2 and Q-3 authorise
-  correction of all active research metadata and generated notices, not its
-  findings or any neighbouring work's other artifacts.
 
 ## Boundary
 
-The census and one-time normaliser cover active research metadata, not the
-truth of research claims or proof of human authorship. Producer evidence comes
-from accepted publications, existing attribution and recoverable Git history;
-a program's identity alone does not establish a model identity. Missing or
-ambiguous historical facts are reported without invention, and do not justify
-silently dropping a contributor. Existing history must be consulted where the
-previous repair already collapsed attribution. Atomicity is per file; the
-normaliser prepares and validates the batch before writing, but does not promise
-rollback of earlier successful replacements after a later I/O failure.
+The census measures current publication metadata, not the truth of research
+claims or proof of human authorship. Publication preserves known attribution
+in the file being published; it does not reconstruct contributors already lost
+from history. Unknown or ambiguous producer facts are reported without invention.
+The fixed legacy exemption permits pre-existing defects until the separate
+correction, without weakening checks on new files or publication routes. Correct
+future Explore publication still applies when the target is a listed file.
+Atomic replacement protects an existing file until replacement completes; it
+makes no rollback promise after a successful replacement and later sync failure.
 
 ## Definition of Done
 
-- Targeted regressions, the enabled active-file census and `make verify` are
-  green at the implementation commit; each ledger test rejects its named fault.
-- The same pull request includes the runner fix, one-time normaliser, its
-  explicit non-gate registration, tests and corrected active research, with all
-  known producers retained; no model or ADR edits are due.
-- The file list respects protected areas; only metadata and generated notices
-  change in other active research files, as Q-2 and Q-3 authorise.
+- Targeted publication, resume and census regressions pass, and `make verify`
+  is green at the implementation commit; each ledger test rejects its fault.
+- The same pull request includes the runner fix, read-only census library and
+  tests; no normaliser or bulk research edits remain. No model or ADR edits.
+- The pull request's file list respects protected areas and the deferred scope.
 - The pull request closes the truthful-Explore-provenance task and its final
   commit carries `Closes-Bead: coding-harness-g19n`.
 - Special runs: none requiring live model calls; tests use local stand-ins.
 
 ## Open decisions
 
-None open. The three maintainer answers remain unchanged.
+None open. All four maintainer answers remain unchanged. The following
+reversible details are explicit agent choices, with their reasons.
 
-- [DETAIL] Keep one producer as a mapping and several as a list of mappings;
-  use program names from `producer_for(endpoint)` and `stage2-research-swarm`,
-  ISO publication dates in `version`, and a separate `model` field when known.
-  This retains the existing simple shape while making all contributors visible.
-- [DETAIL] Preserve earlier evidence-backed records rather than treating the
-  latest Explore audit as authorship of the entire document; a new contribution
-  extends attribution and never invents which paragraphs an older model wrote.
-- [DETAIL] Share metadata validation between the census and normaliser, with
-  independent fault fixtures proving each field and list member; this closes
-  the repeated mechanism rather than fixing only the files seen in one round.
-- [DETAIL] Keep dates and unrelated header bytes unless evidence requires a
-  metadata repair; a missing historical date is a diagnostic, not today's date.
-- [DETAIL] Retain the swarm's exact prepared publication bytes/day in its resume
-  binding and normalise its private brief's date using the documented sentinel
-  `0000-00-00`; the sentinel never becomes a published producer date.
-- [DETAIL] The header's two-hour appetite is the additional repair tranche
-  authorised by Q-3 on 2026-11-06, after the previously spent appetite; all
-  earlier measured time remains in the plan, and this tranche is a stop limit.
+- [DETAIL] Keep one producer as a mapping and several as a list; retain
+  `producer_for(endpoint)` program names, `stage2-research-swarm` for swarm
+  orchestration, ISO dates in `version` and known models in `model`. This keeps
+  the simple shape while preserving multiple contributors.
+- [DETAIL] Retain exact prepared publication bytes/day and the research portion
+  of the private brief in the resume binding. Its date sentinel `0000-00-00`
+  is private and never a published producer date; this prevents the runner's
+  own correction or a later date from invalidating reusable work.
+- [DETAIL] Implement Q-4 with the existing full-path `UNCORRECTED` set and a
+  shrink check. This makes deferred debt visible without granting new files
+  an automatic exception; review rejects additions to the recorded set.
+- [DETAIL] The header retains Q-3's historical two-hour additional repair
+  tranche. Q-4 records it as spent; this redraft grants no further phase-4
+  time and preserves measured history in the plan.
