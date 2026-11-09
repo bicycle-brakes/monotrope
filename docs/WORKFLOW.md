@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-08
+updated: 2026-11-09
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -935,10 +935,13 @@ undid and exits 1; the next step is `implement <change> --stage2-off`.
 An `implement` or `repair` attempt must also have done work: its model call
 changed at least one Git-visible thing beyond the runner's own records — the
 change's `findings.md` and the body of the plan's `## Time used` section, both
-put back by the runner, do not count. Any other addition, edit, deletion, binary
-or file-mode change counts, code or document, planned path or not. Each call is
-compared with its own pre-call state, so an earlier attempt's retained edits
-never qualify a later idle one. An attempt without work is rejected as
+put back by the runner, do not count. The verdict measures surviving model work
+after formatting and derived preparation, discounting the generated index and
+stamp-only changes the checkpoint restores. An edit formatting erases is no work.
+Any other addition, edit, deletion, binary or file-mode change counts, code or
+document, planned path or not. Each call is compared with its own pre-call state,
+so an earlier attempt's retained edits never qualify a later idle one. An
+attempt without work is rejected as
 `no work done` through the existing retry path, with the reason in its
 diagnostics; so is an attempt whose work cannot be measured. If every allowed
 attempt is rejected, the run exits 1 without a checkpoint commit

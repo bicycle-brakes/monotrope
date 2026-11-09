@@ -4,31 +4,24 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-te7q
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm, version: "glm-5.3-flash, 2026-11-07"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # no work done — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-07: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 922 files, 3570 commits, 12 rules.
 
 ## Runner exploration — 2026-11-07
 
-The exploration is complete. Here is the research, ready to append to `plans/changes/no-work-done/research.md` (replacing the "this file is empty until it has run" placeholder line; per the skeleton's note the frontmatter then moves to `provenance: ai-drafted-reviewed` with `produced_by:` and `review:`).
+The exploration below was produced by the recorded Stage-2 call.
 
 **Suggested `neighbours:` header values:** `plans/specs/implementation-verification/spec.md` · `plans/changes/archive/2026-10-07-stage2-flash-runner/spec.md` · `plans/changes/archive/2026-10-08-runner-derived-files/spec.md` · `plans/changes/redraft-after-scope/spec.md`
 

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-te7q
@@ -54,10 +54,11 @@ Starts unless you say stop.
   binary changes, additions and deletions. A same-byte rewrite is empty.
 - Compare each call with its own pre-call state, not the invocation's HEAD:
   retained code from a rejected earlier attempt cannot qualify an idle retry.
-  Runner audit lines, route insertion, time records, formatting, stamps and
-  index rendering lie outside this measurement window. Do not exclude an
-  entire path merely because the runner sometimes writes it: a model's own
-  document or index edit remains eligible, subject to the existing checks.
+  After verification, compare the surviving tree against that pre-call state,
+  considering only paths the model call changed. Discount runner audit lines,
+  route insertion, time records, stamps and index rendering. Index-only,
+  stamp-only and formatting-only edits that the runner discards do not count;
+  substantive document edits remain eligible, subject to the existing checks.
 - Discount this change's restored findings file. For its plan, compare bytes
   outside the time-section body using the existing time-section boundaries;
   the runner restores that body from the pre-call plan through the shared
@@ -137,3 +138,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempt
 ## Time used
 
 2026-11-08 10:39:31–11:00:29 UTC, 1257 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-08 21:32:24–23:17:09 UTC, 6284 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-08 23:17:23–2026-11-09 00:31:51 UTC, 4468 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
