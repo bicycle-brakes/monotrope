@@ -1382,9 +1382,7 @@ def research_producer_field(records: list[dict]) -> str:
     return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
 
 
-def research_publication(
-    existing: bytes, *, producer: str, day: str, model: str | None = None, producers=None
-) -> bytes:
+def research_publication(existing: bytes, *, producer: str, day: str, model: str | None = None) -> bytes:
     """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
 
     The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
@@ -1408,13 +1406,13 @@ def research_publication(
         metadata = yaml.safe_load(block)
         if not isinstance(metadata, dict):
             raise ValueError("header is not a mapping")
-        records = research_header_producers(block, program_hint=producer) if producers is None else producers
+        records = research_header_producers(block, program_hint=producer)
     except (ValueError, yaml.YAMLError) as error:
         raise Refused(f"research publication refused: {error}") from error
     contribution = {"kind": "llm-session", "name": producer, "version": day}
     if model:
         contribution["model"] = model
-    if producers is None and contribution not in records:
+    if contribution not in records:
         records.append(contribution)
     fields = {
         "provenance": "provenance: ai-drafted-reviewed",
