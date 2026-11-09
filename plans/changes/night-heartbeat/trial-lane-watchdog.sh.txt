@@ -1,0 +1,23 @@
+#!/bin/bash
+# Historical trial reference, superseded by the documented 30-minute wake.
+# Ran against the trial's flat lanes.txt (one lane id per line) beside this
+# script, with busy/ and idle-since/ there too. It does not implement the
+# documented run-state directory or pipe-separated lane entries. Its 120-second
+# idle polling is not the standing night-run routine; this is reference text.
+# Token-free lane watchdog: polls every 120 s; exits (and so wakes the chat)
+# when a lane listed in lanes.txt has had no stage2.py job for 10 minutes.
+S="$(cd "$(dirname "$0")" && pwd)"; D="$S/idle-since"; rm -f "$D"/*
+while true; do
+  now=$(date +%s)
+  while read -r w; do
+    [ -z "$w" ] && continue
+    if [ -f "$S/busy/$w" ] || ps -eo args | /usr/bin/grep -qE "[s]tage2.py [a-z-]+ $w( |$)"; then rm -f "$D/$w"
+    else
+      [ -f "$D/$w" ] || echo "$now" > "$D/$w"
+      if [ $((now - $(cat "$D/$w"))) -ge 600 ]; then
+        echo "$(date -u +%FT%H:%MZ) | watchdog: lane $w idle >=10 min, waking the chat" | tee -a "$S/lane-watch.log"; exit 0
+      fi
+    fi
+  done < "$S/lanes.txt"
+  sleep 120
+done

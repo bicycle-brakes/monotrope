@@ -48,8 +48,13 @@ below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to Codex in one
 call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
 stops), proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines. Codex runs in its configured
-`workspace-write` sandbox; the tests do not measure that confinement.
+rows `fixed` from the answer's fixed lines. A repair's post-run check is targeted when
+its coverage can be determined safely - the whole touched and linked test files, ruff
+over the touched Python files and the local gates its file kinds need, outside the
+verify admission - and the admitted full `make verify` otherwise; `review` (phase 6)
+runs a fresh full `make verify` of the current head before it calls the reviewer.
+Codex runs in its configured `workspace-write` sandbox; the tests do not measure that
+confinement.
 
 `session` starts one interactive Pi or Codex session in a new macOS
 Terminal window, inside the change's dedicated worktree
@@ -154,6 +159,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -175,10 +181,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import plans_registry  # noqa: E402
+import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
+import touch_map  # noqa: E402
 import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -332,7 +342,11 @@ REPAIR_ANSWER = (
     "whose fault the test itself plants, then clean green without the switch; the planting branch stays\n"
     "in the kept test so the proof can be repeated. Only a row taken as\n"
     f"`taken — not a test — <reason>` may be answered `not a test`. {RAISING_FAULT_SENTENCE} Do not edit `findings.md`; findings.md is the runner's audit file, and an\n"
-    "edit of it is restored before the checks, so the edit alone never fails the attempt. A hand repair\n"
+    "edit of it is restored before the checks, so the edit alone never fails the attempt. After every\n"
+    "attempt the runner also restores `status` and `implementation_status` in the change's `spec.md`,\n"
+    "optional `design.md` and `plan.md` to the values they had before the call, so never edit those\n"
+    "fields; a repair whose remedy needs a lifecycle change is repaired by hand, not by an attempt.\n"
+    "A hand repair\n"
     "is booked in the row's own Status as\n"
     "one of the three fixed statuses above; a Status that still begins `taken` while naming a fix\n"
     "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
@@ -340,16 +354,22 @@ REPAIR_ANSWER = (
     "The runner keeps every attempt's complete answer as protected local evidence and names the file in\n"
     "the attempt's diagnostics, where a rejected answer can be read again."
 )
+REPAIR_VERIFICATION = (
+    "The runner runs the targeted check for repair, using full `make verify` as fallback when targeted "
+    "coverage is unsafe, and makes the one commit. A fresh full `make verify` runs before phase 6. "
+)
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
     "Repair only the taken rows below. You may run tests and `make verify`; write no entry under\n"
     "`## Time used` in `plan.md`, the runner measures the attempt and writes it. Do not commit and run no\n"
-    "git command that changes the repository: the runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+    "git command that changes the repository. " + REPAIR_VERIFICATION + REPAIR_ANSWER
 )
 # The Sonnet attempt keeps the file-tools sentence it always had.
 REPAIR_FORMAT_FILE_TOOLS = (
     "Repair only the taken rows below, with the available file tools; you cannot run commands. Write no\n"
-    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. " + REPAIR_ANSWER
+    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. "
+    + REPAIR_VERIFICATION
+    + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -1705,7 +1725,7 @@ def capture_address_notices() -> Iterator[list[str]]:
 
 
 def retain_address_notices(notices: list[str]) -> list[str]:
-    """Keep assessed, path-only diagnostics for the operation's durable evidence."""
+    """Keep assessed path-move and unrecorded-wire-api notices for durable evidence."""
     evidence = _address_notice_evidence.get()
     if evidence is None:
         return notices
@@ -2007,11 +2027,16 @@ def free_admission_problem(root: Path, model: str, selected: list[str]) -> str |
     residency = entry.get("residenz")
     if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {OPENCODE} states no data residency"
-    excluded = excluded_problem(root, model)
-    if excluded:
-        return excluded
-    if model in [str(item) for item in entry.get("modelle") or []]:
-        return f"the model {model} is a paid model; the free class does not admit it"
+    # The per-id vetoes (declaration exclusion, paid admission) are the shared component's, read from the
+    # declaration as it stands now, never from the frozen selection.
+    veto = stage2_free.model_veto(
+        model,
+        paid=[str(item) for item in entry.get("modelle") or []],
+        exclusion=lambda ident: excluded_problem(root, ident),
+        plain=False,
+    )
+    if veto:
+        return veto.reason if veto.kind == "excluded" else f"the model {model} is {veto.reason}"
     if model not in selected:
         return f"the model {model} is not in this run's discovered free selection"
     return None
@@ -2042,59 +2067,58 @@ def parse_catalog(output: str) -> list[dict]:
     return rows
 
 
-# A catalog id the runner may select: third-party catalog text never carries a `|` or other markup into
-# the record's cells (DL-B-7 of the loop's deep review).
-MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+MODEL_ID = stage2_free.MODEL_ID
 
 
-def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> dict[str, str]:
-    """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7).
+def free_policy(rule: dict) -> stage2_free.Policy:
+    """The review loop's `free_stage` rule as the shared free policy: its includes add to the suffix's ids."""
+    return stage2_free.Policy(
+        provider=rule["provider"],
+        suffix=rule.get("id_suffix", ""),
+        include=tuple(str(record["id"]) for record in rule.get("include") or []),
+        exclude=tuple(str(record["id"]) for record in rule.get("exclude") or []),
+        include_adds=True,
+    )
+
+
+def free_selection(
+    root: Path,
+    rule: dict,
+    catalog: list[dict],
+    fresh: set[str],
+    definitions: dict[str, object] | None = None,
+    policy: stage2_go.AddressPolicy | None = None,
+) -> stage2_free.Result:
+    """The free members and drops of the fresh catalog, decided by the shared selection (DL-B-2, DL-B-7).
 
     A candidate is an id of the rule's provider that its suffix or include would select. An id outside
     `MODEL_ID` is dropped, and so is one an `ausgeschlossen` entry names or one the entry declares paid
     in `modelle`: a shipped catalog id can carry the free suffix and still be a paid model, and the
-    declaration leaves that id out, not the whole stage (bead coding-harness-vku6).
+    declaration leaves that id out, not the whole stage (bead coding-harness-vku6). The paid and
+    exclusion check is the one research uses as well (bead coding-harness-wb40).
     """
-    paid = {str(item) for item in endpoint_entry(root).get("modelle") or []}
-    suffix = rule.get("id_suffix", "")
-    includes = {str(record["id"]) for record in rule.get("include") or []}
-    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
-    dropped: dict[str, str] = {}
-    for row in catalog:
-        model = row["model"]
-        if row["provider"] != rule["provider"] or model in excludes or model not in fresh or model in dropped:
-            continue
-        if not (model in includes or (suffix and model.endswith(suffix))):
-            continue
-        if not MODEL_ID.fullmatch(model):
-            dropped[model] = "not a plain model id"
-        elif model in paid:
-            dropped[model] = "a paid model; the free class does not admit it"
-        elif problem := excluded_problem(root, model):
-            dropped[model] = problem
-    return dropped
+    paid = [str(item) for item in endpoint_entry(root).get("modelle") or []]
+    candidates = [
+        stage2_free.Candidate(row["provider"], row["model"], (definitions or {}).get(row["model"])) for row in catalog
+    ]
+    return stage2_free.select(
+        candidates,
+        free_policy(rule),
+        fresh=fresh,
+        paid=paid,
+        exclusion=lambda model: excluded_problem(root, model),
+        address=policy,
+    )
 
 
-def select_free(rule: dict, catalog: list[dict]) -> list[str]:
-    """The catalog ids of the rule's provider matching suffix or include, minus excludes, in catalog order.
+def free_drops(root: Path, rule: dict, catalog: list[dict], fresh: set[str]) -> dict[str, str]:
+    """The free candidates of the fresh catalog that are not selected, each with its reason (DL-B-2, DL-B-7)."""
+    return free_selection(root, rule, catalog, fresh).dropped
 
-    Exclusions win, also over an include; a Zen id cannot pass, because only
-    the configured provider's rows are read; an include for an id the catalog
-    does not hold selects nothing (spec, criterion 5).
-    """
-    suffix = rule.get("id_suffix", "")
-    includes = {str(record["id"]) for record in rule.get("include") or []}
-    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
-    chosen: list[str] = []
-    for row in catalog:
-        if row["provider"] != rule["provider"]:
-            continue
-        model = row["model"]
-        if model in excludes or not MODEL_ID.fullmatch(model):
-            continue
-        if (model in includes or (suffix and model.endswith(suffix))) and model not in chosen:
-            chosen.append(model)
-    return chosen
+
+def select_free(rule: dict, catalog: list[dict], *, root: Path) -> list[str]:
+    """Compatibility selection using the explicitly named repository's paid and exclusion vetoes."""
+    return free_selection(root, rule, catalog, {row["model"] for row in catalog}).selected
 
 
 def overlay_store(agent: Path, provider: str) -> dict:
@@ -2146,9 +2170,10 @@ def activate_overlay(
     """Activate fetched definitions through Pi's explicit model configuration.
 
     Returns the fields dropped per id and the address notices of same-host
-    path moves. Pi 1.2.0 restores its remote cache only for server dates newer
-    than its shipped catalog. A successful fresh retrieval need not carry such
-    a date. Keep models-store.json as retrieval evidence and use models.json's
+    path moves and unrecorded wire apis. Pi 1.2.0 restores its remote cache
+    only for server dates newer than its shipped catalog. A successful fresh
+    retrieval need not carry such a date. Keep models-store.json as retrieval
+    evidence and use models.json's
     model definitions to activate that exact catalog independently of cache
     age. Only the fields of `OVERLAY_FIELDS` cross, never provider auth
     configuration, request-body parameters or headers; the fetched store is
@@ -2381,19 +2406,30 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
     # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
-    dropped = free_drops(
-        root, rule, [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))], fresh
+    definitions: dict[str, object] = {}
+    for definition in store.get(rule["provider"], {}).get("models", []):
+        if isinstance(definition, dict) and isinstance(definition.get("id"), str):
+            definitions.setdefault(definition["id"], definition)
+    chosen = free_selection(
+        root,
+        rule,
+        [*catalog, *({"provider": rule["provider"], "model": model} for model in sorted(invalid))],
+        fresh,
+        definitions,
+        policy,
     )
+    dropped = dict(chosen.dropped)
     # Only assessed definitions become selectable: a fresh catalog row whose
     # destination the record refuses is named as a drop and never reaches a
-    # launch, however the rule filters (criterion 5).
+    # launch, however the rule filters (criterion 5). The shared selection assessed the free
+    # candidates; the other rows of the store are named here as before.
     for definition in store.get(rule["provider"], {}).get("models", []):
         if not isinstance(definition, dict) or not isinstance(definition.get("id"), str):
             continue
         verdict = stage2_go.assess(policy, definition["id"], definition)
         if not verdict.admitted:
             dropped.setdefault(definition["id"], verdict.problem)
-    selected = [model for model in select_free(rule, catalog) if model in fresh and model not in dropped]
+    selected = [model for model in chosen.selected if model not in dropped]
     if dropped:
         print(f"review-loop: free ids dropped: {dropped_notice(dropped)}", file=sys.stderr)
     if not selected and not allow_empty:
@@ -3121,11 +3157,102 @@ def rejected_review_block(answer: str, thread: str) -> str:
     )
 
 
-def review(root: Path, change: str) -> None:
-    """Phase 6: verdict first, then release and mark the loop rows.
+def review_audit_only(before: bytes, after: bytes) -> bool:
+    """Admit runner call lines under any heading, comparing all remaining input bytes.
 
-    A re-check after an earlier `## Phase 6` block in `findings.md` starts a
-    fresh read-only Codex session. The first phase-6 review resumes a recorded
+    Remove each call's blank separator with it and permit append's current-date
+    header stamp. All other bytes, including reviewer sessions and verdicts,
+    remain review inputs and must match HEAD.
+    """
+
+    call = re.compile(
+        rb"\n\nStage-2 call, \d{4}-\d{2}-\d{2}: [a-z][a-z0-9-]*(?: \(loop marks\))?"
+        rb"(?: \xc2\xb7 attempt [1-9]\d* \xc2\xb7 route [a-z0-9-]+)?"
+        rb" \xc2\xb7 endpoint [a-z0-9-]+ \xc2\xb7 model [A-Za-z0-9_./:+-]+(?: \xc2\xb7 reason [^\r\n]+)?"
+        rb" \xc2\xb7 leak check clean over \d+ files, \d+ commits, \d+ rules\.(?=\n|$)"
+    )
+    clean_before, clean_after = call.sub(b"", before), call.sub(b"", after)
+    if clean_before == clean_after:
+        return True
+    try:
+        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), dt.date.today()).encode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return stamped == clean_after
+
+
+def require_fresh_full_verification(root: Path, change: str) -> None:
+    """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
+
+    A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
+    committed head, except runner call audit lines and their current-date header stamp in
+    this change's `findings.md` outside byte-identical phase-6 blocks. Review reads its phase and
+    session markers before the runner writes any audit. The head, index and tree must be the same
+    after the check as before.
+    The check runs on every phase-6 invocation, a re-check included, and leaves no receipt: it
+    measures the head being reviewed.
+    A dirty tree or a changed head or tree refuses; a red, unstartable or timed-out check fails the call.
+    """
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+            }
+        ),
+        root,
+    )
+
+    def standing() -> tuple[str, list[str], tuple[bytes, bytes] | None]:
+        head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
+        dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
+        audit = None
+        name = f"plans/changes/{change}/findings.md"
+        path = root / name
+        if name in dirty and path.is_file() and not path.is_symlink() and not path.stat().st_mode & 0o111:
+            committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
+            indexed = _git_bytes(root, "show", f":{name}", env=env)
+            content = path.read_bytes()
+            entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
+            if entries.startswith("100644 ") and all(review_audit_only(committed, body) for body in (indexed, content)):
+                dirty.remove(name)
+                audit = (indexed, content)
+        return head, dirty, audit
+
+    try:
+        head, dirty, audit = standing()
+    except (Refused, OSError) as error:
+        raise Refused(f"the current head could not be read for the full check before phase 6 ({error})") from error
+    if dirty:
+        listing = ", ".join(f"`{path}`" for path in dirty[:20])
+        raise Refused(
+            f"phase 6 reviews a committed tree for `{change}`, and these paths differ from HEAD: {listing}; commit or put "
+            "them back, then run review again. No reviewer was called."
+        )
+    problems = full_verify(root, env, None)
+    if problems:
+        raise CallFailed(
+            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
+        )
+    try:
+        after = standing()
+    except (Refused, OSError) as error:
+        raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
+    if after != (head, dirty, audit):
+        raise CallFailed(
+            f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
+            "no reviewer was called. Run review again."
+        )
+    print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
+
+
+def review(root: Path, change: str) -> None:
+    """Phase 6: a fresh full check first, then the verdict, then release and mark the loop rows.
+
+    The full `make verify` of the current head must pass before the reviewer is called
+    (`require_fresh_full_verification`). A re-check after an earlier `## Phase 6` block in
+    `findings.md` starts a fresh read-only Codex session. The first phase-6 review resumes a recorded
     Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread.
     """
     ctx = preflight(root, change, CODEX)
@@ -3148,6 +3275,7 @@ def review(root: Path, change: str) -> None:
         "\n\n".join(["Write only your verdict now.", PHASE6_GUARD_INSTRUCTION]),
         answer_format=PHASE6_ANSWER_FORMAT,
     )
+    require_fresh_full_verification(root, change)
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     _evidence, verdict_text = split_guard_evidence(answer)
@@ -4009,8 +4137,10 @@ RUFF_COMMANDS = (
     ("check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache"),
     ("format", "--force-exclude", "--no-cache"),
 )
-FORMAT_LABEL = "Runner format before `make verify`"
-FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
+FORMAT_LABEL = "Runner format before post-run verification"
+FORMAT_COMMIT_HEADING = (
+    "Runner format before post-run verification (ruff check --fix with safe fixes only, then ruff format):"
+)
 
 # After the safe formatting the runner runs an attempt's cheap checks, before derived preparation and
 # `make verify` (bead coding-harness-5tyh): read-only ruff lint and format checks over the changed
@@ -4022,7 +4152,26 @@ FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix wi
 RUFF_CHECK = ("check", "--force-exclude", "--no-cache")
 RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
 PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
-CHEAP_LABEL = "Runner cheap checks before `make verify`"
+CHEAP_LABEL = "Runner cheap checks before post-run verification"
+
+# A repair's post-run verification is targeted when its coverage can be determined safely (bead
+# coding-harness-gxwg): the whole touched and linked test files, ruff over the touched Python files
+# and the existing local gates its file kinds need, all outside the machine-wide verify admission.
+# Anything the selector cannot cover - a prompt, an unclassified input, code without a linked test,
+# an unreadable inventory - falls back to the admitted full `make verify`. Targeted green is never
+# reported as full green; phase 6 owes its own fresh full check (`review`).
+TARGETED_LABEL = "Runner targeted checks"
+SCOPE_LABEL = "Runner verification scope"
+SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
+# Inputs whose change makes the full check necessary, whatever else the repair touched.
+SHARED_INFRASTRUCTURE = (
+    "scripts/ci_gates.py",
+    "scripts/verify_all.sh",
+    "scripts/stage2.py",
+    "scripts/verify_lock.py",
+    "scripts/touch_map.py",
+    "scripts/leakcheck.py",
+)
 
 # An attempt's edits to its own findings.md are put back before any post-run check reads model-written
 # state, so the edit alone never spends the attempt (spec, criterion 8). The rejected note joins the
@@ -4035,6 +4184,16 @@ FINDINGS_RESTORED = (
 FINDINGS_RESTORED_NOTICE = (
     "The attempt edited findings.md; the runner restored it before the post-run checks, and the attempt passed them."
 )
+
+# The lifecycle fields a repair may not change (status-fields-restore): the runner puts the pre-call lines
+# back after every attempt, before a post-run check, the derived preparation or the checkpoint reads the
+# documents, and the attempt's bookkeeping names what moved or says the fields stayed unchanged. A review
+# table's Status cell is a different thing entirely and stays out of scope here.
+LIFECYCLE_FIELDS = ("status", "implementation_status")
+LIFECYCLE_DOCS = ("spec.md", "design.md", "plan.md")
+LIFECYCLE_LABEL = "lifecycle fields"
+LIFECYCLE_UNCHANGED = "unchanged"
+RESTORATION_PREFIX = "Runner restoration, "
 
 
 # The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
@@ -4225,17 +4384,44 @@ def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
     return {**env, "PATH": os.pathsep.join(kept), "PYTHONDONTWRITEBYTECODE": "1"}
 
 
-def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
+def changed_paths(
+    root: Path,
+    env: dict[str, str] | None = None,
+    against: str = "HEAD",
+    *,
+    skip_undecodable: bool = False,
+) -> set[Path]:
     """Tracked changes against `against`, in the working tree or the index, and untracked files.
 
     `git diff <commit>` reads only the working tree, so a path staged and then put back in the file
     differs from the commit in the index alone; `--cached` lists it (bead coding-harness-0c8).
+
+    Preserve undecodable bytes with surrogate escapes so other callers still see every path.
+    Preliminary formatting/test selection may skip them; targeted coverage must reject them and
+    require full verification. Intent-to-add handles the raw bytes independently.
     """
     # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
-    tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
-    tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
-    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
-    return {Path(name) for name in [*tracked, *untracked] if name}
+    # Text-mode subprocess output translates CR to LF even with NUL delimiters.
+    tracked = _git_bytes(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split(b"\0")
+    tracked += _git_bytes(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split(b"\0")
+    untracked = _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0")
+    paths: set[Path] = set()
+    for raw in [*tracked, *untracked]:
+        if not raw:
+            continue
+        try:
+            name = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            if skip_undecodable:
+                continue
+            name = raw.decode("utf-8", errors="surrogateescape")
+        path = Path(name)
+        # Git lists an untracked nested repository as a directory ending in '/'.
+        # That suffix is an inventory marker, not an unsafe pathname conversion.
+        if path.is_absolute() or ".." in path.parts or name not in (path.as_posix(), path.as_posix() + "/"):
+            raise Refused("a changed Git path cannot be mapped safely")
+        paths.add(path)
+    return paths
 
 
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
@@ -5192,7 +5378,7 @@ def format_targets(root: Path, env: dict[str, str]) -> list[str]:
     stays unformatted.
     """
     targets: list[str] = []
-    for relative in changed_paths(root, env=env):
+    for relative in changed_paths(root, env=env, skip_undecodable=True):
         posix = relative.as_posix()
         if not posix.endswith(".py") or not posix.startswith(FORMAT_DIRS):
             continue
@@ -5236,7 +5422,12 @@ def _one_line(path: str) -> str:
 
 
 def format_step(
-    root: Path, env: dict[str, str], key: str | None = None, tools: dict[str, str] | None = None
+    root: Path,
+    env: dict[str, str],
+    key: str | None = None,
+    tools: dict[str, str] | None = None,
+    *,
+    inherit_admission: bool = True,
 ) -> str | None:
     """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
 
@@ -5275,10 +5466,9 @@ def format_step(
             done = launch(
                 [RUFF, *command, *targets],
                 root,
-                # Ruff is a local child of the verification: it gets the same verify environment
-                # the timed check gets, shared state root and floor included (bead
-                # coding-harness-p6mu); never the raw runner env.
-                verify_lock.inherit_env(env),
+                # Full verification carries its admission; targeted preparation uses its
+                # already stripped environment, even when this process has an active admission.
+                verify_lock.inherit_env(env) if inherit_admission else dict(env),
                 key,
                 timeout=TOOL_SECONDS,
                 limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
@@ -5482,7 +5672,7 @@ def selected_tests(
     selection failure is a diagnostic, never an empty green set (spec, criterion 3).
     """
     try:
-        changed = changed_paths(root, env=env)
+        changed = changed_paths(root, env=env, skip_undecodable=True)
     except (Refused, OSError) as error:
         return None, str(error)
     targets: set[str] = set()
@@ -5599,12 +5789,14 @@ def must_run_refs(plan: bytes) -> str:
 
 
 MUST_RUN_DELEGATED = (
-    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before full "
+    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before post-run "
     "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
     "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
-    "ledger test fails the attempt before `make verify`. Execute nothing yourself - delegation to the "
+    "ledger test fails the attempt before post-run verification. The runner then runs the targeted check for repair "
+    "or full `make verify` for implement; repair uses full fallback when targeted coverage is unsafe, "
+    "and a fresh full `make verify` runs before phase 6. Execute nothing yourself - delegation to the "
     "runner is the contract, and no extra tool is yours."
 )
 MUST_RUN_COMMANDS = (
@@ -5612,9 +5804,400 @@ MUST_RUN_COMMANDS = (
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
     "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
-    "checks and full `make verify` after the call. Findings.md is the runner's audit file: an edit "
+    "checks after the call, then the targeted check for repair or full `make verify` for implement; "
+    "repair uses full fallback when targeted coverage is unsafe, and a fresh full `make verify` runs "
+    "before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )
+
+
+@dataclass
+class Targeted:
+    """The coverage of one targeted repair check - or the reason it must be the full check."""
+
+    tests: list[str]  # whole test files to run, sorted
+    ruff: list[str]  # touched Python files the cheap checks' ruff did not already cover
+    gates: list[dict]  # the selected local gates, in the gate list's order
+    fallback: str | None = None
+
+
+def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[str]:
+    """Every path the baseline commit holds, as the repository's own posix names."""
+    names = _git_bytes(root, "ls-tree", "-r", "-z", "--name-only", against, env=env).split(b"\0")
+    return {touch_map.inventory_path(name) for name in names if name}
+
+
+@dataclass
+class GateCommand:
+    assignments: list[str]
+    argv: list[str]
+    entrypoints: set[str]
+
+    def locked_command(self, python: Path, original: str) -> str:
+        """Replace only the parsed Python program, keeping shell assignments and literal arguments."""
+        if not self.argv or self.argv[0] != "python3":
+            return original
+        assignments = []
+        for word in self.assignments:
+            name, value = word.split("=", 1)
+            assignments.append(f"{name}={shlex.quote(value)}")
+        return " ".join([*assignments, shlex.join([str(python), *self.argv[1:]])])
+
+
+def _parse_gate_command(command: list[str]) -> GateCommand:
+    """Parse leading assignments, the program and its module/script/test entrypoints once."""
+    words = list(command)
+    assignments = []
+    while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+        assignments.append(words.pop(0))
+    if not words:
+        return GateCommand(assignments, words, set())
+    if words[0] != "python3":
+        return GateCommand(assignments, words, {words[0]})
+    args = words[1:]
+    entrypoints: set[str] = set()
+    if len(args) >= 2 and args[0] == "-m":
+        module = args[1].replace(".", "/")
+        entrypoints.update((f"{module}.py", f"{module}/__main__.py", f"{module}/__init__.py"))
+        args = args[2:]
+    elif args:
+        entrypoints.add(args[0])
+        args = args[1:]
+    # Keep exact file paths: directory arguments must not select the whole pytest/ruff
+    # gate for every repair underneath them, nor may a basename match a different file.
+    for arg in args:
+        path = arg.split("::", 1)[0]
+        if not arg.startswith("-") and path.endswith(".py"):
+            entrypoints.add(path)
+    return GateCommand(assignments, words, entrypoints)
+
+
+def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
+    """What a targeted check of a repair covers, or why only the full check may stand in (bead coding-harness-gxwg).
+
+    The touched paths are the repair's whole delta against `against` - index, working tree, untracked
+    files, both names of a rename, edits an earlier attempt left. Linked tests are the test files the
+    touch map links to a touched path, in the working tree and, for a path the repair removed, at the
+    baseline; every surviving touched or linked test file runs whole. A prompt, shared test or
+    execution configuration, an input kind outside Python and the documents, production code with no
+    linked test, an aliased file or an unreadable inventory makes the check full instead.
+    """
+
+    def full(reason: str) -> Targeted:
+        return Targeted([], [], [], reason)
+
+    try:
+        touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
+        if any(0xDC80 <= ord(char) <= 0xDCFF for path in touched for char in path):
+            return full("a changed Git path cannot be decoded safely")
+        before = _baseline_inventory(root, env, against)
+    except (Refused, OSError, touch_map.CannotMeasure) as error:
+        return full(f"the touched paths could not be listed ({error})")
+    resolved = root.resolve()
+    present: dict[str, bool] = {}
+    touched_tests: list[str] = []
+    code: list[str] = []
+    python: list[str] = []
+    for posix in touched:
+        name = posix.rsplit("/", 1)[-1]
+        if posix.startswith("prompts/"):
+            return full("a prompt changed")
+        if posix in SHARED_INFRASTRUCTURE:
+            return full(f"`{posix}` is shared execution infrastructure")
+        if name == "conftest.py":
+            return full(f"`{posix}` is shared test configuration")
+        path = root / posix
+        try:
+            if path.is_symlink():
+                return full(f"`{posix}` is a link")
+            present[posix] = path.exists()
+            if present[posix] and (
+                not path.is_file() or path.stat().st_nlink != 1 or path.resolve() != resolved / posix
+            ):
+                return full(f"`{posix}` is not an ordinary single-linked file")
+        except (OSError, RuntimeError) as error:
+            return full(f"`{posix}` cannot be inspected ({error})")
+        if posix.endswith(".md") and posix.startswith(("plans/", "docs/")):
+            continue
+        if not posix.endswith(".py"):
+            return full(f"`{posix}` is an input kind the targeted selector does not cover")
+        if _is_test_module(posix):
+            if present[posix]:
+                touched_tests.append(posix)
+        else:
+            code.append(posix)
+        if present[posix]:
+            python.append(posix)
+    try:
+        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)) | touch_map.links(
+            touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)
+        )
+    except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
+        return full(f"the link inventory could not be read ({error})")
+    touched_set = set(touched)
+    linked: dict[str, set[str]] = {}
+    for source, target, _kind in edges:
+        if target in touched_set and _is_test_module(source) and (root / source).is_file():
+            linked.setdefault(target, set()).add(source)
+    for posix in code:
+        if not linked.get(posix):
+            return full(f"`{posix}` has no linked test")
+    tests = sorted(set(touched_tests).union(*(linked.get(posix, set()) for posix in touched)))
+    # Maintainer's option A (2026-11-04): until bead coding-harness-vg9 splits this
+    # file, its whole-file run needs the admitted full check's budget. Select that
+    # route before execution; a targeted timeout must still reject the attempt.
+    if "tests/test_stage2.py" in tests:
+        return full("the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it")
+    try:
+        covered = set(format_targets(root, env))
+        listed = ci_gates.gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return full(f"the checks could not be selected ({error})")
+    membership = any((posix in before) != present[posix] for posix in touched)
+    gates = []
+    for gate in listed:
+        if gate["job"] != "verify" or not gate["local_runnable"] or not ci_gates.misst_in(gate, "lokal"):
+            continue
+        # The document subset always stands: a repair rewrites derived plan, findings and index text.
+        # A changed entrypoint selects its own gate, and a path that appeared or vanished the kit probe.
+        try:
+            command = shlex.split(str(gate["command"]))
+        except ValueError as error:
+            return full(f"gate `{gate['id']}` has an unreadable command ({error})")
+        if (
+            "docs" in gate["subsets"]
+            or (membership and gate["id"] == "leerprobe")
+            or _parse_gate_command(command).entrypoints & touched_set
+        ):
+            gates.append(gate)
+    return Targeted(tests, sorted(set(python) - covered), gates)
+
+
+def scope_text(chosen: Targeted, result: str, notes: Sequence[str] = ()) -> str:
+    """The runner-owned evidence line of one targeted check: mode, selected checks, result - never 'full green'."""
+    files = ", ".join(f"`{_one_line(path)}`" for path in chosen.tests) or "none"
+    ruff = ", ".join(f"`{_one_line(path)}`" for path in chosen.ruff) or "none beyond the cheap checks"
+    gates = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in chosen.gates) or "none"
+    # The result stands first: a long line may be cut at the end by the findings quote.
+    line = (
+        f"targeted verification, not the full `make verify`; result: {result}; test files {files}; "
+        f"extra ruff targets {ruff}; gates {gates}"
+    )
+    if notes:
+        line += "; reported without blocking: " + ", ".join(notes)
+    return line + "; a fresh full `make verify` is still required before phase 6"
+
+
+def fallback_text(reason: str, result: str) -> str:
+    """The evidence line of a repair whose targeted coverage could not stand: the full check, and why."""
+    action = "selected" if result == "not completed" else "ran"
+    return f"full `make verify` {action} (result: {result}) because the targeted coverage was not safe: {reason}"
+
+
+def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
+    """Apply verify_all.sh's CPU/memory worker default without entering its admission."""
+    env = dict(env)
+    if env.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
+        return env
+    readings: list[int] = []
+    cores: int | None = None
+    memory: int | None = None
+    try:
+        if sys.platform == "darwin":
+            values = []
+            for name in ("hw.logicalcpu", "hw.memsize"):
+                done = launch(["/usr/sbin/sysctl", "-n", name], root, env, timeout=TOOL_SECONDS)
+                raw = done.stdout.strip() if done.returncode == 0 else ""
+                values.append(int(raw) if raw.isascii() and raw.isdecimal() and len(raw) <= 18 else None)
+            cores, memory = values
+        elif sys.platform.startswith("linux"):
+            cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+            for line in Path("/proc/meminfo").read_text().splitlines():
+                if line.startswith("MemTotal:"):
+                    raw = line.split()[1]
+                    if raw.isascii() and raw.isdecimal() and len(raw) <= 15:
+                        memory = int(raw) * 1024
+                    break
+    except (OSError, ValueError, CallFailed):
+        pass  # Unavailable readings are ignored, as in the full runner.
+    if cores and cores > 0:
+        readings.append(max(1, cores // 2))
+    if memory and memory > 0:
+        readings.append(max(1, memory // 2147483648))
+    if readings:
+        env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(min(readings))
+    else:
+        env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
+    return env
+
+
+def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
+    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+
+    Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
+    gate-list order through the locked interpreter, as `verify_all.sh` runs them. The first blocking
+    red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
+    reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
+    """
+    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
+    if chosen.ruff:
+        problem = _cheap_ruff(root, env, key, chosen.ruff)
+        if problem:
+            return [f"{TARGETED_LABEL}: {problem}"], []
+    python = root / PYTEST[0]
+    if (chosen.tests or chosen.gates) and not python.is_file():
+        return [
+            protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
+        ], []
+    if chosen.tests:
+        identity = "`" + " ".join(PYTEST) + "`"
+        try:
+            done = launch(
+                [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
+            )
+        except (StepTimedOut, CallFailed) as error:
+            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
+        if done.returncode:
+            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    notes: list[str] = []
+    gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
+    for gate in chosen.gates:
+        command = str(gate["command"])
+        command = _parse_gate_command(shlex.split(command)).locked_command(python, command)
+        identity = f"gate `{gate['id']}` ({gate['enforcement']})"
+        blocking = gate["enforcement"] == "block"
+        try:
+            done = launch(["sh", "-c", command], root, gate_env, key, timeout=TOOL_SECONDS, limit=limit)
+        except (StepTimedOut, CallFailed) as error:
+            if blocking:
+                return [
+                    protect_diagnostics(f"{TARGETED_LABEL}: {identity} did not run to the end: {error}", key)
+                ], notes
+            notes.append(f"`{gate['id']}` did not run to the end")
+            continue
+        if done.returncode and blocking:
+            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], notes
+        if done.returncode:
+            notes.append(f"`{gate['id']}` exited {done.returncode}")
+    return [], notes
+
+
+def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
+    """`make verify` under one machine admission: the problems, empty when it is green.
+
+    The full check of a repair whose targeted coverage was not safe, and of phase 6's boundary. New
+    files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
+    a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
+    """
+    problems: list[str] = []
+    intended: list[bytes] = []
+    try:
+        with verify_lock.hold_admission(["make", "verify"]) as owned:
+            try:
+                intended = intend_new_files(root, env)
+            except (Refused, OSError) as error:
+                return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+            done = launch(
+                ["make", "verify"],
+                root,
+                verify_lock.inherit_env(env),
+                timeout=VERIFY_SECONDS,
+                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+                pass_fds=_lock_fds(owned),
+            )
+    except verify_lock.VerifyLockError as error:
+        problems.append(scrub(f"`make verify` was not started: {error}", key))
+    except StepTimedOut as error:
+        problems.append(f"`make verify` did not finish: {error}")
+    else:
+        if done.returncode != 0:
+            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    finally:
+        try:
+            drop_intended(root, intended, env)
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's intent-to-add entries could not be removed after `make verify`: {error}")
+    return problems
+
+
+def _targeted_body(
+    root: Path,
+    plan: Path,
+    env: dict[str, str],
+    key: str | None,
+    formatted: list[str] | None,
+    tools: dict[str, str] | None,
+    accepted_plan: bytes | None,
+    previous_failures: Sequence[str],
+    against: str,
+    scope: list[str] | None,
+) -> list[str]:
+    """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
+
+    Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
+    `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
+    the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
+    admitted full check instead. A passing result is never worded as full verification.
+    """
+    # Nothing a targeted run starts carries or claims the verify admission.
+    env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
+
+    def ledger(error: BaseException) -> list[str]:
+        return [
+            f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+        ]
+
+    try:
+        line = format_step(root, env, key, tools, inherit_admission=False)
+        if formatted is not None and line is not None:
+            formatted.append(line)
+    except (OSError, RuntimeError, ValueError) as error:
+        return ledger(error)
+    try:
+        cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
+    except (OSError, RuntimeError, ValueError) as error:
+        return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
+    if cheap:
+        return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
+    try:
+        check_criterion_ledger.clear_written(root, plan)
+    except (OSError, RuntimeError, ValueError) as error:
+        return ledger(error)
+    preparation = prepare_derived(root, env, key)
+    if preparation:
+        return preparation
+    chosen = targeted_selection(root, env, against)
+    if chosen.fallback is not None:
+        # Keep the selected scope even if the full check raises before returning its result.
+        if scope is not None:
+            scope.append(fallback_text(chosen.fallback, "not completed"))
+        problems = full_verify(root, env, key)
+        if scope is not None:
+            scope[-1] = fallback_text(chosen.fallback, "red" if problems else "green")
+        return problems
+    problems = []
+    notes: list[str] = []
+    intended: list[bytes] = []
+    try:
+        try:
+            intended = intend_new_files(root, env)
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's new files could not be added intent-to-add before the checks: {error}")
+        else:
+            try:
+                problems, notes = run_targeted(root, env, key, chosen)
+            except StepTimedOut as error:
+                problems.append(
+                    protect_diagnostics(f"{TARGETED_LABEL}: targeted check exceeded its time bound: {error}", key)
+                )
+    finally:
+        try:
+            drop_intended(root, intended, env)
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's intent-to-add entries could not be removed after the checks: {error}")
+    if scope is not None:
+        scope.append(scope_text(chosen, "red" if problems else "green", notes))
+    return problems
 
 
 def verify_attempt(
@@ -5625,6 +6208,9 @@ def verify_attempt(
     tools: dict[str, str] | None = None,
     accepted_plan: bytes | None = None,
     previous_failures: Sequence[str] = (),
+    mode: str = "full",
+    against: str = "HEAD",
+    scope: list[str] | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -5637,6 +6223,13 @@ def verify_attempt(
     Return bounded diagnostics for failed preparation or postconditions, naming the gates that
     blocked. The time section must still be readable; the entry itself is the runner's
     (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
+
+    `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
+    preparation run outside the verify admission, and the repair's delta against `against` selects the
+    whole touched and linked test files, ruff over the touched Python files and the existing local
+    gates its file kinds need (`targeted_selection`). A coverage that cannot be determined safely runs
+    the admitted full `make verify` instead. `scope` receives the runner-owned evidence line that names
+    the mode, the selected checks and the result. Implement and draft keep the default `full`.
     """
     env = runner_env(
         foreign_env(
@@ -5667,6 +6260,17 @@ def verify_attempt(
         return [
             f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
         ]
+    if mode == "targeted":
+        # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
+        # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
+        targeted = _targeted_body(
+            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope
+        )
+        try:
+            time_log(plan)
+        except Refused as error:
+            targeted.append(str(error))
+        return targeted
     intended: list[bytes] = []
     problems: list[str] = []
     try:
@@ -7289,6 +7893,146 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         path.write_bytes(content)
 
 
+def frontmatter_fields(text: str) -> dict[str, object] | None:
+    """Effective protected values, using the registry's parser (and its merge semantics)."""
+    # Path.read_text in the registry uses universal newlines. Match it for byte snapshots.
+    try:
+        values = plans_registry.parse_frontmatter(text.replace("\r\n", "\n").replace("\r", "\n"))
+    except (ValueError, OverflowError, RecursionError):
+        # SafeLoader constructors can reject values (such as invalid dates) without a YAMLError.
+        return None
+    if values is None:
+        return None
+    return {key: values[key] for key in LIFECYCLE_FIELDS if key in values}
+
+
+def lifecycle_snapshot(folder: Path) -> dict[Path, bytes | None]:
+    """Trusted whole-document bytes before the attempt; absent optional design stays absent."""
+    baseline: dict[Path, bytes | None] = {}
+    for name in LIFECYCLE_DOCS:
+        path = folder / name
+        try:
+            content = path.read_bytes()
+            fields = frontmatter_fields(content.decode("utf-8"))
+        except FileNotFoundError as error:
+            if name == "design.md" and not path.is_symlink():
+                baseline[path] = None
+                continue
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        except (OSError, UnicodeDecodeError) as error:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: {error}") from error
+        if fields is None:
+            raise CallFailed(f"lifecycle snapshot failed for {path}: missing frontmatter")
+        baseline[path] = content
+    return baseline
+
+
+def lifecycle_header_end(text: str) -> int:
+    """End of the registry's initial YAML block; keep all following body bytes intact."""
+    # Match the registry delimiter after normalizing only for locating the byte-preserving span.
+    match = re.match(r"---(?:\r\n|\n|\r)", text)
+    assert match is not None
+    opening = match.end()
+    end = re.search(r"(?:\r\n|\n|\r)---", text[opening:])
+    assert end is not None
+    return opening + end.end()
+
+
+def reapply_lifecycle_fields(text: str, baseline: str) -> tuple[str, list[str]]:
+    """Restore the trusted complete YAML block when an effective protected value changes.
+
+    YAML anchors and merge keys couple metadata entries: splicing individual field lines cannot
+    preserve validity. Header edits survive when the effective lifecycle is unchanged; body edits
+    always survive this restoration. Membership matters, so missing and explicit null differ.
+    """
+    before = frontmatter_fields(baseline)
+    after = frontmatter_fields(text)
+    assert before is not None and after is not None
+    touched = [
+        key for key in LIFECYCLE_FIELDS if (key in before) != (key in after) or before.get(key) != after.get(key)
+    ]
+    if not touched:
+        return text, []
+    return baseline[: lifecycle_header_end(baseline)] + text[lifecycle_header_end(text) :], touched
+
+
+def restore_lifecycle_fields(
+    root: Path,
+    baseline: dict[Path, bytes | None],
+    aliases: AliasBaseline,
+    recovery_inputs: dict[Path, bytes] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Restore trusted frontmatter on effective lifecycle changes, before verification.
+
+    Linked leaves recover whole trusted inputs without reading their targets. Unreadable metadata
+    rejects the attempt and recovers trusted bytes. Preflight the complete batch before any writes.
+    """
+    # A safe lifecycle destination does not authorize recovery when a different snapshotted
+    # input is unsafe. Check the entire recovery boundary before reading or writing fields.
+    try:
+        preflight_recovery(root, {*baseline, *(recovery_inputs or {})}, aliases=aliases)
+    except RestorationRefused as safety_error:
+        raise RestorationRefused(f"lifecycle field restoration is refused: {safety_error}") from safety_error
+    changes: dict[Path, bytes | None] = {}
+    report: list[str] = []
+    unchanged: list[str] = []
+    problems: list[str] = []
+    for path, content_before in baseline.items():
+        relative = path.relative_to(root).as_posix()
+        if content_before is None:
+            if path.exists() or path.is_symlink():
+                changes[path] = None
+                report.append(f"{relative} — removed (absent before the attempt; no lifecycle baseline)")
+            continue
+        if path.is_symlink() or (path.is_file() and path.stat().st_nlink > 1):
+            problems.append(f"{relative} was replaced by a linked leaf; the snapshotted-input recovery owns it")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input (linked leaf)")
+            continue
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = None
+        if text is None or frontmatter_fields(text) is None:
+            problems.append(f"{relative} was deleted or lost its frontmatter; the snapshotted-input recovery owns it")
+            changes[path] = content_before
+            report.append(f"{relative} — {', '.join(LIFECYCLE_FIELDS)}; restored snapshotted input")
+            continue
+        updated, touched = reapply_lifecycle_fields(text, content_before.decode("utf-8"))
+        if touched:
+            changes[path] = updated.encode("utf-8")
+            # Report effective changed fields in their fixed order.
+            restored = ", ".join(field for field in LIFECYCLE_FIELDS if field in touched)
+            report.append(f"{relative} — {restored}")
+        else:
+            unchanged.append(relative)
+    if unchanged or not baseline:
+        relatives = ", ".join(sorted(unchanged)) or "no protected document"
+        report.append(f"{relatives} — {LIFECYCLE_UNCHANGED}")
+    if changes:
+        try:
+            preflight_recovery(root, changes, aliases=aliases)
+        except RestorationRefused as safety_error:
+            raise RestorationRefused(f"lifecycle field restoration is refused: {safety_error}") from safety_error
+        for path, content in changes.items():
+            if content is None:
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            else:
+                restore_work_input(root, path, content)
+    return report, problems
+
+
+def restoration_line(verb: str, attempt: int, route: str, report: list[str]) -> str:
+    """The runner-owned per-attempt restoration line: what moved, or that nothing did."""
+    return (
+        f"{RESTORATION_PREFIX}{today()}: {verb} · attempt {attempt} · route {route} — "
+        f"{LIFECYCLE_LABEL}: {'; '.join(report)}"
+    )
+
+
 def preserve_attempt_failure(error: RestorationRefused, original: BaseException | None) -> None:
     """Keep both causes visible without permitting recovery or hiding a call's failure exit."""
     if original is not None:
@@ -7384,6 +8128,8 @@ def run_attempts(
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
     retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
+    verify_mode: str = "full",  # repair: "targeted"; implement keeps the full check
+    protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -7401,6 +8147,18 @@ def run_attempts(
     answer is saved as local evidence and its location joins the attempt's diagnostics - the parser's
     rejections, the call and verify failures included - and is printed on success (bead
     coding-harness-hgvp). A failed call keeps the output it returned.
+
+    A verb that passes `protect_lifecycle` snapshots the change's lifecycle fields (`status`,
+    `implementation_status`) in spec, optional design and plan right before every call. Once the
+    attempt's changed-file measurement stands, changed effective values restore the trusted whole
+    frontmatter block, preserving body edits and YAML anchors - before verification, the
+    derived preparation or the checkpoint reads the documents. The same per-attempt snapshot serves
+    the early exits: a failed call and a retry recover whole snapshotted inputs, a moved HEAD keeps
+    its commit while the safe working-tree fields go back, a refused checkpoint puts the fields back
+    before the run stops, and every attempt's bookkeeping names what was restored or says the fields
+    stayed unchanged (status-fields-restore). A deleted document or an unreadable header is the
+    existing snapshotted-input recovery's to repair; the attempt is rejected, never accepted on
+    invented surrounding content.
 
     The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
     every route, the keyless ones included; the block in findings.md and the retry prompt both take that
@@ -7434,6 +8192,7 @@ def run_attempts(
             prompt_input(path, inputs)
     diagnostics: list[str] = []
     record: list[str] = []
+    scope_record: list[str] = []  # targeted verification: the passing attempt's mode, selected checks and result
     # The tests pytest reported as failed in the attempt before; the next cheap run selects them too.
     previous_failures: list[str] = []
     # The tools the runner itself starts, as they were before the first model ran. One digest for the
@@ -7468,6 +8227,17 @@ def run_attempts(
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         findings_before = ctx.findings.read_bytes()
+        # The lifecycle baseline is this attempt's own: a retry's documents stand at their restored
+        # pre-call bytes, so the fields protected here are the values this attempt saw.
+        lifecycle_before = lifecycle_snapshot(ctx.folder) if protect_lifecycle else {}
+        recovery_inputs = {**inputs_before, ctx.findings: findings_before}
+
+        def restore_attempt_lifecycle(
+            lifecycle_before=lifecycle_before,
+            recovery_inputs=recovery_inputs,
+        ) -> tuple[list[str], list[str]]:
+            """One recovery boundary for normal verification and exceptional handback alike."""
+            return restore_lifecycle_fields(root, lifecycle_before, aliases, recovery_inputs)
 
         def put_findings_back(
             original: BaseException | None = None,
@@ -7493,6 +8263,18 @@ def run_attempts(
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
+        lifecycle_report: list[str] = []
+        lifecycle_report_persisted = False
+        broken: list[str] = []
+
+        def persist_lifecycle_report(
+            report: list[str], destinations=(*inputs_before, ctx.findings), attempt=attempt, route=route
+        ) -> None:
+            nonlocal lifecycle_report_persisted
+            preflight_recovery(root, destinations, aliases=aliases)
+            append(ctx.findings, restoration_line(verb, attempt, route, report))
+            lifecycle_report_persisted = True
+
         # The runner's own span of this attempt starts right before the model and ends at the verdict.
         # A completed call keeps its measured entry whatever post-call check then stops the run; a
         # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
@@ -7547,13 +8329,25 @@ def run_attempts(
                         saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                     except OSError as save_error:
                         saved = f"saving the attempt failed ({save_error})"
+                    if protect_lifecycle:
+                        try:
+                            # Measure recovery before generic input restoration removes the edits.
+                            # A moved HEAD is never reset or amended.
+                            preflight_recovery(root, (*inputs_before, ctx.findings), aliases=aliases)
+                            lifecycle_report, broken = restore_attempt_lifecycle()
+                        except RestorationRefused as safety_error:
+                            preserve_attempt_failure(safety_error, evidence_error)
+                            raise
                     restored = (
                         "HEAD moved or could not be read; history was not rewritten"
                         if moved
                         else restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                     )
+                    if protect_lifecycle:
+                        persist_lifecycle_report([*lifecycle_report, *broken])
                     failures = [str(call_error)] if call_error is not None else []
                     failures += [str(evidence_error), saved, restored]
+                    failures += [f"{LIFECYCLE_LABEL}: {line}" for line in [*broken, *lifecycle_report]]
                     if exposed:
                         failures.append(credential_message(exposed))
                     failure_type = Refused if isinstance(evidence_error, Refused) else CallFailed
@@ -7578,6 +8372,16 @@ def run_attempts(
                             moved_files = str(error)
                     else:
                         moved_files = unmeasured
+                    if protect_lifecycle:
+                        try:
+                            # The commit stays the maintainer's; the safe working-tree fields go
+                            # back before the audit names the stop (status-fields-restore).
+                            lifecycle_report, broken = restore_attempt_lifecycle()
+                        except RestorationRefused as safety_error:
+                            # No audit may be written after this refusal either: the moved-HEAD
+                            # problem travels in the refusal's terminal diagnostic.
+                            safety_error.args = (f"{safety_error}; {problem}",)
+                            raise
                     try:
                         put_findings_back()
                     except RestorationRefused as safety_error:
@@ -7588,6 +8392,8 @@ def run_attempts(
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"
+                    for line in [*lifecycle_report, *broken]:
+                        listing += f"\n- {LIFECYCLE_LABEL}: {line}"
                     if retain_answer and evidence is not None:
                         listing += f"\n- the attempt's protected answer is saved at {evidence}"
                     append(
@@ -7604,6 +8410,7 @@ def run_attempts(
                             whole=[line for line in listing.splitlines() if evidence and evidence in line],
                         ),
                     )
+                    lifecycle_report_persisted = protect_lifecycle
                     raise CallFailed(problem) from call_error
             if call_error is not None:
                 error = call_error
@@ -7621,9 +8428,15 @@ def run_attempts(
                     saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                 except OSError as save_error:
                     saved = f"saving the attempt failed ({save_error})"
+                if protect_lifecycle:
+                    lifecycle_report, broken = restore_attempt_lifecycle()
                 restored = restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
+                if protect_lifecycle:
+                    persist_lifecycle_report([*lifecycle_report, *broken])
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 ended = f"{error}; {saved}; {restored}{leaked}"
+                for line in [*lifecycle_report, *broken]:
+                    ended += f"; {LIFECYCLE_LABEL}: {line}"
                 if retain_answer and evidence is not None:
                     ended += f"\nthe attempt's protected answer is saved at {evidence}"
                 raise CallFailed(ended) from error
@@ -7677,10 +8490,34 @@ def run_attempts(
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
                     restore_findings(kept)
                     findings_restored = True
+            # The lifecycle fields go back before any post-run check, the derived preparation or the
+            # checkpoint reads the documents; the changed-file measurement above still names the
+            # model's edit (status-fields-restore). The whole batch stands checked before its first
+            # write; a refusal propagates unwritten, as every recovery refusal does.
+            lifecycle_problems: list[str] = []
+            if protect_lifecycle:
+                lifecycle_report, lifecycle_problems = restore_attempt_lifecycle()
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
+            scope_lines: list[str] = []
             try:
-                problems = verify_attempt(root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures)
+                if verify_mode == "full":
+                    problems = verify_attempt(
+                        root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures
+                    )
+                else:
+                    problems = verify_attempt(
+                        root,
+                        ctx.plan,
+                        key,
+                        formatted,
+                        tools,
+                        inputs[ctx.plan],
+                        previous_failures,
+                        mode=verify_mode,
+                        against=baseline,
+                        scope=scope_lines,
+                    )
             except Refused as error:
                 put_findings_back(original=error)
                 raise
@@ -7729,7 +8566,9 @@ def run_attempts(
                 work_problems = []
             # An attempt without work is rejected whatever verification said; the reason leads the list,
             # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
-            problems = [*work_problems, *problems]
+            # A structurally broken protected document rejects the attempt even when every check
+            # would pass on the restored bytes (status-fields-restore).
+            problems = [*work_problems, *lifecycle_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -7762,11 +8601,14 @@ def run_attempts(
                 problems = answer_check(answer)
             if problems:
                 previous_failures = failed_test_ids(problems)
-                # The restore note stands first, then the format line: the next model learns that its
-                # findings edits went back, that the runner formatted, and what failed after.
+                # The restore notes stand first, then the format line: the next model learns that its
+                # findings edits and lifecycle fields went back, that the runner formatted, and what
+                # failed after.
                 problems = [
                     *([FINDINGS_RESTORED] if findings_restored else []),
+                    *(f"{LIFECYCLE_LABEL}: {line}" for line in lifecycle_report),
                     *(f"{FORMAT_LABEL}: {line}" for line in formatted),
+                    *(f"{SCOPE_LABEL}: {line}" for line in scope_lines),
                     *problems,
                 ]
                 if retain_answer and evidence is not None:
@@ -7793,11 +8635,17 @@ def run_attempts(
                         whole=[
                             line
                             for line in listing.splitlines()
-                            if (evidence and evidence in line) or (retain_answer and ": several fixed lines (" in line)
+                            if (evidence and evidence in line)
+                            or (retain_answer and ": several fixed lines (" in line)
+                            or line.startswith(f"- {SCOPE_LABEL}: ")
                         ],
                     ),
                 )
             record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
+            if not problems:
+                scope_record += [
+                    protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
+                ]
             exposed = verified_exposed
             if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
@@ -7851,6 +8699,20 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
+                if scope_record:
+                    # The runner's own evidence of how this repair was verified: never a model's claim.
+                    append(
+                        ctx.findings,
+                        quote_block(
+                            f"{SCOPE_LABEL}:\n" + "\n".join(scope_record),
+                            key,
+                            whole=scope_record,
+                        ),
+                    )
+                if protect_lifecycle:
+                    # The attempt's own record line, committed with the checkpoint: what moved, or
+                    # that the fields stayed unchanged (status-fields-restore).
+                    persist_lifecycle_report(lifecycle_report)
                 if before_commit is not None:
                     before_commit()
                 message = commit_message
@@ -7858,9 +8720,11 @@ def run_attempts(
                     # The subject stays the subject; the format line of every attempt that ran the step
                     # stands below the heading, in the commit that holds the formatted bytes.
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
+                if scope_record:
+                    message += "\n\n" + SCOPE_COMMIT_HEADING + "\n" + "\n".join(scope_record)
                 try:
                     checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
-                except CheckpointRolledBack:
+                except CheckpointRolledBack as error:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
                     # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
@@ -7873,8 +8737,19 @@ def run_attempts(
                         moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
                     except Refused:
                         moved = True
+                    if protect_lifecycle:
+                        # The rollback's own restore already put the tree back; when it failed, the
+                        # protected fields still go back before the run stops. A refusal propagates
+                        # before the findings write below (status-fields-restore).
+                        rollback_report, broken = restore_attempt_lifecycle()
+                        # Restoring findings below removes the earlier report too. Keep both the
+                        # pre-check restoration and rollback outcome in the terminal diagnostic.
+                        for line in [*lifecycle_report, *rollback_report, *broken]:
+                            error.args = (f"{error}; {LIFECYCLE_LABEL}: {line}",)
                     if kept is not None and not moved:
                         restore_findings(kept)
+                    if protect_lifecycle:
+                        persist_lifecycle_report([*lifecycle_report, *rollback_report, *broken])
                     raise
                 if after_commit is not None:
                     after_commit()
@@ -7902,6 +8777,19 @@ def run_attempts(
             # stop, so it propagates without an entry (spec, criterion 5).
             if isinstance(error, RestorationRefused) and call_error is not None:
                 preserve_attempt_failure(error, call_error)
+            if protect_lifecycle and not isinstance(error, RestorationRefused):
+                # A terminal failure can precede restoration or follow it (for example a
+                # verifier refusal). Keep the original report: restoring twice would replace
+                # actual changes with an inaccurate "unchanged" result.
+                try:
+                    if not lifecycle_report:
+                        lifecycle_report, broken = restore_attempt_lifecycle()
+                        put_findings_back(original=error)
+                    if not lifecycle_report_persisted:
+                        persist_lifecycle_report([*lifecycle_report, *broken])
+                except RestorationRefused as safety_error:
+                    preserve_attempt_failure(safety_error, error)
+                    raise
             if completed and not logged and not isinstance(error, RestorationRefused):
                 try:
                     preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
@@ -8104,7 +8992,8 @@ def card_problem(text: str) -> str | None:
 
 # The draft's post-run check is the verify job's existing document subset, selected through the
 # shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
-# bead coding-harness-77qj). Implement and repair keep the full `make verify`.
+# bead coding-harness-77qj). Implement keeps full `make verify`; repair takes the targeted check,
+# with the full suite as its fallback and before phase 6.
 DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
 DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
 
@@ -8117,8 +9006,8 @@ def verify_draft(
     The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
     `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
     is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
-    the two artefacts, the plan card and the `## Time used` heading. The full suite stays with
-    implement, repair and the orchestrator.
+    the two artefacts, the plan card and the `## Time used` heading. Implement keeps full `make verify`;
+    repair takes the targeted check, with the full suite as its fallback and before phase 6.
     """
     owed = False
     if len(new_adrs) > 1:
@@ -8437,6 +9326,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
         retain_answer=True,
+        verify_mode="targeted",
+        protect_lifecycle=True,
     )
 
 
