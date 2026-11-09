@@ -84,6 +84,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
         "tests/test_adoption.py runs it"
     ),
+    "archive_closed_changes.py": (
+        "Local command — `make archive` and the post-merge procedure in prompts/07-commit.md run it; "
+        "it moves completed change folders by design, so CI never does "
+        "(tests/test_archive_closed_changes.py runs it)"
+    ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
