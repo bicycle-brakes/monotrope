@@ -2768,6 +2768,9 @@ def test_a_key_written_by_the_gate_into_a_changed_file_is_removed_and_refused(wo
     source = (world.root / "src/app.py").read_text(encoding="utf-8")
     assert "[credential]" in source and KEY not in source
 
+    assert stage2.NO_WORK not in world.text(), "a credential refusal was mislabeled as missing work"
+    assert world.text().count("the GLM credential occurred in changed files and was removed (src/app.py)") == 1
+
     objects = subprocess.run(
         [GIT, "-C", str(world.root), "cat-file", "--batch-all-objects", "--batch"], capture_output=True, check=True
     ).stdout
@@ -10165,8 +10168,18 @@ def test_work_check_accepts_nonempty_changes(world: World, edit: str) -> None:
 
 
 def test_work_check_uses_unbounded_changes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 2. Planted fault: the verdict reads the bounded display list, where restored bookkeeping sorts first."""
+    """Criterion 2. Planted fault: truncate the actual raw work comparison, hiding the real edit."""
     monkeypatch.setattr(stage2, "ATTEMPT_FILES", 1)
+    real_git = stage2._git_bytes
+
+    def bounded_diff(root: Path, *args: str, **kwargs: object) -> bytes:
+        result = real_git(root, *args, **kwargs)
+        if args and args[0] == "diff-tree" and "--raw" in args:
+            return b"\0".join(result.split(b"\0")[: 2 * stage2.ATTEMPT_FILES]) + b"\0"
+        return result
+
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(stage2, "_git_bytes", bounded_diff)
     baseline = script_work(
         world,
         "implement",
@@ -10176,6 +10189,25 @@ def test_work_check_uses_unbounded_changes(world: World, monkeypatch: pytest.Mon
     assert world.run("implement") == 0
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "show", "HEAD:zzz/real.txt") == "work"
+
+
+def test_plan_work_comparison_reads_each_blob_once(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Time-body and stamp discounts share one normalization pass over each plan blob."""
+    before = stage2.worktree_tree(world.root)
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("runner time bookkeeping\n")
+    after = stage2.worktree_tree(world.root)
+    real_git = stage2._git_bytes
+    reads: list[str] = []
+
+    def record_blob(root: Path, *args: str, **kwargs: object) -> bytes:
+        if args[:2] == ("cat-file", "blob"):
+            reads.append(args[2])
+        return real_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_bytes", record_blob)
+    assert not stage2.attempt_has_work(world.root, before, after, world.findings, world.plan)
+    assert len(reads) == len(set(reads)) == 2, "overlapping discounts read the same plan blobs twice"
 
 
 @pytest.mark.parametrize(

@@ -4885,17 +4885,12 @@ def attempt_has_work(
             # Preparation refreshes document dates; those bytes cannot create work.
             old_text = old.decode("utf-8", "surrogateescape")
             new_text = new.decode("utf-8", "surrogateescape")
+            if path == plan_path:
+                old_text, new_text = _minus_time_body(old), _minus_time_body(new)
+            if old_text == new_text:
+                continue
             masked = _mask_stamp(old_text, dated=False)
             if masked is not None and _mask_stamp(new_text, dated=True) == masked:
-                continue
-        if path == plan_path and status == "M" and old_mode == new_mode:
-            old = _git_bytes(root, "cat-file", "blob", old_id)
-            new = _git_bytes(root, "cat-file", "blob", new_id)
-            old_body, new_body = _minus_time_body(old), _minus_time_body(new)
-            if old_body == new_body:
-                continue
-            masked = _mask_stamp(old_body, dated=False)
-            if masked is not None and _mask_stamp(new_body, dated=True) == masked:
                 continue
         return True
     return False
@@ -7702,17 +7697,20 @@ def run_attempts(
             # output as Git objects, just as before the immediate post-call snapshot.
             verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
             if verified_exposed:
-                work_unmeasured = "post-run credential exposure prevents a safe tree snapshot"
+                problems.append(credential_message(verified_exposed))
             # Judge the tree verification leaves, using only this call's changed paths.
             # This discounts formatter reversions, derived rendering and checkpoint stamp restores.
-            if work_unmeasured is None:
+            if not verified_exposed and work_unmeasured is None:
                 try:
                     worked = attempt_has_work(
                         root, before, worktree_tree(root), ctx.findings, ctx.plan, model_after=after
                     )
                 except (Refused, OSError, ValueError) as error:
                     work_unmeasured = str(error)
-            if work_unmeasured is not None:
+            if verified_exposed:
+                # Credential refusal owns this verdict: no unsafe snapshot and no no-work diagnosis.
+                work_problems = []
+            elif work_unmeasured is not None:
                 work_problems = [
                     f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
                 ]
@@ -7805,7 +7803,8 @@ def run_attempts(
             if exposed:
                 if not problems:
                     put_findings_back(original=Refused(credential_message(exposed)))
-                problems.append(credential_message(exposed))
+                if not verified_exposed:
+                    problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
             # produce a duplicate. A rejected attempt that will be retried gets its plan back

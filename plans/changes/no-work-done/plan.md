@@ -135,8 +135,15 @@ omitted for the answered bounded class, and no ADR is due.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash attempts and one Sonnet attempt each failed one test; attempt 3 saved at refs/stage2/attempts/no-work-done/orchestrator-saved-20261108.
 
+## Runner route — 2026-11-09
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-08 10:39:31–11:00:29 UTC, 1257 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-08 21:32:24–23:17:09 UTC, 6284 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-08 23:17:23–2026-11-09 00:31:51 UTC, 4468 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-09 06:35:04–10:41:43 UTC, 14798 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 10:41:54–11:11:19 UTC, 1765 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 11:11:31–11:57:23 UTC, 2751 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
