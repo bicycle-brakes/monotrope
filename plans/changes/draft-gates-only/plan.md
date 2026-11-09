@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-31
 last_reviewed: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-77qj
@@ -72,7 +72,7 @@ plant the obsolete full-check wording and require it to fail.
 - 3: tests/test_stage2.py::test_failed_docs_checks_fail_the_draft_attempt — a nonzero exit, start error, timeout or admission refusal bypasses retries or yields a passing commit, or diagnostics name make verify.
 - 4: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — the docs command loses the scoped environment or another blocking failure is tolerated.
 - 5: tests/test_stage2.py::test_draft_docs_checks_preserve_preparation_and_artifact_guards — preparation runs late or a missing spec, plan, card, Time used heading or excess ADR is accepted.
-- 6: tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft — either implementation route launches document-only verification.
+- 6: tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft — implement or a repair requiring full fallback launches document-only verification.
 - 7: tests/test_stage2.py::test_the_workflow_names_the_draft_document_check — the draft section names make verify as its check or treats parsed output as the verdict.
 
 ## Boundaries and route

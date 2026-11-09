@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
-from test_stage2 import REPO_ROOT, TEST_FREE, TEST_LADDER, VERDICT, World  # noqa: E402
+from test_stage2 import REPO_ROOT, REQUIRED_PI_SETTINGS, TEST_FREE, TEST_LADDER, VERDICT, World  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
 
 world = stage2_world
@@ -153,6 +153,8 @@ def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch
         assert "--no-tools" in call["argv"] and "--tools" not in call["argv"]
         assert call["cwd"] != str(world.root)
         assert "Availability probe only" in call["prompt_file"]
+        # pi-no-compaction (criterion 1): every probe's settings file disables retry and compaction.
+        assert json.loads(call["agent_settings"]) == REQUIRED_PI_SETTINGS
         # Only the free probe carries the diff; the paid probe stays the small static text.
         if not any(f"{model}" in " ".join(call["argv"]) for model in TEST_FREE):
             assert "VALUE = 2" not in call["prompt_file"]
@@ -520,6 +522,62 @@ def test_availability_names_a_dropped_free_id_as_skipped(world: World) -> None:
     state = receipt(world)["state"]
     assert "beacon dropped" in state["availability"]["skipped"]["beacon-2-free"]
     assert state["free"]["selected"] == ["acme-v1-free"]
+
+
+def test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free(world: World) -> None:
+    """Criterion 5 of pi-catalog-move (bead coding-harness-vku6): the free rule never selects a paid id.
+
+    Planted fault: the fresh catalog carries `beam-free`, whose `-free` suffix the rule would select
+    and whose id the endpoint also declares paid in `modelle`. Without the drop the probe refuses the
+    whole preparation ("is a paid model"); with it the id is named as skipped and the remaining free
+    candidate carries the free stage.
+    """
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle"] = [*entry["modelle"], "beam-free"]
+    path.write_text(yaml.safe_dump(data))
+    world.script(
+        pi_catalog="provider model context input output\n"
+        "opencode-go beam-free 128000 0 0\n"
+        "opencode-go acme-v1-free 128000 0 0\n",
+        pi=[{"stdout": "OK"}] * 5,
+    )
+    assert world.run("prepare-loop") == 0, "the preparation refused instead of dropping the declared paid id"
+    state = receipt(world)["state"]
+    assert state["free"]["selected"] == ["acme-v1-free"], "the declared paid id stayed in the free selection"
+    assert "paid model" in state["availability"]["skipped"]["beam-free"], (
+        "the declared paid id left the free stage without a named reason"
+    )
+    probed = {call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in world.reviews()}
+    assert "beam-free" not in probed, "a declared paid id was probed as a free candidate"
+    assert "acme-v1-free" in probed, "the remaining free candidate was never probed"
+
+
+def test_review_report_names_paid_free_drop(world: World, capsys) -> None:
+    """Criterion 7 of research-free-paid: the review report names the dropped id and its paid-admission reason.
+
+    Planted fault: the report omits the id, calls it free, or says its terms were unread as if that granted
+    free admission.
+    """
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle"] = [*entry["modelle"], "beam-free"]
+    path.write_text(yaml.safe_dump(data))
+    world.script(
+        pi_catalog="provider model context input output\n"
+        "opencode-go beam-free 128000 0 0\n"
+        "opencode-go acme-v1-free 128000 0 0\n",
+        pi=[{"stdout": "OK"}] * 5,
+    )
+    assert world.run("prepare-loop") == 0
+    output = capsys.readouterr().out
+    assert "Skipped: beam-free: a paid model; the free class does not admit it" in output
+    assert "Free swarm: acme-v1-free" in output, "the report calls the paid id free or loses the remaining member"
+    assert "beam-free: not admitted; data terms have not been read" not in output
 
 
 def test_availability_report_escapes_control_characters_in_skipped_ids(world: World, capsys) -> None:
