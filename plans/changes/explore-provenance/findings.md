@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-07
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -1116,3 +1116,339 @@ Stage-2 call, 2026-11-07: repair · attempt 3 · route stage-1 · endpoint claud
 > 3 failed, 74 passed in 55.66s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261107T002116398251Z-06d766cc.md
 > ```
+
+Stage-2 call, 2026-11-09: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 965 files, 3721 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +131 -242
+> - `plans/changes/explore-provenance/spec.md` +133 -126
+>
+> Diagnostics:
+> ````text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/adr-0016-docs-check/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/architecture-reconcile/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/beads-close-themselves/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/dirty-index/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/docs-job-report-header/research.md: stale — updated 2026-11-02 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/draft-gates-only/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explore-role/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explorer-reviewer-agents/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/fail-fast-attempts/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/failed-check-spans/research.md: stale — updated 2026-10-22 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/free-member-rate-limit/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/go-access-point/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/haiku-5-5/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/index-merge-regenerates/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-context/research.md: stale — updated 2026-10-15 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-fenced-examples/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/kimi-admission/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ledger-marker/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/loop-until-clean/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/malformed-answer-retry/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/mutation-evidence-module/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/plan-held-paths/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/raising-fault-test/research.md: stale — updated 2026-11-04 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ratchet-mutation-evidence/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-own-refs/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-pytest-failed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/registry-block-last/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-fixed-line-format/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-restore-status/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/research-swarm/research.md: stale — updated 2026-10-19 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/restore-symlink-parent/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-a/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-b/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-release-lock/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-verdict-validated/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/run-report/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line-exits/research.md: stale — updated 2026-10-23 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line/research.md: stale — updated 2026-10-20 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/swarm-test-speed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-expiry/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-test-fixtures/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/test-key-runtime/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/time-records-data/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/tolerate-derived-leftovers/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/venv-pycache/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-absolute-python/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-machine-lock/research.md: stale — updated 2026-10-29 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-stages-new-files/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-worker-cap/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/workflow-promises/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 34655 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
+
+Stage-2 call, 2026-11-09: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 965 files, 3724 commits, 12 rules.
+
+> Attempt 2 (codex-repair): the runner put back what a draft may not change:
+> - `plans/INDEX.md`
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +27 -1
+> - `plans/changes/explore-provenance/spec.md` +5 -1
+>
+> Diagnostics:
+> ````text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/adr-0016-docs-check/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/architecture-reconcile/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/beads-close-themselves/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/dirty-index/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/docs-job-report-header/research.md: stale — updated 2026-11-02 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/draft-gates-only/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explore-role/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explorer-reviewer-agents/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/fail-fast-attempts/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/failed-check-spans/research.md: stale — updated 2026-10-22 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/free-member-rate-limit/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/go-access-point/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/haiku-5-5/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/index-merge-regenerates/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-context/research.md: stale — updated 2026-10-15 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-fenced-examples/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/kimi-admission/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ledger-marker/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/loop-until-clean/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/malformed-answer-retry/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/mutation-evidence-module/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/plan-held-paths/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/raising-fault-test/research.md: stale — updated 2026-11-04 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ratchet-mutation-evidence/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-own-refs/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-pytest-failed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/registry-block-last/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-fixed-line-format/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-restore-status/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/research-swarm/research.md: stale — updated 2026-10-19 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/restore-symlink-parent/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-a/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-b/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-release-lock/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-verdict-validated/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/run-report/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line-exits/research.md: stale — updated 2026-10-23 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line/research.md: stale — updated 2026-10-20 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/swarm-test-speed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-expiry/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-test-fixtures/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/test-key-runtime/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/time-records-data/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/tolerate-derived-leftovers/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/venv-pycache/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-absolute-python/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-machine-lock/research.md: stale — updated 2026-10-29 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-stages-new-files/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-worker-cap/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/workflow-promises/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 34749 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
+
+Stage-2 call, 2026-11-09: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 965 files, 3725 commits, 12 rules.
+
+> Attempt 3 (glm): the runner put back what a draft may not change:
+> - `plans/INDEX.md`
+
+> Attempt 3 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/explore-provenance/plan.md` +22 -4
+> - `plans/changes/explore-provenance/spec.md` +8 -4
+>
+> Diagnostics:
+> ````text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/adr-0016-docs-check/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/architecture-reconcile/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/beads-close-themselves/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/dirty-index/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/docs-job-report-header/research.md: stale — updated 2026-11-02 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/draft-gates-only/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explore-role/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/explorer-reviewer-agents/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/fail-fast-attempts/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/failed-check-spans/research.md: stale — updated 2026-10-22 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/free-member-rate-limit/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/go-access-point/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/haiku-5-5/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/index-merge-regenerates/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-context/research.md: stale — updated 2026-10-15 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/interview-fenced-examples/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/kimi-admission/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ledger-marker/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/loop-until-clean/research.md: stale — updated 2026-10-14 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/malformed-answer-retry/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/mutation-evidence-module/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/plan-held-paths/research.md: stale — updated 2026-10-30 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/raising-fault-test/research.md: stale — updated 2026-11-04 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/ratchet-mutation-evidence/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-own-refs/research.md: stale — updated 2026-11-01 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/red-first-pytest-failed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/registry-block-last/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-fixed-line-format/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/repair-restore-status/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/research-swarm/research.md: stale — updated 2026-10-19 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/restore-symlink-parent/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-a/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-loop-deep-b/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-release-lock/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/review-verdict-validated/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/run-report/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line-exits/research.md: stale — updated 2026-10-23 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/runner-time-line/research.md: stale — updated 2026-10-20 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/swarm-test-speed/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-expiry/research.md: stale — updated 2026-10-27 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/terms-test-fixtures/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/test-key-runtime/research.md: stale — updated 2026-10-26 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/time-records-data/research.md: stale — updated 2026-11-03 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/tolerate-derived-leftovers/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/venv-pycache/research.md: stale — updated 2026-10-24 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-absolute-python/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-machine-lock/research.md: stale — updated 2026-10-29 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-stages-new-files/research.md: stale — updated 2026-10-25 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/verify-worker-cap/research.md: stale — updated 2026-10-31 is older than its last change 2026-11-09 (ff594213)
+> plans/changes/workflow-promises/research.md: stale — updated 2026-10-28 is older than its last change 2026-11-09 (ff594213)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 34844 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
