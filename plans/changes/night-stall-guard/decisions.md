@@ -40,4 +40,4 @@ without limit and a merge brake that matched a read-only status query, we
 decided to deny instead of ask at night and to narrow the merge brake to real
 merges first, and to add a phone alert afterwards, to achieve that no question
 can stop the night again, accepting that a denied call at night fails at once
-and the orchestrator must take another path — 2026-11-09.
+and the orchestrator must take another path — 2026-11-09
