@@ -406,6 +406,7 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     reasons = {item["id"]: item["reason"] for item in result["models"]}
     assert reasons["paid-seat"] == "wire-api-not-measured", "the exclusion reason changed"
@@ -446,6 +447,7 @@ def test_catalog_drift_notice_survives_a_free_selection_veto(world):
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
     assert reasons["moved-free"] == "paid-admitted", "the shared veto no longer decides"
@@ -585,6 +587,7 @@ def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys, hosti
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     assert result["models"][0]["reason"] == "wire-api-not-measured"
     assert len(result["address_notices"]) == 1
