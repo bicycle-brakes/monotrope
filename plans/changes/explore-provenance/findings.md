@@ -1454,3 +1454,55 @@ Stage-2 call, 2026-11-09: draft · attempt 3 · route glm · endpoint glm-coding
 > ````
 
 Stage-2 call, 2026-11-09: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 965 files, 3727 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 965 files, 3735 commits, 12 rules.
+
+Loop attempt: 2026-11-09 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of longcat-2.0 expire on 2026-11-16 (7 days left).
+
+Notice: the data terms of glm-5.3-flash expire on 2026-11-16 (7 days left).
+
+Notice: the data terms of qwen3.8-flash expire on 2026-11-16 (7 days left).
+
+Notice: the data terms of gpt-6-luna expire on 2026-11-16 (7 days left).
+
+Notice: the data terms of claude-haiku-5-5 expire on 2026-11-16 (7 days left).
+
+Notice: the data terms of minimax-m3 expire on 2026-11-16 (7 days left).
+
+Address notice: opencode-go/cat-jam-free: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/deepseek-v4-pro: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/glm-5.2: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/glm-5.3: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/glm-5.3-flash: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/hy3: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/hy4-preview: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/kimi-k2.7-code: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/kimi-k3: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/longcat-2.0: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/longcat-2.5-preview-free: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/mimo-v2.5: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/mimo-v2.5-pro: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/mimo-v2.6-flash: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/mimo-v2.6-pro: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/space-bunny: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
+
+Address notice: opencode-go/step-5-preview-free: the recorded base path is /inference/go/openai/v1, the definition names /inference/go/v1; running on with this same-host move
