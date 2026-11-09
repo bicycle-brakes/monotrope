@@ -8219,12 +8219,16 @@ def test_invalid_accepted_origins_hold_all_consuming_verbs(
 
 
 @pytest.mark.parametrize("verb", ORIGIN_VERBS)
-def test_legacy_released_origin_does_not_hold_verbs(world: World, verb: str) -> None:
+@pytest.mark.parametrize("newest_has_row", [False, True])
+def test_legacy_released_origin_does_not_hold_verbs(world: World, verb: str, newest_has_row: bool) -> None:
     """Released legacy provenance never blocks continuation, review, release or repair."""
     seed_tests(world)
     legacy = released_cells("L1-3", FIXED, "no", "legacy finding")
     legacy[3] = "diff reading"
-    world.write_findings(released_block([legacy]), VERDICT)
+    old_phase6 = phase6_cells("F-old", FIXED, "legacy phase-6 finding")
+    old_phase6[3] = "impl"
+    current = [phase6_cells("F-current", FIXED, "current fixed finding")] if newest_has_row else []
+    world.write_findings(phase6_block([old_phase6]), released_block([legacy]), phase6_block(current), VERDICT)
     world.write_record([("L2-1", "taken — test_a" if verb == "repair" else FIXED, "no")], number=2)
     if verb == "repair":
         script_repair(
@@ -8258,7 +8262,10 @@ def test_uppercase_accepted_status_holds_invalid_origin(
     assert [call for call in world.calls() if call["name"] in MODEL_STANDINS] == []
 
 
-def test_invalid_origin_holds_release_reconciliation(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize("legacy_identity", [False, True])
+def test_invalid_origin_holds_release_reconciliation(
+    world: World, capsys: pytest.CaptureFixture[str], legacy_identity: bool
+) -> None:
     """Criterion 2. Planted fault: either already-released retry branch rewrites findings.md or removes the record before the check."""
     world.write_record([("L1-1", "taken — test_a", "no")])
     world.write_findings(VERDICT)
@@ -8266,6 +8273,11 @@ def test_invalid_origin_holds_release_reconciliation(world: World, capsys: pytes
     set_row_origin(world, "L1-1", "criterion 1")
     saved = world.record().read_text(encoding="utf-8")
     legacy = stage2.release_block(saved, world.text())
+    if legacy_identity:
+        headings = [line for line in saved.splitlines() if stage2.ROUND_HEADING.match(line)]
+        cells = [row[:7] for row in stage2.record_rows(saved)]
+        identity = stage2.record_digest(json.dumps([headings, cells], sort_keys=True))
+        legacy = re.sub(r"(?m)^Record identity: .*$", f"Record identity: {identity}", legacy)
     for restored in (saved, saved.replace("| taken — test_a |", f"| {FIXED} |")):
         world.write_findings(VERDICT, legacy)
         world.record().parent.mkdir(parents=True, exist_ok=True)
@@ -8282,6 +8294,31 @@ def test_invalid_origin_holds_release_reconciliation(world: World, capsys: pytes
         released = stage2.findings_rows(world.text())[0]
         assert [(row[0], row[3]) for row in released] == [("L1-1", "base")]
         assert world.text().count(stage2.RELEASE_HEADING) == 1
+
+
+def test_origin_release_controls_keep_distinct_validation_scopes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary release checks only current provenance; restart and stage retirement never check it."""
+    old = phase6_cells("F-old", FIXED, "superseded phase-6 finding")
+    old[3] = "scope"
+    world.write_record([("L1-1", FIXED, "no")])
+    world.write_findings(phase6_block([old]), phase6_block([]), VERDICT)
+    assert world.run("release-loop") == 0, "ordinary release must ignore superseded phase-6 provenance"
+
+    world.write_findings()
+    _clean_released_loop(world)
+
+    def forbidden_origin_check(*_args: object) -> None:
+        pytest.fail("release-loop control flags must never reach Origin validation")
+
+    monkeypatch.setattr(stage2, "origin_refusal", forbidden_origin_check)
+    current = phase6_cells("F-current", FIXED, "invalid current provenance")
+    current[3] = "invalid"
+    world.write_findings(world.text(), phase6_block([current]))
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer requested restart") == 0
+    world.write_record([("L2-1", FIXED, "no")], number=2, state=loop_state(("free",)))
+    set_row_origin(world, "L2-1", "invalid")
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "model timed out") == 0
+    assert "flash" in stage2.read_state(world.record().read_text(encoding="utf-8"), world.text())["consumed"]
 
 
 @pytest.mark.parametrize("changed_part", ["repair marks", "stage snapshot"])

@@ -2928,10 +2928,13 @@ def released_digest(text: str) -> str | None:
     return match.group(1) if match else None
 
 
-def record_identity(record: str, *, include_origin: bool = False) -> str:
+def record_identity(record: str, *, include_origin: bool = False, origins: dict[str, str] | None = None) -> str:
     """Identify rounds without mutable cells; include Origin only to match older releases."""
     rounds = [line for line in record.splitlines() if ROUND_HEADING.match(line)]
     rows = [row[:7] if include_origin else row[:3] + row[4:7] for row in record_rows(record)]
+    if include_origin and origins is not None:
+        for row in rows:
+            row[3] = origins.get(row[0], row[3])
     return record_digest(json.dumps([rounds, rows], sort_keys=True))
 
 
@@ -2943,6 +2946,24 @@ def released_identity(text: str) -> str | None:
     cut = KEPT_FROM.search(block)
     match = re.search(r"^Record identity: (sha256:[0-9a-f]{64})[ \t]*$", block[: cut.start()] if cut else block, re.M)
     return match.group(1) if match else None
+
+
+def matches_released_identity(record: str, text: str) -> bool:
+    """Match a crash leftover, allowing corrected Origins under the earlier identity formula.
+
+    Older blocks hashed Origin. Reconstruct that formula with the Origins retained in the last
+    released block; all immutable cells and round headings must still match its recorded identity.
+    """
+    identity = released_identity(text)
+    if identity is None:
+        return False
+    released, _ = findings_rows(text[_last_release(text) :])
+    origins = {row[0]: row[3] for row in released}
+    return identity in (
+        record_identity(record),
+        record_identity(record, include_origin=True),
+        record_identity(record, include_origin=True, origins=origins),
+    )
 
 
 def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
@@ -3443,7 +3464,10 @@ def origin_refusal(record: str | None, findings_text: str) -> str | None:
     The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
     values the orchestrator may write.
     """
-    _released, phase6 = findings_rows(findings_text)
+    # A re-check supersedes earlier phase-6 blocks, even when the newest block has no rows.
+    # Do not change findings_rows: repair targeting and the brake still read their full history.
+    heads = list(re.finditer(r"^## Phase 6[^\n]*$", findings_text, re.M))
+    _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
     places = (
         ("loop record", record_rows(record) if record is not None else []),
         ("phase-6 table", phase6),
@@ -3816,8 +3840,7 @@ def release(root: Path, change: str) -> list[list[str]]:
     if refusal:
         raise Refused(refusal)
     if record is not None and (
-        released_digest(text) == record_digest(record)
-        or released_identity(text) in (record_identity(record), record_identity(record, include_origin=True))
+        released_digest(text) == record_digest(record) or matches_released_identity(record, text)
     ):
         # The block stands already: a run stopped between the append and the removal (DL-A-3 of the
         # deep review). Appending it again would count its rounds twice and double its ids.
