@@ -8911,8 +8911,12 @@ def repair_step(**more: object) -> dict:
         "stdout": "L1-1: fixed — tests/test_fix.py::test_fix",
         "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
         # Appending, not planting: a retry after a rejected attempt must still change bytes, or the
-        # runner's no-work rule (bead coding-harness-te7q) rejects it as a same-byte rewrite.
-        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n", "src/repair-work.txt": "work\n"},
+        # runner's no-work rule (bead coding-harness-te7q) rejects it as a same-byte rewrite. The note
+        # goes to a change document, an input kind the targeted check covers (ADR 0025).
+        "append": {
+            "plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n",
+            "plans/changes/demo/research.md": "repair note\n",
+        },
         **more,
     }
 
@@ -10311,6 +10315,11 @@ def test_idle_retry_cannot_reuse_previous_work(world: World, verb: str) -> None:
     steps = [work_step(verb), idle_step(), work_step(verb, 2)]
     if verb == "repair":
         # The first call's work stays in the tree but fails the verifier; the idle second must still fail.
+        # Its unsupported input selects the full check (ADR 0025), so the scripted red `make` is the verifier.
+        steps[0] = {
+            **steps[0],
+            "plant": {**steps[0]["plant"], "verification-scope.txt": "requires full verification\n"},
+        }
         steps[2] = {"plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/third.py": "x = 1\n"}}
     baseline = script_work(world, verb, steps, [{"stdout": "red\n", "exit": 1}, GREEN, GREEN])
     assert world.run(verb) == 0
@@ -13338,7 +13347,13 @@ def test_repair_lifecycle_prompts_name_the_protected_fields(world: World) -> Non
     assert "`plan.md`" in codex_prompt
     world.write_record([("L1-2", "taken — not a test — the runner owns the transition", "no")])
     world.script(
-        claude=[{"stdout": "L1-2: fixed — not a test — the orchestrator owns the transition", "append": {}}],
+        # One real edit: an attempt that leaves no model work is rejected (bead coding-harness-te7q).
+        claude=[
+            {
+                "stdout": "L1-2: fixed — not a test — the orchestrator owns the transition",
+                "append": {"plans/changes/demo/research.md": "hand-off note\n"},
+            }
+        ],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("repair", "demo", "--stage2-off", "Codex unavailable") == 0
@@ -22873,7 +22888,14 @@ def test_targeted_repair_runs_whole_touched_and_linked_test_files(
     repair_world(world)
     answer = "L1-1: fixed — tests/test_fix.py::test_fix"
     # Attempt 2 writes no test of its own: the file attempt 1 left is still the repair's delta.
-    second = {"stdout": answer, "append": {"plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n"}}
+    # Its research note is real work: a time entry alone is no work done (bead coding-harness-te7q).
+    second = {
+        "stdout": answer,
+        "append": {
+            "plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n",
+            "plans/changes/demo/research.md": "second repair note\n",
+        },
+    }
     script_repair(world, [repair_step(), second], make=[{"stdout": "green\n"}])
     commands = targeted_mode(monkeypatch)
     # Cheap runs are the odd pytest calls, the targeted ones the even: attempt 1's targeted run is red.
