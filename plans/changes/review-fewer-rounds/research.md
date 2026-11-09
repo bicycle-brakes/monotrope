@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "Haiku 5.5 exploration and Opus 5.5 research, 2026-11-09"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
