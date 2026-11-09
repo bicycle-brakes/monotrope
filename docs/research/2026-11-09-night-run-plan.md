@@ -40,14 +40,32 @@ only tracker writer; five to six lanes run, never more (maintainer,
 
 ## Lanes
 
-| Lane | Change (bead) | Until 2026-11-10 07:00 UTC |
-|---|---|---|
-| 1 | Explore provenance (coding-harness-g19n) | One repair round for phase-6 rows EP6-1 to EP6-4 (maintainer 2026-11-09: hold the pull request, repair them), full `make verify`, phase-6 re-check, pull request — split in two if the slicing rule (~800 lines) asks for it. EP6-5 stays a follow-up (coding-harness-4bhp). |
-| 2 | Two `make verify` runs at once (coding-harness-u1ha) | Flash explore, interview record from the maintainer's two answers of 2026-11-09 (two slots; the count centrally changeable), `draft`, stop at the plan card for the morning. Not implemented tonight: it changes the lock every other lane waits on. |
-| 3 | Research swarm report format (coding-harness-4q9y) | Flash explore, `draft`, stop at the plan card. Testing strategy (coding-harness-1ga5) waits for it (maintainer 2026-11-09). |
-| 4 | Fewer review rounds (coding-harness-3rtn) | `draft` from decisions Q-1 to Q-12 and the research of 2026-11-09; spec and plan only, the ADR 0021 amendment as a draft; stop at the plan card. Implementation waits for coding-harness-twvx. |
-| 5 | One central harness configuration (coding-harness-twvx) | Explore with `--stage2-off` and the recorded reason (research swarm report-format failures, coding-harness-4q9y), then park for the interview (architectural; the maintainer's answers are needed). |
-| 6 | Follow-up bugs from today's phase-6 reviews | One at a time, Flash explore and `draft` to the plan card: origin check across phase-6 blocks (coding-harness-3h96), no-work ledger marker (coding-harness-twbl), triage-verb round-4 rows (coding-harness-3ha6), research census producer kind (coding-harness-4bhp). |
+1. **Explore provenance (coding-harness-g19n).** One repair round for phase-6
+   rows EP6-1 to EP6-4 (maintainer 2026-11-09: hold the pull request, repair
+   them), full `make verify`, phase-6 re-check, pull request — split in two if
+   the slicing rule (~800 lines) asks for it. EP6-5 stays a follow-up
+   (coding-harness-4bhp).
+2. **Two `make verify` runs at once (coding-harness-u1ha).** Flash explore,
+   interview record from the maintainer's two answers of 2026-11-09 (two slots;
+   the count centrally changeable), `draft`, stop at the plan card for the
+   morning. Not implemented tonight: it changes the lock every other lane waits
+   on.
+3. **Research swarm report format (coding-harness-4q9y).** Flash explore,
+   `draft`, stop at the plan card. Testing strategy (coding-harness-1ga5) waits
+   for it (maintainer 2026-11-09).
+4. **Fewer review rounds (coding-harness-3rtn).** `draft` from decisions Q-1 to
+   Q-12 and the research of 2026-11-09; spec and plan only, the ADR 0021
+   amendment as a draft; stop at the plan card. Implementation waits for
+   coding-harness-twvx.
+5. **One central harness configuration (coding-harness-twvx).** Explore with
+   `--stage2-off` and the recorded reason (research swarm report-format
+   failures, coding-harness-4q9y), then park for the interview (architectural;
+   the maintainer's answers are needed).
+6. **Follow-up bugs from today's phase-6 reviews.** One at a time, Flash explore
+   and `draft` to the plan card: origin check across phase-6 blocks
+   (coding-harness-3h96), no-work ledger marker (coding-harness-twbl),
+   triage-verb round-4 rows (coding-harness-3ha6), research census producer kind
+   (coding-harness-4bhp).
 
 ## Not tonight
 
