@@ -170,6 +170,19 @@ context: |
   Repository change: a small computation in the runner; both estimates logged.
   Architecture change: part of the ADR 0021 amendment.
 
+## Q-12 · How the second-round threshold is introduced
+
+asked: 2026-11-09
+answer: "B: Schatten, immer zweite Runde" — during a shadow period every lens always gets a second round; the single-finding rule (Q-11) is computed and recorded but does not decide; after 10–20 changes the threshold is set from what the second rounds actually found where the rule would have stopped.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the research proposal (second round when at least two single findings make up more than half of a lens's accepted findings, or none of two or more is confirmed by a second reviewer) is the research agent's own derivation; no published threshold exists for three reviewers (research.md).
+  Intention: set the threshold from this repository's own data before it decides anything.
+  Today: the loop runs until a clean round (4–8 rounds).
+  Repository change: threshold and mode (shadow or live) as values in the central configuration (bead coding-harness-twvx); a per-lens record of findings, overlap and both estimates.
+  Architecture change: part of the ADR 0021 amendment.
+
 ## Open — not counted
 
 - The research questions of 2026-11-08 are not answered: (a) evidence for
@@ -179,5 +192,3 @@ context: |
   calls against today's rounds and verify runs. The stage-1 exploration of
   2026-11-09 (research.md) did not read the bead and covers the repository
   only. Answered on 2026-11-09 by the Opus research section of research.md.
-- Q-12 (the threshold and how it is introduced, shadow run or live) is open:
-  the maintainer asked to clarify it first (2026-11-09).
