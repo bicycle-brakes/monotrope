@@ -4088,7 +4088,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
     # scope omits full verification because a draft's document check already passed.
     # The renamed contract must travel with its criterion ledger: otherwise the old
     # promise that every repair runs full verification survives in the accepted plan.
-    ledger = (REPO_ROOT / "plans/changes/draft-gates-only/plan.md").read_text(encoding="utf-8")
+    ledger = (REPO_ROOT / "plans/changes/archive/2026-11-06-draft-gates-only/plan.md").read_text(encoding="utf-8")
     assert "tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft —" in ledger, (
         "criterion 6 must name the fallback-specific repair contract"
     )
@@ -18336,7 +18336,7 @@ def test_first_paid_rung_names_missing_cost_when_flash_is_skipped(
 
 
 def test_paid_terms_doctrine_records_the_retention_decision() -> None:
-    spec = (REPO_ROOT / "plans/changes/loop-until-clean/spec.md").read_text()
+    spec = (REPO_ROOT / "plans/changes/archive/2026-11-06-loop-until-clean/spec.md").read_text()
     adr = (REPO_ROOT / "docs/adr/0021-review-swarms-until-clean.md").read_text()
     for text in (spec, adr):
         assert "Q-11" in text

@@ -84,9 +84,18 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
         "tests/test_adoption.py runs it"
     ),
+    "archive_closed_changes.py": (
+        "Local command — `make archive` and the post-merge procedure in prompts/07-commit.md run it; "
+        "it moves completed change folders by design, so CI never does "
+        "(tests/test_archive_closed_changes.py runs it)"
+    ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
+    ),
+    "outcome_test.py": (
+        "On-demand administrator measurement — a fresh session answers `questions`, the administrator records it with `record` "
+        "(docs/WORKFLOW.md, 'The outcome test'); it runs only read-only git, never on a schedule, so CI never runs it (tests/test_outcome_test.py runs it)"
     ),
     "close_merged_beads.py": (
         "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "

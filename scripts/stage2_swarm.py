@@ -112,8 +112,12 @@ def select_research_catalog(
     evidence, never a failure of the whole preflight (Q-12, Q-14). Its
     destination is assessed against the one address record (`address`, the
     loaded `stage2_go` policy): any path on the recorded host is admissible, a
-    move from the recorded path is kept as a notice, a foreign destination
-    refuses the candidate alone (go-access-point). The free candidates are chosen by the one free
+    move from the recorded path and an explicit base on an unrecorded wire api
+    are kept as notices, a foreign destination refuses the candidate alone
+    (go-access-point). Notices are collected before the eligibility filters:
+    a candidate excluded later — `wire-api-not-measured`, a veto of the free
+    selection included — keeps its notice in `address_notices`, each model
+    once. The free candidates are chosen by the one free
     selection (`stage2_free`) the review loop uses as well: `paid` (the endpoint's `modelle`) and `exclusion`
     (the declaration's public-web exclusion) are its hard vetoes, so an id admitted as paid is dropped here
     with the reason `paid-admitted` and never reaches a probe (bead coding-harness-wb40).
@@ -266,16 +270,30 @@ def select_research_catalog(
         return None
 
     def address_notice(ident: str) -> str | None:
-        """The same-host move notice of an admissible candidate, or None."""
+        """The address-drift notice of an admissible candidate, or None."""
         item = models.get(ident)
         if item is None:
             return None
-        verdict = stage2_go.assess(address, ident, {"api": item.get("api"), "baseUrl": item.get("baseUrl")})
+        # The row's own keys only: an absent base stays absent and resolves
+        # from the record for its api, an explicit null is refused, and no
+        # absent base is turned into an explicit null here.
+        probe = {key: item[key] for key in ("api", "baseUrl") if key in item}
+        verdict = stage2_go.assess(address, ident, probe)
         return verdict.notice if verdict.admitted else None
 
     candidates = []
     free_input = []
     notices: list[str] = []
+    noticed: set[str] = set()
+
+    def collect_notice(ident: str) -> None:
+        """Keep a candidate's drift notice once, ahead of every eligibility filter."""
+        if ident in noticed:
+            return
+        noticed.add(ident)
+        if (notice := address_notice(ident)) is not None:
+            notices.append(notice)
+
     ids = sorted(
         {ident for ident in models if ident.endswith("-free")}
         | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
@@ -286,6 +304,9 @@ def select_research_catalog(
         reason = "not-in-fresh-pi" if item is None else pi_reason(item)
         if reason is None:
             reason = metadata_reason(ident)
+        # The notice is collected whatever the filters decide: an
+        # address-admissible row excluded later keeps its notice.
+        collect_notice(ident)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
         definition = None
         if item is not None:
@@ -307,7 +328,9 @@ def select_research_catalog(
         exclusion=exclusion,
         address=address,
     )
-    notices.extend(chosen.notices)
+    # The shared selection keeps notices of eligible ids only; each of them was
+    # collected above from the same row, so this adds nothing twice.
+    notices.extend(notice for notice in chosen.notices if notice not in notices)
     veto_codes = {"paid": "paid-admitted", "excluded": "excluded-by-declaration", "plain": "pi-malformed"}
     for candidate in candidates:
         ident = candidate["id"]
@@ -323,8 +346,7 @@ def select_research_catalog(
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
         reason = seat_reason(ident)
-        if reason is None and (notice := address_notice(ident)) is not None:
-            notices.append(notice)
+        collect_notice(ident)
         seat_models.append(
             {
                 "id": ident,

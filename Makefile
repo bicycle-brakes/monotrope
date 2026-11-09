@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock change index report close-merged help
+.PHONY: verify test staleness gates leakcheck venv lock change index report close-merged archive help
 
 verify:
 	bash scripts/verify_all.sh
@@ -104,6 +104,35 @@ close-merged:
 	  *) echo 'close-merged: ARGS must be empty or --write' >&2; exit 2 ;; \
 	esac
 
+# Archives completed change folders (bead coding-harness-cqun): every active
+# change whose bead is closed moves to plans/changes/archive/<date>-<name>/,
+# with the four lifecycle header fields stamped and plans/INDEX.md
+# regenerated — reporting only, unless ARGS=--write. Same argument discipline
+# as close-merged above: only command-line ARGS, captured raw without
+# expanding make functions, validated as exact bytes in the shell — so an
+# environment variable can never opt into writing.
+override ARCHIVE_MAKEFILE := $(abspath $(firstword $(MAKEFILE_LIST)))
+export ARCHIVE_MAKEFILE
+ifeq ($(origin ARGS),command line)
+override ARCHIVE_ARGS := $(value ARGS)
+else
+override ARCHIVE_ARGS :=
+endif
+export ARCHIVE_ARGS
+unexport ARGS
+
+archive:
+	@if [ "$(words $(MAKEFILE_LIST))" -ne 1 ]; then \
+	  echo 'archive: expected exactly one Makefile path without whitespace; invoke this Makefile directly' >&2; \
+	  exit 2; \
+	fi
+	@cd "$$(dirname "$$ARCHIVE_MAKEFILE")" && \
+	case "$$ARCHIVE_ARGS" in \
+	  "") python3 scripts/archive_closed_changes.py ;; \
+	  --write) python3 scripts/archive_closed_changes.py --write ;; \
+	  *) echo 'archive: ARGS must be empty or --write' >&2; exit 2 ;; \
+	esac
+
 help:
 	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
 	@echo 'make test                               the test suite, by hand'
@@ -118,4 +147,6 @@ help:
 	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
 	@echo 'make close-merged [ARGS=--write]        close beads a merged Closes-Bead trailer declared (report without ARGS)'
 	@echo '                                        reporting also fails on unresolved declarations (nonzero exit)'
+	@echo 'make archive [ARGS=--write]             archive change folders whose bead is closed (report without ARGS)'
+	@echo '                                        a folder that cannot be interpreted safely refuses the write'
 	@echo 'make help                               this list'
