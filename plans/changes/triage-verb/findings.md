@@ -240,3 +240,22 @@ Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3710 commits, 12 rules.
 
 Stage-2 call, 2026-11-09: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 926 files, 3727 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3730 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +12 -8
+> - `scripts/stage2.py` +18 -9
+> - `tests/test_stage2.py` +43 -7
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L4-3: no fixed line
+> - L4-4: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/triage-verb/stage2/attempts/triage-verb/attempt-1-20261109T122133416048Z-1eda0a4a.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 926 files, 3740 commits, 12 rules.
