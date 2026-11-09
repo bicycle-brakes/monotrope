@@ -15,21 +15,18 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 
-# Research files written before explore published truthful metadata (cut-off: the second merge of origin/main
-# into fix/explore-provenance, 2026-11-09 evening). The maintainer decided to ship without correcting them
+# Research files written before explore published truthful metadata (cut-off: merge of origin/main
+# into fix/explore-provenance, 2026-11-09). The maintainer decided to ship without correcting them
 # (plans/changes/explore-provenance/decisions.md, Q-4); their correction is its own change (bead
 # coding-harness-2i7x). The list only shrinks: a corrected or archived file must leave it.
 UNCORRECTED = frozenset(
     f"plans/changes/{name}/research.md"
     for name in (
-        "address-drift-warning",
         "adr-0016-docs-check",
         "adr-repair-check",
-        "archive-closed-changes",
         "docs-job-report-header",
         "night-heartbeat",
         "night-machine-facts",
-        "outcome-test",
         "pi-no-compaction",
         "raising-fault-test",
         "red-first-own-refs",

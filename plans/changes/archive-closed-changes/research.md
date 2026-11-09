@@ -4,13 +4,15 @@ status: draft
 implementation_status: none
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-cqun
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-06; draft-time checks appended to the recorded Flash exploration"}
+produced_by:
+  - {kind: llm-session, name: claude-code, model: glm-5.3-flash, version: "2026-11-06"}
+  - {kind: llm-session, name: codex, model: gpt-6.1-sol, version: "2026-11-06"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 neighbours: []
