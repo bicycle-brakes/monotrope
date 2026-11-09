@@ -417,6 +417,52 @@ def test_session_metadata_and_fresh_attestation_are_required(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("answer", [float("nan"), float("inf"), float("-inf")])
+def test_answer_submission_rejects_non_json_constants(tmp_path: Path, answer: float) -> None:
+    """Reject Python's nonstandard JSON constants instead of scoring or archiving them."""
+    root = _write_repo(tmp_path / "repo")
+    answers = dict(SENTINELS, **{"verify-floor": answer})
+    done = _record(root, tmp_path, _export(root), answers)
+    assert done.returncode == 3, "non-JSON numeric constants must be malformed input"
+    assert "not measured" in done.stderr
+    assert not (root / HISTORY_REL).exists()
+    assert not (tmp_path / "state").exists()
+
+
+def test_huge_integer_answer_is_incorrect(tmp_path: Path) -> None:
+    """A finite JSON integer beyond float range must get a verdict, not overflow."""
+    root = _write_repo(tmp_path / "repo")
+    try:
+        verdict = _module(root)._grade(10**400, SENTINELS["verify-floor"], "number")
+    except OverflowError:
+        pytest.fail("a finite JSON integer must receive an incorrect verdict without overflowing")
+    assert verdict is False
+    answers = dict(SENTINELS, **{"verify-floor": 10**400})
+    done = _record(root, tmp_path, _export(root), answers)
+    assert done.returncode == 1, f"a huge finite integer must score as incorrect: {done.stderr}"
+    assert "OverflowError" not in done.stderr, "a finite integer must be graded without float conversion"
+    assert (root / HISTORY_REL).exists(), "an incorrect finite answer must append a scored result"
+    record = _history(root)[0]
+    assert record["correct"] == 7 and record["total"] == 8
+    assert _verdict_map(record)["verify-floor"] == "incorrect"
+
+
+def test_conflicting_routing_sections_prevent_measurement(tmp_path: Path) -> None:
+    """A second routing section must not disappear behind the first matching heading."""
+    root = _write_repo(tmp_path / "repo")
+    workflow = root / "docs/WORKFLOW.md"
+    workflow.write_text(
+        workflow.read_text()
+        + "\n### The routing\n\n| Phase | Model | Why |\n|---|---|---|\n"
+        + "| Repair after 4b and 6 | conflicting-repair-1 | Reserve 1.0 after two failures |\n"
+    )
+    _commit(root, "conflicting routing sections")
+    done = _run_tool(root, "questions")
+    assert done.returncode == 3, "conflicting routing evidence must prevent measurement"
+    assert "not measured" in done.stderr
+    assert not (root / HISTORY_REL).exists()
+
+
 def test_grading_is_exact_and_keeps_denominator_eight(tmp_path: Path) -> None:
     """Grading is exact per shape and the denominator never moves: omissions, wrong types, case and prose earn nothing.
 

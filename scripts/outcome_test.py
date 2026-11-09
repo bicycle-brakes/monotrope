@@ -139,23 +139,22 @@ class DuplicateJsonKey(ValueError):
 
 
 def _section(text: str, fragment: str) -> str | None:
-    """The Markdown section under the first heading whose title contains `fragment`."""
+    """The section under exactly one matching heading; duplicates stay unread."""
     lines = text.splitlines()
-    start: int | None = None
-    level = 0
-    for index, line in enumerate(lines):
+    headings = [(index, match) for index, line in enumerate(lines) if (match := HEADING.match(line))]
+    matches = [(index, match) for index, match in headings if fragment in match.group("title")]
+    if len(matches) != 1:
+        return None
+    start, heading = matches[0]
+    level = len(heading.group("level"))
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
         match = HEADING.match(line)
         if match is None:
             continue
-        if start is None:
-            if fragment in match.group("title"):
-                start = index
-                level = len(match.group("level"))
-        elif len(match.group("level")) <= level:
+        if len(match.group("level")) <= level:
             return "\n".join(lines[start:index])
-    if start is not None:
-        return "\n".join(lines[start:])
-    return None
+    return "\n".join(lines[start:])
 
 
 def _table_rows(block: str) -> list[list[str]]:
@@ -371,9 +370,9 @@ def _grade(answer: Any, expected: Any, answer_type: str, *, markdown_emphasis: b
     if answer_type == "number":
         if isinstance(answer, bool) or not isinstance(answer, int | float):
             return False
-        if not math.isfinite(answer):
+        if isinstance(answer, float) and not math.isfinite(answer):
             return False
-        return float(answer) == float(expected)
+        return answer == expected
     if not isinstance(answer, str):
         return False
     text = answer.strip()
@@ -413,19 +412,28 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _reject_json_constant(_value: str) -> Any:
+    """NaN and infinities are Python extensions, not JSON values."""
+    raise ValueError("non-JSON numeric constant")
+
+
 def _load_json_strict(path: Path) -> Any:
     try:
         raw = path.read_bytes()
     except OSError:
         raise NotMeasured(f"cannot read {path.name}") from None
     try:
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys)
+        return json.loads(
+            raw.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys, parse_constant=_reject_json_constant
+        )
     except UnicodeDecodeError:
         raise NotMeasured(f"{path.name} is not valid UTF-8") from None
     except json.JSONDecodeError:
         raise NotMeasured(f"{path.name} is not valid JSON") from None
     except DuplicateJsonKey:
         raise NotMeasured(f"{path.name} carries a duplicate JSON key") from None
+    except ValueError:
+        raise NotMeasured(f"{path.name} is not valid JSON") from None
 
 
 def _escapes(relative: str) -> bool:
