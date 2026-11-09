@@ -289,7 +289,7 @@ def address_policy() -> stage2_go.AddressPolicy:
     )
 
 
-def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None) -> dict:
+def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None, **admission) -> dict:
     return swarm.select_research_catalog(
         bridge,
         POLICY if policy is None else policy,
@@ -297,6 +297,7 @@ def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = Non
         expected_version=PIN,
         measured_wire_apis=("openai-completions",),
         address=address_policy(),
+        **({"paid": (), "exclusion": None} | admission),
     )
 
 
@@ -316,6 +317,18 @@ def test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date(tmp_path, so
         assert "body" not in evidence, "the durable audit needs digests, not whole source documents"
     raw = bridge["sources"]["pi"]["body"]
     assert result["sources"]["pi"]["sha256"] == hashlib.sha256(raw.encode()).hexdigest()
+
+
+def test_preflight_applies_the_admission_vetoes_of_the_shared_free_selection(tmp_path, sources):
+    # Planted fault: a free-looking id admitted as paid, or excluded for the public web, stays selected.
+    bridge = collect(tmp_path, sources)
+    result = select(bridge, paid=["alpha-free"], exclusion=lambda model: "denied" if model == "beta-free" else None)
+    assert result["selected"] == [] and result["N"] == 0
+    reasons = {item["id"]: item["reason"] for item in result["candidates"]}
+    assert reasons["alpha-free"] == "paid-admitted"
+    assert reasons["beta-free"] == "excluded-by-declaration"
+    # Without admission input the selection is the one the catalog and capability evidence give.
+    assert select(bridge)["selected"] == ["alpha-free", "beta-free"]
 
 
 def test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids(tmp_path, sources):
@@ -722,7 +735,7 @@ def test_preflight_free_definition_cannot_redirect_its_declared_go_origin(tmp_pa
     result = select(collect(tmp_path, sources))
     assert result["selected"] == ["beta-free"]
     item = next(item for item in result["candidates"] if item["id"] == "alpha-free")
-    assert item["reason"] == "pi-malformed"
+    assert item["reason"] == ("pi-malformed" if "provider" in change else "destination-refused")
     for field, value in change.items():
         assert item["evidence"]["pi"][field] == {"present": True, "value": value}
 
@@ -739,7 +752,7 @@ def test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin(tmp_p
     sources.pi_models[0].update(change)
     result = select(collect(tmp_path, sources))
     skipped = outcome(result, FIXED[0])
-    assert skipped["reason"] == "pi-malformed"
+    assert skipped["reason"] == ("pi-malformed" if "provider" in change else "destination-refused")
     for field, value in change.items():
         assert skipped["evidence"]["pi"][field] == {"present": True, "value": value}
     assert outcome(result, FIXED[1])["reason"] is None

@@ -35,6 +35,7 @@ import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+from test_stage2 import REQUIRED_PI_SETTINGS  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -259,6 +260,9 @@ record = {
     "prompt_path": str(prompt_file) if prompt_file else None,
     "agent_dir": agent,
     "agent_listing": sorted(os.listdir(agent)) if agent and os.path.isdir(agent) else None,
+    "agent_settings": (Path(agent) / "settings.json").read_text()
+    if agent and (Path(agent) / "settings.json").is_file()
+    else None,
     "home_listing": sorted(os.listdir(os.environ.get("HOME", "")))
     if os.path.isdir(os.environ.get("HOME", ""))
     else None,
@@ -568,6 +572,31 @@ def test_swarm_uses_only_the_injected_pi_wrapper(sworld: SwarmWorld) -> None:
     calls = [call for call in sworld.calls() if call["name"] == "pi"]
     assert {call["kind"] for call in calls} == {"finder", "repository", "online"}
     assert all(call["program_path"] == pinned for call in calls)
+
+
+def test_research_pi_settings_disable_compaction(sworld: SwarmWorld) -> None:
+    """pi-no-compaction (criterion 1). Planted fault: a repository or public research launch's
+    agent settings omit the disabled compaction or re-enable retry.
+
+    The stand-in reads each launch's runner-written settings file before the scratch directory is
+    cleaned up; every Pi seat of the run - the Go-seat finders, the repository and public topics,
+    required and free - must parse to the same two-key JSON, and no Claude role carries Pi
+    settings at all.
+    """
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    seats = [call for call in sworld.calls() if call["name"] == "pi"]
+    assert seats, "the run never launched a Pi seat"
+    assert {call["kind"] for call in seats} == {"finder", "repository", "online"}, "a role outside the seats rode Pi"
+    assert set(FREE) <= {call["model"] for call in seats}, "the free seats never rode Pi"
+    for call in seats:
+        assert json.loads(call["agent_settings"]) == REQUIRED_PI_SETTINGS, (
+            f"{call['kind']} seat {call['model']}: the settings are not the required two-key JSON"
+        )
+    assert all(call["agent_settings"] is None for call in sworld.calls() if call["name"] == "claude"), (
+        "a Claude role carried a Pi settings file"
+    )
 
 
 @pytest.mark.parametrize("klass", ["bounded", "spike"])

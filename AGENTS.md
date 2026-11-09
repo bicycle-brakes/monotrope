@@ -21,7 +21,7 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
@@ -129,6 +129,12 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
 - A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
+- **Night runs stay plain** (maintainer, 2026-10-12): `ROADMAP.md` is the one map and the
+  morning handover the one report; no Kanban board, canvas or dashboard (Grafana included)
+  is proposed or built for the night run until the maintainer states that the plain form
+  has carried. Collecting data is not covered: a structured event log (JSONL with
+  OpenTelemetry GenAI field names, bead coding-harness-oebl) is allowed; a service that
+  shows it is not. Reason: everything is built for an ADHD reader, no feature creep.
 
 ## Tracker quick reference
 
@@ -148,24 +154,15 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
-  A worktree lives under `.claude/worktrees/<name>`, is branched from a
-  freshly fetched `origin/main`, and is removed after the merge. Sibling
-  directories are retired (D-5). `tools/bd` finds the main checkout's tracker
-  from there, and concurrent writers lose nothing
-  (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
-  still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  A worktree lives under `.claude/worktrees/<name>`, is branched from a freshly fetched `origin/main`,
+  and is removed after the merge; tracker access, claims and sibling directories: `docs/WORKFLOW.md` §3.
+  Each new checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
   (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
-- **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Its tools that write, run, spawn or change
-  state are denied by name in `.claude/settings.json`; the one that may send
-  task text to a routing judge (`sys_advise_models`) is asked each time. Its
-  Omnigent default policy (`tools/omnigent/`) is a second layer the maintainer
-  installs; nothing depends on it alone. The one list and details:
-  `docs/WORKFLOW.md` §3, "Worktrees".
+- **Omnigent starts inside the worktree** (ADR 0006). Its default policy (`tools/omnigent/`) is a second layer;
+  nothing depends on it alone. Which tools are denied or asked, and why: `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none"** — an unopened file
   and an empty query say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
@@ -175,15 +172,13 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   chat or rendered page is a view of it: it names the source path and commit,
   and a finding is never first written there. Personal reasons to care stay
   outside the repository.
-- **The maintainer's Claude Code display** (status line, session entry,
-  handover safety net, `/handover`) lives, documented, in `tools/claude-code/`;
-  change it there and reinstall with `tools/claude-code/install.sh`, never
-  only in `~/.claude`.
+- **The maintainer's Claude Code display** (status line, session entry, handover safety net, `/handover`) lives
+  in `tools/claude-code/`; change it there and reinstall with `tools/claude-code/install.sh`, never only in `~/.claude`.
 - **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
-  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04).
+  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
   days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)

@@ -51,6 +51,8 @@ world = stage2_world
 session_world = _session_world
 RECORDED_BASE = TEST_ADDRESS["apis"]["openai-completions"]["basis"]
 MOVED_BASE = "https://opencode.ai/inference/go/v1"
+UNRECORDED_API = "openai-responses"
+UNRECORDED_BASE = "https://opencode.ai/other/go/v1"
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +335,273 @@ def test_same_host_path_moves_run_with_notice(world, monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
+# Address drift: an unrecorded wire api warns without changing admission
+# ---------------------------------------------------------------------------
+
+
+def test_unrecorded_api_warns_without_changing_definition(world, monkeypatch, tmp_path, capsys):
+    """Criteria 2 and 6: an explicit base on a non-empty unrecorded wire api warns, admitted and unchanged.
+
+    Fault: the difference stayed silent, a mapped api was presented as
+    unrecorded, the warning borrowed another api's recorded path, or the
+    warning dropped or rewrote the otherwise admitted row.
+    """
+    model = TEST_LADDER[0]
+    policy = stage2_go.load_address_policy(world.root)
+    definition = row(model, api=UNRECORDED_API, baseUrl=UNRECORDED_BASE)
+    verdict = stage2_go.assess(policy, model, definition)
+    assert verdict.admitted, "an admitted on-host base was refused over its unrecorded api"
+    assert verdict.notice, "the unrecorded api stayed silent"
+    assert model in verdict.notice and UNRECORDED_API in verdict.notice
+    assert "openai-completions" in verdict.notice, "the record's declared api names were not shown"
+    assert UNRECORDED_BASE not in verdict.notice and "/zen/go/v1" not in verdict.notice, (
+        "the notice echoed a URL or borrowed another api's recorded path"
+    )
+    assert "https://" not in verdict.notice and "opencode.ai" not in verdict.notice
+    assert verdict.definition == definition, "the effective api or base was rewritten"
+    # A mapped api is never presented as unrecorded: a matching base stays silent,
+    # a moved path carries the path notice alone.
+    verdict = stage2_go.assess(policy, model, row(model))
+    assert verdict.admitted and verdict.notice is None
+    verdict = stage2_go.assess(policy, model, row(model, baseUrl=MOVED_BASE))
+    assert verdict.admitted and verdict.notice
+    assert "/zen/go/v1" in verdict.notice and "/inference/go/v1" in verdict.notice
+    assert "no recorded" not in verdict.notice, "a mapped api was presented as unrecorded"
+    # Activation keeps the notice beside the row: no admitted row is dropped for it.
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    store = go_store(definition)
+    notes = availability.install_measured_models(None, agent, store, model=model, address=policy)
+    activated = json.loads((agent / "models.json").read_text(encoding="utf-8"))
+    (carried,) = activated["providers"]["opencode-go"]["models"]
+    assert carried["id"] == model and carried["api"] == UNRECORDED_API and carried["baseUrl"] == UNRECORDED_BASE, (
+        "the warning dropped or rewrote an admitted overlay row"
+    )
+    assert any("address notice" in note and UNRECORDED_API in note for note in notes)
+    # The notice alone stops no permitted send, and reaches the reviewer's evidence.
+    harness = Harness(world, monkeypatch)
+    capsys.readouterr()
+    harness.reviewer(model, store)()
+    assert len(harness.sent) == 1, "the notice stopped a permitted send"
+    err = capsys.readouterr().err
+    assert "Address notice:" in err and UNRECORDED_API in err
+
+
+def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
+    """Criterion 3: a drift notice survives the eligibility filters that exclude its row.
+
+    Fault: review preparation lost the notice, or research's address notices
+    omitted the unmeasured row that still carries its exclusion reason.
+    """
+    policy = stage2_go.load_address_policy(world.root)
+    result = swarm.select_research_catalog(
+        bridge_with(
+            row("aa-free"),
+            row("paid-seat", api=UNRECORDED_API, baseUrl=UNRECORDED_BASE),
+            row("moved-free", baseUrl=MOVED_BASE),
+        ),
+        selector_policy(),
+        ["paid-seat"],
+        paid=(),
+        exclusion=None,
+        expected_version="test-pin",
+        address=policy,
+    )
+    reasons = {item["id"]: item["reason"] for item in result["models"]}
+    assert reasons["paid-seat"] == "wire-api-not-measured", "the exclusion reason changed"
+    assert result["selected"] == ["aa-free", "moved-free"], "a notice changed the selection"
+    for model in ("paid-seat", "moved-free"):
+        assert sum(f"opencode-go/{model}:" in notice for notice in result["address_notices"]) == 1, (
+            f"{model}'s notice was lost or repeated"
+        )
+    assert len(result["address_notices"]) == 2, "a drift notice was lost or invented"
+    joined = "\n".join(result["address_notices"])
+    assert "paid-seat" in joined and UNRECORDED_API in joined, "the excluded row's notice was lost"
+    assert "moved-free" in joined and "/inference/go/v1" in joined
+    # Review catalog handling keeps the notice beside the activated row.
+    agent = tmp_path / "agent"
+    agent.mkdir()
+    store = go_store(row("paid-seat", api=UNRECORDED_API, baseUrl=UNRECORDED_BASE))
+    dropped, notices = stage2.activate_overlay(agent, store, policy)
+    assert not dropped, "a notice dropped an admitted row"
+    assert any(UNRECORDED_API in notice for notice in notices)
+    activated = json.loads((agent / "models.json").read_text(encoding="utf-8"))
+    (carried,) = activated["providers"]["opencode-go"]["models"]
+    assert carried["id"] == "paid-seat" and carried["baseUrl"] == UNRECORDED_BASE
+
+
+def test_catalog_drift_notice_survives_a_free_selection_veto(world):
+    """Criterion 3 across the shared free selection: a vetoed free row keeps its notice, once.
+
+    Fault: research took its notices from the shared selection alone, which
+    keeps notices of eligible ids only, so a paid-admitted `-free` row lost
+    its address difference; or the two sources repeated one notice.
+    """
+    policy = stage2_go.load_address_policy(world.root)
+    result = swarm.select_research_catalog(
+        bridge_with(row("aa-free"), row("moved-free", baseUrl=MOVED_BASE)),
+        selector_policy(),
+        [],
+        paid=("moved-free",),
+        exclusion=None,
+        expected_version="test-pin",
+        address=policy,
+    )
+    reasons = {item["id"]: item["reason"] for item in result["candidates"]}
+    assert reasons["moved-free"] == "paid-admitted", "the shared veto no longer decides"
+    assert result["selected"] == ["aa-free"], "a notice changed the selection"
+    assert sum("opencode-go/moved-free:" in notice for notice in result["address_notices"]) == 1, (
+        "the vetoed row's notice was lost or repeated"
+    )
+    assert len(result["address_notices"]) == 1, "a drift notice was lost or invented"
+
+
+def test_api_notices_reach_launch_evidence(world, monkeypatch, capsys):
+    """Criterion 4: an unrecorded-api notice reaches the same launch evidence a path move reaches.
+
+    Fault: a review round, availability probe or research launch lost the
+    notice from its audit record, or the send was stopped by the notice.
+    """
+    model = TEST_LADDER[0]
+    harness = Harness(world, monkeypatch)
+    store = go_store(row(model, api=UNRECORDED_API, baseUrl=UNRECORDED_BASE))
+    # Review: the notice is retained for the round record, not console output alone.
+    with stage2.capture_address_notices() as evidence:
+        capsys.readouterr()
+        harness.reviewer(model, store)()
+    assert any(UNRECORDED_API in notice and model in notice for notice in evidence), (
+        "the reviewer's api notice was console output alone"
+    )
+    assert len(harness.sent) == 1
+    # Probe: the audit record keeps it.
+    probe_call, audit = harness.probe(model, store)
+    probe_call()
+    assert any("address notice" in line and UNRECORDED_API in line for line in audit)
+    assert len(harness.sent) == 2
+    # Research seat: the launch lines keep it.
+    lines: list[str] = []
+    harness.seat(model, store, lines)()
+    assert any("Address notice:" in line and UNRECORDED_API in line for line in lines)
+    assert len(harness.sent) == 3
+
+
+def test_session_records_unrecorded_api_notice(session_world, capsys):
+    """Criterion 4 at the session: an unrecorded api's notice reaches the launch audit record.
+
+    Fault: the initial session lost the api notice from its pending audit
+    record, or refused the otherwise admitted binding.
+    """
+    w = session_world
+    w.declare_go()
+    catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+    data = json.loads(catalog.read_text(encoding="utf-8"))
+    entry = data["openai-completions"].pop(f"chat:{GO_BARE}")
+    entry["api"] = UNRECORDED_API
+    entry["baseUrl"] = UNRECORDED_BASE
+    data[UNRECORDED_API] = {f"chat:{GO_BARE}": entry}
+    catalog.write_text(json.dumps(data), encoding="utf-8")
+    w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert w.run(model=GO_MODEL) == 0, "the session refused an address-admissible unrecorded api"
+    sidecar = w.bindings[0]["extension"].parent / "checked-model.json"
+    carried = json.loads(sidecar.read_text(encoding="utf-8"))["model"]
+    assert carried["api"] == UNRECORDED_API and carried["baseUrl"] == UNRECORDED_BASE, "the binding was rewritten"
+    for evidence in (capsys.readouterr().out, w.text()):
+        assert "Address notice:" in evidence and UNRECORDED_API in evidence
+
+
+def test_matching_recorded_addresses_do_not_warn(world):
+    """Criterion 5: an address equivalent to its own api's record stays silent.
+
+    Fault: a recorded path, one trailing slash, an explicit HTTPS port 443 or
+    a default-filled base warned, or a second recorded api was treated as
+    different merely for being second.
+    """
+    model = TEST_LADDER[0]
+    # A second recorded api with its own base: every api compares with its own record.
+    maintained = copy.deepcopy(TEST_ADDRESS)
+    maintained["apis"]["anthropic-messages"] = {
+        "basis": MOVED_BASE,
+        "quelle": "the Go page, second api (documented)",
+        "gelesen": "2026-11-02",
+    }
+    edit_entry(world, lambda e: e.update({"adresse": maintained}))
+    policy = stage2_go.load_address_policy(world.root)
+    for base in (RECORDED_BASE, RECORDED_BASE + "/", "https://opencode.ai:443/zen/go/v1"):
+        verdict = stage2_go.assess(policy, model, row(model, baseUrl=base))
+        assert verdict.admitted and verdict.notice is None, f"{base} invented drift"
+    verdict = stage2_go.assess(policy, model, row(model, api="anthropic-messages", baseUrl=MOVED_BASE))
+    assert verdict.admitted and verdict.notice is None, "the second api was treated as different for being second"
+    verdict = stage2_go.assess(policy, model, {"id": model, "api": "anthropic-messages"})
+    assert verdict.admitted and verdict.notice is None
+    assert verdict.definition["baseUrl"] == MOVED_BASE, "the fill borrowed another api's base"
+    # A base off its own api's record still warns, with that api's recorded path.
+    verdict = stage2_go.assess(policy, model, row(model, api="anthropic-messages", baseUrl=RECORDED_BASE))
+    assert verdict.admitted and verdict.notice
+    assert "/inference/go/v1" in verdict.notice and "/zen/go/v1" in verdict.notice
+
+
+@pytest.mark.parametrize("api", [123, True, [], {}, None])
+def test_non_string_catalog_api_is_refused(world, api):
+    """A non-string catalog api is refused safely instead of crashing or being admitted."""
+    policy = stage2_go.load_address_policy(world.root)
+    try:
+        verdict = stage2_go.assess(policy, TEST_LADDER[0], row(TEST_LADDER[0], api=api, baseUrl=UNRECORDED_BASE))
+    except AttributeError:
+        pytest.fail("a non-string catalog api must yield a sanitised refusal, not AttributeError")
+    assert not verdict.admitted, "a non-string catalog api must be refused"
+    assert verdict.problem == f"the model {TEST_LADDER[0]} has an unreadable wire api"
+    assert verdict.notice is None
+
+
+@pytest.mark.parametrize(
+    "hostile_api",
+    [
+        "openai\r-completions",
+        "https://synthetic-user:synthetic-password@example.invalid/wire",
+        "openai completions",
+        'openai"completions',
+        "openai\\completions",
+    ],
+)
+def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys, hostile_api):
+    """Criterion 7: an unreadable api value is described safely in a notice, never echoed.
+
+    Fault: a non-token api string, including a credential-bearing URL,
+    entered a diagnostic verbatim, even when research excluded the row.
+    """
+    model = TEST_LADDER[0]
+    policy = stage2_go.load_address_policy(world.root)
+    verdict = stage2_go.assess(policy, model, row(model, api=hostile_api, baseUrl=UNRECORDED_BASE))
+    assert verdict.admitted and verdict.notice, "an unreadable api name silenced an on-host base"
+    assert hostile_api not in verdict.notice and "\r" not in verdict.notice
+    assert model in verdict.notice and "openai-completions" in verdict.notice, "the declared names were not shown"
+    assert "<unreadable>" in verdict.notice, "a non-token api must have a safe description"
+    assert verdict.definition["api"] == hostile_api, "rendering a warning must not rewrite the definition"
+    result = swarm.select_research_catalog(
+        bridge_with(row("paid-seat", api=hostile_api, baseUrl=UNRECORDED_BASE)),
+        selector_policy(),
+        ["paid-seat"],
+        paid=(),
+        exclusion=None,
+        expected_version="test-pin",
+        address=policy,
+    )
+    assert result["models"][0]["reason"] == "wire-api-not-measured"
+    assert len(result["address_notices"]) == 1
+    notice = result["address_notices"][0]
+    assert hostile_api not in notice and "<unreadable>" in notice
+    assert "synthetic-user" not in notice and "synthetic-password" not in notice
+    harness = Harness(world, monkeypatch)
+    capsys.readouterr()
+    harness.reviewer(model, go_store(row(model, api=hostile_api, baseUrl=UNRECORDED_BASE)))()
+    read = capsys.readouterr()
+    assert hostile_api not in read.out + read.err, "an unsafe api reached a diagnostic verbatim"
+    assert "synthetic-user" not in read.out + read.err and "synthetic-password" not in read.out + read.err
+    assert "\r" not in read.out + read.err, "the control character reached a diagnostic"
+    assert len(harness.sent) == 1, "a safely described api stopped a permitted send"
+
+
+# ---------------------------------------------------------------------------
 # Criterion 4: absent bases take the recorded api default
 # ---------------------------------------------------------------------------
 
@@ -410,13 +679,15 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("aa-free"), row("bb-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
-    assert reasons["bb-free"] == "pi-malformed"
+    assert reasons["bb-free"] == "destination-refused"
     evidence = next(item for item in result["candidates"] if item["id"] == "bb-free")["evidence"]
     assert evidence["pi"]["baseUrl"]["value"] == "https://evil.test/x", "raw catalog evidence was rewritten"
     # An empty admitted set is not a clean selection: nothing stays selected.
@@ -424,6 +695,8 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         bridge_with(row("cc-free", baseUrl="https://evil.test/x")),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         measured_wire_apis=("openai-completions",),
         address=policy,
@@ -454,6 +727,8 @@ def test_research_selector_skips_an_explicit_null_base(world):
         bridge_with(row("aa-free"), row("bb-free", baseUrl=None)),
         selector_policy(),
         [],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         measured_wire_apis=("openai-completions",),
         address=policy,
@@ -836,6 +1111,8 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         bridge_with(row("paid-seat", api="anthropic-messages")),
         selector_policy(),
         ["paid-seat"],
+        paid=(),
+        exclusion=None,
         expected_version="test-pin",
         measured_wire_apis=("openai-completions",),
         address=policy,
