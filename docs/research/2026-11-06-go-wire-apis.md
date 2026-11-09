@@ -43,7 +43,7 @@ other APIs, which Console translates:
 |---|---|---|---|
 | anthropic-messages | https://opencode.ai/inference/go/anthropic | **measured** — answers from qwen3.8-flash, qwen3.7-plus, qwen3.8-max, minimax-m3 | qwen3.8-flash (the preferred claude-haiku-5-5 failed, see below) |
 | openai-responses | https://opencode.ai/inference/go/openai/v1 | **measured** — answer from grok-4.7 | grok-4.7 (the preferred gpt-6-luna is disabled) |
-| google-generative-ai | not declared | **blocked** — the live catalog lists only gemini-4-argon-contributor, no exact admitted id | none |
+| google-generative-ai | not declared | **deferred** — the Google wire API is not measured (bead coding-harness-twdu); the live catalog of 2026-11-08 lists gemini-4-argon again | none |
 
 Models that stay skipped, with the measured reason:
 
@@ -52,8 +52,8 @@ Models that stay skipped, with the measured reason:
   refuses. A Pi adapter setting, not the address; the plan returns such a
   defect to the orchestrator instead of widening this change.
 - gpt-6-luna, gpt-5.6-luna — 403 `Model access is disabled`.
-- gemini-4-argon — not in the live catalog (only the contributor alias, which
-  trains on request data and is not admitted).
+- gemini-4-argon — stays skipped: its Google wire API is not measured (bead
+  coding-harness-twdu); the live catalog of 2026-11-08 lists it again.
 
 Now qualifying (wire skip removed): qwen3.8-flash, qwen3.7-plus, qwen3.8-max,
 minimax-m3 (Messages) and grok-4.7 (Responses); fresh preparation places them

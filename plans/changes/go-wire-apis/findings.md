@@ -561,3 +561,5 @@ Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claud
 > - L4-3: tests/test_pi_contract.py::test_messages_route_assertion_takes_the_full_path: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261109T063708514302Z-977e9c1b.md
 > ```
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3734 commits, 12 rules.

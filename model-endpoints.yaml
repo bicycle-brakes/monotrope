@@ -409,7 +409,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gemini-4-argon:
         uebersprungen: "2026-10-30"
-        grund: "wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor"
+        grund: "wire API not measured (the Go page names the Google endpoint; its measurement is bead coding-harness-twdu); the live catalog of 2026-11-08 lists gemini-4-argon again"
         gelesen: "2026-10-30"
         valid_until: "2026-11-29"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
@@ -585,8 +585,8 @@ endpunkte:
       `qwen3.8-flash`, `qwen3.7-plus`, `qwen3.8-max`, `minimax-m3` and
       `grok-4.7` run; `claude-haiku-5-5` stays skipped for Pi's thinking
       setting, `gpt-6-luna` and `gpt-5.6-luna` for a 403. Google is not
-      measured (`gemini-4-argon` stays skipped: no admissible model, bead
-      coding-harness-twdu).
+      measured (`gemini-4-argon` stays skipped: its Google wire API is not
+      measured, bead coding-harness-twdu).
       On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
       Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
       models `https://opencode.ai/inference/go/v1/models`) and Pi's live
