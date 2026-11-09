@@ -626,3 +626,5 @@ Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claud
 > - L2-3: answered `not a test`, but the row is a code row; it needs a test that was red first
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/no-work-done/stage2/attempts/no-work-done/attempt-3-20261109T063452077461Z-03e2cd75.md
 > ```
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 926 files, 3734 commits, 12 rules.

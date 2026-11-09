@@ -10274,6 +10274,42 @@ def test_runner_span_includes_model_and_postchecks(world: World, monkeypatch: py
     assert entry.startswith("2026-10-20 10:00:00–10:00:42 UTC")
 
 
+def test_postverify_credential_refusal_has_no_no_work_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L2-1: a credential found after verification must not masquerade as unmeasured work."""
+    real_verify = stage2.verify_attempt
+    gate_finished = False
+    real_tree = stage2.worktree_tree
+
+    def verify(*args, **kwargs):
+        nonlocal gate_finished
+        problems = real_verify(*args, **kwargs)
+        (world.root / "src/app.py").write_text(f'value = "{KEY}"\n')
+        gate_finished = True
+        return problems
+
+    def tree(*args, **kwargs):
+        assert not gate_finished, "a credential refusal must skip the final tree snapshot"
+        return real_tree(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "worktree_tree", tree)
+    monkeypatch.setattr(stage2, "attempt_has_work", lambda *_a, **_kw: pytest.fail("unsafe work measurement"))
+    monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("credential rejection checkpointed"))
+    baseline = script_work(world, "implement", [work_step("implement")], [GREEN])
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    audit = world.text()
+    assert "credential occurred" in error
+    assert "credential occurred" in audit, "the audit must retain the credential diagnostic"
+    assert stage2.NO_WORK not in audit + error, "a credential refusal is not a no-work verdict"
+    assert KEY not in audit + error + (world.root / "src/app.py").read_text()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry
+
+
 def test_runner_time_includes_postgate_credential_rejection(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """F-3: ending before the final scan mislabels a rejected attempt and loses scan time."""
     clock = FakeClock(monkeypatch, UTC_START)

@@ -7701,18 +7701,20 @@ def run_attempts(
             # Verification executes edited code. Scrub before the final tree can store its
             # output as Git objects, just as before the immediate post-call snapshot.
             verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
-            if verified_exposed:
-                work_unmeasured = "post-run credential exposure prevents a safe tree snapshot"
             # Judge the tree verification leaves, using only this call's changed paths.
             # This discounts formatter reversions, derived rendering and checkpoint stamp restores.
-            if work_unmeasured is None:
+            if not verified_exposed and work_unmeasured is None:
                 try:
                     worked = attempt_has_work(
                         root, before, worktree_tree(root), ctx.findings, ctx.plan, model_after=after
                     )
                 except (Refused, OSError, ValueError) as error:
                     work_unmeasured = str(error)
-            if work_unmeasured is not None:
+            if verified_exposed:
+                # A safety refusal is not a failed work measurement. Record its real
+                # diagnostic before the audit is written, without taking another snapshot.
+                work_problems = [credential_message(verified_exposed)]
+            elif work_unmeasured is not None:
                 work_problems = [
                     f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
                 ]
@@ -7805,7 +7807,8 @@ def run_attempts(
             if exposed:
                 if not problems:
                     put_findings_back(original=Refused(credential_message(exposed)))
-                problems.append(credential_message(exposed))
+                if not verified_exposed:
+                    problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
             # produce a duplicate. A rejected attempt that will be retried gets its plan back
