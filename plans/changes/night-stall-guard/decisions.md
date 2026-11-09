@@ -33,3 +33,11 @@ context: |
   Today: ask rules wait without limit; nothing alerts the maintainer; the watchdog only wakes the chat, which cannot act while a prompt is open.
   Repository change: a night profile under tools/claude-code/ (installed by tools/claude-code/install.sh), narrowed merge rules in .claude/settings.json with tests of the rule set; the alert later.
   Architecture change: none; moving each heartbeat into its own headless, time-limited call (launchd) belongs to the harness-neutral night-run work, not to this change.
+
+In the context of the night run, whose orchestration lives in one chat that a
+single open permission prompt can hold for hours, facing ask rules that wait
+without limit and a merge brake that matched a read-only status query, we
+decided to deny instead of ask at night and to narrow the merge brake to real
+merges first, and to add a phone alert afterwards, to achieve that no question
+can stop the night again, accepting that a denied call at night fails at once
+and the orchestrator must take another path — 2026-11-09.
