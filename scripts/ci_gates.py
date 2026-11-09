@@ -110,11 +110,6 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — the gate ratchet's analyzer (RB-G4); tests/test_ci.py imports it, and the "
         "pytest gate runs it there (bead coding-harness-diic)"
     ),
-    "normalise_active_research.py": (
-        "One-time, explicitly invoked active-research backfill for explore-provenance, not a CI gate; "
-        "tests/test_explore_provenance.py imports its metadata census and exercises its correction offline. "
-        "CI must check the resulting metadata, never rewrite historical research"
-    ),
     "pr_sync.py": (
         "Entry point, not a gate - the supported local merge (merge-main) and the on-request sync "
         "(sync) that the day session and the night orchestrator call explicitly; "
@@ -130,6 +125,15 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library - the one derivation of a research run's obligation inventory, imported by the research "
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
         "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
+    ),
+    "research_census.py": (
+        "Library - the research metadata census (explore-provenance); tests/test_explore_provenance.py "
+        "imports it, and the pytest gate runs it there. It only reads research files, never rewrites them"
+    ),
+    "machine_facts.py": (
+        "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
+        "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "
+        "which no CI checkout can stand in for; tests/test_machine_facts.py runs it against stand-ins"
     ),
     "run_report.py": (
         "Entry point, not a gate — the local, read-only run report (make report); it snapshots the "
@@ -154,6 +158,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "stand-in-testable launch path. tests/test_stage2_availability.py exercises the review loop's preparation "
         "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
         "swarm's against stand-ins and a fixture catalog"
+    ),
+    "stage2_free.py": (
+        "Helper imported by scripts/stage2.py and scripts/stage2_swarm.py for the shared free-model "
+        "selection of the review loop and the research swarm; never an entry point of its own. "
+        "tests/test_stage2_free.py runs it, tests/test_pi_contract.py checks both preparations offline"
     ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
@@ -189,6 +198,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Pure cancellable stage-dispatch library, not a CLI gate; the amended swarm runner will consume it. "
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
+    ),
+    "stage2_research_limits.py": (
+        "Library of scripts/stage2_research_run.py, never an entry point of its own: loads and checks the "
+        "research swarm's time limits from research-swarm-limits.yaml (bead coding-harness-ht1b); "
+        "tests/test_stage2_research_limits.py runs it"
     ),
     "stage2_research_run.py": (
         "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "

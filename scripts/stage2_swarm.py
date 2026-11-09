@@ -20,6 +20,7 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
+import stage2_free
 import stage2_go
 
 # The free researcher's whole tool surface, as Pi's `--tools` allow-list: the
@@ -90,7 +91,15 @@ def _identity_doubt(entries):
 
 
 def select_research_catalog(
-    bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",), address
+    bridge,
+    policy,
+    fixed_ids,
+    *,
+    expected_version,
+    measured_wire_apis=("openai-completions",),
+    address,
+    paid,
+    exclusion,
 ):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
@@ -104,7 +113,10 @@ def select_research_catalog(
     destination is assessed against the one address record (`address`, the
     loaded `stage2_go` policy): any path on the recorded host is admissible, a
     move from the recorded path is kept as a notice, a foreign destination
-    refuses the candidate alone (go-access-point).
+    refuses the candidate alone (go-access-point). The free candidates are chosen by the one free
+    selection (`stage2_free`) the review loop uses as well: `paid` (the endpoint's `modelle`) and `exclusion`
+    (the declaration's public-web exclusion) are its hard vetoes, so an id admitted as paid is dropped here
+    with the reason `paid-admitted` and never reaches a probe (bead coding-harness-wb40).
     """
     validate_research_free_policy(policy)
     provider = policy["provider"]
@@ -166,8 +178,6 @@ def select_research_catalog(
             if address.default_base(item.get("api")) is None:
                 return "no-recorded-base"
             return None
-        if stage2_go.url_problem(base, address.host) is not None:
-            return "pi-malformed"
         return None
 
     baseline = set(bridge.get("baseline", []))
@@ -180,6 +190,9 @@ def select_research_catalog(
         reason = pi_reason(item)
         if reason:
             return reason
+        verdict = stage2_go.assess(address, ident, item)
+        if not verdict.admitted:
+            return "destination-refused"
         return None if item.get("api") in wire_apis else "wire-api-not-measured"
 
     metadata = sources.get("models_dev", {})
@@ -261,7 +274,7 @@ def select_research_catalog(
         return verdict.notice if verdict.admitted else None
 
     candidates = []
-    eligible = set()
+    free_input = []
     notices: list[str] = []
     ids = sorted(
         {ident for ident in models if ident.endswith("-free")}
@@ -273,11 +286,40 @@ def select_research_catalog(
         reason = "not-in-fresh-pi" if item is None else pi_reason(item)
         if reason is None:
             reason = metadata_reason(ident)
-        if reason is None:
-            eligible.add(ident)
-            if (notice := address_notice(ident)) is not None:
-                notices.append(notice)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
+        definition = None
+        if item is not None:
+            definition = {"api": item.get("api")}
+            if item.get("baseUrl") is not None:
+                definition["baseUrl"] = item["baseUrl"]
+        free_input.append(stage2_free.Candidate(provider, ident, definition, reason))
+    chosen = stage2_free.select(
+        free_input,
+        stage2_free.Policy(
+            provider=provider,
+            suffix=policy["suffix"],
+            include=tuple(policy["include"]),
+            exclude=tuple(policy["exclude"]),
+            include_adds=False,
+        ),
+        fresh=set(models),
+        paid=paid,
+        exclusion=exclusion,
+        address=address,
+    )
+    notices.extend(chosen.notices)
+    veto_codes = {"paid": "paid-admitted", "excluded": "excluded-by-declaration", "plain": "pi-malformed"}
+    for candidate in candidates:
+        ident = candidate["id"]
+        if ident in chosen.vetoed:
+            candidate["reason"] = veto_codes[chosen.vetoed[ident].kind]
+            candidate["detail"] = chosen.vetoed[ident].reason
+        elif ident in chosen.refused_destination:
+            candidate["reason"] = "destination-refused"
+            candidate["detail"] = chosen.dropped.get(ident, chosen.refused_destination[ident])
+        elif candidate["reason"] is None:
+            if chosen.skipped.get(ident) in (stage2_free.SKIP_EXCLUDED, stage2_free.SKIP_NOT_INCLUDED):
+                candidate["reason"] = chosen.skipped[ident]
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
         reason = seat_reason(ident)
@@ -291,14 +333,14 @@ def select_research_catalog(
                 "tool_support": metadata_reason(ident) if reason is None else "not-assessed",
             }
         )
+    eligible = set(chosen.eligible)
     for ident in policy["include"]:
+        veto = chosen.vetoed.get(ident)
         if ident not in eligible:
+            if veto:
+                raise ResearchCatalogError(f"explicit free include is ineligible: {ident}: {veto.reason}", 2)
             raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
-    selected = eligible & set(policy["include"]) if policy["include"] else eligible
-    selected -= set(policy["exclude"])
-    for candidate in candidates:
-        if candidate["reason"] is None and candidate["id"] not in selected:
-            candidate["reason"] = "excluded" if candidate["id"] in policy["exclude"] else "not-included"
+    selected = set(chosen.selected)
     return {
         "selected": sorted(selected),
         "N": len(selected),
@@ -422,6 +464,10 @@ def invocation_problem(
             return f"{model} is excluded by the free selection policy"
         if policy["include"] and model not in policy["include"]:
             return f"{model} is not among the policy's explicit includes"
+        # The current declaration decides, never the frozen selection: an id admitted as paid is no free member.
+        veto = stage2_free.model_veto(model, paid=_declared_endpoint(data, endpoint).get("modelle") or [], plain=False)
+        if veto:
+            return f"{model} is {veto.reason}"
         if model not in set(selected_free):
             return f"{model} is not in this run's frozen free selection"
         return None

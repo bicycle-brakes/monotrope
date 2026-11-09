@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-25
+updated: 2026-11-04
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -372,7 +372,7 @@ does not reject the report.
 18. If a required contribution fails, the run retains partial evidence and all missing-slot outcomes and ends incomplete with exit 1 unless a security refusal requires exit 2.
    *Refuted by:* A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes except a topic-5 report whose packet holds no neighbour, a failed free seat alone makes the run incomplete, or an oversized judge packet loses evidence or fails to end incomplete with `judge-packet-over-limit` and no judge call.
    *Basis:* `decisions.md#Q-7`; existing failure contract.
-19. When a swarm executes, its maximum 39 + 3N invocations follow the finite deadlines, required-first dispatch and reserved 15-minute judge allowance without retries or debate.
+19. When a swarm executes, its maximum 39 + 3N invocations follow the finite deadlines, required-first dispatch and the reserved configured judge allowance (`research-swarm-limits.yaml`, initially 15 minutes) without retries or debate.
    *Refuted by:* An extra invocation or retry occurs, a free slot starts ahead of queued required slots, topic work consumes the judge reserve, or unlaunched slots lack not-started-deadline outcomes.
    *Basis:* `decisions.md#Q-7` concurrency answer; `decisions.md#Q-10`; finite-budget detail below.
 20. When exploration explicitly uses `--stage2-off [REASON]`, it keeps single Haiku 5.5 exploration and records route, model and reason for the plan.
@@ -652,20 +652,24 @@ maintainer answer is supplied here.
   output as cancelled and exits 2 in preference to exit 1.
 - [DETAIL] The budget is at most `39 + 3N` calls. Provider queues share four
   permits per provider across roles. Preparation runs before the run's
-  150 minutes: catalog 60 seconds with both
+  configured total (`research-swarm-limits.yaml`, initially
+  160 minutes): catalog 60 seconds with both
   reads started together at catalog preflight; at the shared deadline abort
   unfinished reads without retry. Unfinished Pi exits 1 regardless of the
   other result; successful Pi plus unfinished models.dev records
   capability-unavailable/timeout and keeps required slots, unless an explicit
   include is unmet. Required-seat probes use the fixed 60-second request;
   free probes use the real-size request with 120 seconds and one 360-second
-  retry only after a timeout, before the selection and N are frozen. Other role deadlines: topic
-  author 5 minutes, finder/researcher/merge 10, judge 15, run 150 total,
+  retry only after a timeout, before the selection and N are frozen. Other role
+  deadlines come from `role_minutes` in that file — initially topic author
+  (`sentence`) 5 minutes, researcher (`topics`) 10, merge 10, judge 15,
+  finders 20 — and the run total from `run_minutes`, initially 160,
   monotonically measured with no retries. Required slots precede free seats:
   repository topics 1–8 then online seats 9–11, by topic then declared seat
   order; free seats follow by topic then sorted id. Reused slots (Q-13)
-  launch nothing and keep their place in this order. The judge's 15 minutes
-  are reserved. A topic launches only with positive pre-reserve time left;
+  launch nothing and keep their place in this order. The judge's configured
+  allowance (initially 15 minutes) is reserved. A topic launches only with
+  positive pre-reserve time left;
   its allowance is the lesser of role limit and that remainder. Unlaunched
   slots are not-started-deadline, incomplete only when required. No silent
   roster truncation; large free rosters can leave named missing seats.
