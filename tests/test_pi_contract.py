@@ -1,11 +1,11 @@
 """The offline Pi contracts: the real pinned Pi against a loopback stand-in.
 
 Every case here starts the actual installed Pi through the repository wrapper
-(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers the four
-measured wire APIs from a script: OpenAI-style chat completions, Anthropic
-Messages, OpenAI Responses and Google generateContent — a tool call, a stop,
-an error, per route. No hosted model, no user configuration, no external
-network: the credentials are synthetic, the HOME and agent directories are
+(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers the three
+measured wire APIs (OpenAI-style chat completions, Anthropic Messages and
+OpenAI Responses) plus an offline-only Google generateContent contract — a
+tool call, a stop, an error, per route. No hosted model, no user
+configuration, no external network: the credentials are synthetic, the HOME and agent directories are
 scratch, and a test-only preload (`tests/pi_network_guard.mjs`) denies every
 non-loopback connection the child attempts. The reviewer-shaped cases run the runner's own `run_reviewer` and
 inject test transport at its subprocess seam. Helper launches derive their
@@ -67,7 +67,8 @@ ZEN_SHIPPED = "https://opencode.ai/inference/openai/v1"
 GO_SHIPPED = "https://opencode.ai/inference/go/openai/v1"
 GO_SHIPPED_MESSAGES = "https://opencode.ai/inference/go/anthropic"
 PI_MOVED_PIN = "1.5.0"
-# The three native Go wire APIs this change measures (go-wire-apis, criteria 1-2).
+# Native Go offline contracts: Messages and Responses are measured live;
+# Google remains offline-only and undeclared (go-wire-apis, decisions.md Q-2).
 # Each keeps its own protocol route, native body schema and credential header;
 # a translation into Chat Completions, a wrong route or a credential in the
 # request body fails these contracts.
@@ -303,7 +304,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class StandIn:
-    """A loopback stand-in with a script, answering the four measured wire APIs.
+    """Scripted loopback contracts for three measured APIs plus offline-only Google.
 
     Each POST is routed by protocol: `/chat/completions` (OpenAI Chat
     Completions), `/v1/messages` (Anthropic Messages), `/responses` (OpenAI

@@ -96,8 +96,9 @@ this plan follows the phase-3 prompt, without claiming the missing gate ran.
    forced catalog refresh, leak checks and pinned tool-free probes. Existing
    preparation may also probe other eligible members; do not change its policy
    to restrict the run to three calls. Identify at least one successful exact
-   representative per API: prefer `claude-haiku-5-5`, `gpt-6-luna` and
-   `gemini-4-argon`; another already wire-skipped id on the same API is usable
+   representative for Messages and Responses (Google is deferred, decisions.md
+   Q-2): prefer `claude-haiku-5-5` and `gpt-6-luna`; another already
+   wire-skipped id on the same API is usable
    if the preferred one is unreachable, with the choice recorded. No new id
    or contributor alias. Success means a nonempty decoded answer without Pi
    configuration errors, not merely exit zero or presence in the catalog.
@@ -117,8 +118,9 @@ this plan follows the phase-3 prompt, without claiming the missing gate ran.
    `plans/changes/go-wire-apis/plan.md` ledger markers as work lands; the runner
    maintains evidence in `plans/changes/go-wire-apis/findings.md` and time
    below. After bootstrap the orchestrator reruns offline tests and the full
-   gate before review. Phase 6 compares the final declaration with all three
-   live evidence rows; offline green alone is insufficient.
+   gate before review. Phase 6 compares the final declaration with the two
+   dated live evidence rows (Messages, Responses); Google is deferred
+   (decisions.md Q-2); offline green alone is insufficient.
 
 No deletions. Leave `research.md` and `decisions.md` unchanged during
 implementation. Leave production `scripts/` (except the one research-selector signature line and its capture caller, spec "Protected areas", decision Q-3), Pi package/lock/install,
@@ -168,6 +170,10 @@ Keep final verification and live evidence tied to their exact code commits.
 - 6: tests/test_stage2_go_access.py::test_every_send_rechecks_current_policy — a saved selection sends after the current policy refuses it
 - 6: tests/test_stage2_research_availability.py::test_pool_requires_tool_support_and_a_measured_wire_api — an unmeasured or incapable candidate becomes a substitute
 
+## Runner route — 2026-11-09
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 Appetite overrun: 3 h card. On 2026-11-07, at 14,684 s recorded, the lane was
@@ -182,3 +188,6 @@ repair attempts recorded in `findings.md` carry no time line of their own.
 2026-11-07 13:19:23–13:42:09 UTC, 1366 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-07 13:55:18–15:12:57 UTC, 4659 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-08 01:43:05–03:34:42 UTC, 6696 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-09 13:52:43–15:15:10 UTC, 4947 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 15:15:23–16:13:31 UTC, 3487 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-09 16:13:52–17:05:02 UTC, 3070 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

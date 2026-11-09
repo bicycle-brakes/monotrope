@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-08
+updated: 2026-11-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-36za
@@ -21,9 +21,10 @@ neighbours: []
 
 # Spec — go-wire-apis
 
-Measure OpenCode Go's Anthropic Messages, OpenAI Responses and Google wire
-APIs, then enable direct calls for the already admitted models whose only
-remaining obstacle is that measurement (bead `coding-harness-36za`). Research:
+Measure OpenCode Go's Anthropic Messages and OpenAI Responses wire APIs, then
+enable direct calls for the already admitted models whose only remaining
+obstacle is that measurement (bead `coding-harness-36za`). Google waits for
+its own change (`decisions.md#Q-2`, bead `coding-harness-twdu`). Research:
 `research.md`; scope and direct-call choice: `decisions.md#Q-1`.
 
 ## Problem

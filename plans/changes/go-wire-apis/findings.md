@@ -563,3 +563,255 @@ Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3734 commits, 12 rules.
+
+Stage-2 call, 2026-11-09: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 922 files, 3746 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-wire-apis/plan.md` +8 -6
+> - `plans/changes/go-wire-apis/research.md` +4 -13
+> - `plans/changes/go-wire-apis/spec.md` +6 -4
+> - `tests/test_pi_contract.py` +6 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 73 lines of this gate left out …]
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/go-wire-apis/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1417/popen-gw0/test_startup_budget_reaches_pu0')
+>
+>     def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None:
+>         ns = _project(tmp_path)
+>         # Keep the close bound above the one-second admission floor. The batch
+>         # must complete some closes before exhausting its budget and publishing.
+>         for i in range(14):
+>             _commit(ns.origin, f"complete item {i}\n\nCloses-Bead: coding-harness-item-{i}")
+>         ns.render.write_text(
+>             ns.render.read_text()
+>             + "".join(json.dumps({"id": f"coding-harness-item-{i}", "status": "open"}) + "\n" for i in range(14))
+>         )
+>         stub = ns.klon / "tools" / "bd"
+>         stub.write_text(
+>             STUB.replace("  close)", "  close)\n    sleep 0.2").replace(
+>                 "    ;;\n  dolt)", '    printf "completed-close %s\\n" "$2" >>"${BEADS_STUB_LOG:?}"\n    ;;\n  dolt)'
+>             )
+>         )
+>         result = _start(
+>             ns,
+>             extra={
+>                 "BEADS_START_RECONCILE_TIMEOUT": "3",
+>                 "BEADS_START_BUDGET_RESERVE": "0.1",
+>                 "CLOSE_MERGED_BD_TIMEOUT": "1.5",
+>             },
+>         )
+>         assert result.returncode == 0, result.stderr
+>         calls = _calls(ns)
+>         assert "dolt push" in calls, (calls, result.stderr)
+>         closes = [call.split()[1] for call in calls if call.startswith("close ")]
+>         completed = [call.split()[1] for call in calls if call.startswith("completed-close ")]
+> >       assert 0 < len(completed) < 15, (calls, result.stderr)
+> E       AssertionError: (['export -o /var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/bead-render-5hdejtkk/issues.jsonl', 'dolt push', 'prime ...udget exhausted; retry reconciliation
+> E         refused: coding-harness-main: startup budget exhausted; retry reconciliation
+> E         ')
+> E       assert 0 < 0
+> E        +  where 0 = len([])
+>
+> tests/test_beads_start.py:634: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=79648) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/go-wire-apis/tests/test_stage2.py:18933: DeprecationWarning: This process (pid=79668) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_beads_start.py::test_startup_budget_reaches_publication_before_prime
+> 1 failed, 4860 passed, 17 skipped, 5 warnings in 1491.21s (0:24:51)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [frontmatter-current] $ lauf_cmd
+> docs/research/2026-11-06-go-wire-apis.md: stale — updated 2026-11-07 is older than its last change 2026-11-09 (f75c6924)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32511 earlier lines left out …]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> npm notice
+> npm notice New major version of npm available! 11.20.0 -> 12.2.2
+> npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+> npm notice To update run: npm install -g npm@12.2.2
+> npm notice
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-1-20261109T135231626929Z-ddbafbed.md
+> ```
+
+Stage-2 call, 2026-11-09: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 922 files, 3751 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-wire-apis/plan.md` +7 -5
+> - `plans/changes/go-wire-apis/spec.md` +5 -4
+> - `tests/test_pi_contract.py` +2 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> docs/research/2026-11-06-go-wire-apis.md: stale — updated 2026-11-07 is older than its last change 2026-11-09 (f75c6924)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32552 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-2-20261109T135231626929Z-ddbafbed.md
+> ````
+
+Stage-2 call, 2026-11-09: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 922 files, 3754 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/go-wire-apis/plan.md` +5 -4
+> - `plans/changes/go-wire-apis/spec.md` +4 -3
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> docs/research/2026-11-06-go-wire-apis.md: stale — updated 2026-11-07 is older than its last change 2026-11-09 (f75c6924)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 32598 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/go-wire-apis/stage2/attempts/go-wire-apis/attempt-3-20261109T135231626929Z-ddbafbed.md
+> ````
