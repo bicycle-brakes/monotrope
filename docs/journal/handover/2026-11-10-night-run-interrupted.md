@@ -224,14 +224,15 @@ changes waiting for the maintainer.
 
 ### What the last hours showed
 
-- The session did nothing between about 03:19 and 06:37 UTC. The draft of
-  review-fewer-rounds ended near 03:08 UTC and the watchdog woke the chat at
-  03:19 UTC, but the result was only handled at 06:37 UTC; the half-hourly
-  heartbeat left no line in the log in between. The cause was not read. The
-  triage-verb re-check ended inside that gap; when is not measured.
+- The session did nothing between 03:11 and 06:36 UTC. Measured: the draft
+  of review-fewer-rounds was committed at 03:08:56 UTC, the triage-verb
+  re-check wrote its last output at 03:11:03 UTC, the watchdog logged a wake
+  at 03:19 UTC, and the next action of the session (the note on bead
+  coding-harness-3rtn) carries 06:36:45 UTC. The half-hourly heartbeat left
+  no line in the log in between. The cause was not read.
 - Two bead notes carry a wrong time: the note on bead coding-harness-3rtn
   says 03:12 UTC and the note on bead coding-harness-o2s1 says 06:40 UTC;
-  both were written at 06:37 UTC.
+  they were written at 06:36 and 06:37 UTC.
 - The missing decision statement stopped a second change (after
   verify-slots). `make change` or the interview prompt should produce it;
   no bead was opened for this at night.
