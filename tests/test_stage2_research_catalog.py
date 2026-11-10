@@ -295,6 +295,7 @@ def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = Non
         POLICY if policy is None else policy,
         FIXED if ids is None else ids,
         expected_version=PIN,
+        measured_wire_apis=("openai-completions",),
         address=address_policy(),
         **({"paid": (), "exclusion": None} | admission),
     )
