@@ -477,6 +477,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/research.md`](changes/origin-cell/research.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/spec.md`](changes/origin-cell/spec.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-check-across-blocks/decisions.md`](changes/origin-check-across-blocks/decisions.md) | — | — | — | — |
 | [`changes/origin-check-across-blocks/research.md`](changes/origin-check-across-blocks/research.md) | draft | none | 2026-11-10 | coding-harness-3h96 |
 | [`changes/outcome-test/decisions.md`](changes/outcome-test/decisions.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/findings.md`](changes/outcome-test/findings.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
