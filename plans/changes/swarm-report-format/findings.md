@@ -92,3 +92,5 @@ Stage-2 call, 2026-11-10: draft · attempt 2 · route codex-repair · endpoint o
 
 > Attempt 2 (codex-repair): the runner put back what a draft may not change:
 > - `plans/INDEX.md`
+
+Stage-2 call, 2026-11-10: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3840 commits, 12 rules.
