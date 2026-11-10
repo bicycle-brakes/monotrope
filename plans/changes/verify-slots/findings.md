@@ -839,3 +839,91 @@ Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3 
 Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 985 files, 3860 commits, 12 rules.
 
 Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 985 files, 3860 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 985 files, 3862 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +2 -1
+> - `scripts/verify_lock.py` +13 -5
+> - `tests/test_stage2.py` +2 -0
+> - `tests/test_verify_lock.py` +25 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........F.........                                                       [100%]
+> =================================== FAILURES ===================================
+> ______________ test_default_two_slots_share_capacity_across_trees ______________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1748/popen-gw2/test_default_two_slots_share_c0')
+>
+>     def test_default_two_slots_share_capacity_across_trees(tmp_path: Path) -> None:
+>         """Criterion 1. With no capacity setting, two independent checks overlap and a third queues.
+>     
+>         Fault this pins: an eligible second check that cannot reserve the idle
+>         second slot, or a third reservation granted while two are occupied. The
+>         entries run from separate working directories and share one state root,
+>         the way two worktrees of one machine share it.
+>         """
+>         state = tmp_path / "state"
+>         trees = [tmp_path / f"tree-{index}" for index in range(3)]
+>         for tree in trees:
+>             tree.mkdir()
+>         outs = [tmp_path / f"slot-{index}.json" for index in range(3)]
+>         marks = [tmp_path / f"started-{index}.flag" for index in range(3)]
+>         first = _supervised(
+>             state,
+>             RECORD_BODY,
+>             {"PROBE_OUT": str(outs[0]), "PROBE_STARTED": str(marks[0]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
+>             cwd=trees[0],
+>         )
+>         assert _wait_until(marks[0].is_file), "the first entry never started"
+>         second = _supervised(
+>             state,
+>             RECORD_BODY,
+>             {"PROBE_OUT": str(outs[1]), "PROBE_STARTED": str(marks[1]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
+>             cwd=trees[1],
+>         )
+>         assert _wait_until(marks[1].is_file), "the idle second slot was not granted while the first still ran"
+>         third = _supervised(
+>             state,
+>             RECORD_BODY,
+>             {"PROBE_OUT": str(outs[2]), "PROBE_STARTED": str(marks[2]), "PROBE_SLEEP": "0.2", "PYTHONPATH": str(REPO_ROOT)},
+>             cwd=trees[2],
+>         )
+>         assert not _wait_until(marks[2].is_file, 1.5), "a third check ran while two slots were occupied"
+>         for entry in (first, second, third):
+>             assert entry.wait(timeout=60) == 0
+>         first_span, second_span = _interval(outs[0]), _interval(outs[1])
+>         assert first_span[0] < second_span[1] and second_span[0] < first_span[1], (
+>             f"the two slots did not overlap: {first_span} vs {second_span}"
+>         )
+>         third_span = _interval(outs[2])
+> >       assert third_span[0] >= max(first_span[1], second_span[1]) - 0.05, (
+>             f"the third check started before a slot freed: {third_span} after {first_span} and {second_span}"
+>         )
+> E       AssertionError: the third check started before a slot freed: (1794329423.912256, 1794329424.117526) after (1794329420.705576, 1794329423.711788) and (1794329421.1130419, 1794329424.123842)
+> E       assert 1794329423.912256 >= (1794329424.123842 - 0.05)
+> E        +  where 1794329424.123842 = max(1794329423.711788, 1794329424.123842)
+>
+> tests/test_verify_lock.py:1364: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_default_two_slots_share_capacity_across_trees
+> 1 failed, 17 passed in 26.93s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-1-20261110T164609455305Z-98d5cfaa.md
+> ```
+
+Stage-2 call, 2026-11-10: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 985 files, 3862 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-10: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged

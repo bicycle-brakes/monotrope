@@ -966,7 +966,8 @@ def _lock_fds(owned: int | None) -> tuple[int, ...]:
     """The descriptors a local check's children inherit to keep the admission's ownership alive.
 
     Delegated to the admission itself: the slot lock and the shared
-    compatibility lock travel together, and a nested entry owns neither.
+    compatibility lock travel together. Without an active slot admission,
+    a caller-supplied descriptor travels alone; None yields no descriptors.
     """
     return verify_lock.inherit_fds(owned)
 

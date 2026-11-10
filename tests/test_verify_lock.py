@@ -1361,7 +1361,7 @@ def test_default_two_slots_share_capacity_across_trees(tmp_path: Path) -> None:
         f"the two slots did not overlap: {first_span} vs {second_span}"
     )
     third_span = _interval(outs[2])
-    assert third_span[0] >= max(first_span[1], second_span[1]) - 0.05, (
+    assert third_span[0] >= min(first_span[1], second_span[1]) - 0.05, (
         f"the third check started before a slot freed: {third_span} after {first_span} and {second_span}"
     )
 
@@ -1589,6 +1589,31 @@ with verify_lock.hold_admission(["nested", "child"]) as owned:
         "reused": context.reused,
     }))
 """
+
+
+@pytest.mark.parametrize("marker", ["²", "9" * 5000], ids=["non-decimal-digit", "overlong-digits"])
+def test_malformed_slot_marker_falls_back_to_admission(monkeypatch: pytest.MonkeyPatch, marker: str) -> None:
+    """Malformed slot markers must fall back rather than crash during integer conversion."""
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, "marker-token")
+    monkeypatch.setenv(verify_lock.SLOT_ENV, marker)
+    try:
+        relation = verify_lock._nested_relation()
+    except ValueError as error:
+        pytest.fail(f"a malformed slot marker must fall back to ordinary admission: {error}")
+    assert relation is None, "a malformed slot marker must not validate an inherited admission"
+
+
+def test_overlong_capacity_refuses_with_diagnostic(tmp_path: Path) -> None:
+    """An integer conversion limit must produce the documented refusal, not ValueError."""
+    setting = tmp_path / verify_lock.SLOTS_NAME
+    setting.write_text("9" * 5000, encoding="utf-8")
+    try:
+        with pytest.raises(verify_lock.VerifyLockRefused, match="positive decimal.*refusing admission") as refused:
+            verify_lock.read_capacity(tmp_path)
+    except ValueError as error:
+        pytest.fail(f"an overlong capacity must refuse admission with a diagnostic: {error}")
+    assert str(setting) in str(refused.value), "the refusal must identify the capacity setting"
 
 
 def test_nested_entries_use_their_own_slot_and_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

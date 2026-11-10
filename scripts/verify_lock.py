@@ -315,12 +315,16 @@ def read_capacity(root: Path | None = None) -> int:
     except UnicodeDecodeError:
         raise VerifyLockRefused(f"the capacity setting {path} is not valid UTF-8; refusing substituted state") from None
     raw = text.strip()
-    if CAPACITY_VALUE.fullmatch(raw) is None or int(raw) <= 0:
+    try:
+        capacity = int(raw) if CAPACITY_VALUE.fullmatch(raw) is not None else 0
+    except ValueError:
+        capacity = 0
+    if capacity <= 0:
         raise VerifyLockRefused(
             f"the capacity setting {path} holds {text!r}; a whitespace-trimmed positive decimal "
             "integer is the only accepted content; refusing admission"
         )
-    return int(raw)
+    return capacity
 
 
 def _read_record(path: Path) -> dict | None:
@@ -431,7 +435,10 @@ def _nested_relation() -> tuple[int, int | None] | None:
     if slot_raw:
         if not slot_raw.isdigit():
             return None
-        slot = int(slot_raw)
+        try:
+            slot = int(slot_raw)
+        except ValueError:
+            return None
         holder = read_slot_holder(state_root(), slot)
         if holder is None or not _names(holder, pid, token):
             return None
@@ -574,8 +581,9 @@ def inherit_fds(owned: int | None = None) -> tuple[int, ...]:
     compatibility lock — a child that loses either could overlap a peer or a
     legacy exclusive holder, including after this supervisor is killed hard.
     Both come from the active admission, so a caller that holds
-    `hold_admission` hands them on whole; a nested entry owns no descriptor of
-    its own and inherits nothing here.
+    `hold_admission` hands them on whole. Without an active slot admission,
+    a caller-supplied `owned` descriptor is passed through on its own; with
+    no supplied descriptor (as in a nested entry), the result is empty.
     """
     with _ACTIVE_LOCK:
         active = _ACTIVE

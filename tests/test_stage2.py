@@ -22196,6 +22196,8 @@ def test_slot_admission_descriptors_reach_local_checks(tmp_path: Path, monkeypat
         env = verify_lock.inherit_env(dict(os.environ))
         assert env[verify_lock.SLOT_ENV] == str(active.slot_index), "the local env lost the slot marker"
         # foreign calls receive none of the admission's names, whatever the caller's environment holds
+        for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV, verify_lock.SLOT_ENV):
+            monkeypatch.setenv(name, env[name])
         foreign = stage2.foreign_env({})
         for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV, verify_lock.SLOT_ENV):
             assert name not in foreign, f"a foreign call received {name}"
