@@ -40,6 +40,14 @@ context: |
   Repository change: reviewer prompts per lens; a formalities gate.
   Architecture change: amends ADR 0021 (review swarms until clean).
 
+In the context of the lenses of review round 1, facing reviews that mixed
+defect hunting with artefact formalities, we decided that round 1 covers five
+lenses — spec fidelity and scope, hostile input and failure paths, state,
+retry and abort, tests as evidence, maintainability — and that artefact
+formalities go to a gate instead of a reviewer, to achieve reviewers that
+spend their attention on defects, accepting that a formality no gate checks is
+found by nobody — 2026-11-09
+
 ## Q-2 · Who sits on each lens
 
 asked: 2026-11-08
@@ -52,6 +60,14 @@ context: |
   Today: round 1 runs the free swarm; later rounds one paid ladder id each.
   Repository change: a seating per lens the runner reads; Codex joins round 1.
   Architecture change: amends ADR 0021's stage order.
+
+In the context of the seats on each lens, facing single reviewers that miss
+what another lineage finds, we decided that every lens is reviewed by the
+model with the best measured precision, a cheap model of another lineage and
+Codex gpt-6.1-terra at effort medium — 15 calls in round 1, five of them
+Codex, to achieve overlap between independent reviewers on every lens,
+accepting that round 1 costs 15 calls for every change, a small one included —
+2026-11-09
 
 ## Q-3 · When a second round runs
 
@@ -66,6 +82,14 @@ context: |
   Repository change: an estimator and a threshold in the runner, read from configuration.
   Architecture change: replaces "until clean" in ADR 0021 by an estimate-driven second round.
 
+In the context of the question when a second review round runs, facing second
+rounds that ran for every change whatever round 1 found, we decided that a
+second round runs per lens and only where the overlap of its three reviewers
+estimates many defects still undiscovered, with the threshold taken from
+research with evidence, to achieve fewer rounds where round 1 was thorough,
+accepting that an estimate from three reviewers is coarse and can stop a lens
+too early — 2026-11-09
+
 ## Q-4 · Where seating, rounds and limits live
 
 asked: 2026-11-08
@@ -78,6 +102,15 @@ context: |
   Today: constants in scripts/stage2.py; the ladder in model-endpoints.yaml.
   Repository change: the runner, prompts, docs and tests read one file; this change depends on bead coding-harness-twvx.
   Architecture change: configuration becomes the single source for the loop's shape.
+
+In the context of the home of seating, rounds and limits, facing values the
+maintainer wants to change without a code change, we decided that one
+declarative, validated file — the central configuration (bead coding-harness-
+twvx) — holds lenses, seats, round count and order, the second-round trigger
+and its threshold and the phase-6 re-check limit, and no constant repeats it,
+to achieve a change of the review set-up by one edited line, accepting that
+this change depends on the central configuration or carries an interim file
+until it exists — 2026-11-09
 
 ## Q-5 · How many phase-6 re-checks
 
@@ -92,6 +125,15 @@ context: |
   Repository change: a re-check counter and a stop report in the runner.
   Architecture change: none beyond the configured limit.
 
+In the context of the number of phase-6 re-checks, facing changes that went
+through re-check after re-check, we decided that phase 6 is the first review
+plus one re-check, after which the runner stops and reports to the maintainer
+with a proposal, and that from the second re-check finding of one kind a
+mechanism repair is required instead of case repairs; the limit lives in the
+central configuration, to achieve a bounded end of every change, accepting
+that a change can stop with open findings and wait for the maintainer —
+2026-11-09
+
 ## Q-6 · What round 2 does with findings
 
 asked: 2026-11-08
@@ -104,6 +146,14 @@ context: |
   Today: every new row may start another round.
   Repository change: triage rules for round 2 in the runner and prompts.
   Architecture change: amends ADR 0021's end condition.
+
+In the context of what round 2 does with its findings, facing findings
+that each opened a new full round, we decided that round 2 sorts by kind,
+not by location: a MAJOR or BLOCKER goes into the same last repair without
+a new full round, a MINOR follows the MINOR rule, and a follow-up bead is
+opened only for a finding in code outside this change, to achieve one last
+repair instead of a further round, accepting that the last repair is
+checked by phase 6 alone — 2026-11-09
 
 ## Q-7 · Style findings
 
@@ -118,6 +168,14 @@ context: |
   Repository change: AGENTS.md MINOR rule; triage guidance.
   Architecture change: none.
 
+In the context of style findings, facing style rows that triggered repairs and
+rounds of their own, we decided that an unambiguous style finding rides along
+in a repair that runs anyway and never triggers a repair or a round on its
+own, that matters of taste stay accepted limits named in the pull request, and
+that the MINOR rule in AGENTS.md changes with this change, to achieve clear
+style fixes at no extra round, accepting that a clear style finding stays
+unrepaired when no repair runs — 2026-11-09
+
 ## Q-8 · Self-review
 
 asked: 2026-11-08
@@ -130,6 +188,16 @@ context: |
   Today: no stated rule.
   Repository change: a seating constraint the validator checks; gate scope on changed files.
   Architecture change: none.
+
+In the context of self-review and the formalities gates, facing a rule that
+excluded the implementer's model family from every review, we decided that the
+implementer's model family is excluded only when it would be the sole reviewer
+and may sit among several parallel reviewers, and that Markdownlint and the
+formalities gate block new and changed files only while the existing stock
+stays report-only until cleaned, to achieve more reviewers to choose from and
+gates that do not block on old files, accepting that a reviewer of the
+implementer's family may share its blind spots, and old formality faults stay
+for now — 2026-11-09
 
 ## Q-9 · The form of a lens
 
@@ -144,6 +212,12 @@ context: |
   Repository change: one prompt per lens with its check questions.
   Architecture change: part of the ADR 0021 amendment.
 
+In the context of the form of a lens, facing reviewer roles that left open
+what to look for, we decided that each lens is a defect class with a list of
+concrete check questions, not a role the reviewer plays, to achieve reviews
+that can be compared and measured per question, accepting that the question
+lists must be written and kept current — 2026-11-09
+
 ## Q-10 · Where the check questions come from
 
 asked: 2026-11-09
@@ -156,6 +230,13 @@ context: |
   Today: no check questions.
   Repository change: a question list per lens, held in the central configuration (bead coding-harness-twvx) or the prompt.
   Architecture change: none beyond Q-9.
+
+In the context of the source of the check questions, facing check questions
+that could be invented without evidence, we decided that an agent derives the
+questions per lens from the repository's measured loop and phase-6 rows and
+from the literature, and the maintainer approves the list, to achieve
+questions grounded in the defects this repository actually had, accepting that
+the list waits for the maintainer's approval before it is used — 2026-11-09
 
 ## Q-11 · What triggers a second round
 
@@ -170,6 +251,13 @@ context: |
   Repository change: a small computation in the runner; both estimates logged.
   Architecture change: part of the ADR 0021 amendment.
 
+In the context of the trigger of a second round, facing several estimators
+that could decide, we decided that the share of accepted findings that only
+one reviewer of the lens reported decides, and that the Mh-jackknife and Chao
+estimates are computed and recorded only, to achieve a trigger that is simple
+to read and to check, accepting that the simple share may be less accurate
+than the recorded estimators — 2026-11-09
+
 ## Q-12 · How the second-round threshold is introduced
 
 asked: 2026-11-09
@@ -182,6 +270,15 @@ context: |
   Today: the loop runs until a clean round (4–8 rounds).
   Repository change: threshold and mode (shadow or live) as values in the central configuration (bead coding-harness-twvx); a per-lens record of findings, overlap and both estimates.
   Architecture change: part of the ADR 0021 amendment.
+
+In the context of the introduction of the second-round threshold, facing a
+threshold nobody has measured in this repository, we decided that during a
+shadow period every lens always gets a second round while the single-finding
+rule is computed and recorded but does not decide, and that after 10 to 20
+changes the threshold is set from what the second rounds found where the rule
+would have stopped, to achieve a threshold set from this repository's own
+data, accepting that the shadow period saves no round and costs more calls
+than today — 2026-11-09
 
 ## Open — not counted
 
