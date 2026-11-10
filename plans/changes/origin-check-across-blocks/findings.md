@@ -104,3 +104,9 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/origin-check-across-blocks/plan.md, plans/changes/origin-check-across-blocks/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 997 files, 3876 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 997 files, 3877 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 997 files, 3877 commits, 12 rules.
