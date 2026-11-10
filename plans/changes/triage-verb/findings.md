@@ -373,3 +373,14 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/triage-verb/plan.md, plans/changes/triage-verb/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3831 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-7 | MAJOR | SPEC | impl | scripts/stage2.py:7464 | With `Where` equal to `tests/test_stage2.py#L12-L14`, ordinary `L1-1=taken` records the decision instead of refusing. `_WHERE_SUFFIX` cannot strip the range’s second `L`, so the tracked test file is discarded and the test-only check returns false. Reproduced with both the bare location and a Markdown link. Line ranges must preserve classification and trigger the `taken — not a test — <reason>` correction. [Acceptance criterion 3; Terms] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c526-70ad-7d81-80cc-8e0b9022afcc, 2026-11-10
+Reviewer session: codex 01a1c526-70ad-7d81-80cc-8e0b9022afcc — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
