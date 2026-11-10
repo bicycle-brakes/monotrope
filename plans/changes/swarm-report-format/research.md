@@ -3,8 +3,8 @@ title: "Research — swarm-report-format"
 status: draft
 implementation_status: none
 date: 2026-11-09
-last_reviewed: 2026-11-09
-updated: 2026-11-09
+last_reviewed: 2026-11-10
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
@@ -139,3 +139,20 @@ Limits: only run `1938a24f` was replayed. Run `63b74c37` failed on timeouts
 of one model and is not a format case. The prompt
 (`prompts/research-swarm/report.md`) was read to line 70 of 100; the
 topic-specific sections were not read.
+
+## Draft gap check — invocation ceiling (2026-11-09)
+
+Read at b9a87940: ADR 0020, decision 9, explicitly caps model invocations at
+`39 + 3N` and prohibits retries; `N` is the selected free-model count.
+`ResearchRun.expected_slots` and `manifest_record` in
+`scripts/stage2_research_run.py` preserve that fixed budget; `stage_topics`
+invalidates rejected reports without redispatch. The requested one correction
+per topic contribution can add `33 + 3N` invocations, giving a proposed maximum
+of `72 + 6N`. Renaming calls as attempts within a slot does not preserve the
+decided invocation ceiling. This is a governance decision, not an answerable
+implementation detail; the draft spec records it as open.
+
+The report prompt was now read in full: its topic-3, topic-5 and topic-6
+requirements agree with the strict validator. No prompt or schema relaxation
+is needed for extracting wrapped reports. The shared `payload_text` helper is
+also used by non-topic stages, so topic-only extraction avoids changing them.
