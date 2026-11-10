@@ -7459,16 +7459,13 @@ TRIAGE_STATUSES = ("taken", "rejected", "taken — not a test", "taken — guard
 
 # A Where cell splits on whitespace, commas and semicolons, and on the escaped pipe a cell carries.
 _WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
-# A location's line suffixes: `file.py:12`, `file.py:12-14`, `file.py#L12`, `file.py#L12-L14`,
-# `tests/test_x.py::test_name` - stacked suffixes included, each with an en or em dash allowed.
-_WHERE_SUFFIX = re.compile(r"(?:(?:::[^\s:]+)|(?::\d+(?:[-–—]\d+)?)|(?:#L?\d+(?:[-–—]\d+)?))+$")
 
 
 def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
-    """The repository file locations a `Where` cell names, Markdown delimiters and line suffixes stripped.
+    """The repository file locations a `Where` cell names, independent of location suffix syntax.
 
-    One membership check against the Git index decides what is a repository path, including
-    extensionless root files. Prose, external URLs and untracked paths do not count. Absolute
+    The longest leading part of each token present in the Git index decides the repository path,
+    including extensionless root files. Prose, external URLs and untracked paths do not count. Absolute
     paths below the worktree are made relative without reading the named files; Markdown links
     contribute their target only. An unreadable index refuses rather than guessing locations.
     """
@@ -7479,7 +7476,6 @@ def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
         token = token.strip("`*_\"'()<>")
         while token.startswith("./"):
             token = token[2:]
-        token = _WHERE_SUFFIX.sub("", token).rstrip(".,:;)")
         if not token or ".." in Path(token).parts:
             continue
         if Path(token).is_absolute():
@@ -7487,8 +7483,10 @@ def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
                 token = Path(token).relative_to(root).as_posix()
             except ValueError:
                 continue
-        if token in tracked:
-            locations.append(token)
+        for end in range(len(token), 0, -1):
+            if token[:end] in tracked:
+                locations.append(token[:end])
+                break
     return locations
 
 

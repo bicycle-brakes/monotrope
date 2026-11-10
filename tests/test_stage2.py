@@ -20466,6 +20466,40 @@ def test_triage_ignores_locations_absent_from_the_tracked_file_list(
     assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
 
 
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize(
+    "suffix", ["#L12-L14", "#L12–L14", ":12-14", "#arbitrary-anchor", "::test_x[param]", ":12#anchor"]
+)
+@pytest.mark.parametrize("layout", ["bare", "markdown", "absolute"])
+def test_triage_classifies_tracked_path_prefixes_independently_of_location_suffixes(
+    world: World, suffix: str, layout: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P6-7: suffix syntax must not hide tracked test or production locations."""
+    shorter_path = world.root / "tests/test_stage2"
+    shorter_path.write_text("another tracked file\n", encoding="utf-8")
+    git(world.root, "add", "--", "tests/test_stage2")
+    path = "tests/test_stage2.py"
+    location = f"{world.root}/{path}{suffix}" if layout == "absolute" else f"{path}{suffix}"
+    if layout == "markdown":
+        location = f"[test location]({location})"
+    assert stage2.where_locations(location, world.root) == [path], (
+        "a tracked path must remain identifiable regardless of its location suffix"
+    )
+    triage_record(world, [triage_row(where=location)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2, (
+        "a suffixed test-only location must refuse ordinary taken"
+    )
+    assert "taken — not a test — <reason>" in capsys.readouterr().err
+    assert world.record().read_bytes() == before
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
+    triage_record(world, [triage_row(where=f"{location} and src/app.py{suffix}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0, (
+        "a suffixed production location must keep mixed work eligible for ordinary taken"
+    )
+
+
 @pytest.mark.parametrize(
     "damage",
     ["closing", "opening", "both", "header", "header-opening", "separator", "separator-opening", "non-loop-row"],
