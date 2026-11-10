@@ -3077,6 +3077,44 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
     return released, phase6
 
 
+def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
+    """Every released and phase-6 row with its place and block label, in document order.
+
+    The walk reads the same sections under the same conditions as `findings_rows`, so every row of
+    its two lists is found here again, and adds where the row sits: the block's heading with its
+    occurrence among equal headings, so repeated `## Phase 6` and released headings stay
+    distinguishable (bead coding-harness-3h96). The cells are carried exactly as `findings_rows`
+    returns them; keep the two walks in step when either changes.
+    """
+    blocks: list[tuple[str, str, list[str]]] = []
+    kind = ""
+    heading = ""
+    seen: dict[str, int] = {}
+    for line in text.splitlines():
+        if line.startswith("## "):
+            kind = ""
+            if line.startswith(RELEASE_HEADING):
+                kind = "released"
+            elif line.startswith("## Phase 6"):
+                kind = "phase-6"
+            if kind:
+                heading = line.strip()
+                seen[heading] = seen.get(heading, 0) + 1
+            continue
+        if kind == "released" and KEPT_FROM.match(line):
+            kind = ""  # what follows is the reviewers' words, carried as they came, not rows
+            continue
+        if not kind:
+            continue
+        cells = split_row(line)
+        if not cells or _furniture(cells):
+            continue
+        wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
+        if (kind == "released" and wide) or (kind == "phase-6" and len(cells) == len(ROW_COLUMNS)):
+            blocks.append((kind, f"`{heading}`, block {seen[heading]}", cells))
+    return blocks
+
+
 def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Every taken row with its place (record, released block, phase-6 table), and the IDs that hold the repair.
 
@@ -3612,6 +3650,45 @@ def origin_refusal(record: str | None, findings_text: str) -> str | None:
         f"accepted rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it decides "
         "a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without a "
         "leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
+        "answer. Nothing is called, released, repaired or removed."
+    )
+
+
+def target_origin_refusal(taken: list[tuple[str, list[str]]], findings_text: str) -> str | None:
+    """The refusal that holds the repair while a selected row carries no valid Origin, or None.
+
+    Every row `repair_targets` selected - a record row, a released row or a phase-6 row of any
+    block - needs the orchestrator's provenance before the verb calls or writes; an older block's
+    selected row is no exception (bead coding-harness-3h96). Unselected history keeps the
+    exemptions of `origin_refusal`: released and superseded rows are passive and are never swept
+    here. The vocabulary is checked, never the causality; each finding names the row and its
+    block's heading and occurrence, so the orchestrator can correct the one cell.
+    """
+    found: list[str] = []
+    blocks = row_blocks(findings_text)
+    used: set[int] = set()
+    for place, row in taken:
+        origin = row[3].strip()
+        if ORIGIN_VALUE.fullmatch(origin):
+            continue
+        if place == "record":
+            found.append(f"{row[0]} (loop record, Origin `{origin}`)")
+            continue
+        label = ""
+        for index, (kind, block_label, cells) in enumerate(blocks):
+            if index not in used and kind == place and cells == row:
+                used.add(index)
+                label = block_label
+                break
+        where = "released block" if place == "released" else "phase-6 table"
+        named = f"{row[0]} ({where}, Origin `{origin}`)"
+        found.append(f"{row[0]} ({where}, {label}, Origin `{origin}`)" if label else named)
+    if not found:
+        return None
+    return (
+        f"selected repair rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it "
+        "decides a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without "
+        "a leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
         "answer. Nothing is called, released, repaired or removed."
     )
 
@@ -9193,8 +9270,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
-    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
+    `Broke a test` and starts no review. Every selected row's `Origin` is checked before any call
+    or write, an older block's selected row included (bead coding-harness-3h96). A taken Status that
+    already names a fix in the old hand-written form (`; fixed by`, `; fixed:`, `; repaired by`)
+    refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -9204,6 +9283,12 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
     current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    # The selected rows' own Origin check goes first, so one refusal names every row the repair
+    # would carry, older blocks included; the record/newest-block refusal after it keeps guarding
+    # the accepted rows that no repair selects (bead coding-harness-3h96).
+    target_refusal = target_origin_refusal(taken, current)
+    if target_refusal:
+        raise Refused(target_refusal)
     refusal = origin_refusal(read_record(change, root), current)
     if refusal:
         raise Refused(refusal)

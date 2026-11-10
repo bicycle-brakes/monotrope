@@ -9494,6 +9494,227 @@ def test_repair_refuses_legacy_completed_taken_statuses_before_call(
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
 
+NEWEST_BLOCK_SHAPES = {
+    "empty": lambda: [phase6_block([])],
+    "no-finding": lambda: [phase6_block([]), "No finding."],
+    "rows": lambda: [phase6_block([phase6_cells("F-new", FIXED, "new fixed finding")])],
+}
+
+
+@pytest.mark.parametrize("stage2_off", [False, True])
+@pytest.mark.parametrize("record_present", [False, True])
+@pytest.mark.parametrize("status", ["taken — test_a", "TAKEN — test_a"])
+def test_repair_rejects_invalid_origins_in_selected_history(
+    world: World, capsys: pytest.CaptureFixture[str], status: str, record_present: bool, stage2_off: bool
+) -> None:
+    """Criterion 1. Planted fault: an older block's taken row or a selected released row escapes the Origin check."""
+    seed_tests(world)
+    if record_present:
+        world.write_record([("L1-1", status, "no")])
+        set_row_origin(world, "L1-1", "base")  # the record row is valid; the older blocks are what refuse
+    old = phase6_cells("F-old", status, "older phase finding")
+    options = ("--stage2-off", "unavailable") if stage2_off else ()
+    for shape, newest_parts in NEWEST_BLOCK_SHAPES.items():
+        for origin in INVALID_ORIGINS:
+            released = released_cells("L1-3", status, "no", "released finding")
+            released[3] = origin
+            old[3] = origin
+            world.write_findings(released_block([released]), phase6_block([old]), *newest_parts(), VERDICT)
+            before = origin_state(world)
+            capsys.readouterr()
+            assert world.run("repair", "demo", *options) == 2, (shape, origin, status, record_present, stage2_off)
+            error = capsys.readouterr().err
+            assert "invalid Origin" in error, (shape, origin, status, record_present, stage2_off, error)
+            assert "F-old" in error and "L1-3" in error, (shape, origin)
+            assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
+            assert origin_state(world) == before, (shape, origin)
+            assert world.calls() == [], (shape, origin)
+
+
+def test_repair_origin_refusal_has_no_effects_across_blocks(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 2. Planted fault: a call, probe, audit line, time entry, byte change or commit precedes the refusal."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "base")
+    released = released_cells("L1-3", "taken — test_c", "no", "released finding")
+    released[3] = "fix-r01"
+    old = phase6_cells("F-old", "TAKEN — crit 6", "older phase finding")
+    old[3] = "criterion 1"
+    world.write_findings(phase6_block([old]), released_block([released]), phase6_block([]), VERDICT)
+    before = origin_state(world)
+    plan_before = world.plan.read_bytes()
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        pi=[{"stdout": "must not run"}],
+        codex=[codex_ok("T9", "must not run")],
+        claude=[{"stdout": "must not run"}],
+        make=[{"stdout": "green\n"}],
+    )
+    for options in ((), ("--stage2-off", "unavailable")):
+        capsys.readouterr()
+        assert world.run("repair", "demo", *options) == 2, options
+        error = capsys.readouterr().err
+        assert "invalid Origin" in error and "F-old" in error and "L1-3" in error, (options, error)
+        assert origin_state(world) == before, options
+        assert world.plan.read_bytes() == plan_before, "a time entry was appended before the refusal"
+        assert git(world.root, "rev-parse", "HEAD") == baseline, "a commit was made before the refusal"
+        assert world.calls() == [], options
+
+
+def test_repair_origin_refusal_locates_every_selected_block(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Criterion 3. Planted fault: a bad row or its older block cannot be located, a valid target is accused, or the correction guidance is incomplete."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "oops")
+    first_release = released_cells("L1-3", "taken — test_c", "no", "first released finding")
+    first_release[3] = ""
+    second_release = released_cells("L1-4", "taken — test_d", "no", "second released finding")
+    second_release[3] = "fix-r0"
+    first_phase = phase6_cells("F-1", "taken — crit 6", "first older phase finding")
+    first_phase[3] = "criterion 1"
+    second_phase = phase6_cells("F-2", "taken — crit 7", "second older phase finding")
+    second_phase[3] = "BASE"
+    valid = phase6_cells("F-ok", "taken — crit 8", "valid newest finding")  # Origin `base`
+    world.write_findings(
+        released_block([first_release]),
+        released_block([second_release]),
+        phase6_block([first_phase]),
+        phase6_block([second_phase]),
+        phase6_block([valid]),
+        VERDICT,
+    )
+    capsys.readouterr()
+    assert world.run("repair") == 2
+    error = capsys.readouterr().err
+    assert "L1-1 (loop record, Origin `oops`)" in error
+    released_heading = "`## Phase 4b — loop rows, released 2026-10-12`"
+    assert f"L1-3 (released block, {released_heading}, block 1, Origin ``)" in error
+    assert f"L1-4 (released block, {released_heading}, block 2, Origin `fix-r0`)" in error
+    phase_heading = "`## Phase 6 — Codex, 2026-10-12`"
+    assert f"F-1 (phase-6 table, {phase_heading}, block 1, Origin `criterion 1`)" in error
+    assert f"F-2 (phase-6 table, {phase_heading}, block 2, Origin `BASE`)" in error
+    assert "F-ok" not in error, "a valid selected row was accused"
+    assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
+    assert "The orchestrator sets it" in error and "correct the cell" in error
+    assert "not the reviewer's answer" in error
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize("origin", ["base", "fix-r1", "fix-r12"])
+def test_repair_preserves_valid_origins_across_blocks(world: World, origin: str) -> None:
+    """Criterion 4. Planted fault: the target check refuses a canonical value, omits an older target from the batch, or rewrites an Origin while marking fixed."""
+    baseline = repair_world(world, ("L1-1", "taken — test_a", "no"))
+    set_row_origin(world, "L1-1", origin)
+    # Superseded rows that no repair selects keep their exemption: their invalid Origin must not block.
+    stale_fixed = released_cells("L1-9", FIXED, "no", "stale released repair")
+    stale_fixed[3] = "diff reading"
+    stale_rejected = phase6_cells("F-rej", "rejected — covered", "stale rejection")
+    stale_rejected[3] = "criterion 1"
+    released = released_cells("L1-3", "taken — test_c", "no", "released finding")
+    released[3] = origin
+    old = phase6_cells("F-old", "taken — crit 6", "older phase finding")
+    old[3] = origin
+    world.write_findings(
+        phase6_block([stale_rejected]),
+        released_block([stale_fixed]),
+        released_block([released]),
+        phase6_block([old]),
+        phase6_block([]),
+        VERDICT,
+    )
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-old: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    for listed in (
+        "- L1-1 [MAJOR, MAINT] src/app.py:1: finding of L1-1 — Status: taken — test_a",
+        "- L1-3 [MAJOR, MAINT] src/app.py:1: released finding — Status: taken — test_c",
+        "- F-old [MAJOR, SPEC] spec.md:3: older phase finding — Status: taken — crit 6",
+    ):
+        assert listed in prompt, listed
+    fixed = "fixed — tests/test_fix.py::test_fix"
+    saved = world.record().read_text(encoding="utf-8")
+    assert {row[0]: (row[3], row[7]) for row in stage2.record_rows(saved)} == {"L1-1": (origin, fixed)}
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    assert {row[0]: (row[3], row[7]) for row in released_now} == {
+        "L1-9": ("diff reading", FIXED),
+        "L1-3": (origin, fixed),
+    }
+    assert {row[0]: (row[3], row[7]) for row in phase6_now} == {
+        "F-rej": ("criterion 1", "rejected — covered"),
+        "F-old": (origin, fixed),
+    }
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+
+
+def test_origin_history_check_is_limited_to_repair_targets(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. Planted fault: another verb calls the target check, or repair audits unselected historical rows."""
+    real_check = stage2.target_origin_refusal
+
+    def forbidden_target_check(*_args: object) -> None:
+        pytest.fail("only repair may check the selected rows' Origins")
+
+    monkeypatch.setattr(stage2, "target_origin_refusal", forbidden_target_check)
+    stale = phase6_cells("F-old", FIXED, "superseded phase-6 finding")
+    stale[3] = "scope"
+    legacy_release = released_cells("L1-9", FIXED, "no", "stale released repair")
+    legacy_release[3] = "diff reading"
+    # Ordinary release ignores superseded provenance and never reaches the target check.
+    world.write_record([("L1-1", FIXED, "no")])
+    world.write_findings(phase6_block([stale]), phase6_block([]), VERDICT)
+    assert world.run("release-loop") == 0
+    # The loop keeps its newest-block scope with the guard standing.
+    world.write_record([("L2-1", FIXED, "no")], number=2)
+    world.write_findings(phase6_block([stale]), released_block([legacy_release]), phase6_block([]), VERDICT)
+    world.script(
+        pi=[{"stdout": rows(1)}] * 4,
+        codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+    )
+    assert world.run("review-loop") == 0
+    # The phase-6 review keeps its scope too.
+    world.write_record([("L2-1", FIXED, "no")], number=2)
+    world.write_findings(phase6_block([stale]), released_block([legacy_release]), phase6_block([]), VERDICT)
+    commit_review_findings(world)
+    world.script(
+        pi=[{"stdout": rows(1)}] * 4,
+        codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+    )
+    assert world.run("review") == 0
+
+    # Repair audits its selected rows alone: unselected fixed and rejected history never blocks it.
+    monkeypatch.setattr(stage2, "target_origin_refusal", real_check)
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "base")
+    stale_rejected = phase6_cells("F-rej", "rejected — covered", "stale rejection")
+    stale_rejected[3] = "criterion 1"
+    world.write_findings(
+        phase6_block([stale_rejected]),
+        released_block([legacy_release]),
+        phase6_block([]),
+        VERDICT,
+    )
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    assert {row[0]: (row[3], row[7]) for row in released_now} == {"L1-9": ("diff reading", FIXED)}
+    assert {row[0]: (row[3], row[7]) for row in phase6_now} == {"F-rej": ("criterion 1", "rejected — covered")}
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+
+
 def test_repair_requires_a_clean_tree_a_spec_and_a_plan_with_its_time_heading(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -104,14 +104,22 @@ verification and makes the commit after this draft.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_rejects_invalid_origins_in_selected_history — older taken or selected released rows with invalid Origin reach a repair attempt
-- 2: not yet written tests/test_stage2.py::test_repair_origin_refusal_has_no_effects_across_blocks — a call, audit, time entry, file/state mutation or commit precedes refusal
-- 3: not yet written tests/test_stage2.py::test_repair_origin_refusal_locates_every_selected_block — a bad target or distinguishable block location is omitted, a valid target is accused, or correction guidance is incomplete
-- 4: not yet written tests/test_stage2.py::test_repair_preserves_valid_origins_across_blocks — valid older targets are refused, omitted, relocated or have their Origins rewritten
-- 5: not yet written tests/test_stage2.py::test_origin_history_check_is_limited_to_repair_targets — other verbs broaden validation or repair audits unselected historical rows
+- 1: tests/test_stage2.py::test_repair_rejects_invalid_origins_in_selected_history — older taken or selected released rows with invalid Origin reach a repair attempt
+- 2: tests/test_stage2.py::test_repair_origin_refusal_has_no_effects_across_blocks — a call, audit, time entry, file/state mutation or commit precedes refusal
+- 3: tests/test_stage2.py::test_repair_origin_refusal_locates_every_selected_block — a bad target or distinguishable block location is omitted, a valid target is accused, or correction guidance is incomplete
+- 4: tests/test_stage2.py::test_repair_preserves_valid_origins_across_blocks — valid older targets are refused, omitted, relocated or have their Origins rewritten
+- 5: tests/test_stage2.py::test_origin_history_check_is_limited_to_repair_targets — other verbs broaden validation or repair audits unselected historical rows
 - 5: tests/test_stage2.py::test_legacy_released_origin_does_not_hold_verbs — completed historical provenance blocks a verb
 - 5: tests/test_stage2.py::test_origin_release_controls_keep_distinct_validation_scopes — ordinary release audits superseded rows or control flags check Origin
 - 5: tests/test_stage2.py::test_an_undecided_row_holds_the_repair — pending decisions no longer hold repair
 - 6: not a test — phase-6 review reads the repair section of docs/WORKFLOW.md against criterion 6; missing the all-block pre-effect guarantee or demanding passive backfill refutes it
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-10 13:23:26–14:49:30 UTC, 5163 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 14:49:48–16:15:50 UTC, 5161 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 16:16:04–17:43:31 UTC, 5246 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
