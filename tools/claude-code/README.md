@@ -2,10 +2,12 @@
 
 The maintainer's Claude Code setup for working across several repositories and
 parallel sessions: a status line that says where a session is and what it is
-doing, an entry point at session start, a safety net under the handover, and a
-warning when two sessions share one checkout. It is user-level tooling — it is
-installed into `~/.claude` and works in every repository, so it stays here and
-does not travel with the kit (`scripts/kit/manifest.yaml`, catch-all `tools/`).
+doing, an entry point at session start, a safety net under the handover, a
+warning when two sessions share one checkout, and a night profile that keeps an
+unattended session from stalling on a permission question. It is user-level
+tooling — it is installed into `~/.claude` and works in every repository, so it
+stays here and does not travel with the kit (`scripts/kit/manifest.yaml`,
+catch-all `tools/`).
 
 Provenance: written by Claude Code (Opus 5) at the maintainer's request on
 2026-09-18, tested on the maintainer's machine (macOS, bash 3.2, jq 1.7);
@@ -82,7 +84,7 @@ tools/claude-code/install.sh --check   # what differs from ~/.claude; changes no
 tools/claude-code/install.sh           # copy the files, merge settings.json
 ```
 
-The install copies the six files into `~/.claude` and merges `settings.json`:
+The install copies the eight files into `~/.claude` and merges `settings.json`:
 it sets `statusLine` and adds each hook of `./settings.json` whose command is
 not there yet; everything else in the file stays. A replaced file is kept as
 `<name>.bak-<timestamp>`. Restart Claude Code afterwards.
@@ -90,8 +92,41 @@ not there yet; everything else in the file stays. A replaced file is kept as
 Change a file here and reinstall — a change made only in `~/.claude` is
 overwritten by the next install, which `--check` shows first.
 
-Needs `jq`, `git` and `perl`. Without `claude` on the PATH the recap and the
-note stay empty; without `bd` the beads line stays hidden.
+Needs `jq`, `git`, `perl` and Python 3 (`python3`, for the night launcher).
+Without `claude` on the PATH the recap and the note stay empty; without `bd`
+the beads line stays hidden.
+
+## Night runs (unattended)
+
+For an unattended session the same install provides the night profile:
+`night.py` and its settings fragment `night-settings.json`. It starts Claude
+Code so that a permission question cannot hold the run
+(plans/changes/night-stall-guard, bead `coding-harness-ibde`):
+
+```bash
+python3 ~/.claude/night.py -p "continue the change"   # any normal claude arguments
+```
+
+The launcher reads the explicit ask and deny rules of the supported settings
+scopes — the user settings under `$CLAUDE_CONFIG_DIR` (else `~/.claude`), the
+current Git worktree's `.claude/settings.json` and the optional
+`.claude/settings.local.json` beside it; outside Git the working directory is
+the project root — and writes a private overlay that repeats the denies and
+turns every sourced ask rule into a deny. It then runs
+`claude --settings <overlay> --permission-mode dontAsk` for this invocation
+only. Inherited settings stay in their native layers and are never rewritten;
+the overlay lives in a temporary directory exactly as long as the child, and
+the child's exit status is forwarded.
+
+The launch is refused — before `claude` starts — when a present settings file
+cannot be read or parsed, or when an argument would replace the profile
+(`--settings`, `--permission-mode`, `--dangerously-skip-permissions`, in
+`--flag value` or `--flag=value` form). When an action is denied at night, the
+session continues with an authorised alternative or parks the denied step and
+records it; it does not disable the brake to get through.
+
+There is no phone alert and no independent heartbeat yet: that returns as its
+own change once the maintainer chooses a push service.
 
 ## State it keeps
 

@@ -406,6 +406,7 @@ def test_catalog_drift_notices_survive_eligibility_filters(world, tmp_path):
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     reasons = {item["id"]: item["reason"] for item in result["models"]}
     assert reasons["paid-seat"] == "wire-api-not-measured", "the exclusion reason changed"
@@ -446,6 +447,7 @@ def test_catalog_drift_notice_survives_a_free_selection_veto(world):
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     reasons = {item["id"]: item["reason"] for item in result["candidates"]}
     assert reasons["moved-free"] == "paid-admitted", "the shared veto no longer decides"
@@ -585,6 +587,7 @@ def test_api_notices_sanitise_untrusted_values(world, monkeypatch, capsys, hosti
         exclusion=None,
         expected_version="test-pin",
         address=policy,
+        measured_wire_apis=("openai-completions",),
     )
     assert result["models"][0]["reason"] == "wire-api-not-measured"
     assert len(result["address_notices"]) == 1
@@ -682,6 +685,7 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         paid=(),
         exclusion=None,
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -697,9 +701,22 @@ def test_refused_rows_stay_refused(world, monkeypatch):
         paid=(),
         exclusion=None,
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert empty["selected"] == [] and empty["selection_outcome"] != "selected"
+
+
+def test_research_selector_requires_declared_measured_wire_apis(world):
+    """Omitting measurement evidence must fail, rather than apply a code default."""
+    with pytest.raises(TypeError, match="measured_wire_apis"):
+        swarm.select_research_catalog(
+            bridge_with(row("aa-free")),
+            selector_policy(),
+            [],
+            expected_version="test-pin",
+            address=stage2_go.load_address_policy(world.root),
+        )
 
 
 def test_research_selector_skips_an_explicit_null_base(world):
@@ -716,6 +733,7 @@ def test_research_selector_skips_an_explicit_null_base(world):
         paid=(),
         exclusion=None,
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     assert result["selected"] == ["aa-free"]
@@ -1099,6 +1117,7 @@ def test_admission_preserves_the_other_restrictions(world, monkeypatch):
         paid=(),
         exclusion=None,
         expected_version="test-pin",
+        measured_wire_apis=("openai-completions",),
         address=policy,
     )
     seat = next(item for item in result["models"] if item["id"] == "paid-seat")
@@ -1286,3 +1305,87 @@ def test_installation_refuses_an_unassessed_go_row(world, tmp_path, base):
             stage2, tmp_path, go_store(row(TEST_LADDER[0], baseUrl=base)), model=TEST_LADDER[0], address=policy
         )
     assert not (tmp_path / "models.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# The native wire APIs (go-wire-apis, criterion 6)
+# ---------------------------------------------------------------------------
+
+
+NEW_API_BASES = {
+    "anthropic-messages": "https://opencode.ai/inference/go/anthropic",
+    "openai-responses": "https://opencode.ai/inference/go/openai/v1",
+    "google-generative-ai": "https://opencode.ai/inference/go/google/v1beta",
+}
+
+
+@pytest.mark.parametrize("api", sorted(NEW_API_BASES))
+def test_native_api_probes_keep_their_assessed_destinations(world, monkeypatch, api):
+    """Each new wire API's probe keeps its own assessed destination, explicit base and absent base alike.
+
+    The record maps the API; the probe dispatches on an explicit base and on an
+    absent base, and the sending configuration Pi consumes carries that API's
+    own base each time. If the installed configuration changes its wire API
+    after the caller assessed the destination, dispatch refuses the mismatch
+    before sending. A foreign-host catalog row is also refused. This does not
+    prove that a catalog row pairs its API with a natively served base.
+    """
+    base = NEW_API_BASES[api]
+    edit_entry(
+        world,
+        lambda e: e["adresse"]["apis"].update(
+            {api: {"basis": base, "quelle": "the synthetic native record (go-wire-apis)", "gelesen": "2026-11-06"}}
+        ),
+    )
+    model = TEST_LADDER[0]
+    harness = Harness(world, monkeypatch)
+    installed: list[tuple] = []
+    original = stage2.dispatch_go
+
+    def reading_dispatch(root, model_arg, send, *args, **kwargs):
+        """Read the configuration artifact the launch will consume; change nothing."""
+        config = kwargs.get("configuration")
+        if config is not None:
+            content = json.loads(Path(config).read_text(encoding="utf-8"))
+            rows = (
+                [content["model"]]
+                if Path(config).name == "checked-model.json"
+                else content["providers"]["opencode-go"]["models"]
+            )
+            installed.extend((one.get("api"), one.get("baseUrl")) for one in rows)
+        return original(root, model_arg, send, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "dispatch_go", reading_dispatch)
+    # The explicit base dispatches, and the sending configuration carries it.
+    explicit_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl=base)))
+    explicit_call()
+    assert installed == [(api, base)], f"{api}: the sending configuration carried {installed}"
+    # The absent base resolves to the same API's own mapping, never another API's default.
+    bare = row(model, api=api)
+    del bare["baseUrl"]
+    bare_call, _audit = harness.probe(model, go_store(bare))
+    bare_call()
+    assert installed == [(api, base), (api, base)], f"{api}: the absent base resolved to {installed}"
+    assert len(harness.sent) == 2, "a resolved native probe failed to dispatch"
+
+    # Plant: the installed configuration swaps the wire API behind dispatch's back.
+    def swapped_dispatch(root, model_arg, send, *args, **kwargs):
+        config = kwargs.get("configuration")
+        if config is not None:
+            content = json.loads(Path(config).read_text(encoding="utf-8"))
+            for one in content["providers"]["opencode-go"]["models"]:
+                one["api"] = "openai-completions"
+            Path(config).write_text(json.dumps(content), encoding="utf-8")
+        return original(root, model_arg, send, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "dispatch_go", swapped_dispatch)
+    swapped_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl=base)))
+    with pytest.raises(stage2.Refused, match="configuration"):
+        swapped_call()
+    monkeypatch.setattr(stage2, "dispatch_go", original)
+    # Plant: a foreign host under the new mapping refuses before anything is installed.
+    foreign_call, _audit = harness.probe(model, go_store(row(model, api=api, baseUrl="https://evil.test/go/v1")))
+    with pytest.raises(stage2_go.DestinationRefused, match="not the admitted host"):
+        foreign_call()
+    assert len(harness.sent) == 2, "a mismatched configuration or a foreign host reached a send"
+    assert installed == [(api, base), (api, base)], "a refused probe rewrote the dispatch evidence"

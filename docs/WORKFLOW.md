@@ -483,12 +483,24 @@ What this does not do:
 - Agents act under the maintainer's GitHub account, so nobody can tell from
   GitHub who pressed merge. The merge rule is a rule, not proof.
 - The ask rules in `.claude/settings.json` are a brake against an accidental
-  merge, not a lock: they match a command's text, and another spelling passes
-  them — `curl` against the API, the web page, `gh` run through `sh -c '…'`,
-  by an absolute path or from a script file, a flag of the merge moved before
-  `merge` (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a
-  file (`gh api graphql --input <file>` or `-F query=@<file>`), and an alias
-  set by `gh alias import` or by editing gh's own config file.
+  merge, not a lock. Since the night-stall-guard change (2026-11-09) they match
+  precisely instead of naming `merge` anywhere in the command: the direct
+  `gh pr merge` forms with their repository-flag placements, a REST call with
+  an explicit PUT method on the `repos/<owner>/<repo>/pulls/<number>/merge`
+  endpoint, the inline `mergePullRequest`, `enablePullRequestAutoMerge` and
+  `enqueuePullRequest` GraphQL mutations passed as `-f query=…` or
+  `--raw-field query=…`, the GitHub MCP merge tool, `gh alias set`, and a push
+  to an unprotected `main`. A status read that only names merge fields
+  (`mergedAt`, `mergeable`, `mergeStateStatus`, `isInMergeQueue` — the query
+  shape of the 2026-11-08 incident) does not prompt. The list is still matched
+  against the command's text, and other spellings pass it: `curl` against the
+  API, the web page, `gh` run through `sh -c '…'`, by an absolute path or from
+  a script file, a flag of the merge moved before `merge`
+  (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a file
+  (`gh api graphql --input <file>` or `-F query=@<file>`), a REST merge call
+  without the explicit PUT (`gh api` defaults to GET, and to POST once `-f` is
+  present), and an alias set by `gh alias import` or by editing gh's own
+  config file.
 - Nothing checks that the class is right, that a claimed ADR file exists, or
   that a decision pull request carries its label and block. The review
   before the merge holds them.
@@ -1010,6 +1022,22 @@ the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
 undid and exits 1; the next step is `implement <change> --stage2-off`.
+An `implement` or `repair` attempt must also have done work: its model call
+changed at least one Git-visible thing beyond the runner's own records — the
+change's `findings.md` and the body of the plan's `## Time used` section, both
+put back by the runner, do not count. The verdict measures surviving model work
+after formatting and derived preparation, discounting the generated index and
+stamp-only changes in any document, whether or not checkpoint preparation restores
+them. Replacing only an existing `updated:` value does not count as work, even
+when the replacement is not a date. An edit formatting erases is no work.
+Any other addition, edit, deletion, binary or file-mode change counts, code or
+document, planned path or not. Each call is compared with its own pre-call state,
+so an earlier attempt's retained edits never qualify a later idle one. An
+attempt without work is rejected as
+`no work done` through the existing retry path, with the reason in its
+diagnostics; so is an attempt whose work cannot be measured. If every allowed
+attempt is rejected, the run exits 1 without a checkpoint commit
+(bead coding-harness-te7q).
 If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
@@ -1597,7 +1625,18 @@ existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
-or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. The
+orchestrator also sets each accepted row's `Origin`, the provenance the repair
+brake reads, and never leaves it to a reviewer: `base` for a finding that
+existed before any repair and that no repair caused, or `fix-r<N>` (N a
+positive whole number without a leading zero) for a finding that repair round
+N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
+naming the row and its place, while a taken or fixed row in the loop record
+or a phase-6 table carries any other value; the orchestrator corrects the cell
+and runs the verb again. Ordinary release checks the record before writing
+the released block; already released history is never re-checked, including
+legacy rows released before this check existed. `release-loop --restart` and
+`release-loop --stage-failed` do not check Origin. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
@@ -1623,7 +1662,11 @@ runner's line `Record digest: sha256:<hex>` of the record it released; a
 second `release-loop` over a record whose digest equals the last released
 block's appends nothing, removes the record and says so. Each block also
 carries `Record identity: sha256:<hex>`, a hash of the round headings and the
-first seven cells of each record row, excluding Status and Broke a test.
+ID, Severity, Dimension, Where, Finding and Reviewer cells of each record row,
+excluding Origin, Status and Broke a test. For compatibility, reconciliation
+also accepts the earlier identity formula: the round headings and the first
+seven cells of each row, including Origin but excluding Status and Broke a
+test. New and reconciled blocks carry the identity that excludes Origin.
 When identity matches the last released block but digest differs (for example
 after repair or stage retirement), `release-loop` rewrites that block in
 place from the record, including statuses, snapshot, kept words and digest,
@@ -1852,6 +1895,25 @@ day session would ask:
 2. **A further case of the same mechanism at a phase-6 re-check:** record
    the finding, park that pull request and continue with the next queue
    item; the maintainer decides it in the morning.
+
+**The night profile (since the night-stall-guard change, 2026-11-09; bead
+coding-harness-ibde).** An unattended session starts Claude Code through the
+night launcher so a permission question cannot hold the run:
+`python3 ~/.claude/night.py` followed by the arguments a normal `claude` call
+would take. The launcher reads the explicit ask and deny rules of the supported
+settings scopes, turns every sourced ask rule into a deny in a private overlay,
+and runs `claude --settings <overlay> --permission-mode dontAsk` for this
+invocation only; the day settings are never rewritten, and the overlay lives in
+a temporary directory for the child's lifetime. A denied action therefore
+returns control at once instead of waiting for a person: the session continues
+with an authorised alternative, or parks the denied step and records it — it
+never disables the brake to get through. The launch is refused before `claude`
+starts when a present settings file cannot be read or parsed, or when a caller
+argument would replace the profile (`--settings`, `--permission-mode`,
+`--dangerously-skip-permissions`). What the profile does not cover stays as it
+is: external policy and authentication dialogs, a stopped or usage-limited
+session, and — until the maintainer chooses a push service — no phone alert
+and no independent heartbeat exists.
 
 **The 30-minute wake (standing since 2026-11-05/06; bead
 coding-harness-7x3c).** Supervision of an unattended run rests on scheduled
