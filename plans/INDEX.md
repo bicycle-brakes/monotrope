@@ -467,6 +467,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/origin-cell/decisions.md`](changes/origin-cell/decisions.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/findings.md`](changes/origin-cell/findings.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/research.md`](changes/origin-cell/research.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/spec.md`](changes/origin-cell/spec.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/outcome-test/decisions.md`](changes/outcome-test/decisions.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/findings.md`](changes/outcome-test/findings.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/plan.md`](changes/outcome-test/plan.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
