@@ -97,3 +97,10 @@ Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 997 files, 3869 commits, 12 rules.
 
 Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 997 files, 3869 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 997 files, 3871 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/origin-check-across-blocks/plan.md, plans/changes/origin-check-across-blocks/spec.md — unchanged

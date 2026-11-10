@@ -3082,7 +3082,7 @@ def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
 
     The walk reads the same sections under the same conditions as `findings_rows`, so every row of
     its two lists is found here again, and adds where the row sits: the block's heading with its
-    occurrence among equal headings, so repeated `## Phase 6` and released headings stay
+    occurrence among blocks of the same kind, so repeated `## Phase 6` and released headings stay
     distinguishable (bead coding-harness-3h96). The cells are carried exactly as `findings_rows`
     returns them; keep the two walks in step when either changes.
     """
@@ -3099,7 +3099,7 @@ def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
                 kind = "phase-6"
             if kind:
                 heading = line.strip()
-                seen[heading] = seen.get(heading, 0) + 1
+                seen[kind] = seen.get(kind, 0) + 1
             continue
         if kind == "released" and KEPT_FROM.match(line):
             kind = ""  # what follows is the reviewers' words, carried as they came, not rows
@@ -3111,7 +3111,7 @@ def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
             continue
         wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
         if (kind == "released" and wide) or (kind == "phase-6" and len(cells) == len(ROW_COLUMNS)):
-            blocks.append((kind, f"`{heading}`, block {seen[heading]}", cells))
+            blocks.append((kind, f"`{heading}`, block {seen[kind]}", cells))
     return blocks
 
 
@@ -3665,24 +3665,29 @@ def target_origin_refusal(taken: list[tuple[str, list[str]]], findings_text: str
     block's heading and occurrence, so the orchestrator can correct the one cell.
     """
     found: list[str] = []
-    blocks = row_blocks(findings_text)
-    used: set[int] = set()
-    for place, row in taken:
-        origin = row[3].strip()
+    located = [(place, "", row) for place, row in taken if place == "record"]
+    pending = [(place, row) for place, row in taken if place != "record"]
+    # Walk the source, not the batch: equal cells in repeated blocks have no identity in `taken`.
+    # Consume one selected occurrence at a time, preserving their document order and multiplicity.
+    for kind, label, cells in row_blocks(findings_text):
+        for index, (place, row) in enumerate(pending):
+            if kind == place and cells == row:
+                located.append((place, label, row))
+                pending.pop(index)
+                break
+    # Keep malformed or otherwise unlocated targets in the check rather than silently dropping them.
+    located.extend((place, "", row) for place, row in pending)
+    for place, label, row in located:
+        origin = row[3].strip() if len(row) > 3 else ""
         if ORIGIN_VALUE.fullmatch(origin):
             continue
+        ident = row[0] if row else "<missing ID>"
         if place == "record":
-            found.append(f"{row[0]} (loop record, Origin `{origin}`)")
+            found.append(f"{ident} (loop record, Origin `{origin}`)")
             continue
-        label = ""
-        for index, (kind, block_label, cells) in enumerate(blocks):
-            if index not in used and kind == place and cells == row:
-                used.add(index)
-                label = block_label
-                break
         where = "released block" if place == "released" else "phase-6 table"
-        named = f"{row[0]} ({where}, Origin `{origin}`)"
-        found.append(f"{row[0]} ({where}, {label}, Origin `{origin}`)" if label else named)
+        named = f"{ident} ({where}, Origin `{origin}`)"
+        found.append(f"{ident} ({where}, {label}, Origin `{origin}`)" if label else named)
     if not found:
         return None
     return (

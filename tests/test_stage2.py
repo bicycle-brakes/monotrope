@@ -9503,15 +9503,21 @@ NEWEST_BLOCK_SHAPES = {
 
 @pytest.mark.parametrize("stage2_off", [False, True])
 @pytest.mark.parametrize("record_present", [False, True])
+@pytest.mark.parametrize("record_origin", ["base", "invalid"])
 @pytest.mark.parametrize("status", ["taken — test_a", "TAKEN — test_a"])
 def test_repair_rejects_invalid_origins_in_selected_history(
-    world: World, capsys: pytest.CaptureFixture[str], status: str, record_present: bool, stage2_off: bool
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+    record_present: bool,
+    record_origin: str,
+    stage2_off: bool,
 ) -> None:
     """Criterion 1. Planted fault: an older block's taken row or a selected released row escapes the Origin check."""
     seed_tests(world)
     if record_present:
         world.write_record([("L1-1", status, "no")])
-        set_row_origin(world, "L1-1", "base")  # the record row is valid; the older blocks are what refuse
+        set_row_origin(world, "L1-1", record_origin)
     old = phase6_cells("F-old", status, "older phase finding")
     options = ("--stage2-off", "unavailable") if stage2_off else ()
     for shape, newest_parts in NEWEST_BLOCK_SHAPES.items():
@@ -9526,9 +9532,68 @@ def test_repair_rejects_invalid_origins_in_selected_history(
             error = capsys.readouterr().err
             assert "invalid Origin" in error, (shape, origin, status, record_present, stage2_off, error)
             assert "F-old" in error and "L1-3" in error, (shape, origin)
-            assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
+            if record_present and record_origin == "invalid":
+                assert "L1-1 (loop record, Origin `invalid`)" in error, (shape, origin)
+            else:
+                assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
             assert origin_state(world) == before, (shape, origin)
             assert world.calls() == [], (shape, origin)
+
+
+@pytest.mark.parametrize("place", ["released", "phase-6"])
+def test_target_origin_refusal_lists_identical_rows_in_document_order(place: str) -> None:
+    """Identical selected cells keep their source occurrences when the batch is reordered."""
+    block = released_block if place == "released" else phase6_block
+    first = (
+        released_cells("L1-1", "taken — fix", "no", "repeated finding")
+        if place == "released"
+        else phase6_cells("F-1", "taken — fix", "repeated finding")
+    )
+    first[3] = "invalid"
+    middle = first.copy()
+    middle[0] = "L1-2" if place == "released" else "F-2"
+    text = "\n\n".join([block([first]), block([middle]), block([first.copy()])])
+    refusal = stage2.target_origin_refusal([(place, middle), (place, first.copy()), (place, first.copy())], text)
+    assert refusal is not None
+    locations = [f"block {number}, Origin `invalid`" for number in (1, 2, 3)]
+    assert refusal.index(locations[0]) < refusal.index(locations[1]) < refusal.index(locations[2]), (
+        "selected rows must be diagnosed in document order, including identical occurrences",
+        refusal,
+    )
+    entries = refusal.split(". The orchestrator", 1)[0].split("; ")
+    assert first[0] in entries[0] and middle[0] in entries[1] and first[0] in entries[2]
+
+
+@pytest.mark.parametrize("place", ["record", "released", "phase-6"])
+@pytest.mark.parametrize("row", [[], ["F-short"], ["F-short", "MINOR", "SPEC"]])
+def test_target_origin_refusal_handles_short_rows(place: str, row: list[str]) -> None:
+    """A selected row with no Origin cell yields a controlled refusal, never IndexError."""
+    try:
+        refusal = stage2.target_origin_refusal([(place, row)], "")
+    except IndexError:
+        pytest.fail("a short selected row must produce an Origin refusal instead of a traceback")
+    assert refusal is not None and "invalid Origin" in refusal
+    assert (row[0] if row else "missing ID") in refusal
+    assert "correct the cell" in refusal
+
+
+@pytest.mark.parametrize("place", ["released", "phase-6"])
+def test_target_origin_refusal_distinguishes_dated_block_headings(place: str) -> None:
+    """Block occurrences stay unique when only the heading's date changes."""
+    if place == "released":
+        first = released_cells("L1-1", "taken — fix", "no", "first finding")
+        second = released_cells("L1-2", "taken — fix", "no", "second finding")
+        block = released_block
+    else:
+        first = phase6_cells("F-1", "taken — fix", "first finding")
+        second = phase6_cells("F-2", "taken — fix", "second finding")
+        block = phase6_block
+    first[3] = second[3] = "invalid"
+    text = "\n\n".join([block([first]), block([second]).replace("2026-10-12", "2026-10-13")])
+    refusal = stage2.target_origin_refusal([(place, first), (place, second)], text)
+    assert refusal is not None
+    assert "2026-10-12`, block 1" in refusal
+    assert "2026-10-13`, block 2" in refusal, "different dates must not restart the block occurrence"
 
 
 def test_repair_origin_refusal_has_no_effects_across_blocks(
