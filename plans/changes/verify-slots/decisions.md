@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -34,6 +34,13 @@ context: |
   Repository change: the lock admits N holders at once, FIFO kept, the memory check per admission.
   Architecture change: none.
 
+In the context of the machine-wide verify lock, which admits one full check at
+a time, facing repair lanes that waited one to five hours each at the lock
+while one check of about 25 minutes ran, we decided that two full checks may
+run at the same time on the machine, to achieve a shorter wait, accepting that
+two checks side by side each run slower and that the effect must be measured
+before the change counts as done — 2026-11-09
+
 ## Q-2 · Where the number lives
 
 asked: 2026-11-09
@@ -46,6 +53,13 @@ context: |
   Today: no setting exists; one slot is built into the lock.
   Repository change: one declared value read by the lock, validated; documentation names it.
   Architecture change: none; the central configuration file is its own change (bead coding-harness-twvx).
+
+In the context of the slot count of the verify lock, facing a value that the
+machine and later measurements may change, we decided that the count lives in
+one central, easily changed place with the default 2 and that no constant
+repeats it, to achieve a change of the count without a code change, accepting
+that the central harness configuration is its own change (bead
+coding-harness-twvx) and the value moves there later — 2026-11-09
 
 Evidence to keep in view (bead coding-harness-p6mu): three concurrent full
 checks once drove the load above 100 and each check past 30 minutes, against
