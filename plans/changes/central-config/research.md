@@ -9,8 +9,13 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-twvx
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "Haiku 5.5, two explorations on the fallback route, 2026-11-10"}
+review: {status: pending, approved_by: null, approved_at: null}
+class: architectural
 tags: [research]
+neighbours:
+  - plans/changes/review-loop-deep-a/spec.md
 ---
 
 # central config — Research
