@@ -19,9 +19,9 @@ tags: [adr, review-loop, calibration]
   stage order and clean-round end condition and ADR 0017's review-loop bound;
   supersedes no ADR. Amends no D- or O-number.
 * Review: direction stated by the maintainer on 2026-11-07 through 2026-11-10
-  (`plans/changes/review-fewer-rounds/decisions.md`, Q-1 through Q-12).
-  The first question list, free second-round seating and small-change live
-  trigger still await answers; no answer is inferred here. Decider:
+  (`plans/changes/review-fewer-rounds/decisions.md`, Q-1 through Q-15),
+  including the approved initial questions, three-model free round and
+  always-on small-change second round. This draft adds no answer. Decider:
   maintainer; prepared by Codex. Acceptance is the merge commit, recorded
   nowhere else; the header's review remains pending.
 * Date: 2026-11-10; takes effect on merge.
@@ -79,13 +79,15 @@ the maintainer's answered experiment and avoids inventing its threshold.
    Log singleton share, jackknife and Chao; initially the estimators are
    diagnostic only. A small change has no three-reviewer estimator.
 4. In shadow, every change gets one free second round over the whole diff,
-   including when round 1 found nothing. Its seating remains open. In live
-   mode at least one per-lens trigger schedules that one round, never a lens
-   subset. Assess at ten completed changes; compare share and the recorded
-   estimators once against round-2 misses. The recorded calibration decision
+   including when round 1 found nothing. Three distinct models from several
+   families read it independently, with at most one implementer-family member
+   (Q-14/Q-8). In live mode at least one full-change per-lens trigger schedules
+   that one round, never a lens subset. Small changes always receive the
+   free second round, in shadow and live modes (Q-15). Assess at ten completed
+   changes; compare share and the recorded estimators once against round-2 misses. The recorded calibration decision
    sets the better trigger and threshold, ending shadow if evidence is clear;
-   otherwise ask the maintainer. No agent invents a production rule or the
-   small-change trigger.
+   otherwise ask the maintainer. No agent invents a production threshold
+   or changes the answered small-change rule.
 5. The initial central policy has two loop rounds. Round-2 MAJOR/BLOCKERs
    in this change enter one last repair regardless of location; only defects
    in code outside the change may become follow-up work. Tests/security/false
@@ -105,22 +107,25 @@ the maintainer's answered experiment and avoids inventing its threshold.
    policy. New/changed files block on new lint/formality checks, stock reports
    only; existing blocking gates retain their contracts. The spec inventories
    every formality and its gate; uncovered ones get follow-up beads.
-8. The maintainer approves the first scenario-question list. Only a phase-6
-   finding not covered by that list warrants an addition; it applies at once
+8. The maintainer approved the first scenario-question list unchanged on
+   2026-11-10 (Q-13). Only a phase-6 finding not covered by that list warrants an addition; it applies at once
    and is shown with its evidence in the pull request.
 
 ## Consequences
 
 - Fifteen calls in full-change round 1, or five for small changes, replace
-  the current first swarm. Second-round call count remains undecided. Quota and
-  wall time must be measured; this ADR claims no measured cost saving.
+  the current first swarm. The one free second round costs three calls,
+  giving eighteen calls for a full shadow change or eight for a small one,
+  before failed-call retries. Quota and wall time must be measured; this ADR
+  claims no measured cost saving.
 - Missing reviewers cannot silently turn the three-seat experiment into a
   two-seat one. Incomplete/cut input pauses completion with its evidence kept.
 - Calibration owes accepted-defect identities, overlap, unique yield, call
   tokens/time and verification/lock-wait evidence; unavailable values say so.
-- Check-question approval and the configuration dependency block rollout.
-  Free-round seating and small-change trigger answers also block rollout.
-  The live winner and threshold belong to the later calibration decision.
+- The merged central configuration skeleton still blocks implementation.
+  Check questions, free-round count/diversity and the small-change rule are
+  answered; the live winner and threshold belong to the later calibration
+  decision, with no automatic promotion from shadow.
 - Current doctrine and prompts change together; historical ADRs remain intact.
 
 ## Validation

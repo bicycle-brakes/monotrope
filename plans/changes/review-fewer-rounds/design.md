@@ -19,11 +19,10 @@ tags: [design, review-loop]
 
 # Design — review-fewer-rounds
 
-Shape the focused-review experiment in `spec.md` from the twelve answered
-records and the dated research. The first question list, the free second-round
-seating and the small-change live trigger remain open in the spec; this file
-records no approval. The
-2026-11-10 answers replace the earlier repeated-lens second-round design.
+Shape the focused-review experiment in `spec.md` from the fifteen answered
+records and dated research. The 2026-11-10 answers approve the initial
+questions (Q-13), seat one mixed-family trio in round 2 (Q-14), and always
+run that round for small changes (Q-15). This draft records no new approval.
 
 ## Alternatives
 
@@ -59,8 +58,9 @@ until completed or explicitly restarted, never converted into captures.
 - **Runner → reviewer:** build round-1 scenario questions from the initially approved
   configuration, spec/plan and a frozen implementation revision; round 2
   receives the whole diff without lens questions or other reviewers' answers.
-  Its configured roster is filled only after the spec's seating answer. Paid Go calls
-  keep existing repository read tools; Codex uses the official CLI's read-only
+  Its configured roster is one mixed-family trio for both small and full
+  changes, at most one member from the implementer family (Q-14/Q-8).
+  Paid Go calls keep existing repository read tools; Codex uses the official CLI's read-only
   route with `gpt-6.1-terra`/`medium`, independent of draft/repair/phase-6 routing.
   No reviewer sees another answer. Calls may execute concurrently within a
   round; no repair runs until required answers have been collected. Class
@@ -84,13 +84,13 @@ until completed or explicitly restarted, never converted into captures.
 
 ## Data model
 
-The orchestrator writes the central policy, only after the maintainer's open
-intent answers are recorded and the configuration skeleton has merged. Proposed
+The orchestrator writes the central policy after the configuration skeleton
+has merged, using the existing intent answers Q-1 through Q-15. Proposed
 fields are:
 
 | Record | Fields and owner |
 |---|---|
-| Policy | Schema version; lens IDs, defect-class questions and approval reference; ordered focused/free rounds; full/small round-1 seats and independently answered round-2 seats; seat endpoint/model/family/effort; dated precision evidence and cost evidence; trigger `singleton_share`; mode `shadow`; candidate threshold `0.5` and comparison `>` marked provisional; live calibration reference absent; phase-6 maximum ordinary reviews `2`, night exception maximum `1` with single-mechanism repair precondition; weekly style cadence. Orchestrator, through central configuration. |
+| Policy | Schema version; lens IDs, defect-class questions and approval reference; ordered focused/free rounds; full/small round-1 seats and one independent three-model mixed-family round-2 roster; small-change round-2 rule `always`; seat endpoint/model/family/effort; dated precision evidence and cost evidence; trigger `singleton_share`; mode `shadow`; candidate threshold `0.5` and comparison `>` marked provisional; live calibration reference absent; phase-6 maximum ordinary reviews `2`, night exception maximum `1` with single-mechanism repair precondition; weekly style cadence. Orchestrator, through central configuration. |
 | Run snapshot | Run ID, policy version/digest and resolved policy, implementation family, preparation receipt, round input HEAD/diff digests, scheduled lens/seat keys, launched/completed/failed state, completed-round state. Runner, atomically under existing record lock. |
 | Triage map | Raw row ID → accepted defect ID or rejected reason, primary defect lens, reporting seat/lens or free-round origin, severity, mechanism key and disposition. Orchestrator, validated by runner. |
 | Lens observation | Run/round/lens/input digest, S, f1/f2/f3, singleton share, jackknife total/remaining/completeness, Chao total/remaining/completeness or undefined reason, candidate decision, actual scheduled decision and shadow mode. Runner after triage. |
@@ -106,7 +106,10 @@ models, at most one implementer-family member per lens, sole-reviewer family
 exclusion, initial question approval, finite round order/count, declared
 trigger/comparison and applicable ranges, positive review budget and bounded
 night exception, known keys and duplicate YAML keys. Small-change seats must be
-explicit; a missing free-round roster or small-change live rule is invalid. A
+explicit; a missing free-round trio or a small-change rule other than `always`
+is invalid under the initial policy. The free trio also permits at most one
+implementer-family member. Use the initial model choices and small-seat
+selection recorded as details in the spec, subject to admission/preparation. A
 live mode without a recorded calibrated rule and comparison is invalid. The
 initial sample is shadow; zero accepted defects yield an undefined share, not a
 fabricated zero. No default enables live mode.
@@ -126,12 +129,13 @@ reasons. Store diagnostics and the candidate comparison, but shadow always
 schedules the one free second round. For a one-seat small change, S=f1 and
 share=1 when S>0; three-seat estimators are explicitly not applicable. Failed
 required seats remain incomplete. In approved live mode, per-lens triggers
-combine by OR into one free second round, never a subset of lenses; unresolved
-evidence cannot be silently interpreted as a negative trigger. Q-11 permits an
-estimator to win the later comparison, so the adapter accepts the recorded
+combine by OR into one free second round for full changes, never a subset of
+lenses; small changes always receive that round, independent of the signal.
+Unresolved evidence cannot be silently interpreted as a negative trigger.
+Q-11 permits an estimator to win the later comparison, so the adapter accepts the recorded
 winner rather than hard-coding share forever.
 
-Round 2 uses its separately declared, maintainer-answered seating on the
+Round 2 uses its separately declared three-model mixed-family roster on the
 post-repair revision and reads freely over the whole diff; no third round
 follows under the initial policy. All accepted MAJOR/BLOCKERs and required
 MINORs enter one final repair; style cannot create that repair. The orchestrator
@@ -166,8 +170,9 @@ clean-up bead and its own PR; retain source row IDs and collection week so rows
 are not collected twice. Taste-only limits are not required work. No
 reviewer/repair attempt writes the tracker or starts a scheduling service.
 Question additions require a phase-6 row that no current question covers, its
-evidence source and PR disclosure; only the initial list awaits approval. The
-formality inventory in the spec distinguishes existing gates, planned mechanical
+evidence source and PR disclosure; the initial list already has approval
+under Q-13 and is copied unchanged from the spec into the central declaration.
+The formality inventory in the spec distinguishes existing gates, planned mechanical
 checks and semantic card-scope comparison with no gate. The orchestrator creates
 the uncovered item's follow-up and records its ID/title; the new check cannot
 claim that semantic equivalence is machine-proved.
@@ -175,10 +180,11 @@ claim that semantic equivalence is machine-proved.
 ## ADR draft
 
 The one MADR-form draft is
-`docs/adr/0027-focused-review-with-a-shadow-period.md`, numbered after 0025 on
-`origin/main` as read at `fe8a6329` on 2026-11-10. The existing branch-local
-0026 draft is revised, not duplicated as 0027. It amends ADR 0021 and ADR 0017
-without changing a D-/O-number or an existing ADR body; no continuity-map
+`docs/adr/0027-focused-review-with-a-shadow-period.md`. At baseline
+`67042d9b` on 2026-11-10 it is already the change's branch-local draft:
+0026 is reserved for the central-configuration dependency, as recorded in
+`decisions.md`. Revise 0027 in place; do not create another ADR. It amends
+ADR 0021 and ADR 0017 without changing a D-/O-number or an existing ADR body; no continuity-map
 amendment is required. Its pending approval and merge-effective status are
 explicit. There is no second embedded or separately numbered draft.
 

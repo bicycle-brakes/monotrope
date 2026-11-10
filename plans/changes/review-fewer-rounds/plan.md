@@ -18,8 +18,8 @@ tags: [plan, review-loop]
 # Plan — review-fewer-rounds
 
 ```text
-For you:     Five focused lenses replace repeated unfocused rounds; small changes use five first-round calls, and shadow adds one free second round.
-Done when:   All 24 criteria have evidence, the answered policy is wired through the runner and gates, and make verify passes.
+For you:     Five focused lenses replace repeated unfocused rounds; one free second round uses three models, always for small changes and during shadow.
+Done when:   All 26 criteria have evidence, the answered policy is wired through the runner and gates, and make verify passes.
 Appetite:    12 h of phase 4, repair rounds included; a stop, not an estimate.
 Not now:     A production trigger or threshold, the later calibration study, central configuration infrastructure or a dashboard.
 Pre-mortem:  suppose it failed: most likely because duplicate reports were counted as different defects and distorted the calibration evidence.
@@ -28,14 +28,14 @@ Starts unless you say stop.
 
 ## Prerequisites and ownership
 
-**Phase 4 is blocked**, independently of the card's veto: the central
-configuration skeleton must merge first (central configuration work item
-`coding-harness-twvx`, Q-4), and the maintainer must answer the spec's three
-open decisions: initial questions, free second-round seating, and the
-small-change live trigger. The orchestrator records the actual answers and
-context in `decisions.md` and the bead; this draft records none.
+**Phase 4 waits for the central configuration skeleton to merge**,
+independently of the card's veto (central configuration work item
+`coding-harness-twvx`, Q-4). The fifteen intent records are answered:
+Q-13 approves the exact questions, Q-14 fixes three mixed-family reviewers
+for the free round, and Q-15 always runs it for small changes in both modes.
+No repeated interview or new approval is needed for those answers.
 
-At baseline `fe8a6329` on 2026-11-10 there is no central review-policy
+At baseline `67042d9b` on 2026-11-10 there is no central review-policy
 contract. Proposed integration is `model-endpoints.yaml:review_loop`;
 confirm the merged dependency's canonical path/reader/schema before phase 4
 and reconcile this file list if different. No interim file or local schema
@@ -61,8 +61,11 @@ The existing branch-local ADR draft is the one new ADR against main.
    phase-6 budgets. Reject duplicate/unknown keys and missing intent answers
    before any call. Expose `--check` for CI. Initial full-change proposal:
    DeepSeek Flash, MiMo Flash and Terra/medium, as dated in the spec; small
-   changes get one explicit other-family seat per lens. Do not infer round-2
-   seats. Policy edits drive runtime without repeated constants.
+   changes get one explicit other-family seat per lens. Round 2 has one trio
+   for either change size, initially the full-change models, with several families and at most one implementer-family member.
+   Each small lens uses the precision seat unless self-family, otherwise the
+   declared cheap other-family seat; refuse an invalid sole seat. Policy edits
+   drive runtime without repeated constants.
 2. Create `scripts/stage2_review_lenses.py` and
    `tests/test_stage2_review_lenses.py`: versioned run/seat persistence,
    round-1 prompt construction, free round-2 prompts, triage/capture mapping,
@@ -89,8 +92,10 @@ The existing branch-local ADR draft is the one new ADR against main.
    Undefined denominators carry reasons; one-seat small changes have no
    three-seat estimator. Shadow always runs one whole-diff free second round
    on the repaired revision, never five focused re-reviews. Future approved
-   live mode ORs per-lens signals into that one round, using the recorded
-   comparison winner/threshold and the separately answered small-change rule.
+   live mode ORs full-change per-lens signals into that one round, using the
+   recorded comparison winner/threshold. Small changes always run it in both
+   modes, even with zero accepted findings. Both modes use exactly three free
+   calls, from several model families; no repeated lens groups in round 2.
    Round-2 required repairs form one final batch, without a third loop round;
    outside-change follow-ups go to the orchestrator. Clear style rides along
    only when repair is already required; taste remains a named PR limit.
@@ -130,9 +135,11 @@ The existing branch-local ADR draft is the one new ADR against main.
    docs/research/review-fewer-rounds-calibration.jsonl` and `summarize --input
    docs/research/review-fewer-rounds-calibration.jsonl`.
 8. Orchestrator bootstrap: change `model-endpoints.yaml` at the dependency's
-   canonical section with actual intent answers, approval reference and Terra
-   loop admission. Change `decisions/gates.yaml` to register policy and
-   changed-path formality/lint checks; regenerate `.github/workflows/ci.yml`
+   canonical section with actual intent answers, approval reference Q-13 and Terra
+   loop admission, copying the fifteen questions from the spec unchanged.
+   Store the separate three-model free roster and small-change `always` rule
+   from Q-14/Q-15; reject a one-family trio or multiple implementer-family seats.
+   Change `decisions/gates.yaml` to register policy and changed-path formality/lint checks; regenerate `.github/workflows/ci.yml`
    and `plans/INDEX.md` with the commands below. Extend the spec's formality
    inventory if another gap appears. Create a follow-up bead for uncovered
    semantic card-scope comparison, recording title/ID in the inventory and PR;
@@ -168,7 +175,7 @@ callers and fault-sensitive tests.
 - 8: not yet written tests/test_stage2_review_lenses.py::test_overlap_diagnostics_by_seat_count — wrong capture matrix or fabricated one-seat estimate
 - 9: not yet written tests/test_stage2_review_lenses.py::test_shadow_runs_one_free_second_round — zero findings skip it or lens prompts constrain it
 - 10: not yet written tests/test_stage2_review_lenses.py::test_ten_change_comparison_preserves_misses_and_needs_decision — duplicates/zeros distort sample or report promotes itself
-- 11: not yet written tests/test_stage2_review_lenses.py::test_live_trigger_ors_into_one_free_round — multiple rounds, selected lenses, wrong comparison or an invented small-change rule
+- 11: not yet written tests/test_stage2_review_lenses.py::test_live_trigger_ors_into_one_free_round — multiple rounds, selected lenses, wrong comparison or applying overlap to small changes
 - 12: not yet written tests/test_stage2_review_lenses.py::test_round_two_leads_to_one_final_repair_and_no_third_round — location-based deferral or third full round
 - 13: not yet written tests/test_stage2_review_lenses.py::test_minor_and_style_dispositions_do_not_drive_rounds — style-only repair or unrepaired required MINOR
 - 14: not yet written tests/test_check_review_formalities.py::test_changed_files_block_and_unchanged_stock_reports — invalid changed metadata/card/time/lint passes or old stock blocks
@@ -185,6 +192,8 @@ callers and fault-sensitive tests.
 - 23: not yet written tests/test_stage2_review_policy.py::test_question_additions_require_uncovered_phase_six_evidence — unapproved first list or unexplained later addition is used
 - 23: not a test — phase-6 review checks that every immediate addition and its source finding are disclosed in the PR; an omitted addition refutes it
 - 24: not a test — orchestrator checks the central-skeleton merge commit before phase 4 and the PR file list for interim settings; pre-merge implementation or an interim policy refutes it
+- 25: not yet written tests/test_stage2_review_lenses.py::test_free_round_dispatches_three_independent_mixed_family_models — wrong count, shared output or invalid family mix reaches calls
+- 26: not yet written tests/test_stage2_review_lenses.py::test_small_changes_always_run_free_round_in_shadow_and_live — empty results or live thresholds skip the second round
 
 ## Verification
 
@@ -214,22 +223,27 @@ git diff --check
 ```
 
 `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent at
-`fe8a6329`, read 2026-11-10. Keep the prompt's card/ledger/time form and use
+`67042d9b`, read 2026-11-10. Keep the prompt's card/ledger/time form and use
 the present registry/interview/ledger checks; do not add the missing files.
 The runner owns derived-file updates, full verification and the one commit.
 
 ## Draft validation — 2026-11-10
 
-Measured on this draft over baseline `fe8a6329`: interview minimums,
-question-context and criterion-ledger commands above exit 0. The scoped
-research-handoff command exits 0 with the explicit legacy/no-v2 exemption;
-it does not certify a swarm. `git diff --check` passes.
+Measured on the revised draft over baseline `67042d9b`: interview minimums,
+question-context and criterion-ledger exit 0. Research-handoff exits 0 with
+its explicit legacy/no-v2 exemption; this does not certify a research swarm.
+Read-only structural checks pass for required headers, the current generated
+index, the runner's card check, the empty time section, all 26 criterion
+numbers and their decision references. The fifteen approved questions match
+the prior draft unchanged. `git diff --check` passes.
 
-The complete registry gate is not run here: no tracker render confined to
-this worktree was supplied, and this attempt may not read outside the tree.
-The runner must measure registry coupling and `make verify` with its actual
-tracker context. The absent change-artefact validator cannot be measured.
-Open decisions remain open regardless of these structural check results.
+The full registry gate, including tracker coupling, is not measured here:
+no tracker render confined to this worktree was supplied, and this attempt
+may not read outside it. The change-artefact validator is absent, so that
+command is not measured. The runner performs its document checks, full
+verification and commit; this draft claims no implementation test evidence.
+The existing ADR 0027 is the only added ADR against the local `origin/main`
+reference; no fresh remote state could be read through GitHub in this attempt.
 
 ## Boundaries and route
 

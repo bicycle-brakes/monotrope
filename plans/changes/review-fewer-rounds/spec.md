@@ -50,7 +50,8 @@ This is a proposal until its decision pull request merges.
 - **Round:** the scheduled reviewers reading one frozen revision, followed by
   triage; repairs happen after those calls, never between members.
 - **Free second round:** reviewers read the whole diff without lens questions;
-  free describes their focus, not provider pricing. Its seating remains open.
+  free describes their focus, not provider pricing. Three models from several
+  families review it once (Q-14).
 - **Small change:** class `bounded`, or a text-only change under the repository
   rule (Markdown outside `scripts/`, `tests/`, `prompts/` and `decisions/`).
 - **Shadow:** record per-lens signals, but always run the one free second round.
@@ -62,7 +63,7 @@ This is a proposal until its decision pull request merges.
    through maintainer-approved defect-class check questions.
    *Refuted by:* a missing lens, a role-only prompt, or an unapproved question
    list reaching a model.
-   *Basis:* decisions.md#Q-1, decisions.md#Q-9, decisions.md#Q-10.
+   *Basis:* decisions.md#Q-1, decisions.md#Q-9, decisions.md#Q-10, decisions.md#Q-13.
 
 2. When round 1 runs, each of the five lenses receives three independent
    read-only calls (best measured precision, cheap other lineage, and Codex
@@ -136,7 +137,7 @@ This is a proposal until its decision pull request merges.
     *Refuted by:* selective lens re-review, more than one second round,
     equality interpreted differently from the configured comparison, or an
     estimator becoming authoritative before the recorded comparison of
-    triggers; a fabricated small-change trigger also refutes it.
+    triggers; applying this overlap rule to small changes also refutes it.
     *Basis:* decisions.md#Q-3, decisions.md#Q-11, decisions.md#Q-12.
 
 12. When round 2 finishes, its triaged findings lead to at most one last repair
@@ -197,11 +198,12 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-2, decisions.md#Q-8; research.md, current loop.
 
 20. When this change is delivered, the workflow, prompts and one new amendment
-    describe focused round 1, a free second round, and bounded phase 6 with
-    its single-mechanism night exception.
+    describe focused round 1, the three-model free second round, and bounded
+    phase 6 with its single-mechanism night exception.
     *Refuted by:* current instructions still requiring the old ladder/until-clean
-    route for new runs or claiming the threshold/questions were approved here.
-    *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-7, decisions.md#Q-12.
+    route for new runs, calling answered choices open, or claiming a live
+    threshold was approved here.
+    *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-7, decisions.md#Q-12, decisions.md#Q-14.
 
 21. When a week has clear style findings left standing, the orchestrator
     gathers them in one clean-up bead for repair in its own pull request.
@@ -230,6 +232,20 @@ This is a proposal until its decision pull request merges.
     creating a second authoritative policy source.
     *Basis:* decisions.md#Q-4.
 
+25. When the free second round runs, exactly three distinct models from
+    several model families independently read the whole diff once, with at
+    most one member of the implementer's family.
+    *Refuted by:* fifteen repeated lens calls, fewer or more than three
+    required calls, shared answers, one family filling the roster, or two
+    implementer-family members.
+    *Basis:* decisions.md#Q-14, decisions.md#Q-8.
+
+26. When a small change completes round 1 and its required repair, it receives
+    exactly one free second round in both shadow and live modes.
+    *Refuted by:* zero findings, undefined overlap, a threshold or live mode
+    skipping its second round.
+    *Basis:* decisions.md#Q-15, decisions.md#Q-2.
+
 ## Non-goals
 
 - Proving that lenses find more defects or that singleton share estimates
@@ -247,8 +263,8 @@ This is a proposal until its decision pull request merges.
 
 ## Formality inventory
 
-Gate names below describe current checks read at commit `fe8a6329` on
-2026-11-10; a planned extension is explicitly labelled. Existing blocking
+The inventory below carries forward the checks documented in the draft at
+`fe8a6329` on 2026-11-10; a planned extension is explicitly labelled. Existing blocking
 checks keep their contracts; new lint/formality checks block changed paths only
 and report unchanged stock. Reviewers hunt defects, not these formats.
 
@@ -288,8 +304,8 @@ on 2026-11-09 reports approximately 27% median underestimation for
 three-inspector jackknife data, not a calibrated error rate for this repo. Zero
 accepted findings are weak evidence. During shadow both estimators are
 diagnostics; shadow always runs the free second round. One-seat small changes
-cannot measure overlap; their live trigger is explicitly undecided. Missing
-required seats pause completion rather than silently changing the frozen
+cannot measure overlap; they always get the free second round, including in
+live mode (Q-15). Missing required seats pause completion rather than silently changing the frozen
 seating. Existing legacy snapshots retain their old semantics until completed or
 explicitly restarted by the maintainer.
 
@@ -301,42 +317,23 @@ explicitly restarted by the maintainer.
   `prompts/04b-review-loop.md`, `prompts/06-review.md`, central configuration,
   its validator, the new checks and generated `.github/workflows/ci.yml` and
   `plans/INDEX.md`, as enumerated in `plan.md`.
-- The maintainer has answered the three open decisions below; the central
-  configuration skeleton has merged and its integration is reconciled in the plan.
+- The central configuration skeleton has merged and its integration is
+  reconciled in the plan; the initial list and both round policies follow
+  the existing answers (Q-13 through Q-15).
 - Protected areas and non-goals remain untouched in the PR file list.
 - The PR closes the focused review work item (`coding-harness-3rtn`), with
   final trailer `Closes-Bead: coding-harness-3rtn`.
 - Special live runs: none required to draft or implement; report subsequent
   calibration observations with their dated commits, never as existing evidence.
 
-## Open decisions
+## Approved lens questions
 
-These unresolved intent choices prevent a final phase-2 pass. The orchestrator
-presents them one at a time and records actual answers with their context in
-`decisions.md` and the tracker; this draft cannot do so.
+The maintainer approved this English list unchanged on 2026-11-10
+(decisions.md#Q-13, referring to draft `5bda389c`). Later additions follow
+Q-9 and Q-10: an uncovered phase-6 finding is required and the addition is
+disclosed in the PR. The runtime list belongs to the central configuration.
 
-`[DECISION]` The check-question list requires maintainer approval under Q-10. It
-is proposed below, not answered in this draft. The orchestrator records the
-eventual answer and its context in `decisions.md` and the bead.
-
-Topic: Die fünf Prüfschwerpunkte brauchen konkrete Prüffragen.
-Intention: Die Fragen sollen die beobachteten Fehler treffen, bevor Modelle damit prüfen.
-Today: Die Schwerpunkte sind beschlossen; eine Fragenliste ist noch nicht freigegeben.
-Repository change: Die folgende Liste wird zur freizugebenden Grundlage der zentralen Konfiguration.
-Architecture change: Keine zusätzliche Änderung; die Liste füllt die bereits beschlossenen Schwerpunkte aus.
-
-Goal in one sentence: Jeder Schwerpunkt sucht anhand konkreter Fragen nach seiner Fehlerklasse.
-Options:
-
-- Option 1 — Die folgende Liste verwenden: Alle fünf Schwerpunkte erhalten
-  konkrete Fragen; spätere Ergänzungen gelten bei einem durch Phase 6 belegten Loch sofort und stehen im Pull Request.
-- Option 2 — Einzelne Fragen ändern: Die Umsetzung wartet auf die korrigierte Liste.
-
-Recommendation: Option 1 — sie verbindet die beobachteten Spezifikations- und Wartungsfehler mit den Fehlerszenarien aus der Recherche.
-If you say "ok": Genau die folgende Liste wird als freigegebener Fragenkatalog umgesetzt.
-What is lost: Ein längerer Fragenkatalog könnte weitere Spezialfälle einzeln nennen, erhöht aber den Prüfaufwand.
-
-| Lens | Proposed check questions | Derivation |
+| Lens | Approved check questions | Derivation |
 |---|---|---|
 | Spec fidelity and scope | Does every criterion hold for its trigger, state and refuting case? Does the implementation preserve the recorded decisions and non-goals? Do current user instructions promise behavior the implementation actually provides? | Q-1; research §(a); Q-10's measured SPEC share on 2026-11-09 |
 | Hostile input and failure paths | Can malformed, adversarial or missing input bypass a boundary? Do timeout, denial and dependency failure stop safely with truthful evidence? Can credentials or outside data enter output or foreign calls? | Q-1; research's cut-input failure and scenario-reading evidence §(a) |
@@ -344,55 +341,12 @@ What is lost: Ein längerer Fragenkatalog könnte weitere Spezialfälle einzeln 
 | Tests as evidence | Does each criterion have evidence that reaches the production boundary? Would its stated fault turn that evidence red? Do fixtures hide failure, partial results or a missing prerequisite? | Q-1; research's distinction between measured results and missing observations |
 | Maintainability | Does one place own each rule without diverging copies? Does the repair close the faulty mechanism across its callers? Can a later maintainer understand and change the behavior without hidden coupling or unrelated scope? | Q-1; Q-10's measured MAINT share on 2026-11-09; research's repeated-repair examples |
 
-Soll diese Fragenliste unverändert umgesetzt werden (Option 1)?
+## Open decisions
 
-### Second-round seating — unresolved intent
-
-`[DECISION]` Q-3 leaves the free second round's seating open (`decisions.md`,
-Open — not counted). No roster is inferred from round 1.
-
-Topic: Wer die freie zweite Prüfrunde übernimmt.
-Intention: Die freie Runde ist beschlossen; für ausführbare Aufrufe fehlt ihre Besetzung.
-Today: Die vorhandene Planung wiederholt die fünf Dreiergruppen; dafür gibt es keine aktuelle Antwort.
-Repository change: Die zentrale Konfiguration erhält genau eine Besetzung für die freie Runde.
-Architecture change: Keine weitere Runde; die vorhandene zweite Runde liest ohne Prüfschwerpunkte.
-
-Goal in one sentence: Die freie zweite Runde erhält eine klare, bezahlbare Besetzung.
-Options:
-
-- Option 1 — Ein unabhängiges Dreierteam liest den gesamten Diff: drei Aufrufe mit mehreren Modellfamilien.
-- Option 2 — Alle bisherigen Prüfer lesen erneut frei: fünfzehn Aufrufe bei großen Änderungen, mit mehr Wiederholung.
-
-Recommendation: Option 1 — mehrere Modellfamilien bleiben vertreten, während die freie Runde drei Aufrufe benötigt.
-If you say "ok": Ein Dreierteam aus den drei für große Änderungen vorgesehenen Modellen liest einmal ohne Linsen; die Familienregel gilt weiter.
-What is lost: Die vielen unabhängigen Wiederholungen der zweiten Option entfallen.
-
-Soll die freie zweite Runde ein unabhängiges Dreierteam erhalten (Option 1)?
-
-### Small-change trigger — unresolved intent
-
-`[DECISION]` One reviewer per lens makes every accepted defect a singleton; Q-11
-therefore cannot discriminate small changes without another answer. Shadow still
-always runs the free second round, including for small changes.
-
-Topic: Wann kleine Änderungen nach der Schattenphase eine zweite Runde bekommen.
-Intention: Ein Prüfer pro Schwerpunkt liefert keine Überlappung für die bisherige Auslöseregel.
-Today: Bei kleinen Änderungen ist jeder bestätigte Fund ein Einzelfund; die Auslösung ist ausdrücklich offen.
-Repository change: Die zentrale Konfiguration erhält eine eigene Regel für kleine Änderungen.
-Architecture change: Keine zusätzlichen Prüfer oder Runden; nur die Auslösung wird vervollständigt.
-
-Goal in one sentence: Kleine Änderungen bekommen eine verständliche Regel statt einer scheinbar gemessenen Überlappung.
-Options:
-
-- Option 1 — Kleine Änderungen immer zweimal prüfen: kein Schluss aus ungeeigneten Überlappungsdaten, aber weiterhin Kosten der freien Runde.
-- Option 2 — Kleine Änderungen nur bei bestätigten Pflichtreparaturen erneut prüfen: weniger Aufrufe, aber eine leere erste Runde kann übersehene Fehler verdecken.
-
-Recommendation: Option 1 — ohne zweite Stimme fehlt die Grundlage für eine verlässliche Auslassregel.
-If you say "ok": Kleine Änderungen erhalten auch nach der Schattenphase immer genau eine freie zweite Runde.
-What is lost: Die Möglichkeit, ihre zweite Runde bei leerer erster Runde zu sparen.
-
-Sollen kleine Änderungen weiterhin immer eine freie zweite Runde bekommen
-(Option 1)?
+None open for this draft. The later calibration decision chooses the live
+trigger and threshold; it is not an unanswered prerequisite for implementing
+the shadow policy. Implementation still waits for the merged central
+configuration skeleton (Q-4). No maintainer answer is written by this draft.
 
 I decide these reversible details and record why:
 
@@ -415,3 +369,13 @@ I decide these reversible details and record why:
   threshold; this shadow candidate does not prejudge that outcome.
 - `[DETAIL]` A lens reviewer reports only BLOCKERs outside its own lens,
   preserving serious incidental discoveries without recreating general review.
+- `[DETAIL]` The free second round initially reuses the full-change trio
+  as one mixed-family team, with three calls total; Q-14 fixes the count
+  and diversity, while model identities remain centrally revisable.
+- `[DETAIL]` Each small-change lens initially uses the precision seat
+  when it is outside the implementer family, otherwise the declared
+  cheap other-family seat; refuse preparation if neither is admissible.
+  This keeps its one-seat policy explicit without claiming per-lens data.
+- `[DETAIL]` Retain the change's existing ADR 0027 draft. Its reserved
+  number follows the recorded central-configuration dependency; do not
+  create ADR 0028 or revise historical ADR bodies.
