@@ -525,7 +525,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
-| [`changes/swarm-report-format/decisions.md`](changes/swarm-report-format/decisions.md) | draft | none | 2026-11-09 | coding-harness-4q9y |
+| [`changes/swarm-report-format/decisions.md`](changes/swarm-report-format/decisions.md) | draft | none | 2026-11-10 | coding-harness-4q9y |
 | [`changes/swarm-report-format/findings.md`](changes/swarm-report-format/findings.md) | draft | none | 2026-11-09 | coding-harness-4q9y |
 | [`changes/swarm-report-format/plan.md`](changes/swarm-report-format/plan.md) | draft | none | 2026-11-10 | coding-harness-4q9y |
 | [`changes/swarm-report-format/research.md`](changes/swarm-report-format/research.md) | draft | none | 2026-11-10 | coding-harness-4q9y |

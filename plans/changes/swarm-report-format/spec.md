@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, research-swarm]
 class: bounded
 appetite: 3
-adr_files: []
+adr_files: [docs/adr/0020-phase-1-research-swarm.md]
 neighbours: []
 ---
 
