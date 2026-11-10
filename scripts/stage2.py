@@ -3465,8 +3465,28 @@ def record_rows(record: str, *, strict: bool = False) -> list[list[str]]:
     the compatibility reader for other verbs still accepts typed Status pipes.
     """
     rows = []
+    in_table = False
     for line, reviewer in _record_lines(record):
-        cells = None if reviewer else split_row(line)
+        if reviewer:
+            in_table = False
+            continue
+        cells = split_row(line)
+        if strict:
+            # Check table syntax before filtering loop IDs: split_row deliberately returns None
+            # for missing boundary pipes, which must never hide a damaged runner-owned row.
+            first = _PIPE.split(line.strip().lstrip("|"), maxsplit=1)[0].strip()
+            table_line = (
+                line.lstrip().startswith("|")
+                or (in_table and bool(line.strip()))
+                or ("|" in line and (LOOP_ID.fullmatch(first) or first == ROW_COLUMNS[0]))
+            )
+            in_table = bool(table_line)
+            if table_line and (cells is None or len(cells) != len(ROW_COLUMNS)):
+                count = "missing boundary pipe" if cells is None else f"{len(cells)} cells"
+                raise Refused(
+                    f"the loop record has a malformed loop row/table line ({count}; "
+                    f"{len(ROW_COLUMNS)} cells are needed); mend it, nothing has been written."
+                )
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
         if len(cells) < len(ROW_COLUMNS) or (strict and len(cells) != len(ROW_COLUMNS)):
@@ -7447,29 +7467,28 @@ _WHERE_SUFFIX = re.compile(r"(?:(?:::[^\s:]+)|(?::\d+(?:[-–—]\d+)?)|(?:#L?\d
 def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     """The repository file locations a `Where` cell names, Markdown delimiters and line suffixes stripped.
 
-    A token counts when it carries a `/`, an explicit `./` prefix or a root filename with an extension:
-    prose and paths that climb out stay out. Absolute paths below the worktree
-    are made relative without reading the named files; Markdown links contribute their target only.
+    One membership check against the Git index decides what is a repository path, including
+    extensionless root files. Prose, external URLs and untracked paths do not count. Absolute
+    paths below the worktree are made relative without reading the named files; Markdown links
+    contribute their target only. An unreadable index refuses rather than guessing locations.
     """
+    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
     locations = []
     cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
     for token in _WHERE_TOKEN_SPLIT.split(cell):
         token = token.strip("`*_\"'()<>")
-        explicit_relative = token.startswith("./")
         while token.startswith("./"):
             token = token[2:]
         token = _WHERE_SUFFIX.sub("", token).rstrip(".,:;)")
-        root_filename = re.fullmatch(r"(?:\.[\w-]+(?:\.[\w-]+)*|[\w-]+(?:\.[\w-]+)+)", token) is not None
         if not token or ".." in Path(token).parts:
-            continue
-        if "/" not in token and not explicit_relative and not root_filename:
             continue
         if Path(token).is_absolute():
             try:
                 token = Path(token).relative_to(root).as_posix()
             except ValueError:
                 continue
-        locations.append(token)
+        if token in tracked:
+            locations.append(token)
     return locations
 
 

@@ -20423,6 +20423,82 @@ def test_marking_a_vanished_record_names_the_ids(world: World) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def triage_tracked_paths(world: World) -> None:
+    """Real index entries distinguish repository locations from reviewer prose and URLs."""
+    names = ("tests/test_stage2.py", "tests/helper.py", "README.md", "Makefile", "LICENSE", ".gitignore")
+    for name in names:
+        path = world.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n", encoding="utf-8")
+    git(world.root, "add", "--", *names)
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("location", ["Makefile:12", "LICENSE", ".gitignore:2", "[build](Makefile#L12)"])
+def test_triage_matches_extensionless_root_locations_against_tracked_files(world: World, location: str) -> None:
+    """A tracked root file must keep a mixed finding eligible for an ordinary repair."""
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0, (
+        "tracked root files, including extensionless names, must count as production locations"
+    )
+    assert stage2.record_rows(world.record().read_text())[0][7] == "taken — repair both files"
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize(
+    "location",
+    ["[reference](https://example.com/reference)", "https://example.com/src/app.py", "src/untracked.py", "unknown.md"],
+)
+def test_triage_ignores_locations_absent_from_the_tracked_file_list(
+    world: World, location: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """External links and untracked files cannot bypass the test-only refusal."""
+    (world.root / "src/untracked.py").write_text("untracked\n", encoding="utf-8")
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2, (
+        "only tracked repository paths may count as production locations"
+    )
+    assert "taken — not a test — <reason>" in capsys.readouterr().err
+    assert world.record().read_bytes() == before
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["closing", "opening", "both", "header", "header-opening", "separator", "separator-opening", "non-loop-row"],
+)
+def test_triage_refuses_malformed_table_rows_before_publishing(
+    world: World, damage: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No damaged runner-owned table line may be silently skipped during strict validation."""
+    triage_record(world, [triage_row(), triage_row("L1-2", status="taken — previous", broke="yes")])
+    original = world.record().read_text(encoding="utf-8")
+    row = next(line for line in original.splitlines() if line.startswith("| L1-2 |"))
+    if damage in {"header", "header-opening"}:
+        row = next(line for line in original.splitlines() if line.startswith("| ID |"))
+    elif damage in {"separator", "separator-opening"}:
+        row = next(line for line in original.splitlines() if line.startswith("|---"))
+    if damage == "non-loop-row":
+        damaged = "| unexpected | malformed |"
+    elif damage in {"opening", "header-opening", "separator-opening"}:
+        damaged = row[1:]
+    elif damage == "both":
+        damaged = row[1:-1]
+    else:
+        damaged = row[:-1]
+    world.record().write_text(original.replace(row, damaged), encoding="utf-8")
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "repair the target") == 2, (
+        "every malformed table row must refuse before publishing the target update"
+    )
+    assert "loop row" in capsys.readouterr().err
+    assert world.record().read_bytes() == before, "a malformed record must remain byte-for-byte unchanged"
+
+
 def triage_record(w: World, rows_: list[list[str]]) -> None:
     """A loop record of one round whose rows carry the Where locations and statuses triage reads."""
     directory = w.record().parent
@@ -20596,6 +20672,7 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
         ("src/app.py:12", "taken", 0),
     ],
 )
+@pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
     world: World, where: str, decision: str, code: int, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -20814,6 +20891,7 @@ def test_triage_refuses_guard_authority_in_an_ordinary_reason(world: World, reas
 
 
 @pytest.mark.parametrize("location", ["./README.md", "README.md:12", "`README.md`", "[readme](./README.md)"])
+@pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_accepts_mixed_test_and_root_file_locations(world: World, location: str) -> None:
     """Root file locations count as production locations without opening them."""
     triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
