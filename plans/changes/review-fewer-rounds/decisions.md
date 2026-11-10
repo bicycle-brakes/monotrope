@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -27,10 +27,15 @@ bead coding-harness-3rtn on the day it was given. They are transcribed here
 unchanged in substance, one record per question. Questions still open are
 listed at the end and are not counted.
 
+On 2026-11-10 the maintainer chose, question by question, the accepted
+downside of each decision statement; where that choice added a rule, the
+answer line says so and the statement carries that day's date. Q-3 was
+answered anew on that day.
+
 ## Q-1 · Which review lenses round 1 covers
 
 asked: 2026-11-08
-answer: "Plus Wartbarkeit" — five lenses: (1) spec fidelity and scope, (2) hostile input and failure paths, (3) state, retry and abort, (4) tests as evidence, (5) maintainability; artefact formalities (headers, status, plan card against decisions, time ledger) go to a gate instead of a reviewer.
+answer: "Plus Wartbarkeit" — five lenses: (1) spec fidelity and scope, (2) hostile input and failure paths, (3) state, retry and abort, (4) tests as evidence, (5) maintainability; artefact formalities (headers, status, plan card against decisions, time ledger) go to a gate instead of a reviewer. Added by the maintainer on 2026-11-10: the spec lists every artefact formality with the gate that checks it; a formality without a gate becomes a follow-up bead.
 answered_by: maintainer
 status: answered
 context: |
@@ -43,15 +48,17 @@ context: |
 In the context of the lenses of review round 1, facing reviews that mixed
 defect hunting with artefact formalities, we decided that round 1 covers five
 lenses — spec fidelity and scope, hostile input and failure paths, state,
-retry and abort, tests as evidence, maintainability — and that artefact
-formalities go to a gate instead of a reviewer, to achieve reviewers that
-spend their attention on defects, accepting that a formality no gate checks is
-found by nobody — 2026-11-09
+retry and abort, tests as evidence, maintainability — that artefact
+formalities go to gates instead of a reviewer, that the spec lists every
+formality with the gate that checks it, and that a formality without a gate
+becomes a follow-up bead, to achieve reviewers that spend their attention on
+defects, accepting that nobody checks a formality without a gate until its
+follow-up bead is done — 2026-11-10
 
 ## Q-2 · Who sits on each lens
 
 asked: 2026-11-08
-answer: every lens is reviewed by the model with the best measured precision, a cheap model of another lineage and Codex gpt-6.1-terra at effort medium — 15 calls in round 1, five of them Codex; think deeply about which aspects must be covered and check for empirical evidence.
+answer: every lens is reviewed by the model with the best measured precision, a cheap model of another lineage and Codex gpt-6.1-terra at effort medium — 15 calls in round 1, five of them Codex; think deeply about which aspects must be covered and check for empirical evidence. Added by the maintainer on 2026-11-10: a small change (class bounded, or text-only) gets one reviewer per lens, 5 calls in round 1.
 answered_by: maintainer
 status: answered
 context: |
@@ -64,15 +71,16 @@ context: |
 In the context of the seats on each lens, facing single reviewers that miss
 what another lineage finds, we decided that every lens is reviewed by the
 model with the best measured precision, a cheap model of another lineage and
-Codex gpt-6.1-terra at effort medium — 15 calls in round 1, five of them
-Codex, to achieve overlap between independent reviewers on every lens,
-accepting that round 1 costs 15 calls for every change, a small one included —
-2026-11-09
+Codex gpt-6.1-terra at effort medium — 15 calls in round 1, five of them Codex
+— and that a small change (class bounded, or text-only) gets one reviewer per
+lens, 5 calls, to achieve overlap between independent reviewers on every lens
+where the change is large enough to pay for it, accepting that a small change
+has no second voice on any lens — 2026-11-10
 
 ## Q-3 · When a second round runs
 
 asked: 2026-11-08
-answer: per lens, by the overlap of its three reviewers (a capture-recapture estimate of the defects still undiscovered); a second round runs only for lenses with a high estimate; the threshold comes from research with evidence.
+answer: "Die zweite Runde ohne Linsen laufen lassen" (2026-11-10) — the trigger stays per lens (Q-11); when it fires for at least one lens, one single second round runs in which the reviewers read the whole diff freely, without lenses. This replaces the answer of 2026-11-08 (a second round per lens, only for lenses with a high capture-recapture estimate; the threshold from research with evidence).
 answered_by: maintainer
 status: answered
 context: |
@@ -83,17 +91,18 @@ context: |
   Architecture change: replaces "until clean" in ADR 0021 by an estimate-driven second round.
 
 In the context of the question when a second review round runs, facing second
-rounds that ran for every change whatever round 1 found, we decided that a
-second round runs per lens and only where the overlap of its three reviewers
-estimates many defects still undiscovered, with the threshold taken from
-research with evidence, to achieve fewer rounds where round 1 was thorough,
-accepting that an estimate from three reviewers is coarse and can stop a lens
-too early — 2026-11-09
+rounds that ran for every change whatever round 1 found, we decided that the
+trigger is measured per lens (Q-11) and that, when it fires for at least one
+lens, one single second round runs in which the reviewers read the whole diff
+freely, without lenses, to achieve at most one further round and a second look
+that is not bound to the questions of round 1, accepting that the second round
+is unfocused again and also reads the lenses whose trigger did not fire —
+2026-11-10
 
 ## Q-4 · Where seating, rounds and limits live
 
 asked: 2026-11-08
-answer: the model selection must be centrally and easily changeable — likewise which rounds run, the number of rounds, which and how many models sit in a round; one declarative, validated file (the central configuration of bead coding-harness-twvx) holds lenses, seats, round count and order, the second-round trigger and its threshold, and the phase-6 re-check limit; no constant repeats it.
+answer: the model selection must be centrally and easily changeable — likewise which rounds run, the number of rounds, which and how many models sit in a round; one declarative, validated file (the central configuration of bead coding-harness-twvx) holds lenses, seats, round count and order, the second-round trigger and its threshold, and the phase-6 re-check limit; no constant repeats it. Added by the maintainer on 2026-11-10: no interim file: the implementation of this change waits until the skeleton of the central configuration is merged; spec and plan may be written earlier.
 answered_by: maintainer
 status: answered
 context: |
@@ -105,17 +114,18 @@ context: |
 
 In the context of the home of seating, rounds and limits, facing values the
 maintainer wants to change without a code change, we decided that one
-declarative, validated file — the central configuration (bead coding-harness-
-twvx) — holds lenses, seats, round count and order, the second-round trigger
-and its threshold and the phase-6 re-check limit, and no constant repeats it,
-to achieve a change of the review set-up by one edited line, accepting that
-this change depends on the central configuration or carries an interim file
-until it exists — 2026-11-09
+declarative, validated file — the central configuration (bead
+coding-harness-twvx) — holds lenses, seats, round count and order, the
+second-round trigger and its threshold and the phase-6 re-check limit, that no
+constant repeats it, and that no interim file is built, to achieve a change of
+the review set-up by one edited line, accepting that the implementation of
+this change waits until the skeleton of the central configuration is merged,
+while spec and plan may be written earlier — 2026-11-10
 
 ## Q-5 · How many phase-6 re-checks
 
 asked: 2026-11-08
-answer: the first phase-6 review plus one re-check; after that the runner stops and reports to the maintainer with a proposal (a named limit in the PR, a mechanism repair, or stop); from the second re-check finding of one kind a mechanism repair is required instead of case repairs. The limit lives in the central configuration.
+answer: the first phase-6 review plus one re-check; after that the runner stops and reports to the maintainer with a proposal (a named limit in the PR, a mechanism repair, or stop); from the second re-check finding of one kind a mechanism repair is required instead of case repairs. The limit lives in the central configuration. Added by the maintainer on 2026-11-10: at night the runner may run a second re-check when all open findings belong to one mechanism and that mechanism was repaired.
 answered_by: maintainer
 status: answered
 context: |
@@ -128,16 +138,20 @@ context: |
 In the context of the number of phase-6 re-checks, facing changes that went
 through re-check after re-check, we decided that phase 6 is the first review
 plus one re-check, after which the runner stops and reports to the maintainer
-with a proposal, and that from the second re-check finding of one kind a
-mechanism repair is required instead of case repairs; the limit lives in the
-central configuration, to achieve a bounded end of every change, accepting
-that a change can stop with open findings and wait for the maintainer —
-2026-11-09
+with a proposal, that from the second re-check finding of one kind a mechanism
+repair is required instead of case repairs, that at night the runner may run a
+second re-check when all open findings belong to one mechanism and that
+mechanism was repaired, and that the limit lives in the central configuration,
+to achieve a bounded end of every change without a night lost to one
+mechanism, accepting that the night re-check costs a further full check and a
+Codex call the maintainer did not approve one by one, and that in every other
+case a change stops with open findings and waits for the maintainer —
+2026-11-10
 
 ## Q-6 · What round 2 does with findings
 
 asked: 2026-11-08
-answer: round 2 sorts by kind, not by location — a MAJOR or BLOCKER goes into the same last repair (no new full round; phase 6 with its limit follows); a MINOR follows the MINOR rule (tests, security or false statements repaired without asking; style named as an accepted limit); a follow-up bead only for a finding in code outside this change. This replaces the earlier answer of the same day that sorted by location.
+answer: round 2 sorts by kind, not by location — a MAJOR or BLOCKER goes into the same last repair (no new full round; phase 6 with its limit follows); a MINOR follows the MINOR rule (tests, security or false statements repaired without asking; style named as an accepted limit); a follow-up bead only for a finding in code outside this change. This replaces the earlier answer of the same day that sorted by location. Added by the maintainer on 2026-11-10: the accepted downside confirmed as worded.
 answered_by: maintainer
 status: answered
 context: |
@@ -158,7 +172,7 @@ checked by phase 6 alone — 2026-11-09
 ## Q-7 · Style findings
 
 asked: 2026-11-08
-answer: an unambiguous style finding (a clear proposal, not a matter of taste) rides along in a repair that runs anyway; it never triggers a repair or a round on its own; matters of taste stay accepted limits named in the PR. The MINOR rule in AGENTS.md changes with this change.
+answer: an unambiguous style finding (a clear proposal, not a matter of taste) rides along in a repair that runs anyway; it never triggers a repair or a round on its own; matters of taste stay accepted limits named in the PR. The MINOR rule in AGENTS.md changes with this change. Added by the maintainer on 2026-11-10: once a week a clean-up bead collects the clear style findings left standing and repairs them in a pull request of its own.
 answered_by: maintainer
 status: answered
 context: |
@@ -171,15 +185,17 @@ context: |
 In the context of style findings, facing style rows that triggered repairs and
 rounds of their own, we decided that an unambiguous style finding rides along
 in a repair that runs anyway and never triggers a repair or a round on its
-own, that matters of taste stay accepted limits named in the pull request, and
-that the MINOR rule in AGENTS.md changes with this change, to achieve clear
-style fixes at no extra round, accepting that a clear style finding stays
-unrepaired when no repair runs — 2026-11-09
+own, that once a week a clean-up bead collects the clear style findings left
+standing and repairs them in a pull request of its own, that matters of taste
+stay accepted limits named in the pull request, and that the MINOR rule in
+AGENTS.md changes with this change, to achieve clear style fixes at no extra
+round, accepting one more pull request a week with a full check of its own,
+and style work that occupies a lane — 2026-11-10
 
 ## Q-8 · Self-review
 
 asked: 2026-11-08
-answer: exclude the implementer's model family only when it would be the sole reviewer; when several reviewers run in parallel it may sit among them. Markdownlint and the formalities gate block new and changed files only; the existing stock stays report-only until cleaned.
+answer: exclude the implementer's model family only when it would be the sole reviewer; when several reviewers run in parallel it may sit among them. Markdownlint and the formalities gate block new and changed files only; the existing stock stays report-only until cleaned. Added by the maintainer on 2026-11-10: at most one reviewer of the implementer's model family sits on a lens.
 answered_by: maintainer
 status: answered
 context: |
@@ -191,18 +207,20 @@ context: |
 
 In the context of self-review and the formalities gates, facing a rule that
 excluded the implementer's model family from every review, we decided that the
-implementer's model family is excluded only when it would be the sole reviewer
-and may sit among several parallel reviewers, and that Markdownlint and the
-formalities gate block new and changed files only while the existing stock
-stays report-only until cleaned, to achieve more reviewers to choose from and
-gates that do not block on old files, accepting that a reviewer of the
-implementer's family may share its blind spots, and old formality faults stay
-for now — 2026-11-09
+implementer's model family is excluded when it would be the sole reviewer,
+that among several parallel reviewers at most one of that family sits on a
+lens, and that Markdownlint and the formalities gate block new and changed
+files only while the existing stock stays report-only until cleaned, to
+achieve more reviewers to choose from without a lens read mainly by the
+implementer's family, and gates that do not block on old files, accepting that
+the seating is tighter — when a model of another family fails, the lens runs
+with fewer reviewers or waits — and that old formality faults stay for now —
+2026-11-10
 
 ## Q-9 · The form of a lens
 
 asked: 2026-11-09
-answer: "Fehlerklassen + Prüffragen" — each lens is a defect class with a list of concrete check questions, not a role the reviewer plays.
+answer: "Fehlerklassen + Prüffragen" — each lens is a defect class with a list of concrete check questions, not a role the reviewer plays. Added by the maintainer on 2026-11-10: a question list is revised only when phase 6 finds something no question covers.
 answered_by: maintainer
 status: answered
 context: |
@@ -214,14 +232,16 @@ context: |
 
 In the context of the form of a lens, facing reviewer roles that left open
 what to look for, we decided that each lens is a defect class with a list of
-concrete check questions, not a role the reviewer plays, to achieve reviews
-that can be compared and measured per question, accepting that the question
-lists must be written and kept current — 2026-11-09
+concrete check questions, not a role the reviewer plays, and that a list is
+revised only when phase 6 finds something no question covers, to achieve
+reviews that can be compared and measured per question, with a stated occasion
+for upkeep, accepting that a gap in a list shows only after it has let one
+defect through — 2026-11-10
 
 ## Q-10 · Where the check questions come from
 
 asked: 2026-11-09
-answer: "Aus unseren Funden + Literatur, du gibst frei" — an agent derives the questions per lens from the repository's measured loop and phase-6 rows and from the literature; the maintainer approves the list.
+answer: "Aus unseren Funden + Literatur, du gibst frei" — an agent derives the questions per lens from the repository's measured loop and phase-6 rows and from the literature; the maintainer approves the list. Added by the maintainer on 2026-11-10: the maintainer approves only the first list; later additions apply at once and are shown in the pull request.
 answered_by: maintainer
 status: answered
 context: |
@@ -234,14 +254,16 @@ context: |
 In the context of the source of the check questions, facing check questions
 that could be invented without evidence, we decided that an agent derives the
 questions per lens from the repository's measured loop and phase-6 rows and
-from the literature, and the maintainer approves the list, to achieve
-questions grounded in the defects this repository actually had, accepting that
-the list waits for the maintainer's approval before it is used — 2026-11-09
+from the literature, that the maintainer approves the first list, and that
+later additions apply at once and are shown in the pull request, to achieve
+questions grounded in the defects this repository actually had, without a
+night waiting for an approval, accepting that a bad addition acts until the
+maintainer sees it in the pull request and takes it back — 2026-11-10
 
 ## Q-11 · What triggers a second round
 
 asked: 2026-11-09
-answer: "Einzelfund-Anteil, Jackknife nur protokolliert" — the share of accepted findings that only one reviewer of the lens reported decides; the Mh-jackknife and Chao estimates are computed and recorded only.
+answer: "Einzelfund-Anteil, Jackknife nur protokolliert" — the share of accepted findings that only one reviewer of the lens reported decides; the Mh-jackknife and Chao estimates are computed and recorded only. Added by the maintainer on 2026-11-10: after the shadow period the simple share is compared once with the recorded estimators, and the better trigger decides from then on.
 answered_by: maintainer
 status: answered
 context: |
@@ -253,15 +275,18 @@ context: |
 
 In the context of the trigger of a second round, facing several estimators
 that could decide, we decided that the share of accepted findings that only
-one reviewer of the lens reported decides, and that the Mh-jackknife and Chao
-estimates are computed and recorded only, to achieve a trigger that is simple
-to read and to check, accepting that the simple share may be less accurate
-than the recorded estimators — 2026-11-09
+one reviewer of the lens reported is the trigger, that the Mh-jackknife and
+Chao estimates are computed and recorded only, and that after the shadow
+period (Q-12) the simple share is compared once with the recorded estimators
+and the better trigger decides from then on, to achieve a trigger that is
+simple to read and to check and is measured once against the alternatives,
+accepting the work of that one comparison, and that the less accurate trigger
+may stand until it is done — 2026-11-10
 
 ## Q-12 · How the second-round threshold is introduced
 
 asked: 2026-11-09
-answer: "B: Schatten, immer zweite Runde" — during a shadow period every lens always gets a second round; the single-finding rule (Q-11) is computed and recorded but does not decide; after 10–20 changes the threshold is set from what the second rounds actually found where the rule would have stopped.
+answer: "B: Schatten, immer zweite Runde" — during a shadow period every lens always gets a second round; the single-finding rule (Q-11) is computed and recorded but does not decide; after 10–20 changes the threshold is set from what the second rounds actually found where the rule would have stopped. Added by the maintainer on 2026-11-10: the shadow period ends after 10 changes when the data are clear; otherwise the runner asks the maintainer.
 answered_by: maintainer
 status: answered
 context: |
@@ -273,12 +298,15 @@ context: |
 
 In the context of the introduction of the second-round threshold, facing a
 threshold nobody has measured in this repository, we decided that during a
-shadow period every lens always gets a second round while the single-finding
-rule is computed and recorded but does not decide, and that after 10 to 20
-changes the threshold is set from what the second rounds found where the rule
-would have stopped, to achieve a threshold set from this repository's own
-data, accepting that the shadow period saves no round and costs more calls
-than today — 2026-11-09
+shadow period every change always gets the one free second round (Q-3) while
+the single-finding rule is computed and recorded per lens but does not decide,
+that the threshold is set from what the second rounds found where the rule
+would have stopped, and that the shadow period ends after 10 changes when the
+data are clear and otherwise the runner asks the maintainer, to achieve a
+threshold set from this repository's own data and a shadow period with a
+stated end, accepting that 10 changes may be too few for rare kinds of defect,
+and that until the end the procedure saves no round and costs more calls than
+today — 2026-11-10
 
 ## Open — not counted
 
@@ -289,3 +317,6 @@ than today — 2026-11-09
   calls against today's rounds and verify runs. The stage-1 exploration of
   2026-11-09 (research.md) did not read the bead and covers the repository
   only. Answered on 2026-11-09 by the Opus research section of research.md.
+- Open after the answers of 2026-11-10: who sits in the free second round
+  (Q-3), and what triggers it on a small change, where one reviewer per lens
+  (Q-2) makes every finding a single finding (Q-11).
