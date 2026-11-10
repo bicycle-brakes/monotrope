@@ -224,3 +224,34 @@ Not determinable until the interview fixes the scope. The files that would certa
 - **No class declaration in `research.md` or `spec.md`.** The addendum states `architectural` (bead coding-harness-twvx, maintainer 2026-11-08). The header still needs the declaration.
 - **Provenance** is still `human-written`. The content is model-produced, so the skeleton's own rule applies (`ai-drafted-reviewed` with `produced_by:` and `review:`).
 - **Tracker not read by this pass.** The class and the consumer list come from the addendum and were not checked against the tracker.
+
+## Draft preparation addendum — 2026-11-10
+
+Read at `7a027101`, confined to this worktree and repository git metadata:
+
+- The five answered records in `decisions.md` resolve the earlier scope,
+  prose, file-layout and migration-order questions. Earlier exploration
+  statements about missing class/neighbours/provenance describe their earlier
+  state; the current header supplies all three. No complete research-swarm/v2
+  record is present; both recorded explorations used the Stage-1 fallback.
+- `AGENTS.md`, house rule 4, already states
+  `writing_sessions_per_repository` with default 2. Repository-wide search
+  finds no numeric implementation of that named setting. ADR 0006 names the
+  setting without supplying a second numeric source. It can therefore be
+  the first small lane-count value without changing parallel-work policy.
+- `scripts/verify_lock.py` still implements exclusive admission; a
+  `verify-slots` change folder is absent here. The first slice must not infer
+  the contents of the other branch or build multi-slot verification.
+- `scripts/stage2.py::work_prompt` reads phase text and repository rules,
+  with an optional byte snapshot through `prompt_input`; dispatch checks the
+  outgoing text through `checked_prompt`. This is an existing boundary for
+  rendering the first owned placeholder and retaining its source bytes.
+- `pyproject.toml` already pins PyYAML and Pydantic; a shared typed schema
+  needs no new dependency. `decisions/gates.yaml` remains human-reserved by
+  `provenance.yaml` and already generates hosted CI. Gate addition belongs
+  to orchestrator bootstrap; moving the list remains the last, separate
+  decision slice.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent
+  at this baseline. The draft follows the phase-3 prompt and uses the
+  existing interview, research-handoff and criterion-ledger checks instead;
+  it cannot report the absent validator as green.
