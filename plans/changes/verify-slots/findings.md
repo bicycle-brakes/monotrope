@@ -616,3 +616,5 @@ Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash failed its post-run checks on 2026-11-10; the first Sonnet attempt ran without the pinned Pi in the worktree · leak check clean over 985 files, 3841 commits, 12 rules.
