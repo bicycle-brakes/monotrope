@@ -76,6 +76,7 @@ def research_select(catalog: Catalog, policy: dict | None = None, **more) -> dic
         policy or {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         [],
         expected_version=stage2.PI_VERSION,
+        measured_wire_apis=("openai-completions",),
         address=ADDRESS,
         **({"paid": (), "exclusion": None} | more),
     )
