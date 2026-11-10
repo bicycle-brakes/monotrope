@@ -2183,9 +2183,11 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
-    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 4.0)
     # capacity one: the runner's admission must genuinely queue behind the holder, the way the
-    # wait that this test pins only happens when the capacity is fully occupied
+    # wait that this test pins only happens when the capacity is fully occupied. The queue wait
+    # (3 s) plus the execution (1.5 s) exceeds the limit (4 s), while the execution alone keeps
+    # a wide margin for a loaded machine's process start.
     (world.state / "coding-harness").mkdir(parents=True, exist_ok=True)
     (world.state / "coding-harness" / verify_lock.SLOTS_NAME).write_text("1", encoding="utf-8")
     ready = world.state / "holder-ready"
@@ -2200,7 +2202,7 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
         world.script(make=[{"stdout": "green", "sleep": 1.5}])
         queued = threading.Thread(target=attempt)
         queued.start()
-        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+        time.sleep(3.0)  # real seconds of queueing while the holder owns the admission
         holder.terminate()
         holder.wait(timeout=30)
         queued.join(timeout=90)

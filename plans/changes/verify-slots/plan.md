@@ -184,8 +184,13 @@ rows stand in `findings.md`.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash failed the post-run checks after the allowed attempts (2026-11-10).
+
 ## Time used
 
 2026-11-10 09:26:23–10:34:38 UTC, 4095 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 10:34:48–10:39:42 UTC, 293 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 10:39:52–10:42:42 UTC, 170 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-10 10:50:19–11:36:09 UTC, 2750 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

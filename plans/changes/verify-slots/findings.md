@@ -438,3 +438,181 @@ Stage-2 call, 2026-11-10: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order - A...
 > 2 failed, 24 passed in 30.69s
 > ```
+
+Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash failed the post-run checks after the allowed attempts (2026-11-10) · leak check clean over 985 files, 3824 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +5 -3
+> - `tests/test_verify_lock.py` +4 -3
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 9269 lines of this gate left out …]
+> FAILED tests/test_stage2_research_catalog.py::test_each_run_forces_a_fresh_go_catalog
+> FAILED tests/test_stage2_research_catalog.py::test_removed_shipped_free_ids_do_not_return
+> FAILED tests/test_stage2_research_catalog.py::test_free_eligibility_requires_text_chat_and_explicit_tools
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_capabilities_intersect_only_fresh_pi_ids
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[http-500]
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[http-404]
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[unparsable]
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[not-an-object]
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[no-provider]
+> FAILED tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct
+> FAILED tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules
+> FAILED tests/test_stage2_research_catalog.py::test_nonempty_selection_keeps_both_sources_and_exclusion_evidence
+> FAILED tests/test_stage2_research_catalog.py::test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates[{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}]
+> FAILED tests/test_stage2_research_catalog.py::test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates[{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"alpha-free","tool_call":true}}}}]
+> FAILED tests/test_stage2_research_catalog.py::test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates[{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}]
+> FAILED tests/test_stage2_research_catalog.py::test_missing_metadata_id_excludes_only_that_candidate
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_uses_locked_pi_1_5_0
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_contains_new_go_models
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_keeps_messages_catalog_base
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-0]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-946684800000]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-0]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-946684800000]
+> ERROR tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[synthetic-protocol-check-free]
+> ERROR tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[deepseek-v4.1-flash]
+> ERROR tests/test_pi_contract.py::test_real_reviewer_tool_contract - Failed: t...
+> ERROR tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff
+> ERROR tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps
+> ERROR tests/test_pi_contract.py::test_real_reviewer_ignores_ambient_credentials
+> ERROR tests/test_pi_contract.py::test_real_extension_tool_input_and_result - ...
+> ERROR tests/test_pi_contract.py::test_real_session_policy_blocks_foreign_reads
+> ERROR tests/test_pi_contract.py::test_real_session_binding_holds_the_assessed_base
+> ERROR tests/test_pi_contract.py::test_real_model_listing_is_a_provider_table
+> ERROR tests/test_pi_contract.py::test_real_opencode_provider_contracts - Fail...
+> ERROR tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory
+> ERROR tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused
+> ERROR tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction
+> ERROR tests/test_pi_contract.py::test_contract_environment_excludes_parent_provider_keys
+> ERROR tests/test_pi_contract.py::test_real_catalog_headers_remain_literal - F...
+> ERROR tests/test_pi_contract.py::test_shipped_catalog_prepares_both_swarms_offline
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[review preparation refuses-the review preparation refused the shipped Go catalog-planted: the review preparation refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research preparation refuses-the research preparation refused the shipped Go catalog-planted: the research preparation refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research catalog helper refuses-the research preparation refused the shipped Go catalog-planted: the production research catalog helper refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[review bypasses the shared selection-the review preparation refused the shipped Go catalog-refused: the model beam-free is a paid model; the free class does not admit it]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research bypasses the shared selection-the research preparation refused the shipped Go catalog-refused: beam-free is a paid model; the free class does not admit it]
+> 111 failed, 5111 passed, 17 skipped, 5 warnings, 29 errors in 1250.26s (0:20:50)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [leerprobe] $ lauf_cmd
+> BLOCK (1):
+>   - 1 red case(s) without a declared reason
+>       tests.test_verify_lock::test_each_slot_checks_memory_before_work
+>       
+>       Add them with: python3 scripts/kit/probe.py --messen
+>
+> INFO  (1):
+>   - 1383 of 1428 cases carry into a foreign repository (96 %)
+>       mechanismus 113 · bestand 872 file(s)
+>
+> BLOCK (1), repeated last:
+>   - 1 red case(s) without a declared reason
+> ── [leerprobe] RED (block) — der Lauf ist rot.
+> ── [plans-registry] $ lauf_cmd
+> [… 199 lines of this gate left out …]
+>   - Bead 'coding-harness-680l' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-680l` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-6ie' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-6ie` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-788' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-788` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-8v2c.1' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-8v2c.1` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-9ycy' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-9ycy` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-bvy' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-bvy` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-c99h' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-c99h` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-cjf9' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-cjf9` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-g19n' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-g19n` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-ibde' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-ibde` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-k93f' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-k93f` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-mfth' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-mfth` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-nr6h' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-nr6h` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-p3xq' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-p3xq` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-t83' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-t83` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-tlr4' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-tlr4` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-twvx' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-twvx` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-ut8q' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-ut8q` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-uxa9' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-uxa9` -- or set the bead back to 'open' if nobody is working on it.
+>   - Bead 'coding-harness-xul8' is 'in_progress' but has no artefact under plans/changes/
+>       The tracker says work is going on here; the workflow never heard of it. Fix: `make change NAME=<name> BEAD=coding-harness-xul8` -- or set the bead back to 'open' if nobody is working on it.
+>
+> INFO  (2):
+>   - 28 running beads checked, 27 without artefact
+>   - 535 artefacts checked
+>
+> BLOCK (1), repeated last:
+>   - plans/changes/verify-slots/measurements.md: no readable frontmatter
+> ── [plans-registry] RED (block) — der Lauf ist rot.
+> ── [frontmatter-current] $ lauf_cmd
+> docs/WORKFLOW.md: stale — updated 2026-11-09 is older than its last change 2026-11-10 (a258d445)
+> plans/changes/verify-slots/measurements.md: no-frontmatter
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> (no-frontmatter and duplicate need a hand edit; the stamp names them and leaves them alone.)
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 35659 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````

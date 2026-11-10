@@ -49,9 +49,10 @@ if out:
 # One protected body that appends its name — the order of these lines is the
 # admission order of independent entries.
 ORDER_BODY = """
-import os
+import os, time
 with open(os.environ["PROBE_LOG"], "a", encoding="utf-8") as handle:
     handle.write(os.environ["PROBE_NAME"] + chr(10))
+time.sleep(float(os.environ.get("PROBE_SLEEP", "0")))
 """
 
 # An entry that holds admission through the context, the way scripts.stage2
@@ -1533,9 +1534,9 @@ def test_slot_waiters_reserve_in_fifo_order(tmp_path: Path) -> None:
     state = tmp_path / "state"
     log = tmp_path / "order.log"
     extra = lambda name, seconds: {"PROBE_LOG": str(log), "PROBE_NAME": name, "PROBE_SLEEP": seconds}  # noqa: E731
-    holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "6"))
+    holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "30"))
     assert _wait_until(lambda: "holder-a" in _log_lines(log)), "holder A never started"
-    holder_b = _supervised(state, ORDER_BODY, extra("holder-b", "6"))
+    holder_b = _supervised(state, ORDER_BODY, extra("holder-b", "30"))
     assert _wait_until(lambda: "holder-b" in _log_lines(log)), "holder B never started"
     waiter_one = _supervised(state, ORDER_BODY, extra("waiter-1", "0.2"))
     # admitted holders have left the queue: only the live waiters keep a record
