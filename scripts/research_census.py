@@ -16,6 +16,9 @@ import yaml
 
 FRONTMATTER = re.compile(r"\A\ufeff?---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.S)
 PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+# Q-5 (maintainer, 2026-11-10): one prospective boundary replaces the path inventory.
+# updated is the current-file edit stamp; the adoption day itself is measured.
+ADOPTION_DAY = date(2026, 11, 10)
 PENDING = {"status": "pending", "approved_by": None, "approved_at": None}
 
 
@@ -128,11 +131,12 @@ def model_attribution(producer) -> bool:
     return any(isinstance(record, Mapping) and record.get("kind") == "llm-session" for record in records)
 
 
-def census_findings(paths: Iterable[Path], root: Path) -> list[str]:
+def census_findings(paths: Iterable[Path], root: Path, *, apply_adoption: bool = False) -> list[str]:
     """Read current research and report every path-specific defect before exemptions."""
     affected = []
     for path in paths:
         relative = path.relative_to(root).as_posix()
+        first_finding = len(affected)
         try:
             text = path.read_bytes().decode("utf-8")
         except UnicodeDecodeError:
@@ -169,4 +173,15 @@ def census_findings(paths: Iterable[Path], root: Path) -> list[str]:
             notices = stage2.research_opening_notices(text, frontmatter.end())
             if notices:
                 affected.append(f"{relative}: opening skeleton notice over published research")
+        # Collect the complete diagnostics first. Only a readable pre-adoption edit stamp
+        # establishes stock. Missing/bad stamps fail closed; later publication evidence
+        # cannot hide behind an old edit stamp. No history reconstruction or path list.
+        updated = header.get("updated")
+        updated_fields = [key for key, _ in yaml.compose(frontmatter.group(1)).value if key.value == "updated"]
+        if apply_adoption and len(updated_fields) == 1 and is_day(updated) and str(updated) < ADOPTION_DAY.isoformat():
+            records = producer if isinstance(producer, list) else [producer]
+            known_days = [header.get("date"), header.get("last_reviewed"), publication_day]
+            known_days.extend(record.get("version") for record in records if isinstance(record, Mapping))
+            if not any(is_day(day) and str(day) >= ADOPTION_DAY.isoformat() for day in known_days):
+                del affected[first_finding:]
     return affected

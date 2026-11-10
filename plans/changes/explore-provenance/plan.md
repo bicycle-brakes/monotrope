@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -221,6 +221,8 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-09 20:06:15–20:15:59 UTC, 584 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-09 20:16:39–20:19:42 UTC, 184 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-09 20:20:05–20:21:48 UTC, 103 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-10 13:55:49–15:17:25 UTC, 4895 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-10 15:17:41–20:29:01 UTC, 18679 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 

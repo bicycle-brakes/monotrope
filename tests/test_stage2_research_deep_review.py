@@ -904,3 +904,40 @@ def test_publication_preserves_fenced_opening_notice_quotes(notice, fence):
     corrected = stage2.research_publication(source, producer="codex", day="2026-11-09")
     assert authored.encode() in corrected, "authored fenced opening quotations must keep every byte"
     assert corrected.count(notice.encode()) == 1, "remove only the actual generated notice outside the fence"
+
+
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
+@pytest.mark.parametrize("owned", ["review", "provenance", "updated", "produced_by"])
+@pytest.mark.parametrize("anchor_owned", [False, True])
+def test_research_publication_refuses_alias_spans_before_writing(tmp_path, monkeypatch, eol, owned, anchor_owned):
+    # EP6-8: composed YAML aliases point back at the anchor, not at their own source.
+    # Refuse rather than replace another field or send corrupt frontmatter to the writer.
+    values = {
+        "review": "{status: approved, approved_by: Maintainer, approved_at: 2026-11-01}",
+        "provenance": "human-written",
+        "updated": "2026-11-01",
+        "produced_by": '{kind: llm-session, name: codex, version: "2026-11-01"}',
+    }
+    fields = (
+        f"{owned}: &old {values[owned]}\nprevious: *old\n"
+        if anchor_owned
+        else f"previous: &old {values[owned]}\n{owned}: *old\n"
+    )
+    source = (
+        (f"---\n{fields}" + "date: 2026-11-01\nlast_reviewed: 2026-11-01\n---\n# Research\n\nKept.\n")
+        .replace("\n", eol)
+        .encode()
+    )
+    path = tmp_path / "research.md"
+    path.write_bytes(source)
+    writes = []
+    monkeypatch.setattr(stage2, "write_atomic", lambda *args: writes.append(args))
+    refused = False
+    try:
+        prepared = stage2.research_publication(source, producer="codex", day="2026-11-10")
+        stage2.publish_research(path, prepared, "Accepted research")
+    except stage2.Refused:
+        refused = True
+    assert refused, "Publication must refuse owned YAML alias spans before replacement"
+    assert writes == [], "No malformed frontmatter may reach the atomic writer"
+    assert path.read_bytes() == source

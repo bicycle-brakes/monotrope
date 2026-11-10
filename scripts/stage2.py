@@ -1233,6 +1233,10 @@ def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
     spans = []
     for field, value in node.value:
         if field.value == key:
+            # Composing an alias returns its anchor's original node and source marks.
+            # Those marks cannot delimit this field; refuse before any replacement.
+            if value.start_mark.index < field.end_mark.index:
+                raise Refused(f"research publication refused: {key} uses a YAML alias")
             start = block.rfind("\n", 0, field.start_mark.index) + 1
             end = value.end_mark.index
             # A block mapping's end mark includes its final line ending; keep that separator.
@@ -1519,6 +1523,14 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
             corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
         else:
             corrected = eol.join([corrected, *inserted])
+    # Replacing an owned anchor can also leave an unrelated alias dangling. Validate
+    # the complete prepared header before it can reach the atomic writer.
+    try:
+        # Compose checks YAML syntax/aliases without constructing the private brief's
+        # deliberate 0000-00-00 date sentinel as a Python calendar date.
+        yaml.compose(corrected)
+    except yaml.YAMLError as error:
+        raise Refused(f"research publication refused: corrected header is invalid YAML: {error}") from error
     shifted = text[:start] + corrected + text[end:]
     return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
 

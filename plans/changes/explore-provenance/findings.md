@@ -2111,8 +2111,82 @@ Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| EP6-7 | MAJOR | SPEC | fix-r2 | plans/changes/address-drift-warning/research.md; plans/changes/archive-closed-changes/research.md; plans/changes/outcome-test/research.md | Commit `a04b37f3` normalises producer metadata in three other changes’ research files and removes opening notices from `outcome-test`. The current spec explicitly protects these files and defers existing-research correction to separate work; this PR therefore exceeds its accepted scope. [Protected areas; Definition of Done] | Codex | taken — maintainer answer Q-5 of 2026-11-10: the three files equal main since the merge 17d030cf (pull request #365), so no edit of them remains; repair the mechanism behind it by the runner: the census gets one adoption day (spec, Boundary) so research files merged earlier are stock, and tests/test_explore_provenance.py is green again without touching other changes' files | — |
-| EP6-8 | MAJOR | SPEC | base | scripts/stage2.py:1236 | Publication corrupts valid YAML when `review: *old` references an earlier anchored approval mapping. PyYAML supplies the anchor’s original value position, so the replacement produces `review: {status: pending, approved_by: null, approved_at: null}review: *old`. Reproduced through `publish_research` with the atomic write intercepted: malformed frontmatter reaches the writer without refusal. Publication must leave valid pending-review metadata or refuse before replacement. [AC3, AC5] | Codex | taken — in-spec code fault the reviewer reproduced, repair by the runner | — |
+| EP6-7 | MAJOR | SPEC | fix-r2 | plans/changes/address-drift-warning/research.md; plans/changes/archive-closed-changes/research.md; plans/changes/outcome-test/research.md | Commit `a04b37f3` normalises producer metadata in three other changes’ research files and removes opening notices from `outcome-test`. The current spec explicitly protects these files and defers existing-research correction to separate work; this PR therefore exceeds its accepted scope. [Protected areas; Definition of Done] | Codex | fixed — tests/test_explore_provenance.py::test_uncorrected_stock_only_shrinks | — |
+| EP6-8 | MAJOR | SPEC | base | scripts/stage2.py:1236 | Publication corrupts valid YAML when `review: *old` references an earlier anchored approval mapping. PyYAML supplies the anchor’s original value position, so the replacement produces `review: {status: pending, approved_by: null, approved_at: null}review: *old`. Reproduced through `publish_research` with the atomic write intercepted: malformed frontmatter reaches the writer without refusal. Publication must leave valid pending-review metadata or refuse before replacement. [AC3, AC5] | Codex | fixed — tests/test_stage2_research_deep_review.py::test_research_publication_refuses_alias_spans_before_writing | — |
 
 Phase 6 verdict: codex 01a1c321-b85c-77f1-97cd-8944718692dd, 2026-11-10
 Reviewer session: codex 01a1c321-b85c-77f1-97cd-8944718692dd — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3851 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_census.py` +16 -1
+> - `scripts/stage2.py` +12 -0
+> - `tests/test_explore_provenance.py` +64 -46
+> - `tests/test_stage2_research_deep_review.py` +37 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/explore-provenance/spec.md: stale — updated 2026-11-09 is older than its last change 2026-11-10 (7a2edc14)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 37447 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261110T135524360132Z-7dee2d8b.md
+> ````
+
+Stage-2 call, 2026-11-10: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 999 files, 3855 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-10: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged

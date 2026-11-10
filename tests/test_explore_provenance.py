@@ -15,30 +15,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 
-# Research files written before explore published truthful metadata (cut-off: merge of origin/main
-# into fix/explore-provenance, 2026-11-09). The maintainer decided to ship without correcting them
-# (plans/changes/explore-provenance/decisions.md, Q-4); their correction is its own change (bead
-# coding-harness-2i7x). The list only shrinks: a corrected or archived file must leave it.
-UNCORRECTED = frozenset(
-    f"plans/changes/{name}/research.md"
-    for name in (
-        "adr-0016-docs-check",
-        "adr-repair-check",
-        "docs-job-report-header",
-        "night-heartbeat",
-        "night-machine-facts",
-        "pi-no-compaction",
-        "raising-fault-test",
-        "red-first-own-refs",
-        "redraft-after-scope",
-        "repair-targeted-check",
-        "review-loop-deep-a",
-        "status-fields-restore",
-        "swarm-test-speed",
-        "time-records-data",
-    )
-)
-
 
 def active_research_files() -> list[Path]:
     archive = PLANS / "archive"
@@ -113,33 +89,75 @@ def test_census_names_unreadable_headers(tmp_path, monkeypatch, text, reason):
 
 
 def test_active_model_research_has_no_false_human_provenance():
-    # Every research file outside the recorded uncorrected stock must meet the contract: a new
-    # explore publication cannot add to the stock.
-    assert_active_model_research_has_no_false_human_provenance(exempt=UNCORRECTED)
+    import research_census as census
+
+    affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+    assert affected == [], f"active research violates the publication contract: {affected}"
 
 
-def test_uncorrected_stock_only_shrinks():
-    # A listed file that now passes the census, or no longer is active research, leaves the list.
-    failing = {finding.split(": ", 1)[0] for finding in census_findings()}
-    stale = sorted(UNCORRECTED - failing)
-    assert stale == [], f"remove corrected or archived research from UNCORRECTED: {stale}"
+def test_uncorrected_stock_only_shrinks(tmp_path):
+    # A stock file loses its exemption when it changes on the adoption day; correcting it
+    # and subsequently breaking it cannot restore the exemption under its old creation date.
+    import research_census as census
+
+    path = tmp_path / "research.md"
+    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
+    path.write_text(header + "# Research\n")
+    assert census.census_findings([path], tmp_path)
+    try:
+        findings = census.census_findings([path], tmp_path, apply_adoption=True)
+    except TypeError as error:
+        pytest.fail(f"The census must apply the adoption day instead of a fixed file list: {error}")
+    assert findings == [], "pre-adoption research is stock regardless of its path"
+    changed = header.replace("updated: 2026-11-05", "updated: 2026-11-10")
+    path.write_text(changed + "# Research\n")
+    assert census.census_findings([path], tmp_path, apply_adoption=True)
+    path.write_text(changed.replace("human-written", "ai-drafted-reviewed") + "# Research\n")
+    assert census.census_findings([path], tmp_path, apply_adoption=True) == []
+    path.write_text(changed + "# Research\n")
+    assert census.census_findings([path], tmp_path, apply_adoption=True)
 
 
-def test_census_exemption_is_limited_to_the_listed_files(tmp_path, monkeypatch):
-    # The exemption names files; a new model-written file with a false header is still reported.
-    for name in ("listed", "new"):
-        folder = tmp_path / name
-        folder.mkdir()
-        (folder / "research.md").write_text(
-            "---\nprovenance: human-written\n---\n# Research\n"
-            "Stage-2 call, 2026-11-09: explore · endpoint glm-coding-plan\n"
-            "## Runner exploration — 2026-11-09\n\nAccepted research.\n"
+@pytest.mark.parametrize("stamp", ["2026-11-09", "2026-11-10", "2026-11-11", "invalid", None])
+def test_census_exemption_is_limited_to_the_listed_files(tmp_path, stamp):
+    # Historical name retained for the ledger: Q-5 replaces listed paths with one adoption
+    # day. Equal-day, later and unreadable dates must never obtain the stock exemption.
+    import research_census as census
+
+    path = tmp_path / "new-name" / "research.md"
+    path.parent.mkdir()
+    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
+    header = header.replace("updated: 2026-11-05\n", f"updated: {stamp}\n" if stamp else "")
+    path.write_text(header + "# Research\n")
+    raw = census.census_findings([path], tmp_path)
+    assert raw, "the raw census must still report stock defects"
+    try:
+        findings = census.census_findings([path], tmp_path, apply_adoption=True)
+    except TypeError as error:
+        pytest.fail(f"The census must apply its adoption day: {error}")
+    assert findings == ([] if stamp == "2026-11-09" else raw)
+
+
+@pytest.mark.parametrize("evidence", ["date", "last_reviewed", "producer", "publication", "duplicate-update"])
+def test_census_adoption_rejects_stale_stamps_over_new_evidence(tmp_path, evidence):
+    import research_census as census
+
+    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
+    body = "# Research\n"
+    if evidence in {"date", "last_reviewed"}:
+        header = header.replace(f"{evidence}: 2026-11-04", f"{evidence}: 2026-11-10")
+    elif evidence == "producer":
+        header = header.replace('version: "2026-11-05"', 'version: "2026-11-10"')
+    elif evidence == "duplicate-update":
+        header = header.replace("updated: 2026-11-05", "updated: 2026-11-10\nupdated: 2026-11-05")
+    else:
+        body += (
+            "Stage-2 call, 2026-11-10: explore · endpoint glm-coding-plan\n"
+            "## Runner exploration — 2026-11-10\n\nAccepted research.\n"
         )
-    monkeypatch.setattr(sys.modules[__name__], "PLANS", tmp_path)
-    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
-    with pytest.raises(AssertionError, match="new/research.md") as raised:
-        assert_active_model_research_has_no_false_human_provenance(exempt=frozenset({"listed/research.md"}))
-    assert "listed/research.md" not in str(raised.value)
+    path = tmp_path / "research.md"
+    path.write_text(header + body)
+    assert census.census_findings([path], tmp_path, apply_adoption=True), "new evidence must be measured"
 
 
 @pytest.mark.parametrize("notice", stage2.skeleton_notices())
