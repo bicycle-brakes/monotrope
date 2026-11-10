@@ -635,3 +635,171 @@ Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint cl
 > - Runner format before post-run verification: ruff changed no file.
 > - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
 > ```
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 985 files, 3858 commits, 12 rules.
+
+Loop attempt: 2026-11-10 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: free ids dropped: beam-free (a paid model; the free class does not admit it).
+
+Notice: opencode-go/claude-haiku-5-5: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/gpt-5.6-luna: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/gpt-6-luna: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/grok-4.7: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/minimax-m3: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/muse-spark-1.2-contributor: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/muse-spark-1.3-contributor: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/qwen3.7-plus: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/qwen3.8-flash: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: opencode-go/qwen3.8-max: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base.
+
+Notice: paid models skipped: qwen3.8-flash (the model qwen3.8-flash was skipped on 2026-10-17: wire API not measured); gpt-6-luna (the model gpt-6-luna was skipped on 2026-10-17: wire API not measured); claude-haiku-5-5 (the model claude-haiku-5-5 was skipped on 2026-10-17: wire API not measured); minimax-m3 (the model minimax-m3 was skipped on 2026-10-17: wire API not measured); qwen3.7-plus (the model qwen3.7-plus was skipped on 2026-10-22: wire API not measured); qwen3.8-max (the model qwen3.8-max was skipped on 2026-10-22: wire API not measured); grok-4.7 (the model grok-4.7 was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint)); gpt-5.6-luna (the model gpt-5.6-luna was skipped on 2026-10-30: wire API not measured (the Go page names the Responses endpoint)); gemini-4-argon (the model gemini-4-argon was skipped on 2026-10-30: wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor); kimi-k3.1-pro (the model kimi-k3.1-pro was skipped on 2026-10-30: not in the live Go catalog (2026-10-30)); beam-free (the model beam-free was skipped on 2026-10-30: not in the live Go catalog (2026-10-30)).
+
+Notice: in the live catalog without a terms reading: hy4, muse-spark-1.2-contributor, muse-spark-1.3-contributor.
+
+Notice: the data terms of longcat-2.0 expire on 2026-11-16 (6 days left).
+
+Notice: the data terms of glm-5.3-flash expire on 2026-11-16 (6 days left).
+
+Notice: the data terms of qwen3.8-flash expire on 2026-11-16 (6 days left).
+
+Notice: the data terms of gpt-6-luna expire on 2026-11-16 (6 days left).
+
+Notice: the data terms of claude-haiku-5-5 expire on 2026-11-16 (6 days left).
+
+Notice: the data terms of minimax-m3 expire on 2026-11-16 (6 days left).
+
+Address notice: opencode-go/claude-haiku-5-5: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/gpt-5.6-luna: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/gpt-6-luna: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/grok-4.7: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/minimax-m3: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/muse-spark-1.2-contributor: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/muse-spark-1.3-contributor: wire api "openai-responses" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/qwen3.7-plus: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/qwen3.8-flash: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Address notice: opencode-go/qwen3.8-max: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
