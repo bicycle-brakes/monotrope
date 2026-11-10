@@ -81,8 +81,8 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_question_context.py::test_interview_asks_the_accepted_downside — deleting the explicit downside request still passes
-- 2: not yet written tests/test_check_question_context.py::test_interview_records_the_statement_with_the_answer — deferred recording, an invented downside or a missing statement clause/date still passes
+- 1: tests/test_check_question_context.py::test_interview_asks_the_accepted_downside — deleting the explicit downside request still passes
+- 2: tests/test_check_question_context.py::test_interview_records_the_statement_with_the_answer — deferred recording, an invented downside or a missing statement clause/date still passes
 - 3: tests/test_stage2.py::test_draft_refuses_unreadable_statements_before_dispatch — absent, duplicate, wrongly dated or fence-only statements start any model route or leave no actionable diagnostic; include repeated and agent-attributed answered records
 - 4: tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch — an I/O or UTF-8 read failure starts a model or rewrites the input
 - 5: tests/test_stage2.py::test_draft_statement_precheck_accepts_supported_records — valid wraps/remarks, old dated answers, open/skipped records or fenced examples are refused

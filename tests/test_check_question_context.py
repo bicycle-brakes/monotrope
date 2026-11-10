@@ -11,6 +11,7 @@ only files the manifest carries.
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -645,3 +646,79 @@ def test_bare_context_over_indented_prose_names_the_block_fix(tmp_path: Path) ->
     assert done.returncode == 1, done.stdout
     assert "write `context: |`" in done.stdout
     assert "is blank" not in done.stdout
+
+
+# --- decision-statement-skeleton · AC 1 and 2 · the interview prompt ---------
+
+INTERVIEW = REPO / "prompts" / "01a-interview.md"
+
+
+def _paragraph(text: str, start: str) -> str:
+    """The paragraph of `text` that begins with `start`, or an empty string."""
+    for block in text.split("\n\n"):
+        if block.lstrip().startswith(start):
+            return " ".join(block.split())
+    return ""
+
+
+def _asks_the_accepted_downside(text: str) -> bool:
+    rule = _paragraph(text, "**Every question asks which downside the maintainer accepts.**")
+    return (
+        "asks the maintainer to accept one with the choice" in rule
+        and "never a later step" in rule
+        and "never the agent's to supply" in rule
+    )
+
+
+def _records_the_statement_with_the_answer(text: str) -> bool:
+    rule = _paragraph(text, "**Write the record at once, statement included.**")
+    downside = _paragraph(text, "**Every question asks which downside the maintainer accepts.**")
+    parts = (
+        "`In the context of`",
+        "`facing`",
+        "`we decided`",
+        "`to achieve`",
+        "`accepting`",
+        "the date of the day you record",
+    )
+    template = "In the context of <situation>, facing <constraint>, we decided <option>,\nto achieve <goal>, accepting <consequence>. — "
+    return (
+        "before the next question" in rule
+        and "never left for drafting" in rule
+        and all(part in rule for part in parts)
+        and template in text
+        and "you never invent it" in downside
+        and "the record stays `open`" in downside
+    )
+
+
+def _swap(text: str, old: str, new: str) -> str:
+    """`text` with the one occurrence of `old` replaced, whatever line breaks wrap it."""
+    pattern = r"\s+".join(re.escape(word) for word in old.split())
+    changed, count = re.subn(pattern, lambda _: new, text)
+    assert count == 1, f"{old!r} occurs {count} times"
+    return changed
+
+
+def test_interview_asks_the_accepted_downside() -> None:
+    """Counterexample: without the explicit downside request the reading turns false."""
+    text = INTERVIEW.read_text(encoding="utf-8")
+    assert _asks_the_accepted_downside(text)
+    start = text.index("**Every question asks which downside the maintainer accepts.**")
+    removed = text[:start] + text[text.index("**Every question brings its context", start) :]
+    assert not _asks_the_accepted_downside(removed)
+    assert not _asks_the_accepted_downside(_swap(text, "never a later step", "best asked later"))
+    assert not _asks_the_accepted_downside(_swap(text, "never the agent's to supply", "the agent's to supply"))
+
+
+def test_interview_records_the_statement_with_the_answer() -> None:
+    """Counterexamples: deferred recording, an invented downside, a lost clause or a lost date."""
+    text = INTERVIEW.read_text(encoding="utf-8")
+    assert _records_the_statement_with_the_answer(text)
+    assert not _records_the_statement_with_the_answer(_swap(text, "before the next question", "before drafting"))
+    assert not _records_the_statement_with_the_answer(_swap(text, "you never invent it", "you may propose one"))
+    assert not _records_the_statement_with_the_answer(_swap(text, "`accepting`, ", ""))
+    assert not _records_the_statement_with_the_answer(
+        _swap(text, "accepting <consequence>. — ", "accepting <consequence>.")
+    )
+    assert not _records_the_statement_with_the_answer(_swap(text, "the date of the day you record", "a date"))
