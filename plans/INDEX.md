@@ -472,6 +472,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/no-work-done/decisions.md`](changes/no-work-done/decisions.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/findings.md`](changes/no-work-done/findings.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/plan.md`](changes/no-work-done/plan.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/research.md`](changes/no-work-done/research.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/spec.md`](changes/no-work-done/spec.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/origin-cell/decisions.md`](changes/origin-cell/decisions.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/findings.md`](changes/origin-cell/findings.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |

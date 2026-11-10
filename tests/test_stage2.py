@@ -318,6 +318,7 @@ for relative in step.get("delete", []):
 for relative, text in step.get("append", {}).items():
     with Path(relative).open("a") as handle:
         handle.write(text.replace("@KEY@", key))
+
 sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
 answer_path = option("-o")
@@ -1958,8 +1959,20 @@ def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(wo
     checking_derived_make(world)
     world.script(
         claude=[
-            {"stdout": "first", "append": {"plans/changes/demo/plan.md": "measured first attempt\n"}},
-            {"stdout": "repair", "append": {"plans/changes/demo/plan.md": "measured repair\n"}},
+            {
+                "stdout": "first",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "measured first attempt\n",
+                },
+            },
+            {
+                "stdout": "repair",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "measured repair\n",
+                },
+            },
         ],
         make=[
             {"stdout": "actual test failed", "exit": 1, "plant": {"plans/INDEX.md": "stale again\n"}},
@@ -2388,7 +2401,7 @@ def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: Wo
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "repaired"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "repaired"},
         ],
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
@@ -2407,9 +2420,9 @@ def test_two_failed_postchecks_route_once_to_sonnet(world: World) -> None:
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "second"},
-            {"stdout": "fallback fixed it"},
-            {"stdout": "must not run"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "second"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "fallback fixed it"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "must not run"},
         ],
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
@@ -2440,7 +2453,10 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
             },
             {
                 "stdout": "fixed",
-                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:02–10:03, 1 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-07 10:02–10:03, 1 min\n",
+                },
             },
         ],
         make=[{"stdout": noisy, "exit": 1}, {"stdout": "green\n"}],
@@ -2472,7 +2488,10 @@ def _red_run(world: World, output: str) -> str:
             },
             {
                 "stdout": "fixed",
-                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+                },
             },
         ],
         make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
@@ -2505,7 +2524,10 @@ def test_a_blocking_gates_standard_error_reaches_the_repair_prompt(world: World)
             },
             {
                 "stdout": "fixed",
-                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+                },
             },
         ],
         make=[
@@ -2533,7 +2555,10 @@ def test_a_long_standard_error_is_cut_with_a_marker(world: World) -> None:
             },
             {
                 "stdout": "fixed",
-                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+                },
             },
         ],
         make=[
@@ -2632,8 +2657,13 @@ def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World
     valid = "---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n"
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"plans/changes/demo/plan.md": "# no time heading\n"}},
             {
+                "append": {"src/scenario-work.txt": "declared attempt work\n"},
+                "stdout": "first",
+                "plant": {"plans/changes/demo/plan.md": "# no time heading\n"},
+            },
+            {
+                "append": {"src/scenario-work.txt": "declared attempt work\n"},
                 "stdout": "repaired",
                 "plant": {"plans/changes/demo/plan.md": valid + "2026-10-07 10:00–10:04, 4 min\n"},
             },
@@ -2650,11 +2680,22 @@ def test_sonnet_fallback_starts_with_both_diagnostics_when_both_flash_attempts_d
     gone = "# no time heading\n"
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"plans/changes/demo/plan.md": gone}},
-            {"stdout": "second", "plant": {"plans/changes/demo/plan.md": gone}},
+            {
+                "append": {"src/scenario-work.txt": "declared attempt work\n"},
+                "stdout": "first",
+                "plant": {"plans/changes/demo/plan.md": gone},
+            },
+            {
+                "append": {"src/scenario-work.txt": "declared attempt work\n"},
+                "stdout": "second",
+                "plant": {"plans/changes/demo/plan.md": gone},
+            },
             {
                 "stdout": "fallback",
-                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:09, 9 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:09, 9 min\n",
+                },
             },
         ],
         make=[{"stdout": "green\n"}, {"stdout": "green\n"}, {"stdout": "green\n"}],
@@ -2744,6 +2785,11 @@ def test_a_key_written_by_the_gate_into_a_changed_file_is_removed_and_refused(wo
     assert git(world.root, "rev-parse", "HEAD") == before
     source = (world.root / "src/app.py").read_text(encoding="utf-8")
     assert "[credential]" in source and KEY not in source
+
+    objects = subprocess.run(
+        [GIT, "-C", str(world.root), "cat-file", "--batch-all-objects", "--batch"], capture_output=True, check=True
+    ).stdout
+    assert KEY.encode() not in objects, "the final work snapshot stored a credential written by verification"
 
 
 def test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused(world: World) -> None:
@@ -2854,7 +2900,10 @@ def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {
                 "stdout": "repaired",
-                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:06, 6 min\n"},
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:06, 6 min\n",
+                },
             },
         ],
         make=[{"stdout": f"token {KEY} leaked\n", "exit": 1}, {"stdout": "green\n"}],
@@ -2912,7 +2961,13 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
             "plant": {"src/app.py": "value = 2\n"},
             "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
         }
-        second = {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"}}
+        second = {
+            "stdout": "fixed",
+            "append": {
+                "src/scenario-work.txt": "declared retry work\n",
+                "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+            },
+        }
         if verb == "implement":
             world.script(claude=[first, second], make=[bad, green])
             code = world.run("implement")
@@ -3201,7 +3256,13 @@ def test_secret_line_anchors_are_redacted_in_failed_gate_output(world: World, an
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "measured retry\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "measured retry\n",
+                },
+            },
         ],
         make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
     )
@@ -4675,8 +4736,14 @@ def test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line(world: Wor
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "repair"},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "repair"},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n",
+                },
+            },
         ],
         make=[{"stdout": red, "exit": 1}, {"stdout": red, "exit": 1}, {"stdout": "green"}],
     )
@@ -4708,8 +4775,14 @@ def test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "repair"},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "repair"},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n",
+                },
+            },
         ],
         make=[
             {"stdout": red, "stderr": "warning: unframed\nTraceback: tail", "exit": 1},
@@ -4736,7 +4809,10 @@ def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World
                 "plant": {"src/b.py": "bravo\n", "src/app.py": "value = 22\n", "src/blob.bin": "a\x00b"},
                 "delete": ["src/a.py"],
             },
-            {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+            {
+                "stdout": "third",
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"},
+            },
         ],
         make=[{"stdout": red, "exit": 1}] * 3,
     )
@@ -4767,7 +4843,13 @@ def test_a_failed_attempt_that_changed_nothing_says_so(world: World) -> None:
     world.script(
         claude=[
             {"stdout": "nothing"},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared retry work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -4780,15 +4862,29 @@ def test_an_unmeasured_file_list_says_why_and_changes_nothing_else(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Criterion 4. Planted fault: a snapshot failure propagates and stops the run.
-    def broken(_root: Path) -> str:
-        raise stage2.Refused("git add failed: planted")
+    # Only the first attempt is unmeasured: an unmeasured attempt can never be accepted (bead
+    # coding-harness-te7q), so the second attempt, measured, carries the run to its checkpoint.
+    real = stage2.worktree_tree
+    calls: list[int] = []
+
+    def broken(root: Path) -> str:
+        calls.append(1)
+        if len(calls) == 1:
+            raise stage2.Refused("git add failed: planted")
+        return real(root)
 
     monkeypatch.setattr(stage2, "worktree_tree", broken)
     baseline = git(world.root, "rev-parse", "HEAD")
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -4817,7 +4913,13 @@ def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -4831,14 +4933,26 @@ def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
 
 def test_an_unmeasured_reason_stays_one_line_with_one_full_stop(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 4. Planted fault: the raw git error is put into the sentence as it is.
-    def broken(_root: Path) -> str:
-        raise stage2.Refused("git add failed: fatal: first line\n  second   line.\n")
+    real = stage2.worktree_tree
+    calls: list[int] = []
+
+    def broken(root: Path) -> str:
+        calls.append(1)
+        if len(calls) == 1:  # the second attempt is measured, so it can be accepted
+            raise stage2.Refused("git add failed: fatal: first line\n  second   line.\n")
+        return real(root)
 
     monkeypatch.setattr(stage2, "worktree_tree", broken)
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -4864,7 +4978,13 @@ def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -4881,7 +5001,13 @@ def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
 @pytest.mark.parametrize("passing", ["first", "second"], ids=["first-try", "after-a-failure"])
 def test_a_passing_attempt_leaves_only_its_audit_line(world: World, passing: str) -> None:
     # Criterion 5. Planted fault: a block written for every attempt.
-    fixed = {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}}
+    fixed = {
+        "stdout": "fixed",
+        "append": {
+            "src/scenario-work.txt": "declared attempt work\n",
+            "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+        },
+    }
     if passing == "first":
         world.script(claude=[fixed], make=[{"stdout": "green"}])
     else:
@@ -4958,8 +5084,18 @@ def test_a_block_holds_no_fragment_of_the_key(world: World) -> None:
     red = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
     world.script(
         claude=[
-            {"stdout": "first", "plant": {f"src/k{KEY[3:15]}.txt": "named after the credential\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "append": {"src/scenario-work.txt": "declared attempt work\n"},
+                "stdout": "first",
+                "plant": {f"src/k{KEY[3:15]}.txt": "named after the credential\n"},
+            },
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
     )
@@ -5051,7 +5187,13 @@ def test_quoted_reader_lines_count_for_no_reader(world: World) -> None:
                     "src/u  Stage-2 session, 2026-10-11: probe": "named with a line separator\n",
                 },
             },
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
     )
@@ -5296,7 +5438,13 @@ def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) 
         claude=[
             {"stdout": "first", "plant": {"scripts/a.py": "a=1\n"}},
             {"stdout": "second"},
-            {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "third",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         ruff=[
             {},
@@ -5325,7 +5473,13 @@ def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world
                 "stdout": "first",
                 "plant": {"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"},
             },
-            {"stdout": "second", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "second",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
         make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
@@ -5511,7 +5665,13 @@ def test_a_long_diagnostic_line_is_cut_with_a_marker(world: World) -> None:
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
     )
@@ -5525,8 +5685,17 @@ def test_a_long_file_list_is_cut_with_a_count(world: World) -> None:
     # Criterion 14. Planted fault: no cap on the list.
     world.script(
         claude=[
-            {"stdout": "first", "plant": {f"src/bulk-{n:02d}.py": f"value = {n}\n" for n in range(60)}},
-            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+            {
+                "stdout": "first",
+                "plant": {f"src/bulk-{n:02d}.py": f"value = {n}\n" for n in range(60)},
+            },
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n",
+                },
+            },
         ],
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
@@ -9136,7 +9305,13 @@ def repair_step(**more: object) -> dict:
     return {
         "stdout": "L1-1: fixed — tests/test_fix.py::test_fix",
         "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
-        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+        # Appending, not planting: a retry after a rejected attempt must still change bytes, or the
+        # runner's no-work rule (bead coding-harness-te7q) rejects it as a same-byte rewrite. The note
+        # goes to a change document, an input kind the targeted check covers (ADR 0025).
+        "append": {
+            "plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n",
+            "plans/changes/demo/research.md": "repair note\n",
+        },
         **more,
     }
 
@@ -9308,7 +9483,7 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
         released_block([released_cells("L1-2", "fixed — not a test — no test can show it", "no", "released repaired")]),
         phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase repaired")]),
     )
-    world.script(claude=[{"stdout": "must not run"}])
+    world.script(claude=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "must not run"}])
     assert world.run("repair") == 2
     assert world.calls() == []
     assert "no row is taken" in capsys.readouterr().err
@@ -9472,7 +9647,7 @@ def test_repair_refuses_legacy_completed_taken_statuses_before_call(
         released_block([released_cells("L2-1", f"taken — test_c{marker}", "no", "released finding")]),
         phase6_block([phase6_cells("F-1", f"taken — crit 6{marker.upper()}", "phase finding")]),
     )
-    world.script(claude=[{"stdout": "must not run"}])
+    world.script(claude=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "must not run"}])
     assert world.run("repair") == 2
     assert world.calls() == []
     error = capsys.readouterr().err
@@ -9971,7 +10146,11 @@ def test_stage2_off_repairs_with_one_sonnet_attempt_and_records_the_reason(
     """Criterion 8. Planted fault: the key read on Stage 1, or the reason missing from one of the two places."""
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
     repair_world(world)
-    world.script(claude=[repair_step()], codex=[{"stdout": "must not run"}], make=[{"stdout": "green\n"}])
+    world.script(
+        claude=[repair_step()],
+        codex=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "must not run"}],
+        make=[{"stdout": "green\n"}],
+    )
     assert world.run("repair", "demo", "--stage2-off", "Z.ai unavailable") == 0
     calls = world.calls("claude")
     assert len(calls) == 1 and world.calls("codex") == []
@@ -10274,7 +10453,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     """F-7/F-12: the runner measures every retry itself; the model writes no entry, and a rejected attempt's entry stays."""
     baseline = repair_world(world)
     steps = [repair_step()] * 3
-    steps[attempt - 1] = repair_step(append={})
+    steps[attempt - 1] = repair_step(append={"src/repair-work.txt": "work\n"})
     script_repair(
         world,
         steps,
@@ -10380,7 +10559,10 @@ def test_runner_logs_each_completed_attempt_once(world: World, monkeypatch: pyte
     """Criterion 2. Planted fault: no entry, or two, for an accepted or a rejected attempt."""
     FakeClock(monkeypatch, UTC_START)
     world.script(
-        claude=[{"stdout": "first", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "second"}],
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "second"},
+        ],
         make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
@@ -10404,6 +10586,321 @@ def test_runner_logs_every_attempt_of_an_exhausted_run(world: World, monkeypatch
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
+# ---------------------------------------------------------------------------
+# No work done (bead coding-harness-te7q): an attempt that changed nothing is rejected
+# ---------------------------------------------------------------------------
+
+# What an otherwise idle call leaves behind that the runner owns or that changes no bytes.
+NO_WORK_EDITS = {
+    "no-edit": {},
+    "same-bytes": {"plant": {"src/app.py": "value = 1\n"}},
+    "findings-only": {"plant": {"plans/changes/demo/findings.md": "forged\n"}},
+    "time-body-only": {"append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}},
+}
+GREEN = {"stdout": "green\n"}
+
+
+def idle_step(variant: str = "no-edit") -> dict:
+    """A model step that does no work, in one of the ways a call can leave only owned or unchanged bytes."""
+    return dict(NO_WORK_EDITS[variant])
+
+
+def work_step(verb: str, number: int = 1) -> dict:
+    """A model step that does real work; a repair step also carries the test and the answer its proofs need."""
+    if verb == "repair":
+        return repair_step()
+    return {"stdout": "done", "plant": {"src/app.py": f"value = {number + 1}\n"}}
+
+
+def script_work(world: World, verb: str, steps: list[dict], make: list[dict], *, off: bool = False) -> str:
+    """Script one implement or repair run; return the baseline commit.
+
+    An implement step answers `done`, a repair step the fixed line of its one taken row. With
+    `off`, every step goes to the single Sonnet call of a Stage-2-off run.
+    """
+    answer = "L1-1: fixed — tests/test_fix.py::test_fix" if verb == "repair" else "done"
+    steps = [{"stdout": answer, **step} for step in steps]
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        if off:
+            world.script(claude=steps, make=make)
+        else:
+            script_repair(world, steps, make=make)
+    else:
+        world.script(claude=steps, make=make)
+    return git(world.root, "rev-parse", "HEAD")
+
+
+@pytest.mark.parametrize("variant", sorted(NO_WORK_EDITS))
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_no_work_attempt_is_rejected(world: World, verb: str, variant: str) -> None:
+    """Criterion 1. Planted fault: a call with no edit, a same-byte rewrite or only discarded bookkeeping passes."""
+    baseline = script_work(world, verb, [idle_step(variant)] * 3, [GREEN] * 3)
+    assert world.run(verb) == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert len(quote_blocks(world.text())) == 3
+    assert world.text().count(stage2.NO_WORK) >= 3
+
+
+@pytest.mark.parametrize("kind", ["held-stamp", "index", "format-only"])
+def test_discarded_model_changes_are_no_work(world: World, kind: str) -> None:
+    """Work erased by preparation, formatting or checkpoint stamp restoration cannot qualify."""
+    held = "docs/adr/9999-test.md"
+    if kind == "held-stamp":
+        path = world.root / held
+        path.parent.mkdir(parents=True)
+        path.write_text(old_header(), encoding="utf-8")
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "-qm", "seed held document")
+        step = {"plant": {held: old_header().replace("updated: 2026-09-29", "updated: 2026-10-01")}}
+    elif kind == "index":
+        step = {"plant": {"plans/INDEX.md": "model index edit\n"}}
+    else:
+        step = {"plant": {"scripts/helper.py": "VALUE=2\n"}}
+    baseline = script_work(world, "implement", [step] * 3, [GREEN] * 3)
+    if kind == "format-only":
+        world.script(
+            claude=[{"stdout": "done", **step}] * 3,
+            ruff=[{"plant": {"scripts/helper.py": "VALUE = 2\n"}}] * 12,
+            make=[GREEN] * 3,
+        )
+    assert world.run("implement") == 1, "discarded model edits qualified as committed work"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert stage2.NO_WORK in world.text()
+
+
+@pytest.mark.parametrize("kind", ["time-body-only", "index-only"])
+def test_bookkeeping_scenario_has_no_implicit_work(world: World, kind: str) -> None:
+    """Declared bookkeeping alone must fail, without an idle opt-out or silent stand-in work."""
+    step = (
+        {"append": {"plans/changes/demo/plan.md": "model time only\n"}}
+        if kind == "time-body-only"
+        else {"plant": {"plans/INDEX.md": "model index only\n"}}
+    )
+    steps = [step] * 3
+    baseline = script_work(world, "implement", steps, [GREEN] * 3)
+    assert world.run("implement") == 1, "bookkeeping-only scenario acquired undeclared model work"
+    assert not (world.root / "src/stand-in-work.txt").exists()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+def test_no_work_diagnostic_names_the_verbs_contract(world: World) -> None:
+    """A repair retry must address taken loop rows rather than the implementation plan."""
+    script_work(world, "repair", [idle_step()] * 3, [GREEN] * 3)
+    assert world.run("repair") == 1
+    prompt = prompt_of(repair_calls(world)[1])
+    assert "repair the taken rows of the loop record" in prompt
+    assert "make the change the plan names" not in prompt
+
+
+def test_no_work_guard_detects_bypassed_check(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault (STAGE2_PLANT_FAULT=1): the real predicate is bypassed and the empty call is accepted."""
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(stage2, "attempt_has_work", lambda *_args, **_kwargs: True)
+    baseline = script_work(world, "implement", [idle_step()] * 3, [GREEN] * 3)
+    assert world.run("implement") == 1, "an attempt that changed nothing was accepted"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert stage2.NO_WORK in world.text()
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_idle_retry_cannot_reuse_previous_work(world: World, verb: str) -> None:
+    """Criterion 1. Planted fault: a retry is judged against HEAD, so a rejected call's retained edits qualify it."""
+    steps = [work_step(verb), idle_step(), work_step(verb, 2)]
+    if verb == "repair":
+        # The first call's work stays in the tree but fails the verifier; the idle second must still fail.
+        # Its unsupported input selects the full check (ADR 0025), so the scripted red `make` is the verifier.
+        steps[0] = {
+            **steps[0],
+            "plant": {**steps[0]["plant"], "verification-scope.txt": "requires full verification\n"},
+        }
+        steps[2] = {"plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/third.py": "x = 1\n"}}
+    baseline = script_work(world, verb, steps, [{"stdout": "red\n", "exit": 1}, GREEN, GREEN])
+    assert world.run(verb) == 0
+    text = world.text()
+    assert "Attempt 2 (" in text and stage2.NO_WORK in text
+    entries = runner_entries(world.plan)
+    assert ["rejected" in line for line in entries] == [True, True, False]
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def _write_plan_prose(root: Path) -> None:
+    plan = root / "plans" / "changes" / "demo" / "plan.md"
+    plan.write_text(plan.read_text(encoding="utf-8").replace("# Plan\n", "# Plan changed\n"), encoding="utf-8")
+
+
+def _add_note(root: Path) -> None:
+    (root / "docs").mkdir()
+    (root / "docs" / "note.md").write_text("# Note\n", encoding="utf-8")
+
+
+def _add_unplanned(root: Path) -> None:
+    (root / "elsewhere").mkdir()
+    (root / "elsewhere" / "new.txt").write_text("new\n", encoding="utf-8")
+
+
+def _time_body_beside_prose(root: Path) -> None:
+    _write_plan_prose(root)
+    with (root / "plans" / "changes" / "demo" / "plan.md").open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+
+
+WORK_EDITS = {
+    "code": lambda root: (root / "src" / "app.py").write_text("value = 3\n", encoding="utf-8"),
+    "document": _add_note,
+    "plan-prose": _write_plan_prose,
+    "plan-prose-beside-time-body": _time_body_beside_prose,
+    "unplanned-path": _add_unplanned,
+    "tracked-deletion": lambda root: (root / "src" / "app.py").unlink(),
+    "binary": lambda root: (root / "src" / "blob.bin").write_bytes(b"\x00\x01\x02"),
+    "file-mode": lambda root: (root / "src" / "app.py").chmod(0o755),
+    "plan-mode": lambda root: (root / "plans" / "changes" / "demo" / "plan.md").chmod(0o755),
+    "held-body-reversion": lambda root: (root / "README.md").write_text(
+        old_header().replace("updated: 2026-09-29", "updated: 2026-10-01"), encoding="utf-8"
+    ),
+}
+
+
+@pytest.mark.parametrize("edit", sorted(WORK_EDITS))
+def test_work_check_accepts_nonempty_changes(world: World, edit: str) -> None:
+    """Criterion 2. Planted fault: an addition, change, deletion, binary or mode change is refused for its kind or path."""
+    if edit == "held-body-reversion":
+        _seed_retained_held_body_edit(world)
+    before = stage2.worktree_tree(world.root)
+    WORK_EDITS[edit](world.root)
+    after = stage2.worktree_tree(world.root)
+    assert stage2.attempt_has_work(world.root, before, after, world.findings, world.plan, model_after=after), edit
+
+
+def _seed_retained_held_body_edit(world: World) -> None:
+    """A rejected call retained body work; a retry can undo it and leave only a stamp versus HEAD."""
+    path = world.root / "README.md"
+    original = old_header()
+    path.write_text(original, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "-qm", "seed held document")
+    path.write_text(original + "\nEarlier attempt's retained body edit.\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("relative", ["docs/note.md", "README.md", "plans/changes/demo/plan.md"])
+@pytest.mark.parametrize("updated", ["not-a-date", "", "2026-10-01"])
+def test_stamp_only_work_discount_is_symmetric(world: World, relative: str, updated: str) -> None:
+    """Only changing an existing updated line is no work, even when its new value is malformed."""
+    path = world.root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = old_header()
+    if path == world.plan:
+        original += "\n## Time used\n\nPrevious runner record.\n"
+    path.write_text(original, encoding="utf-8")
+    before = stage2.worktree_tree(world.root)
+    changed = original.replace("updated: 2026-09-29", f"updated: {updated}")
+    if path == world.plan:
+        changed += "Forged time record.\n"
+    path.write_text(changed, encoding="utf-8")
+    after = stage2.worktree_tree(world.root)
+    assert not stage2.attempt_has_work(world.root, before, after, world.findings, world.plan, model_after=after), (
+        "changing only a stamp and discarded time records must not qualify as work"
+    )
+
+
+def test_work_check_uses_unbounded_changes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2. Planted fault: the verdict reads the bounded display list, where restored bookkeeping sorts first."""
+    monkeypatch.setattr(stage2, "ATTEMPT_FILES", 1)
+    baseline = script_work(
+        world,
+        "implement",
+        [{"plant": {"plans/changes/demo/findings.md": "forged\n", "zzz/real.txt": "work\n"}}],
+        [GREEN],
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "show", "HEAD:zzz/real.txt") == "work"
+
+
+@pytest.mark.parametrize(
+    ("verb", "route"), [("implement", "flash-repair"), ("repair", "codex-repair")], ids=["implement", "repair"]
+)
+def test_no_work_rejection_reaches_existing_retry(world: World, verb: str, route: str) -> None:
+    """Criterion 3. Planted fault: the reason is missing from the retry prompt or findings, or the retry changes route."""
+    script_work(world, verb, [idle_step(), work_step(verb)], [GREEN, GREEN])
+    assert world.run(verb) == 0
+    calls = repair_calls(world)
+    assert len(calls) == 2
+    prompt = prompt_of(calls[1])
+    assert "Attempt 1" in prompt and stage2.NO_WORK in prompt
+    text = world.text()
+    assert f"route {route}" in text and stage2.NO_WORK in text
+
+
+@pytest.mark.parametrize("off", [False, True], ids=["default", "stage2-off"])
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_all_empty_attempts_leave_no_checkpoint(
+    world: World, capsys: pytest.CaptureFixture[str], verb: str, off: bool
+) -> None:
+    """Criterion 4. Planted fault: an all-empty run exits 0, advances HEAD or reports acceptance."""
+    baseline = script_work(world, verb, [idle_step()] * (1 if off else 3), [GREEN] * 3, off=off)
+    options = ("--stage2-off", "offline test") if off else ()
+    assert world.run(verb, "demo", *options) == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert "verified and committed" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_empty_attempt_keeps_rejected_records(world: World, verb: str) -> None:
+    """Criterion 5. Planted fault: an audit or measured entry is lost, doubled or accepted, or a repair row turns fixed."""
+    script_work(world, verb, [idle_step()] * 3, [GREEN] * 3)
+    held = world.record().read_text(encoding="utf-8") if verb == "repair" else None
+    assert world.run(verb) == 1
+    entries = runner_entries(world.plan)
+    assert len(entries) == 3
+    assert all("rejected" in line and "accepted" not in line for line in entries)
+    assert world.text().count("Stage-2 call,") == 3
+    if held is not None:
+        assert world.record().read_text(encoding="utf-8") == held, "a repair row was marked without a fix"
+
+
+@pytest.mark.parametrize("fault", ["compare", "trees", "diff"])
+def test_work_measurement_failure_prevents_acceptance(
+    world: World, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    """Criterion 6. Planted fault: an unreadable snapshot or comparison counts as work and reaches a checkpoint."""
+    real_git = stage2._git_bytes
+
+    def refuse_diff(root: Path, *args: str, **kwargs: object) -> bytes:
+        if args and args[0] == "diff-tree":
+            raise stage2.Refused("git diff-tree failed: planted")
+        return real_git(root, *args, **kwargs)
+
+    def refuse(*_args: object, **_kwargs: object):
+        raise stage2.Refused("planted measurement failure")
+
+    if fault == "compare":
+        monkeypatch.setattr(stage2, "attempt_has_work", refuse)
+    elif fault == "trees":
+        monkeypatch.setattr(stage2, "worktree_tree", refuse)
+    else:
+        monkeypatch.setattr(stage2, "_git_bytes", refuse_diff)
+    baseline = script_work(world, "implement", [work_step("implement", n) for n in (1, 2, 3)], [GREEN] * 3)
+    assert world.run("implement") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert "could not measure whether the attempt produced work" in world.text()
+
+
+def test_nonempty_repair_still_requires_answer_proof(world: World) -> None:
+    """Criterion 7. Planted fault: real work bypasses the repair answer check, so an unproven repair is committed."""
+    steps = [
+        {"stdout": "no fixed line", "plant": {"src/app.py": f"value = {n}\n", "tests/test_fix.py": FIX_TEST}}
+        for n in (2, 3, 4)
+    ]
+    baseline = script_work(world, "repair", steps, [GREEN] * 3)
+    held = world.record().read_text(encoding="utf-8")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert stage2.NO_WORK not in world.text()
+    assert world.record().read_text(encoding="utf-8") == held
+
+
 def test_runner_span_includes_model_and_postchecks(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 3. Planted fault: the end read before the post-run checks, or after the checkpoint."""
     clock = FakeClock(monkeypatch, UTC_START)
@@ -10415,6 +10912,42 @@ def test_runner_span_includes_model_and_postchecks(world: World, monkeypatch: py
     (entry,) = runner_entries(world.plan)
     assert ", 42 s — " in entry
     assert entry.startswith("2026-10-20 10:00:00–10:00:42 UTC")
+
+
+def test_postverify_credential_refusal_has_no_no_work_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L2-1: a credential found after verification must not masquerade as unmeasured work."""
+    real_verify = stage2.verify_attempt
+    gate_finished = False
+    real_tree = stage2.worktree_tree
+
+    def verify(*args, **kwargs):
+        nonlocal gate_finished
+        problems = real_verify(*args, **kwargs)
+        (world.root / "src/app.py").write_text(f'value = "{KEY}"\n')
+        gate_finished = True
+        return problems
+
+    def tree(*args, **kwargs):
+        assert not gate_finished, "a credential refusal must skip the final tree snapshot"
+        return real_tree(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "worktree_tree", tree)
+    monkeypatch.setattr(stage2, "attempt_has_work", lambda *_a, **_kw: pytest.fail("unsafe work measurement"))
+    monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("credential rejection checkpointed"))
+    baseline = script_work(world, "implement", [work_step("implement")], [GREEN])
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    audit = world.text()
+    assert "credential occurred" in error
+    assert "credential occurred" in audit, "the audit must retain the credential diagnostic"
+    assert stage2.NO_WORK not in audit + error, "a credential refusal is not a no-work verdict"
+    assert KEY not in audit + error + (world.root / "src/app.py").read_text()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry
 
 
 def test_runner_time_includes_postgate_credential_rejection(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -10828,7 +11361,13 @@ def test_runner_restores_deleted_change_directory_before_logging(
         return answer
 
     monkeypatch.setattr(stage2, "run_work_model", model)
-    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "green\n"}] * 2)
+    world.script(
+        claude=[
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "one"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "two"},
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
     try:
         if final_attempt:
             monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("rejected attempt checkpointed"))
@@ -10880,7 +11419,7 @@ def test_runner_time_persistence_uses_shared_writer(world: World, monkeypatch: p
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "plans/changes/demo/plan.md": "# rewritten\n"}},
-            {"stdout": "second"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "second"},
         ],
         make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
     )
@@ -10917,7 +11456,7 @@ def test_runner_keeps_rejected_time_across_input_restore(world: World, monkeypat
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "plans/changes/demo/plan.md": "# rewritten\n"}},
-            {"stdout": "second"},
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "second"},
         ],
         make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
     )
@@ -10950,7 +11489,7 @@ def test_runner_final_time_write_restores_alias_without_following(
         return answer
 
     monkeypatch.setattr(stage2, "run_work_model", model)
-    world.script(claude=[{"stdout": "done"}])
+    world.script(claude=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "done"}])
     assert world.run("implement", "demo", "--stage2-off", "offline test") == 1
     assert target.read_bytes() == original
     assert not world.plan.is_symlink() and world.plan.stat().st_nlink == 1
@@ -11976,7 +12515,7 @@ def test_repair_retains_each_attempt_answer(world: World) -> None:
     (world.bin / "calls.jsonl").unlink()
     world.write_record([("L3-1", "taken — test_c", "no")])
     partial = "the call died mid-answer, but this line stood in its answer file\n" + long_line
-    world.script(codex=[{"exit": 1, "answer": partial}])
+    world.script(codex=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "exit": 1, "answer": partial}])
     assert world.run("repair") == 1
     files = sorted(evidence.glob("attempt-*.md"))
     assert len(files) == 4, "the failed call's answer was not retained"
@@ -13052,7 +13591,9 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
     assert "The attempt also wrote this line." in committed_plan
     entries = runner_entries(world.plan)
     assert entries and entries[-1].endswith("accepted · measured by the runner")
-    # A second repair whose only plant is the protected fields passes the same checks.
+    # A second repair that also edits the protected fields passes the same checks: the restoration
+    # alone never rejects it. It carries one real edit, because an attempt whose only change is the
+    # restored fields leaves no model work and is rejected (no-work-done; maintainer 2026-11-09).
     world.write_record([("L1-2", "taken — not a test — the runner owns the transition", "no")])
     script_repair(
         world,
@@ -13062,7 +13603,8 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
                 "plant": {
                     "plans/changes/demo/spec.md": lifecycle_damaged(
                         world, "plans/changes/demo/spec.md", status="superseded", implementation=None
-                    )
+                    ),
+                    "src/app.py": "value = 3\n",
                 },
                 "append": {},
             }
@@ -13200,7 +13742,13 @@ def test_repair_lifecycle_prompts_name_the_protected_fields(world: World) -> Non
     assert "`plan.md`" in codex_prompt
     world.write_record([("L1-2", "taken — not a test — the runner owns the transition", "no")])
     world.script(
-        claude=[{"stdout": "L1-2: fixed — not a test — the orchestrator owns the transition", "append": {}}],
+        # One real edit: an attempt that leaves no model work is rejected (bead coding-harness-te7q).
+        claude=[
+            {
+                "stdout": "L1-2: fixed — not a test — the orchestrator owns the transition",
+                "append": {"plans/changes/demo/research.md": "hand-off note\n"},
+            }
+        ],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("repair", "demo", "--stage2-off", "Codex unavailable") == 0
@@ -18111,7 +18659,9 @@ def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> 
     world.research.write_text(text, encoding="utf-8")
     # The one call that does run is the bounded route at the end; its answer names a repository file,
     # as research must (bead coding-harness-e7m).
-    world.script(claude=[{"stdout": "Facts from `src/app.py`."}])
+    world.script(
+        claude=[{"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "Facts from `src/app.py`."}]
+    )
     assert world.run("explore", "demo", "--availability-reported", RECEIPT_ID) == 2
     assert world.run("prepare-explore") == 2, "preparation ran where no swarm runs"
     assert world.run("explore", "demo", "--stage2-off", "r", "--availability-reported", RECEIPT_ID) == 2
@@ -22733,7 +23283,14 @@ def test_targeted_repair_runs_whole_touched_and_linked_test_files(
     repair_world(world)
     answer = "L1-1: fixed — tests/test_fix.py::test_fix"
     # Attempt 2 writes no test of its own: the file attempt 1 left is still the repair's delta.
-    second = {"stdout": answer, "append": {"plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n"}}
+    # Its research note is real work: a time entry alone is no work done (bead coding-harness-te7q).
+    second = {
+        "stdout": answer,
+        "append": {
+            "plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n",
+            "plans/changes/demo/research.md": "second repair note\n",
+        },
+    }
     script_repair(world, [repair_step(), second], make=[{"stdout": "green\n"}])
     commands = targeted_mode(monkeypatch)
     # Cheap runs are the odd pytest calls, the targeted ones the even: attempt 1's targeted run is red.

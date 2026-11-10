@@ -5080,6 +5080,78 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     return entries
 
 
+NO_WORK = "no work done"
+
+
+def _minus_time_body(data: bytes) -> str:
+    """A plan's text without the body of its `## Time used` section: the one part the runner restores."""
+    text = data.decode("utf-8", "surrogateescape")
+    match = time_records.TIME_HEADING.search(text)
+    if match is None:
+        return text
+    following = time_records.FOLLOWING_HEADING.search(text[match.end() :])
+    end = match.end() + following.start() if following else len(text)
+    return text[: match.end()] + text[end:]
+
+
+def attempt_has_work(
+    root: Path, before: str, after: str, findings: Path, plan: Path, *, model_after: str | None = None
+) -> bool:
+    """Measure surviving model work after verification, excluding writes the runner owns.
+
+    Only paths changed by this call qualify. The final tree includes formatting and derived
+    preparation; the generated index and stamp-only changes in any document are excluded
+    from work, whether or not checkpoint preparation restores them. The unbounded raw
+    comparison also preserves binary and mode-only work.
+    """
+    candidates = None
+    if model_after is not None:
+        candidates = set(
+            _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, model_after)
+            .rstrip(b"\0")
+            .split(b"\0")
+        )
+    done = _git_bytes(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
+    fields = done.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2:
+        raise Refused("git diff-tree --raw returned a record without its path")
+    findings_path = findings.relative_to(root).as_posix()
+    plan_path = plan.relative_to(root).as_posix()
+    for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
+        parts = header.decode("ascii").lstrip(":").split(" ")
+        if len(parts) != 5:
+            raise Refused(f"git diff-tree --raw returned a malformed record: {header!r}")
+        old_mode, new_mode, old_id, new_id, status = parts
+        path = os.fsdecode(raw_path)
+        if candidates is not None and raw_path not in candidates:
+            continue
+        if path in (findings_path, "plans/INDEX.md"):
+            continue
+        if status == "M" and old_mode == new_mode and old_mode in ("100644", "100755"):
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            # Ignore stamp-only edits on every document, including malformed replacement
+            # values and stamps outside held paths that the checkpoint does not restore.
+            old_text = old.decode("utf-8", "surrogateescape")
+            new_text = new.decode("utf-8", "surrogateescape")
+            masked = _mask_stamp(old_text, dated=False)
+            if masked is not None and _mask_stamp(new_text, dated=False) == masked:
+                continue
+        if path == plan_path and status == "M" and old_mode == new_mode:
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            old_body, new_body = _minus_time_body(old), _minus_time_body(new)
+            if old_body == new_body:
+                continue
+            masked = _mask_stamp(old_body, dated=False)
+            if masked is not None and _mask_stamp(new_body, dated=False) == masked:
+                continue
+        return True
+    return False
+
+
 def put_back_lines(paths: list[str]) -> list[str]:
     """The put-back list lines: every path in backticks, without a bound.
 
@@ -8448,15 +8520,25 @@ def run_attempts(
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
                     raise error
+            files: list[str] | str
+            work_unmeasured: str | None = None
+            worked = False
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
                 try:
-                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    after = worktree_tree(root)
                 except (Refused, OSError) as error:
                     files = str(error)
+                    work_unmeasured = str(error)
+                else:
+                    try:
+                        files = attempt_files(root, before, after)
+                    except (Refused, OSError) as error:
+                        files = str(error)
             else:
                 files = unmeasured
+                work_unmeasured = unmeasured
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -8518,9 +8600,41 @@ def run_attempts(
                 # back through the batch restore below, and the verdict stays rejected (F-5).
                 put_findings_back()
                 problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            # Verification executes edited code. Scrub before the final tree can store its
+            # output as Git objects, just as before the immediate post-call snapshot.
+            verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
+            # Judge the tree verification leaves, using only this call's changed paths.
+            # This discounts formatter reversions, derived rendering and checkpoint stamp restores.
+            if not verified_exposed and work_unmeasured is None:
+                try:
+                    worked = attempt_has_work(
+                        root, before, worktree_tree(root), ctx.findings, ctx.plan, model_after=after
+                    )
+                except (Refused, OSError, ValueError) as error:
+                    work_unmeasured = str(error)
+            if verified_exposed:
+                # A safety refusal is not a failed work measurement. Record its real
+                # diagnostic before the audit is written, without taking another snapshot.
+                work_problems = [credential_message(verified_exposed)]
+            elif work_unmeasured is not None:
+                work_problems = [
+                    f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
+                ]
+            elif not worked:
+                expected_work = (
+                    "repair the taken rows of the loop record" if verb == "repair" else "make the change the plan names"
+                )
+                work_problems = [
+                    f"{NO_WORK}: the attempt left no model work after runner bookkeeping, "
+                    f"derived preparation and formatting; {expected_work}"
+                ]
+            else:
+                work_problems = []
+            # An attempt without work is rejected whatever verification said; the reason leads the list,
+            # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
-            problems = [*lifecycle_problems, *problems]
+            problems = [*work_problems, *lifecycle_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -8598,14 +8712,15 @@ def run_attempts(
                 scope_record += [
                     protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
                 ]
-            exposed = []
-            if key is not None:
+            exposed = verified_exposed
+            if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
                 # diagnostic block, before finalizing either the verdict or its measured endpoint.
                 exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
-                if exposed:
-                    if not problems:
-                        put_findings_back(original=Refused(credential_message(exposed)))
+            if exposed:
+                if not problems:
+                    put_findings_back(original=Refused(credential_message(exposed)))
+                if not verified_exposed:
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
