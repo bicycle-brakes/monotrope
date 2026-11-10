@@ -20435,6 +20435,40 @@ def triage_tracked_paths(world: World) -> None:
 
 
 @pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("decision", stage2.TRIAGE_STATUSES)
+@pytest.mark.parametrize(
+    "token",
+    [
+        "README.md.bak",
+        "README.md_",
+        "tests/test_stage2.py.bak",
+        "src/untracked.py",
+        "unknown.md",
+        "tests/test_stage2.py::test_x",
+        "tests/test_stage2.py#arbitrary-anchor",
+        "tests/test_stage2.py:12#anchor",
+        "./README.md",
+        "{root}/README.md",
+    ],
+)
+def test_triage_refuses_unrecognised_path_spellings_without_prefix_matching(
+    world: World, token: str, decision: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P6-8: only exact tracked paths with the enumerated suffixes are locations."""
+    token = token.replace("{root}", str(world.root))
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {token}")])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "the orchestrator decided") == 2, (
+        "an unrecognised path-like token must refuse every decision, never resolve a tracked prefix"
+    )
+    diagnostic = capsys.readouterr().err
+    assert token in diagnostic and "correct" in diagnostic
+    assert "taken — not a test — <reason>" in diagnostic
+    assert world.record().read_bytes() == before
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
 @pytest.mark.parametrize("location", ["Makefile:12", "LICENSE", ".gitignore:2", "[build](Makefile#L12)"])
 def test_triage_matches_extensionless_root_locations_against_tracked_files(world: World, location: str) -> None:
     """A tracked root file must keep a mixed finding eligible for an ordinary repair."""
@@ -20446,58 +20480,46 @@ def test_triage_matches_extensionless_root_locations_against_tracked_files(world
 
 
 @pytest.mark.usefixtures("triage_tracked_paths")
-@pytest.mark.parametrize(
-    "location",
-    ["[reference](https://example.com/reference)", "https://example.com/src/app.py", "src/untracked.py", "unknown.md"],
-)
+@pytest.mark.parametrize("location", ["[reference](https://example.com/reference)", "https://example.com/src/app.py"])
 def test_triage_ignores_locations_absent_from_the_tracked_file_list(
     world: World, location: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """External links and untracked files cannot bypass the test-only refusal."""
-    (world.root / "src/untracked.py").write_text("untracked\n", encoding="utf-8")
+    """External URLs do not turn a test-only finding into mixed repository work."""
     triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
     before = world.record().read_bytes()
     capsys.readouterr()
-    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2, (
-        "only tracked repository paths may count as production locations"
-    )
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2
     assert "taken — not a test — <reason>" in capsys.readouterr().err
     assert world.record().read_bytes() == before
     assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
 
 
 @pytest.mark.usefixtures("triage_tracked_paths")
-@pytest.mark.parametrize(
-    "suffix", ["#L12-L14", "#L12–L14", ":12-14", "#arbitrary-anchor", "::test_x[param]", ":12#anchor"]
-)
-@pytest.mark.parametrize("layout", ["bare", "markdown", "absolute"])
+@pytest.mark.parametrize("suffix", ["", ":12", ":12-14", ":12–14", "#L12", "#L12-L14", "#L12–L14"])
+@pytest.mark.parametrize("layout", ["bare", "markdown", "quoted"])
 def test_triage_classifies_tracked_path_prefixes_independently_of_location_suffixes(
     world: World, suffix: str, layout: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """P6-7: suffix syntax must not hide tracked test or production locations."""
+    """Allowed suffixes preserve exact test and production paths, even with a shorter tracked name."""
     shorter_path = world.root / "tests/test_stage2"
     shorter_path.write_text("another tracked file\n", encoding="utf-8")
     git(world.root, "add", "--", "tests/test_stage2")
     path = "tests/test_stage2.py"
-    location = f"{world.root}/{path}{suffix}" if layout == "absolute" else f"{path}{suffix}"
+    location = f"{path}{suffix}"
     if layout == "markdown":
         location = f"[test location]({location})"
-    assert stage2.where_locations(location, world.root) == [path], (
-        "a tracked path must remain identifiable regardless of its location suffix"
-    )
+    elif layout == "quoted":
+        location = f"`{location}`"
+    assert stage2.where_locations(location, world.root) == [path]
     triage_record(world, [triage_row(where=location)])
     before = world.record().read_bytes()
     capsys.readouterr()
-    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2, (
-        "a suffixed test-only location must refuse ordinary taken"
-    )
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2
     assert "taken — not a test — <reason>" in capsys.readouterr().err
     assert world.record().read_bytes() == before
     assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
     triage_record(world, [triage_row(where=f"{location} and src/app.py{suffix}")])
-    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0, (
-        "a suffixed production location must keep mixed work eligible for ordinary taken"
-    )
+    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0
 
 
 @pytest.mark.parametrize(
@@ -20568,10 +20590,11 @@ def triage_row(
     [
         ("taken", "src/app.py:1"),
         ("rejected", "src/app.py:1"),
-        ("taken — not a test", "tests/test_stage2.py::test_x"),
-        ("taken — guard test", "tests/test_stage2.py::test_x"),
+        ("taken — not a test", "tests/test_stage2.py:12"),
+        ("taken — guard test", "tests/test_stage2.py:12"),
     ],
 )
+@pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_records_each_supported_decision_in_the_worktree_record(
     world: World, tmp_path: Path, decision: str, where: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -20692,15 +20715,15 @@ def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
 @pytest.mark.parametrize(
     ("where", "decision", "code"),
     [
-        ("tests/test_stage2.py::test_x", "taken", 2),
-        ("[test location](tests/test_stage2.py::test_x)", "taken", 2),
+        ("tests/test_stage2.py:12", "taken", 2),
+        ("[test location](tests/test_stage2.py:12)", "taken", 2),
         ("`[test location](tests/test_stage2.py:12)`", "taken", 2),
-        ("{root}/tests/test_stage2.py:12", "taken", 2),
-        ("[test location]({root}/tests/test_stage2.py#L12)", "taken", 2),
+        ("tests/test_stage2.py:12", "taken", 2),
+        ("[test location](tests/test_stage2.py#L12)", "taken", 2),
         ("[test](tests/helper.py) and [production](src/app.py)", "taken", 0),
-        ("{root}/src/app.py:12 and tests/helper.py", "taken", 0),
-        ("tests/test_stage2.py::test_x", "taken — not a test", 0),
-        ("tests/test_stage2.py::test_x", "taken — guard test", 0),
+        ("src/app.py:12 and tests/helper.py", "taken", 0),
+        ("tests/test_stage2.py:12", "taken — not a test", 0),
+        ("tests/test_stage2.py:12", "taken — guard test", 0),
         ("tests/helper.py and src/app.py", "taken", 0),
         ("the test helpers mislead the reader", "taken", 0),
         ("src/app.py:12", "taken", 0),
@@ -20863,7 +20886,7 @@ def test_triage_is_local_and_does_not_write_proof_or_repository_state(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Criterion 6. Planted fault: triage demands a credential or a clean tree, or starts a call or an append."""
-    triage_record(world, [triage_row("L1-1"), triage_row("L1-2", where="tests/test_stage2.py::test_y")])
+    triage_record(world, [triage_row("L1-1"), triage_row("L1-2", where="tests/test_stage2.py:14")])
     (world.root / "model-endpoints.yaml").unlink()
     (world.root / "src" / "untracked.patch").write_text("a dirty tree\n", encoding="utf-8")
 
@@ -20887,11 +20910,12 @@ def test_triage_is_local_and_does_not_write_proof_or_repository_state(
     ("decision", "where"),
     [
         ("taken", "src/app.py:1"),
-        ("taken — not a test", "tests/test_stage2.py::test_x"),
-        ("taken — guard test", "tests/test_stage2.py::test_x"),
+        ("taken — not a test", "tests/test_stage2.py:12"),
+        ("taken — guard test", "tests/test_stage2.py:12"),
         ("rejected", "src/app.py:1"),
     ],
 )
+@pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_preserves_guard_authority_and_existing_loop_rules(world: World, decision: str, where: str) -> None:
     """Criterion 7. Planted fault: the status rewritten, plain guard authority, or a taken row counted as clean."""
     triage_record(world, [triage_row(where=where)])
@@ -20924,7 +20948,7 @@ def test_triage_refuses_guard_authority_in_an_ordinary_reason(world: World, reas
     assert world.record().read_bytes() == before
 
 
-@pytest.mark.parametrize("location", ["./README.md", "README.md:12", "`README.md`", "[readme](./README.md)"])
+@pytest.mark.parametrize("location", ["README.md", "README.md:12", "`README.md`", "[readme](README.md)"])
 @pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_accepts_mixed_test_and_root_file_locations(world: World, location: str) -> None:
     """Root file locations count as production locations without opening them."""
@@ -20956,7 +20980,7 @@ def test_triage_preserves_original_record_line_endings(world: World, ending: byt
 
 def test_triage_refuses_a_quoted_guard_reason(world: World) -> None:
     """Criterion 7. A guard status whose reason is only quoted opens no planted run, so triage refuses it."""
-    triage_record(world, [triage_row(where="tests/test_stage2.py::test_x")])
+    triage_record(world, [triage_row(where="tests/test_stage2.py:12")])
     before = world.record().read_bytes()
     assert world.run("triage", "demo", "L1-1=taken — guard test", '"the planted fault"') == 2
     assert world.record().read_bytes() == before
@@ -20978,6 +21002,7 @@ def triage_instruction_problems(text: str) -> list[str]:
     return found
 
 
+@pytest.mark.usefixtures("triage_tracked_paths")
 def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -20985,7 +21010,7 @@ def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
     example = re.search(r"stage2\.py triage\s+<change> '(?P<row>[^']+)' '(?P<reason>[^']+)'", stage2.__doc__ or "")
     assert example, "the runner help shows no triage example"
     assert example.group("row").startswith("L1-1=")
-    triage_record(world, [triage_row(where="tests/test_stage2.py::test_x")])
+    triage_record(world, [triage_row(where="tests/test_stage2.py:12")])
     capsys.readouterr()
     example_code = world.run("triage", "demo", example.group("row"), example.group("reason"))
     assert example_code == 0, "the documented example fails the parser"

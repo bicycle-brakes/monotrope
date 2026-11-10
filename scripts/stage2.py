@@ -7462,31 +7462,30 @@ _WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
 
 
 def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
-    """The repository file locations a `Where` cell names, independent of location suffix syntax.
+    """Recognise only exact indexed paths and the Boundary's enumerated line suffixes.
 
-    The longest leading part of each token present in the Git index decides the repository path,
-    including extensionless root files. Prose, external URLs and untracked paths do not count. Absolute
-    paths below the worktree are made relative without reading the named files; Markdown links
-    contribute their target only. An unreadable index refuses rather than guessing locations.
+    Markdown links contribute their target, external URLs and prose contribute nothing. Other
+    path-like tokens refuse rather than guessing a tracked prefix or normalising another spelling.
     """
     tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
     locations = []
     cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
     for token in _WHERE_TOKEN_SPLIT.split(cell):
-        token = token.strip("`*_\"'()<>")
-        while token.startswith("./"):
-            token = token[2:]
-        if not token or ".." in Path(token).parts:
+        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
+        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
             continue
-        if Path(token).is_absolute():
-            try:
-                token = Path(token).relative_to(root).as_posix()
-            except ValueError:
-                continue
-        for end in range(len(token), 0, -1):
-            if token[:end] in tracked:
-                locations.append(token[:end])
-                break
+        # Check the whole name first: punctuation may itself belong to an indexed filename.
+        path = token if token in tracked else re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if path in tracked:
+            locations.append(path)
+        elif "/" in token or re.search(r"\.[\w-]+", token):
+            raise Refused(
+                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been written. "
+                "Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or #L<line>-L<line> suffix. "
+                "For test-only work, record `taken — not a test — <reason>` after correcting the location."
+            )
     return locations
 
 
@@ -7586,7 +7585,8 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
                     f"loop row `{row}` already pairs Status `{existing_status}` with Broke a test `{existing_mark}`; "
                     "triage cannot re-decide a row carrying repair evidence."
                 )
-            if decision == "taken" and where_is_test_only(targets[0][4], root):
+            test_only = where_is_test_only(targets[0][4], root)
+            if decision == "taken" and test_only:
                 raise Refused(
                     f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
                     "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
