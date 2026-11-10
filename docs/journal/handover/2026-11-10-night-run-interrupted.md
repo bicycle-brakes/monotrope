@@ -188,3 +188,57 @@ Read the last lines of
 `queue.txt` beside it, then answer the list under "Needed from the
 maintainer" from the top. A further addendum records how triage-verb and
 review-fewer-rounds ended.
+
+## Addendum — 2026-11-10, 06:40 UTC: the last two lanes ended, the run is over
+
+No runner job runs any more. Nothing was merged. Both remaining lanes ended
+parked, so the night closes with two new pull requests (#362, #364) and six
+changes waiting for the maintainer.
+
+- **triage-verb** (bead coding-harness-o2s1) — parked. The phase-6 re-check
+  (full check green at `16ed2a62`) found three new MAJOR rows; the verdict is
+  committed unchanged (`de4d8fb1`). P6-4 (an extensionless root file such as
+  `Makefile` is dropped from the location) and P6-5 (an external URL counts
+  as a production location) are the second and third finding of the mechanism
+  the first repair addressed; P6-6 is a damaged table row that validation
+  skips instead of refusing. Case repair ends here by the rule in
+  `AGENTS.md`. No pull request was opened.
+- **review-fewer-rounds** (bead coding-harness-3rtn) — parked. All three
+  draft attempts failed the document job on one gate only: `decisions.md`
+  carries no decision statement for its twelve questions. The last attempt
+  (spec, design, plan, the draft of ADR 0026, the runner's findings) is
+  committed unchanged and not accepted (`2098684d`). No plan card is shown
+  yet.
+
+### Added to "Needed from the maintainer"
+
+1. triage-verb: a mechanism repair that decides "is this a tracked repository
+   path" at one choke point (recommended), or a `Boundary` in the spec that
+   names the supported spellings. Context in the notes of bead
+   coding-harness-o2s1.
+2. review-fewer-rounds: may the orchestrator write the twelve decision
+   statements that restate the answers of 2026-11-09, or does the maintainer
+   word them? Each needs an "accepting that" clause the answers do not state.
+   Context in the notes of bead coding-harness-3rtn. This replaces the plan
+   card for review-fewer-rounds in the list above.
+
+### What the last hours showed
+
+- The session did nothing between about 03:19 and 06:37 UTC. The draft of
+  review-fewer-rounds ended near 03:08 UTC and the watchdog woke the chat at
+  03:19 UTC, but the result was only handled at 06:37 UTC; the half-hourly
+  heartbeat left no line in the log in between. The cause was not read. The
+  triage-verb re-check ended inside that gap; when is not measured.
+- Two bead notes carry a wrong time: the note on bead coding-harness-3rtn
+  says 03:12 UTC and the note on bead coding-harness-o2s1 says 06:40 UTC;
+  both were written at 06:37 UTC.
+- The missing decision statement stopped a second change (after
+  verify-slots). `make change` or the interview prompt should produce it;
+  no bead was opened for this at night.
+
+### Resume here (final)
+
+Answer "Needed from the maintainer" in the first addendum from the top, then
+the two points added here. The run state folder
+`~/.local/state/coding-harness/night/2026-11-08-a/` holds the log and the
+queue.
