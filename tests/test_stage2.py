@@ -3374,7 +3374,7 @@ DEMO_CONTEXT = (
     "context: |\n"
     "  Topic: The demo change's draft.\n"
     "  Intention: A record the early statement check can read.\n"
-    "  Today: The decisions file carries no answered record.\n"
+    "  Today: The decisions file records the demo question and its current answer status.\n"
     "  Repository change: none.\n"
     "  Architecture change: none.\n\n"
 )
@@ -4239,6 +4239,7 @@ def test_draft_refuses_unreadable_statements_before_dispatch(
     assert world.run("draft") == 2
     error = assert_no_dispatch(world, capsys)
     assert "plans/changes/demo/decisions.md" in error
+    assert "decision statement cannot be read" in error, error
     assert "complete the interview" in error
     assert f"{identifier} —" in error and reason in error, error
     if extra is not None:
@@ -4249,8 +4250,9 @@ def test_draft_refuses_unreadable_statements_before_dispatch(
     assert git(world.root, "rev-parse", "HEAD") == head
 
 
+@pytest.mark.parametrize("read_failure", ["invalid-utf8", "permission-denied"])
 def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
-    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, read_failure: str
 ) -> None:
     # Criterion 4 (bead coding-harness-nr6h). Planted fault: an unreadable or invalidly encoded
     # decisions.md becomes an empty passing interview, is rewritten, or reaches a model call.
@@ -4259,11 +4261,23 @@ def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
     path = world.root / "plans" / "changes" / "demo" / "decisions.md"
     raw = (
         b"---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\nIn the context of caf\xe9. \x97 2026-09-30\n"
+        if read_failure == "invalid-utf8"
+        else (DECISIONS_HEADER + "\n" + demo_record() + "\n").encode("utf-8")
     )
     path.write_bytes(raw)
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "unreadable decisions")
     head = git(world.root, "rev-parse", "HEAD")
+    if read_failure == "permission-denied":
+        real_read_text = Path.read_text
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path and candidate.exists():
+                raise PermissionError("decision file permission denied")
+            return real_read_text(candidate, *args, **kwargs)
+
+        # A deterministic OSError on the draft route, even when tests run as root.
+        monkeypatch.setattr(Path, "read_text", read_text)
     assert world.run("draft") == 2
     error = assert_no_dispatch(world, capsys)
     assert "plans/changes/demo/decisions.md" in error and "cannot be read" in error, error
@@ -4274,8 +4288,10 @@ def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
     with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview") as refused:
         stage2.refuse_unreadable_statements(world.root, "demo")
     assert "plans/changes/demo/decisions.md" in str(refused.value)
+    if read_failure == "permission-denied":
+        assert "decision file permission denied" in str(refused.value)
     path.unlink()
-    with pytest.raises(stage2.Refused, match="complete the interview"):
+    with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview"):
         stage2.refuse_unreadable_statements(world.root, "demo")
 
 
