@@ -438,6 +438,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/docs-job-report-header/plan.md`](changes/docs-job-report-header/plan.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/research.md`](changes/docs-job-report-header/research.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/spec.md`](changes/docs-job-report-header/spec.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
+| [`changes/go-wire-apis/decisions.md`](changes/go-wire-apis/decisions.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/findings.md`](changes/go-wire-apis/findings.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/plan.md`](changes/go-wire-apis/plan.md) | draft | partial | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/research.md`](changes/go-wire-apis/research.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/spec.md`](changes/go-wire-apis/spec.md) | draft | partial | 2026-11-06 | coding-harness-36za |
 | [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/design.md`](changes/guard-test/design.md) | draft | partial | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/findings.md`](changes/guard-test/findings.md) | draft | none | 2026-10-29 | coding-harness-0ho |

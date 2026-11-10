@@ -237,8 +237,6 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       qwen3.8-flash:
-        uebersprungen: "2026-10-17"
-        grund: "wire API not measured"
         gelesen: "2026-10-17"
         valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -248,8 +246,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gpt-6-luna:
-        uebersprungen: "2026-10-17"
-        grund: "wire API not measured"
+        uebersprungen: "2026-11-06"
+        grund: "Responses API measured 2026-11-06 (grok-4.7), but this model answered 403 \"Model access is disabled\""
         gelesen: "2026-10-17"
         valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -259,8 +257,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       claude-haiku-5-5:
-        uebersprungen: "2026-10-17"
-        grund: "wire API not measured"
+        uebersprungen: "2026-11-06"
+        grund: "Messages API measured 2026-11-06, but this model refuses Pi's request: 400 \"thinking.type.enabled is not supported for this model; use thinking.type.adaptive\" (a Pi adapter setting, bead coding-harness-36za evidence)"
         gelesen: "2026-10-17"
         valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -270,8 +268,6 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       minimax-m3:
-        uebersprungen: "2026-10-17"
-        grund: "wire API not measured"
         gelesen: "2026-10-17"
         valid_until: "2026-11-16"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -356,8 +352,6 @@ endpunkte:
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       qwen3.7-plus:
-        uebersprungen: "2026-10-22"
-        grund: "wire API not measured"
         gelesen: "2026-10-22"
         valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -367,8 +361,6 @@ endpunkte:
         anfragen_gelesen: "2026-10-22"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       qwen3.8-max:
-        uebersprungen: "2026-10-22"
-        grund: "wire API not measured"
         gelesen: "2026-10-22"
         valid_until: "2026-11-21"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
@@ -396,8 +388,6 @@ endpunkte:
         anfragen_gelesen: "2026-10-30"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       grok-4.7:
-        uebersprungen: "2026-10-30"
-        grund: "wire API not measured (the Go page names the Responses endpoint)"
         gelesen: "2026-10-30"
         valid_until: "2026-11-29"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
@@ -407,8 +397,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-30"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gpt-5.6-luna:
-        uebersprungen: "2026-10-30"
-        grund: "wire API not measured (the Go page names the Responses endpoint)"
+        uebersprungen: "2026-11-06"
+        grund: "Responses API measured 2026-11-06 (grok-4.7), but this model answered 403 \"Model access is disabled\""
         gelesen: "2026-10-30"
         valid_until: "2026-11-29"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
@@ -419,7 +409,7 @@ endpunkte:
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gemini-4-argon:
         uebersprungen: "2026-10-30"
-        grund: "wire API not measured (the Go page names the Google endpoint); the live catalog lists only gemini-4-argon-contributor"
+        grund: "wire API not measured (the Go page names the Google endpoint; its measurement is bead coding-harness-twdu); the live catalog of 2026-11-08 lists gemini-4-argon again"
         gelesen: "2026-10-30"
         valid_until: "2026-11-29"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go (https://opencode.ai/v2/docs/console/go/)"
@@ -532,7 +522,8 @@ endpunkte:
     # The one admitted Go address (ADR 0024, go-access-point Q-1 to Q-5): the
     # runner, both swarms, the probes and the session read it; the
     # orchestrating session maintains the path, a runner attempt never does.
-    # Only the measured wire API is mapped. A definition without a base under an
+    # Only measured wire APIs are mapped (completions; Messages and Responses
+    # since 2026-11-06). A definition without a base under an
     # unmapped wire API is refused; one that names a base is admitted only on
     # the admitted host, like every other.
     adresse:
@@ -542,6 +533,14 @@ endpunkte:
           basis: "https://opencode.ai/inference/go/openai/v1"
           quelle: "https://opencode.ai/docs/go (the Go page: Chat Completions at https://opencode.ai/inference/go/openai/v1/chat/completions)"
           gelesen: "2026-10-31"
+        anthropic-messages:
+          basis: "https://opencode.ai/inference/go/anthropic"
+          quelle: "https://opencode.ai/docs/go (endpoint table: https://opencode.ai/inference/go/anthropic/v1/messages, @ai-sdk/anthropic, for claude-haiku-5-5, minimax-m3, qwen3.8-max, qwen3.8-flash, qwen3.7-plus)"
+          gelesen: "2026-11-06"
+        openai-responses:
+          basis: "https://opencode.ai/inference/go/openai/v1"
+          quelle: "https://opencode.ai/docs/go (endpoint table: https://opencode.ai/inference/go/openai/v1/responses, @ai-sdk/openai, for grok-4.7, gpt-6-luna, gpt-5.6-luna)"
+          gelesen: "2026-11-06"
     bemerkung: >-
       The review loop (phase 4b), the interactive session verb (`stage2.py
       session`, ADR 0012) and, since ADR 0020, the research swarm's Go calls
@@ -582,9 +581,14 @@ endpunkte:
       `https://opencode.ai/zen/go/v1/messages` is not used — three calls
       there were refused on 2026-10-08. As of 2026-10-17, `qwen3.8-flash`,
       `claude-haiku-5-5` and `minimax-m3` use anthropic-messages in Pi's
-      shipped catalog; `gpt-6-luna` uses openai-responses. All four are
-      skipped: wire API not measured. Their data-terms admission under Q-11
-      stands; a probe must measure their real address before use.
+      shipped catalog; `gpt-6-luna` uses openai-responses. Until 2026-11-06
+      all four were skipped: wire API not measured. On 2026-11-06 Messages
+      and Responses were measured live (docs/research/2026-11-06-go-wire-apis.md):
+      `qwen3.8-flash`, `qwen3.7-plus`, `qwen3.8-max`, `minimax-m3` and
+      `grok-4.7` run; `claude-haiku-5-5` stays skipped for Pi's thinking
+      setting, `gpt-6-luna` and `gpt-5.6-luna` for a 403. Google is not
+      measured (`gemini-4-argon` stays skipped: its Google wire API is not
+      measured, bead coding-harness-twdu).
       On 2026-10-31 the Go page names only `/inference/go/` addresses (Chat
       Completions `https://opencode.ai/inference/go/openai/v1/chat/completions`,
       models `https://opencode.ai/inference/go/v1/models`) and Pi's live
@@ -688,7 +692,7 @@ research_swarm:
   availability_preflight:
     max_age_seconds: 900
     exclude_until: []
-    measured_wire_apis: [openai-completions]
+    measured_wire_apis: [openai-completions, anthropic-messages, openai-responses]
   online_free: {provider: opencode-go, suffix: "-free", include: [], exclude: []}
 
 # ---------------------------------------------------------------------------
