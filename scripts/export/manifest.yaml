@@ -26,4 +26,10 @@ rules:
   - {prefix: "provenance.yaml", verdict: carry}
   - {prefix: "model-endpoints.yaml", verdict: geruest}
   - {prefix: "AGENTS.md", verdict: carry}
+  # The central harness configuration travels with the gate list and its
+  # scripts: the exported verify job runs the harness-config gate, so its
+  # values and its checked source must be present (ADR 0026).
+  - {prefix: "config/harness/", verdict: carry}
+  - {prefix: "scripts/harness_config.py", verdict: carry}
+  - {prefix: "scripts/check_harness_config.py", verdict: carry}
   - {prefix: "", verdict: drop}

@@ -3179,6 +3179,100 @@ def test_guard_environment_gate_goes_red_when_the_switch_is_present() -> None:
         assert not any(s.get("continue-on-error") for s in steps), f"the {where} step is not blocking"
 
 
+CENTRAL_GATE_SCRIPT = "scripts/check_harness_config.py"
+CENTRAL_GATE_ID = "harness-config"
+
+
+def _central_checker(root: Path) -> subprocess.CompletedProcess[str]:
+    """The real checker subprocess against one root, in enforcement mode."""
+    return subprocess.run(
+        [sys.executable, str(REPO_ROOT / CENTRAL_GATE_SCRIPT), "--root", str(root), "--check"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+def test_central_config_gate_blocks_locally_and_in_generated_ci(tmp_path: Path) -> None:
+    """Criterion 8 of central-config. Planted fault: the standalone checker fails but local
+    verification or the generated hosted workflow omits, downgrades or does not select the gate.
+
+    The attempt's tree does not register the gate yet: the gate list and the generated
+    workflow are held paths and change only at the orchestrator's bootstrap step (plan,
+    step 6). Until then the test holds the planned declaration to the same schema,
+    selection and rendering rules every real gate goes through, and proves with the real
+    checker subprocess that an invalid configuration cannot pass it. The first assertion
+    turns red once the gate is registered, so the bootstrap folds these checks into
+    real-tree assertions instead of leaving two declarations of one gate.
+    """
+    document = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert all(g["id"] != CENTRAL_GATE_ID for g in document["gates"]), (
+        "the harness-config gate is registered; fold this test into real-tree assertions (plan, step 6)"
+    )
+    raw = {
+        "id": CENTRAL_GATE_ID,
+        "title": "The central harness configuration and its bindings hold",
+        "command": f"python3 {CENTRAL_GATE_SCRIPT} --check",
+        "job": "verify",
+        "enforcement": "block",
+        "floor": False,
+        "placement": "both",
+        "subsets": ["docs"],
+        "reason": (
+            "One validated source for each migrated harness setting (ADR 0026): invalid data is "
+            "refused, the marked prose and the prompt placeholder must state the configured value, "
+            "and no live script may redeclare an owned setting."
+        ),
+    }
+    document["gates"].append(raw)
+    assert ci_gates.validate_schema(document) == [], "the planned harness-config declaration is not schema-valid"
+
+    shape = {
+        "id": raw["id"],
+        "name": raw["title"],
+        "job": raw["job"],
+        "command": raw["command"],
+        "action": None,
+        "with": {},
+        "enforcement": raw["enforcement"],
+        "floor": raw["floor"],
+        "placement": raw["placement"],
+        "subsets": raw["subsets"],
+        "needs_tracker": False,
+        "needs_history": False,
+    }
+    assert ci_gates.in_job(shape, "verify"), "the gate is not in the verify job"
+    assert ci_gates.in_job(shape, "docs"), "the gate is not in the draft verb's document subset"
+    assert misst_in(shape, "lokal"), "the gate does not measure in local verification"
+    assert misst_in(shape, "ci"), "the gate does not measure in hosted verification"
+    assert ci_gates._schritt(shape) == [
+        "      - name: The central harness configuration and its bindings hold",
+        "        id: harness-config",
+        "        if: ${{ !cancelled() }}",
+        "        run: python3 scripts/check_harness_config.py --check",
+    ], "the gate does not render as a blocking step of the generated verify job"
+
+    (tmp_path / "config" / "harness").mkdir(parents=True)
+    lanes = tmp_path / "config" / "harness" / "lanes.yaml"
+    lanes.write_text("writing_sessions_per_repository: 0\n", encoding="utf-8")
+    broken = _central_checker(tmp_path)
+    assert broken.returncode != 0, "invalid configuration or a missing binding passed the checker"
+    assert "lanes.yaml" in broken.stdout + broken.stderr, "the refusal does not name the file"
+
+    (tmp_path / "prompts").mkdir()
+    (tmp_path / "prompts" / "04-implement.md").write_text(
+        "limit {{ harness.lanes.writing_sessions_per_repository }}\n", encoding="utf-8"
+    )
+    (tmp_path / "AGENTS.md").write_text(
+        "at most <!-- harness-config: lanes.writing_sessions_per_repository -->2<!-- /harness-config --> sessions\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "scripts").mkdir()
+    green = _central_checker(tmp_path)
+    assert green.returncode == 0, f"measured agreement failed: {green.stdout + green.stderr}"
+
+
 # Test files that name a gate's script without seeding a fault into it. Each
 # holds a mutation-named test that has nothing to do with the script (bead
 # coding-harness-a05). The second is the shape of the call-site test of

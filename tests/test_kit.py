@@ -419,3 +419,31 @@ def test_research_handoff_checker_and_tests_travel() -> None:
         rule = probe.rolle(path)
         assert rule is not None and rule[0] == "mechanismus", path
         assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+
+
+CENTRAL_CONFIG_RULES = {
+    "config/harness/lanes.yaml": "config/harness/",
+    "scripts/harness_config.py": "scripts/harness_config.py",
+    "scripts/check_harness_config.py": "scripts/check_harness_config.py",
+    "tests/test_harness_config.py": "tests/test_harness_config.py",
+}
+
+
+def test_central_config_values_reader_checker_and_tests_travel() -> None:
+    """Central-config packaging: the configuration travels with its reader, its checker and its tests.
+
+    Planted fault: one of the four falls to a catch-all rule, so a probe copy
+    would measure a configuration it does not carry (ADR 0026).
+    """
+    for path, prefix in CENTRAL_CONFIG_RULES.items():
+        rule = probe.rolle(path)
+        assert rule is not None and rule[0] == "mechanismus", path
+        assert rule[1] == prefix, f"{path} is left to the rule {rule[1]}"
+
+
+def test_the_central_config_role_goes_red_when_a_rule_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Counterpart: with the reader's own rule gone, the catch-all must not grant the role quietly."""
+    stripped = [r for r in probe.regeln() if r["prefix"] != "scripts/harness_config.py"]
+    monkeypatch.setattr(probe, "regeln", lambda: stripped)
+    rule = probe.rolle("scripts/harness_config.py", stripped)
+    assert rule is None or rule[0] != "mechanismus", "a removed rule still grants the mechanism role"

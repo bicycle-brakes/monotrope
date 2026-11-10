@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-11-02
+updated: 2026-11-10
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}

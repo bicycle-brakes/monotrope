@@ -152,6 +152,11 @@ paths:
   - prefix: "decisions/gates.yaml"
     allowed: [human-decided]
     frontmatter: none
+  # The central harness values (ADR 0026): edited through a pull request,
+  # validated by the one shared reader. Values carry no document header.
+  - prefix: "config/harness/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: none
 
   # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
   - prefix: "docs/adr/"

@@ -166,4 +166,12 @@ its existing path, never moved or unreserved. Later slices need their own
 reader inventories, file lists, criteria and plan cards; they are not phase-4
 instructions in this plan. The tracker stays with the orchestrating session.
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-10 13:25:37–15:43:33 UTC, 8275 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 15:44:14–17:43:30 UTC, 7156 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 17:43:45–19:03:53 UTC, 4807 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

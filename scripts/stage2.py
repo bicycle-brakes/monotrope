@@ -182,6 +182,7 @@ import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import ci_gates  # noqa: E402
+import harness_config  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
 import plans_registry  # noqa: E402
@@ -1583,12 +1584,51 @@ def prompt_input(path: Path, inputs: dict[Path, bytes] | None = None) -> str:
     return inputs[path].decode("utf-8")
 
 
+def _captured_configuration(root: Path, inputs: dict[Path, bytes] | None) -> harness_config.HarnessSnapshot:
+    """One configuration per composition, read on demand at a reserved token.
+
+    The snapshot is never cached between compositions: the next one captures
+    its own. Its bytes join the run's input snapshot, so an attempt cannot
+    redefine its own configuration inputs and a rejected attempt's edit is
+    restored with the rest (design.md, Templates → runner).
+    """
+    try:
+        snapshot = harness_config.load(root)
+    except harness_config.HarnessConfigError as error:
+        raise Refused(str(error)) from None
+    if inputs is not None:
+        for path, payload in snapshot.sources:
+            inputs.setdefault(path, payload)
+    return snapshot
+
+
+def _rendered_central_values(text: str, snapshot: harness_config.HarnessSnapshot, source: str) -> str:
+    """One text with its reserved setting placeholders resolved, or the refusal."""
+    try:
+        return harness_config.render(snapshot, text, source)
+    except harness_config.HarnessConfigError as error:
+        raise Refused(str(error)) from None
+
+
 def work_prompt(
     root: Path, prompt_file: str, change: str, extra: str = "", inputs: dict[Path, bytes] | None = None
 ) -> str:
-    """A work phase, the repository rules and its inputs, without review row instructions."""
+    """A work phase, the repository rules and its inputs, without review row instructions.
+
+    A prompt that carries reserved setting placeholders (`{{ harness.… }}`)
+    is resolved from one captured configuration before anything else sees the
+    text, so the leak check on the exact outgoing string checks the resolved
+    values (spec, criterion 5). Only the prompt body and the repository rules
+    render: change inputs and model output are never rendered. Prompts
+    without reserved tokens keep their current behavior — no configuration is
+    read for them.
+    """
     body = prompt_input(root / "prompts" / prompt_file, inputs)
     rules = prompt_input(root / "AGENTS.md", inputs)
+    if harness_config.RESERVED_PREFIX.search(body) or harness_config.RESERVED_PREFIX.search(rules):
+        snapshot = _captured_configuration(root, inputs)
+        body = _rendered_central_values(body, snapshot, f"prompts/{prompt_file}")
+        rules = _rendered_central_values(rules, snapshot, "AGENTS.md")
     parts = [
         body.rstrip(),
         f"---\n\nChange: {change} (`plans/changes/{change}/`).",

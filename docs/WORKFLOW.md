@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-09
+updated: 2026-11-10
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1461,6 +1461,29 @@ directory, and starts no headless verb — no `codex exec`, no Pi print or RPC
 mode, and no call to the OpenCode CLI. The verb neither runs the review loop nor
 changes which reviewer sees what: the review order is not this verb's business.
 Its decision record is ADR 0012.
+
+### The central harness configuration
+
+`config/harness/` holds the harness's migrated settings, one small YAML file
+per topic, read and validated only by `scripts/harness_config.py` (ADR 0026).
+The one schema is strict: unknown topics, unknown keys, duplicate or merge
+keys and non-positive counts are refused with the file and the reason, and no
+consumer carries a fallback default. A phase prompt states a setting through
+the reserved placeholder `{{ harness.<dotted-key> }}`; the runner resolves it
+from one captured configuration per composition, before the existing leak
+check sees the exact outgoing text, and refuses the composition when a token
+is unknown or malformed — nothing inside a token is ever evaluated.
+Hand-written prose keeps its value readable through a marker,
+`<!-- harness-config: <dotted-key> -->value<!-- /harness-config -->`.
+`scripts/check_harness_config.py` — the blocking gate `harness-config` in the
+one gate list — compares each marked value and each registered placeholder
+with the configuration and fails verification on drift, on a deleted or
+malformed binding, or on a numeric redeclaration of an owned setting in live
+Python under `scripts/` and `tools/`; tests and history are outside that
+scan. The first owned setting is `lanes.writing_sessions_per_repository`.
+Migration stays ordered: models and routes, review seating, the other limits,
+then the gate list each move in their own slice with their own reader
+inventory, and until then their existing declarations keep their authority.
 
 ### The review loop (phase 4b)
 

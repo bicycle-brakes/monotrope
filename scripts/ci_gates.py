@@ -97,6 +97,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "On-demand administrator measurement — a fresh session answers `questions`, the administrator records it with `record` "
         "(docs/WORKFLOW.md, 'The outcome test'); it runs only read-only git, never on a schedule, so CI never runs it (tests/test_outcome_test.py runs it)"
     ),
+    "check_harness_config.py": (
+        "Standalone command awaiting its gate registration — the central-config bootstrap adds the "
+        "harness-config gate to decisions/gates.yaml, and generated CI then calls it; until that "
+        "decision pull request lands it runs by hand and in tests/test_harness_config.py"
+    ),
     "close_merged_beads.py": (
         "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
         "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
@@ -110,6 +115,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Bibliothek — die eine Feldliste der Uebergaben. Sie wird von "
         "tests/test_feedback_channel.py importiert; ein eigener CI-Schritt "
         "prueft nichts, was der Test nicht schon prueft"
+    ),
+    "harness_config.py": (
+        "Library — the one reader and renderer of the central harness configuration "
+        "(config/harness/, ADR 0026): scripts/stage2.py and scripts/check_harness_config.py "
+        "import it; tests/test_harness_config.py runs it"
     ),
     "leakcheck.py": (
         "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "

@@ -653,9 +653,24 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text("# Agent rules\n\nStay inside the repository.\n", encoding="utf-8")
+    # The runner reads config/harness/ while composing a prompt that carries a reserved
+    # placeholder (ADR 0026); the world commits a valid configuration.
+    (root / "config" / "harness").mkdir(parents=True)
+    (root / "config" / "harness" / "lanes.yaml").write_text("writing_sessions_per_repository: 2\n", encoding="utf-8")
     (root / "src").mkdir()
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
+    # The real held implement prompt states the configured session cap only at the
+    # orchestrator's bootstrap step (plan, step 6); the world appends that line to its
+    # own copy, so the implement composition resolves a reserved placeholder here.
+    implement = root / "prompts" / "04-implement.md"
+    implement.write_text(
+        implement.read_text(encoding="utf-8").rstrip("\n")
+        + "\n\n**Session cap:** the writing-session limit for this repository is\n"
+        + "{{ harness.lanes.writing_sessions_per_repository }}; this line states the\n"
+        + "configured value, it enforces nothing.\n",
+        encoding="utf-8",
+    )
     pin_the_ladder(root / "model-endpoints.yaml")
     (root / "provenance.yaml").write_text(
         "paths:\n  - {prefix: 'plans/', frontmatter: required}\nexcluded: []\n", encoding="utf-8"
@@ -1916,6 +1931,77 @@ def test_first_implement_refreshes_derived_files_without_a_model_repair(world: W
     assert len(world.calls("make")) == 1
     assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
     assert git(world.root, "status", "--porcelain") == ""
+
+
+def test_invalid_central_config_refuses_before_implement_dispatch(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3 of central-config. Planted fault: the stand-in is called anyway, or the
+    refusal lacks the configuration's path."""
+    (world.root / "config" / "harness" / "lanes.yaml").write_text(
+        "writing_sessions_per_repository: 0\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "invalid central configuration")
+    world.script(claude=[{"stdout": "must not run"}], make=[{"stdout": "must not run"}])
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    assert "refused" in error and "config/harness/lanes.yaml" in error, error
+    assert world.calls() == []
+
+
+def test_implement_prompt_uses_central_session_limit_before_leakcheck(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 5 of central-config. Planted fault: a changed count is ignored, or the exact
+    outgoing resolved text is not what the leak check sees."""
+    (world.root / "config" / "harness" / "lanes.yaml").write_text(
+        "writing_sessions_per_repository: 4\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "raise the session limit")
+    real = leakcheck.check
+    checked: list[list[tuple[str, str]]] = []
+
+    def planted(change, denylist, root, items):
+        checked.append(list(items))
+        return real(change, denylist, root, items)
+
+    monkeypatch.setattr(leakcheck, "check", planted)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    prompt = " ".join(world.calls("claude")[0]["prompt_file"].split())
+    assert "limit for this repository is 4;" in prompt, "the prompt does not state the configured count"
+    assert "{{ harness." not in prompt, "a reserved token reached dispatch unresolved"
+    assert checked, "the leak check did not run"
+    joined = [" ".join(text.split()) for _, text in checked[0]]
+    assert any("is 4;" in one for one in joined), "the leak check did not see the resolved text"
+    assert not any("{{ harness." in text for _, text in checked[0]), "the leak check saw the raw template"
+
+
+def test_attempt_snapshot_restores_central_prompt_inputs(world: World) -> None:
+    """Criterion 4's runner half. Planted fault: an attempt changes its own configuration
+    input and the change is not restored before the next attempt."""
+    lanes = world.root / "config" / "harness" / "lanes.yaml"
+    before = lanes.read_bytes()
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"config/harness/lanes.yaml": "writing_sessions_per_repository: 9\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {
+                "stdout": "implemented",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+        ],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert lanes.read_bytes() == before, "the attempt's own configuration change was not restored"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
 def test_preparation_stamps_only_changed_held_documents(world: World) -> None:

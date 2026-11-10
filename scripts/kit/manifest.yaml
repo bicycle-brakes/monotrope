@@ -118,6 +118,12 @@ rules:
   - prefix: scripts/research_handoff.py
     rolle: mechanismus
     reason: "the one derivation of the obligation inventory, shared by the research runner and the gate research-handoff, so it travels with the gate (bead coding-harness-icw)"
+  - prefix: scripts/harness_config.py
+    rolle: mechanismus
+    reason: "the one reader and renderer of the central harness configuration (config/harness/, ADR 0026); the implement prompt and the gate harness-config go through this module"
+  - prefix: scripts/check_harness_config.py
+    rolle: mechanismus
+    reason: "the check behind the gate harness-config — the gate file travels, so its script does (ADR 0026)"
   - prefix: scripts/check_interview_minimums.py
     rolle: mechanismus
     reason: "the check behind the gate interview-minimums — the gate file travels, so its script does; the day it exempts from comes from the repository's own record (ADR 0014)"
@@ -210,6 +216,9 @@ rules:
   - prefix: tests/test_check_question_context.py
     rolle: mechanismus
     reason: "builds its own trees with their own adoption days; the half that reads AGENTS.md skips where that file does not travel (ADR 0018)"
+  - prefix: tests/test_harness_config.py
+    rolle: mechanismus
+    reason: "builds its own roots and runs the travelling reader and checker against them; holds in the probe copy"
   - prefix: tests/test_adoption.py
     rolle: mechanismus
     reason: "builds its own trees and holds in the probe copy; the case that reads this repository's own record lives in tests/test_this_repository_adoption.py, which no rule lets travel because the record stays home (ADR 0014)"
@@ -328,6 +337,9 @@ rules:
   - prefix: provenance.yaml
     rolle: mechanismus
     reason: "die Provenienzklassen. Das Vokabular reist, die Pfadzuordnung ist zu pruefen"
+  - prefix: config/harness/
+    rolle: mechanismus
+    reason: "the central harness values (ADR 0026): they travel so the probe copy measures them, with their reader and their check"
   - prefix: .github/workflows/ci.yml
     rolle: mechanismus
     reason: "die EINE Gate-Liste. ci_gates.py liest sie; ohne sie hat der Ablauf keinen Erzwinger"
