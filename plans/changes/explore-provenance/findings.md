@@ -2190,3 +2190,15 @@ Stage-2 call, 2026-11-10: repair · attempt 2 · route codex-repair · endpoint 
 > - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-10: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3884 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-9 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1240 | Publication silently deletes unrelated metadata when an owned YAML key is an alias. Reproduced with `owner: &key provenance` followed by `*key: human-written`: `research_publication` succeeds, but the resulting header loses `owner`. The alias key’s source mark points into the preceding field, so replacement consumes both lines. Preserve unrelated fields or refuse before publication. This is new evidence involving alias keys; the earlier alias-value repair does not cover it. [AC5] | Codex | open | — |
+| EP6-10 | BLOCKER | SPEC | Phase 6 | plans/changes/explore-provenance/spec.md:129; plans/changes/explore-provenance/spec.md:180 | [DIVERGENT] The exemption contract requires opposite behavior for pre-adoption files outside the original path set. Criterion 9 explicitly rejects a date-based exemption, while the adoption-day amendment requires one; the definitions and implementation detail still require the removed `UNCORRECTED` set. The implementation follows the amendment and exempts these files, contradicting the retained acceptance criteria. Update the superseded contract so the census has one consistent acceptance rule. [AC7, AC9; Boundary] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c774-8f9d-7b21-8e70-4630eb617b1c, 2026-11-10
+Reviewer session: codex 01a1c774-8f9d-7b21-8e70-4630eb617b1c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
