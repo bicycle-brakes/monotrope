@@ -24,7 +24,7 @@ Class: bounded (bead coding-harness-nr6h).
 ## Q-1 · Where a missing decision statement is prevented
 
 asked: 2026-11-10
-answer: "Beides" (option A) — the interview asks the accepted downside with every question and writes the statement at once, and `draft` refuses before its first model call when a statement is missing. With the answer the maintainer asked: "Kann bei sowas pydantic oder jinja 2 helfen?"
+answer: "Kann bei sowas pydantic oder jinja 2 helfen? A" — option A of the dialog, which was "both": the interview asks the accepted downside with every question and writes the statement at once, and `draft` refuses before its first model call when a statement is missing. The question about pydantic and Jinja2 in the same answer is recorded as a [GAP] for the spec.
 answered_by: maintainer
 status: answered
 context: |

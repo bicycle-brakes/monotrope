@@ -131,3 +131,9 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
 
 Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 997 files, 3893 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 997 files, 3893 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 997 files, 3893 commits, 12 rules.
