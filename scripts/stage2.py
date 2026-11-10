@@ -3410,7 +3410,10 @@ def holding_record(change: str, root: Path) -> Iterator[None]:
 def read_record(change: str, root: Path) -> str | None:
     path = record_dir(change, root) / "loop.md"
     try:
-        return path.read_text(encoding="utf-8") if path.exists() else None
+        if not path.exists():
+            return None
+        with path.open(encoding="utf-8", newline="") as stream:
+            return stream.read()
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(f"the loop record {path} cannot be read.") from error
 
@@ -7444,18 +7447,22 @@ _WHERE_SUFFIX = re.compile(r"(?:(?:::[^\s:]+)|(?::\d+(?:[-–—]\d+)?)|(?:#L?\d
 def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     """The repository file locations a `Where` cell names, Markdown delimiters and line suffixes stripped.
 
-    A token counts when it carries a `/` and names a relative path of this repository: prose, bare
-    names without a directory and paths that climb out stay out. Absolute paths below the worktree
+    A token counts when it carries a `/`, an explicit `./` prefix or a root filename with an extension:
+    prose and paths that climb out stay out. Absolute paths below the worktree
     are made relative without reading the named files; Markdown links contribute their target only.
     """
     locations = []
     cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
     for token in _WHERE_TOKEN_SPLIT.split(cell):
         token = token.strip("`*_\"'()<>")
+        explicit_relative = token.startswith("./")
         while token.startswith("./"):
             token = token[2:]
         token = _WHERE_SUFFIX.sub("", token).rstrip(".,:;)")
-        if not token or "/" not in token or ".." in Path(token).parts:
+        root_filename = re.fullmatch(r"(?:\.[\w-]+(?:\.[\w-]+)*|[\w-]+(?:\.[\w-]+)+)", token) is not None
+        if not token or ".." in Path(token).parts:
+            continue
+        if "/" not in token and not explicit_relative and not root_filename:
             continue
         if Path(token).is_absolute():
             try:
@@ -7535,6 +7542,8 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
         )
     folder_of(root, change)
     status = triage_status(decision, reason)
+    if decision != "taken — guard test" and guard_authorised(status):
+        raise Refused("the reason would grant guard authority; supply `taken — guard test` explicitly as the decision.")
     if decision == "taken — guard test" and not guard_authorised(status):
         raise Refused("`taken — guard test` needs a nonempty unquoted reason; a quoted reason opens no guard proof.")
     try:

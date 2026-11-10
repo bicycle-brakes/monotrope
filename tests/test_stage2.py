@@ -20726,12 +20726,12 @@ def test_triage_holds_the_record_lock_and_replaces_atomically(
         observe("the replacement")
         real["replace_record"](path, text)
 
-    monkeypatch.setattr(stage2, "read_record", read_record)
-    monkeypatch.setattr(stage2, "replace_record", replace_record)
-    assert world.run("triage", "demo", "L1-1=taken", "the orchestrator decided this row") == 0
-    assert seen == ["the record read", "the replacement"], seen
-    assert not holds_record_lock(world, "demo"), "the lock stayed held after the command"
-    monkeypatch.undo()
+    with monkeypatch.context() as patch:
+        patch.setattr(stage2, "read_record", read_record)
+        patch.setattr(stage2, "replace_record", replace_record)
+        assert world.run("triage", "demo", "L1-1=taken", "the orchestrator decided this row") == 0
+        assert seen == ["the record read", "the replacement"], seen
+        assert not holds_record_lock(world, "demo"), "the lock stayed held after the command"
     # an injected replacement failure reports exit 1 and keeps the prior record whole, no temp file left
     triage_record(world, [triage_row()])
     before = world.record().read_bytes()
@@ -20800,6 +20800,46 @@ def test_triage_preserves_guard_authority_and_existing_loop_rules(world: World, 
         assert not stage2.clean_round(rows, 1), "a taken row counted as a clean round"
         refusal = stage2.undecided_refusal(rows, "the loop cannot go on")
         assert refusal is not None and "L1-1" in refusal
+
+
+@pytest.mark.parametrize("reason", ["guard test — exercise the failure", "`ignored`guard test — exercise the failure"])
+def test_triage_refuses_guard_authority_in_an_ordinary_reason(world: World, reason: str) -> None:
+    """An ordinary decision must not acquire guard authority from its reason."""
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+    assert world.run("triage", "demo", "L1-1=taken", reason) == 2, (
+        "triage must refuse implicit guard authority supplied through an ordinary reason"
+    )
+    assert world.record().read_bytes() == before
+
+
+@pytest.mark.parametrize("location", ["./README.md", "README.md:12", "`README.md`", "[readme](./README.md)"])
+def test_triage_accepts_mixed_test_and_root_file_locations(world: World, location: str) -> None:
+    """Root file locations count as production locations without opening them."""
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both locations") == 0, (
+        "a mixture of tests and a repository-root file must allow ordinary taken"
+    )
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == "taken — repair both locations"
+
+
+@pytest.mark.parametrize("ending", [b"\r\n", b"\r"])
+@pytest.mark.parametrize("final_newline", [True, False])
+def test_triage_preserves_original_record_line_endings(world: World, ending: bytes, final_newline: bool) -> None:
+    """Changing one Status cell preserves every original newline byte."""
+    triage_record(world, [triage_row(), triage_row("L1-2")])
+    before = world.record().read_bytes().replace(b"\n", ending)
+    if not final_newline:
+        before = before.removesuffix(ending)
+    world.record().write_bytes(before)
+    old = b"| deepseek-v4.1-flash |  |  |"
+    new = "| deepseek-v4.1-flash | taken — repair the failure |  |".encode()
+    assert old in before
+    assert world.run("triage", "demo", "L1-1=taken", "repair the failure") == 0
+    assert world.record().read_bytes() == before.replace(old, new, 1), (
+        "triage must preserve original line endings and the final newline while replacing only the target Status"
+    )
 
 
 def test_triage_refuses_a_quoted_guard_reason(world: World) -> None:

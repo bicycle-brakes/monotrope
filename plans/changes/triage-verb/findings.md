@@ -266,9 +266,9 @@ Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | impl | scripts/stage2.py:7537 | For a production row, `L1-1=taken` with reason `guard test — exercise the failure` records `taken — guard test — exercise the failure`. `guard_authorised()` then returns true, granting guard authority although the caller supplied ordinary `taken`. Validate that the composed status cannot acquire authority absent from the decision operand. [Acceptance criterion 7] | Codex | taken — in-spec code fault, repair by the runner | — |
-| P6-2 | MAJOR | SPEC | impl | scripts/stage2.py:7458 | A `Where` cell containing `tests/test_stage2.py and ./README.md` is classified as test-only: the parser removes `./`, then discards `README.md` because it contains no slash. Ordinary `taken` therefore refuses a valid mixed-location request. Repository-root file locations must count when deciding whether every location lies below `tests/`. [Acceptance criteria 1 and 3; Terms] | Codex | taken — in-spec code fault, repair by the runner | — |
-| P6-3 | MAJOR | SPEC | impl | scripts/stage2.py:7542 | Triaging a valid record with CRLF line endings rewrites every line ending to LF. The reused `read_record()` calls `Path.read_text()`, which normalizes newlines before the status splice; atomic replacement publishes that normalized text. Preserve original line endings so recording one decision changes only its Status cell. [Acceptance criterion 2] | Codex | taken — in-spec code fault, repair by the runner | — |
+| P6-1 | MAJOR | SPEC | impl | scripts/stage2.py:7537 | For a production row, `L1-1=taken` with reason `guard test — exercise the failure` records `taken — guard test — exercise the failure`. `guard_authorised()` then returns true, granting guard authority although the caller supplied ordinary `taken`. Validate that the composed status cannot acquire authority absent from the decision operand. [Acceptance criterion 7] | Codex | fixed — tests/test_stage2.py::test_triage_refuses_guard_authority_in_an_ordinary_reason | — |
+| P6-2 | MAJOR | SPEC | impl | scripts/stage2.py:7458 | A `Where` cell containing `tests/test_stage2.py and ./README.md` is classified as test-only: the parser removes `./`, then discards `README.md` because it contains no slash. Ordinary `taken` therefore refuses a valid mixed-location request. Repository-root file locations must count when deciding whether every location lies below `tests/`. [Acceptance criteria 1 and 3; Terms] | Codex | fixed — tests/test_stage2.py::test_triage_accepts_mixed_test_and_root_file_locations | — |
+| P6-3 | MAJOR | SPEC | impl | scripts/stage2.py:7542 | Triaging a valid record with CRLF line endings rewrites every line ending to LF. The reused `read_record()` calls `Path.read_text()`, which normalizes newlines before the status splice; atomic replacement publishes that normalized text. Preserve original line endings so recording one decision changes only its Status cell. [Acceptance criterion 2] | Codex | fixed — tests/test_stage2.py::test_triage_preserves_original_record_line_endings | — |
 
 Phase 6 verdict: codex 01a1c306-aece-7ab1-9b02-eaf30622d6ac, 2026-11-10
 Reviewer session: codex 01a1c306-aece-7ab1-9b02-eaf30622d6ac — a fresh session reviewed: no phase-2a session was recorded
@@ -346,3 +346,10 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-10: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3798 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3802 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/triage-verb/plan.md, plans/changes/triage-verb/spec.md — unchanged
