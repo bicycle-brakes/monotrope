@@ -89,3 +89,102 @@ commits their results until a session resumes. Nothing was merged.
 Read the task outputs and `git status` of the five lane worktrees, commit
 what the runner finished, then answer the EP6-7 question on bead
 coding-harness-g19n.
+
+## Addendum — 2026-11-10, 02:55 UTC: the session resumed and ran on
+
+The usage limit lifted shortly after the record above was written, and the
+same session continued. Everything above this heading describes the stand at
+01:55 UTC; where the two disagree, this addendum holds. Nothing was merged.
+
+### Pull requests of this night
+
+- #362 (named above; bead coding-harness-ibde): unchanged, full check green
+  at `847517bc` (00:20 UTC), phase 6 without a finding.
+- #364, new: measured wire APIs of the Go models (bead coding-harness-36za);
+  full check green at `f2cb4082` (02:11 UTC), phase 6 without a finding.
+
+Read before merging: #362 changes `.claude/settings.json`, and its body
+states which spellings of a merging call still pass without a question. #364
+removes nine "wire API not measured" skips in `model-endpoints.yaml`, which
+admits those models to the paid review ladder and the research swarm. The
+follow-up for the Google endpoint is bead coding-harness-twdu.
+
+### Lanes at 02:55 UTC
+
+- **triage-verb** (bead coding-harness-o2s1) — running. Phase 6 found three
+  MAJOR rows (a reason text that grants guard authority, a root-level file
+  dropped from the location, CRLF rewritten to LF). The runner repaired all
+  three (`16ed2a62`, Codex, first attempt); the phase-6 re-check holds the
+  verify lock. Next: commit the verdict unchanged; when clean, open the pull
+  request with `Closes-Bead: coding-harness-o2s1`.
+- **review-fewer-rounds** (bead coding-harness-3rtn) — running. The draft of
+  spec, design, plan and an ADR draft waits behind the verify lock. Its branch
+  was 83 commits behind `origin/main` and is not synced. Next: commit the
+  runner's result, stop at the plan card.
+- **explore-provenance** (bead coding-harness-g19n) — parked. The third
+  re-check found two MAJOR rows: EP6-7 (a hand repair, `a04b37f3`, edits the
+  research files of three other changes, outside the protected scope of the
+  spec) and EP6-8 (a YAML alias corrupts the review line on publication). The
+  runner refuses to repair EP6-8 while EP6-7 is undecided.
+- **verify-slots** (bead coding-harness-u1ha) — parked at the plan card. All
+  three draft attempts failed only on missing decision statements; these were
+  added, restating the maintainer's two answers of 2026-11-09, and the third
+  attempt was accepted by hand.
+- **swarm-report-format** (bead coding-harness-4q9y) — parked at the plan
+  card (`da0dc829`).
+- **central-config** (bead coding-harness-twvx) — parked before the
+  interview. Two fallback explorations are committed; the research header
+  still lacks neighbours, class and provenance.
+
+Fewer than five lanes ran from 02:40 UTC on: every other queued item needs
+the maintainer. The four follow-up beads (coding-harness-3h96, -twbl, -3ha6,
+-4bhp) repair code that is not on `main` yet and wait for four merges:
+pull requests #359 and #360, triage-verb and explore-provenance.
+
+### Needed from the maintainer
+
+1. Merge decisions: #359, #360, #361, #362, #364 and this handover (#363).
+2. explore-provenance, row EP6-7 (options in the notes of bead
+   coding-harness-g19n). Recommended: a small pull request of its own
+   corrects the three research headers, merges first, and the change drops
+   its own edits.
+3. Plan cards (veto or go): verify-slots, swarm-report-format,
+   review-fewer-rounds once its draft is committed.
+4. swarm-report-format: confirm the interview skip (notes of bead
+   coding-harness-4q9y).
+5. central-config: the interview; five open points stand in the notes of bead
+   coding-harness-twvx.
+6. Still open from earlier: target numbers for the epic coding-harness-bxxt,
+   and the expired claims on beads coding-harness-dca4, -csm and -xay1.
+
+### Hand interventions, counted per change
+
+- night-stall-guard, 2: one hand acceptance (`065f7b12`) and one hand edit
+  (`9e4e1d31`); both named in #362.
+- go-wire-apis, 2: two hand repairs, the second `f2cb4082` (a test helper
+  lacked a new required argument); named in #364.
+- explore-provenance, 2: `1cbeed87` and `a04b37f3`; a third must be asked.
+- verify-slots, 1: the acceptance of the third draft attempt.
+
+### Lessons added after 01:55 UTC
+
+- A draft may not edit `decisions.md`, and a decision record needs a
+  statement beginning "In the context of" and ending with its date. A change
+  opened without it fails every draft attempt on that alone; three attempts
+  were spent on verify-slots before this was read.
+- A change in a function signature surfaced only in the full check, 25
+  minutes in: the targeted check after the repair did not select the three
+  tests that call the function through a helper.
+- A hand repair that touches files of other changes becomes a review finding
+  of its own (EP6-7). The next one is asked first.
+- Prose times between 00:52 and 01:22 UTC were estimated and up to 40 minutes
+  late; they are corrected in the log and in the notes of beads
+  coding-harness-twvx and -4q9y. Every time now comes from `date -u`.
+
+### Resume here (replaces the section above)
+
+Read the last lines of
+`~/.local/state/coding-harness/night/2026-11-08-a/lane-watch.log` and
+`queue.txt` beside it, then answer the list under "Needed from the
+maintainer" from the top. A further addendum records how triage-verb and
+review-fewer-rounds ended.
