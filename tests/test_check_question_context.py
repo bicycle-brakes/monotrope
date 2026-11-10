@@ -21,6 +21,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 import check_interview_minimums as counting  # noqa: E402
+import check_question_context as gate  # noqa: E402
 
 SCRIPT = REPO / "scripts" / "check_question_context.py"
 GATE_FILE = REPO / "decisions" / "gates.yaml"
@@ -540,6 +541,60 @@ def test_unmeasured_evidence_takes_exit_precedence(tmp_path: Path) -> None:
     done = run(root)
     assert done.returncode == 3
     assert "Q-1" in done.stdout and "Q-2" in done.stdout  # both are named, none is passed
+
+
+# --- the statement-only helper (bead coding-harness-nr6h) --------------------
+
+
+def test_statement_helper_matches_the_gate_reader() -> None:
+    """`statement_problems` returns exactly the reader's CannotMeasure messages,
+    one per answered record in document order — the same grammar, nothing
+    stronger and nothing weaker. Planted faults: the helper disagrees with the
+    existing statement grammar, reads a fenced example as a record, or starts
+    enforcing the context field or the adoption day itself."""
+    rel = "plans/changes/helper/decisions.md"
+    fenced_example = (
+        "```markdown\n"
+        "## Q-9 · a documented example\n\n"
+        "asked: 2026-10-14\nanswer: yes\nanswered_by: maintainer\nstatus: answered\n\n"
+        "In the context of an example, facing nothing, we decided nothing.\n"
+        "```\n"
+    )
+    text = "\n".join(
+        [
+            record("Q-1"),
+            record("Q-2", madr="In the context of a choice, facing two, we decided one. —\n2026-10-14\n"),
+            record(
+                "Q-3",
+                madr="In the context of a choice, we decided A, accepting B. "
+                "— 2026-10-14 (recorded on the bead the same day)\n",
+            ),
+            record("Q-4", madr="We decided. — 2026-10-14\n"),
+            record(
+                "Q-5", madr="In the context of one note, we decided A — 2026-10-14 and of another B — 2026-10-15.\n"
+            ),
+            record("Q-6", madr="In the context of a change, we decided. — 2026-13-45\n"),
+            record("Q-7", madr="In the context of a change, we decided. Recorded 2026-10-14.\n"),
+            record("Q-8", status="open"),
+            SKIP_BLOCK,
+            fenced_example,
+        ]
+    )
+    expected: list[str] = []
+    for record_id, body, marks in gate._records(text):
+        try:
+            gate._recording_day(rel, record_id, body, marks)
+        except gate.CannotMeasure as cannot:
+            expected.append(str(cannot))
+    problems = gate.statement_problems(text, rel)
+    assert problems == expected, "the helper is not the gate's statement reader"
+    assert len(problems) == 4  # Q-2's wrap and Q-3's remark stay readable; the fenced example stays out
+    for problem, record_id in zip(problems, ["Q-4", "Q-5", "Q-6", "Q-7"], strict=True):
+        assert problem.startswith(f"{rel}: {record_id} — "), problem
+    # The helper grades statements only: a subject record without a context
+    # field and an answer dated before any adoption day are not its findings.
+    assert gate.statement_problems(record("Q-10", context=None), rel) == []
+    assert gate.statement_problems(record("Q-10", day=EARLY, context=None), rel) == []
 
 
 # --- AC 10 · the gate is blocking in both placements ------------------------

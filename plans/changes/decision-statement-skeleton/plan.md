@@ -83,11 +83,19 @@ make verify
 
 - 1: not yet written tests/test_check_question_context.py::test_interview_asks_the_accepted_downside — deleting the explicit downside request still passes
 - 2: not yet written tests/test_check_question_context.py::test_interview_records_the_statement_with_the_answer — deferred recording, an invented downside or a missing statement clause/date still passes
-- 3: not yet written tests/test_stage2.py::test_draft_refuses_unreadable_statements_before_dispatch — absent, duplicate, wrongly dated or fence-only statements start any model route or leave no actionable diagnostic; include repeated and agent-attributed answered records
-- 4: not yet written tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch — an I/O or UTF-8 read failure starts a model or rewrites the input
-- 5: not yet written tests/test_stage2.py::test_draft_statement_precheck_accepts_supported_records — valid wraps/remarks, old dated answers, open/skipped records or fenced examples are refused
+- 3: tests/test_stage2.py::test_draft_refuses_unreadable_statements_before_dispatch — absent, duplicate, wrongly dated or fence-only statements start any model route or leave no actionable diagnostic; include repeated and agent-attributed answered records
+- 4: tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch — an I/O or UTF-8 read failure starts a model or rewrites the input
+- 5: tests/test_stage2.py::test_draft_statement_precheck_accepts_supported_records — valid wraps/remarks, old dated answers, open/skipped records or fenced examples are refused
 - 5: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — the statement precheck consumes the existing ADR-answer exception
-- 5: not yet written tests/test_check_question_context.py::test_statement_helper_matches_the_gate_reader — the helper disagrees with the existing statement grammar or starts enforcing context/adoption itself
-- 6: not yet written tests/test_stage2.py::test_draft_statement_precheck_ignores_other_changes — a malformed live or archived neighbour prevents dispatch despite valid selected input
+- 5: tests/test_check_question_context.py::test_statement_helper_matches_the_gate_reader — the helper disagrees with the existing statement grammar or starts enforcing context/adoption itself
+- 6: tests/test_stage2.py::test_draft_statement_precheck_ignores_other_changes — a malformed live or archived neighbour prevents dispatch despite valid selected input
+
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-11-10 13:24:52–14:18:43 UTC, 3231 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 14:19:22–15:45:09 UTC, 5146 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 15:45:41–16:43:48 UTC, 3487 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

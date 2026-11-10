@@ -181,6 +181,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -8912,6 +8913,34 @@ def answer_is_owed(root: Path, change: str) -> bool:
         return False
 
 
+def refuse_unreadable_statements(root: Path, change: str) -> None:
+    """The draft's early statement check (bead coding-harness-nr6h): no model call starts on an
+    interview whose answered records the question-context gate cannot read.
+
+    The document job finds a missing statement only after a model call, and a retry cannot repair
+    the answers — the drafter may not edit `decisions.md`. This reads this change's own file
+    through the gate's statement reader; other changes' records stay the repository-wide gate's
+    business, which still runs later. A read failure refuses too: the interview owns its records,
+    and the runner neither repairs nor replaces them.
+    """
+    path = root / "plans" / "changes" / change / "decisions.md"
+    rel = path.relative_to(root).as_posix()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(
+            f"{rel} cannot be read ({error}); complete the interview first — "
+            "the runner neither repairs nor replaces decisions.md."
+        ) from error
+    problems = check_question_context.statement_problems(text, rel)
+    if problems:
+        raise Refused(
+            f"{rel} holds answered records whose decision statement cannot be read; complete the "
+            "interview first — the runner does not edit decisions.md:\n"
+            + "\n".join(f"- {problem}" for problem in problems)
+        )
+
+
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
 
 
@@ -9023,14 +9052,16 @@ def verify_draft(
 def draft(root: Path, change: str) -> None:
     """Phases 2, 2b and 3: Codex drafts the change; GLM 5.3 after two failed Codex attempts (ADR 0016).
 
-    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the leak check
-    before each call, the credential scans, the one commit - plus what a writing Codex call needs:
+    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the early
+    statement check on this change's `decisions.md`, the leak check before each call, the
+    credential scans, the one commit - plus what a writing Codex call needs:
     each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
     its own missing ADR answer, which only the maintainer can record.
     """
     ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
+    refuse_unreadable_statements(root, change)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
     started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}

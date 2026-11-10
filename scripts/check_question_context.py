@@ -224,6 +224,25 @@ def _recording_day(rel: str, record_id: str, body: list[tuple[int, str]], marks:
         ) from None
 
 
+def statement_problems(text: str, rel: str) -> list[str]:
+    """Per answered record, why its decision statement cannot be read; empty when all read.
+
+    The statement-only view of this gate, over the same `_records` and
+    `_recording_day` reader: one message per answered record whose statement
+    is absent, ambiguous, undated or impossible, in document order, and
+    nothing besides — context fields, the adoption day, findings and exit
+    codes stay the gate's own (bead coding-harness-nr6h: the early draft
+    check reads this, never the whole gate).
+    """
+    problems: list[str] = []
+    for record_id, body, marks in _records(text):
+        try:
+            _recording_day(rel, record_id, body, marks)
+        except CannotMeasure as cannot:
+            problems.append(str(cannot))
+    return problems
+
+
 def _context_findings(rel: str, record_id: str, body: list[tuple[int, str]], marks: list[bool]) -> list[str]:
     """Findings for the record's context field; empty when one non-blank
     text value stands. Presence only — wording and length are not graded."""

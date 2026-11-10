@@ -230,6 +230,15 @@ its decision statement (a closing parenthetical remark may follow it); the adopt
 stay exempt and unchanged, and evidence the gate cannot read is not measured
 (exit 3) instead of passing.
 
+The interview asks the downside the maintainer accepts with every question and
+records the complete decision statement at once, with the answer and its
+recording day, never an invented downside. `draft` reads the selected change's
+`decisions.md` through the same statement reader before its first model call
+and refuses (no attempt consumed, no fallback, the file untouched) when the
+file cannot be read or an answered record lacks a readable statement. Other
+changes' records stay with the repository-wide gate, and the document job and
+the missing-ADR-answer tolerance are unchanged.
+
 **An ambiguity is not mechanics.** "The plan is the contract" governs departures
 from an *unambiguous* contract. Where the plan allows two readings, nothing is
 chosen: the note is `[DECISION]`, the rest is finished, then stop.
