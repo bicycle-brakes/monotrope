@@ -1,3 +1,20 @@
+---
+title: "Measurements — verify-slots"
+status: draft
+implementation_status: none
+date: 2026-11-10
+last_reviewed: 2026-11-10
+updated: 2026-11-10
+supersedes: null
+superseded_by: null
+bead: coding-harness-u1ha
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "Sonnet 5.5, 2026-11-10"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [measurements, verification]
+---
+
 # Measurements — verify-slots
 
 The serial-versus-paired evidence for criterion 11 of `spec.md` (bead

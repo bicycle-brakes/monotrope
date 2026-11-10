@@ -618,3 +618,20 @@ Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint cl
 > ````
 
 Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash failed its post-run checks on 2026-11-10; the first Sonnet attempt ran without the pinned Pi in the worktree · leak check clean over 985 files, 3841 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash failed its post-run checks on 2026-11-10; the earlier Sonnet call ended with exit 1 before it changed code · leak check clean over 985 files, 3845 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +1 -1
+> - `docs/how-it-works.md` +1 -1
+> - `docs/orchestration.md` +1 -1
+> - `plans/changes/verify-slots/measurements.md` +17 -0
+> - `tests/test_verify_lock.py` +26 -26
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> ```

@@ -1732,37 +1732,37 @@ def test_each_slot_checks_memory_before_work(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setenv(verify_lock.FLOOR_ENV, "25")
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
     monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
-    reads: list[float] = []
-    release = threading.Event()
-    started = [threading.Event(), threading.Event()]
+    # One thread, injected memory readings and an injected sleep: the order of events is
+    # fixed by the code under test, never by thread timing.
+    mode = {"reading": 30.0}
+    probes: list[float] = []
+    sleeps: list[float] = []
+    work_started: list[int] = []
 
     def reader(_platform: str | None = None) -> float | None:
-        reading = 30.0 if release.is_set() else 10.0
-        reads.append(reading)
-        return reading
+        probes.append(mode["reading"])
+        return mode["reading"]
 
-    monkeypatch.setattr(verify_lock, "_sleep", lambda _seconds: time.sleep(0.01))
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        # Nothing has started on the below-floor reading; memory recovers during the wait.
+        assert work_started == [0], "the second admission started work on a below-floor reading"
+        mode["reading"] = 30.0
+
+    monkeypatch.setattr(verify_lock, "_sleep", fake_sleep)
     monkeypatch.setattr(verify_lock, "read_available_memory", reader)
 
-    def body(index: int) -> None:
-        with verify_lock.hold_admission(["slot", str(index)]):
-            started[index].set()
-
-    threads = [threading.Thread(target=body, args=(index,)) for index in range(2)]
-    try:
-        for thread in threads:
-            thread.start()
-        assert _wait_until(lambda: len(reads) >= 2), "the second slot's admission never took its own probe"
-        time.sleep(0.3)
-        assert not any(event.is_set() for event in started), "work started on a below-floor reading"
-        release.set()
-        for event in started:
-            assert event.wait(10.0), "an admission never started after memory recovered"
-    finally:
-        release.set()
-        for thread in threads:
-            thread.join(10.0)
-    assert len(reads) >= 2, "an admission skipped its own memory probe"
+    with verify_lock.hold_admission(["slot", "0"]):
+        work_started.append(0)
+        assert probes == [30.0], "the first admission skipped its own memory probe"
+        mode["reading"] = 10.0
+        with verify_lock.hold_admission(["slot", "1"]):
+            work_started.append(1)
+            second_lock = verify_lock.state_root() / verify_lock.slot_lock_name(1)
+            assert second_lock.is_file(), "the second reservation is not slot 1"
+    assert work_started == [0, 1]
+    assert probes == [30.0, 10.0, 30.0], "the second slot's admission did not apply its own memory policy"
+    assert sleeps == [verify_lock.MEMORY_POLL_SECONDS]
 
 
 def test_wait_logs_name_all_occupied_slots_without_tokens(tmp_path: Path) -> None:

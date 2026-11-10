@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-10
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
