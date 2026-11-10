@@ -177,6 +177,14 @@ future Explore publication still applies when the target is a listed file.
 Atomic replacement protects an existing file until replacement completes; it
 makes no rollback promise after a successful replacement and later sync failure.
 
+Adoption day (maintainer, 2026-11-10, `decisions.md` Q-5): the census holds
+from the day this change merges. A research file that reached `main` before
+that day is stock and exempt, whatever change it belongs to; the exemption is
+decided by that day at one place in the census, not by a list of file names
+that every later merge outgrows. A research file published or changed from
+the adoption day on is measured in full. Correcting stock files stays separate
+work.
+
 ## Definition of Done
 
 - Targeted publication, resume and census regressions pass, and `make verify`
