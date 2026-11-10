@@ -391,3 +391,14 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/triage-verb/plan.md, plans/changes/triage-verb/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3848 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-8 | MAJOR | SPEC | impl | scripts/stage2.py:7486–7489 | With `Where` equal to `tests/test_stage2.py and README.md.bak`, ordinary `taken` is accepted because prefix matching incorrectly resolves the untracked `README.md.bak` to tracked `README.md`. The only tracked location actually named is a test file, so triage must refuse without writing and suggest `taken — not a test — <reason>`. Recognize location suffixes without treating a different filename as its tracked prefix. [Acceptance criterion 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c5b6-1c0f-7342-b5ec-2d2e1b0b3ead, 2026-11-10
+Reviewer session: codex 01a1c5b6-1c0f-7342-b5ec-2d2e1b0b3ead — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
