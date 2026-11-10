@@ -175,7 +175,7 @@ claim that semantic equivalence is machine-proved.
 ## ADR draft
 
 The one MADR-form draft is
-`docs/adr/0026-focused-review-with-a-shadow-period.md`, numbered after 0025 on
+`docs/adr/0027-focused-review-with-a-shadow-period.md`, numbered after 0025 on
 `origin/main` as read at `fe8a6329` on 2026-11-10. The existing branch-local
 0026 draft is revised, not duplicated as 0027. It amends ADR 0021 and ADR 0017
 without changing a D-/O-number or an existing ADR body; no continuity-map

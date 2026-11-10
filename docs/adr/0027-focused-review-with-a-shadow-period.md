@@ -1,5 +1,5 @@
 ---
-title: "ADR 0026 — Focused first reviews calibrate one free second round in shadow"
+title: "ADR 0027 — Focused first reviews calibrate one free second round in shadow"
 category: adr
 status: accepted
 created: 2026-11-10
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, review-loop, calibration]
 ---
 
-# ADR 0026 — Focused first reviews calibrate one free second round in shadow
+# ADR 0027 — Focused first reviews calibrate one free second round in shadow
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, open is proposed and closed is rejected. Amends ADR 0021's

@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, review-loop]
 class: architectural
 appetite: 12
-adr_files: [docs/adr/0026-focused-review-with-a-shadow-period.md]
+adr_files: [docs/adr/0027-focused-review-with-a-shadow-period.md]
 neighbours: []
 ---
 
@@ -296,7 +296,7 @@ explicitly restarted by the maintainer.
 ## Definition of Done
 
 - Criterion-ledger evidence and `make verify` pass on the implementation head.
-- The same decision PR carries `docs/adr/0026-focused-review-with-a-shadow-period.md`,
+- The same decision PR carries `docs/adr/0027-focused-review-with-a-shadow-period.md`,
   `AGENTS.md`, `docs/WORKFLOW.md`, `docs/how-it-works.md`,
   `prompts/04b-review-loop.md`, `prompts/06-review.md`, central configuration,
   its validator, the new checks and generated `.github/workflows/ci.yml` and

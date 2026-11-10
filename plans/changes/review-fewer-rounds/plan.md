@@ -142,7 +142,7 @@ The existing branch-local ADR draft is the one new ADR against main.
    Orchestrator bootstrap changes `AGENTS.md`, `prompts/04b-review-loop.md`
    and `prompts/06-review.md` to the same policy, including immediate disclosed
    question additions only for uncovered phase-6 findings. Revise the one
-   draft `docs/adr/0026-focused-review-with-a-shadow-period.md` consistently;
+   draft `docs/adr/0027-focused-review-with-a-shadow-period.md` consistently;
    it amends ADR 0021/0017 without modifying their historical bodies.
    `docs/WORKFLOW.md` also gives the orchestrator the weekly procedure:
    collect outstanding clear style rows into one clean-up bead and its own

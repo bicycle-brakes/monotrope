@@ -367,6 +367,16 @@ small change always gets exactly one free second round, to achieve a rule
 that does not pretend to a measurement, accepting that its three calls are
 spent even when round 1 found nothing — 2026-11-10
 
+## Decided by the agent — the ADR number
+
+[DETAIL] **The ADR draft of this change is ADR 0027**
+(`docs/adr/0027-focused-review-with-a-shadow-period.md`), renamed from 0026 on
+2026-11-10. Reason: the change central-config (bead coding-harness-twvx)
+drafted `docs/adr/0026-one-central-harness-configuration.md`, and this change
+waits for its skeleton (Q-4), so central-config merges first and keeps 0026.
+The maintainer was told at the central-config plan card. The runner's audit
+lines in `findings.md` keep the old file name as recorded.
+
 ## Open — not counted
 
 - The research questions of 2026-11-08 are not answered: (a) evidence for
