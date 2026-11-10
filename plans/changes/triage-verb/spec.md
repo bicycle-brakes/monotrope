@@ -97,6 +97,21 @@ review findings and proof evidence are preserved. The orchestrator alone
 applies the planned update to `prompts/04b-review-loop.md` after the accepted
 implementation attempt; implementation attempts never edit held paths.
 
+## Boundary
+
+Maintainer, 2026-11-10, after the fifth finding of the location mechanism
+(P6-2, P6-4, P6-5, P6-7, P6-8): triage does not guess what a `Where` cell
+means. A token names a repository location only in one of these spellings:
+a tracked path; that path followed by `:<line>` or `:<line>-<line>` (hyphen
+or en dash); that path followed by `#L<line>` or `#L<line>-L<line>`; or a
+Markdown link whose target is one of these. The part before the suffix must
+equal a tracked path exactly; a prefix of a longer name never counts. A token
+that looks like a path (it contains `/` or a file extension) and matches none
+of these spellings makes triage refuse without writing and name the token, so
+the row's location is corrected by hand first. Plain prose words and external
+URLs are not locations. Free-text locations end with the structured finding
+record (bead coding-harness-k7tv), which is separate work.
+
 ## Definition of Done
 
 - `make verify` green with command tests demonstrating each refusal's fault.
