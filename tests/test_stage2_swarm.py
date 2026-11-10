@@ -1116,6 +1116,377 @@ def test_empty_neighbour_topic_runs_three_seats_without_invented_evidence(sworld
     assert len(sworld.calls("repository")) == 24, "the 39 fixed slots stay"
 
 
+# ---------------------------------------------------------------------------
+# Wrapped topic reports and the one same-seat correction (bead coding-harness-4q9y)
+# ---------------------------------------------------------------------------
+
+
+def fenced(body: str, info: str = "json", ticks: str = "```") -> str:
+    return f"{ticks}{info}\n{body}\n{ticks}"
+
+
+def with_extra_field(report: str, value: str = "extra") -> str:
+    """A contract-valid report beside one unknown top-level field: a real contract fault (Q-5)."""
+    return json.dumps(dict(json.loads(report), gate_route=value))
+
+
+def normalised_reports(reports: list[dict], run_id: str) -> list[dict]:
+    """The published reports with the run's own identity normalised away, so only content compares.
+
+    Every validated report embeds its run id in each global claim, question and link id; a fresh
+    run draws a fresh id, so equality across runs must first abstract it.
+    """
+    return json.loads(json.dumps(reports).replace(run_id, "<run-id>"))
+
+
+@pytest.mark.parametrize(
+    ("name", "represent"),
+    [
+        ("bare", lambda body: body),
+        ("fence-json", lambda body: fenced(body)),
+        ("fence-plain", lambda body: fenced(body, info="")),
+    ],
+)
+def test_topic_report_preserves_bare_and_exact_fence(sworld: SwarmWorld, name: str, represent) -> None:
+    # Criterion 1. Planted fault: a canonical bare object or an exact fenced block is altered or refused.
+    baseline = None
+    for _ in range(3):
+        sworld.rewind()
+        sworld.complete(**{"repository:2": [{"stdout": represent(repository_report(2))}]})
+        assert sworld.run() == 0
+        manifest = manifest_of(sworld)
+        assert manifest["correction_calls"] == 0, f"{name}: the canonical answer needs no correction"
+        reports = [r for r in published_blocks(sworld, "report") if r["topic"] == 2]
+        assert len(reports) == 3, f"{name}: every topic-2 seat published its report"
+        comparable = normalised_reports(reports, manifest["run_id"])
+        baseline = comparable if baseline is None else baseline
+        assert comparable == baseline, f"{name}: the validated report changed with the representation"
+    assert baseline is not None
+
+
+@pytest.mark.parametrize(
+    ("name", "wrap"),
+    [
+        ("prose-before", lambda body: f"Here is my report.\n\n{fenced(body)}"),
+        ("residue-after", lambda body: f"{fenced(body)}\n</arg_value></tool_call>"),
+        ("prose-and-residue", lambda body: f"Sure:\n\n{fenced(body)}\n</arg_value></tool_call>"),
+        ("thick-fence", lambda body: fenced(body, ticks="````")),
+        ("unlabelled-with-text", lambda body: f"The answer follows.\n\n{fenced(body, info='')}\nDone."),
+    ],
+)
+def test_topic_report_accepts_single_wrapped_object(sworld: SwarmWorld, name: str, wrap) -> None:
+    # Criterion 2. Planted fault: prose or tool residue around one complete fenced object rejects
+    # an otherwise valid report, or a correction starts for it.
+    sworld.rewind()
+    sworld.complete(**{"repository:2": [{"stdout": wrap(repository_report(2))}]})
+    assert sworld.run() == 0, f"{name}: one complete fenced object is accepted with text around it"
+    assert len(models(sworld, "repository", 2)) == 3, f"{name}: no correction starts for a wrapped report"
+    reports = [r for r in published_blocks(sworld, "report") if r["topic"] == 2]
+    assert len(reports) == 3, f"{name}: every topic-2 seat published its report"
+    assert all(r["claims"][0]["statement"] == "value is a module-level assignment" for r in reports)
+
+
+@pytest.mark.parametrize(
+    ("name", "answer"),
+    [
+        ("two-fences", lambda body: f"Draft:\n{fenced(body)}\nFinal:\n{fenced(body)}"),
+        ("bare-beside-fence", lambda body: f"{body}\n{fenced(body)}"),
+        (
+            "duplicate-keys",
+            lambda _body: fenced(
+                '{"claims": [], "counter_evidence": [], "not_read": [], "neighbour_relation": "x", '
+                '"questions": [], "questions": []}'
+            ),
+        ),
+        (
+            "non-finite",
+            lambda _body: fenced(
+                '{"claims": [], "counter_evidence": [], "not_read": [], "neighbour_relation": NaN, "questions": []}'
+            ),
+        ),
+        ("truncated", lambda _body: fenced('{"claims": [')),
+        ("malformed-json", lambda body: fenced(body[:-1])),
+    ],
+)
+def test_topic_report_refuses_ambiguous_or_malformed_objects(sworld: SwarmWorld, name: str, answer) -> None:
+    # Criterion 3. Planted fault: extraction chooses among competing objects or repairs invalid JSON
+    # into an accepted report.
+    sworld.rewind()
+    sworld.complete(**{"repository:2": [{"stdout": answer(repository_report(2))}]})
+    assert sworld.run() == 1, f"{name}: a competing or malformed object never becomes an accepted report"
+    assert "judge" not in kinds(sworld)
+    assert "invalid-report" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_topic_report_gets_one_same_seat_correction(sworld: SwarmWorld) -> None:
+    # Criterion 5. Planted fault: the rejected answer or its reason is missing from the correction, a
+    # different model answers, a valid or process-failed seat is retried, or a second correction starts.
+    bad = with_extra_field(repository_report(4))
+    good = repository_report(4)
+    peer = json.loads(repository_report(4))
+    peer["claims"][0]["statement"] = "PEER-ONLY-STATEMENT-MARKER"
+    sworld.complete(
+        **{
+            "repository:4:deepseek-v4.1-flash": [{"stdout": json.dumps(peer)}],
+            "repository:4:mimo-v2.6-pro": [{"stdout": bad}, {"stdout": good}],
+        }
+    )
+    assert sworld.run() == 0
+    calls = sworld.calls("repository")
+    mimo = [c for c in calls if c["model"] == "mimo-v2.6-pro" and c["topic"] == 4]
+    assert len(mimo) == 2, "exactly one correction follows the rejected answer"
+    assert len(calls) == 25, "no other seat is corrected"
+    assert [c["model"] for c in mimo] == ["mimo-v2.6-pro", "mimo-v2.6-pro"], "no model is substituted"
+    prompt = mimo[1]["prompt"]
+    assert "Topic 4 of 11" in prompt, "the correction rides the seat's original brief"
+    assert '"gate_route": "extra"' in prompt, "the seat's own rejected answer is in the correction"
+    assert "report fields do not match the template" in prompt, "the rejection reason is in the correction"
+    assert "PEER-ONLY-STATEMENT-MARKER" not in prompt, "no peer answer reaches the seat"
+    sworld.rewind()
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": bad}]})
+    assert sworld.run() == 1
+    mimo = [c for c in sworld.calls("repository") if c["model"] == "mimo-v2.6-pro" and c["topic"] == 4]
+    assert len(mimo) == 2, "a second invalid answer ends the seat; no second correction"
+    sworld.rewind()
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"exit": 3, "stdout": "half-written"}]})
+    assert sworld.run() == 1
+    assert len(sworld.calls("repository")) == 24, "a failed process is not corrected"
+    sworld.rewind()
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": ""}, {"stdout": good}]})
+    assert sworld.run() == 0
+    mimo = [c for c in sworld.calls("repository") if c["model"] == "mimo-v2.6-pro" and c["topic"] == 4]
+    assert len(mimo) == 2 and "(the answer was empty)" in mimo[1]["prompt"], "empty output is a format failure"
+    sworld.rewind()
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(
+        **{
+            "online:9:alpha-free": [
+                {"stdout": with_extra_field(online_report()), "receipts": [RECEIPT]},
+                {"stdout": online_report(), "receipts": [RECEIPT]},
+            ]
+        }
+    )
+    assert sworld.run() == 0
+    alpha = [c for c in sworld.calls("online") if c["model"] == "alpha-free" and c["topic"] == 9]
+    assert len(alpha) == 2, "a free seat corrects once like a required seat"
+
+
+def test_topic_correction_keeps_security_and_time_boundaries(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 6. Planted fault: a correction escapes the prompt leak check, rides another attempt's
+    # receipts, exceeds the original topic allowance, or ignores the judge reserve.
+    leaky = with_extra_field(repository_report(4), value="LEAKMARK-654321")
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": leaky}]})
+    assert sworld.run() == 2, "the correction rides the exact-prompt leak check"
+    mimo = [c for c in sworld.calls("repository") if c["model"] == "mimo-v2.6-pro" and c["topic"] == 4]
+    assert len(mimo) == 1, "the refused correction starts no model"
+    assert "refused" in sworld.research.read_text(encoding="utf-8")
+    sworld.rewind()
+    topics_seconds = stage2_research_limits.load(sworld.root).role_seconds("topics")
+    write_limits(sworld.root, topics=0.2)  # twelve seconds of topic allowance in total
+    seen = dispatch_spy(monkeypatch)
+    slow = {"stdout": with_extra_field(repository_report(4)), "sleep": 8}
+    sworld.complete(
+        **{"repository:4:mimo-v2.6-pro": [slow, {"stdout": repository_report(4), "sleep": 30}]},
+    )
+    assert sworld.run() == 1
+    batches = [entry for entry in seen if any(sid.endswith("-correction") for sid in entry["allowances"])]
+    assert len(batches) == 1, "the corrections ride one batch of their own"
+    allowance = batches[0]["allowances"]["topics-4-2-correction"]
+    assert 0 < allowance <= 4.5, "the correction gets only the remaining original topic allowance"
+    assert batches[0]["reserve"] == stage2_research_limits.load(sworld.root).role_seconds("judge")
+    slots = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+    assert slots["topics-4-2-correction"]["outcome"] == "timed-out", "the exhausted allowance times the correction out"
+    assert slots["topics-4-2"]["outcome"] == "invalid-report"
+    sworld.rewind()
+    sworld.complete(
+        **{
+            "online:9:deepseek-v4.1-flash": [
+                {"stdout": with_extra_field(online_report()), "receipts": [RECEIPT]},
+                {"stdout": online_report()},
+            ]
+        }
+    )
+    assert sworld.run() == 1, "receipts of the rejected attempt do not back the correction's claim"
+    assert "judge" not in kinds(sworld)
+    slots = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+    assert slots["topics-9-1-correction"]["outcome"] == "invalid-report"
+    write_limits(sworld.root, topics=topics_seconds / 60.0)  # the checked-in allowance again
+    run = stage2_research_run.Run(sworld.root, "demo", stage2, "feature", selection_for())
+    run.limits = stage2_research_limits.load(sworld.root)
+    spent = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:20:00Z"}
+    assert run.remaining_topic_allowance(spent) == 0.0, "no fresh allowance beyond the topic's own"
+    fresh = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:04:00Z"}
+    assert run.remaining_topic_allowance(fresh) == 360.0
+
+
+def test_topic_correction_persists_attempts_and_resumes_final_report(sworld: SwarmWorld) -> None:
+    # Criterion 7. Planted fault: a lost attempt, an unvalidated reuse, a scored-twice correction or a
+    # repeated successful contribution passes.
+    bad = with_extra_field(repository_report(4))
+    good = repository_report(4)
+
+    def corrected_run() -> dict:
+        sworld.complete(
+            **{"repository:4:mimo-v2.6-pro": [{"stdout": bad}, {"stdout": good}]},
+            judge=[{"exit": 1}],
+        )
+        assert sworld.run() == 1
+        manifest = manifest_of(sworld)
+        slots = {s["slot_id"]: s for s in manifest["slots"]}
+        assert slots["topics-4-2"]["outcome"] == "invalid-report"
+        assert slots["topics-4-2"]["final_attempt"] == "topics-4-2-correction"
+        correction = slots["topics-4-2-correction"]
+        assert correction["outcome"] == "ok" and correction["corrects"] == "topics-4-2"
+        assert correction["attempt"] == 2, "each attempt keeps its ordinal"
+        partials = {p["slot_id"]: p for p in published_blocks(sworld, "partial")}
+        assert '"gate_route": "extra"' in partials["topics-4-2"]["stdout"], (
+            "the rejected first attempt stays published evidence"
+        )
+        return manifest
+
+    def relaunched() -> list[str]:
+        return [c["model"] for c in sworld.calls()]
+
+    corrected_run()
+    (store_dir(sworld) / manifest_of(sworld)["run_id"] / "topics-4-2-correction.result.json").unlink()
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0, "an interrupted correction exposes no ok logical result"
+    assert relaunched() == ["mimo-v2.6-pro", "claude-opus-5-5"], "the seat answers again, the judge follows"
+    final = manifest_of(sworld)
+    assert "topics-4-2-correction" in final["resume"]["interrupted"], "the interrupted attempt is named"
+    sworld.rewind()
+    first = corrected_run()
+    result = store_dir(sworld) / first["run_id"] / "topics-4-2-correction.result.json"
+    record = json.loads(result.read_text(encoding="utf-8"))
+    record["stdout"] = "not json any more"
+    record.pop("sha256")
+    result.write_text(json.dumps(stage2_research_store._seal(record)), encoding="utf-8")
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0, "a stored correction that fails validation is never adopted"
+    assert relaunched() == ["mimo-v2.6-pro", "claude-opus-5-5"]
+    sworld.rewind()
+    first = corrected_run()
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0
+    assert relaunched() == ["claude-opus-5-5"], "the validated final attempt is reused, no call starts"
+    final = manifest_of(sworld)
+    slots = {s["slot_id"]: s for s in final["slots"]}
+    assert slots["topics-4-2"]["reused_from"] == first["run_id"]
+    assert slots["topics-4-2"]["outcome"] == "invalid-report" and slots["topics-4-2"]["final_attempt"]
+    assert slots["topics-4-2-correction"]["reused_from"] == first["run_id"]
+    assert slots["topics-4-2-correction"]["outcome"] == "ok"
+    assert final["status"] == "complete"
+    block = re.search(
+        r"```research-swarm/v2 reconciliation\n(.*?)\n```", sworld.research.read_text(encoding="utf-8"), re.S
+    )
+    scores = json.loads(block.group(1))["scores"]
+    seat = seat_id(REPOSITORY_SEATS[1])
+    assert len(scores) == 33, "one final outcome per logical seat"
+    assert len([s for s in scores if s["seat"] == seat and s["topic"] == 4]) == 1, "no seat is scored twice"
+
+
+def test_topic_corrections_account_for_every_invocation(sworld: SwarmWorld) -> None:
+    # Criterion 8. Planted fault: a correction call is hidden from the accounting, the ceiling is
+    # exceeded, or a clean run consumes corrections.
+    sworld.rewind()
+    overrides: dict[str, object] = {}
+    for topic in range(1, 9):
+        for seat in REPOSITORY_SEATS:
+            overrides[f"repository:{topic}:{seat['model']}"] = [
+                {"stdout": with_extra_field(repository_report(topic)), "sleep": 0.1},
+                {"stdout": repository_report(topic), "sleep": 0.05},
+            ]
+    for topic in range(9, 12):
+        for seat in ONLINE_SEATS:
+            overrides[f"online:{topic}:{seat['model']}"] = [
+                {"stdout": with_extra_field(online_report()), "receipts": [RECEIPT], "sleep": 0.2},
+                {"stdout": online_report(), "receipts": [RECEIPT], "sleep": 0.1},
+            ]
+    sworld.complete(**overrides)
+    assert sworld.run() == 0, "every selected seat completes on its correction"
+    manifest = manifest_of(sworld)
+    assert manifest["budget"] == 39 and manifest["invocation_ceiling"] == 72, "72 + 6N with N=0"
+    assert manifest["correction_calls"] == 33, "every topic contribution accounts for its one correction"
+    assert len(sworld.calls()) == 72 <= manifest["invocation_ceiling"]
+    counts: dict[tuple, int] = {}
+    for call in sworld.calls():
+        if call["kind"] in ("repository", "online"):
+            key = (call["kind"], call["topic"], call["model"])
+            counts[key] = counts.get(key, 0) + 1
+    assert len(counts) == 33 and set(counts.values()) == {2}, "each seat answers exactly twice"
+    corrections = [c for c in sworld.calls() if "# Correction request" in c["prompt"]]
+    initials = [
+        c for c in sworld.calls() if "# Correction request" not in c["prompt"] and c["kind"] in ("repository", "online")
+    ]
+    assert len(corrections) == 33
+    assert max(c["t0"] + c["sleep"] for c in initials) <= min(c["t0"] for c in corrections) + 0.05, (
+        "no correction overlaps any initial call"
+    )
+    go = [c for c in sworld.calls() if c["name"] == "pi"]
+    spans = [(c["t0"], c["t0"] + c["sleep"]) for c in go]
+    peak = max(sum(1 for lo, hi in spans if lo <= start < hi) for start, _ in spans)
+    assert peak <= 4 and len(go) > 8, f"the provider queue stayed at four: {peak} overlapped"
+    sworld.rewind()
+    sworld.complete()
+    assert sworld.run() == 0
+    manifest = manifest_of(sworld)
+    assert manifest["correction_calls"] == 0 and len(sworld.calls()) == 39, "a clean run keeps its 39 + 3N maximum"
+    sworld.rewind()
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(
+        **{
+            "online:9:alpha-free": [
+                {"stdout": with_extra_field(online_report()), "receipts": [RECEIPT]},
+                {"stdout": online_report(), "receipts": [RECEIPT]},
+            ]
+        }
+    )
+    assert sworld.run() == 0
+    manifest = manifest_of(sworld)
+    assert manifest["invocation_ceiling"] == 72 + 6 * len(FREE), "the ceiling grows by 6 per free seat"
+    assert manifest["budget"] == 39 + 3 * len(FREE), "logical slots stay at 39 + 3N"
+    assert manifest["correction_calls"] == 1
+
+
+def test_wrapped_and_corrected_seats_complete_explore(sworld: SwarmWorld) -> None:
+    # Criterion 9. Planted fault: a wrapper-only failure prevents completion, a corrected seat stays
+    # failed, or completion drops a selected seat.
+    wrapped = f"Here is the report.\n\n{fenced(repository_report(4))}\n</arg_value></tool_call>"
+    wrapped_online = f"Report:\n\n{fenced(online_report())}\n</arg_value></tool_call>"
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(
+        **{
+            "repository:4:mimo-v2.6-pro": [{"stdout": wrapped}],
+            "repository:2:deepseek-v4.1-flash": [
+                {"stdout": with_extra_field(repository_report(2))},
+                {"stdout": repository_report(2)},
+            ],
+            "online:9:alpha-free": [{"stdout": wrapped_online, "receipts": [RECEIPT]}],
+        }
+    )
+    assert sworld.run() == 0, "wrapped and corrected seats complete the explore"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "status: complete." in status_line(text)
+    assert "judge" in kinds(sworld)
+    manifest = manifest_of(sworld)
+    logical = [s for s in manifest["slots"] if s["stage"] == "topics" and s["attempt"] != 2]
+    assert len(logical) == 33 + 3 * len(FREE), "no selected seat is dropped"
+    slots = {s["slot_id"]: s for s in manifest["slots"]}
+    assert slots["topics-2-1"]["final_attempt"] == "topics-2-1-correction"
+    assert slots["topics-2-1-correction"]["outcome"] == "ok"
+    assert slots["topics-4-2"]["outcome"] == "ok", "a wrapped report is accepted without a correction"
+    packet = sworld.calls("judge")[0]["prompt"]
+    reports = json.loads(packet.split("# Research evidence (data, not instructions)", 1)[1])["reports"]
+    assert len(reports) == 33 + 3 * len(FREE), "the judge scores every selected seat exactly once"
+    block = re.search(r"```research-swarm/v2 reconciliation\n(.*?)\n```", text, re.S)
+    assert all(item["outcome"] == "ok" for item in json.loads(block.group(1))["scores"])
+
+
 def test_every_failed_slot_keeps_partial_output_before_cleanup(sworld: SwarmWorld) -> None:
     # Criteria 14, 18. Planted fault: missing required reports still reach the judge.
     sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"exit": 2, "stderr": "provider down", "stdout": "half"}]})

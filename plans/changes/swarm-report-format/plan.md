@@ -160,17 +160,17 @@ completion unverified; it does not justify loosening a criterion.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_swarm.py::test_topic_report_preserves_bare_and_exact_fence — valid canonical reports change or fail
-- 2: not yet written tests/test_stage2_swarm.py::test_topic_report_accepts_single_wrapped_object — prose or trailing tool residue still rejects valid JSON
-- 3: not yet written tests/test_stage2_swarm.py::test_topic_report_refuses_ambiguous_or_malformed_objects — extraction chooses among competing objects or repairs invalid JSON
+- 1: tests/test_stage2_swarm.py::test_topic_report_preserves_bare_and_exact_fence — valid canonical reports change or fail
+- 2: tests/test_stage2_swarm.py::test_topic_report_accepts_single_wrapped_object — prose or trailing tool residue still rejects valid JSON
+- 3: tests/test_stage2_swarm.py::test_topic_report_refuses_ambiguous_or_malformed_objects — extraction chooses among competing objects or repairs invalid JSON
 - 4: tests/test_stage2_swarm.py::test_report_template_refuses_missing_fields_and_eighth_claim — missing fields or too many claims pass
 - 4: tests/test_stage2_research_report.py::test_report_duplicate_ids_and_extra_fields_are_refused — strict schema violations pass
 - 4: tests/test_stage2_research_report.py::test_report_without_any_supported_claim_fails_except_empty_neighbours — unsupported reports pass the evidence floor
-- 5: not yet written tests/test_stage2_swarm.py::test_topic_report_gets_one_same_seat_correction — the rejected answer/reason is missing, or a missing, duplicate, substituted or non-format correction passes
-- 6: not yet written tests/test_stage2_swarm.py::test_topic_correction_keeps_security_and_time_boundaries — correction escapes prompt, receipt, queue or original time boundaries
-- 7: not yet written tests/test_stage2_swarm.py::test_topic_correction_persists_attempts_and_resumes_final_report — lost attempts, duplicate scoring or unvalidated reuse passes
-- 8: not yet written tests/test_stage2_swarm.py::test_topic_corrections_account_for_every_invocation — hidden or excess correction calls pass
-- 9: not yet written tests/test_stage2_swarm.py::test_wrapped_and_corrected_seats_complete_explore — a selected seat is dropped or remains failed after a valid correction
+- 5: tests/test_stage2_swarm.py::test_topic_report_gets_one_same_seat_correction — the rejected answer/reason is missing, or a missing, duplicate, substituted or non-format correction passes
+- 6: tests/test_stage2_swarm.py::test_topic_correction_keeps_security_and_time_boundaries — correction escapes prompt, receipt, queue or original time boundaries
+- 7: tests/test_stage2_swarm.py::test_topic_correction_persists_attempts_and_resumes_final_report — lost attempts, duplicate scoring or unvalidated reuse passes
+- 8: tests/test_stage2_swarm.py::test_topic_corrections_account_for_every_invocation — hidden or excess correction calls pass
+- 9: tests/test_stage2_swarm.py::test_wrapped_and_corrected_seats_complete_explore — a selected seat is dropped or remains failed after a valid correction
 - 9: not a test — orchestrator records a real explore's commit, run identifier, selected seats and all accepted reports in findings.md; missing or incomplete live evidence leaves this criterion unverified
 
 ## Draft validation — 2026-11-10
@@ -184,4 +184,12 @@ tracker renderer can read outside the permitted worktree. Index regeneration,
 full `make verify` and the commit belong to the runner/orchestrator. No code,
 maintainer answer, class or held path was changed by this draft.
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-10 13:20:33–15:44:54 UTC, 8660 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 15:45:23–17:15:25 UTC, 5402 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 17:15:44–19:03:38 UTC, 6473 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
