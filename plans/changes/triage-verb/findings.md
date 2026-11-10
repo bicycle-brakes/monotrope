@@ -353,3 +353,16 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-10: repair · attempt 1 · route codex — lifecycle fields: plans/changes/triage-verb/plan.md, plans/changes/triage-verb/spec.md — unchanged
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3810 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-4 | MAJOR | SPEC | impl | scripts/stage2.py:7462-7466 | With `Where` equal to `tests/test_stage2.py and Makefile:12`, ordinary `taken` is refused as test-only. The current parser discards the extensionless root filename, although this repository contains `Makefile`. This is new evidence that root-file recognition remains incomplete: the mixed-location request must be accepted. [Acceptance criteria 1 and 3] | Codex | open | — |
+| P6-5 | MAJOR | SPEC | impl | scripts/stage2.py:7455-7472 | With `Where` equal to `tests/test_stage2.py and [reference](https://example.com/reference)`, ordinary `taken` is accepted. The external URL counts as a production location because it contains slashes, although the only repository location names a test. The command must refuse and suggest `taken — not a test — <reason>`. [Acceptance criterion 3] | Codex | open | — |
+| P6-6 | MAJOR | SPEC | impl | scripts/stage2.py:3468-3472 | Given a valid target row and another runner-owned row ending with `taken — previous` and a `yes` proof mark but missing its closing table pipe, triage accepts and publishes the target update. `split_row()` returns nothing for the damaged line, so strict validation silently skips it. A malformed record must cause refusal without writing. [Acceptance criterion 4] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c36d-70e7-76c0-8676-99b7fbe0db7c, 2026-11-10
+Reviewer session: codex 01a1c36d-70e7-76c0-8676-99b7fbe0db7c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
