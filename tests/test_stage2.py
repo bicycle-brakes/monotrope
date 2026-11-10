@@ -429,7 +429,7 @@ class World:
                 ident,
                 "MAJOR",
                 "MAINT",
-                "impl",
+                "base",
                 "src/app.py:1",
                 f"finding of {ident} {finding}".strip(),
                 (members or [reviewer])[index % len(members or [reviewer])],
@@ -452,10 +452,19 @@ class World:
         self.findings.write_text("# Findings — demo\n\n" + "\n\n".join(lines) + "\n", encoding="utf-8")
 
 
-def decide_record(w: World, status: str = "taken — test_a", broke: str = "no") -> None:
-    """Decide every row of the loop record the way the implementer would: by editing the file."""
+def decide_record(w: World, status: str = "taken — test_a", broke: str = "no", origin: str = "base") -> None:
+    """Decide every row of the loop record the way the orchestrator would: by editing the file.
+
+    The orchestrator also sets each decided row's Origin (`base` unless a repair caused the finding);
+    the reviewer's own Origin text is replaced only on the rows being decided.
+    """
     text = w.record().read_text(encoding="utf-8")
-    text = re.sub(r"^(\| L\d+-\d+ \|.*\|)  \|  \|$", rf"\1 {status} | {broke} |", text, flags=re.M)
+    text = re.sub(
+        r"^\| (L\d+-\d+) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|(.*\|)  \|  \|$",
+        lambda m: f"| {m[1]} | {m[2]} | {m[3]} | {origin} |{m[5]} {status} | {broke} |",
+        text,
+        flags=re.M,
+    )
     w.record().write_text(text, encoding="utf-8")
 
 
@@ -5166,7 +5175,7 @@ def test_quoted_reader_lines_count_for_no_reader(world: World) -> None:
         "## Phase 6 — Codex, 2026-09-30",
         "## Phase 4b — loop rows, released",
         "| X1 | MAJOR | SPEC | a | b | six |",
-        "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | f | deepseek | taken — t | no | — |",
+        "| L1-1 | MAJOR | MAINT | base | src/app.py:1 | f | deepseek | taken — t | no | — |",
     ]
     red = "\n".join(_gate("pytest", quoted, "red"))
     world.script(
@@ -5213,7 +5222,7 @@ def test_a_quoted_release_heading_or_no_loop_line_moves_no_release(world: World)
     assert world.text().count(stage2.NO_LOOP_LINE) == 2, "the quote stood in for the runner's own line"
     released = f"{stage2.RELEASE_HEADING} 2026-10-11\n\n" + stage2.render_table(
         stage2.RELEASED_COLUMNS,
-        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "deepseek", "taken — t", "no", "—"]],
+        [["L1-1", "MAJOR", "MAINT", "base", "src/app.py:1", "f", "deepseek", "taken — t", "no", "—"]],
     )
     world.write_findings(VERDICT, released, quoted)
     assert [row[0] for row in stage2.findings_rows(world.text())[0]] == ["L1-1"]
@@ -5758,7 +5767,7 @@ def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None
     """Repair round 2 (F-7 note): `fill_marks` stamps the file by itself, not only through the append before it."""
     released = f"{stage2.RELEASE_HEADING} 2026-09-29\n\n" + stage2.render_table(
         stage2.RELEASED_COLUMNS,
-        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "deepseek-v4.1-flash", "taken — t", "no", "—"]],
+        [["L1-1", "MAJOR", "MAINT", "base", "src/app.py:1", "f", "deepseek-v4.1-flash", "taken — t", "no", "—"]],
     )
     world.findings.write_text(old_header() + "\n" + released + "\n", encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
@@ -8361,6 +8370,392 @@ def test_two_fix_r_rounds_stop_the_loop(world: World, capsys: pytest.CaptureFixt
     assert "## Round 3 — mimo-v2.6-pro, " in world.record().read_text(encoding="utf-8")
 
 
+# ---------------------------------------------------------------------------
+# The orchestrator supplies the Origin the repair brake reads (bead coding-harness-ywbh)
+# ---------------------------------------------------------------------------
+
+INVALID_ORIGINS = ("", "criterion 1", "fix-r", "fix-r0", "fix-r01", "fix-r-1", "fix-r1x", "FIX-R1", "BASE")
+ORIGIN_VERBS = ("review-loop", "review", "release-loop", "repair")
+ORIGIN_PLACES = ("record", "phase-6")
+MODEL_STANDINS = ("pi", "codex", "claude")
+
+
+def set_row_origin(w: World, ident: str, origin: str) -> None:
+    """Rewrite the Origin cell of one record row, as the orchestrator's decision would."""
+    text = w.record().read_text(encoding="utf-8")
+    text = re.sub(
+        rf"^(\| {ident} (?:\|[^|]+){{2}}\|)[^|]+(\|.*)$",
+        lambda m: f"{m[1]} {origin} {m[2]}",
+        text,
+        flags=re.M,
+    )
+    w.record().write_text(text, encoding="utf-8")
+
+
+def plant_origin(w: World, place: str, status: str, origin: str, broke: str = "no") -> None:
+    """One decided row at one of the three authoritative places, with the given Origin."""
+    shutil.rmtree(w.record().parent, ignore_errors=True)
+    if place == "record":
+        w.write_record([("L1-1", status, broke)])
+        set_row_origin(w, "L1-1", origin)
+        w.write_findings(VERDICT)
+    elif place == "released":
+        cells = released_cells("L1-1", status, broke, "released finding")
+        cells[3] = origin
+        w.write_findings(VERDICT, released_block([cells]))
+    else:
+        cells = phase6_cells("F-1", status, "phase finding")
+        cells[3] = origin
+        w.write_findings(VERDICT, phase6_block([cells]))
+
+
+def origin_state(w: World) -> tuple[bytes | None, bytes | None]:
+    """The bytes a refusal must leave alone: findings.md and the loop record (which holds the stage state)."""
+    record = w.record()
+    return (
+        w.findings.read_bytes() if w.findings.exists() else None,
+        record.read_bytes() if record.exists() else None,
+    )
+
+
+def test_origin_workflow_assigns_provenance_to_the_orchestrator() -> None:
+    """Criterion 1. Planted fault: the row-decision paragraph drops the orchestrator's ownership of Origin or a causal meaning."""
+    text = flat((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8"))
+    start = text.index("The orchestrator writes beside each row its `Status`")
+    paragraph = text[start : start + 3000]
+    assert "also sets each accepted row's `Origin`" in paragraph
+    assert "never leaves it to a reviewer" in paragraph
+    assert "`base` for a finding that existed before any repair and that no repair caused" in paragraph
+    assert "`fix-r<N>` (N a positive whole number without a leading zero)" in paragraph
+    assert "for a finding that repair round N caused" in paragraph
+    assert "the orchestrator corrects the cell" in paragraph
+
+
+@pytest.mark.parametrize("verb", ORIGIN_VERBS)
+@pytest.mark.parametrize("place", ORIGIN_PLACES)
+@pytest.mark.parametrize("status", ["taken — test_a", FIXED])
+def test_invalid_accepted_origins_hold_all_consuming_verbs(
+    world: World, capsys: pytest.CaptureFixture[str], verb: str, place: str, status: str
+) -> None:
+    """Criterion 2. Planted fault: a taken or fixed row at any place with an invalid Origin lets a verb call, write or delete."""
+    seed_tests(world)
+    world.script(
+        pi=[{"stdout": rows(1)}] * 4,
+        codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L1-1: agree")],
+        claude=[{"stdout": "nothing"}],
+        make=[{"stdout": "green\n"}],
+    )
+    for origin in INVALID_ORIGINS:
+        plant_origin(world, place, status, origin)
+        before = origin_state(world)
+        capsys.readouterr()
+        assert world.run(verb) == 2, (verb, place, status, origin)
+        error = capsys.readouterr().err
+        assert "invalid Origin" in error, (verb, place, status, origin, error)
+        assert origin_state(world) == before, (verb, place, status, origin)
+    assert [call for call in world.calls() if call["name"] in MODEL_STANDINS] == []
+
+
+@pytest.mark.parametrize("verb", ORIGIN_VERBS)
+@pytest.mark.parametrize("newest_has_row", [False, True])
+def test_legacy_released_origin_does_not_hold_verbs(world: World, verb: str, newest_has_row: bool) -> None:
+    """Released legacy provenance never blocks continuation, review, release or repair."""
+    seed_tests(world)
+    legacy = released_cells("L1-3", FIXED, "no", "legacy finding")
+    legacy[3] = "diff reading"
+    old_phase6 = phase6_cells("F-old", FIXED, "legacy phase-6 finding")
+    old_phase6[3] = "impl"
+    current = [phase6_cells("F-current", FIXED, "current fixed finding")] if newest_has_row else []
+    world.write_findings(phase6_block([old_phase6]), released_block([legacy]), phase6_block(current), VERDICT)
+    world.write_record([("L2-1", "taken — test_a" if verb == "repair" else FIXED, "no")], number=2)
+    if verb == "repair":
+        script_repair(
+            world,
+            [repair_step(stdout="L2-1: fixed — tests/test_fix.py::test_fix")],
+            make=[{"stdout": "green\n"}],
+        )
+    else:
+        world.script(
+            pi=[{"stdout": rows(1)}] * 4,
+            codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+        )
+        if verb == "review":
+            # Phase 6 reads the committed head for its full check (repair-targeted-check).
+            commit_review_findings(world)
+    assert world.run(verb) == 0
+    assert stage2.findings_rows(world.text())[0][0][3] == "diff reading"
+
+
+@pytest.mark.parametrize("verb", ORIGIN_VERBS)
+def test_uppercase_accepted_status_holds_invalid_origin(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    """Plant loss of case-insensitive acceptance; uppercase TAKEN must still hold all verbs."""
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(stage2, "accepted_row", lambda row: row[7].startswith(("taken", "fixed")))
+    seed_tests(world)
+    plant_origin(world, "record", "TAKEN — test_a", "invalid")
+    before = origin_state(world)
+    capsys.readouterr()
+    assert world.run(verb) == 2
+    assert "invalid Origin" in capsys.readouterr().err
+    assert origin_state(world) == before
+    assert [call for call in world.calls() if call["name"] in MODEL_STANDINS] == []
+
+
+@pytest.mark.parametrize("legacy_identity", [False, True])
+def test_invalid_origin_holds_release_reconciliation(
+    world: World, capsys: pytest.CaptureFixture[str], legacy_identity: bool
+) -> None:
+    """Criterion 2. Planted fault: either already-released retry branch rewrites findings.md or removes the record before the check."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.write_findings(VERDICT)
+    # A release written before Origin validation can retain invalid provenance.
+    set_row_origin(world, "L1-1", "criterion 1")
+    saved = world.record().read_text(encoding="utf-8")
+    legacy = stage2.release_block(saved, world.text())
+    if legacy_identity:
+        headings = [line for line in saved.splitlines() if stage2.ROUND_HEADING.match(line)]
+        cells = [row[:7] for row in stage2.record_rows(saved)]
+        identity = stage2.record_digest(json.dumps([headings, cells], sort_keys=True))
+        legacy = re.sub(r"(?m)^Record identity: .*$", f"Record identity: {identity}", legacy)
+    for restored in (saved, saved.replace("| taken — test_a |", f"| {FIXED} |")):
+        world.write_findings(VERDICT, legacy)
+        world.record().parent.mkdir(parents=True, exist_ok=True)
+        world.record().write_text(restored, encoding="utf-8")
+        before = origin_state(world)
+        capsys.readouterr()
+        assert world.run("release-loop") == 2
+        assert "invalid Origin" in capsys.readouterr().err
+        assert origin_state(world) == before
+        # The documented remedy must reconcile, without duplicating the released block.
+        set_row_origin(world, "L1-1", "base")
+        assert world.run("release-loop") == 0
+        assert not world.record().exists()
+        released = stage2.findings_rows(world.text())[0]
+        assert [(row[0], row[3]) for row in released] == [("L1-1", "base")]
+        assert world.text().count(stage2.RELEASE_HEADING) == 1
+
+
+def test_origin_release_controls_keep_distinct_validation_scopes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary release checks only current provenance; restart and stage retirement never check it."""
+    old = phase6_cells("F-old", FIXED, "superseded phase-6 finding")
+    old[3] = "scope"
+    world.write_record([("L1-1", FIXED, "no")])
+    world.write_findings(phase6_block([old]), phase6_block([]), VERDICT)
+    assert world.run("release-loop") == 0, "ordinary release must ignore superseded phase-6 provenance"
+
+    world.write_findings()
+    _clean_released_loop(world)
+
+    def forbidden_origin_check(*_args: object) -> None:
+        pytest.fail("release-loop control flags must never reach Origin validation")
+
+    monkeypatch.setattr(stage2, "origin_refusal", forbidden_origin_check)
+    current = phase6_cells("F-current", FIXED, "invalid current provenance")
+    current[3] = "invalid"
+    world.write_findings(world.text(), phase6_block([current]))
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer requested restart") == 0
+    world.write_record([("L2-1", FIXED, "no")], number=2, state=loop_state(("free",)))
+    set_row_origin(world, "L2-1", "invalid")
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "model timed out") == 0
+    assert "flash" in stage2.read_state(world.record().read_text(encoding="utf-8"), world.text())["consumed"]
+
+
+@pytest.mark.parametrize("changed_part", ["repair marks", "stage snapshot"])
+def test_legacy_release_identity_reconciles_crash_leftover(world: World, changed_part: str) -> None:
+    """L2-2: retain reconciliation with the pre-Origin-change identity formula."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(()))
+    world.write_findings(VERDICT)
+    original = world.record().read_text(encoding="utf-8")
+    # Freeze the earlier formula independently of the production identity helper.
+    headings = [line for line in original.splitlines() if stage2.ROUND_HEADING.match(line)]
+    cells = [row[:7] for row in stage2.record_rows(original)]
+    legacy_identity = stage2.record_digest(json.dumps([headings, cells], sort_keys=True))
+    block = stage2.release_block(original, world.text())
+    block = re.sub(r"(?m)^Record identity: .*$", f"Record identity: {legacy_identity}", block)
+    block = block.replace("| — |", "| agree |")
+    world.write_findings(VERDICT, block)
+    if changed_part == "repair marks":
+        changed = original.replace("| taken — test_a |", f"| {FIXED} |")
+    else:
+        changed = original.replace('"consumed": []', '"consumed": ["free"]')
+    assert changed != original
+    assert stage2.record_digest(changed) != stage2.record_digest(original)
+    world.record().write_text(changed, encoding="utf-8")
+
+    assert world.run("release-loop") == 0, "a legacy identity must reconcile without another phase-6 verdict"
+    assert not world.record().exists()
+    assert world.text().count(stage2.RELEASE_HEADING) == 1
+    released = stage2.findings_rows(world.text())[0]
+    assert len(released) == 1 and released[0][3] == "base"
+    assert released[0][-1] == "agree"
+    assert f"Record digest: {stage2.record_digest(changed)}" in world.text()
+    assert f"Record identity: {stage2.record_identity(changed)}" in world.text()
+    if changed_part == "repair marks":
+        assert released[0][7] == FIXED
+    else:
+        assert stage2.read_state(None, world.text())["consumed"] == ["free"]
+
+
+def test_origin_refusal_identifies_rows_sources_and_correction(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3. Planted fault: the refusal hides a row, its place or the allowed values, or asks the reviewer."""
+    world.write_record([("L1-1", FIXED, "no"), ("L1-2", "rejected — r", "")])
+    set_row_origin(world, "L1-1", "oops")
+    set_row_origin(world, "L1-2", "oops2")
+    released = released_cells("L2-1", "taken — test_c", "no", "released finding")
+    released[3] = ""
+    wrong = phase6_cells("F-1", "taken — crit 6", "phase finding")
+    wrong[3] = "fix-r0"
+    right = phase6_cells("F-2", "taken — crit 7", "phase finding")
+    world.write_findings(VERDICT, released_block([released]), phase6_block([wrong, right]))
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    error = capsys.readouterr().err
+    assert "L1-1 (loop record, Origin `oops`)" in error
+    assert "L2-1" not in error, "released history must not be re-checked"
+    assert "F-1 (phase-6 table, Origin `fix-r0`)" in error
+    assert "L1-2" not in error and "F-2" not in error, "a valid or rejected row was named"
+    assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
+    assert "The orchestrator sets it" in error and "not the reviewer's answer" in error
+    assert world.reviews("pi") == []
+
+
+@pytest.mark.parametrize("origin", ["base", "fix-r1", "fix-r12"])
+def test_valid_origins_preserve_existing_admission_checks(
+    world: World, capsys: pytest.CaptureFixture[str], origin: str
+) -> None:
+    """Criterion 4. Planted fault: a canonical value is refused, or supplying it skips the decision or test-evidence refusals."""
+    assert stage2.ORIGIN_VALUE.fullmatch(origin)
+    assert not any(stage2.ORIGIN_VALUE.fullmatch(bad) for bad in INVALID_ORIGINS)
+    # a fixed row without its `Broke a test` mark still waits for the mark, not for provenance
+    world.write_record([("L1-1", FIXED, "")])
+    set_row_origin(world, "L1-1", f"  {origin}  ")
+    world.write_findings(VERDICT)
+    for verb in ("review-loop", "release-loop"):
+        capsys.readouterr()
+        assert world.run(verb) == 2
+        error = capsys.readouterr().err
+        assert "`Broke a test` mark (L1-1)" in error and "invalid Origin" not in error, (verb, error)
+    # a taken row still waits for its repair before the next round
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", origin)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    error = capsys.readouterr().err
+    assert "taken rows are not repaired yet" in error and "invalid Origin" not in error, error
+    assert world.reviews("pi") == []
+    # a fully decided row with a valid Origin releases
+    world.write_record([("L1-1", FIXED, "no")])
+    set_row_origin(world, "L1-1", origin)
+    assert world.run("release-loop") == 0
+    assert [row[3] for row in stage2.findings_rows(world.text())[0]] == [origin]
+
+
+def test_nonaccepted_rows_need_no_origin(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5. Planted fault: a rejected or open row with an arbitrary Origin is refused, or the undecided-row refusal is skipped."""
+    for origin in ("", "criterion 1", "BASE", "fix-r0"):
+        for place in ORIGIN_PLACES:
+            for status in ("rejected — covered", "open", ""):
+                if place == "released" and status == "open":
+                    continue  # released rows are decided; `open` is a phase-6 word
+                plant_origin(world, place, status, origin, broke="")
+                record = world.record().read_text(encoding="utf-8") if world.record().exists() else None
+                assert stage2.origin_refusal(record, world.text()) is None, (origin, place, status)
+    # the existing undecided-row refusal still applies, and names the rows, not their Origin
+    plant_origin(world, "record", "", "criterion 1", broke="")
+    for verb in ("review-loop", "release-loop"):
+        capsys.readouterr()
+        assert world.run(verb) == 2
+        error = capsys.readouterr().err
+        assert "undecided rows (L1-1)" in error and "invalid Origin" not in error, (verb, error)
+    assert world.reviews("pi") == []
+
+
+def test_reviewer_origin_is_not_filled_automatically(world: World) -> None:
+    """Criterion 6. Planted fault: intake defaults a blank or arbitrary reviewer Origin to `base` or `fix-r<N>`."""
+    answer = (
+        "| X1 | MAJOR | SPEC |  | a.py:1 | blank origin body |\n"
+        "| X2 | MAJOR | SPEC | whatever the reviewer wrote | a.py:2 | arbitrary origin body |"
+    )
+    world.script(pi=[{"stdout": answer}] * 4)
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    origins = {row[5]: row[3] for row in stage2.record_rows(text)}
+    assert origins["blank origin body"] == ""
+    assert origins["arbitrary origin body"] == "whatever the reviewer wrote"
+    assert not any(stage2.ORIGIN_VALUE.fullmatch(origin) for origin in origins.values())
+
+
+def test_origin_survives_repair_and_release(world: World) -> None:
+    """Criterion 7. Planted fault: marking a row fixed, releasing it or reconciling a release replaces its Origin."""
+    repair_world(world, ("L1-1", "taken — test_a", "no"))
+    set_row_origin(world, "L1-1", "fix-r3")
+    released = released_cells("L1-3", "taken — test_c", "no", "released finding")
+    released[3] = "fix-r2"
+    phase6 = phase6_cells("F-1", "taken — crit 6", "phase finding")
+    phase6[3] = "fix-r10"
+    world.write_findings(VERDICT, released_block([released]), phase6_block([phase6]))
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-1: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    saved = world.record().read_text(encoding="utf-8")
+    assert {row[0]: row[3] for row in stage2.record_rows(saved)} == {"L1-1": "fix-r3"}
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    assert {row[0]: (row[3], row[7]) for row in released_now} == {
+        "L1-3": ("fix-r2", "fixed — tests/test_fix.py::test_fix"),
+    }
+    assert {row[0]: row[3] for row in phase6_now} == {"F-1": "fix-r10"}
+    # an ordinary release carries the record row's Origin into the released block
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert {row[0]: row[3] for row in stage2.findings_rows(world.text())[0]} == {"L1-1": "fix-r3"}
+    # a repeated release that reconciles a changed record keeps it as well
+    changed = saved.replace("yes — tests/test_fix.py::test_fix", "no")
+    assert changed != saved
+    world.record().parent.mkdir(parents=True, exist_ok=True)
+    world.record().write_text(changed, encoding="utf-8")
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    assert {row[0]: (row[3], row[8]) for row in stage2.findings_rows(world.text())[0]} == {"L1-1": ("fix-r3", "no")}
+
+
+def test_origin_brake_survives_released_history(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 8. Planted fault: a release or taken-to-fixed change resets the brake, or a rejected row counts as accepted."""
+    first = released_cells("L1-1", FIXED, "no", "released repaired")
+    first[3] = "fix-r1"
+    world.write_findings(VERDICT, released_block([first]))
+    world.write_record([("L2-1", FIXED, "no"), ("L2-2", "rejected — noise", "")], number=2)
+    set_row_origin(world, "L2-1", "fix-r2")
+    set_row_origin(world, "L2-2", "base")  # a rejected base row does not quiet the brake
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    for status in (FIXED, "taken — test_a"):  # taken to fixed changes nothing
+        text = world.record().read_text(encoding="utf-8")
+        world.record().write_text(text.replace(FIXED, status), encoding="utf-8")
+        capsys.readouterr()
+        assert world.run("review-loop") == 2
+        refused = capsys.readouterr().err
+        assert "repair brake" in refused and "maintainer" in refused, refused
+        assert world.reviews("pi") == []
+        text = world.record().read_text(encoding="utf-8")
+        world.record().write_text(text.replace(status, FIXED), encoding="utf-8")
+    # an accepted base row in the released round quiets it; the rejected row's arbitrary Origin does not refuse
+    set_row_origin(world, "L2-2", "criterion 2")
+    first[3] = "base"
+    world.write_findings(VERDICT, released_block([first]))
+    assert world.run("review-loop") == 0
+    assert "## Round 3 — " in world.record().read_text(encoding="utf-8")
+
+
 def test_round_history_survives_split_releases_and_config_edits(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -9015,7 +9410,7 @@ def restored_line(world: World) -> str:
 
 
 def released_cells(ident: str, status: str, broke: str, finding: str) -> list[str]:
-    return [ident, "MAJOR", "MAINT", "impl", "src/app.py:1", finding, "deepseek-v4.1-flash", status, broke, "—"]
+    return [ident, "MAJOR", "MAINT", "base", "src/app.py:1", finding, "deepseek-v4.1-flash", status, broke, "—"]
 
 
 def phase6_cells(ident: str, status: str, finding: str) -> list[str]:
@@ -15533,7 +15928,7 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
         "L1-1",
         "MAJOR",
         "MAINT",
-        "impl",
+        "base",
         "src/app.py:1",
         "finding of L1-1",
         "deepseek-v4.1-flash",

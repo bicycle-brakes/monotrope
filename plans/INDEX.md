@@ -438,6 +438,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/docs-job-report-header/plan.md`](changes/docs-job-report-header/plan.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/research.md`](changes/docs-job-report-header/research.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/spec.md`](changes/docs-job-report-header/spec.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
+| [`changes/go-wire-apis/decisions.md`](changes/go-wire-apis/decisions.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/findings.md`](changes/go-wire-apis/findings.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/plan.md`](changes/go-wire-apis/plan.md) | draft | partial | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/research.md`](changes/go-wire-apis/research.md) | draft | none | 2026-11-06 | coding-harness-36za |
+| [`changes/go-wire-apis/spec.md`](changes/go-wire-apis/spec.md) | draft | partial | 2026-11-06 | coding-harness-36za |
 | [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/design.md`](changes/guard-test/design.md) | draft | partial | 2026-10-29 | coding-harness-0ho |
 | [`changes/guard-test/findings.md`](changes/guard-test/findings.md) | draft | none | 2026-10-29 | coding-harness-0ho |
@@ -472,6 +477,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/no-work-done/plan.md`](changes/no-work-done/plan.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/no-work-done/research.md`](changes/no-work-done/research.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/no-work-done/spec.md`](changes/no-work-done/spec.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/origin-cell/decisions.md`](changes/origin-cell/decisions.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/findings.md`](changes/origin-cell/findings.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/research.md`](changes/origin-cell/research.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
+| [`changes/origin-cell/spec.md`](changes/origin-cell/spec.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/outcome-test/decisions.md`](changes/outcome-test/decisions.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/findings.md`](changes/outcome-test/findings.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/plan.md`](changes/outcome-test/plan.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |

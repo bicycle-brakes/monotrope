@@ -96,7 +96,7 @@ def select_research_catalog(
     fixed_ids,
     *,
     expected_version,
-    measured_wire_apis=("openai-completions",),
+    measured_wire_apis,
     address,
     paid,
     exclusion,

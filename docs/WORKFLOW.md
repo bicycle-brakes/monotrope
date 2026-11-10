@@ -1595,7 +1595,18 @@ existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
-or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. The
+orchestrator also sets each accepted row's `Origin`, the provenance the repair
+brake reads, and never leaves it to a reviewer: `base` for a finding that
+existed before any repair and that no repair caused, or `fix-r<N>` (N a
+positive whole number without a leading zero) for a finding that repair round
+N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
+naming the row and its place, while a taken or fixed row in the loop record
+or a phase-6 table carries any other value; the orchestrator corrects the cell
+and runs the verb again. Ordinary release checks the record before writing
+the released block; already released history is never re-checked, including
+legacy rows released before this check existed. `release-loop --restart` and
+`release-loop --stage-failed` do not check Origin. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
@@ -1621,7 +1632,11 @@ runner's line `Record digest: sha256:<hex>` of the record it released; a
 second `release-loop` over a record whose digest equals the last released
 block's appends nothing, removes the record and says so. Each block also
 carries `Record identity: sha256:<hex>`, a hash of the round headings and the
-first seven cells of each record row, excluding Status and Broke a test.
+ID, Severity, Dimension, Where, Finding and Reviewer cells of each record row,
+excluding Origin, Status and Broke a test. For compatibility, reconciliation
+also accepts the earlier identity formula: the round headings and the first
+seven cells of each row, including Origin but excluding Status and Broke a
+test. New and reconciled blocks carry the identity that excludes Origin.
 When identity matches the last released block but digest differs (for example
 after repair or stage retirement), `release-loop` rewrites that block in
 place from the record, including statuses, snapshot, kept words and digest,
