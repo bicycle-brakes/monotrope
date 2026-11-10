@@ -44,17 +44,21 @@ limit (2026-10-27/28). One verify beside two runner verbs made Claude Code
 stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
 then:
 
-1. **One verify-bearing step at a time, across all lanes.** Such a step runs
-   `make verify`: an implement or repair attempt, or the orchestrator's own
-   full run, which runs at lower priority (`nice -n 10`). The number of test
-   workers is sized from the machine: half the logical cores, at most one per
-   2 GiB of memory (bead coding-harness-l7sc, #305).
+1. **Verify-bearing steps fill the configured admission capacity, across all
+   lanes.** Such a step runs `make verify`: an implement or repair attempt, or
+   the orchestrator's own full run, which runs at lower priority
+   (`nice -n 10`). The machine-wide admission admits two independent checks at
+   once by default, and its count is the `verify.slots` file in the shared
+   state root (see `docs/WORKFLOW.md`, "One admission per user and machine");
+   the number of test workers is sized from the machine: half the logical
+   cores, at most one per 2 GiB of memory (bead coding-harness-l7sc, #305).
 2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,
    the phase-6 review, CI waits and pull-request text use little local
    memory.
-3. **The order of the verify slot:** first a runner attempt, because its
+3. **The order of the verify slots:** first a runner attempt, because its
    step limit can kill it; then the lane nearest its pull request; then the
-   rest.
+   rest. A lane takes a slot only while one is free within the configured
+   capacity, and its full checks queue in the admission like anyone else's.
 4. **No restart after a memory stop without the maintainer's word.** The
    leftovers are committed unchanged, and the lane moves to its next remote
    step.
@@ -127,7 +131,7 @@ handover.
 | Rule | Today | Planned |
 | --- | --- | --- |
 | Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
-| One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
+| Verify-bearing steps within the configured capacity, memory floor | enforced: one admission per machine with two slots by default, set by `verify.slots` in the shared state root, and a memory floor per slot (bead coding-harness-p6mu, coding-harness-u1ha, #284) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |

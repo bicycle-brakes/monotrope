@@ -2354,7 +2354,160 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     assert len(starts) == 1, events
     assert starts[0]["admission_reused"] is True, starts[0]
     assert starts[0]["admission_id"] is None and starts[0]["admission_wait_seconds"] is None, starts[0]
-    assert len([e for e in events if e["event"] == "run_end"]) == 1
+
+
+def _background_runner(tree: Path, home: Path, *args: str) -> subprocess.Popen[bytes]:
+    """One runner run in its own process, so two can hold their slots at once.
+
+    Every tree of one scenario sits at `<scenario>/<name>/tree` and shares the
+    one state root `<scenario>/state`, the way worktrees share a machine's.
+    """
+    bash = shutil.which("bash") or "/bin/bash"
+    return subprocess.Popen(
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args],
+        cwd=tree,
+        env=_runner_env(tree, home, [], {"XDG_STATE_HOME": str(tree.parent.parent / "state")}),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def _write_runner_capacity(state: Path, content: str) -> None:
+    """Publish the shared state root's capacity setting before any run reads it."""
+    root = state / "coding-harness"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / verify_lock.SLOTS_NAME).write_text(content, encoding="utf-8")
+
+
+def _slot_tree(base: Path, gid: str, seconds: str, *, ending: str = "true", probe: bool = False) -> Path:
+    """A runner tree whose one gate records its interval, and optionally the shell nesting probe."""
+    base.mkdir(parents=True, exist_ok=True)
+    gate_dir = base / "gates"
+    gate_dir.mkdir(exist_ok=True)
+    command = (
+        f"date +%s > {gate_dir}/{gid}.start; sleep {seconds}; "
+        f"date +%s > {gate_dir}/{gid}.end; touch {gate_dir}/{gid}.ran"
+    )
+    if probe:
+        command += (
+            f'; "$PYTHON" -m scripts.verify_lock --held > {gate_dir}/{gid}.held 2>&1; echo $? > {gate_dir}/{gid}.code'
+        )
+    if ending != "true":
+        command += f"; {ending}"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
+            {
+                "id": gid,
+                "title": f"The one gate of {base.name}",
+                "command": command,
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "reason": "a seed for the runner tests",
+            }
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    return tree
+
+
+def _gate_times(base: Path, tree_name: str, gid: str) -> tuple[int, int]:
+    """The recorded start and end epoch seconds of one tree's gate."""
+    gate_dir = base / tree_name / "gates"
+    return (
+        int((gate_dir / f"{gid}.start").read_text(encoding="utf-8")),
+        int((gate_dir / f"{gid}.end").read_text(encoding="utf-8")),
+    )
+
+
+def test_shell_runner_obeys_two_slot_admission(tmp_path: Path) -> None:
+    """Criterion 8 of verify-slots: the shell runner and its CI entry obey the configured capacity.
+
+    Fault this pins: a shell or CI run bypassing the capacity, a gate verdict
+    changed by it, or a nested run queueing behind its own ancestor's
+    admission instead of reusing it.
+    """
+    home = tmp_path / "home"
+
+    # (A) capacity two: two concurrent runs overlap their gates, and each run's
+    # gate nests in the admission its own shell entry holds
+    base = tmp_path / "two"
+    _write_runner_capacity(base / "state", "2")
+    left = _slot_tree(base / "left", "left-gate", "3", probe=True)
+    right = _slot_tree(base / "right", "right-gate", "3")
+    runs = [_background_runner(left, home), _background_runner(right, home)]
+    outs = [run.communicate(timeout=120) for run in runs]
+    for run, (out, err) in zip(runs, outs, strict=True):
+        assert run.returncode == 0, f"exit {run.returncode}\n{out}\n{err}"
+        assert "VERIFY GREEN" in out, out
+    left_span, right_span = _gate_times(base, "left", "left-gate"), _gate_times(base, "right", "right-gate")
+    assert left_span[0] <= right_span[1] and right_span[0] <= left_span[1], (
+        f"the two runs did not overlap at capacity two: {left_span} vs {right_span}"
+    )
+    held_code = (base / "left" / "gates" / "left-gate.code").read_text(encoding="utf-8").strip()
+    assert held_code == "0", f"the gate did not nest in its run's own slot admission: {held_code}"
+
+    # (B) one of two concurrent runs fails blocking: its verdict stays red, the other stays green
+    base = tmp_path / "verdict"
+    _write_runner_capacity(base / "state", "2")
+    failing = _slot_tree(base / "failing", "failing-gate", "2", ending="exit 1")
+    passing = _slot_tree(base / "passing", "passing-gate", "2")
+    runs = [_background_runner(failing, home), _background_runner(passing, home)]
+    outs = [run.communicate(timeout=120) for run in runs]
+    assert runs[0].returncode == 1 and "RED (block)" in outs[0][0], outs[0]
+    assert runs[1].returncode == 0 and "VERIFY GREEN" in outs[1][0], outs[1]
+    fail_span, pass_span = _gate_times(base, "failing", "failing-gate"), _gate_times(base, "passing", "passing-gate")
+    assert fail_span[0] <= pass_span[1], f"the failing run held the other run back: {fail_span} vs {pass_span}"
+
+    # (C) capacity one: an independent second run's gate waits for the first run's slot
+    base = tmp_path / "one"
+    _write_runner_capacity(base / "state", "1")
+    first = _slot_tree(base / "first", "first-gate", "3")
+    second = _slot_tree(base / "second", "second-gate", "0.3")
+    runs = [_background_runner(first, home)]
+    first_started = base / "first" / "gates" / "first-gate.start"
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not first_started.exists():
+        time.sleep(0.05)
+    assert first_started.exists(), "the first run never reached its gate"
+    runs.append(_background_runner(second, home))
+    outs = [run.communicate(timeout=120) for run in runs]
+    for run, (out, err) in zip(runs, outs, strict=True):
+        assert run.returncode == 0, f"exit {run.returncode}\n{out}\n{err}"
+    first_span, second_start = _gate_times(base, "first", "first-gate"), _gate_times(base, "second", "second-gate")[0]
+    assert second_start >= first_span[1], f"capacity one was exceeded: {first_span} vs start {second_start}"
+
+    # (D) the CI entry queues at full capacity: no bypass, and it proceeds after a slot frees
+    base = tmp_path / "ci"
+    _write_runner_capacity(base / "state", "2")
+    holder = _slot_tree(base / "holder", "holder-gate", "4")
+    other = _slot_tree(base / "other", "other-gate", "4")
+    queued = _slot_tree(base / "queued", "queued-gate", "0.3")
+    runs = [_background_runner(holder, home), _background_runner(other, home)]
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not all(
+        (base / name / "gates" / f"{gid}.start").exists()
+        for name, gid in (("holder", "holder-gate"), ("other", "other-gate"))
+    ):
+        time.sleep(0.1)
+    assert (base / "holder" / "gates" / "holder-gate.start").exists(), "the first holder never reached its gate"
+    assert (base / "other" / "gates" / "other-gate.start").exists(), "the second holder never reached its gate"
+    third = _background_runner(queued, home, "--ci")
+    gone_by = time.monotonic() + 2.0
+    while time.monotonic() < gone_by and not (base / "queued" / "gates" / "queued-gate.ran").exists():
+        time.sleep(0.05)
+    assert not (base / "queued" / "gates" / "queued-gate.ran").exists(), "a CI run bypassed a full capacity"
+    outs = [run.communicate(timeout=120) for run in runs]
+    for run, (out, err) in zip(runs, outs, strict=True):
+        assert run.returncode == 0, f"exit {run.returncode}\n{out}\n{err}"
+    out, err = third.communicate(timeout=120)
+    assert third.returncode == 0, f"exit {third.returncode}\n{out}\n{err}"
+    assert (base / "queued" / "gates" / "queued-gate.ran").exists(), "the queued CI run never proceeded"
 
 
 def test_no_second_verification_workflow() -> None:

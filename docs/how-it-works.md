@@ -150,9 +150,12 @@ These are operator details; you can skip them on a first read.
 - An implement or repair attempt fails fast: ruff and the attempt's own tests
   run before the full `make verify` and stop at the first red one. A draft
   runs only its document gates, not the full suite.
-- One admission per machine: a second `make verify` or runner check queues
-  behind the first instead of running beside it, and waits while free memory
-  is below a floor (`scripts/verify_lock.py`).
+- One admission per machine, with a configurable capacity: two independent
+  `make verify` or runner checks run beside each other by default, further
+  ones queue in registration order, and each admitted check waits while free
+  memory is below a floor (`scripts/verify_lock.py`). The capacity is the
+  `verify.slots` file in the shared state root — a whitespace-trimmed
+  positive decimal integer, absence meaning the default of two.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
@@ -290,8 +293,9 @@ What is particular to this repository:
   2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
   4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
   test workers from the machine (half the cores, at most one per 2 GiB of
-  memory), and all lanes share one verification slot, enforced by one
-  admission per machine ([lanes](orchestration.md)).
+  memory), and the lanes fill the machine admission's configured capacity —
+  two verification slots by default, set by `verify.slots` in the shared
+  state root ([lanes](orchestration.md)).
 
 ## Follow one completed change
 

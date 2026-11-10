@@ -963,8 +963,12 @@ def defer_launch_signals():
 
 
 def _lock_fds(owned: int | None) -> tuple[int, ...]:
-    """The descriptors a local check's children inherit to keep the admission's ownership alive."""
-    return () if owned is None else (owned,)
+    """The descriptors a local check's children inherit to keep the admission's ownership alive.
+
+    Delegated to the admission itself: the slot lock and the shared
+    compatibility lock travel together, and a nested entry owns neither.
+    """
+    return verify_lock.inherit_fds(owned)
 
 
 def launch(
@@ -6068,7 +6072,8 @@ def _targeted_body(
     admitted full check instead. A passing result is never worded as full verification.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
-    env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
+    admission_names = (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV, verify_lock.SLOT_ENV)
+    env = {name: value for name, value in env.items() if name not in admission_names}
 
     def ledger(error: BaseException) -> list[str]:
         return [

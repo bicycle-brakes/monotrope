@@ -161,9 +161,11 @@ else
     fi
 fi
 
-# One machine-wide admission for this user (queue, free-memory check) before
-# any protected work: concurrent full checks across repositories and worktrees
-# exhausted the machine (bead coding-harness-p6mu). A valid inherited marker
+# One machine-wide admission for this user (queue for a free slot, free-memory
+# check) before any protected work: concurrent full checks across repositories
+# and worktrees exhausted the machine (bead coding-harness-p6mu). The capacity
+# defaults to two slots and is set machine-wide by the `verify.slots` file in
+# the shared state root. A valid inherited marker
 # (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
 # ancestor already holds — re-enter the unchanged gate loop directly; the
 # module is invoked as `-m scripts.verify_lock`, and the supervisor below

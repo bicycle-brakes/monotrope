@@ -713,6 +713,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    # The slot marker of an outer run is likewise not an ancestor here; a test
+    # that sets only the legacy pair must validate through the legacy path.
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
 
     git(root, "init", "--quiet", "--initial-branch=main")
     git(root, "add", "-A")
@@ -2181,6 +2184,10 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
     monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    # capacity one: the runner's admission must genuinely queue behind the holder, the way the
+    # wait that this test pins only happens when the capacity is fully occupied
+    (world.state / "coding-harness").mkdir(parents=True, exist_ok=True)
+    (world.state / "coding-harness" / verify_lock.SLOTS_NAME).write_text("1", encoding="utf-8")
     ready = world.state / "holder-ready"
     holder = _real_holder(ready)
     try:
@@ -22133,7 +22140,7 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
     probe = (
         "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
-        "h = verify_lock.read_holder(); "
+        "h = verify_lock.read_slot_holder(verify_lock.state_root(), int(os.environ[verify_lock.SLOT_ENV])); "
         "print(json.dumps([h.get('token') if h else None, os.environ.get(verify_lock.TOKEN_ENV), "
         "verify_lock.nested_holder_pid()]))"
     )
@@ -22145,6 +22152,57 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+def test_slot_admission_descriptors_reach_local_checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 8 of verify-slots (bead coding-harness-u1ha). Planted fault: a local launch inherited
+    # only one descriptor or none, so the slot's ownership died with the runner while its check still
+    # ran; or the admission's names reached a foreign call's environment.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
+    probe = (
+        "import fcntl, json, os, sys\n"
+        "sys.path.insert(0, 'scripts')\n"
+        "import verify_lock\n"
+        "root = verify_lock.state_root()\n"
+        "slot = int(os.environ[verify_lock.SLOT_ENV])\n"
+        "free = []\n"
+        "for name in (verify_lock.slot_lock_name(slot), verify_lock.LOCK_NAME):\n"
+        "    descriptor = os.open(root / name, os.O_RDONLY)\n"
+        "    try:\n"
+        "        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+        "        fcntl.flock(descriptor, fcntl.LOCK_UN)\n"
+        "        free.append(name)\n"
+        "    except OSError:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        os.close(descriptor)\n"
+        "print(json.dumps([free, slot, verify_lock.nested_holder_pid()]))\n"
+    )
+    with verify_lock.hold_admission(["make", "verify"]) as owned:
+        assert owned is not None
+        active = verify_lock._ACTIVE
+        assert active is not None
+        # the runner's adapter hands a local launch both descriptors: the slot's and the shared lock's
+        fds = stage2._lock_fds(owned)
+        assert owned in fds, "the slot descriptor did not reach the local launch"
+        assert active.state.lock_fd in fds, "the compatibility descriptor did not reach the local launch"
+        assert len(fds) == 2, f"the local launch inherited unexpected descriptors: {fds}"
+        env = verify_lock.inherit_env(dict(os.environ))
+        assert env[verify_lock.SLOT_ENV] == str(active.slot_index), "the local env lost the slot marker"
+        # foreign calls receive none of the admission's names, whatever the caller's environment holds
+        foreign = stage2.foreign_env({})
+        for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV, verify_lock.SLOT_ENV):
+            assert name not in foreign, f"a foreign call received {name}"
+        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=fds)
+    assert done.returncode == 0, done.stderr
+    free, slot, nested = json.loads(done.stdout)
+    assert free == [], f"the local check lost a descriptor's held state: {free}"
+    assert slot == active.slot_index, "the local check lost its slot identity"
+    assert nested == os.getpid(), "the runner's child did not nest in its slot admission"
 
 
 # ---------------------------------------------------------------------------

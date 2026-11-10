@@ -217,3 +217,224 @@ Stage-2 call, 2026-11-10: draft · attempt 3 · route glm · endpoint glm-coding
 > tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > ````
+
+Stage-2 call, 2026-11-10: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 984 files, 3818 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +41 -25
+> - `docs/how-it-works.md` +9 -5
+> - `docs/orchestration.md` +12 -8
+> - `plans/changes/verify-slots/measurements.md` +50 -0
+> - `plans/changes/verify-slots/plan.md` +11 -11
+> - `scripts/stage2.py` +6 -2
+> - `scripts/verify_all.sh` +5 -3
+> - `scripts/verify_lock.py` +337 -85
+> - `tests/test_ci.py` +144 -1
+> - `tests/test_stage2.py` +59 -1
+> - `tests/test_verify_lock.py` +609 -13
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/verify_lock.py`, `tests/test_ci.py`, `tests/test_verify_lock.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_verify_lock.py:188:5: PTH105 `os.replace()` should be replaced by `Path.replace()`
+>     |
+> 186 |     fresh = root / f".{verify_lock.SLOTS_NAME}.{os.getpid()}"
+> 187 |     fresh.write_text(content, encoding="utf-8")
+> 188 |     os.replace(fresh, root / verify_lock.SLOTS_NAME)
+>     |     ^^^^^^^^^^ PTH105
+>     |
+>
+> Found 1 error.
+> ```
+
+Stage-2 call, 2026-11-10: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 985 files, 3822 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-slots/plan.md` +11 -11
+> - `tests/test_verify_lock.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         assert _wait_until(lambda: "holder-b" in _log_lines(log)), "holder B never started"
+>         waiter_one = _supervised(state, ORDER_BODY, extra("waiter-1", "0.2"))
+> >       assert _wait_until(lambda: len(_records(state)) >= 3), "the first waiter never registered"
+> E       AssertionError: the first waiter never registered
+> E       assert False
+> E        +  where False = _wait_until(<function test_slot_waiters_reserve_in_fifo_order.<locals>.<lambda> at 0x10882f9c0>)
+>
+> tests/test_verify_lock.py:1541: AssertionError
+> __________________ test_shell_runner_obeys_two_slot_admission __________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1655/popen-gw0/test_shell_runner_obeys_two_sl0')
+>
+>     def test_shell_runner_obeys_two_slot_admission(tmp_path: Path) -> None:
+>         """Criterion 8 of verify-slots: the shell runner and its CI entry obey the configured capacity.
+>     
+>         Fault this pins: a shell or CI run bypassing the capacity, a gate verdict
+>         changed by it, or a nested run queueing behind its own ancestor's
+>         admission instead of reusing it.
+>         """
+>         home = tmp_path / "home"
+>     
+>         # (A) capacity two: two concurrent runs overlap their gates, and each run's
+>         # gate nests in the admission its own shell entry holds
+>         base = tmp_path / "two"
+>         _write_runner_capacity(base / "state", "2")
+>         left = _slot_tree(base / "left", "left-gate", "3", probe=True)
+>         right = _slot_tree(base / "right", "right-gate", "3")
+>         runs = [_background_runner(left, home), _background_runner(right, home)]
+>         outs = [run.communicate(timeout=120) for run in runs]
+>         for run, (out, err) in zip(runs, outs, strict=True):
+>             assert run.returncode == 0, f"exit {run.returncode}\n{out}\n{err}"
+>             assert "VERIFY GREEN" in out, out
+>         left_span, right_span = _gate_times(base, "left", "left-gate"), _gate_times(base, "right", "right-gate")
+>         assert left_span[0] <= right_span[1] and right_span[0] <= left_span[1], (
+>             f"the two runs did not overlap at capacity two: {left_span} vs {right_span}"
+>         )
+>         held_code = (base / "left" / "gates" / "left-gate.code").read_text(encoding="utf-8").strip()
+>         assert held_code == "0", f"the gate did not nest in its run's own slot admission: {held_code}"
+>     
+>         # (B) one of two concurrent runs fails blocking: its verdict stays red, the other stays green
+>         base = tmp_path / "verdict"
+>         _write_runner_capacity(base / "state", "2")
+>         failing = _slot_tree(base / "failing", "failing-gate", "2", ending="exit 1")
+>         passing = _slot_tree(base / "passing", "passing-gate", "2")
+>         runs = [_background_runner(failing, home), _background_runner(passing, home)]
+>         outs = [run.communicate(timeout=120) for run in runs]
+>         assert runs[0].returncode == 1 and "RED (block)" in outs[0][0], outs[0]
+>         assert runs[1].returncode == 0 and "VERIFY GREEN" in outs[1][0], outs[1]
+>         fail_span, pass_span = _gate_times(base, "failing", "failing-gate"), _gate_times(base, "passing", "passing-gate")
+>         assert fail_span[0] <= pass_span[1], f"the failing run held the other run back: {fail_span} vs {pass_span}"
+>     
+>         # (C) capacity one: an independent second run's gate waits for the first run's slot
+>         base = tmp_path / "one"
+>         _write_runner_capacity(base / "state", "1")
+>         first = _slot_tree(base / "first", "first-gate", "3")
+>         second = _slot_tree(base / "second", "second-gate", "0.3")
+>         runs = [_background_runner(first, home), _background_runner(second, home)]
+>         outs = [run.communicate(timeout=120) for run in runs]
+>         for run, (out, err) in zip(runs, outs, strict=True):
+>             assert run.returncode == 0, f"exit {run.returncode}\n{out}\n{err}"
+>         first_span, second_start = _gate_times(base, "first", "first-gate"), _gate_times(base, "second", "second-gate")[0]
+> >       assert second_start >= first_span[1], f"capacity one was exceeded: {first_span} vs start {second_start}"
+> E       AssertionError: capacity one was exceeded: (1794307174, 1794307177) vs start 1794307174
+> E       assert 1794307174 >= 1794307177
+>
+> tests/test_ci.py:2473: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_nested_entries_use_their_own_slot_and_context
+> FAILED tests/test_stage2.py::test_a_runner_check_hands_its_child_the_admission_token
+> FAILED tests/test_verify_lock.py::test_default_two_slots_share_capacity_across_trees
+> FAILED tests/test_verify_lock.py::test_release_keeps_the_lock_held_by_an_inherited_descriptor
+> FAILED tests/test_stage2.py::test_slot_admission_descriptors_reach_local_checks
+> FAILED tests/test_verify_lock.py::test_independent_entries_share_one_machine_lock
+> FAILED tests/test_verify_lock.py::test_slot_release_preserves_peers_and_inherited_children
+> FAILED tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens
+> FAILED tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease
+> FAILED tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order - A...
+> FAILED tests/test_ci.py::test_shell_runner_obeys_two_slot_admission - Asserti...
+> 11 failed, 15 passed in 22.00s
+> ```
+
+Stage-2 call, 2026-11-10: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 985 files, 3822 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-slots/plan.md` +11 -11
+> - `scripts/stage2.py` +2 -1
+> - `scripts/verify_lock.py` +16 -4
+> - `tests/test_ci.py` +13 -3
+> - `tests/test_verify_lock.py` +6 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ..............F........F..                                               [100%]
+> =================================== FAILURES ===================================
+> ___________ test_verification_admission_is_outside_execution_timeout ___________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1656/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1656/popen-gw2/test_verification_admission_is0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106aaf140>
+>
+>     def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
+>         # step limit — a short passing check times out after queueing — or the limit dropped, so
+>         # a hung executing check escapes its group cleanup.
+>         monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+>         # capacity one: the runner's admission must genuinely queue behind the holder, the way the
+>         # wait that this test pins only happens when the capacity is fully occupied
+>         (world.state / "coding-harness").mkdir(parents=True, exist_ok=True)
+>         (world.state / "coding-harness" / verify_lock.SLOTS_NAME).write_text("1", encoding="utf-8")
+>         ready = world.state / "holder-ready"
+>         holder = _real_holder(ready)
+>         try:
+>             _holder_acquired(ready)
+>             problems: list[str] = []
+>     
+>             def attempt() -> None:
+>                 problems.extend(stage2.verify_attempt(world.root, world.plan))
+>     
+>             world.script(make=[{"stdout": "green", "sleep": 1.5}])
+>             queued = threading.Thread(target=attempt)
+>             queued.start()
+>             time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+>             holder.terminate()
+>             holder.wait(timeout=30)
+>             queued.join(timeout=90)
+> >           assert problems == [], f"the admission wait consumed the step limit: {problems}"
+> E           AssertionError: the admission wait consumed the step limit: ["`make verify` did not finish: make was stopped by the runner's step limit after 0.0 minutes"]
+> E           assert ['`make verif... 0.0 minutes'] == []
+> E             
+> E             Left contains one more item: "`make verify` did not finish: make was stopped by the runner's step limit after 0.0 minutes"
+> E             Use -v to get more diff
+>
+> tests/test_stage2.py:2207: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] waiting for admission: slot 0: holder pid 63590 (/Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3 -c import os, pathlib, time; pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); time.sleep(30.0), started 2026-11-10T11:42:17)
+> [verify-lock] admitted after 1s
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ___________________ test_slot_waiters_reserve_in_fifo_order ____________________
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1656/popen-gw4/test_slot_waiters_reserve_in_f0')
+>
+>     def test_slot_waiters_reserve_in_fifo_order(tmp_path: Path) -> None:
+>         """Criterion 4. Live waiters reserve freed slots in registration order, without waiting for all to empty.
+>     
+>         Fault this pins: a later waiter overtaking an earlier live registration,
+>         or a free slot kept idle until every other holder has finished.
+>         """
+>         state = tmp_path / "state"
+>         log = tmp_path / "order.log"
+>         extra = lambda name, seconds: {"PROBE_LOG": str(log), "PROBE_NAME": name, "PROBE_SLEEP": seconds}  # noqa: E731
+>         holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "6"))
+>         assert _wait_until(lambda: "holder-a" in _log_lines(log)), "holder A never started"
+>         holder_b = _supervised(state, ORDER_BODY, extra("holder-b", "6"))
+>         assert _wait_until(lambda: "holder-b" in _log_lines(log)), "holder B never started"
+>         waiter_one = _supervised(state, ORDER_BODY, extra("waiter-1", "0.2"))
+>         # admitted holders have left the queue: only the live waiters keep a record
+> >       assert _wait_until(lambda: len(_records(state)) >= 1), "the first waiter never registered"
+> E       AssertionError: the first waiter never registered
+> E       assert False
+> E        +  where False = _wait_until(<function test_slot_waiters_reserve_in_fifo_order.<locals>.<lambda> at 0x10b697ce0>)
+>
+> tests/test_verify_lock.py:1542: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout
+> FAILED tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order - A...
+> 2 failed, 24 passed in 30.69s
+> ```

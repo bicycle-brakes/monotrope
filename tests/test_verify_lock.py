@@ -86,11 +86,13 @@ def _env(state: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
     return env
 
 
-def _supervised(state: Path, body: str, extra: dict[str, str] | None = None) -> subprocess.Popen[bytes]:
+def _supervised(
+    state: Path, body: str, extra: dict[str, str] | None = None, cwd: Path | None = None
+) -> subprocess.Popen[bytes]:
     """One independent supervisor entry against an isolated state root."""
     return subprocess.Popen(
         [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", body],
-        cwd=REPO_ROOT,
+        cwd=cwd or REPO_ROOT,
         env=_env(state, extra),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -177,19 +179,39 @@ def _interval(out: Path) -> tuple[float, float]:
     return (record["start"], record["end"])
 
 
+def _write_capacity(state: Path, content: str) -> None:
+    """Publish the machine-wide capacity setting by atomic replacement, the way an operator would."""
+    root = state / "coding-harness"
+    root.mkdir(parents=True, exist_ok=True)
+    fresh = root / f".{verify_lock.SLOTS_NAME}.{os.getpid()}"
+    fresh.write_text(content, encoding="utf-8")
+    fresh.replace(root / verify_lock.SLOTS_NAME)
+
+
+def _log_lines(log: Path) -> list[str]:
+    """The order log as it stands, without creating anything."""
+    try:
+        return log.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Criterion 1 — one machine, one admission at a time
 # ---------------------------------------------------------------------------
 
 
 def test_independent_entries_share_one_machine_lock(tmp_path: Path) -> None:
-    """Independent admissions run their protected work one at a time.
+    """Independent admissions run their protected work one at a time, at capacity one.
 
     Fault this pins: an admission that locks nothing lets two supervisor
     entries and a stage-2-style context entry overlap their protected
     intervals against one shared state root — the three-lane trial's overload.
+    Capacity one is selected explicitly: the default of two has its own
+    criterion test below, and this scenario needs the serial case.
     """
     state = tmp_path / "state"
+    _write_capacity(state, "1")
     outs = [tmp_path / f"entry-{index}.json" for index in range(3)]
     entries = [
         _supervised(state, RECORD_BODY, {"PROBE_OUT": str(outs[0]), "PROBE_SLEEP": "0.4"}),
@@ -319,6 +341,9 @@ def test_only_live_ancestor_ownership_allows_nested_admission(tmp_path: Path, mo
     state = tmp_path / "state"
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    # A slot marker standing in the ambient environment (the runner's real one)
+    # would take the slot path before this test's legacy shapes; clear it.
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
     reads: list[float] = []
 
     def counting_reader(_platform: str | None = None) -> float | None:
@@ -401,9 +426,12 @@ def test_exit_interrupt_and_dead_waiter_release_admission(tmp_path: Path) -> Non
     Fault this pins: a dead holder or waiter blocking progress forever, a
     signal releasing the lock before the child's group is gone, and a
     supervisor releasing ownership while its protected child still runs.
+    Capacity one is selected explicitly: the orphaned-child scenario needs the
+    successor to be excluded until the child's interval ends.
     """
     state = tmp_path / "state"
-    holder_file = state / "coding-harness" / verify_lock.HOLDER_NAME
+    _write_capacity(state, "1")
+    holder_file = state / "coding-harness" / verify_lock.slot_holder_name(0)
 
     # a holder killed mid-run cannot obstruct the next admission
     started = tmp_path / "started-a.json"
@@ -512,9 +540,11 @@ def test_low_memory_wait_holds_exclusion_and_rechecks(
 
     Fault this pins: protected work starting on a below-floor reading, the
     exclusion dropped during the wait, or the 30-second rechecks and logs
-    stopping.
+    stopping. Capacity one is selected explicitly: the waiting admission must
+    hold its reservation through the memory wait, so the second one queues.
     """
     state = tmp_path / "state"
+    _write_capacity(state, "1")
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.setenv(verify_lock.FLOOR_ENV, "25")
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
@@ -877,12 +907,17 @@ def test_release_keeps_the_lock_held_by_an_inherited_descriptor(
     state = tmp_path / "state"
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
     inherited = None
+    slot_index = None
     with verify_lock.hold_admission(["holder"]) as descriptor:
         assert descriptor is not None
         inherited = os.dup(descriptor)  # what a protected child inherits
-    probe = os.open(state / "coding-harness" / verify_lock.LOCK_NAME, os.O_RDONLY)
+        active = verify_lock._ACTIVE
+        assert active is not None and active.slot_index is not None
+        slot_index = active.slot_index
+    probe = os.open(state / "coding-harness" / verify_lock.slot_lock_name(slot_index), os.O_RDONLY)
     try:
         with pytest.raises(OSError):
             fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -907,7 +942,7 @@ def test_a_second_signal_during_cleanup_still_releases(tmp_path: Path, monkeypat
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
-    holder_file = state / "coding-harness" / verify_lock.HOLDER_NAME
+    holder_file = state / "coding-harness" / verify_lock.slot_holder_name(0)
     original_stop = verify_lock._stop_child
 
     def first_signal(_child: object) -> int:
@@ -933,7 +968,7 @@ def test_a_signal_while_the_child_starts_still_ends_the_child(tmp_path: Path, mo
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
-    holder_file = state / "coding-harness" / verify_lock.HOLDER_NAME
+    holder_file = state / "coding-harness" / verify_lock.slot_holder_name(0)
     started: list[subprocess.Popen[bytes]] = []
     original_popen = subprocess.Popen
 
@@ -990,9 +1025,9 @@ def test_publishing_never_writes_through_a_hard_linked_holder(tmp_path: Path, mo
     root.mkdir(parents=True, mode=0o700)
     victim = tmp_path / "victim.txt"
     victim.write_text("keep me\n", encoding="utf-8")
-    os.link(victim, root / verify_lock.HOLDER_NAME)
+    os.link(victim, root / verify_lock.slot_holder_name(0))
     with verify_lock.hold_admission(["holder"]):
-        assert verify_lock.read_holder(root) is not None, "the holder was not published"
+        assert verify_lock.read_slot_holder(root, 0) is not None, "the holder was not published"
     assert victim.read_text(encoding="utf-8") == "keep me\n", "publishing wrote through the planted hard link"
 
 
@@ -1168,12 +1203,12 @@ def test_a_descendant_in_its_own_session_nests_after_the_holder_died(
 
 
 CONTEXT_PROBE = """
-import json, sys
+import json, os, sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "scripts"))
 import verify_lock
 context = verify_lock.admission_context()
-holder = verify_lock.read_holder()
+holder = verify_lock.read_slot_holder(verify_lock.state_root(), int(os.environ[verify_lock.SLOT_ENV]))
 print(json.dumps({
     "id": context.admission_id,
     "wait": context.wait_seconds,
@@ -1199,6 +1234,7 @@ def test_admission_measurement_survives_cli_and_inherited_context(
     for name in (
         verify_lock.LOCK_ENV,
         verify_lock.TOKEN_ENV,
+        verify_lock.SLOT_ENV,
         verify_lock.FLOOR_ENV,
         verify_lock.ADMISSION_ID_ENV,
         verify_lock.ADMISSION_WAIT_ENV,
@@ -1222,7 +1258,7 @@ def test_admission_measurement_survives_cli_and_inherited_context(
         assert re.fullmatch(r"[0-9a-f]{32}", active.admission_id), active.admission_id
         context = verify_lock.admission_context()
         assert context == verify_lock.AdmissionContext(active.admission_id, 60.0, False)
-        holder = verify_lock.read_holder()
+        holder = verify_lock.read_slot_holder(state / "coding-harness", active.slot_index)
         assert holder is not None
         assert holder["admission_id"] == active.admission_id
         assert holder["admission_wait"] == 60.0
@@ -1275,3 +1311,563 @@ def test_admission_measurement_survives_cli_and_inherited_context(
     assert re.fullmatch(r"[0-9a-f]{32}", seen["id"] or ""), seen
     assert seen["wait"] is not None and seen["wait"] >= 0, seen
     assert seen["id"] == seen["holder_id"] and seen["wait"] == seen["holder_wait"], seen
+
+
+# ---------------------------------------------------------------------------
+# The configurable slot capacity (bead coding-harness-u1ha)
+# ---------------------------------------------------------------------------
+
+
+def test_default_two_slots_share_capacity_across_trees(tmp_path: Path) -> None:
+    """Criterion 1. With no capacity setting, two independent checks overlap and a third queues.
+
+    Fault this pins: an eligible second check that cannot reserve the idle
+    second slot, or a third reservation granted while two are occupied. The
+    entries run from separate working directories and share one state root,
+    the way two worktrees of one machine share it.
+    """
+    state = tmp_path / "state"
+    trees = [tmp_path / f"tree-{index}" for index in range(3)]
+    for tree in trees:
+        tree.mkdir()
+    outs = [tmp_path / f"slot-{index}.json" for index in range(3)]
+    marks = [tmp_path / f"started-{index}.flag" for index in range(3)]
+    first = _supervised(
+        state,
+        RECORD_BODY,
+        {"PROBE_OUT": str(outs[0]), "PROBE_STARTED": str(marks[0]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
+        cwd=trees[0],
+    )
+    assert _wait_until(marks[0].is_file), "the first entry never started"
+    second = _supervised(
+        state,
+        RECORD_BODY,
+        {"PROBE_OUT": str(outs[1]), "PROBE_STARTED": str(marks[1]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
+        cwd=trees[1],
+    )
+    assert _wait_until(marks[1].is_file), "the idle second slot was not granted while the first still ran"
+    third = _supervised(
+        state,
+        RECORD_BODY,
+        {"PROBE_OUT": str(outs[2]), "PROBE_STARTED": str(marks[2]), "PROBE_SLEEP": "0.2", "PYTHONPATH": str(REPO_ROOT)},
+        cwd=trees[2],
+    )
+    assert not _wait_until(marks[2].is_file, 1.5), "a third check ran while two slots were occupied"
+    for entry in (first, second, third):
+        assert entry.wait(timeout=60) == 0
+    first_span, second_span = _interval(outs[0]), _interval(outs[1])
+    assert first_span[0] < second_span[1] and second_span[0] < first_span[1], (
+        f"the two slots did not overlap: {first_span} vs {second_span}"
+    )
+    third_span = _interval(outs[2])
+    assert third_span[0] >= max(first_span[1], second_span[1]) - 0.05, (
+        f"the third check started before a slot freed: {third_span} after {first_span} and {second_span}"
+    )
+
+
+def test_shared_capacity_setting_and_live_decrease(tmp_path: Path) -> None:
+    """Criterion 2. The one machine-wide setting selects the capacity for every tree; a decrease drains.
+
+    Fault this pins: settings of one or three ignored, a per-checkout copy of
+    the value winning, or a lowered capacity granting a new reservation while
+    a slot at or above it is still occupied.
+    """
+    # capacity one serialises independent entries
+    state_one = tmp_path / "state-one"
+    _write_capacity(state_one, "1")
+    out_a = tmp_path / "one-a.json"
+    mark_a = tmp_path / "one-a.flag"
+    serial_a = _supervised(
+        state_one, RECORD_BODY, {"PROBE_OUT": str(out_a), "PROBE_STARTED": str(mark_a), "PROBE_SLEEP": "2.0"}
+    )
+    assert _wait_until(mark_a.is_file), "the first entry never started"
+    mark_b = tmp_path / "one-b.flag"
+    serial_b = _supervised(
+        state_one,
+        RECORD_BODY,
+        {"PROBE_OUT": str(tmp_path / "one-b.json"), "PROBE_STARTED": str(mark_b), "PROBE_SLEEP": "0.2"},
+    )
+    assert not _wait_until(mark_b.is_file, 1.5), "a second check ran while capacity one was occupied"
+    for entry in (serial_a, serial_b):
+        assert entry.wait(timeout=60) == 0
+    assert _interval(tmp_path / "one-b.json")[0] >= _interval(out_a)[1] - 0.05, "capacity one overlapped two checks"
+
+    # capacity three admits three at once
+    state_three = tmp_path / "state-three"
+    _write_capacity(state_three, "3")
+    outs = [tmp_path / f"three-{index}.json" for index in range(3)]
+    marks = [tmp_path / f"three-{index}.flag" for index in range(3)]
+    trio = []
+    for index in range(3):
+        trio.append(
+            _supervised(
+                state_three,
+                RECORD_BODY,
+                {"PROBE_OUT": str(outs[index]), "PROBE_STARTED": str(marks[index]), "PROBE_SLEEP": "1.5"},
+            )
+        )
+    for mark in marks:
+        assert _wait_until(mark.is_file), "capacity three did not admit three checks at once"
+    for entry in trio:
+        assert entry.wait(timeout=60) == 0
+    spans = [_interval(out) for out in outs]
+    for outer in spans:
+        for inner in spans:
+            assert outer[0] < inner[1], f"three admitted checks did not overlap: {spans}"
+
+    # a live decrease drains: slot 1 sits above the lowered capacity and keeps its reservation
+    state_drop = tmp_path / "state-drop"
+    _write_capacity(state_drop, "2")
+    mark_a = tmp_path / "drop-a.flag"
+    out_a = tmp_path / "drop-a.json"
+    drop_a = _supervised(
+        state_drop, RECORD_BODY, {"PROBE_OUT": str(out_a), "PROBE_STARTED": str(mark_a), "PROBE_SLEEP": "1.2"}
+    )
+    assert _wait_until(mark_a.is_file)
+    mark_b = tmp_path / "drop-b.flag"
+    out_b = tmp_path / "drop-b.json"
+    drop_b = _supervised(
+        state_drop, RECORD_BODY, {"PROBE_OUT": str(out_b), "PROBE_STARTED": str(mark_b), "PROBE_SLEEP": "4.0"}
+    )
+    assert _wait_until(mark_b.is_file), "the second slot was not granted while the capacity stood at two"
+    _write_capacity(state_drop, "1")  # lowered while both hold; slot 1 sits above the lowered capacity
+    mark_c = tmp_path / "drop-c.flag"
+    out_c = tmp_path / "drop-c.json"
+    drop_c = _supervised(
+        state_drop, RECORD_BODY, {"PROBE_OUT": str(out_c), "PROBE_STARTED": str(mark_c), "PROBE_SLEEP": "0.2"}
+    )
+    assert not _wait_until(mark_c.is_file, 1.5), "a lowered capacity granted a reservation before the drain"
+    for entry in (drop_a, drop_b, drop_c):
+        assert entry.wait(timeout=60) == 0
+    b_span, c_span = _interval(out_b), _interval(out_c)
+    assert c_span[0] >= b_span[1] - 0.05, (
+        f"the new reservation started before the occupied higher slot drained: {c_span} after {b_span}"
+    )
+
+
+def test_invalid_or_unsafe_capacity_refuses_before_work(tmp_path: Path) -> None:
+    """Criterion 3. A present but invalid or unsafe capacity setting refuses before any protected work.
+
+    Fault this pins: an empty, zero, negative, fractional, nonnumeric,
+    substituted or unreadable setting silently selecting a fallback, hanging,
+    or letting the protected command run.
+    """
+    marker = tmp_path / "never.flag"
+    command = [
+        sys.executable,
+        "-c",
+        f"import pathlib; pathlib.Path({str(marker)!r}).write_text('ran', encoding='utf-8')",
+    ]
+
+    def entry(state: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "scripts.verify_lock", "--", *command],
+            cwd=REPO_ROOT,
+            env=_env(state),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+    for index, content in enumerate(("", " ", "\n", " \n ", "0", "-1", "2.5", "abc", "1 2", "0x10", "١٢")):
+        state = tmp_path / f"state-invalid-{index}"
+        _write_capacity(state, content)
+        done = entry(state)
+        setting = str(state / "coding-harness" / verify_lock.SLOTS_NAME)
+        assert done.returncode == 2, f"content {content!r} was not refused: {done.stdout} {done.stderr}"
+        assert "refusing" in done.stderr, f"content {content!r} carries no diagnostic: {done.stderr}"
+        assert setting in done.stderr, f"the diagnostic does not name the setting: {done.stderr}"
+        assert not marker.exists(), f"content {content!r} let the protected command run"
+
+    for kind in ("symlink", "directory", "unreadable"):
+        state = tmp_path / f"state-{kind}"
+        root = state / "coding-harness"
+        root.mkdir(parents=True)
+        victim = tmp_path / f"victim-{kind}.txt"
+        victim.write_text("2", encoding="utf-8")
+        setting_path = root / verify_lock.SLOTS_NAME
+        if kind == "symlink":
+            setting_path.symlink_to(victim)
+        elif kind == "directory":
+            setting_path.mkdir()
+        else:
+            setting_path.write_text("2", encoding="utf-8")
+            setting_path.chmod(0o000)
+        done = entry(state)
+        assert done.returncode == 2, f"the {kind} setting was not refused: {done.stdout} {done.stderr}"
+        assert "refusing" in done.stderr, f"the {kind} setting carries no diagnostic: {done.stderr}"
+        assert not marker.exists(), f"the {kind} setting let the protected command run"
+        assert victim.read_text(encoding="utf-8") == "2", f"the {kind} setting's target was modified"
+
+    # the accepted shape: a whitespace-trimmed positive decimal integer, nothing else
+    state = tmp_path / "state-trimmed"
+    _write_capacity(state, " 2\n")
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.verify_lock",
+            "--",
+            sys.executable,
+            "-c",
+            f"import pathlib; pathlib.Path({str(marker)!r}).write_text('ran', encoding='utf-8')",
+        ],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 0, f"a whitespace-trimmed setting was refused: {done.stderr}"
+    assert marker.is_file(), "the accepted setting never ran the protected command"
+
+
+def test_slot_waiters_reserve_in_fifo_order(tmp_path: Path) -> None:
+    """Criterion 4. Live waiters reserve freed slots in registration order, without waiting for all to empty.
+
+    Fault this pins: a later waiter overtaking an earlier live registration,
+    or a free slot kept idle until every other holder has finished.
+    """
+    state = tmp_path / "state"
+    log = tmp_path / "order.log"
+    extra = lambda name, seconds: {"PROBE_LOG": str(log), "PROBE_NAME": name, "PROBE_SLEEP": seconds}  # noqa: E731
+    holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "6"))
+    assert _wait_until(lambda: "holder-a" in _log_lines(log)), "holder A never started"
+    holder_b = _supervised(state, ORDER_BODY, extra("holder-b", "6"))
+    assert _wait_until(lambda: "holder-b" in _log_lines(log)), "holder B never started"
+    waiter_one = _supervised(state, ORDER_BODY, extra("waiter-1", "0.2"))
+    # admitted holders have left the queue: only the live waiters keep a record
+    assert _wait_until(lambda: len(_records(state)) >= 1), "the first waiter never registered"
+    waiter_two = _supervised(state, ORDER_BODY, extra("waiter-2", "0.2"))
+    assert _wait_until(lambda: len(_records(state)) >= 2), "the second waiter never registered"
+
+    # holder B ends first: the first waiter takes the freed slot while holder A still occupies its own
+    os.kill(holder_b.pid, signal.SIGTERM)
+    assert holder_b.wait(timeout=30) == 128 + signal.SIGTERM, "holder B did not end on its signal"
+    assert _wait_until(lambda: "waiter-1" in _log_lines(log), 5.0), (
+        "the first waiter was not admitted while the other slot was still occupied"
+    )
+    assert holder_a.poll() is None, "the first waiter waited for every holder instead of the freed slot"
+
+    # holder A ends and its slot frees; the waiters' registered order stays their admission order
+    os.kill(holder_a.pid, signal.SIGTERM)
+    assert holder_a.wait(timeout=30) == 128 + signal.SIGTERM, "holder A did not end on its signal"
+    for entry in (waiter_one, waiter_two):
+        assert entry.wait(timeout=60) == 0
+    assert _log_lines(log) == ["holder-a", "holder-b", "waiter-1", "waiter-2"], _log_lines(log)
+
+
+NESTED_CONTEXT_BODY = """
+import json, os, subprocess, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_lock
+go = os.environ["PROBE_GO"]
+Path(os.environ["PROBE_STARTED"]).write_text("started")
+deadline = time.time() + 30
+while not os.path.exists(go) and time.time() < deadline:
+    time.sleep(0.05)
+held = subprocess.run(
+    [sys.executable, "-m", "scripts.verify_lock", "--held"],
+    capture_output=True,
+    text=True,
+    timeout=30,
+    check=False,
+)
+with verify_lock.hold_admission(["nested", "child"]) as owned:
+    context = verify_lock.admission_context()
+    Path(os.environ["PROBE_OUT"]).write_text(json.dumps({
+        "owned_none": owned is None,
+        "slot": os.environ.get(verify_lock.SLOT_ENV),
+        "marker_pid": os.environ.get(verify_lock.LOCK_ENV),
+        "held_exit": held.returncode,
+        "id": context.admission_id,
+        "wait": context.wait_seconds,
+        "reused": context.reused,
+    }))
+"""
+
+
+def test_nested_entries_use_their_own_slot_and_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. A nested check reuses its ancestor's admission at full capacity, with its own context.
+
+    Fault this pins: nesting that queues again while both slots are occupied,
+    a peer's slot, token or context resolved as its own, or a malformed or
+    stale slot marker bypassing admission.
+    """
+    # in-process: the genuine marker nests; malformed, stale and foreign-token markers do not
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
+    with verify_lock.hold_admission(["fresh", "holder"]) as owned:
+        assert owned is not None
+        active = verify_lock._ACTIVE
+        assert active is not None and active.slot_index is not None
+        monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+        monkeypatch.setenv(verify_lock.TOKEN_ENV, active.token)
+        monkeypatch.setenv(verify_lock.SLOT_ENV, str(active.slot_index))
+        assert verify_lock.nested_holder_pid() == os.getpid(), "the genuine slot marker did not nest"
+        monkeypatch.setenv(verify_lock.SLOT_ENV, "not-a-number")
+        assert verify_lock.nested_holder_pid() is None, "a malformed slot marker bypassed admission"
+        monkeypatch.setenv(verify_lock.SLOT_ENV, str(active.slot_index + 100))
+        assert verify_lock.nested_holder_pid() is None, "a stale slot marker bypassed admission"
+        monkeypatch.setenv(verify_lock.SLOT_ENV, str(active.slot_index))
+        monkeypatch.setenv(verify_lock.TOKEN_ENV, "another-admission-token")
+        assert verify_lock.nested_holder_pid() is None, "a foreign token validated a slot marker"
+    monkeypatch.delenv(verify_lock.LOCK_ENV)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV)
+    monkeypatch.delenv(verify_lock.SLOT_ENV)
+
+    # multi-process: both slots occupied, and each nested child resolves its own ancestor's context
+    go = tmp_path / "go.flag"
+    outs = [tmp_path / f"nested-{index}.json" for index in range(2)]
+    marks = [tmp_path / f"holder-{index}.flag" for index in range(2)]
+    holders = []
+    for index in range(2):
+        holders.append(
+            _supervised(
+                state,
+                NESTED_CONTEXT_BODY,
+                {"PROBE_OUT": str(outs[index]), "PROBE_GO": str(go), "PROBE_STARTED": str(marks[index])},
+            )
+        )
+        # one after the other, so holder N reserves slot N
+        assert _wait_until(marks[index].is_file), f"holder {index} never took its slot"
+    root = state / "coding-harness"
+    records = [verify_lock.read_slot_holder(root, index) for index in range(2)]
+    assert all(record is not None for record in records), f"the slots' ownership was not published: {records}"
+    assert records[0]["admission_id"] != records[1]["admission_id"], "two admissions shared one identity"
+    go.write_text("now", encoding="utf-8")
+    for out in outs:
+        assert _wait_until(out.is_file), "a nested child queued or never ran while both slots were occupied"
+    for index, out in enumerate(outs):
+        result = json.loads(out.read_text(encoding="utf-8"))
+        assert result["owned_none"], f"a nested entry owned a slot of its own: {result}"
+        # The supervisor's own child carries its ancestor's context as its own fresh
+        # measurement (bead coding-harness-1um6); either way it must be THIS ancestor's.
+        assert result["reused"] is False, f"the ancestor's context was misread as inherited: {result}"
+        assert result["held_exit"] == 0, f"--held did not accept the ancestor's admission: {result}"
+        assert result["slot"] == str(index), f"the nested child resolved a peer's slot: {result}"
+        assert result["marker_pid"] == str(holders[index].pid), f"the nested child resolved a peer's marker: {result}"
+        assert result["id"] == records[index]["admission_id"], f"the nested context lost its ancestor's id: {result}"
+        assert result["wait"] == records[index]["admission_wait"], f"the nested context lost its wait: {result}"
+    for holder in holders:
+        assert holder.wait(timeout=60) == 0
+
+
+def test_slot_release_preserves_peers_and_inherited_children(tmp_path: Path) -> None:
+    """Criterion 6. A reservation covers the protected children's cleanup and releases without hurting peers.
+
+    Fault this pins: a peer's cleanup deleting another slot's ownership,
+    capacity leaking after a dead participant, or a successor overlapping
+    still-protected work.
+    """
+    state = tmp_path / "state"
+    root = state / "coding-harness"
+    mark_a = tmp_path / "peer-a.flag"
+    out_a = tmp_path / "peer-a.json"
+    peer_a = _supervised(
+        state, RECORD_BODY, {"PROBE_OUT": str(out_a), "PROBE_STARTED": str(mark_a), "PROBE_SLEEP": "2.0"}
+    )
+    assert _wait_until(mark_a.is_file)
+    mark_b = tmp_path / "peer-b.flag"
+    out_b = tmp_path / "peer-b.json"
+    peer_b = _supervised(
+        state, RECORD_BODY, {"PROBE_OUT": str(out_b), "PROBE_STARTED": str(mark_b), "PROBE_SLEEP": "0.8"}
+    )
+    assert _wait_until(mark_b.is_file), "the peer never took the second slot"
+
+    # the first supervisor dies mid-run; its protected child keeps the slot through its own lifetime
+    os.kill(peer_a.pid, signal.SIGKILL)
+    peer_a.wait(timeout=10)
+    assert peer_b.wait(timeout=60) == 0 and out_b.is_file(), "the peer could not finish beside the orphaned child"
+    # the peer's release removed only its own ownership, and never a lock file
+    assert verify_lock.read_slot_holder(root, 1) is None, "the peer's record outlived its release"
+    assert (root / verify_lock.slot_lock_name(1)).is_file(), "the peer's release unlinked a lock file"
+    survivor = verify_lock.read_slot_holder(root, 0)
+    assert survivor is not None and survivor["pid"] == peer_a.pid, (
+        "the peer's cleanup deleted the dead participant's ownership"
+    )
+    probe = os.open(root / verify_lock.slot_lock_name(0), os.O_RDONLY)
+    try:
+        with pytest.raises(OSError):
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(probe)
+
+    # the orphaned child's interval ends, its slot is released, and capacity is whole again
+    assert _wait_until(out_a.is_file), "the orphaned child never finished"
+    mark_c = tmp_path / "after-c.flag"
+    mark_d = tmp_path / "after-d.flag"
+    after_c = _supervised(
+        state,
+        RECORD_BODY,
+        {"PROBE_OUT": str(tmp_path / "after-c.json"), "PROBE_STARTED": str(mark_c), "PROBE_SLEEP": "1.0"},
+    )
+    assert _wait_until(mark_c.is_file), "capacity did not recover for the first follower"
+    after_d = _supervised(
+        state,
+        RECORD_BODY,
+        {"PROBE_OUT": str(tmp_path / "after-d.json"), "PROBE_STARTED": str(mark_d), "PROBE_SLEEP": "1.0"},
+    )
+    assert _wait_until(mark_d.is_file), "the dead participant's slot was never reusable: capacity leaked"
+    for entry in (after_c, after_d):
+        assert entry.wait(timeout=60) == 0
+
+
+def test_each_slot_checks_memory_before_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 7. Every reservation applies the free-memory policy; the second slot skips nothing.
+
+    Fault this pins: a second slot's admission starting work below the floor,
+    or an admission that never takes its own probe.
+    """
+    state = tmp_path / "state"
+    _write_capacity(state, "2")
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "25")
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
+    reads: list[float] = []
+    release = threading.Event()
+    started = [threading.Event(), threading.Event()]
+
+    def reader(_platform: str | None = None) -> float | None:
+        reading = 30.0 if release.is_set() else 10.0
+        reads.append(reading)
+        return reading
+
+    monkeypatch.setattr(verify_lock, "_sleep", lambda _seconds: time.sleep(0.01))
+    monkeypatch.setattr(verify_lock, "read_available_memory", reader)
+
+    def body(index: int) -> None:
+        with verify_lock.hold_admission(["slot", str(index)]):
+            started[index].set()
+
+    threads = [threading.Thread(target=body, args=(index,)) for index in range(2)]
+    try:
+        for thread in threads:
+            thread.start()
+        assert _wait_until(lambda: len(reads) >= 2), "the second slot's admission never took its own probe"
+        time.sleep(0.3)
+        assert not any(event.is_set() for event in started), "work started on a below-floor reading"
+        release.set()
+        for event in started:
+            assert event.wait(10.0), "an admission never started after memory recovered"
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(10.0)
+    assert len(reads) >= 2, "an admission skipped its own memory probe"
+
+
+def test_wait_logs_name_all_occupied_slots_without_tokens(tmp_path: Path) -> None:
+    """Criterion 9. A waiter's log names every occupied slot and its holder, and never a token.
+
+    Fault this pins: a holder missing from the wait logs, one holder's record
+    overwritten by another's, or a token printed where the holder's slot,
+    process id, command and start time belong.
+    """
+    state = tmp_path / "state"
+    template = (
+        "import os, time\nfrom pathlib import Path\n"
+        "Path(os.environ['PROBE_STARTED']).write_text({name!r})\ntime.sleep({seconds})\n"
+    )
+    body_a = template.format(name="a", seconds="5")
+    body_b = template.format(name="b", seconds="5.2")
+    holder_a = _supervised(state, body_a, {"PROBE_STARTED": str(tmp_path / "logged-a.flag")})
+    assert _wait_until((tmp_path / "logged-a.flag").is_file), "holder A never started"
+    holder_b = _supervised(state, body_b, {"PROBE_STARTED": str(tmp_path / "logged-b.flag")})
+    assert _wait_until((tmp_path / "logged-b.flag").is_file), "holder B never took its slot"
+    root = state / "coding-harness"
+    records = [verify_lock.read_slot_holder(root, index) for index in range(2)]
+    assert all(record is not None for record in records), "a holder's record is missing"
+    assert records[0]["pid"] == holder_a.pid and records[1]["pid"] == holder_b.pid, "a holder's record was overwritten"
+    waiter = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", "import time; time.sleep(0.2)"],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    stderr = waiter.stderr
+    assert waiter.returncode == 0, f"the queued waiter never ran: {stderr}"
+    assert "waiting for admission" in stderr, f"the wait was not logged: {stderr}"
+    for index in range(2):
+        assert f"slot {index}: holder pid {records[index]['pid']}" in stderr, (
+            f"slot {index}'s holder is missing from the wait log: {stderr}"
+        )
+    assert "write_text('a')" in stderr and "write_text('b')" in stderr, f"a holder's command is missing: {stderr}"
+    for record in records:
+        assert record["token"] not in stderr, "a wait log exposed an ownership token"
+
+
+LEGACY_HOLDER_BODY = """
+import fcntl, json, os, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_lock
+root = Path(os.environ["STATE_ROOT"]) / "coding-harness"
+root.mkdir(parents=True, exist_ok=True)
+descriptor = os.open(root / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NONBLOCK, 0o600)
+fcntl.flock(descriptor, fcntl.LOCK_EX)
+(root / verify_lock.HOLDER_NAME).write_text(
+    json.dumps({
+        "pid": os.getpid(),
+        "token": "legacy-admission-token",
+        "command": ["legacy", "checkout"],
+        "start": "2026-11-10T00:00:00",
+    }),
+    encoding="utf-8",
+)
+child = subprocess.Popen(
+    [sys.executable, "-c", "import os, time; time.sleep(float(os.environ['LEGACY_SLEEP']))"],
+    env=dict(os.environ),
+    pass_fds=(descriptor,),
+    start_new_session=True,
+)
+Path(os.environ["LEGACY_PIDS"]).write_text(json.dumps({"holder": os.getpid(), "child": child.pid}))
+"""
+
+
+def test_legacy_exclusion_survives_new_holder_supervisor_death(tmp_path: Path) -> None:
+    """Criterion 10. A legacy single-slot admission excludes every new reservation, held or orphaned.
+
+    Fault this pins: the added slots letting a new check run beside a legacy
+    holder's exclusive admission — including after the legacy supervisor dies
+    with its protected child still running.
+    """
+    state = tmp_path / "state"
+    pids_out = tmp_path / "legacy-pids.json"
+    legacy = subprocess.Popen(
+        [sys.executable, "-c", LEGACY_HOLDER_BODY],
+        cwd=REPO_ROOT,
+        env=_env(state, {"STATE_ROOT": str(state), "LEGACY_SLEEP": "4.0", "LEGACY_PIDS": str(pids_out)}),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    assert _wait_until(pids_out.is_file), "the legacy holder never took its exclusive admission"
+    pids = json.loads(pids_out.read_text(encoding="utf-8"))
+    out = tmp_path / "legacy-follower.json"
+    mark = tmp_path / "legacy-follower.flag"
+    follower = _supervised(
+        state, RECORD_BODY, {"PROBE_OUT": str(out), "PROBE_STARTED": str(mark), "PROBE_SLEEP": "0.2"}
+    )
+    assert not _wait_until(mark.is_file, 1.5), "a new check ran beside a legacy holder's exclusive admission"
+
+    # the legacy supervisor dies; its protected child keeps the inherited exclusion until its work ends
+    os.kill(legacy.pid, signal.SIGKILL)
+    legacy.wait(timeout=10)
+    try:
+        os.kill(pids["child"], 0)
+    except ProcessLookupError:
+        raise AssertionError("the legacy child died with its supervisor; the orphan shape was never built") from None
+    assert not _wait_until(mark.is_file, 1.5), "the new check ran while the legacy child still held the exclusion"
+    assert _wait_until(mark.is_file, 15.0), "the new check never ran after the legacy child's exclusion ended"
+    assert follower.wait(timeout=60) == 0 and out.is_file(), "the follower did not finish after the legacy drain"

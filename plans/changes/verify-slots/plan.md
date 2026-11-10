@@ -163,21 +163,29 @@ rows stand in `findings.md`.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_lock.py::test_default_two_slots_share_capacity_across_trees — a second cannot enter or a third overlaps two occupied reservations.
-- 2: not yet written tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease — one/three are ignored or a decrease overlooks occupied higher slots.
-- 3: not yet written tests/test_verify_lock.py::test_invalid_or_unsafe_capacity_refuses_before_work — invalid, substituted or unreadable settings start work or hang.
-- 4: not yet written tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order — a later waiter overtakes or an idle slot waits for another holder to finish.
-- 5: not yet written tests/test_verify_lock.py::test_nested_entries_use_their_own_slot_and_context — full-capacity nesting queues or a peer's token, slot or context is resolved.
-- 6: not yet written tests/test_verify_lock.py::test_slot_release_preserves_peers_and_inherited_children — cleanup deletes peer state, leaks capacity or releases before children end.
-- 7: not yet written tests/test_verify_lock.py::test_each_slot_checks_memory_before_work — the second reservation starts below the floor or bypasses the existing policy.
+- 1: tests/test_verify_lock.py::test_default_two_slots_share_capacity_across_trees — a second cannot enter or a third overlaps two occupied reservations.
+- 2: tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease — one/three are ignored or a decrease overlooks occupied higher slots.
+- 3: tests/test_verify_lock.py::test_invalid_or_unsafe_capacity_refuses_before_work — invalid, substituted or unreadable settings start work or hang.
+- 4: tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order — a later waiter overtakes or an idle slot waits for another holder to finish.
+- 5: tests/test_verify_lock.py::test_nested_entries_use_their_own_slot_and_context — full-capacity nesting queues or a peer's token, slot or context is resolved.
+- 6: tests/test_verify_lock.py::test_slot_release_preserves_peers_and_inherited_children — cleanup deletes peer state, leaks capacity or releases before children end.
+- 7: tests/test_verify_lock.py::test_each_slot_checks_memory_before_work — the second reservation starts below the floor or bypasses the existing policy.
 - 7: tests/test_verify_lock.py::test_sustained_low_memory_refuses_at_the_bound — the low-memory refusal loses its deadline or diagnostic.
 - 7: tests/test_verify_lock.py::test_unknown_memory_is_logged_and_does_not_block — unknown readings block or silently pass.
-- 8: not yet written tests/test_ci.py::test_shell_runner_obeys_two_slot_admission — the shell or CI bypasses capacity or nesting changes a gate verdict.
-- 8: not yet written tests/test_stage2.py::test_slot_admission_descriptors_reach_local_checks — slot or compatibility ownership is lost across a local launch or reaches foreign calls.
+- 8: tests/test_ci.py::test_shell_runner_obeys_two_slot_admission — the shell or CI bypasses capacity or nesting changes a gate verdict.
+- 8: tests/test_stage2.py::test_slot_admission_descriptors_reach_local_checks — slot or compatibility ownership is lost across a local launch or reaches foreign calls.
 - 8: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — the admission wait consumes checking time.
 - 8: tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — the wait is included in execution.
-- 9: not yet written tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens — a holder disappears from the progress logs or a token is exposed.
-- 10: not yet written tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
+- 9: tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens — a holder disappears from the progress logs or a token is exposed.
+- 10: tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
 - 11: not a test — the phase-6 review reads `measurements.md` and the three updated current-policy documents against criterion 11; absent revision-bound serial-versus-paired wall-time and load evidence, or a stale one-slot prescription, refutes it.
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-10 09:26:23–10:34:38 UTC, 4095 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 10:34:48–10:39:42 UTC, 293 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 10:39:52–10:42:42 UTC, 170 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
