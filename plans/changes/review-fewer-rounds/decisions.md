@@ -308,6 +308,65 @@ stated end, accepting that 10 changes may be too few for rare kinds of defect,
 and that until the end the procedure saves no round and costs more calls than
 today — 2026-11-10
 
+## Q-13 · The first list of check questions
+
+asked: 2026-11-10
+answer: Use the list — the fifteen check questions proposed in the draft spec (5bda389c, "Open decisions", three per lens) hold unchanged. The maintainer read them in a German rendering of the spec's table; the English table is the approved text.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the five lenses need concrete check questions.
+  Intention: the questions should hit the observed defects before models review with them; under Q-10 the maintainer approves only the first list.
+  Today: the lenses are decided; no list is approved.
+  Repository change: the list becomes part of the central configuration and of the reviewer prompts.
+  Architecture change: none beyond the lenses already decided.
+
+In the context of the check questions of the five review lenses, facing
+lenses that were decided without questions a model can work through, we
+decided that the fifteen questions of the draft spec hold unchanged and that
+later additions follow Q-9 and Q-10, to achieve reviewers that start from the
+observed defect classes, accepting that special cases are not named one by
+one and that what no question hits surfaces only in phase 6 — 2026-11-10
+
+## Q-14 · Who sits in the free second round
+
+asked: 2026-11-10
+answer: A team of three — three models of several model families read the whole diff once without a lens (three calls); the family rule of Q-8 holds.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the seating of the free second round.
+  Intention: Q-3 decided a free second round without lenses; without a seating the runner cannot call it.
+  Today: the earlier planning repeats the five groups of three of round 1; no current answer covers that.
+  Repository change: the central configuration gets exactly one seating for the free round.
+  Architecture change: no further round; the existing second round reads without lenses.
+
+In the context of the free second review round, facing a decided round with
+no seating, we decided that an independent team of three models of several
+families reads the whole diff once without a lens, to achieve a second look
+at three calls instead of fifteen, accepting that only three independent
+voices read and that a defect the many repetitions of the other option would
+have found stays hidden until phase 6 — 2026-11-10
+
+## Q-15 · What triggers the second round on a small change
+
+asked: 2026-11-10
+answer: Always a second round — a small change gets exactly one free second round, after the shadow period too.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: when a small change gets a second round after the shadow period.
+  Intention: with one reviewer per lens (Q-2) every finding is a single finding, so the overlap trigger of Q-11 says nothing on a small change.
+  Today: open; during the shadow period the free second round runs anyway, on small changes too.
+  Repository change: the central configuration gets a rule of its own for small changes.
+  Architecture change: no additional reviewers or rounds.
+
+In the context of the second-round trigger on a small change, facing one
+reviewer per lens and therefore no overlap to measure, we decided that a
+small change always gets exactly one free second round, to achieve a rule
+that does not pretend to a measurement, accepting that its three calls are
+spent even when round 1 found nothing — 2026-11-10
+
 ## Open — not counted
 
 - The research questions of 2026-11-08 are not answered: (a) evidence for
@@ -317,6 +376,5 @@ today — 2026-11-10
   calls against today's rounds and verify runs. The stage-1 exploration of
   2026-11-09 (research.md) did not read the bead and covers the repository
   only. Answered on 2026-11-09 by the Opus research section of research.md.
-- Open after the answers of 2026-11-10: who sits in the free second round
-  (Q-3), and what triggers it on a small change, where one reviewer per lens
-  (Q-2) makes every finding a single finding (Q-11).
+- Open after the answers of 2026-11-10 and answered the same day: who sits in
+  the free second round (Q-14) and what triggers it on a small change (Q-15).
