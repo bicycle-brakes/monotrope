@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-07
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -80,3 +80,25 @@ context: |
   Architecture change: none.
 
 In the context of a mechanism repair that failed three times within its appetite, facing a hard history-reading problem, we decided to ship the explore fix and the census and move the normalisation to its own bead, to achieve a finished lane and a clean plan for the hard part, accepting that existing research files keep their current headers until then. — 2026-11-07
+
+## Q-5 · Research files merged before the census takes effect
+
+asked: 2026-11-10
+answer: Adoption day — the census holds from the day this change merges; research files merged before it are stock and exempt.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the census fails on research files of other changes that merged while this change was in review.
+  Intention: pull request #365 corrected three such files (merged 2026-11-10); after syncing with main two tests fail again on two more (go-wire-apis, origin-cell) — the same mechanism a second time, and open pull requests will add further cases.
+  Today: the census reads every active research file whatever its age, so each change merged before the census breaks it.
+  Repository change: an adoption day in the check, as the interview-minimums gate has; the spec gets a boundary for it.
+  Architecture change: none.
+
+In the context of the provenance census over active research files, facing
+files of other changes that merge before the census and turn it red again
+after every sync, we decided that the census holds from its adoption day and
+that research files merged before it are stock and exempt, to achieve a
+change that can merge without correcting every earlier file first, accepting
+that false producer records in the earlier files (on 2026-11-10 at least
+go-wire-apis and origin-cell) stay until someone corrects them on purpose
+— 2026-11-10
