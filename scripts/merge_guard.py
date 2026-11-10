@@ -14,6 +14,11 @@ against this list; nothing else in the repository types it. The Omnigent rules
 beside them belong to `scripts/omnigent_policy.py`, whose `--write` keeps every
 rule it does not own.
 
+`tools/claude-code/night.py` turns these same ask rules into deny rules for an
+unattended session. The day-only invariant below — no deny or allow rule covers
+a merge sample — is not applied to that night overlay, whose denies are the
+point.
+
 A call is written the way a permission rule names it: `Bash(<command>)` for a
 shell command, the bare tool name for any other tool
 (`mcp__<server>__<tool>` for an MCP tool).
@@ -54,16 +59,32 @@ MERGE_ASK_RULES: dict[str, tuple[str, str]] = {
         "argument also prompts",
         "Bash(gh pr -R o/r merge 54)",
     ),
-    "Bash(gh api *merge*)": (
-        "the REST merge endpoint and the GraphQL mergePullRequest mutation written in the command (one read from a "
-        'file passes); a read containing "merge" also prompts',
+    "Bash(gh api *PUT*pulls/*/merge*)": (
+        "the REST merge endpoint with the method spelled before the path (-X PUT, --method PUT); a GET, also on "
+        "this endpoint, names no PUT and passes",
         "Bash(gh api -X PUT repos/o/r/pulls/54/merge)",
     ),
-    "Bash(gh api *Merge*)": (
-        "the GraphQL enablePullRequestAutoMerge mutation written in the command; whether matching ignores case is "
-        "not documented",
-        "Bash(gh api graphql -f query='mutation { enablePullRequestAutoMerge("
-        'input: {pullRequestId: "x"}) { clientMutationId } }\')',
+    "Bash(gh api *pulls/*/merge*PUT*)": (
+        "the REST merge endpoint with the method spelled after the path (-X PUT, --method PUT)",
+        "Bash(gh api repos/o/r/pulls/54/merge --method PUT)",
+    ),
+    "Bash(gh api *query=*mergePullRequest*)": (
+        "the GraphQL mergePullRequest mutation written in the command as -f query=... or --raw-field query=...; "
+        "a read query names no mutation",
+        "Bash(gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: "
+        '"x"}) { clientMutationId } }\')',
+    ),
+    "Bash(gh api *query=*enablePullRequestAutoMerge*)": (
+        "the GraphQL enablePullRequestAutoMerge mutation written in the command as -f query=... or "
+        "--raw-field query=...",
+        "Bash(gh api graphql --raw-field query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: "
+        '"x"}) { clientMutationId } }\')',
+    ),
+    "Bash(gh api *query=*enqueuePullRequest*)": (
+        "the GraphQL enqueuePullRequest mutation (the merge queue) written in the command as -f query=... or "
+        "--raw-field query=...",
+        "Bash(gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: "
+        '"x"}) { clientMutationId } }\')',
     ),
     "Bash(gh alias set *)": (
         "gh alias set can give pr merge a name the other rules do not match; gh alias import and an edit of gh's "
@@ -135,6 +156,9 @@ def problems(settings: dict) -> list[str]:
         for rule, (reason, _) in MERGE_ASK_RULES.items()
         if rule not in ask
     ]
+    for rule in ("Bash(gh api *merge*)", "Bash(gh api *Merge*)"):
+        if rule in ask:
+            found.append(f".claude/settings.json has the broad ask rule {rule}, which prompts on merge-field reads")
     for kind in ("deny", "allow"):
         for rule in permissions.get(kind) or []:
             hit = [call for call in samples() if covers(rule, call)]
