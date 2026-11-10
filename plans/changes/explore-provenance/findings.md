@@ -2104,3 +2104,15 @@ Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1c2bb-dc11-7001-9e36-e88f59e27d82, 2026-11-10
 Reviewer session: codex 01a1c2bb-dc11-7001-9e36-e88f59e27d82 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-10: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 986 files, 3803 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-10
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-7 | MAJOR | SPEC | Phase 6 | plans/changes/address-drift-warning/research.md; plans/changes/archive-closed-changes/research.md; plans/changes/outcome-test/research.md | Commit `a04b37f3` normalises producer metadata in three other changes’ research files and removes opening notices from `outcome-test`. The current spec explicitly protects these files and defers existing-research correction to separate work; this PR therefore exceeds its accepted scope. [Protected areas; Definition of Done] | Codex | open | — |
+| EP6-8 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:1236 | Publication corrupts valid YAML when `review: *old` references an earlier anchored approval mapping. PyYAML supplies the anchor’s original value position, so the replacement produces `review: {status: pending, approved_by: null, approved_at: null}review: *old`. Reproduced through `publish_research` with the atomic write intercepted: malformed frontmatter reaches the writer without refusal. Publication must leave valid pending-review metadata or refuse before replacement. [AC3, AC5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1c321-b85c-77f1-97cd-8944718692dd, 2026-11-10
+Reviewer session: codex 01a1c321-b85c-77f1-97cd-8944718692dd — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
