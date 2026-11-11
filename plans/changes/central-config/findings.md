@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-twvx
@@ -209,3 +209,134 @@ Stage-2 call, 2026-11-10: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_ci.py::test_central_config_gate_blocks_locally_and_in_generated_ci
 > 1 failed, 13 passed in 13.48s
 > ```
+
+Stage-2 call, 2026-11-10: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason three attempts failed on 2026-11-10; one more attempt from the kept tree on the maintainer's instruction to give every lane a task · leak check clean over 990 files, 3887 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_ci.py` +1 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 2824 lines of this gate left out …]
+> INFO  (1):
+>   - leak check clean: 34 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 34 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1870/popen-gw2/test_repair_prompts_keep_the_i5/repo/.git/stage2/attempts/demo/attempt-3-20261111T001842213959Z-4d392c98.md
+> repair: verified and committed · route stage-1 · attempt 3
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=31091) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/central-config/tests/test_stage2.py:20418: DeprecationWarning: This process (pid=31097) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_kit.py::test_the_kit_does_not_describe_the_phases - Asserti...
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[spec-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[spec-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[plan-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[plan-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[decisions-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[decisions-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[design-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[design-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[phase-prompt-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[phase-prompt-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[agent-rules-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[agent-rules-2]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[all-inputs-1]
+> FAILED tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan[all-inputs-2]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[phase-prompt-first]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[phase-prompt-second]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[phase-prompt-both]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[all-inputs-first]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[all-inputs-second]
+> FAILED tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs[all-inputs-both]
+> FAILED tests/test_stage2.py::test_repair_prompts_keep_the_initial_input_snapshot[phase-prompt-1]
+> FAILED tests/test_stage2.py::test_repair_prompts_keep_the_initial_input_snapshot[phase-prompt-2]
+> 23 failed, 5231 passed, 17 skipped, 5 warnings in 1347.42s (0:22:27)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [leerprobe] $ lauf_cmd
+> BLOCK (1):
+>   - 1 red case(s) without a declared reason
+>       tests.test_kit::test_the_kit_does_not_describe_the_phases
+>       
+>       Add them with: python3 scripts/kit/probe.py --messen
+>
+> INFO  (1):
+>   - 1384 of 1429 cases carry into a foreign repository (96 %)
+>       mechanismus 117 · bestand 873 file(s)
+>
+> BLOCK (1), repeated last:
+>   - 1 red case(s) without a declared reason
+> ── [leerprobe] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 35614 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````

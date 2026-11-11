@@ -3269,6 +3269,7 @@ def test_central_config_gate_blocks_locally_and_in_generated_ci(tmp_path: Path) 
         encoding="utf-8",
     )
     (tmp_path / "scripts").mkdir()
+    lanes.write_text("writing_sessions_per_repository: 2\n", encoding="utf-8")
     green = _central_checker(tmp_path)
     assert green.returncode == 0, f"measured agreement failed: {green.stdout + green.stderr}"
 

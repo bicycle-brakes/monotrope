@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-twvx
@@ -144,17 +144,17 @@ assert nonzero exit and the diagnostic. Never edit real policy during a test.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_harness_config.py::test_initial_session_limit_has_one_authority — missing source, a different initial count or a live duplicate is accepted.
-- 2: not yet written tests/test_harness_config.py::test_one_schema_rejects_unknown_topics_keys_and_bad_counts — an extra topic/key or bool/string/non-positive count is accepted.
-- 3: not yet written tests/test_harness_config.py::test_unusable_config_has_path_and_reason_without_defaults — malformed, missing, unreadable, duplicate-key or merge-key input yields usable settings.
-- 3: not yet written tests/test_stage2.py::test_invalid_central_config_refuses_before_implement_dispatch — the stand-in is called or the error lacks the configuration path.
-- 4: not yet written tests/test_harness_config.py::test_prompt_render_uses_one_snapshot_and_refreshes_next_time — an intervening edit changes the captured view or the next render stays stale.
-- 4: not yet written tests/test_harness_config.py::test_unknown_or_malformed_reserved_placeholder_refuses — an unresolved reserved token survives or an expression executes.
-- 5: not yet written tests/test_stage2.py::test_implement_prompt_uses_central_session_limit_before_leakcheck — a changed count is ignored or the exact resolved outgoing text is not checked.
-- 5: not yet written tests/test_stage2.py::test_attempt_snapshot_restores_central_prompt_inputs — an attempt changes its own configuration input without restoration.
-- 6: not yet written tests/test_harness_config.py::test_checker_rejects_stale_missing_or_unknown_prose_bindings — changed prose or a deleted/invalid required marker passes the real checker.
-- 7: not yet written tests/test_harness_config.py::test_checker_rejects_named_duplicates_and_literalized_prompt — a canonical/uppercase numeric assignment or lost registered placeholder passes.
-- 8: not yet written tests/test_ci.py::test_central_config_gate_blocks_locally_and_in_generated_ci — invalid configuration can bypass one verification path.
+- 1: tests/test_harness_config.py::test_initial_session_limit_has_one_authority — missing source, a different initial count or a live duplicate is accepted.
+- 2: tests/test_harness_config.py::test_one_schema_rejects_unknown_topics_keys_and_bad_counts — an extra topic/key or bool/string/non-positive count is accepted.
+- 3: tests/test_harness_config.py::test_unusable_config_has_path_and_reason_without_defaults — malformed, missing, unreadable, duplicate-key or merge-key input yields usable settings.
+- 3: tests/test_stage2.py::test_invalid_central_config_refuses_before_implement_dispatch — the stand-in is called or the error lacks the configuration path.
+- 4: tests/test_harness_config.py::test_prompt_render_uses_one_snapshot_and_refreshes_next_time — an intervening edit changes the captured view or the next render stays stale.
+- 4: tests/test_harness_config.py::test_unknown_or_malformed_reserved_placeholder_refuses — an unresolved reserved token survives or an expression executes.
+- 5: tests/test_stage2.py::test_implement_prompt_uses_central_session_limit_before_leakcheck — a changed count is ignored or the exact resolved outgoing text is not checked.
+- 5: tests/test_stage2.py::test_attempt_snapshot_restores_central_prompt_inputs — an attempt changes its own configuration input without restoration.
+- 6: tests/test_harness_config.py::test_checker_rejects_stale_missing_or_unknown_prose_bindings — changed prose or a deleted/invalid required marker passes the real checker.
+- 7: tests/test_harness_config.py::test_checker_rejects_named_duplicates_and_literalized_prompt — a canonical/uppercase numeric assignment or lost registered placeholder passes.
+- 8: tests/test_ci.py::test_central_config_gate_blocks_locally_and_in_generated_ci — invalid configuration can bypass one verification path.
 - 9: not a test — phase-6 review compares the final path list and ADR/design sequence with Q-4/Q-5; moving an old declaration or claiming all migrations done refutes it.
 
 ## Not touched
@@ -170,8 +170,13 @@ instructions in this plan. The tracker stays with the orchestrating session.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-10
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: three attempts failed on 2026-11-10; one more attempt from the kept tree on the maintainer's instruction to give every lane a task.
+
 ## Time used
 
 2026-11-10 13:25:37–15:43:33 UTC, 8275 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 15:44:14–17:43:30 UTC, 7156 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 17:43:45–19:03:53 UTC, 4807 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-10 22:06:47–2026-11-11 00:37:19 UTC, 9031 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
