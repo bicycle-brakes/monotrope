@@ -2363,3 +2363,5 @@ Stage-2 call, 2026-11-11: repair · attempt 3 · route stage-1 · endpoint claud
 > - Attempt 3 (stage-1): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-11: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+
+Stage-2 call, 2026-11-11: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3916 commits, 12 rules.
