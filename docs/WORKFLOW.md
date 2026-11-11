@@ -492,12 +492,24 @@ What this does not do:
 - Agents act under the maintainer's GitHub account, so nobody can tell from
   GitHub who pressed merge. The merge rule is a rule, not proof.
 - The ask rules in `.claude/settings.json` are a brake against an accidental
-  merge, not a lock: they match a command's text, and another spelling passes
-  them — `curl` against the API, the web page, `gh` run through `sh -c '…'`,
-  by an absolute path or from a script file, a flag of the merge moved before
-  `merge` (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a
-  file (`gh api graphql --input <file>` or `-F query=@<file>`), and an alias
-  set by `gh alias import` or by editing gh's own config file.
+  merge, not a lock. Since the night-stall-guard change (2026-11-09) they match
+  precisely instead of naming `merge` anywhere in the command: the direct
+  `gh pr merge` forms with their repository-flag placements, a REST call with
+  an explicit PUT method on the `repos/<owner>/<repo>/pulls/<number>/merge`
+  endpoint, the inline `mergePullRequest`, `enablePullRequestAutoMerge` and
+  `enqueuePullRequest` GraphQL mutations passed as `-f query=…` or
+  `--raw-field query=…`, the GitHub MCP merge tool, `gh alias set`, and a push
+  to an unprotected `main`. A status read that only names merge fields
+  (`mergedAt`, `mergeable`, `mergeStateStatus`, `isInMergeQueue` — the query
+  shape of the 2026-11-08 incident) does not prompt. The list is still matched
+  against the command's text, and other spellings pass it: `curl` against the
+  API, the web page, `gh` run through `sh -c '…'`, by an absolute path or from
+  a script file, a flag of the merge moved before `merge`
+  (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a file
+  (`gh api graphql --input <file>` or `-F query=@<file>`), a REST merge call
+  without the explicit PUT (`gh api` defaults to GET, and to POST once `-f` is
+  present), and an alias set by `gh alias import` or by editing gh's own
+  config file.
 - Nothing checks that the class is right, that a claimed ADR file exists, or
   that a decision pull request carries its label and block. The review
   before the merge holds them.
@@ -996,6 +1008,7 @@ admission and cost values live in `model-endpoints.yaml`.
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
+| 4b Triage | none (a local command) | a local runner command for the orchestrator's already-made decision: it records one row's `Status` in this worktree's loop record and calls no model; a test-only `taken` is refused without `taken — not a test — <reason>`, and `Broke a test` stays the repair's proof mark |
 | Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
@@ -1018,6 +1031,22 @@ the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
 undid and exits 1; the next step is `implement <change> --stage2-off`.
+An `implement` or `repair` attempt must also have done work: its model call
+changed at least one Git-visible thing beyond the runner's own records — the
+change's `findings.md` and the body of the plan's `## Time used` section, both
+put back by the runner, do not count. The verdict measures surviving model work
+after formatting and derived preparation, discounting the generated index and
+stamp-only changes in any document, whether or not checkpoint preparation restores
+them. Replacing only an existing `updated:` value does not count as work, even
+when the replacement is not a date. An edit formatting erases is no work.
+Any other addition, edit, deletion, binary or file-mode change counts, code or
+document, planned path or not. Each call is compared with its own pre-call state,
+so an earlier attempt's retained edits never qualify a later idle one. An
+attempt without work is rejected as
+`no work done` through the existing retry path, with the reason in its
+diagnostics; so is an attempt whose work cannot be measured. If every allowed
+attempt is rejected, the run exits 1 without a checkpoint commit
+(bead coding-harness-te7q).
 If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
@@ -1139,7 +1168,7 @@ placements.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Twelve verbs exist:
+into a shell. Thirteen verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
@@ -1188,6 +1217,23 @@ into a shell. Twelve verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+- `triage` — the orchestrator records one already-made decision on the loop
+  record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
+  '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
+  test` or `taken — guard test` with a single-line reason, finds exactly that
+  row in this worktree's own record under the record lock, and replaces the
+  record atomically. It calls no model, reads no credential and works on a
+  dirty tree; only that row's `Status` cell changes — every other byte, the
+  reviewers' words and the final newline stay as they are. Invalid input, a
+  damaged record, a `fixed` row and a held lock refuse with exit 2; a failed
+  write reports exit 1 and leaves the prior record whole. A plain `taken` on
+  a row whose `Where` cell names only locations below `tests/` is refused with
+  the spelling it must take (`taken — not a test — <reason>`), because an
+  ordinary repair of it could not exist; a mixed or prose-only `Where` stays
+  the orchestrator's judgment. Triage never fills `Broke a test`: the proof
+  mark stays the repair's, so a row marked `taken` is decided but keeps its
+  round not clean until the mark is written; ADR 0023's explicit guard
+  exception is untouched.
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;
@@ -1865,6 +1911,25 @@ day session would ask:
 2. **A further case of the same mechanism at a phase-6 re-check:** record
    the finding, park that pull request and continue with the next queue
    item; the maintainer decides it in the morning.
+
+**The night profile (since the night-stall-guard change, 2026-11-09; bead
+coding-harness-ibde).** An unattended session starts Claude Code through the
+night launcher so a permission question cannot hold the run:
+`python3 ~/.claude/night.py` followed by the arguments a normal `claude` call
+would take. The launcher reads the explicit ask and deny rules of the supported
+settings scopes, turns every sourced ask rule into a deny in a private overlay,
+and runs `claude --settings <overlay> --permission-mode dontAsk` for this
+invocation only; the day settings are never rewritten, and the overlay lives in
+a temporary directory for the child's lifetime. A denied action therefore
+returns control at once instead of waiting for a person: the session continues
+with an authorised alternative, or parks the denied step and records it — it
+never disables the brake to get through. The launch is refused before `claude`
+starts when a present settings file cannot be read or parsed, or when a caller
+argument would replace the profile (`--settings`, `--permission-mode`,
+`--dangerously-skip-permissions`). What the profile does not cover stays as it
+is: external policy and authentication dialogs, a stopped or usage-limited
+session, and — until the maintainer chooses a push service — no phone alert
+and no independent heartbeat exists.
 
 **The 30-minute wake (standing since 2026-11-05/06; bead
 coding-harness-7x3c).** Supervision of an unattended run rests on scheduled

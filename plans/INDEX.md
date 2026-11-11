@@ -477,6 +477,16 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/night-machine-facts/plan.md`](changes/night-machine-facts/plan.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/research.md`](changes/night-machine-facts/research.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
 | [`changes/night-machine-facts/spec.md`](changes/night-machine-facts/spec.md) | draft | none | 2026-11-06 | coding-harness-yql7 |
+| [`changes/night-stall-guard/decisions.md`](changes/night-stall-guard/decisions.md) | draft | none | 2026-11-09 | coding-harness-ibde |
+| [`changes/night-stall-guard/findings.md`](changes/night-stall-guard/findings.md) | draft | none | 2026-11-09 | coding-harness-ibde |
+| [`changes/night-stall-guard/plan.md`](changes/night-stall-guard/plan.md) | draft | none | 2026-11-09 | coding-harness-ibde |
+| [`changes/night-stall-guard/research.md`](changes/night-stall-guard/research.md) | draft | none | 2026-11-09 | coding-harness-ibde |
+| [`changes/night-stall-guard/spec.md`](changes/night-stall-guard/spec.md) | draft | none | 2026-11-09 | coding-harness-ibde |
+| [`changes/no-work-done/decisions.md`](changes/no-work-done/decisions.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/findings.md`](changes/no-work-done/findings.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/plan.md`](changes/no-work-done/plan.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/research.md`](changes/no-work-done/research.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/no-work-done/spec.md`](changes/no-work-done/spec.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/origin-cell/decisions.md`](changes/origin-cell/decisions.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/findings.md`](changes/origin-cell/findings.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
@@ -550,4 +560,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/time-records-data/plan.md`](changes/time-records-data/plan.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/research.md`](changes/time-records-data/research.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/spec.md`](changes/time-records-data/spec.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/triage-verb/decisions.md`](changes/triage-verb/decisions.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/findings.md`](changes/triage-verb/findings.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/plan.md`](changes/triage-verb/plan.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/research.md`](changes/triage-verb/research.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/spec.md`](changes/triage-verb/spec.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
