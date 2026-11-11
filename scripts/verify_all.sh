@@ -12,6 +12,14 @@
 #   bash scripts/verify_all.sh --job docs    # only the document gates (the draft verb, bead coding-harness-77qj)
 #   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not
+#
+# Every run owns a private pytest temporary area and removes it after use — on
+# success, failure and interruption alike (bead coding-harness-bxxt.3). A
+# caller inspecting a failed run keeps it explicitly, and removes it when done:
+#   HARNESS_VERIFY_KEEP_TMP=1 PYTHON=.venv/bin/python3 make verify
+# Only an unsuccessful run then retains its area, with its absolute path
+# reported on stderr; a successful run removes its area whatever the variable
+# says, and no later run sweeps an explicitly retained one.
 
 set -u
 
@@ -84,6 +92,23 @@ done
 
 if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
+fi
+
+# ── The run's temporary area (bead coding-harness-bxxt.3) ───────────────────
+#
+# A run whose calling shell is already the supervised child of a live scope
+# re-enters the unchanged gate loop below; every other invocation of this
+# script — a fresh run, a nested runner, admission inherited or not — hands
+# itself to the module's scope supervisor and receives a fresh private area
+# under the same managed container. So two runs never share an area, a nested
+# run never touches its parent's, and a scope whose supervisor died is
+# reclaimed by a later run once its protected work has ended. The module is
+# invoked as `-m scripts.verify_lock`; the supervisor below execs this script
+# again with the original arguments, and its child passes both this scope
+# query and the admission query, so no invocation re-enters recursively.
+# `--list` above executed no gates and allocates no area.
+if [ -z "${HARNESS_VERIFY_TMP_SCOPE:-}" ] || ! "$PYTHON" -m scripts.verify_lock --tmp-held >/dev/null 2>&1; then
+    exec "$PYTHON" -m scripts.verify_lock --tmp-scope -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi
 
 # The local worker default (bead coding-harness-l7sc): the pytest gate's `-n

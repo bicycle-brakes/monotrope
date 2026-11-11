@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -120,19 +120,19 @@ commands and the stated detached-descendant boundary against the diff.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_verify_runs_have_distinct_nested_temp_areas — a nested runner shares or deletes its parent's area, or re-enters recursively.
-- 2: not yet written tests/test_ci.py::test_verify_pytest_sessions_and_workers_use_run_area — real serial/xdist probes or a second pytest session escape the area or erase an active session.
-- 3: not yet written tests/test_ci.py::test_verify_temp_cleanup_preserves_exit_status — green/red normal exits leave payloads or return a different original status.
-- 4: not yet written tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group — any trapped signal deletes before group cleanup, leaves payloads or loses 128-plus-signal status.
-- 5: not yet written tests/test_verify_lock.py::test_failed_temp_scope_retention_is_explicit_and_reported — failed/interrupted requested evidence disappears, lacks a path or is removed by the next run; other values retain unexpectedly.
-- 6: not yet written tests/test_verify_lock.py::test_successful_temp_scope_never_retains — a successful requested run leaves its payload.
-- 7: not yet written tests/test_verify_lock.py::test_temp_scope_recovers_orphans_after_protected_work_ends — the next start deletes a surviving child's area or leaves a reclaimable SIGKILL orphan.
-- 8: not yet written tests/test_verify_lock.py::test_temp_scope_cleanup_preserves_unrelated_paths — siblings, parent/default-root sentinels or substituted symlink targets change.
-- 9: not yet written tests/test_verify_lock.py::test_temp_scope_storage_failures_are_visible_and_unsuccessful — injected setup/spawn/sweep/removal failures start unsafe work, leak admission, go silent or return success.
+- 1: tests/test_ci.py::test_verify_runs_have_distinct_nested_temp_areas — a nested runner shares or deletes its parent's area, or re-enters recursively.
+- 2: tests/test_ci.py::test_verify_pytest_sessions_and_workers_use_run_area — real serial/xdist probes or a second pytest session escape the area or erase an active session.
+- 3: tests/test_ci.py::test_verify_temp_cleanup_preserves_exit_status — green/red normal exits leave payloads or return a different original status.
+- 4: tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group — any trapped signal deletes before group cleanup, leaves payloads or loses 128-plus-signal status.
+- 5: tests/test_verify_lock.py::test_failed_temp_scope_retention_is_explicit_and_reported — failed/interrupted requested evidence disappears, lacks a path or is removed by the next run; other values retain unexpectedly.
+- 6: tests/test_verify_lock.py::test_successful_temp_scope_never_retains — a successful requested run leaves its payload.
+- 7: tests/test_verify_lock.py::test_temp_scope_recovers_orphans_after_protected_work_ends — the next start deletes a surviving child's area or leaves a reclaimable SIGKILL orphan.
+- 8: tests/test_verify_lock.py::test_temp_scope_cleanup_preserves_unrelated_paths — siblings, parent/default-root sentinels or substituted symlink targets change.
+- 9: tests/test_verify_lock.py::test_temp_scope_storage_failures_are_visible_and_unsuccessful — injected setup/spawn/sweep/removal failures start unsafe work, leak admission, go silent or return success.
 - 10: tests/test_ci.py::test_runner_holds_no_command_list_of_its_own — lifecycle wiring adds a second gate-command source.
 - 10: tests/test_ci.py::test_the_makefile_runs_what_the_one_list_runs — the gate recipe and Makefile cease to match.
-- 10: not yet written tests/test_ci.py::test_temp_scope_preserves_runner_entry_contracts — list enters admission/allocates, jobs or --ci bypass scopes, inherited admission requeues, or worker/duration context changes.
-- 11: not yet written tests/test_ci.py::test_verify_rejects_external_basetemp_options — accepted basetemp spellings escape containment, or unrelated addopts are lost.
+- 10: tests/test_ci.py::test_temp_scope_preserves_runner_entry_contracts — list enters admission/allocates, jobs or --ci bypass scopes, inherited admission requeues, or worker/duration context changes.
+- 11: tests/test_ci.py::test_verify_rejects_external_basetemp_options — accepted basetemp spellings escape containment, or unrelated addopts are lost.
 
 ## Boundaries and route
 
@@ -155,4 +155,12 @@ change-plan form. `scripts/validate_change_artefacts.py` is also absent;
 use the existing interview, criterion-ledger and research-handoff gates,
 with the runner responsible for index regeneration and the full document job.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-11 22:24:30–23:22:10 UTC, 3459 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-11 23:22:37–23:26:39 UTC, 241 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-11 23:26:50–23:27:40 UTC, 50 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

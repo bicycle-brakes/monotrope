@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -144,3 +144,218 @@ restriction; no tracker write or git mutation was performed.
 
 > Attempt 2 (codex-repair): the runner put back what a draft may not change:
 > - `plans/INDEX.md`
+
+Stage-2 call, 2026-11-11: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1011 files, 3961 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `scripts/verify_all.sh` +25 -0
+> - `scripts/verify_lock.py` +606 -15
+> - `tests/test_ci.py` +329 -0
+> - `tests/test_verify_lock.py` +368 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_ci.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/verify_lock.py:1214:13: PTH106 `os.rmdir()` should be replaced by `Path.rmdir()`
+>      |
+> 1212 |             finally:
+> 1213 |                 os.close(nested)
+> 1214 |             os.rmdir(name, dir_fd=dir_fd)
+>      |             ^^^^^^^^ PTH106
+> 1215 |         else:
+> 1216 |             os.unlink(name, dir_fd=dir_fd)
+>      |
+>
+> scripts/verify_lock.py:1216:13: PTH108 `os.unlink()` should be replaced by `Path.unlink()`
+>      |
+> 1214 |             os.rmdir(name, dir_fd=dir_fd)
+> 1215 |         else:
+> 1216 |             os.unlink(name, dir_fd=dir_fd)
+>      |             ^^^^^^^^^ PTH108
+>      |
+>
+> scripts/verify_lock.py:1234:5: PTH106 `os.rmdir()` should be replaced by `Path.rmdir()`
+>      |
+> 1232 |     finally:
+> 1233 |         os.close(root_fd)
+> 1234 |     os.rmdir(path)
+>      |     ^^^^^^^^ PTH106
+>      |
+>
+> tests/test_ci.py:2603:9: F841 Local variable `bash` is assigned to but never used
+>      |
+> 2601 |     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+> 2602 |     with _held_holder(base / "state", pid=os.getpid()):
+> 2603 |         bash = shutil.which("bash") or "/bin/bash"
+>      |         ^^^^ F841
+> 2604 |         done = subprocess.run(
+> 2605 |             [
+>      |
+>      = help: Remove assignment to unused variable `bash`
+>
+> tests/test_verify_lock.py:1591:25: ARG001 Unused function argument: `args`
+>      |
+> 1589 |     monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path / "spawn-root"))
+> 1590 |
+> 1591 |     def refusing_spawn(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+>      |                         ^^^^ ARG001
+> 1592 |         raise OSError("spawn refused by the fixture")
+>      |
+>
+> tests/test_verify_lock.py:1591:41: ARG001 Unused function argument: `kwargs`
+>      |
+> 1589 |     monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(tmp_path / "spawn-root"))
+> 1590 |
+> 1591 |     def refusing_spawn(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+>      |                                         ^^^^^^ ARG001
+> 1592 |         raise OSError("spawn refused by the fixture")
+>      |
+>
+> Found 6 errors.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-11-12: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1011 files, 3964 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `scripts/verify_lock.py` +3 -3
+> - `tests/test_ci.py` +0 -1
+> - `tests/test_verify_lock.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> ==================================== ERRORS ====================================
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> ______________________ ERROR collecting tests/test_ci.py _______________________
+> In test_verify_rejects_external_basetemp_options: function uses no argument 'adddopts'
+> =========================== short test summary info ============================
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> ERROR tests/test_ci.py - Failed: In test_verify_rejects_external_basetemp_opt...
+> 8 errors in 1.09s
+> ```
+
+Stage-2 call, 2026-11-12: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1011 files, 3966 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `tests/test_ci.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         root = tmp_path / "tmproot"
+>         stop = tmp_path / "stop"
+>         started = tmp_path / "started"
+>         entry = _scoped(root, AREA_WRITER, {"PROBE_OUT": str(stop), "PROBE_STARTED": str(started)})
+>         container = _container_of(root)
+>         try:
+> >           assert _wait_until(lambda: _areas(container)), "the entry never allocated its run area"
+> E           AssertionError: the entry never allocated its run area
+> E           assert False
+> E            +  where False = _wait_until(<function test_temp_scope_signals_clean_after_process_group.<locals>.<lambda> at 0x10abc3060>)
+>
+> tests/test_verify_lock.py:1375: AssertionError
+> _____________ test_temp_scope_signals_clean_after_process_group[2] _____________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-43/popen-gw0/test_temp_scope_signals_clean_0')
+> signum = <Signals.SIGINT: 2>
+>
+>     @pytest.mark.parametrize("signum", [signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT])
+>     def test_temp_scope_signals_clean_after_process_group(tmp_path: Path, signum: int) -> None:
+>         """Ledger criterion 4: a trapped signal ends the group first, then removes the area, keeping 128+signal.
+>     
+>         Fault this pins: a signal removing the area while the supervised group can
+>         still write (the survivor re-creates its payload after the removal), a
+>         payload left behind, or the existing 128-plus-signal status lost.
+>         """
+>         root = tmp_path / "tmproot"
+>         stop = tmp_path / "stop"
+>         started = tmp_path / "started"
+>         entry = _scoped(root, AREA_WRITER, {"PROBE_OUT": str(stop), "PROBE_STARTED": str(started)})
+>         container = _container_of(root)
+>         try:
+> >           assert _wait_until(lambda: _areas(container)), "the entry never allocated its run area"
+> E           AssertionError: the entry never allocated its run area
+> E           assert False
+> E            +  where False = _wait_until(<function test_temp_scope_signals_clean_after_process_group.<locals>.<lambda> at 0x10935f1a0>)
+>
+> tests/test_verify_lock.py:1375: AssertionError
+> _____________ test_temp_scope_signals_clean_after_process_group[1] _____________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-43/popen-gw7/test_temp_scope_signals_clean_0')
+> signum = <Signals.SIGHUP: 1>
+>
+>     @pytest.mark.parametrize("signum", [signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT])
+>     def test_temp_scope_signals_clean_after_process_group(tmp_path: Path, signum: int) -> None:
+>         """Ledger criterion 4: a trapped signal ends the group first, then removes the area, keeping 128+signal.
+>     
+>         Fault this pins: a signal removing the area while the supervised group can
+>         still write (the survivor re-creates its payload after the removal), a
+>         payload left behind, or the existing 128-plus-signal status lost.
+>         """
+>         root = tmp_path / "tmproot"
+>         stop = tmp_path / "stop"
+>         started = tmp_path / "started"
+>         entry = _scoped(root, AREA_WRITER, {"PROBE_OUT": str(stop), "PROBE_STARTED": str(started)})
+>         container = _container_of(root)
+>         try:
+> >           assert _wait_until(lambda: _areas(container)), "the entry never allocated its run area"
+> E           AssertionError: the entry never allocated its run area
+> E           assert False
+> E            +  where False = _wait_until(<function test_temp_scope_signals_clean_after_process_group.<locals>.<lambda> at 0x10752d4e0>)
+>
+> tests/test_verify_lock.py:1375: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_temp_scope_cleanup_preserves_unrelated_paths
+> FAILED tests/test_verify_lock.py::test_failed_temp_scope_retention_is_explicit_and_reported
+> FAILED tests/test_verify_lock.py::test_successful_temp_scope_never_retains - ...
+> FAILED tests/test_ci.py::test_verify_runs_have_distinct_nested_temp_areas - A...
+> FAILED tests/test_ci.py::test_verify_keeps_unrelated_and_refuses_malformed_addopts
+> FAILED tests/test_ci.py::test_verify_pytest_sessions_and_workers_use_run_area
+> FAILED tests/test_ci.py::test_temp_scope_preserves_runner_entry_contracts - A...
+> FAILED tests/test_ci.py::test_verify_temp_cleanup_preserves_exit_status - Ass...
+> FAILED tests/test_verify_lock.py::test_temp_scope_recovers_orphans_after_protected_work_ends
+> FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[3]
+> FAILED tests/test_verify_lock.py::test_temp_scope_storage_failures_are_visible_and_unsuccessful
+> FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[15]
+> FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[2]
+> FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[1]
+> 14 failed, 7 passed in 21.15s
+> ```
