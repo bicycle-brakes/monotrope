@@ -79,7 +79,7 @@ The schema/CI checks above and final full check follow step 5. Before acceptance
 
 ## Limits and ownership
 
-No changes to `scripts/stage2.py`, `scripts/verify_lock.py`, `scripts/verify_duration.py`, `scripts/kit/manifest.yaml`, other change folders, ADRs, prompts or model routes. The existing evidence parser is exercised as a consumer, not rewritten. No external service call is part of the new proofs. The orchestrator presents the card unchanged and owns the decision pull request for the held gate-list edit; this drafting attempt neither implements nor commits it.
+No behaviour changes to `scripts/stage2.py` (its `run_targeted` docstring is corrected by text only, spec "Protected areas", decisions Q-2), and no changes to `scripts/verify_lock.py`, `scripts/verify_duration.py`, `scripts/kit/manifest.yaml`, other change folders, ADRs, prompts (except the local-run line of `prompts/05-verify.md`, corrected by the orchestrator, decisions Q-2) or model routes. The existing evidence parser is exercised as a consumer, not rewritten. No external service call is part of the new proofs. The orchestrator presents the card unchanged and owns the decision pull request for the held gate-list edit; this drafting attempt neither implements nor commits it.
 
 ## Runner route — 2026-11-11
 

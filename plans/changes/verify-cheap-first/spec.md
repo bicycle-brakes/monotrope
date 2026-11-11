@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.1
@@ -84,8 +84,11 @@ Maintainer decision: `decisions.md#Q-1`.
    gate, or a green verdict after gate-list generation failed or was empty.
    *Basis:* decisions.md#Q-1; research.md, intent of the bead.
 
-6. When a report or advisory gate fails, its failure remains visible
-   without stopping the run or making the final verdict red by itself.
+6. When a report or advisory gate that runs fails, its failure remains
+   visible without stopping the run or making the final verdict red by
+   itself. A report or advisory gate that sorts behind the first blocking
+   failure is not run and is named in the not-run summary like every other
+   gate there.
    *Refuted by:* a later marker missing, a suppressed nonblocking failure,
    or a nonzero run exit when all blocking gates passed.
    *Basis:* decisions.md, agent-decided enforcement preservation.
@@ -148,6 +151,11 @@ Maintainer decision: `decisions.md#Q-1`.
   change in the gate list.
 - No edits to other changes, existing ADRs, model configuration, tracker,
   admission or duration helpers, workflow prompts, or kit classification.
+- One exception (maintainer, 2026-11-11, decisions Q-2): a text elsewhere
+  that the early stop makes false is corrected in the same change — the
+  local-run line of `prompts/05-verify.md` and the `run_targeted`
+  docstring in `scripts/stage2.py`. Text only; no behaviour of the runner
+  or the targeted check changes.
 - Held paths are never edited by the implementation attempt; the
   orchestrator owns `decisions/gates.yaml` and `.github/workflows/ci.yml`.
 
