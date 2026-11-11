@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.1
@@ -81,4 +81,11 @@ The schema/CI checks above and final full check follow step 5. Before acceptance
 
 No changes to `scripts/stage2.py`, `scripts/verify_lock.py`, `scripts/verify_duration.py`, `scripts/kit/manifest.yaml`, other change folders, ADRs, prompts or model routes. The existing evidence parser is exercised as a consumer, not rewritten. No external service call is part of the new proofs. The orchestrator presents the card unchanged and owns the decision pull request for the held gate-list edit; this drafting attempt neither implements nor commits it.
 
+## Runner route — 2026-11-11
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-10 20:57:34–22:22:45 UTC, 5111 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-10 22:22:58–2026-11-11 01:01:11 UTC, 9493 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
