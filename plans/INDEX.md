@@ -433,6 +433,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive-closed-changes/research.md`](changes/archive-closed-changes/research.md) | draft | none | 2026-11-06 | coding-harness-cqun |
 | [`changes/archive-closed-changes/spec.md`](changes/archive-closed-changes/spec.md) | draft | none | 2026-11-06 | coding-harness-cqun |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
+| [`changes/decision-statement-skeleton/decisions.md`](changes/decision-statement-skeleton/decisions.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
+| [`changes/decision-statement-skeleton/findings.md`](changes/decision-statement-skeleton/findings.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
+| [`changes/decision-statement-skeleton/plan.md`](changes/decision-statement-skeleton/plan.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
+| [`changes/decision-statement-skeleton/research.md`](changes/decision-statement-skeleton/research.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
+| [`changes/decision-statement-skeleton/spec.md`](changes/decision-statement-skeleton/spec.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
 | [`changes/docs-job-report-header/decisions.md`](changes/docs-job-report-header/decisions.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/findings.md`](changes/docs-job-report-header/findings.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/plan.md`](changes/docs-job-report-header/plan.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
@@ -555,6 +560,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/time-records-data/plan.md`](changes/time-records-data/plan.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/research.md`](changes/time-records-data/research.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/spec.md`](changes/time-records-data/spec.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
+| [`changes/triage-verb/decisions.md`](changes/triage-verb/decisions.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/findings.md`](changes/triage-verb/findings.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/plan.md`](changes/triage-verb/plan.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/research.md`](changes/triage-verb/research.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/triage-verb/spec.md`](changes/triage-verb/spec.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/verify-cheap-first/decisions.md`](changes/verify-cheap-first/decisions.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/findings.md`](changes/verify-cheap-first/findings.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/plan.md`](changes/verify-cheap-first/plan.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
