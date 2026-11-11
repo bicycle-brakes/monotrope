@@ -2384,3 +2384,15 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_explore_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
 
 Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+
+Stage-2 call, 2026-11-11: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3962 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-11
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-13 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:194 | With `updated: 2026-11-09` and `produced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash, 2026-11-10"}`, the raw census reports an invalid producer version, but `apply_adoption=True` returns no findings. The exemption ignores the later date inside this recognized legacy producer spelling, allowing defective research with post-adoption evidence to pass. [AC7, AC9] | Codex | open | — |
+| EP6-14 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:81 | A research header containing `provenance: ai-drafted-reviewed` and `produced_by: &p [*p]` raises `RecursionError` during duplicate-key inspection. Reproduced with a second unreadable research file: the scan aborts before examining it. Report the invalid recursive producer structure and continue scanning subsequent files. [AC10] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1cccf-81c7-7890-95fc-1f8e44ebd0f0, 2026-11-11
+Reviewer session: codex 01a1cccf-81c7-7890-95fc-1f8e44ebd0f0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
