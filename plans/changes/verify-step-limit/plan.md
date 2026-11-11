@@ -1,7 +1,7 @@
 ---
 title: "Plan — verify-step-limit"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-11
 last_reviewed: 2026-11-11
 updated: 2026-11-11
@@ -52,7 +52,7 @@ The runner owns the full check and commit. No real 45-minute sleep is needed.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_verify_step_limit_is_45_minutes — the default remains 1800 seconds or changes to another value
+- 1: tests/test_stage2.py::test_verify_step_limit_is_45_minutes — the default remains 1800 seconds or changes to another value
 - 1: tests/test_stage2.py::test_the_runner_steps_carry_their_limits_at_the_call_sites — post-attempt make uses a different timeout
 - 1: tests/test_stage2.py::test_targeted_stage2_test_file_requires_full_verification — full_verify ignores the shared timeout
 - 1: tests/test_stage2.py::test_draft_docs_check_keeps_admission_and_execution_limit — the documents launch ignores the shared timeout
@@ -66,3 +66,5 @@ The runner owns the full check and commit. No real 45-minute sleep is needed.
 - 4: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — queue time is charged to execution
 
 ## Time used
+
+2026-11-11 20:50:58–21:54:05 UTC, 3787 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner

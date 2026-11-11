@@ -1,7 +1,7 @@
 ---
 title: "Spec — verify-step-limit"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-11
 last_reviewed: 2026-11-11
 updated: 2026-11-11

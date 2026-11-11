@@ -20,3 +20,5 @@ tags: [findings, stage-2]
 # Findings — verify-step-limit
 
 Stage-2 call, 2026-11-11: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1019 files, 3951 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1022 files, 3953 commits, 12 rules.
