@@ -277,7 +277,7 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
     python_word="'$(printf %s "$PYTHON" | sed "s/'/'\\\\''/g")'"
     lauf_cmd=${cmd/python3/"$python_word"}
     echo ""
-    echo "── [$gid] \$ $lauf_cmd"
+    echo "── [$gid] $ $lauf_cmd"
     # Monotonic readings immediately around the unchanged gate command; the
     # raw status is captured before any timing operation, so it is the gate
     # command's own and not a helper's (bead coding-harness-1um6).

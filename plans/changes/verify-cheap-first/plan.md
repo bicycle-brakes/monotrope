@@ -59,23 +59,23 @@ The schema/CI checks above and final full check follow step 5. Before acceptance
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_cheap_first.py::test_cost_schema_rejects_missing_and_invalid_costs — invalid costs on any gate kind pass validation
-- 1: not yet written tests/test_ci.py::test_repository_gate_schema_is_v3 — the final reader accepts v2 or the real list has not migrated
-- 2: not yet written tests/test_verify_cheap_first.py::test_local_cost_order_preserves_selection_and_ties — declaration position defeats cost order or filtering changes
-- 3: not yet written tests/test_verify_cheap_first.py::test_local_blocking_failure_stops_before_pytest — an expensive marker runs after cheap red or exit is zero
-- 4: not yet written tests/test_verify_cheap_first.py::test_skip_summary_names_only_unexecuted_selected_gates — missing or false skip IDs, or skipped gates shown as passed
-- 5: not yet written tests/test_verify_cheap_first.py::test_green_run_executes_every_selected_gate_once — a selected gate is omitted or repeated
-- 5: not yet written tests/test_verify_cheap_first.py::test_unusable_gate_selection_never_reports_green — failed or empty command generation produces a green verdict
-- 6: not yet written tests/test_verify_cheap_first.py::test_nonblocking_failures_continue_without_red_verdict — report/advisory failure stops execution or changes exit status
-- 7: not yet written tests/test_verify_cheap_first.py::test_ci_mode_continues_after_blocking_failure — --ci loses a later selected gate
+- 1: tests/test_verify_cheap_first.py::test_cost_schema_rejects_missing_and_invalid_costs — invalid costs on any gate kind pass validation
+- 1: tests/test_ci.py::test_repository_gate_schema_is_v3 — the final reader accepts v2 or the real list has not migrated
+- 2: tests/test_verify_cheap_first.py::test_local_cost_order_preserves_selection_and_ties — declaration position defeats cost order or filtering changes
+- 3: tests/test_verify_cheap_first.py::test_local_blocking_failure_stops_before_pytest — an expensive marker runs after cheap red or exit is zero
+- 4: tests/test_verify_cheap_first.py::test_skip_summary_names_only_unexecuted_selected_gates — missing or false skip IDs, or skipped gates shown as passed
+- 5: tests/test_verify_cheap_first.py::test_green_run_executes_every_selected_gate_once — a selected gate is omitted or repeated
+- 5: tests/test_verify_cheap_first.py::test_unusable_gate_selection_never_reports_green — failed or empty command generation produces a green verdict
+- 6: tests/test_verify_cheap_first.py::test_nonblocking_failures_continue_without_red_verdict — report/advisory failure stops execution or changes exit status
+- 7: tests/test_verify_cheap_first.py::test_ci_mode_continues_after_blocking_failure — --ci loses a later selected gate
 - 7: tests/test_ci.py::test_every_gate_step_runs_even_after_a_failing_gate — hosted gate steps lose always-run conditions
 - 7: tests/test_ci.py::test_every_step_after_a_failing_gate_still_runs — hosted execution or matrix enforcement stops early
-- 8: not yet written tests/test_verify_cheap_first.py::test_early_stop_preserves_repair_diagnostics — the parser loses the failed command/diagnostic or invents a skipped section
-- 9: not yet written tests/test_verify_cheap_first.py::test_early_stop_history_records_only_executed_gates — history fabricates a skipped event or omits the red run end
+- 8: tests/test_verify_cheap_first.py::test_early_stop_preserves_repair_diagnostics — the parser loses the failed command/diagnostic or invents a skipped section
+- 9: tests/test_verify_cheap_first.py::test_early_stop_history_records_only_executed_gates — history fabricates a skipped event or omits the red run end
 - 9: tests/test_ci.py::test_duration_storage_failure_warns_without_changing_verdict — broken measurement storage changes enforcement
-- 10: not yet written tests/test_ci.py::test_repository_gate_schema_is_v3 — real gates have incorrect cost assignments or the obsolete pytest-order claim
-- 10: not yet written tests/test_verify_cheap_first.py::test_catalog_exposes_declared_costs — catalogue omits or misstates a declared cost
-- 11: not yet written tests/test_verify_cheap_first.py::test_transferred_kit_stops_before_expensive_gate — transferred dependencies or renamed gate IDs break cheap-first stopping
+- 10: tests/test_ci.py::test_repository_gate_schema_is_v3 — real gates have incorrect cost assignments or the obsolete pytest-order claim
+- 10: tests/test_verify_cheap_first.py::test_catalog_exposes_declared_costs — catalogue omits or misstates a declared cost
+- 11: tests/test_verify_cheap_first.py::test_transferred_kit_stops_before_expensive_gate — transferred dependencies or renamed gate IDs break cheap-first stopping
 
 ## Limits and ownership
 
@@ -85,7 +85,12 @@ No changes to `scripts/stage2.py`, `scripts/verify_lock.py`, `scripts/verify_dur
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-11
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash failed twice; the Sonnet call of 01:01 UTC ended with exit 1 before changing anything; one test from green; the maintainer set the verify speed-up as first priority on 2026-11-10.
+
 ## Time used
 
 2026-11-10 20:57:34–22:22:45 UTC, 5111 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 22:22:58–2026-11-11 01:01:11 UTC, 9493 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-11 02:38:41–03:31:03 UTC, 3141 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

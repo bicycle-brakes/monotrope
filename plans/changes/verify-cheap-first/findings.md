@@ -197,3 +197,5 @@ Stage-2 call, 2026-11-10: implement · attempt 2 · route flash-repair · endpoi
 > ```
 
 Stage-2 call, 2026-11-11: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1012 files, 3902 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash failed twice; the Sonnet call of 01:01 UTC ended with exit 1 before changing anything; one test from green; the maintainer set the verify speed-up as first priority on 2026-11-10 · leak check clean over 1012 files, 3906 commits, 12 rules.
