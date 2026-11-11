@@ -3,8 +3,8 @@ title: "Research — targeted-check-more-verbs"
 status: draft
 implementation_status: none
 date: 2026-11-10
-last_reviewed: 2026-11-10
-updated: 2026-11-10
+last_reviewed: 2026-11-11
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -92,3 +92,31 @@ Selection `targeted_selection`, execution `run_targeted`, repair body `_targeted
 ---
 
 Facts only; I designed nothing and judged nothing. The runner owns `research.md` and the `neighbours:` header — the neighbour list there currently names `docs/research/2026-11-09-make-verify-long-term.md`; `plans/changes/repair-targeted-check/spec.md` and `plans/changes/adr-repair-check/decisions.md` are the two neighbouring specs this exploration found beyond it, for the runner to add if it agrees.
+
+## Repository follow-up — 2026-11-11
+
+Read at baseline `e635f03b` while drafting; these resolve repository gaps,
+not maintainer decisions:
+
+- `scripts/touch_map.py`, `imported()` and `links()`, produces direct
+  `tests` and `imports` edges only; Python imports resolve by unique stem.
+  No transitive traversal is present. Current and committed snapshot
+  adapters already exist, and code kinds include Python and shell. The
+  existing static-link caveat remains applicable to indirect selection.
+- `scripts/verify_duration.py` owns the local `verify-duration.jsonl`
+  store, safe flocked append, version-1 start/gate/end records and the report
+  reader. Start records include repository, commit and gate-file digest;
+  gate records include ID, exit and enforcement. Neither targeted-result
+  nor slip records exist, and failed-test IDs are not stored. Storage
+  failures are diagnostic and do not change gate verdicts.
+- `scripts/stage2.py`, `require_fresh_full_verification()`, checks head and
+  dirty paths before/after `full_verify()`, with a narrow audit-only
+  exception for this change's findings; it does not correlate targeted
+  checkpoints with the duration history.
+- `tools/claude-code/skills/handover/SKILL.md` is the repository-owned
+  handover instruction. `templates/plan.md` and
+  `scripts/validate_change_artefacts.py` are absent from this baseline.
+- ADR 0025 is an existing accepted file under the human-decided ADR prefix
+  in `provenance.yaml`; an amendment is therefore orchestrator-only work in
+  a decision pull request. The change's recorded bounded class does not
+  require phase 2b or a new ADR draft.
