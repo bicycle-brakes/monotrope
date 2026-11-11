@@ -6073,7 +6073,13 @@ def _targeted_body(
     admitted full check instead. A passing result is never worded as full verification.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
-    admission_names = (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV, verify_lock.SLOT_ENV)
+    admission_names = (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.SLOT_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    )
     env = {name: value for name, value in env.items() if name not in admission_names}
 
     def ledger(error: BaseException) -> list[str]:

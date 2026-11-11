@@ -4,33 +4,23 @@ status: draft
 implementation_status: none
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-09
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm, version: "glm-5.3-flash, 2026-11-09"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # verify slots — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-09: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 980 files, 3783 commits, 12 rules.
 
 ## Runner exploration — 2026-11-09
 
-I have the full map now. Here is the research, ready to append to `plans/changes/verify-slots/research.md`.
-
-````markdown
 ## What exists today
 
 **The bead's intent is not readable from the tree.** The bead `coding-harness-u1ha`
@@ -236,9 +226,3 @@ if allowances change.
 `coding-harness-dca4`); `plans/changes/outcome-test/` (merged as PR #358);
 `docs/orchestration.md` (status: proposed). The tracker-only beads above are
 suggested neighbours the runner may add once readable.
-````
-
-Two notes outside the artifact text, for the orchestrator:
-
-- **Open question, needs the interview:** the change's intent is recorded nowhere in the tree — the bead `coding-harness-u1ha` description sits in the Dolt tracker, which this read-only explorer could not query. The research deliberately documents both "slot" meanings with sources so neither reading is favoured.
-- **Provenance:** per the skeleton's own note, whoever appends this model-drafted section should set `provenance: ai-drafted-reviewed` with `produced_by:` and `review:` in the frontmatter (`provenance.yaml`, class `ai-drafted-reviewed`).

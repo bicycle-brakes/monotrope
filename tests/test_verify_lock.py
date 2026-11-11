@@ -1745,6 +1745,63 @@ def test_slot_release_preserves_peers_and_inherited_children(tmp_path: Path) -> 
         assert entry.wait(timeout=60) == 0
 
 
+@pytest.mark.parametrize("release_outer_first", [False, True])
+def test_overlapping_admissions_preserve_remaining_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release_outer_first: bool
+) -> None:
+    """L2-2: releasing either overlapping admission preserves the survivor's child inheritance."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    for name in (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.SLOT_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    ):
+        monkeypatch.delenv(name, raising=False)
+    with contextlib.ExitStack() as cleanup:
+        outer = contextlib.ExitStack()
+        cleanup.callback(outer.close)
+        outer_fd = outer.enter_context(verify_lock.hold_admission(["outer"]))
+        outer_context = verify_lock.admission_context()
+        outer_env = verify_lock.inherit_env({})
+        outer_fds = verify_lock.inherit_fds(outer_fd)
+        inner = contextlib.ExitStack()
+        cleanup.callback(inner.close)
+        inner_fd = inner.enter_context(verify_lock.hold_admission(["inner"]))
+        inner_context = verify_lock.admission_context()
+        inner_env = verify_lock.inherit_env({})
+        inner_fds = verify_lock.inherit_fds(inner_fd)
+        assert outer_context.admission_id != inner_context.admission_id
+        if release_outer_first:
+            outer.close()
+            expected_context, expected_env, expected_fds, owned = inner_context, inner_env, inner_fds, inner_fd
+        else:
+            inner.close()
+            expected_context, expected_env, expected_fds, owned = outer_context, outer_env, outer_fds, outer_fd
+        assert verify_lock.admission_context() == expected_context, "the surviving admission lost its context"
+        assert verify_lock.inherit_env({}) == expected_env, "the surviving admission lost its marker"
+        assert verify_lock.inherit_fds(owned) == expected_fds, "the surviving admission lost its compatibility lock"
+        probe = (
+            "import sys; sys.path.insert(0, 'scripts'); import verify_lock; "
+            "assert verify_lock.nested_holder_pid() is not None; "
+            "assert verify_lock.admission_context().admission_id == sys.argv[1]; "
+            "ctx = verify_lock.hold_admission(['nested']); "
+            "assert ctx.__enter__() is None; ctx.__exit__(None, None, None)"
+        )
+        child = subprocess.run(
+            [sys.executable, "-c", probe, expected_context.admission_id],
+            cwd=REPO_ROOT,
+            env={**os.environ, **expected_env},
+            pass_fds=expected_fds,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert child.returncode == 0, child.stderr
+
+
 def test_each_slot_checks_memory_before_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 7. Every reservation applies the free-memory policy; the second slot skips nothing.
 

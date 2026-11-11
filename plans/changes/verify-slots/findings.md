@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -933,3 +933,10 @@ Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 985 files, 3877 commits, 12 rules.
 
 Stage-2 call, 2026-11-10: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 985 files, 3877 commits, 12 rules.
+
+Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 985 files, 3883 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged

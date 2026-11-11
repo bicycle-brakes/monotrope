@@ -22659,6 +22659,50 @@ def test_targeted_repair_falls_back_to_full_on_uncovered_inputs(
     assert chosen.tests == [] and chosen.gates == [] and chosen.ruff == []
 
 
+def test_targeted_body_strips_admission_measurements(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L2-4: targeted preparation must not charge an ancestor's wait to its children."""
+    names = (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.SLOT_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    )
+    env = {name: "ancestor" for name in names}
+    env[verify_lock.ADMISSION_WAIT_ENV] = "123.0"
+    env["PATH"] = "/usr/bin"
+    seen = []
+
+    def format_probe(_root, child_env, _key, _tools, *, inherit_admission):
+        assert inherit_admission is False
+        seen.append(child_env.copy())
+
+    def cheap_probe(_root, child_env, _plan, _key, _accepted_plan, _previous_failures):
+        seen.append(child_env.copy())
+        return ["stop after observing preparation"]
+
+    monkeypatch.setattr(stage2, "format_step", format_probe)
+    monkeypatch.setattr(stage2, "cheap_checks", cheap_probe)
+    result = stage2._targeted_body(
+        tmp_path,
+        tmp_path / "plan.md",
+        env,
+        None,
+        None,
+        None,
+        None,
+        (),
+        "HEAD",
+        None,
+    )
+    assert result and "stop after observing preparation" in result[0]
+    assert len(seen) == 2
+    for child_env in seen:
+        assert not set(names).intersection(child_env), "targeted work inherited an admission or its measured wait"
+        assert child_env["PATH"] == "/usr/bin"
+    assert all(name in env for name in names), "the caller's environment was mutated"
+
+
 def test_targeted_commands_run_without_verify_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 6. Planted fault: a targeted command enters the machine admission or carries its marker, or the
     full check stops acquiring the admission it owes."""

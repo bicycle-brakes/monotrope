@@ -554,6 +554,8 @@ def _registry_lock(state: State) -> Iterator[None]:
 
 _ACTIVE_LOCK = threading.Lock()
 _ACTIVE: _Admission | None = None
+# Keep every live admission: contexts can overlap and release in either order.
+_ACTIVE_ADMISSIONS: list[_Admission] = []
 
 
 def _active_pid() -> int | None:
@@ -695,6 +697,7 @@ class _Admission:
         self._publish()
         with _ACTIVE_LOCK:
             global _ACTIVE
+            _ACTIVE_ADMISSIONS.append(self)
             _ACTIVE = self
         self._memory_gate()
         self.wait_seconds = _now() - self.entered
@@ -709,8 +712,9 @@ class _Admission:
         self._released = True
         with _ACTIVE_LOCK:
             global _ACTIVE
-            if _ACTIVE is self:
-                _ACTIVE = None
+            if self in _ACTIVE_ADMISSIONS:
+                _ACTIVE_ADMISSIONS.remove(self)
+            _ACTIVE = _ACTIVE_ADMISSIONS[-1] if _ACTIVE_ADMISSIONS else None
         # Only the owner removes its own slot's record, and only while it still names this
         # process and token: a cancelled waiter never published one and must not delete the
         # slot's active holder's (review row F6-1), and a peer's slot state stays untouched.
@@ -994,8 +998,9 @@ class _Admission:
 def hold_admission(command: list[str]) -> Iterator[int | None]:
     """One machine admission around protected work: queue for a slot, memory gate, published ownership.
 
-    Yields the slot descriptor local children must inherit, or None when this
-    entry is nested in an ancestor's admission. Refusals raise
+    Yields the slot descriptor, or None when this entry is nested in an
+    ancestor's admission. Use inherit_fds() for local children: they must
+    inherit both the slot lock and the shared compatibility lock. Refusals raise
     VerifyLockRefused or MemoryFloorRefused before the body runs; release
     happens in every ending, after any child cleanup the caller does.
     """
