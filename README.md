@@ -175,7 +175,7 @@ cd monotrope
 tools/beads/install.sh && tools/bd bootstrap --yes  # fresh clone: load the tracker
 make venv                  # local .venv from the pinned lock (Python 3.12+)
 bash tools/pi/install.sh   # pinned Pi; the real-Pi tests in make verify need it
-make verify                # all gates
+make verify                # all gates, cheap ones first; a red run stops early
 tools/bd ready             # open, unblocked work
 ```
 
