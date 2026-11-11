@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -155,6 +155,17 @@ default, and their number is one value adjustable without a code change
 - Design phase 2b and an ADR: this is the bounded extension recorded in
   `decisions.md` (class bounded), not a change to architecture or gate
   policy.
+
+## Boundary
+
+One process holds at most one admission at a time (maintainer, 2026-11-11,
+review round 3, rows L3-2 and L3-3). A second admission requested while the
+same process still holds one is refused at once with a message that names the
+held slot; it never waits and never shares descriptors, environment marker or
+holder file with the first. The runner never asks for two: every caller
+(`scripts/verify_all.sh`, the timed checks of `scripts/stage2.py`) holds one
+admission for one run. Lifting this boundary is the work of bead
+coding-harness-42em (each admission an explicit handle).
 
 ## Protected areas
 
