@@ -208,6 +208,10 @@ holder record per slot, nested admission, accepted after two repair rounds
 measured trials (one slot against two) and the boundary of 2026-11-11 (spec,
 "Boundary"), which the next repair implements.
 
+## Runner route — 2026-11-11
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-10 09:26:23–10:34:38 UTC, 4095 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -218,3 +222,6 @@ measured trials (one slot against two) and the boundary of 2026-11-11 (spec,
 2026-11-10 16:46:53–16:50:45 UTC, 232 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-10 16:51:07–20:29:38 UTC, 13110 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-10 21:44:33–2026-11-11 03:31:56 UTC, 20841 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-11 14:25:30–15:26:28 UTC, 3657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-11 15:26:42–16:25:04 UTC, 3501 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-11 16:25:20–16:56:13 UTC, 1853 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

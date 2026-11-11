@@ -942,3 +942,155 @@ Stage-2 call, 2026-11-10: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
 
 Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 985 files, 3912 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 985 files, 3940 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/verify_lock.py` +29 -9
+> - `tests/test_verify_lock.py` +74 -35
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 80 lines of this gate left out …]
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2029/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2029/popen-gw2/test_targeted_commands_run_wit0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bc1b710>
+>
+>     def test_targeted_commands_run_without_verify_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         """Criterion 6. Planted fault: a targeted command enters the machine admission or carries its marker, or the
+>         full check stops acquiring the admission it owes."""
+>         repair_world(world)
+>         entered: list[list[str]] = []
+>         real_hold = verify_lock.hold_admission
+>     
+>         @contextlib.contextmanager
+>         def spy(command: list[str]):
+>             entered.append(list(command))
+>             with real_hold(command) as owned:
+>                 yield owned
+>     
+>         monkeypatch.setattr(verify_lock, "hold_admission", spy)
+>         commands = targeted_mode(monkeypatch)
+>         # A real outer admission is active in this state root, as when make verify starts the runner.
+>         # inherit_env can recover it even though the targeted body stripped its explicit environment.
+>         with real_hold(["outer", "verify"]), monkeypatch.context() as inherited:
+>             admission = verify_lock.inherit_env(dict(os.environ))
+>             for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV):
+>                 inherited.setenv(name, admission[name])
+> >           assert world.run("repair") == 0
+> E           AssertionError: assert 1 == 0
+> E            +  where 1 = run('repair')
+> E            +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2029/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2029/popen-gw2/test_targeted_commands_run_wit0/state')).run
+>
+> tests/test_stage2.py:22727: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: codex call failed: no thread.started event; the attempt is saved at refs/stage2/attempts/demo/repair-attempt-2-20261111T151526404278Z (2e05b0de70df); `git diff 8af6c8ae8a57 refs/stage2/attempts/demo/repair-attempt-2-20261111T151526404278Z` shows it; the runner restored the worktree to 8af6c8ae8a57 (undone: plans/INDEX.md, plans/changes/demo/plan.md, src/app.py, tests/test_fix.py); rerun the verb or add --stage2-off.; lifecycle fields: plans/changes/demo/plan.md, plans/changes/demo/spec.m [… 13 characters left out …]
+> the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2029/popen-gw2/test_targeted_commands_run_wit0/repo/.git/stage2/attempts/demo/attempt-2-20261111T151523976424Z-b1d08634.md
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=72263) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/tests/test_stage2.py:20341: DeprecationWarning: This process (pid=72264) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_targeted_commands_run_without_verify_admission
+> 1 failed, 5258 passed, 17 skipped, 5 warnings in 1394.04s (0:23:14)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 35862 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-1-20261111T142459274245Z-54cae2a9.md
+> ````
+
+Stage-2 call, 2026-11-11: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 985 files, 3940 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +17 -7
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-2-20261111T142459274245Z-54cae2a9.md
+> ```
+
+Stage-2 call, 2026-11-11: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 985 files, 3944 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure
+> - `make verify` did not finish: make was stopped by the runner's step limit after 30 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-3-20261111T142459274245Z-54cae2a9.md
+> ```
