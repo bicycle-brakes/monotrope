@@ -226,6 +226,50 @@ def test_cost_schema_rejects_missing_and_invalid_costs(tmp_path: Path, monkeypat
     assert "cost" in seen.err + seen.out
 
 
+def test_schema_success_reports_validated_version_without_rereading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """A file disappearing after validation cannot change the reported schema."""
+    tree = _tree_files(tmp_path / "schema")
+    _write_gate_file(tree, [_gate(tree, "seed", "seconds")])
+    gate_file = tree / "decisions" / "gates.yaml"
+    monkeypatch.setattr(ci_gates, "GATE_FILE", gate_file)
+    validated_gates = ci_gates.gates()
+    validate = ci_gates.validate_schema
+
+    def validate_then_remove():
+        errors = validate()
+        assert not errors
+        gate_file.unlink()
+        return errors
+
+    monkeypatch.setattr(ci_gates, "gates", lambda: validated_gates)
+    monkeypatch.setattr(ci_gates, "validate_schema", validate_then_remove)
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--check-schema"])
+    assert ci_gates.main() == 0
+    assert "Schema 3." in capsys.readouterr().out, "success must report the validated schema version"
+
+
+@pytest.mark.parametrize("version", [3.0, "3", True])
+def test_schema_version_requires_integer_three(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, version
+) -> None:
+    """Reject noninteger schema versions both in validation and at the command line."""
+    tree = _tree_files(tmp_path / "schema")
+    _write_gate_file(tree, [_gate(tree, "seed", "seconds")], schema_version=version)
+    gate_file = tree / "decisions" / "gates.yaml"
+    document = yaml.safe_load(gate_file.read_text(encoding="utf-8"))
+    assert any("schema_version" in error for error in ci_gates.validate_schema(document)), (
+        "schema_version must be the integer 3",
+        version,
+    )
+    monkeypatch.setattr(ci_gates, "GATE_FILE", gate_file)
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--check-schema"])
+    assert ci_gates.main() != 0
+    output = capsys.readouterr()
+    assert "schema_version" in output.out + output.err
+
+
 def test_local_cost_order_preserves_selection_and_ties(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     """Criterion 2: the local selection is cheap-first — seconds before minutes, declaration order inside each class.
 

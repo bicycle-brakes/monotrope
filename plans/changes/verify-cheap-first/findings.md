@@ -386,3 +386,10 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claud
 Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1012 files, 3925 commits, 12 rules.
 
 Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged; plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1012 files, 3928 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `Makefile` is an input kind the targeted selector does not cover
+
+Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged

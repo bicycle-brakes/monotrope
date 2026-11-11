@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-09
+updated: 2026-11-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -531,7 +531,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make verify     # local gates, cheap first; stop at the first blocking failure
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -542,6 +542,12 @@ make index      # regenerate plans/INDEX.md
 `ci.yml` is generated from, and a hand edit of `ci.yml` fails the `ci-drift`
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
+
+Local verification orders selected gates by declared cost (`seconds` before
+`minutes`) and stops at the first blocking failure. It names every remaining
+selected gate as not run because of that failure; a red run is therefore not
+a complete check. Hosted CI and `--ci` continue through all selected gates.
+See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,

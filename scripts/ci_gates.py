@@ -354,7 +354,7 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
     version = doc.get("schema_version")
-    if version != SCHEMA_VERSION:
+    if type(version) is not int or version != SCHEMA_VERSION:
         fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
     fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
@@ -469,23 +469,6 @@ def gates() -> list[dict[str, Any]]:
             }
         )
     return out
-
-
-def deklarierte_schema_version() -> int:
-    """Die schema_version der Gate-Datei; 0, wenn sie sich nicht lesen laesst.
-
-    Keine Entscheidung, ein Lesen: der Aufrufer hat die Liste zuvor durch
-    `gates()` geprueft — die Funktion dient nur dem Schema-Dispatch
-    (Kostenordnung, Katalog-Darstellung, Ausgabe).
-    """
-    try:
-        doc = yaml.safe_load(GATE_FILE.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return 0
-    if not isinstance(doc, dict):
-        return 0
-    version = doc.get("schema_version")
-    return version if isinstance(version, int) else 0
 
 
 def kostenordnung(alle: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -867,7 +850,7 @@ def main() -> int:
             for f in fehler:
                 print(f"  - {f}")
             return 1
-        print(f"Gate-Datei ok: {len(alle)} Gates, Schema {deklarierte_schema_version()}.")
+        print(f"Gate-Datei ok: {len(alle)} Gates, Schema {SCHEMA_VERSION}.")
         return 0
 
     if args.check_ci:
