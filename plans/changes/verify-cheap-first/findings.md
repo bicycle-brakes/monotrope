@@ -395,3 +395,10 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged
 
 Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1012 files, 3932 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1012 files, 3936 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/ci_gates.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-11: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged

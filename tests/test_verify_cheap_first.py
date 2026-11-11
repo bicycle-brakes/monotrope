@@ -761,3 +761,68 @@ def test_transferred_kit_stops_before_expensive_gate(tmp_path: Path) -> None:
     assert not (empfaenger / "mm-after.ran").exists()
     assert (empfaenger / "order.txt").read_text(encoding="utf-8") == "aa-red\n"
     assert _not_run_gates(done.stdout) == ["zz-suite", "mm-after"], done.stdout
+
+
+def test_gate_frame_uses_declared_interpreter_without_absolute_path(tmp_path: Path) -> None:
+    """Repair evidence uses the bare command while execution keeps the pinned interpreter."""
+    tree = _tree_files(tmp_path / "frame")
+    command = (
+        'python3 -c "import pathlib, sys; '
+        "pathlib.Path('interpreter.txt').write_text(sys.executable); "
+        "print('E   pinned-interpreter-diagnostic'); sys.exit(1)\""
+    )
+    _write_gate_file(tree, [_gate(tree, "python-red", "seconds", command=command)])
+    done = _run_runner(tree)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert (tree / "interpreter.txt").read_text() == sys.executable
+    evidence = red_sections(done.stdout)
+    assert evidence is not None, "the blocking gate must remain available as repair evidence"
+    assert f"── [python-red] $ {command}" in evidence, "the frame must show the declared bare interpreter"
+    assert sys.executable not in done.stdout, "the resolved absolute interpreter must not enter the run log"
+    assert sys.executable not in evidence, "repair evidence must not disclose the resolved interpreter path"
+    assert "E   pinned-interpreter-diagnostic" in evidence
+
+
+def test_last_blocking_failure_has_no_empty_not_run_summary(tmp_path: Path) -> None:
+    """A last-gate failure is red but cannot claim that any gate was skipped."""
+    tree = _tree_files(tmp_path / "last-red")
+    _write_gate_file(
+        tree,
+        [_gate(tree, "first", "seconds"), _gate(tree, "last", "minutes", ending="exit 1")],
+    )
+    done = _run_runner(tree)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert (tree / "order.txt").read_text() == "first\nlast\n"
+    assert "── [last] RED (block)" in done.stdout
+    assert "not run" not in done.stdout, "no not-run header belongs to a run that executed every selected gate"
+
+
+def test_gate_record_requires_cost_even_without_schema_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The record builder never silently normalizes a missing required cost to None."""
+    tree = _tree_files(tmp_path / "required-cost")
+    gate = _gate(tree, "seed", "seconds")
+    _write_gate_file(tree, [gate])
+    monkeypatch.setattr(ci_gates, "GATE_FILE", tree / "decisions" / "gates.yaml")
+    monkeypatch.setattr(ci_gates, "validate_schema", lambda: [])
+    assert ci_gates.gates()[0]["cost"] == "seconds"
+    del gate["cost"]
+    _write_gate_file(tree, [gate])
+    with pytest.raises(KeyError, match="cost"):
+        ci_gates.gates()
+
+
+def test_list_exposes_each_gate_cost(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """The human-readable inventory pairs every gate with its declared cost."""
+    tree = _tree_files(tmp_path / "list-cost")
+    _write_gate_file(tree, [_gate(tree, "suite", "minutes"), _gate(tree, "lint", "seconds")])
+    monkeypatch.setattr(ci_gates, "REPO_ROOT", tree)
+    monkeypatch.setattr(ci_gates, "GATE_FILE", tree / "decisions" / "gates.yaml")
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--list"])
+    assert ci_gates.main() == 0
+    output = capsys.readouterr().out
+    rows = [line for line in output.splitlines() if re.search(r"\[(suite|lint)\]", line)]
+    assert len(rows) == 2, output
+    assert "[suite]" in rows[0] and "cost: minutes" in rows[0], "the suite's cost must be visible beside its name"
+    assert "[lint]" in rows[1] and "cost: seconds" in rows[1], "the lint gate's cost must be visible beside its name"

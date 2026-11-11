@@ -459,7 +459,7 @@ def gates() -> list[dict[str, Any]]:
                 "enforcement": g["enforcement"],
                 "floor": g["floor"],
                 "placement": g["placement"],
-                "cost": g.get("cost"),
+                "cost": g["cost"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
                 "subsets": list(g.get("subsets") or []),
@@ -900,7 +900,7 @@ def main() -> int:
     for g in alle:
         marke = "~" if g["via_local_equivalent"] else (" " if g["local_runnable"] else "*")
         takt = " ⏱" if g["job"] == "drift" else ""
-        print(f"{marke}{takt} [{g['id']}] {g['name']}")
+        print(f"{marke}{takt} [{g['id']}] {g['name']} (cost: {g['cost']})")
         if g["local_runnable"]:
             zusatz = "  (lokales Aequivalent der Action)" if g["via_local_equivalent"] else ""
             if g["placement"] == "writer":

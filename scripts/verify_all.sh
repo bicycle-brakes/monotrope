@@ -277,7 +277,8 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
     python_word="'$(printf %s "$PYTHON" | sed "s/'/'\\\\''/g")'"
     lauf_cmd=${cmd/python3/"$python_word"}
     echo ""
-    echo "── [$gid] $ $lauf_cmd"
+    # Keep machine-local interpreter paths out of logs and repair evidence.
+    echo "── [$gid] $ $cmd"
     # Monotonic readings immediately around the unchanged gate command; the
     # raw status is captured before any timing operation, so it is the gate
     # command's own and not a helper's (bead coding-harness-1um6).
@@ -313,7 +314,7 @@ GATES
 # gate-frame format the evidence parser reads (`^── \[`), so no skipped gate
 # becomes a gate section, and skipped gates get no timing events: the
 # history describes executed commands only.
-if [ -n "$stop_gate" ]; then
+if [ -n "$verbleibend" ]; then
     echo ""
     echo "── not run — the run stopped at the blocking failure in [$stop_gate]:"
     printf '%s' "$verbleibend" | while IFS= read -r gid; do
