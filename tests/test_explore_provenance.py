@@ -311,6 +311,75 @@ def valid_research_header():
 
 
 @pytest.mark.parametrize("eol", ["\n", "\r\n"])
+@pytest.mark.parametrize("later_older_publication", [None, "single", "swarm"])
+def test_census_swarm_heading_ends_stock_exemption(tmp_path, eol, later_older_publication):
+    import research_census as census
+
+    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
+    header = header.replace("updated: 2026-11-05", "updated: 2026-11-09")
+    body = (
+        "# Research\n<!-- research-swarm/v2 run abc123 -->\n"
+        "## Research swarm — 2026-11-10\nIncomplete research.\n<!-- /research-swarm/v2 -->\n"
+    )
+    if later_older_publication == "single":
+        body += (
+            "Stage-2 call, 2026-11-05: explore · endpoint glm-coding-plan\n"
+            "## Runner exploration — 2026-11-05\nAccepted research.\n"
+        )
+    elif later_older_publication == "swarm":
+        body += (
+            "<!-- research-swarm/v2 run def456 -->\n"
+            "## Research swarm — 2026-11-05\nEarlier research.\n<!-- /research-swarm/v2 -->\n"
+        )
+    path = tmp_path / "research.md"
+    path.write_bytes((header + body).replace("\n", eol).encode())
+    raw = census.census_findings([path], tmp_path)
+    assert any("provenance: expected" in finding for finding in raw)
+    assert census.census_findings([path], tmp_path, apply_adoption=True) == raw, (
+        "any post-adoption swarm heading must end the stock exemption, even before an older publication"
+    )
+    if later_older_publication is None:
+        assert any("missing publication program/date" in finding for finding in raw)
+    # Examples and pre-adoption publications must still permit the stock exemption.
+    for stock_body in (
+        body.replace("2026-11-10", "2026-11-09"),
+        "```markdown\n" + body + "```\n",
+        "".join("> " + line for line in body.splitlines(keepends=True)),
+        "## Research swarm — 2026-11-10\nA heading without a published envelope.\n",
+    ):
+        path.write_bytes((header + stock_body).replace("\n", eol).encode())
+        assert census.census_findings([path], tmp_path, apply_adoption=True) == []
+
+
+@pytest.mark.parametrize("apply_adoption", [False, True])
+@pytest.mark.parametrize("version", ["2026-11-09", "2026-11-10"])
+def test_census_reports_unquoted_producer_date_and_continues(tmp_path, apply_adoption, version):
+    import research_census as census
+
+    path = tmp_path / "research.md"
+    header = valid_research_header().replace('version: "2026-11-05"', f"version: {version}")
+    header = header.replace("updated: 2026-11-05", "updated: 2026-11-09")
+    body = (
+        "# Research\nStage-2 call, 2026-11-09: explore · endpoint glm-coding-plan\n"
+        "## Runner exploration — 2026-11-09\nAccepted research.\n"
+    )
+    path.write_text(header + body)
+    later = tmp_path / "later.md"
+    later.write_text("# Missing frontmatter\n")
+    try:
+        findings = census.census_findings([path, later], tmp_path, apply_adoption=apply_adoption)
+    except TypeError as error:
+        pytest.fail(f"An unquoted producer date must produce diagnostics and allow the scan to continue: {error}")
+    assert "later.md: unreadable header (no frontmatter)" in findings
+    producer_findings = [finding for finding in findings if finding.startswith("research.md:")]
+    if apply_adoption and version == "2026-11-09":
+        assert producer_findings == [], "a pre-adoption invalid producer date still belongs to stock"
+    else:
+        assert "research.md: produced_by.version: expected one publication date" in producer_findings
+        assert "research.md: produced_by: missing publication program/date" in producer_findings
+
+
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
 @pytest.mark.parametrize("route", ["single", "swarm"])
 def test_census_reads_real_line_endings(tmp_path, monkeypatch, eol, route):
     folder = tmp_path / "demo"

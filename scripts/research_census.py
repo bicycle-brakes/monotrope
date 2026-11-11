@@ -20,21 +20,29 @@ PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
 # updated is the current-file edit stamp; the adoption day itself is measured.
 ADOPTION_DAY = date(2026, 11, 10)
 PENDING = {"status": "pending", "approved_by": None, "approved_at": None}
+SINGLE_PUBLICATION = re.compile(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S")
+SWARM_PUBLICATION = re.compile(
+    r"(?ms)^<!-- research-swarm/v2 run [0-9a-f]+ -->\r?\n.+?^<!-- /research-swarm/v2 -->[ \t]*\r?$"
+)
+SWARM_DAY = re.compile(r"(?m)^## Research swarm — (\d{4}-\d{2}-\d{2})[ \t]*\r?$")
+
+
+def publication_days(body: str) -> list[str]:
+    """Keep dates from every visible publication, irrespective of their document order."""
+    visible = stage2.research_visible_text(body)
+    days = [match.group(1) for match in SINGLE_PUBLICATION.finditer(visible)]
+    for swarm in SWARM_PUBLICATION.finditer(visible):
+        days.extend(SWARM_DAY.findall(swarm.group()))
+    return days
 
 
 def publication_evidence(body: str) -> tuple[str | None, str | None]:
     """Return the latest visible runner publication's program and date, not quoted examples."""
     visible = stage2.research_visible_text(body)
-    singles = list(re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible))
-    swarms = list(
-        re.finditer(
-            r"(?ms)^<!-- research-swarm/v2 run [0-9a-f]+ -->\r?\n.+?^<!-- /research-swarm/v2 -->[ \t]*\r?$",
-            visible,
-        )
-    )
+    singles = list(SINGLE_PUBLICATION.finditer(visible))
+    swarms = list(SWARM_PUBLICATION.finditer(visible))
     if swarms and (not singles or swarms[-1].start() > singles[-1].start()):
-        # The exact swarm publication date is already retained in its producer header.
-        return "stage2-research-swarm", None
+        return "stage2-research-swarm", max(SWARM_DAY.findall(swarms[-1].group()), default=None)
     if not singles:
         return None, None
     answer = singles[-1]
@@ -105,6 +113,7 @@ def metadata_problems(
     if program and not any(
         isinstance(record, Mapping)
         and record.get("name") == program
+        and isinstance(record.get("version"), str)
         and is_day(record.get("version"))
         and (not publication_day or record["version"] >= publication_day)
         for record in records
@@ -181,6 +190,7 @@ def census_findings(paths: Iterable[Path], root: Path, *, apply_adoption: bool =
         if apply_adoption and len(updated_fields) == 1 and is_day(updated) and str(updated) < ADOPTION_DAY.isoformat():
             records = producer if isinstance(producer, list) else [producer]
             known_days = [header.get("date"), header.get("last_reviewed"), publication_day]
+            known_days.extend(publication_days(body))
             known_days.extend(record.get("version") for record in records if isinstance(record, Mapping))
             if not any(is_day(day) and str(day) >= ADOPTION_DAY.isoformat() for day in known_days):
                 del affected[first_finding:]
