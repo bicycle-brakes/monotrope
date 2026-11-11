@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-10
+updated: 2026-11-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1345,9 +1345,13 @@ repository presents, not what else the disk holds.
 
 `python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write
 `spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
-guards are `implement`'s: the preflight (a `research.md` with its bead, a
-`decisions.md`), the refusal of pre-existing changes outside the change's
-`findings.md`, the declaration and the leak check before each attempt's call,
+guards are `implement`'s: the preflight (a `research.md` with its bead), the
+refusal of pre-existing changes outside the change's `findings.md`, plus one
+of the draft's own, the early statement refusal: before any attempt the
+runner reads the change's `decisions.md` through the question-context gate's
+statement reader and refuses — naming the file, the question and the remedy,
+to complete the interview — an unreadable file or an answered record without
+a readable decision statement; `implement` has no such check. Then the declaration and the leak check before each attempt's call,
 the credential scans, and exactly one commit when an attempt passes. A draft's
 Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change

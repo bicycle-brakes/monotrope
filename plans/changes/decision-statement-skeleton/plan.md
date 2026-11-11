@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-nr6h
@@ -94,9 +94,14 @@ make verify
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-11
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex repair calls ended with exit 1 on 2026-11-11.
+
 ## Time used
 
 2026-11-10 13:24:52–14:18:43 UTC, 3231 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 14:19:22–15:45:09 UTC, 5146 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 15:45:41–16:43:48 UTC, 3487 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-10 21:23:40–22:22:31 UTC, 3531 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-11 08:04:38–08:31:57 UTC, 1640 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

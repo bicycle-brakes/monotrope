@@ -4281,10 +4281,10 @@ def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
     assert world.run("draft") == 2
     error = assert_no_dispatch(world, capsys)
     assert "plans/changes/demo/decisions.md" in error and "cannot be read" in error, error
+    assert "complete the interview" in error, error
     assert path.read_bytes() == raw, "the runner rewrote the unreadable file"
     assert git(world.root, "rev-parse", "HEAD") == head
-    # The early check refuses a file it cannot read, with the remedy; the draft route reaches the
-    # same refusal through the preflight. A missing file refuses the same way.
+    # The draft route and the helper give one refusal, with the remedy. A missing file refuses the same way.
     with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview") as refused:
         stage2.refuse_unreadable_statements(world.root, "demo")
     assert "plans/changes/demo/decisions.md" in str(refused.value)

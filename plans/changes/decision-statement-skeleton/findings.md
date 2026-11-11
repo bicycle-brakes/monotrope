@@ -279,3 +279,10 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/decision-statement-skeleton/stage2/attempts/decision-statement-skeleton/attempt-1-20261111T060431622252Z-4787af23.md
 > ````
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex repair calls ended with exit 1 on 2026-11-11 · leak check clean over 997 files, 3918 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (stage-1): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-11: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged

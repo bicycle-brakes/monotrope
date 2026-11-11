@@ -9058,7 +9058,9 @@ def draft(root: Path, change: str) -> None:
     each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
     its own missing ADR answer, which only the maintainer can record.
     """
-    ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
+    # `decisions.md` is read by the early statement check below, which refuses an unreadable file
+    # with the remedy; the preflight does not read it a second time with a bare message.
+    ctx = preflight(root, change, CODEX, bead_file="research.md")
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
     refuse_unreadable_statements(root, change)
