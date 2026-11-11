@@ -192,6 +192,22 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash failed 
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash failed its post-run checks on 2026-11-10; the earlier Sonnet call ended with exit 1 before it changed code.
 
+## Stop report — 2026-11-11
+
+The appetite is four hours, a stop and not an estimate. The runner's time
+ledger below records about 12.5 hours of implement and repair attempts by
+2026-11-11 03:32 UTC, about three times the appetite; the orchestrator
+reported the overrun in the conversation on 2026-11-10 and did not record it
+here (review round 3, row L3-1). The maintainer decided on 2026-11-10 to go on
+because the speed-up of `make verify` was made first priority, and on
+2026-11-11 approved this record as the third hand intervention of the change.
+
+What stands: two slots with capacity read from one documented home, a slot
+holder record per slot, nested admission, accepted after two repair rounds
+(`bb1c93ca`) with a green full check. What evidence is missing: the two
+measured trials (one slot against two) and the boundary of 2026-11-11 (spec,
+"Boundary"), which the next repair implements.
+
 ## Time used
 
 2026-11-10 09:26:23–10:34:38 UTC, 4095 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
