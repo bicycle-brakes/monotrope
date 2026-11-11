@@ -1218,6 +1218,29 @@ def test_topic_report_refuses_ambiguous_or_malformed_objects(sworld: SwarmWorld,
     assert "invalid-report" in sworld.research.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("wrapper", ['Draft: "\n{objects}', '{objects}\nUnfinished: "', "Draft: {{\n{objects}"])
+def test_topic_report_refuses_unclosed_wrapping(wrapper: str) -> None:
+    # Planted fault: an open prose quote/brace hides competing objects from extraction.
+    body = repository_report(2)
+    answer = wrapper.format(objects=f"{fenced(body)}\n{fenced(body)}")
+    try:
+        stage2_research_run.topic_report_payload(answer)
+    except stage2_research_run.ResearchReportError:
+        return
+    pytest.fail("unclosed wrapping around competing reports must be refused, never select a fenced report")
+
+
+@pytest.mark.parametrize("field", ["started_at", "ended_at"])
+def test_topic_correction_malformed_stored_time_has_no_allowance(sworld: SwarmWorld, field: str) -> None:
+    # Planted fault: a malformed persisted timestamp resets a resumed seat's allowance.
+    run = stage2_research_run.Run(sworld.root, "demo", stage2, "feature", selection_for())
+    run.limits = stage2_research_limits.load(sworld.root)
+    record = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:04:00Z"}
+    assert run.remaining_topic_allowance(record) == 360.0
+    record[field] = "malformed-time"
+    assert run.remaining_topic_allowance(record) == 0.0, "unknown elapsed time must grant no correction allowance"
+
+
 def test_topic_report_gets_one_same_seat_correction(sworld: SwarmWorld) -> None:
     # Criterion 5. Planted fault: the rejected answer or its reason is missing from the correction, a
     # different model answers, a valid or process-failed seat is retried, or a second correction starts.

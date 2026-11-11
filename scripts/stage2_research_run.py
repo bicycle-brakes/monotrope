@@ -165,6 +165,7 @@ def _object_spans(text: str) -> list[str]:
     """Every complete brace span of the text, in order: a `{` opening from depth zero to its closing `}`.
 
     Quote state is tracked, so a brace or an escaped quote inside a JSON string never breaks the count.
+    An unfinished quote or brace makes the answer ambiguous and refuses extraction.
     """
     spans: list[str] = []
     depth = 0
@@ -190,6 +191,8 @@ def _object_spans(text: str) -> list[str]:
             depth -= 1
             if depth == 0:
                 spans.append(text[start : index + 1])
+    if in_string or depth:
+        raise ResearchReportError("the answer holds an unclosed quote or object; none is selected")
     return spans
 
 
@@ -1014,7 +1017,8 @@ class Run:
         try:
             spent = datetime.strptime(ended, shape) - datetime.strptime(started, shape)
         except ValueError:
-            return 0.0
+            # Unknown elapsed time cannot grant a resumed correction a fresh allowance.
+            return self.limits.role_seconds("topics")
         return max(0.0, spent.total_seconds())
 
     def remaining_topic_allowance(self, first: dict) -> float:

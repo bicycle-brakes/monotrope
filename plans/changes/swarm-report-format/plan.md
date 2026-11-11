@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-09
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
@@ -188,8 +188,15 @@ maintainer answer, class or held path was changed by this draft.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-10 13:20:33–15:44:54 UTC, 8660 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 15:45:23–17:15:25 UTC, 5402 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-10 17:15:44–19:03:38 UTC, 6473 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-11 23:28:06–23:36:10 UTC, 485 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-11 23:36:28–23:45:44 UTC, 556 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-11 23:46:03–23:53:12 UTC, 429 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
@@ -523,3 +523,86 @@ Address notice: opencode-go/qwen3.7-plus: wire api "anthropic-messages" has no r
 Address notice: opencode-go/qwen3.8-flash: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
 
 Address notice: opencode-go/qwen3.8-max: wire api "anthropic-messages" has no recorded base; the record declares openai-completions; running on with the definition's own base
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model longcat-2.5-free · leak check clean over 984 files, 3957 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3966 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_run.py` +5 -1
+> - `tests/test_stage2_swarm.py` +23 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-1-20261111T232754714541Z-9c52523c.md
+> ```
+
+Stage-2 call, 2026-11-12: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 984 files, 3968 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-2-20261111T232754714541Z-9c52523c.md
+> ```
+
+Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 984 files, 3968 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-3-20261111T232754714541Z-9c52523c.md
+> ```
