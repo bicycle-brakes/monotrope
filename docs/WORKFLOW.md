@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-10
+updated: 2026-11-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1587,9 +1587,12 @@ positive whole number without a leading zero) for a finding that repair round
 N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
 naming the row and its place, while a taken or fixed row in the loop record
 or a phase-6 table carries any other value; the orchestrator corrects the cell
-and runs the verb again. Ordinary release checks the record before writing
-the released block; already released history is never re-checked, including
-legacy rows released before this check existed. `release-loop --restart` and
+and runs the verb again. These checks read the loop record and the newest
+phase-6 table. Repair additionally checks every selected taken row in every
+released block and phase-6 table before any call or write, including legacy
+released rows selected for repair. Ordinary release checks the record before
+writing the released block; released and superseded history that repair does
+not select needs no backfill. `release-loop --restart` and
 `release-loop --stage-failed` do not check Origin. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's

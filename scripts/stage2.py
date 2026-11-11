@@ -3080,38 +3080,29 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
 def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
     """Every released and phase-6 row with its place and block label, in document order.
 
-    The walk reads the same sections under the same conditions as `findings_rows`, so every row of
-    its two lists is found here again, and adds where the row sits: the block's heading with its
-    occurrence among blocks of the same kind, so repeated `## Phase 6` and released headings stay
-    distinguishable (bead coding-harness-3h96). The cells are carried exactly as `findings_rows`
-    returns them; keep the two walks in step when either changes.
+    Each section is parsed by `findings_rows` itself, so row selection cannot drift between
+    repair targeting and location diagnostics (bead coding-harness-3h96). The block label adds
+    the heading and its occurrence among blocks of the same kind, preserving document order
+    and distinguishing repeated headings without changing the shared parser.
     """
     blocks: list[tuple[str, str, list[str]]] = []
-    kind = ""
-    heading = ""
     seen: dict[str, int] = {}
-    for line in text.splitlines():
-        if line.startswith("## "):
-            kind = ""
-            if line.startswith(RELEASE_HEADING):
-                kind = "released"
-            elif line.startswith("## Phase 6"):
-                kind = "phase-6"
-            if kind:
-                heading = line.strip()
-                seen[kind] = seen.get(kind, 0) + 1
+    lines = text.splitlines(keepends=True)
+    starts = [index for index, line in enumerate(lines) if line.startswith("## ")]
+    if not starts:
+        return blocks
+    for start, end in zip(starts, starts[1:] + [len(lines)], strict=True):
+        heading = lines[start].strip()
+        if heading.startswith(RELEASE_HEADING):
+            kind = "released"
+        elif heading.startswith("## Phase 6"):
+            kind = "phase-6"
+        else:
             continue
-        if kind == "released" and KEPT_FROM.match(line):
-            kind = ""  # what follows is the reviewers' words, carried as they came, not rows
-            continue
-        if not kind:
-            continue
-        cells = split_row(line)
-        if not cells or _furniture(cells):
-            continue
-        wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
-        if (kind == "released" and wide) or (kind == "phase-6" and len(cells) == len(ROW_COLUMNS)):
-            blocks.append((kind, f"`{heading}`, block {seen[kind]}", cells))
+        seen[kind] = seen.get(kind, 0) + 1
+        released, phase6 = findings_rows("".join(lines[start:end]))
+        rows = released if kind == "released" else phase6
+        blocks.extend((kind, f"`{heading}`, block {seen[kind]}", cells) for cells in rows)
     return blocks
 
 

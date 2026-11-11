@@ -9540,6 +9540,45 @@ def test_repair_rejects_invalid_origins_in_selected_history(
             assert world.calls() == [], (shape, origin)
 
 
+@pytest.mark.parametrize("selection_changes", [False, True])
+def test_row_blocks_uses_findings_rows_selection(monkeypatch: pytest.MonkeyPatch, selection_changes: bool) -> None:
+    """Block locations follow the row parser, including future changes to its selection rules."""
+    released = released_cells("L1-1", "taken — fix", "no", "released finding")
+    phase = phase6_cells("F-1", "taken — fix", "phase finding")
+    excluded = phase6_cells("F-excluded", "taken — fix", "selection changes exclude this row")
+    text = "\n\n".join(
+        [
+            released_block([released]),
+            "Kept from the loop record:",
+            render_row(released_cells("L1-2", "taken — fix", "no", "reviewer quotation")),
+            phase6_block([phase, excluded]),
+            "## Unrelated section",
+            render_row(phase),
+            phase6_block([phase.copy()]),
+            released_block([released.copy()]),
+        ]
+    )
+    parser = stage2.findings_rows
+    if selection_changes:
+        # Simulate a parser evolution: the locator must inherit it instead of duplicating its rules.
+        def changed_parser(source: str) -> tuple[list[list[str]], list[list[str]]]:
+            released_rows, phase_rows = parser(source)
+            return released_rows, [row for row in phase_rows if row[0] != "F-excluded"]
+
+        monkeypatch.setattr(stage2, "findings_rows", changed_parser)
+    expected_released, expected_phase = stage2.findings_rows(text)
+    located = stage2.row_blocks(text)
+    assert [row for place, _, row in located if place == "released"] == expected_released
+    assert [row for place, _, row in located if place == "phase-6"] == expected_phase, (
+        "every selected findings row must have a block under the same parser rules"
+    )
+    assert [label for place, label, _ in located if place == "released"] == [
+        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 1",
+        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 2",
+    ]
+    assert located[-2][1] == "`## Phase 6 — Codex, 2026-10-12`, block 2"
+
+
 @pytest.mark.parametrize("place", ["released", "phase-6"])
 def test_target_origin_refusal_lists_identical_rows_in_document_order(place: str) -> None:
     """Identical selected cells keep their source occurrences when the batch is reordered."""
