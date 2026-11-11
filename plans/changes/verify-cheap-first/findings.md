@@ -255,3 +255,130 @@ Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 1012 files, 3921 commits, 12 rules.
 
 Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1012 files, 3921 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex calls ended with exit 1 on 2026-11-11 · leak check clean over 1012 files, 3923 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `Makefile` +1 -1
+> - `README.md` +1 -1
+> - `docs/WORKFLOW.md` +1 -1
+> - `docs/testing.md` +1 -1
+> - `prompts/05-verify.md` +1 -1
+> - `scripts/ci_gates.py` +2 -19
+> - `scripts/stage2.py` +1 -1
+> - `tests/test_verify_cheap_first.py` +7 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-cheap-first/plan.md, plans/changes/verify-cheap-first/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `Makefile` is an input kind the targeted selector does not cover
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ '/Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-first/.venv/bin/python3' -m pytest tests/ -q -n auto
+> [… 78 lines of this gate left out …]
+> ..................                                                       [100%]
+> =================================== FAILURES ===================================
+> ___________ test_verification_admission_is_outside_execution_timeout ___________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-first/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1950/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1950/popen-gw1/test_verification_admission_is0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10be40860>
+>
+>     def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
+>         # step limit — a short passing check times out after queueing — or the limit dropped, so
+>         # a hung executing check escapes its group cleanup.
+>         monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+>         ready = world.state / "holder-ready"
+>         holder = _real_holder(ready)
+>         try:
+>             _holder_acquired(ready)
+>             problems: list[str] = []
+>     
+>             def attempt() -> None:
+>                 problems.extend(stage2.verify_attempt(world.root, world.plan))
+>     
+>             world.script(make=[{"stdout": "green", "sleep": 1.5}])
+>             queued = threading.Thread(target=attempt)
+>             queued.start()
+>             time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+>             holder.terminate()
+>             holder.wait(timeout=30)
+>             queued.join(timeout=90)
+> >           assert problems == [], f"the admission wait consumed the step limit: {problems}"
+> E           AssertionError: the admission wait consumed the step limit: ["`make verify` did not finish: make was stopped by the runner's step limit after 0.0 minutes"]
+> E           assert ['`make verif... 0.0 minutes'] == []
+> E             
+> E             Left contains one more item: "`make verify` did not finish: make was stopped by the runner's step limit after 0.0 minutes"
+> E             Use -v to get more diff
+>
+> tests/test_stage2.py:2222: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] waiting for admission: holder pid 74903 (/Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-first/.venv/bin/python3 -c import os, pathlib, time; pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); time.sleep(30.0), started 2026-11-11T10:44:16)
+> [verify-lock] admitted after 1s
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=45837) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-first/tests/test_stage2.py:21277: DeprecationWarning: This process (pid=45838) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout
+> 1 failed, 5400 passed, 17 skipped, 5 warnings in 1311.96s (0:21:51)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 37015 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-first/stage2/attempts/verify-cheap-first/attempt-1-20261111T093905554612Z-478a9b6c.md
+> ````
