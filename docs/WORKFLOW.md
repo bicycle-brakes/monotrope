@@ -1343,17 +1343,20 @@ repository presents, not what else the disk holds.
 
 ### The draft (phases 2, 2b and 3)
 
-`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write
-`spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
-guards are `implement`'s: the preflight (a `research.md` with its bead), the
-refusal of pre-existing changes outside the change's `findings.md`, plus one
-of the draft's own, the early statement refusal: before any attempt the
-runner reads the change's `decisions.md` through the question-context gate's
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
+[`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write `spec.md`, `design.md`
+and `plan.md` in one call (ADR 0016). The
+guards start with `implement`'s preflight: a `research.md` with its bead and
+an endpoint declaration check inside that preflight. Next comes the refusal
+of pre-existing changes outside the change's `findings.md`, then the draft's
+own early statement refusal: before any attempt the runner reads the change's
+`decisions.md` through the question-context gate's
 statement reader and refuses — naming the file, the question and the remedy,
 to complete the interview — an unreadable file or an answered record without
-a readable decision statement; `implement` has no such check. Then the declaration and the leak check before each attempt's call,
-the credential scans, and exactly one commit when an attempt passes. A draft's
-Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
+a readable decision statement; `implement` has no such check. The leak check
+runs before each attempt's call, with credential scans and exactly one
+commit when an attempt passes. A draft's Codex call runs in the CLI's
+`workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.

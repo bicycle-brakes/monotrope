@@ -31,6 +31,11 @@ a recording day that is missing, ambiguous or impossible, a file that cannot
 be read — is not measured, never an exemption, and takes exit precedence over
 findings. The gate writes nothing.
 
+The Stage-2 runner is a second reader of the statement diagnostics: its
+selected-change draft precheck uses `statement_problems` and includes those
+messages verbatim in its refusals. Runner tests assert their reason text;
+when changing a message here, update those assertions as well.
+
 Usage:
     python3 scripts/check_question_context.py                # this repository
     python3 scripts/check_question_context.py --root DIR     # another tree (tests)

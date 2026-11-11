@@ -8923,13 +8923,13 @@ def refuse_unreadable_statements(root: Path, change: str) -> None:
     business, which still runs later. A read failure refuses too: the interview owns its records,
     and the runner neither repairs nor replaces them.
     """
-    path = root / "plans" / "changes" / change / "decisions.md"
+    path = folder_of(root, change) / "decisions.md"
     rel = path.relative_to(root).as_posix()
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(
-            f"{rel} cannot be read ({error}); complete the interview first — "
+            f"{rel} cannot be read ({getattr(error, 'strerror', None) or error}); complete the interview first — "
             "the runner neither repairs nor replaces decisions.md."
         ) from error
     problems = check_question_context.statement_problems(text, rel)

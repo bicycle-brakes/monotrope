@@ -4295,6 +4295,45 @@ def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
         stage2.refuse_unreadable_statements(world.root, "demo")
 
 
+@pytest.mark.parametrize("change", ["", ".", "..", "../demo", "demo/../demo"])
+def test_statement_precheck_validates_its_own_change_name(world: World, change: str) -> None:
+    draft_world(world)
+    try:
+        stage2.refuse_unreadable_statements(world.root, change)
+    except stage2.Refused as error:
+        assert "single folder name" in str(error), "the helper must reject the name before reading any file"
+    else:
+        pytest.fail("the statement helper accepted an invalid change name")
+
+
+@pytest.mark.parametrize("read_failure", ["permission-denied", "missing"])
+def test_statement_read_failure_keeps_machine_paths_out(
+    world: World, monkeypatch: pytest.MonkeyPatch, read_failure: str
+) -> None:
+    draft_world(world)
+    path = world.root / "plans/changes/demo/decisions.md"
+    if read_failure == "missing":
+        path.unlink()
+        reason = "No such file or directory"
+    else:
+        real_read_text = Path.read_text
+        reason = "Permission denied"
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError(13, reason, str(path))
+            return real_read_text(candidate, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read_text)
+    with pytest.raises(stage2.Refused) as refused:
+        stage2.refuse_unreadable_statements(world.root, "demo")
+    message = str(refused.value)
+    assert str(world.root) not in message, "a runner refusal must not expose a machine-local path"
+    assert "plans/changes/demo/decisions.md" in message
+    assert reason in message, "the refusal must preserve the read-failure reason"
+    assert "complete the interview" in message
+
+
 def test_draft_statement_precheck_accepts_supported_records(world: World) -> None:
     # Criterion 5 (bead coding-harness-nr6h). Planted fault: the early check rejects a supported
     # wrapped statement or closing remark, or demands statements from open, skipped or fenced
@@ -16972,8 +17011,10 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
         (fragment.replace(effort_reference(verb), f"`{stage2.CODEX_EFFORTS[verb]}`"), "an independent literal stands"),
     ):
         doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
-        assert fragment in doc_text, (doc, fragment)
-        assert sol_effort_problems(*sol_texts(doc, doc_text.replace(fragment, planted, 1))), (doc, why)
+        pattern = r"\s+".join(re.escape(word) for word in fragment.split())
+        assert re.search(pattern, doc_text), (doc, fragment)
+        changed = re.sub(pattern, lambda _, replacement=planted: replacement, doc_text, count=1)
+        assert sol_effort_problems(*sol_texts(doc, changed)), (doc, why)
 
 
 def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:

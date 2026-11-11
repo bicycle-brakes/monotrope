@@ -308,3 +308,134 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claud
 > - L3-2: tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/decision-statement-skeleton/stage2/attempts/decision-statement-skeleton/attempt-1-20261111T093846634466Z-80f0cb2e.md
 > ```
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 997 files, 3927 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +12 -9
+> - `scripts/check_question_context.py` +5 -0
+> - `scripts/stage2.py` +2 -2
+> - `tests/test_check_question_context.py` +63 -55
+> - `tests/test_stage2.py` +39 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 65 lines of this gate left out …]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ..........F............................................................. [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ..........                                                               [100%]
+> =================================== FAILURES ===================================
+> __ test_sol_instructions_reference_the_central_effort_for_each_verb[place-9] ___
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/decision-statement-skeleton/.venv/bin/python3
+>
+> doc = 'workflow'
+> fragment = '(`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write'
+> verb = 'draft'
+>
+>     @pytest.mark.parametrize(
+>         ("doc", "fragment", "verb"),
+>         SOL_EFFORT_PLACES,
+>         ids=[f"place-{n}" for n in range(1, len(SOL_EFFORT_PLACES) + 1)],
+>     )
+>     def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, fragment: str, verb: str) -> None:
+>         # Criterion 4. Planted faults: the link dropped, another verb's entry named, or an independent value stands.
+>         assert sol_effort_problems(WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()) == []
+>         other = next(key for key in stage2.CODEX_EFFORTS if key != verb)
+>         for planted, why in (
+>             (fragment.replace(effort_reference(verb), f'`CODEX_EFFORTS["{verb}"]`'), "the link is dropped"),
+>             (fragment.replace(f'"{verb}"', f'"{other}"'), "another verb's entry is named"),
+>             (fragment.replace(effort_reference(verb), f"`{stage2.CODEX_EFFORTS[verb]}`"), "an independent literal stands"),
+>         ):
+>             doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
+> >           assert fragment in doc_text, (doc, fragment)
+> E           AssertionError: ('workflow', '(`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write')
+> E           assert '(`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write' in '---\ntitle: "Workflow and model routing — phases and stages"\ncategory: governance\nstatus: current\ncreated: 2026-09... files despite good naming, add an LSP MCP\nserver — and only when that is not enough, think about a semantic index.\n'
+>
+> tests/test_stage2.py:17014: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=33549) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/decision-statement-skeleton/tests/test_stage2.py:21018: DeprecationWarning: This process (pid=33550) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_sol_instructions_reference_the_central_effort_for_each_verb[place-9]
+> 1 failed, 5320 passed, 17 skipped, 5 warnings in 1271.62s (0:21:11)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 36493 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:67:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:99:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:99:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:99:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:100:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:101:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:102:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/decision-statement-skeleton/stage2/attempts/decision-statement-skeleton/attempt-1-20261111T112347875566Z-9e7ea363.md
+> ````
+
+Stage-2 call, 2026-11-11: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 997 files, 3928 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-11: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged

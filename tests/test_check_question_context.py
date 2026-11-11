@@ -653,75 +653,83 @@ def test_bare_context_over_indented_prose_names_the_block_fix(tmp_path: Path) ->
 INTERVIEW = REPO / "prompts" / "01a-interview.md"
 
 
-def _paragraph(text: str, start: str) -> str:
-    """The paragraph of `text` that begins with `start`, or an empty string."""
-    for block in text.split("\n\n"):
-        if block.lstrip().startswith(start):
-            return " ".join(block.split())
-    return ""
+def _rule_text(text: str) -> str:
+    """Read duties across Markdown emphasis, blank lines and hard wraps."""
+    return " ".join(text.replace("**", "").replace("`", "").split())
 
 
-def _asks_the_accepted_downside(text: str) -> bool:
-    rule = _paragraph(text, "**Every question asks which downside the maintainer accepts.**")
-    return (
-        "asks the maintainer to accept one with the choice" in rule
-        and "never a later step" in rule
-        and "never the agent's to supply" in rule
-    )
+def _downside_duties(text: str) -> dict[str, bool]:
+    flat = _rule_text(text)
+    return {
+        "ask the accepted downside with the choice": "asks the maintainer to accept one with the choice" in flat,
+        "ask now, rather than later": "never a later step" in flat,
+        "the agent must not supply the downside": "never the agent's to supply" in flat,
+    }
 
 
-def _records_the_statement_with_the_answer(text: str) -> bool:
-    rule = _paragraph(text, "**Write the record at once, statement included.**")
-    downside = _paragraph(text, "**Every question asks which downside the maintainer accepts.**")
-    parts = (
-        "`In the context of`",
-        "`facing`",
-        "`we decided`",
-        "`to achieve`",
-        "`accepting`",
-        "the date of the day you record",
-    )
-    template = "In the context of <situation>, facing <constraint>, we decided <option>,\nto achieve <goal>, accepting <consequence>. — "
-    return (
-        "before the next question" in rule
-        and "never left for drafting" in rule
-        and all(part in rule for part in parts)
-        and template in text
-        and "you never invent it" in downside
-        and "the record stays `open`" in downside
-    )
+def _recording_duties(text: str) -> dict[str, bool]:
+    flat = _rule_text(text)
+    return {
+        "record before the next question": "before the next question" in flat,
+        "do not defer recording to drafting": "never left for drafting" in flat,
+        "keep all statement clauses in the recording rule": "In the context of, facing, we decided, to achieve, accepting,"
+        in flat,
+        "date the statement on the recording day": "the date of the day you record" in flat,
+        "keep the complete dated statement template": bool(
+            re.search(
+                r"In the context of <situation>, facing <constraint>, we decided <option>, "
+                r"to achieve <goal>, accepting <consequence>\. — \d{4}-\d{2}-\d{2}",
+                flat,
+            )
+        ),
+        "never invent an accepted downside": "you never invent it" in flat,
+        "leave an unsettled downside open": "the record stays open" in flat,
+    }
 
 
 def _swap(text: str, old: str, new: str) -> str:
-    """`text` with the one occurrence of `old` replaced, whatever line breaks wrap it."""
+    """Plant a missing duty across arbitrary whitespace; the caller diagnoses it."""
     pattern = r"\s+".join(re.escape(word) for word in old.split())
-    changed, count = re.subn(pattern, lambda _: new, text)
-    assert count == 1, f"{old!r} occurs {count} times"
-    return changed
+    return re.sub(pattern, lambda _: new, text)
+
+
+def _assert_duties(duties: dict[str, bool]) -> None:
+    missing = [duty for duty, present in duties.items() if not present]
+    assert not missing, "Interview prompt lost duties: " + "; ".join(missing)
 
 
 def test_interview_asks_the_accepted_downside() -> None:
-    """Counterexample: without the explicit downside request the reading turns false."""
+    """Counterexamples remove duties; rewrapping and heading edits preserve them."""
     text = INTERVIEW.read_text(encoding="utf-8")
-    assert _asks_the_accepted_downside(text)
-    start = text.index("**Every question asks which downside the maintainer accepts.**")
-    removed = text[:start] + text[text.index("**Every question brings its context", start) :]
-    assert not _asks_the_accepted_downside(removed)
-    assert not _asks_the_accepted_downside(_swap(text, "never a later step", "best asked later"))
-    assert not _asks_the_accepted_downside(_swap(text, "never the agent's to supply", "the agent's to supply"))
+    _assert_duties(_downside_duties(text))
+    _assert_duties(_downside_duties("\n\n".join(text.split())))
+    _assert_duties(
+        _downside_duties(text.replace("Every question asks which downside", "Each question asks what downside"))
+    )
+    for phrase, duty in (
+        ("asks the maintainer to accept one with the choice", "ask the accepted downside with the choice"),
+        ("never a later step", "ask now, rather than later"),
+        ("never the agent's to supply", "the agent must not supply the downside"),
+    ):
+        assert not _downside_duties(_swap(text, phrase, "[removed]"))[duty], f"Counterexample must remove duty: {duty}"
 
 
 def test_interview_records_the_statement_with_the_answer() -> None:
-    """Counterexamples: deferred recording, an invented downside, a lost clause or a lost date."""
+    """Counterexamples name the missing duty, independent of Markdown wrapping."""
     text = INTERVIEW.read_text(encoding="utf-8")
-    assert _records_the_statement_with_the_answer(text)
-    assert not _records_the_statement_with_the_answer(_swap(text, "before the next question", "before drafting"))
-    assert not _records_the_statement_with_the_answer(_swap(text, "you never invent it", "you may propose one"))
-    assert not _records_the_statement_with_the_answer(_swap(text, "`accepting`, ", ""))
-    assert not _records_the_statement_with_the_answer(
-        _swap(text, "accepting <consequence>. — ", "accepting <consequence>.")
-    )
-    assert not _records_the_statement_with_the_answer(_swap(text, "the date of the day you record", "a date"))
+    _assert_duties(_recording_duties(text))
+    _assert_duties(_recording_duties("\n\n".join(text.split())))
+    _assert_duties(_recording_duties(text.replace("Write the record at once", "Record the answer immediately")))
+    for phrase, duty in (
+        ("before the next question", "record before the next question"),
+        ("never left for drafting", "do not defer recording to drafting"),
+        ("you never invent it", "never invent an accepted downside"),
+        ("the record stays `open`", "leave an unsettled downside open"),
+        ("`accepting`,", "keep all statement clauses in the recording rule"),
+        ("accepting <consequence>. —", "keep the complete dated statement template"),
+        ("the date of the day you record", "date the statement on the recording day"),
+    ):
+        assert not _recording_duties(_swap(text, phrase, "[removed]"))[duty], f"Counterexample must remove duty: {duty}"
 
 
 def test_later_phase_decisions_ask_the_accepted_downside() -> None:
