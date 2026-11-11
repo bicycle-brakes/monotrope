@@ -550,6 +550,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/targeted-check-more-verbs/decisions.md`](changes/targeted-check-more-verbs/decisions.md) | draft | none | 2026-11-11 | coding-harness-0swp |
 | [`changes/targeted-check-more-verbs/research.md`](changes/targeted-check-more-verbs/research.md) | draft | none | 2026-11-10 | coding-harness-0swp |
 | [`changes/time-records-data/decisions.md`](changes/time-records-data/decisions.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/findings.md`](changes/time-records-data/findings.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
