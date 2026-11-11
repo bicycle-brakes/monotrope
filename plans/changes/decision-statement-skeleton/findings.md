@@ -286,3 +286,5 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claud
 > - Attempt 1 (stage-1): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-11: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
+
+Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 997 files, 3920 commits, 12 rules.

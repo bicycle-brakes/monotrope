@@ -54,3 +54,25 @@ the statement from those parts, so that its form cannot be wrong. Whether
 that is worth a second representation of a record beside the Markdown the
 gates read today is for the spec to weigh against the plain way (the prompt
 asks, the runner refuses early); it is not decided here.
+
+## Q-2 · Whether the rule also holds for questions of the later phases
+
+asked: 2026-11-11
+answer: Include it now — the question form for decisions raised while writing spec, design or plan (`prompts/02-spec.md`) gets the same rule in this change.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the new rule "every question names the downside you accept" holds only in the interview or for every question to the maintainer.
+  Intention: review round 3 found (row L3-4) that the rule was written into the interview prompt only; questions that come up later follow a form of their own that ends at "What is lost" and never asks for the accepted downside, yet their answers become records in decisions.md, where the new check demands the complete statement.
+  Today: bead and spec name the interview only; the change is complete by them but leaves this second source of records without the rule.
+  Repository change: the held prompt file prompts/02-spec.md gets the rule, with a test; or the spec names the gap as a limit and a follow-up bead closes it.
+  Architecture change: none.
+
+In the context of questions raised while writing spec, design or plan,
+facing a question form that never asks for the accepted downside although
+its answers become records the new check reads, we decided that this form
+gets the same rule in this change, to achieve that no source of answered
+records lacks the accepted downside, accepting that the scope grows by a
+further held file and a test, that the change is already far past its
+appetite and that every further review round costs a full check
+— 2026-11-11

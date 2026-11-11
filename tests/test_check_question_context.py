@@ -722,3 +722,29 @@ def test_interview_records_the_statement_with_the_answer() -> None:
         _swap(text, "accepting <consequence>. — ", "accepting <consequence>.")
     )
     assert not _records_the_statement_with_the_answer(_swap(text, "the date of the day you record", "a date"))
+
+
+def test_later_phase_decisions_ask_the_accepted_downside() -> None:
+    """Loop row L3-4: a `[DECISION]` raised while writing spec, design or plan
+    follows the form of prompts/02-spec.md and ends as an answered record too,
+    so that form asks the accepted downside as the interview does.
+    Counterexamples: the form line or the rule sentence removed."""
+    spec_prompt = (REPO / "prompts" / "02-spec.md").read_text(encoding="utf-8")
+
+    def asks(text: str) -> bool:
+        flat = " ".join(text.split())
+        return (
+            "Downside you accept:" in text
+            and "asks which downside the maintainer accepts with the choice" in flat
+            and "you never invent it" in flat
+            and "`accepting` clause" in flat
+        )
+
+    assert asks(spec_prompt)
+    assert not asks(_swap(spec_prompt, "Downside you accept:", "Note:"))
+    assert not asks(
+        _swap(spec_prompt, "asks which downside the maintainer accepts with the choice", "may mention a downside")
+    )
+    # The workflow names this file as the form of a question to a person, so
+    # the later phases have no second form that could miss the rule.
+    assert "prompts/02-spec.md" in WORKFLOW.read_text(encoding="utf-8")
