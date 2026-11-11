@@ -231,8 +231,8 @@ def test_local_cost_order_preserves_selection_and_ties(tmp_path: Path, monkeypat
 
     The list is deliberately anti-alphabetical and puts a minutes gate first.
     Membership never moves: job, subset, placement and equivalents filter as
-    before; `gates()`, the CI placement and a still-readable version-2 list
-    keep declaration order.
+    before; `gates()` and the CI placement keep declaration order, and a
+    version-2 list is refused.
     """
     base = tmp_path / "order"
     base.mkdir()
@@ -292,27 +292,22 @@ def test_local_cost_order_preserves_selection_and_ties(tmp_path: Path, monkeypat
     assert [g["id"] for g in ci_gates.gates()] == [g["id"] for g in gate_file["gates"]]
     assert {g["id"]: g["cost"] for g in ci_gates.gates()} == {g["id"]: g["cost"] for g in gate_file["gates"]}
 
-    # A still-readable version-2 list keeps declaration order: no sorting
-    # without a declared schema. (The default job is verify, so the drift
-    # gates stay out of this selection.)
+    # A version-2 list without costs is refused, not read in declaration
+    # order: the cost order has no undeclared fallback.
     alt = copy.deepcopy(gate_file)
     alt["schema_version"] = 2
     for g in alt["gates"]:
         g.pop("cost", None)
     list_file.write_text(yaml.safe_dump(alt, sort_keys=False), encoding="utf-8")
-    assert ids(["--commands", "--placement", "lokal", "--tsv"]) == [
-        "zz-minutes-first",
-        "aa-seconds-a",
-        "bb-seconds-b",
-        "writer-seconds",
-    ]
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--commands", "--placement", "lokal", "--tsv"])
+    assert ci_gates.main() != 0, "a version-2 list was still read after the schema activation"
+    capsys.readouterr()
 
 
 def test_catalog_exposes_declared_costs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     """Criterion 10: the generated catalogue carries each gate's declared cost in its own column.
 
-    The schema-3 table gains the cost column between enforcement and floor;
-    cost-less records keep the committed bootstrap rendering. (The real
+    The table carries the cost column between enforcement and floor. (The real
     list's classification is checked by
     tests/test_ci.py::test_repository_gate_schema_is_v3.)
     """
@@ -349,17 +344,6 @@ def test_catalog_exposes_declared_costs(tmp_path: Path, monkeypatch: pytest.Monk
     assert zeilen[1] == "|---|---|---|---|---|---|---|---|---|"
     costen = {parts[0].strip(): parts[5].strip() for parts in (z.split("|")[1:-1] for z in zeilen[2:])}
     assert costen == {"suite": "minutes", "lint": "seconds"}, costen
-
-    # An explicit schema argument decides, whatever the records carry.
-    assert "cost" not in ci_gates.catalog_rows(records, schema=2)
-    assert "| cost |" in ci_gates.catalog_rows([dict(suite)], schema=3)
-
-    # Cost-less records — the bootstrap's fixtures and the still-readable
-    # version-2 list — keep the committed eight-column table.
-    naked = [{k: v for k, v in suite.items() if k != "cost"}]
-    alt = ci_gates.catalog_rows(naked)
-    assert alt.splitlines()[0] == "| id | title | command / action | job | enforcement | floor | placement | reason |"
-    assert alt.splitlines()[1] == "|---|---|---|---|---|---|---|---|"
 
     # And the CLI renders the declared list with its costs.
     list_file = tmp_path / "gates.yaml"

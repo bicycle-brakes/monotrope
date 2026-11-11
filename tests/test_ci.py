@@ -1247,10 +1247,6 @@ def test_the_schema_rejects_a_malformed_interpreter_list(
     assert "tools.python" in seen.err + seen.out
 
 
-@pytest.mark.skip(
-    reason="bootstrap-only (plan verify-cheap-first, step 3): the held gate list is still schema 2; "
-    "the orchestrator removes this skip in step 4 when it activates schema 3"
-)
 def test_repository_gate_schema_is_v3() -> None:
     """Final activation test of verify-cheap-first (criteria 1 and 10 of its spec).
 
@@ -1334,7 +1330,7 @@ def _runner_tree_files(tree: Path) -> Path:
 
 def _write_gate_file(tree: Path, gate_list: list[dict]) -> None:
     gate_file = {
-        "schema_version": 2,
+        "schema_version": 3,
         "tools": {"python": ["3.11", "3.12"]},
         "gates": gate_list,
     }
@@ -1351,6 +1347,7 @@ def _runner_tree(base: Path, gate_command: str) -> Path:
                 "title": "The one gate of the runner tree",
                 "command": gate_command,
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -1747,6 +1744,7 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
                 f'echo {gid} >> "{order}"; {ending}'
             ),
             "job": "verify",
+            "cost": "seconds",
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",
@@ -1914,6 +1912,7 @@ def _report_gate(
         "id": gid,
         "title": f"The {gid} gate",
         "job": job,
+        "cost": "seconds",
         "enforcement": enforcement,
         "floor": True,
         "placement": placement,
@@ -2156,6 +2155,7 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
             "title": f"The {gid} gate",
             "command": f'echo {gid} >> "{order}"; {ending}',
             "job": "verify",
+            "cost": "seconds",
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",

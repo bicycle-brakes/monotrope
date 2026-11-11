@@ -80,13 +80,6 @@ PLACEMENT: tuple[str, ...] = ("hosted", "writer", "both")
 # Schemawechsel ist sichtbar, kein stiller.
 SCHEMA_VERSION = 3
 COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
-# Nur noch im Bootstrap lesbar (Plan verify-cheap-first, Schritt 1): die
-# gehaltene Gate-Liste ist noch Schema 2 — sie bleibt mit ihrer bisherigen
-# Katalog-Darstellung und Deklarationsordnung lesbar, damit der Versuch echten
-# v3-Leser-/Runner-Code an synthetischen Listen prueft, ohne die unberuehrte
-# gehaltene Liste zu brechen. Der Orchestrator entfernt diesen Zweig mit der
-# Schema-Aktivierung (Schritt 4); im gelieferten Ergebnis ist v2 verboten.
-BOOTSTRAP_SCHEMA_VERSION = 2
 
 # Scripts ohne Aufrufer in der erzeugten ci.yml — mit dem Grund, warum das
 # richtig ist (RB-G3). Jedes Script unter `scripts/` steht entweder als Gate-
@@ -361,7 +354,7 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
     version = doc.get("schema_version")
-    if version not in (SCHEMA_VERSION, BOOTSTRAP_SCHEMA_VERSION):
+    if version != SCHEMA_VERSION:
         fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
     fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
@@ -385,7 +378,7 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: job muss eins von {JOBS} sein, ist {g.get('job')!r}")
         if g.get("enforcement") not in ENFORCEMENT:
             fehler.append(f"{gid}: enforcement muss eins von {ENFORCEMENT} sein")
-        if version == SCHEMA_VERSION and g.get("cost") not in COST_CLASSES:
+        if g.get("cost") not in COST_CLASSES:
             fehler.append(
                 f"{gid}: cost muss eins von {COST_CLASSES} sein, ist {g.get('cost')!r} (bead coding-harness-bxxt.1)"
             )
@@ -526,34 +519,23 @@ def _zelle(text: Any) -> str:
     return str(text).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
 
 
-def catalog_rows(alle: list[dict[str, Any]] | None = None, schema: int | None = None) -> str:
+def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
     """The one list as a Markdown table — the inventory of docs/governance/gate-catalog.md.
 
     Deterministic and unfiltered: every declared gate, in list order, with the
     fields the catalog promises (id, title, command or action, job,
-    enforcement, floor, placement, reason; under schema 3 plus the cost column
-    between enforcement and floor, bead coding-harness-bxxt.1). A command gate
-    and a hosted action are rendered distinctly, and an action with a local
-    equivalent names it — the reader must see what runs where. The rendering
-    follows the declared schema, or the explicit argument, or — for directly
-    handed records — the cost presence on every record, so the bootstrap's
-    cost-less records keep their committed table. `tests/test_gate_catalog.py`
-    holds the committed inventory to this rendering.
+    enforcement, cost, floor, placement, reason — the cost column since
+    schema 3, bead coding-harness-bxxt.1). A command gate and a hosted action
+    are rendered distinctly, and an action with a local equivalent names it —
+    the reader must see what runs where. `tests/test_gate_catalog.py` holds
+    the committed inventory to this rendering.
     """
     if alle is None:
         alle = gates()
-    if schema is None:
-        schema = SCHEMA_VERSION if alle and all(g.get("cost") for g in alle) else BOOTSTRAP_SCHEMA_VERSION
-    if schema >= SCHEMA_VERSION:
-        zeilen = [
-            "| id | title | command / action | job | enforcement | cost | floor | placement | reason |",
-            "|---|---|---|---|---|---|---|---|---|",
-        ]
-    else:
-        zeilen = [
-            "| id | title | command / action | job | enforcement | floor | placement | reason |",
-            "|---|---|---|---|---|---|---|---|",
-        ]
+    zeilen = [
+        "| id | title | command / action | job | enforcement | cost | floor | placement | reason |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
     for g in alle:
         if g["action"]:
             einsatz = f"action `{g['action']}` (hosted CI only)"
@@ -561,7 +543,7 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None, schema: int | None = 
                 einsatz = f"action `{g['action']}`; locally: `{g['command']}`"
         else:
             einsatz = f"`{g['command']}`"
-        kosten_zelle = f"{_zelle(g['cost'])} | " if schema >= SCHEMA_VERSION else ""
+        kosten_zelle = f"{_zelle(g['cost'])} | "
         zeilen.append(
             f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
             f"{_zelle(g['enforcement'])} | {kosten_zelle}{'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
@@ -921,7 +903,7 @@ def main() -> int:
         # Deklarationsordnung. Die Auswahl wird vorher gefiltert: Sortieren
         # veraendert nie, WER misst, nur wann. `gates()`, die CI-Ableitung und
         # jede andere Ausgabe bleiben in Deklarationsordnung.
-        if args.placement == "lokal" and deklarierte_schema_version() == SCHEMA_VERSION:
+        if args.placement == "lokal":
             auswahl = kostenordnung(auswahl)
         for g in auswahl:
             if args.tsv:

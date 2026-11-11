@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-11-02
+updated: 2026-11-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
@@ -29,7 +29,11 @@ The inventory between the markers is generated, never typed by hand:
     python3 scripts/ci_gates.py --catalog
 
 Run it and paste its output between the markers whenever the gate list
-changes. `floor` is the non-negotiable set (a `yes` gate is red when it
+changes. `cost` is the gate's declared cost class, `seconds` or
+`minutes`: a local run orders its gates by it, every `seconds` gate before
+the first `minutes` gate, and stops at the first red blocking gate, naming
+the gates it did not run; the hosted CI runs every gate whatever failed
+before. `floor` is the non-negotiable set (a `yes` gate is red when it
 cannot measure); `placement` says where a gate measures — `hosted` only in
 the hosted CI, `writer` only on a writer machine, `both` everywhere. A
 command reads as the command a developer would type; a hosted action is
