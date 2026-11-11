@@ -439,3 +439,5 @@ Stage-2 call, 2026-11-11: repair · attempt 2 · route codex-repair · endpoint 
 > - Attempt 2 (codex-repair): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-11: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
+
+Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model hy3 · leak check clean over 997 files, 3932 commits, 12 rules.
