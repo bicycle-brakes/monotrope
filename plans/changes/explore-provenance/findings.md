@@ -2365,3 +2365,15 @@ Stage-2 call, 2026-11-11: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-11: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
 
 Stage-2 call, 2026-11-11: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3916 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 999 files, 3925 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-11
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-11 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:35 | A research file with `updated: 2026-11-09`, pre-adoption producer dates and a swarm envelope headed `## Research swarm — 2026-11-10` incorrectly retains the stock exemption. Reproduced: the raw census reports false provenance and missing swarm attribution, but `apply_adoption=True` returns no findings because swarm evidence supplies no date. Publication evidence on or after adoption must prevent exemption. [AC7, AC9] | Codex | open | — |
+| EP6-12 | MAJOR | SPEC | Phase 6 | scripts/research_census.py:109 | For an accepted Flash publication whose producer uses unquoted `version: 2026-11-09`, YAML loads the version as `datetime.date`. The census then raises `TypeError` when comparing it with the publication date string, abandoning diagnostics, subsequent files and stock-exemption handling. Report the invalid producer version and continue scanning instead of aborting. [AC10] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1ca40-2c2a-7452-b4e5-65ffb77db572, 2026-11-11
+Reviewer session: codex 01a1ca40-2c2a-7452-b4e5-65ffb77db572 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
