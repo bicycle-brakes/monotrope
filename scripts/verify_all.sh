@@ -311,8 +311,9 @@ GATES
 # The not-run summary (bead coding-harness-bxxt.1): every selected gate the
 # run did not execute because of the blocking failure, and only those —
 # executed and filtered gates are never named. The lines stay outside the
-# gate-frame format the evidence parser reads (`^── \[`), so no skipped gate
-# becomes a gate section, and skipped gates get no timing events: the
+# gate-frame format the evidence parser reads: summary entries have three
+# spaces after `──`, while gate frames require exactly one (`^── \[`). Thus
+# no skipped gate becomes a gate section, and skipped gates get no timing events: the
 # history describes executed commands only.
 if [ -n "$verbleibend" ]; then
     echo ""

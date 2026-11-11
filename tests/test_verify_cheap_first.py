@@ -32,7 +32,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import ci_gates  # noqa: E402
 import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
-from stage2 import red_sections  # noqa: E402
+from stage2 import GATE_END, GATE_START, red_sections  # noqa: E402
 
 # The runner mechanism the kit transfers (scripts/kit/manifest.yaml classifies
 # all four as `mechanismus`); the transfer proof copies exactly these and runs
@@ -646,6 +646,15 @@ def test_early_stop_preserves_repair_diagnostics(tmp_path: Path) -> None:
     _write_gate_file(tree, gates)
     done = _run_runner(tree)
     assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    summary_lines = [line for line in done.stdout.splitlines() if line.endswith("] not run")]
+    assert summary_lines == ["──   [suite-minutes] not run", "──   [after-minutes] not run"], done.stdout
+    # Three spaces after the bars keep these real runner lines outside both
+    # one-space gate-frame patterns. A whitespace-tolerant end pattern must
+    # fail here even if red_sections currently ignores an unmatched end frame.
+    for line in summary_lines:
+        assert GATE_START.match(line) is None, f"not-run summary matched a gate start: {line}"
+        assert GATE_END.match(line) is None, f"not-run summary matched a gate end: {line}"
+    assert red_sections("\n".join(summary_lines)) is None
     red = red_sections(done.stdout)
     assert red is not None, done.stdout
     assert "── [quick-red] $ touch" in red, red
