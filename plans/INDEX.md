@@ -565,4 +565,5 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/triage-verb/plan.md`](changes/triage-verb/plan.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/triage-verb/research.md`](changes/triage-verb/research.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/triage-verb/spec.md`](changes/triage-verb/spec.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/verify-step-limit/research.md`](changes/verify-step-limit/research.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
