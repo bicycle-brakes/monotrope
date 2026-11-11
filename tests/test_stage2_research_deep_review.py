@@ -907,6 +907,37 @@ def test_publication_preserves_fenced_opening_notice_quotes(notice, fence):
 
 
 @pytest.mark.parametrize("eol", ["\n", "\r\n"])
+@pytest.mark.parametrize(
+    "fields",
+    [
+        "owner: &key provenance\n*key: human-written",
+        "owner: &value human-written\nprovenance: *value",
+        "owner: &value Maintainer",
+        "owner: {name: &value Maintainer}",
+        "&key owner: Maintainer",
+        "owner: [&value Maintainer, *value]",
+    ],
+)
+def test_research_publication_refuses_all_header_anchors_and_aliases(tmp_path, monkeypatch, eol, fields):
+    source = (f"---\n{fields}\n---\n# Research\n\nKept.\n").replace("\n", eol).encode()
+    path = tmp_path / "research.md"
+    path.write_bytes(source)
+    writes = []
+    monkeypatch.setattr(stage2, "write_atomic", lambda *args: writes.append(args))
+    refusal = ""
+    try:
+        prepared = stage2.research_publication(source, producer="codex", day="2026-11-10")
+        stage2.publish_research(path, prepared, "Accepted research")
+    except stage2.Refused as error:
+        refusal = str(error)
+    assert "YAML anchor" in refusal or "YAML alias" in refusal, (
+        "Publication must name and refuse YAML anchors or aliases anywhere in the header before replacement"
+    )
+    assert writes == [], "Ambiguous source spans must never reach the atomic writer"
+    assert path.read_bytes() == source
+
+
+@pytest.mark.parametrize("eol", ["\n", "\r\n"])
 @pytest.mark.parametrize("owned", ["review", "provenance", "updated", "produced_by"])
 @pytest.mark.parametrize("anchor_owned", [False, True])
 def test_research_publication_refuses_alias_spans_before_writing(tmp_path, monkeypatch, eol, owned, anchor_owned):

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-10
+updated: 2026-11-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -51,11 +51,14 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
   active change folder, excluding `archive/`. Existing model attribution or
   accepted publication evidence establishes model-written research regardless
   of its current provenance label, including manually seeded work.
-- **Legacy exemption** — the fixed full-path set `UNCORRECTED` in
-  `tests/test_explore_provenance.py`, recorded at the 2026-11-09 merge of
-  `origin/main` into this branch (`0a5aeb3f`). These existing files await the
+- **Stock exemption** — the adoption day of 2026-11-10 (maintainer, `decisions.md`
+  Q-5), applied at one place in the census (`ADOPTION_DAY` in
+  `scripts/research_census.py`). An active research file whose single readable
+  `updated` stamp lies before that day, and which carries no evidence dated on
+  or after it, is stock: its findings are not reported. The removed fixed
+  `UNCORRECTED` file set is no longer required anywhere. Stock files await the
   separate history-based correction (bead coding-harness-2i7x — normalise
-  existing research). The set only shrinks; a new file cannot join it.
+  existing research).
 - **Skeleton text** — only the generated opening empty-file paragraph and
   provenance-instruction blockquote from `scripts/new_change.py`; the title and
   authored quotations of those notices remain research.
@@ -115,9 +118,11 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
    *Basis:* decisions.md#Q-1; research.md, “What exists today”.
 
 7. When the active-research census runs, every reported metadata or opening-notice
-   violation outside the fixed legacy exemption makes its repository test fail.
-   *Refuted by:* a new violating file passes, another provenance label hides a
-   model-written file, or the census is skipped.
+   violation outside the stock exemption (adoption day) makes its repository
+   test fail.
+   *Refuted by:* a file published or changed from the adoption day on passes with
+   a violation, another provenance label hides a model-written file, or the
+   census is skipped.
    *Basis:* decisions.md#Q-2; decisions.md#Q-4.
 
 8. When an incomplete swarm publication is corrected and resumed, the runner's
@@ -126,15 +131,18 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
    later calendar day, or foreign header/body/tail edits pass as the same input.
    *Basis:* decisions.md#Q-1; research.md, “Where it lives”.
 
-9. While existing research correction is deferred, the census's full-path legacy
-   exemption only shrinks as listed files become compliant or leave active work.
-   *Refuted by:* a new exemption, a directory-wide or date-based exemption, or
-   a compliant or archived path remaining in the set.
-   *Basis:* decisions.md#Q-4.
+9. While existing research correction is deferred, the stock exemption is
+   decided only by the adoption day: a file stays exempt only while its edit
+   stamp lies before that day and it carries no later evidence, so correcting
+   and then changing a file, or any change from the adoption day on, ends it.
+   *Refuted by:* a file with an equal-day, later or unreadable edit stamp, or
+   with evidence dated from the adoption day on, obtaining the exemption; or
+   an exemption by directory or file name.
+   *Basis:* decisions.md#Q-4; decisions.md#Q-5.
 
 10. When the read-only census examines active research, it reports each unreadable
     file and each model-written file violating the metadata contract or retaining
-    an opening skeleton notice before applying the legacy exemption.
+    an opening skeleton notice before applying the stock exemption.
     *Refuted by:* a bad producer-list member, missing field, duplicate nested
     key, retained approval, inconsistent date or unreadable file goes unreported;
     failed-call or quoted evidence falsely establishes publication; or the
@@ -171,9 +179,9 @@ The census measures current publication metadata, not the truth of research
 claims or proof of human authorship. Publication preserves known attribution
 in the file being published; it does not reconstruct contributors already lost
 from history. Unknown or ambiguous producer facts are reported without invention.
-The fixed legacy exemption permits pre-existing defects until the separate
+The stock exemption permits pre-existing defects until the separate
 correction, without weakening checks on new files or publication routes. Correct
-future Explore publication still applies when the target is a listed file.
+future Explore publication still applies when the target is a stock file.
 Atomic replacement protects an existing file until replacement completes; it
 makes no rollback promise after a successful replacement and later sync failure.
 
@@ -209,9 +217,9 @@ reversible details are explicit agent choices, with their reasons.
   of the private brief in the resume binding. Its date sentinel `0000-00-00`
   is private and never a published producer date; this prevents the runner's
   own correction or a later date from invalidating reusable work.
-- [DETAIL] Implement Q-4 with the existing full-path `UNCORRECTED` set and a
-  shrink check. This makes deferred debt visible without granting new files
-  an automatic exception; review rejects additions to the recorded set.
+- [DETAIL] Superseded by Q-5: the exemption is the adoption day in the census,
+  not a file set. Deferred debt stays visible because the exemption ends for a
+  file at its first change from the adoption day on.
 - [DETAIL] The header retains Q-3's historical two-hour additional repair
   tranche. Q-4 records it as spent; this redraft grants no further phase-4
   time and preserves measured history in the plan.

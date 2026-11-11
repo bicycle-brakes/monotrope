@@ -1233,10 +1233,6 @@ def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
     spans = []
     for field, value in node.value:
         if field.value == key:
-            # Composing an alias returns its anchor's original node and source marks.
-            # Those marks cannot delimit this field; refuse before any replacement.
-            if value.start_mark.index < field.end_mark.index:
-                raise Refused(f"research publication refused: {key} uses a YAML alias")
             start = block.rfind("\n", 0, field.start_mark.index) + 1
             end = value.end_mark.index
             # A block mapping's end mark includes its final line ending; keep that separator.
@@ -1473,6 +1469,13 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
     block = text[start:end]
     eol = "\r\n" if "\r\n" in block else "\n"
     try:
+        # Alias nodes reuse the anchor's source marks, even for mapping keys.
+        # Refuse the mechanism throughout the header before deriving any edit span.
+        # YAML tokens distinguish real anchors/aliases from quoted text and comments.
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                kind = "anchor" if isinstance(token, yaml.tokens.AnchorToken) else "alias"
+                raise Refused(f"research publication refused: YAML {kind} {token.value!r} in header")
         metadata = yaml.safe_load(block)
         if not isinstance(metadata, dict):
             raise ValueError("header is not a mapping")
@@ -1523,8 +1526,7 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
             corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
         else:
             corrected = eol.join([corrected, *inserted])
-    # Replacing an owned anchor can also leave an unrelated alias dangling. Validate
-    # the complete prepared header before it can reach the atomic writer.
+    # Validate the complete prepared header before it can reach the atomic writer.
     try:
         # Compose checks YAML syntax/aliases without constructing the private brief's
         # deliberate 0000-00-00 date sentinel as a Python calendar date.
