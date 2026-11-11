@@ -288,3 +288,23 @@ Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-11: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
 
 Stage-2 call, 2026-11-11: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 997 files, 3920 commits, 12 rules.
+
+Stage-2 call, 2026-11-11: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex repair calls ended with exit 1 on 2026-11-11 · leak check clean over 997 files, 3922 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +11 -8
+> - `scripts/check_question_context.py` +5 -0
+> - `scripts/stage2.py` +5 -2
+> - `tests/test_check_question_context.py` +69 -48
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/decision-statement-skeleton/plan.md, plans/changes/decision-statement-skeleton/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - L3-1: tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L3-2: tests/test_stage2.py::test_draft_refuses_an_unreadable_decision_file_before_dispatch: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/decision-statement-skeleton/stage2/attempts/decision-statement-skeleton/attempt-1-20261111T093846634466Z-80f0cb2e.md
+> ```
