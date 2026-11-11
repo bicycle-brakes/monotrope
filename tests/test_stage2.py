@@ -3521,9 +3521,58 @@ PLAN_CARD = (
     "```\n\n## Time used\n"
 )
 
+DECISIONS_HEADER = "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\n"
+DEMO_CONTEXT = (
+    "context: |\n"
+    "  Topic: The demo change's draft.\n"
+    "  Intention: A record the early statement check can read.\n"
+    "  Today: The decisions file records the demo question and its current answer status.\n"
+    "  Repository change: none.\n"
+    "  Architecture change: none.\n\n"
+)
+ANSWERED_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. — 2026-09-30\n"
+)
+WRAPPED_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. —\n2026-09-30\n"
+)
+REMARK_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. "
+    "— 2026-09-30 (recorded on the bead the same day)\n"
+)
+OLD_STATEMENT = ANSWERED_STATEMENT.replace("— 2026-09-30", "— 2020-01-01")
+SKIP_RECORD = "## SKIP · interview\n\nstatus: skipped\nreason: nothing is owed here.\n"
+FENCED_EXAMPLE = (
+    "```markdown\n"
+    "## Q-9 · a documented example\n\n"
+    "asked: 2026-09-30\nanswer: yes\nanswered_by: maintainer\nstatus: answered\n\n"
+    "In the context of an example, facing nothing, we decided nothing.\n"
+    "```\n"
+)
+
+
+def demo_record(
+    qid: str = "Q-1",
+    *,
+    statement: str | None = ANSWERED_STATEMENT,
+    status: str = "answered",
+    answered_by: str = "maintainer",
+) -> str:
+    """One interview record of the demo change; `statement=None` records the answer without a
+    decision statement."""
+    head = (
+        f"## {qid} · the demo question\n\n"
+        f"asked: 2026-09-30\nanswer: yes\nanswered_by: {answered_by}\nstatus: {status}\n\n"
+    )
+    return head + DEMO_CONTEXT + (statement or "") + "\n"
+
 
 def draft_world(world: World) -> None:
-    """A change a draft can start from: no spec, no plan, a decisions.md with its bead, committed.
+    """A change a draft can start from: no spec, no plan, and a committed decisions.md with its
+    bead and one answered record whose statement the early check reads (bead coding-harness-nr6h).
 
     The commit that adds the existing ADR is also where `origin/main` goes, so the merge base a
     `draft_keep` reads holds that ADR and only a second, new one counts as new (spec, criterion 8).
@@ -3531,15 +3580,31 @@ def draft_world(world: World) -> None:
     folder = world.root / "plans" / "changes" / "demo"
     (folder / "spec.md").unlink()
     world.plan.unlink()
-    (folder / "decisions.md").write_text(
-        "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\nQ-1 answered.\n",
-        encoding="utf-8",
-    )
+    (folder / "decisions.md").write_text(DECISIONS_HEADER + "\n" + demo_record(), encoding="utf-8")
     (world.root / "docs" / "adr").mkdir(parents=True)
     (world.root / "docs" / "adr" / "0007-existing-record.md").write_text("# ADR\n\nheld.\n", encoding="utf-8")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "decisions")
     git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+
+def commit_decisions(world: World, body: str, message: str) -> str:
+    """Replace demo's decisions.md with `body`, committed — the statement tests need committed
+    input, or the pre-existing-change refusal would refuse first and pass them for the wrong
+    reason."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(body, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", message)
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def assert_no_dispatch(world: World, capsys: pytest.CaptureFixture[str]) -> str:
+    """A refusal before the first model call: no call, no attempt entry, no audit line."""
+    error = capsys.readouterr().err
+    assert world.calls() == [], "a model call started on refused input"
+    assert not world.findings.exists(), "an attempt entry was written"
+    assert "Stage-2 call" not in error
+    return error
 
 
 def clear_derived_leftovers(world: World) -> None:
@@ -4232,6 +4297,232 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
     assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
+
+
+@pytest.mark.parametrize(
+    ("body", "identifier", "reason", "bullets", "extra"),
+    [
+        pytest.param(
+            DECISIONS_HEADER + "\n" + demo_record(statement=None),
+            "Q-1",
+            "states no decision statement",
+            1,
+            None,
+            id="absent",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(
+                statement=ANSWERED_STATEMENT
+                + "In the context of a second wording, we decided otherwise, accepting delay. — 2026-09-30\n"
+            ),
+            "Q-1",
+            "states 2 decision statements",
+            1,
+            None,
+            id="duplicate",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(
+                statement=(
+                    "In the context of a demo draft, facing the empty file, we decided one record, "
+                    "to achieve a start, accepting the upkeep. Recorded 2026-09-30.\n"
+                )
+            ),
+            "Q-1",
+            "no `— YYYY-MM-DD` date ends the decision statement",
+            1,
+            None,
+            id="without-the-dash",
+        ),
+        pytest.param(
+            DECISIONS_HEADER + "\n" + demo_record(statement=ANSWERED_STATEMENT.replace("2026-09-30", "2026-13-45")),
+            "Q-1",
+            "names no calendar day",
+            1,
+            None,
+            id="impossible-date",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(statement=None).rstrip("\n")
+            + "\n```text\n"
+            + ANSWERED_STATEMENT
+            + "```\n\n",
+            "Q-1",
+            "states no decision statement",
+            1,
+            None,
+            id="fence-only",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record("Q-1")
+            + demo_record("Q-1", statement=None)
+            + demo_record("Q-2", answered_by="agent", statement=None),
+            "Q-1",
+            "states no decision statement",
+            2,
+            "Q-2",
+            id="repeated-and-agent",
+        ),
+    ],
+)
+def test_draft_refuses_unreadable_statements_before_dispatch(
+    world: World,
+    body: str,
+    identifier: str,
+    reason: str,
+    bullets: int,
+    extra: str | None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Criterion 3 (bead coding-harness-nr6h). Planted fault: the draft dispatches on an unreadable
+    # statement, consumes a retry, or refuses without naming the record, the reason and the remedy.
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"credential read on refusal: {name}"))
+    draft_world(world)
+    head = commit_decisions(world, body, "unreadable statement")
+    assert world.run("draft") == 2
+    error = assert_no_dispatch(world, capsys)
+    assert "plans/changes/demo/decisions.md" in error
+    assert "decision statement cannot be read" in error, error
+    assert "complete the interview" in error
+    assert f"{identifier} —" in error and reason in error, error
+    if extra is not None:
+        assert f"{extra} —" in error, error
+    assert error.count("plans/changes/demo/decisions.md: ") == bullets, error
+    # Nothing was rewritten or committed: the interview owns the answers.
+    assert (world.root / "plans/changes/demo/decisions.md").read_text(encoding="utf-8") == body
+    assert git(world.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("read_failure", ["invalid-utf8", "permission-denied"])
+def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, read_failure: str
+) -> None:
+    # Criterion 4 (bead coding-harness-nr6h). Planted fault: an unreadable or invalidly encoded
+    # decisions.md becomes an empty passing interview, is rewritten, or reaches a model call.
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"credential read on refusal: {name}"))
+    draft_world(world)
+    path = world.root / "plans" / "changes" / "demo" / "decisions.md"
+    raw = (
+        b"---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\nIn the context of caf\xe9. \x97 2026-09-30\n"
+        if read_failure == "invalid-utf8"
+        else (DECISIONS_HEADER + "\n" + demo_record() + "\n").encode("utf-8")
+    )
+    path.write_bytes(raw)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "unreadable decisions")
+    head = git(world.root, "rev-parse", "HEAD")
+    if read_failure == "permission-denied":
+        real_read_text = Path.read_text
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path and candidate.exists():
+                raise PermissionError("decision file permission denied")
+            return real_read_text(candidate, *args, **kwargs)
+
+        # A deterministic OSError on the draft route, even when tests run as root.
+        monkeypatch.setattr(Path, "read_text", read_text)
+    assert world.run("draft") == 2
+    error = assert_no_dispatch(world, capsys)
+    assert "plans/changes/demo/decisions.md" in error and "cannot be read" in error, error
+    assert "complete the interview" in error, error
+    assert path.read_bytes() == raw, "the runner rewrote the unreadable file"
+    assert git(world.root, "rev-parse", "HEAD") == head
+    # The draft route and the helper give one refusal, with the remedy. A missing file refuses the same way.
+    with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview") as refused:
+        stage2.refuse_unreadable_statements(world.root, "demo")
+    assert "plans/changes/demo/decisions.md" in str(refused.value)
+    if read_failure == "permission-denied":
+        assert "decision file permission denied" in str(refused.value)
+    path.unlink()
+    with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview"):
+        stage2.refuse_unreadable_statements(world.root, "demo")
+
+
+@pytest.mark.parametrize("change", ["", ".", "..", "../demo", "demo/../demo"])
+def test_statement_precheck_validates_its_own_change_name(world: World, change: str) -> None:
+    draft_world(world)
+    try:
+        stage2.refuse_unreadable_statements(world.root, change)
+    except stage2.Refused as error:
+        assert "single folder name" in str(error), "the helper must reject the name before reading any file"
+    else:
+        pytest.fail("the statement helper accepted an invalid change name")
+
+
+@pytest.mark.parametrize("read_failure", ["permission-denied", "missing"])
+def test_statement_read_failure_keeps_machine_paths_out(
+    world: World, monkeypatch: pytest.MonkeyPatch, read_failure: str
+) -> None:
+    draft_world(world)
+    path = world.root / "plans/changes/demo/decisions.md"
+    if read_failure == "missing":
+        path.unlink()
+        reason = "No such file or directory"
+    else:
+        real_read_text = Path.read_text
+        reason = "Permission denied"
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError(13, reason, str(path))
+            return real_read_text(candidate, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read_text)
+    with pytest.raises(stage2.Refused) as refused:
+        stage2.refuse_unreadable_statements(world.root, "demo")
+    message = str(refused.value)
+    assert str(world.root) not in message, "a runner refusal must not expose a machine-local path"
+    assert "plans/changes/demo/decisions.md" in message
+    assert reason in message, "the refusal must preserve the read-failure reason"
+    assert "complete the interview" in message
+
+
+def test_draft_statement_precheck_accepts_supported_records(world: World) -> None:
+    # Criterion 5 (bead coding-harness-nr6h). Planted fault: the early check rejects a supported
+    # wrapped statement or closing remark, or demands statements from open, skipped or fenced
+    # example records, or from an answer dated long before any adoption day.
+    body = (
+        DECISIONS_HEADER
+        + "\n"
+        + demo_record("Q-1", statement=WRAPPED_STATEMENT)
+        + demo_record("Q-2", statement=REMARK_STATEMENT)
+        + demo_record("Q-3", statement=OLD_STATEMENT)
+        + demo_record("Q-4", status="open", statement=None)
+        + SKIP_RECORD
+        + "\n"
+        + FENCED_EXAMPLE
+    )
+    draft_world(world)
+    commit_decisions(world, body, "supported records")
+    assert stage2.refuse_unreadable_statements(world.root, "demo") is None
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 1
+
+
+def test_draft_statement_precheck_ignores_other_changes(world: World) -> None:
+    # Criterion 6 (bead coding-harness-nr6h). Planted fault: the early check reads other changes'
+    # decision files, so a malformed live or archived neighbour prevents this first call despite
+    # the selected change's valid input.
+    draft_world(world)
+    for rel in ("plans/changes/other/decisions.md", "plans/changes/archive/old-neighbour/decisions.md"):
+        path = world.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(DECISIONS_HEADER + "\n" + demo_record("Q-1", statement=None), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "broken neighbours")
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 1
 
 
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
@@ -17374,8 +17665,10 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
         (fragment.replace(effort_reference(verb), f"`{stage2.CODEX_EFFORTS[verb]}`"), "an independent literal stands"),
     ):
         doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
-        assert fragment in doc_text, (doc, fragment)
-        assert sol_effort_problems(*sol_texts(doc, doc_text.replace(fragment, planted, 1))), (doc, why)
+        pattern = r"\s+".join(re.escape(word) for word in fragment.split())
+        assert re.search(pattern, doc_text), (doc, fragment)
+        changed = re.sub(pattern, lambda _, replacement=planted: replacement, doc_text, count=1)
+        assert sol_effort_problems(*sol_texts(doc, changed)), (doc, why)
 
 
 def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
