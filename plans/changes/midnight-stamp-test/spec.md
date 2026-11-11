@@ -1,7 +1,7 @@
 ---
 title: "Spec — midnight-stamp-test"
 status: draft
-implementation_status: none
+implementation_status: done
 date: 2026-11-11
 last_reviewed: 2026-11-11
 updated: 2026-11-11

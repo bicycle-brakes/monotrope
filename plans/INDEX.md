@@ -466,7 +466,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/midnight-stamp-test/findings.md`](changes/midnight-stamp-test/findings.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
 | [`changes/midnight-stamp-test/plan.md`](changes/midnight-stamp-test/plan.md) | draft | none | 2026-11-11 | coding-harness-bxxt.5 |
 | [`changes/midnight-stamp-test/research.md`](changes/midnight-stamp-test/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
-| [`changes/midnight-stamp-test/spec.md`](changes/midnight-stamp-test/spec.md) | draft | none | 2026-11-11 | coding-harness-bxxt.5 |
+| [`changes/midnight-stamp-test/spec.md`](changes/midnight-stamp-test/spec.md) | draft | done | 2026-11-11 | coding-harness-bxxt.5 |
 | [`changes/night-heartbeat/decisions.md`](changes/night-heartbeat/decisions.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/findings.md`](changes/night-heartbeat/findings.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/plan.md`](changes/night-heartbeat/plan.md) | draft | none | 2026-11-06 | coding-harness-7x3c |

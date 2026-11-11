@@ -121,7 +121,9 @@ green. Full verification belongs to the runner.
 - 3: tests/test_stage2.py::test_first_implement_refreshes_derived_files_without_a_model_repair — the make stand-in refuses the plan stamp because it expects a date other than the pinned one
 - 3: tests/test_stage2.py::test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics — the make stand-in refuses the plan stamp because it expects a date other than the pinned one
 - 4: tests/test_workflow_entry.py::test_new_change_creates_the_folder_and_a_current_index — the scaffold's updated date differs from the one the test pinned
-- 5: not yet written tests/test_stage2.py::test_stamp_tests_pin_the_date_they_compare — a date.today( read reappears in one of the nine bodies or the helper and stays uncaught
+- 5: tests/test_stage2.py::test_stamp_tests_pin_the_date_they_compare — a date.today( read reappears in one of the nine bodies or the helper and stays uncaught
 - 6: not a test — the pull request's file list shows no path under scripts/
 
 ## Time used
+
+2026-11-11 12:26:41–13:20:04 UTC, 3203 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
