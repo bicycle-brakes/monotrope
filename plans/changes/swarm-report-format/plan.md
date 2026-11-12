@@ -20,7 +20,7 @@ tags: [plan, research-swarm]
 ```text
 For you:     Research reports survive harmless wrapping and get one correction after a format rejection.
 Done when:   Regression tests and make verify pass, and a real explore accepts every selected seat's report.
-Appetite:    3 hours of phase 4 in total, repairs included — a stop, not an estimate.
+Appetite:    9 hours of phase 4 in total, repairs included — a stop, not an estimate (raised by the maintainer on 2026-11-12, decisions.md#Q-6).
 Not now:     Schema relaxation, model replacement, transport retries or longer time limits.
 Pre-mortem:  suppose it failed: most likely because the correction bypassed the original seat's boundaries.
 Starts unless you say stop.
@@ -111,7 +111,7 @@ The attempt updates `plans/changes/swarm-report-format/spec.md` and
 `plans/changes/swarm-report-format/plan.md` as implementation proceeds and
 removes `not yet written` from ledger entries when their tests exist. The
 runner records measured phase-4 time under `Time used` and owns call evidence.
-Stop at the three-hour appetite, including repair rounds, and report unfinished
+Stop at the nine-hour appetite, including repair rounds, and report unfinished
 work. A newly necessary file or held edit requires a revised plan first.
 
 ## Limits and route

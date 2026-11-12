@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
@@ -128,3 +128,25 @@ rejection answered by the one correction attempt, to achieve that content
 written into a wrongly named field is never lost unseen, accepting that a
 good report costs an extra call for one surplus field and drops out when the
 correction fails — 2026-11-10
+
+## Q-6 · How much phase-4 time this change may still take
+
+asked: 2026-11-12
+answer: "maxhe a mit opus sub, erstelle einen bead für die reparatur" — option A: an Opus sub-agent repairs the three text rows of the second review-loop round (L2-1, L2-12, L2-14) by hand, the runner repair reruns for the code rows only, the appetite rises to 9 hours, and the runner flaw gets a bead of its own (coding-harness-kz5r).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the phase-4 time budget (appetite) of this change after the second runner repair was lost.
+  Intention: the time used had passed the budget, so no further runner call was allowed without the maintainer.
+  Today: plan.md recorded 6.98 hours of measured phase-4 time against an appetite the maintainer had already raised from 3 to 6 hours earlier that day (recorded in the bead's notes only; the plan card still said 3). The second runner repair of the round-2 rows was discarded whole because it also edited prompts/01-explore.md, a path a runner run may not commit.
+  Repository change: the plan card's appetite reads 9 hours; the three text rows are edited by hand, the code rows go back to the runner repair.
+  Architecture change: none.
+
+In the context of a change whose measured phase-4 time had passed its raised
+appetite after a runner repair was discarded over one held path, facing the
+choice between stopping the change and spending more time on it, we decided
+to raise the appetite to nine hours, to have the three text rows edited by
+hand and to rerun the runner repair for the code rows only, to achieve that
+the repairs already understood are not lost to one misplaced edit, accepting
+that this bounded change now takes three times its first budget and that the
+runner flaw behind the discard stays open in its own bead — 2026-11-12
