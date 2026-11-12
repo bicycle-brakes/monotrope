@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-11
 last_reviewed: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -190,4 +190,12 @@ full verification remain the runner's work after this draft.
 - 12: not a test — orchestrator review of the handover skill's count command and explicit repository/interval/unavailable wording; omission refutes criterion 12
 - 13: not yet written tests/test_stage2.py::test_verification_doctrine_covers_extended_targeted_routes — workflow, held instructions or the ADR contradict the agreed verification boundaries; orchestrator bootstrap owns this test
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-11 20:50:58–23:23:11 UTC, 9132 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-11 23:23:22–2026-11-12 00:07:48 UTC, 2666 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-12 00:08:25–01:04:53 UTC, 3387 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
