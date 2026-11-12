@@ -17,6 +17,14 @@
 #   bash scripts/verify_all.sh --job docs    # only the document gates (the draft verb, bead coding-harness-77qj)
 #   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not
+#
+# Temporary areas (bead coding-harness-bxxt.3): every admitted run owns a
+# process-id-named pytest temporary area under one private per-user parent and
+# removes it when the run ends. Export HARNESS_VERIFY_KEEP_TMP=1 to keep a
+# FAILED run's area for inspection — the runner prints its absolute path, the
+# area then needs manual removal, and no later run sweeps it. A successful run
+# removes its area regardless, and every other value of the variable removes
+# normally.
 
 set -u
 
@@ -193,6 +201,179 @@ if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
 else
     exec "$PYTHON" -m scripts.verify_lock -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi
+
+# ── The runner-owned temporary area (bead coding-harness-bxxt.3) ───────────
+#
+# Every admitted run allocates a temporary area named after its own process id
+# under one private per-user managed parent, exports that area as
+# PYTEST_DEBUG_TEMPROOT, and removes it when it ends — after a green or a red
+# verdict alike, and on a handled SIGINT, SIGTERM, SIGHUP or SIGQUIT, which
+# keep the supervisor's 128-plus-signal status. A run keeps its area for
+# inspection only when HARNESS_VERIFY_KEEP_TMP was exactly 1 before the gates
+# started; the area is then born under a non-numeric name (`keep-<pid>`) and
+# its absolute path is printed, so no sweep can take it and a hard kill cannot
+# lose the request. Retained areas need manual removal.
+#
+# Hard-kill boundary: a SIGKILL runs no trap, so its unretained area waits for
+# the NEXT start under the same managed parent — that start removes every
+# unretained sibling area whose named process no longer exists. Liveness is a
+# process-id check only: no descendant protection, no lease, and a reused
+# process id may defer reclamation (its stale area fails allocation loudly
+# instead of being shared). Only numeric direct children of the parent are
+# inspected; any other name is skipped, never followed or touched. An
+# inaccessible or unsafe entry is reported with its path and reason and ends
+# the run before any gate — a storage failure never turns verification green.
+# The managed parent lives under the caller's original PYTEST_DEBUG_TEMPROOT,
+# or the platform temporary parent, and travels to nested runs through
+# HARNESS_VERIFY_TMP_PARENT so they find the same siblings; TMPDIR stays
+# unchanged.
+if [ -n "${PYTEST_ADDOPTS:-}" ] && ! "$PYTHON" - <<'PYEOF'
+import os
+import shlex
+import sys
+
+try:
+    words = shlex.split(os.environ.get("PYTEST_ADDOPTS", ""))
+except ValueError as exc:
+    print(f"verify-tmp: PYTEST_ADDOPTS is not valid shell quoting ({exc}); refusing to start gates", file=sys.stderr)
+    raise SystemExit(2)
+for word in words:
+    if word.startswith("--"):
+        name = word.partition("=")[0]
+        if name == "--basetemp" or (len(name) > 2 and "--basetemp".startswith(name)):
+            print(
+                f"verify-tmp: PYTEST_ADDOPTS selects an explicit basetemp ({word!r}); "
+                "this runner owns the temporary root, so it refuses the option instead",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+PYEOF
+then
+    exit 2
+fi
+verify_tmp_parent="${HARNESS_VERIFY_TMP_PARENT:-}"
+if [ -z "$verify_tmp_parent" ]; then
+    verify_tmp_base="${PYTEST_DEBUG_TEMPROOT:-${TMPDIR:-/tmp}}"
+    case "$verify_tmp_base" in
+        /*) ;;
+        *) verify_tmp_base="$PWD/$verify_tmp_base" ;;
+    esac
+    verify_tmp_parent="$verify_tmp_base/verify-runs-$(id -u)"
+fi
+if ! mkdir -p -m 700 -- "$verify_tmp_parent" 2>/dev/null; then
+    echo "verify-tmp: cannot create the managed parent $verify_tmp_parent" >&2
+    exit 2
+fi
+# Validate the parent and reclaim dead siblings; the interpreter below decides
+# each entry and performs the removal itself, and never follows a symlink.
+if ! "$PYTHON" - "$verify_tmp_parent" <<'PYEOF'
+import os
+import shutil
+import stat
+import sys
+
+parent = sys.argv[1]
+
+
+def refuse(path, reason):
+    print(f"verify-tmp: refusing {path}: {reason}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+try:
+    info = os.lstat(parent)
+except OSError as exc:
+    refuse(parent, f"cannot inspect the managed parent ({exc})")
+if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+    refuse(parent, "not a real directory")
+if info.st_uid != os.geteuid():
+    refuse(parent, "not owned by this user")
+try:
+    with os.scandir(parent) as scan:
+        entries = sorted(scan, key=lambda entry: entry.name)
+except OSError as exc:
+    refuse(parent, f"cannot read the managed parent ({exc})")
+for entry in entries:
+    name = entry.name
+    if not name.isdigit():
+        continue
+    try:
+        info = entry.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        continue
+    except OSError as exc:
+        refuse(entry.path, f"cannot inspect it ({exc})")
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        refuse(entry.path, "not a managed run area (symlink or not a directory)")
+    if info.st_uid != os.geteuid():
+        refuse(entry.path, "not owned by this user")
+    try:
+        os.kill(int(name), 0)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        continue
+    else:
+        continue
+    try:
+        shutil.rmtree(entry.path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        refuse(entry.path, f"cannot remove it ({exc})")
+PYEOF
+then
+    exit 2
+fi
+# Exclusive creation: two live runs cannot share an area, and a stale area
+# with this process id fails the run loudly instead of being reused.
+verify_tmp_keep=0
+[ "${HARNESS_VERIFY_KEEP_TMP:-}" = "1" ] && verify_tmp_keep=1
+if [ "$verify_tmp_keep" -eq 1 ]; then
+    verify_tmp_area="$verify_tmp_parent/keep-$$"
+else
+    verify_tmp_area="$verify_tmp_parent/$$"
+fi
+if ! mkdir -m 700 -- "$verify_tmp_area" 2>/dev/null; then
+    echo "verify-tmp: cannot allocate the run area $verify_tmp_area — another run owns it, or a stale area with this process id blocks it" >&2
+    exit 2
+fi
+export PYTEST_DEBUG_TEMPROOT="$verify_tmp_area"
+export HARNESS_VERIFY_TMP_PARENT="$verify_tmp_parent"
+if [ "$verify_tmp_keep" -eq 1 ]; then
+    echo "verify-tmp: keeping this run's area on request (HARNESS_VERIFY_KEEP_TMP=1): $verify_tmp_area" >&2
+fi
+# End-of-run cleanup, idempotent across the signal and EXIT handlers: the
+# first handler disarms every trap. A failed removal keeps an existing nonzero
+# status; after otherwise successful work it turns the run's status into 2, so
+# a storage failure never reads as a green verdict.
+verify_tmp_cleanup() {
+    verify_tmp_status=$?
+    trap - EXIT INT TERM HUP QUIT
+    if [ "$verify_tmp_status" -eq 0 ] || [ "$verify_tmp_keep" -ne 1 ]; then
+        if ! rm -rf -- "$verify_tmp_area" 2>/dev/null; then
+            echo "verify-tmp: could not remove the run area $verify_tmp_area — remove it by hand" >&2
+            [ "$verify_tmp_status" -eq 0 ] && verify_tmp_status=2
+        fi
+    else
+        echo "verify-tmp: kept for inspection: $verify_tmp_area" >&2
+    fi
+    exit "$verify_tmp_status"
+}
+verify_tmp_signal() {
+    trap - EXIT INT TERM HUP QUIT
+    if [ "$verify_tmp_keep" -ne 1 ]; then
+        rm -rf -- "$verify_tmp_area" 2>/dev/null || echo "verify-tmp: could not remove the run area $verify_tmp_area — remove it by hand" >&2
+    else
+        echo "verify-tmp: kept for inspection: $verify_tmp_area" >&2
+    fi
+    exit $((128 + $1))
+}
+trap verify_tmp_cleanup EXIT
+trap 'verify_tmp_signal 2' INT
+trap 'verify_tmp_signal 15' TERM
+trap 'verify_tmp_signal 1' HUP
+trap 'verify_tmp_signal 3' QUIT
 
 # ── Measured durations (bead coding-harness-1um6) ──────────────────────────
 #
