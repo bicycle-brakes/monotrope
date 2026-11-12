@@ -264,8 +264,12 @@ These are development stages, not the review stages of phase 4b.
   through `scripts/stage2.py`, and the scope is framework content (ADR 0007,
   amended since). Whether the second check finds more errors than one has not
   been measured.
-- **Stage 3 — orchestration.** Agents as YAML files, parallel worktrees and
-  automatic routing. This stage is evaluated, not built.
+- **Stage 3 — a meta-harness.** A proposed layer in which each agent is a
+  short YAML file and an orchestrator spreads work across parallel worktrees
+  and routes each diff to a reviewer on its own. Parallel worktrees and the
+  runner's model routes with their fallbacks already exist in Stage 2; a
+  session still starts each step by hand. The meta-harness is described for
+  evaluation and is not in use (`docs/WORKFLOW.md`, section 5).
 
 How a call to a second vendor is allowed to happen in the second development
 stage:
