@@ -5,28 +5,45 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
-last_reviewed: 2026-11-10
-updated: 2026-11-10
+last_reviewed: 2026-11-12
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Fable 5, 2026-11-10"}
+produced_by: {kind: llm-session, name: claude-code, version: "Fable 5.2, 2026-11-12"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions, make-verify]
 ---
 
 # verify-tmp-cleanup — Decisions
 
-Class: bounded (bead coding-harness-bxxt.3; one answered question or a
-reasoned skip is owed — a skip below, written during the night run of
-2026-11-10 and to be confirmed by the maintainer at the plan card).
+Class: bounded (bead coding-harness-bxxt.3; one answered question is owed —
+Q-1 below, answered on 2026-11-12; it replaces the interview skip of
+2026-11-10 and the plan approved at `e6894adc`).
 
-## SKIP · interview
+## Q-1 · Where the cleanup lives and how a killed run is covered
 
-status: skipped
-reason: A bounded fix whose intent the bead states in full — each run of the full check uses a base temporary folder of its own and removes it when it ends, green or red, also after an interrupt, and a red run keeps it only on request (bead coding-harness-bxxt.3, created on the maintainer's request of 2026-11-09 after the data volume ran full). What remains is mechanics, decided below with reasons; the plan card goes to the maintainer before anything is built.
+asked: 2026-11-12
+answer: "F: eigener Ordner je Lauf (Empfohlen)" — each run of `scripts/verify_all.sh` gets a temporary folder of its own, named after its process id, under one parent folder; the run removes it when it ends and on an interrupt; at its start every run removes the sibling folders whose process is no longer alive. `scripts/verify_lock.py` is not touched.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), make verify removes its own temporary test folders.
+  Intention: three implement attempts of the approved plan failed in the night of 2026-11-11/12; one grew scripts/verify_lock.py by 606 lines. The maintainer asked whether pytest's own retention settings were the smartest fix.
+  Today: measured on 2026-11-12 about 08:10 UTC, pytest's temporary root held 707 MB in 7 folders; 4 of them (about 630 MB) came from runs killed in the night and still carried a lock file, which pytest's cleanup skips for 3 days whatever its retention settings say.
+  Repository change: about 20 lines in scripts/verify_all.sh, tests for a normal end, an interrupt and an orphan left by a hard kill, and a shorter plan.
+  Architecture change: none.
+
+In the context of full checks that leave gigabytes under pytest's temporary
+root, facing killed runs whose locked folders pytest keeps for three days and
+a first plan that grew the verify lock by hundreds of lines, we decided that
+`scripts/verify_all.sh` gives each run a temporary folder named after its
+process id, removes it at its end and on an interrupt, and removes the
+folders of dead processes at its start, to achieve cleanup for every way a
+run can end with about twenty lines in one script, accepting that a folder
+left by a hard kill stays until the next run starts — 2026-11-12
 
 ## Decided by the agent
 
@@ -36,12 +53,9 @@ Reason: the gate list is a held file and its command is pinned byte for byte
 against the Makefile; the exploration found that pytest takes its temporary
 root from the environment.
 
-[DETAIL] **The removal sits where end-of-run work is already guaranteed**: the
-supervised entry of the verify lock, which runs on a normal end, a red gate,
-a cancel and a trapped signal. Reason: it is the one place in the tree that
-provably runs in all four cases; a supervisor killed hard is outside it, as
-its own boundary already states, and a later run removes what such a run
-left behind.
+[DETAIL] **Where the removal sits** is decided by Q-1 (2026-11-12): in
+`scripts/verify_all.sh`, not in the verify lock's supervised entry as first
+written on 2026-11-10.
 
 [DETAIL] **"On request" is one environment variable set by the caller** for a
 red run whose folder should stay; nothing is kept by default. Reason: the
