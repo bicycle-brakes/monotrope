@@ -4,12 +4,17 @@ status: draft
 implementation_status: none
 date: 2026-11-09
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by:
+  - {kind: llm-session, name: claude-code, model: glm-5.3-flash, version: "2026-11-09"}
+  - {kind: llm-session, name: claude-code, version: "2026-11-09"}
+  - {kind: llm-session, name: codex, model: gpt-6.1-sol, version: "2026-11-10"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
