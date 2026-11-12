@@ -10,6 +10,19 @@ appends one version-1 JSON line to `verify-duration.jsonl` under
 outside the repository, local only: no command output, no credentials, no
 upload (bead coding-harness-1um6, spec "Non-goals").
 
+**Targeted results and local slips** (bead coding-harness-0swp). The stage-2
+runner appends one `targeted` record per accepted targeted green, bound to its
+checkpoint tree and the gate configuration it measured; the phase-6 boundary
+correlates a completed red full run — through the runner-owned
+`HARNESS_VERIFY_CORRELATION` identity that `start` records — with this
+repository's latest matching targeted green and appends one `slip` per
+full-run identity, deduplicated atomically. Timeouts, launch and admission
+failures and identity mismatches stay unmeasured; a storage gap is reported
+and never changes a verification verdict. The `slips` reader counts distinct
+slipped full runs of one repository in a half-open UTC interval and reports
+missing, corrupt or incomplete evidence as an unavailable measurement, never
+as a trustworthy zero.
+
 **Time.** Elapsed seconds are differences of `time.monotonic()`, so a wall
 clock adjustment cannot produce negative or inflated durations, and an
 inherited admission's wait is recorded as the shared context it is — never
@@ -36,6 +49,11 @@ Command line:
             --start T0 --end T1 --status N --enforcement block
     python -m scripts.verify_duration end --run ID --start T0 --end T1 --verdict green
     python -m scripts.verify_duration report [--run ID]
+    python -m scripts.verify_duration targeted --repository P --worktree P \
+            --change C --verb V --tests F,G --gates A --outcome green --tree T
+    python -m scripts.verify_duration slip --repository P --check C --run R \
+            --tree T --failed-gates A,B
+    python -m scripts.verify_duration slips --repository P --since UTC --until UTC
 """
 
 from __future__ import annotations
@@ -62,9 +80,20 @@ EVENT_VERSION = 1
 RUN_START = "run_start"
 GATE = "gate"
 RUN_END = "run_end"
-EVENTS = (RUN_START, GATE, RUN_END)
+TARGETED = "targeted"
+SLIP = "slip"
+EVENTS = (RUN_START, GATE, RUN_END, TARGETED, SLIP)
 GATE_FILE = Path("decisions") / "gates.yaml"
 GIT_TIMEOUT_SECONDS = 10.0
+# The runner-owned identity that ties one full `make verify` to its duration records,
+# so a completed local red can be measured against the latest matching targeted green.
+CORRELATION_ENV = "HARNESS_VERIFY_CORRELATION"
+# run_start fields that arrived after version 1 was already in use: records written before
+# them stand without them, and their absence reads as the explicit unknown, never as invalid.
+START_OPTIONAL_FIELDS = frozenset({"correlation"})
+# Bounded identifiers only: no raw gate output and no credentials ever reach the history.
+MAX_FAILED_TESTS = 40
+MAX_TEST_ID_LENGTH = 200
 
 
 class StorageUnusable(Exception):
@@ -116,18 +145,32 @@ def _gate_file_digest() -> str | None:
         return None
 
 
+def gate_file_digest(root: Path) -> str | None:
+    """The SHA-256 of the gate file under this repository root, or None when absent.
+
+    The same bytes `_gate_file_digest()` reads for a run started there, so a targeted record and
+    the full run it is measured against carry comparable digests.
+    """
+    try:
+        return hashlib.sha256((Path(root) / GATE_FILE).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def _worker_setting() -> str | None:
     """The effective worker setting passed to the gates; unset means xdist decides."""
     value = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")
     return value if value else None
 
 
-def _open_history() -> int:
+def _open_history(readable: bool = False) -> int:
     """A private regular history file for appending; an aliased or nonregular destination refuses.
 
     The same shape as the admission's lock files: the no-follow open fails on
     a symlink standing in the file's place, a FIFO cannot pass the regular
     check, and nothing is ever written through a substituted destination.
+    `readable` opens read-write, so the caller may inspect the standing records under the same
+    guards before appending (the slip deduplication).
     """
     root = verify_lock.state_root()
     try:
@@ -139,8 +182,9 @@ def _open_history() -> int:
     if root.is_symlink() or not root.is_dir():
         raise StorageUnusable(f"the shared state directory {root} is not a usable directory")
     path = history_path()
+    write = os.O_RDWR if readable else os.O_WRONLY
     try:
-        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        return os.open(path, write | os.O_CREAT | os.O_EXCL | os.O_APPEND | os.O_NOFOLLOW, 0o600)
     except FileExistsError:
         pass
     except OSError as error:
@@ -150,7 +194,7 @@ def _open_history() -> int:
         ) from error
     # O_NONBLOCK so a FIFO standing in the file's place is refused below, never waited on.
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(path, write | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as error:
         raise StorageUnusable(
             f"the history file {path} is not a private regular file; refusing substituted history"
@@ -178,6 +222,157 @@ def append_event(event: dict) -> None:
         raise StorageUnusable(f"the history lock or write failed ({error}); refusing to record event") from error
     finally:
         os.close(fd)
+
+
+def append_targeted(
+    *,
+    repository: str,
+    worktree: str,
+    change: str,
+    verb: str,
+    check_id: str,
+    tests: list[str],
+    gates: list[str],
+    config_sha256: str | None,
+    tree: str,
+    commit: str | None,
+    outcome: str,
+) -> None:
+    """Append one targeted-check result: scope, identity and the checkpoint it was accepted at.
+
+    Selected tests and gates are identifiers only, never output; `tree` and `config_sha256` are what
+    a later slip measurement compares, so a green is never blamed across changed content.
+    """
+    append_event(
+        {
+            "v": EVENT_VERSION,
+            "event": TARGETED,
+            "check_id": check_id,
+            "utc": _utc_now(),
+            "repository": repository,
+            "worktree": worktree,
+            "change": change,
+            "verb": verb,
+            "tests": list(tests),
+            "gates": list(gates),
+            "outcome": outcome,
+            "config_sha256": config_sha256,
+            "tree": tree,
+            "commit": commit,
+        }
+    )
+
+
+def append_slip(event: dict) -> bool:
+    """Append one slip unless this full run's slip already stands; the check and the write share one lock.
+
+    Deduplication is atomic with the append (bead coding-harness-0swp): reprocessing a completed
+    red run under the same run identity returns False and writes nothing, so a slip is counted once
+    per full run even when two writers race. A storage refusal raises `StorageUnusable`.
+    """
+    line = json.dumps(event, sort_keys=True) + "\n"
+    fd = _open_history(readable=True)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            size = os.fstat(fd).st_size
+            standing = os.pread(fd, size, 0).decode("utf-8", "replace") if size else ""
+            for row in standing.splitlines():
+                if not row.strip():
+                    continue
+                try:
+                    record = json.loads(row)
+                except ValueError:
+                    continue  # a truncated row is diagnosed by the reader, never repaired here
+                if (
+                    isinstance(record, dict)
+                    and record.get("event") == SLIP
+                    and record.get("run_id") == event.get("run_id")
+                ):
+                    return False
+            data = line.encode("utf-8")
+            if os.write(fd, data) != len(data):
+                raise StorageUnusable("the history write was incomplete; refusing to claim a complete slip")
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError as error:
+        raise StorageUnusable(f"the history lock or write failed ({error}); refusing to record slip") from error
+    finally:
+        os.close(fd)
+    return True
+
+
+def bounded_failed_tests(ids: list[str]) -> list[str]:
+    """Failed test ids bounded for the record: at most `MAX_FAILED_TESTS`, each at most `MAX_TEST_ID_LENGTH`."""
+    return [ident[:MAX_TEST_ID_LENGTH] for ident in ids[:MAX_FAILED_TESTS]]
+
+
+def record_local_slip(repository: str, correlation: str, tree: str, failed_tests: list[str] | None) -> str:
+    """Correlate one completed red full run with this repository's latest matching targeted green.
+
+    The run is found through the runner-owned correlation its `start` record carries; only a
+    completed red verdict counts, so a timeout and a run that never started stay unmeasured. The
+    matching green is the latest recorded `targeted` record of this repository with the same gate
+    configuration and the same checked tree — differing commits with identical trees match,
+    differing trees never (bead coding-harness-0swp). Returns what was recorded or why the run
+    stays unmeasured; raises `HistoryMissing` and `StorageUnusable` for the caller to report.
+    """
+    events, _findings = _read_events()
+    start = None
+    for event in events:
+        if event["event"] == RUN_START and event.get("correlation") == correlation:
+            start = event
+    if start is None or _record_error(start):
+        return "the red full run carries no recorded start identity; it stays unmeasured"
+    run_id = start["run_id"]
+    ends = [event for event in events if event["event"] == RUN_END and event.get("run_id") == run_id]
+    if not ends or _record_error(ends[-1]) or ends[-1].get("verdict") != "red":
+        return f"full run {run_id[:8]}… has no completed red verdict; it stays unmeasured"
+    failed_gates = sorted(
+        {
+            str(event["gate"])
+            for event in events
+            if event["event"] == GATE
+            and event.get("run_id") == run_id
+            and event.get("exit") != 0
+            and event.get("enforcement") == "block"
+            and not _record_error(event)
+        }
+    )
+    home = str(Path(repository).resolve())
+    match = None
+    for event in events:
+        if event["event"] != TARGETED or event.get("outcome") != "green" or _record_error(event):
+            continue
+        if str(Path(str(event.get("repository", ""))).resolve()) != home:
+            continue
+        if event.get("config_sha256") != start.get("config_sha256") or event.get("tree") != tree:
+            continue
+        match = event  # file order: the latest matching green of this repository wins
+    if match is None:
+        return (
+            f"no accepted targeted green of {home} matches tree {tree[:12]}… and this gate configuration; "
+            f"the red full run {run_id[:8]}… stays unmeasured"
+        )
+    slip = {
+        "v": EVENT_VERSION,
+        "event": SLIP,
+        "check_id": str(match["check_id"]),
+        "run_id": run_id,
+        "utc": _utc_now(),
+        "repository": home,
+        "failed_gates": failed_gates,
+        "failed_tests": None if failed_tests is None else bounded_failed_tests(list(failed_tests)),
+        "config_sha256": start.get("config_sha256"),
+        "tree": tree,
+    }
+    if append_slip(slip):
+        named = ", ".join(failed_gates) or "none recorded"
+        return (
+            f"recorded one local slip: targeted check {str(match['check_id'])[:8]}… was green on this tree, "
+            f"full run {run_id[:8]}… is red (failed gates: {named})"
+        )
+    return f"the slip of full run {run_id[:8]}… stands already; the red run was not counted twice"
 
 
 def _seconds(start: str, end: str) -> float:
@@ -225,6 +420,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         "placement": args.placement,
         "memory_pct": memory,
         "workers": _worker_setting(),
+        # The runner-owned identity of a full check whose caller asked for slip correlation;
+        # a run nobody correlated carries None and stays unmeasured in the slip reader.
+        "correlation": os.environ.get(CORRELATION_ENV) or None,
         **_context_fields(),
     }
     append_event(event)
@@ -272,6 +470,100 @@ def cmd_end(args: argparse.Namespace) -> int:
     return 0
 
 
+def _utc_moment(text_value: str) -> datetime.datetime:
+    """A UTC moment from an ISO string that carries its offset; the type of --since and --until."""
+    try:
+        moment = datetime.datetime.fromisoformat(text_value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"{text_value} is not an ISO-8601 moment") from error
+    if moment.tzinfo is None:
+        raise argparse.ArgumentTypeError(f"{text_value} carries no UTC offset")
+    return moment.astimezone(datetime.UTC)
+
+
+def _comma_list(raw: str | None) -> list[str]:
+    """A comma-separated identifier list from the command line, empty parts dropped."""
+    return [name.strip() for name in (raw or "").split(",") if name.strip()]
+
+
+def cmd_targeted(args: argparse.Namespace) -> int:
+    """Append one targeted-check result record; the stage-2 runner calls the function directly."""
+    event = {
+        "v": EVENT_VERSION,
+        "event": TARGETED,
+        "check_id": args.check,
+        "utc": _utc_now(),
+        "repository": str(Path(args.repository).resolve()),
+        "worktree": str(Path(args.worktree).resolve()),
+        "change": args.change,
+        "verb": args.verb,
+        "tests": _comma_list(args.tests),
+        "gates": _comma_list(args.gates),
+        "outcome": args.outcome,
+        "config_sha256": args.config_sha256
+        if args.config_sha256 is not None
+        else gate_file_digest(Path(args.repository)),
+        "tree": args.tree,
+        "commit": args.commit,
+    }
+    append_event(event)
+    print(event["check_id"])
+    return 0
+
+
+def cmd_slip(args: argparse.Namespace) -> int:
+    """Append one slip record, deduplicated on its full-run identity; print what stands."""
+    event = {
+        "v": EVENT_VERSION,
+        "event": SLIP,
+        "check_id": args.check,
+        "run_id": args.run,
+        "utc": _utc_now(),
+        "repository": str(Path(args.repository).resolve()),
+        "failed_gates": _comma_list(args.failed_gates),
+        "failed_tests": _comma_list(args.failed_tests) or None,
+        "config_sha256": args.config_sha256,
+        "tree": args.tree,
+    }
+    appended = append_slip(event)
+    print("recorded one slip" if appended else "the slip of this full run stands already; it was not counted twice")
+    return 0
+
+
+def cmd_slips(args: argparse.Namespace) -> int:
+    """Count distinct slipped full runs of one repository in the half-open [since, until) UTC interval.
+
+    Missing, corrupt or incomplete evidence is an unavailable measurement, named as such — never a
+    trustworthy zero (bead coding-harness-0swp).
+    """
+    repository = str(Path(args.repository).resolve())
+    try:
+        events, findings = _read_events()
+    except HistoryMissing as missing:
+        print(f"slip measurement unavailable: {missing}")
+        return 1
+    slips = [event for event in events if event["event"] == SLIP]
+    broken = list(findings)
+    broken += [f"invalid slip fields: {event.get('check_id')}" for event in slips if _record_error(event)]
+    counted = {
+        event["run_id"]
+        for event in slips
+        if not _record_error(event)
+        and str(Path(str(event.get("repository", ""))).resolve()) == repository
+        and args.since <= datetime.datetime.fromisoformat(event["utc"]).astimezone(datetime.UTC) < args.until
+    }
+    interval = f"{args.since.isoformat()} (inclusive) to {args.until.isoformat()} (exclusive)"
+    if broken:
+        for note in broken:
+            _log(f"slip measurement incomplete: {note}")
+        print(f"slip measurement is incomplete; this count is not trustworthy: {len(counted)}")
+        print(f"interval {interval} · repository {repository}")
+        return 1
+    print(f"slips: {len(counted)} distinct slipped full runs")
+    print(f"interval {interval} · repository {repository}")
+    return 0
+
+
 def _read_events() -> tuple[list[dict], list[str]]:
     """The valid version-1 events in file order, plus one diagnostic per unreadable line.
 
@@ -306,7 +598,11 @@ def _read_events() -> tuple[list[dict], list[str]]:
         except ValueError:
             findings.append(f"line {number}: not valid JSON — a truncated row stays a diagnosed gap, never a run")
             continue
-        if not isinstance(event, dict) or event.get("event") not in EVENTS or not isinstance(event.get("run_id"), str):
+        if not isinstance(event, dict) or event.get("event") not in EVENTS:
+            findings.append(f"line {number}: not a version-1 verify-duration event")
+            continue
+        identity = "check_id" if event["event"] in (TARGETED, SLIP) else "run_id"
+        if not isinstance(event.get(identity), str):
             findings.append(f"line {number}: not a version-1 verify-duration event")
             continue
         if type(event.get("v")) is not int or event["v"] != EVENT_VERSION:
@@ -334,8 +630,16 @@ def _record_error(event: dict) -> str | None:
         except ValueError:
             return False
 
-    fields = {"run_id": text, "utc": timestamp}
+    def names(value: object) -> bool:
+        return isinstance(value, list) and all(isinstance(item, str) and bool(item.strip()) for item in value)
+
     kind = event["event"]
+    if kind in (TARGETED, SLIP):
+        fields = {"check_id": text, "utc": timestamp}
+        if kind == SLIP:
+            fields["run_id"] = text
+    else:
+        fields = {"run_id": text, "utc": timestamp}
     if kind == RUN_START:
         fields.update(
             {
@@ -350,6 +654,7 @@ def _record_error(event: dict) -> str | None:
                 "admission_reused": lambda v: v is None or type(v) is bool,
                 "admission_wait_seconds": lambda v: v is None or seconds(v),
                 "memory_pct": lambda v: v is None or (seconds(v) and v <= 100),
+                "correlation": lambda v: v is None or text(v),
             }
         )
     elif kind == GATE:
@@ -361,21 +666,64 @@ def _record_error(event: dict) -> str | None:
                 "enforcement": lambda v: v in ("block", "advisory", "report"),
             }
         )
-    else:
+    elif kind == RUN_END:
         fields.update({"seconds": seconds, "verdict": lambda v: v in ("green", "red")})
-    invalid = [name for name, check in fields.items() if name not in event or not check(event[name])]
+    elif kind == TARGETED:
+        fields.update(
+            {
+                "repository": text,
+                "worktree": text,
+                "change": text,
+                "verb": text,
+                "tests": names,
+                "gates": names,
+                "outcome": lambda v: v in ("green", "red"),
+                "config_sha256": lambda v: v is None or text(v),
+                "tree": text,
+                "commit": lambda v: v is None or text(v),
+            }
+        )
+    else:
+        fields.update(
+            {
+                "repository": text,
+                "failed_gates": names,
+                "failed_tests": lambda v: v is None or names(v),
+                "config_sha256": lambda v: v is None or text(v),
+                "tree": text,
+            }
+        )
+    invalid: list[str] = []
+    for name, check in fields.items():
+        # `correlation` arrived with coding-harness-0swp: version-1 records written before it
+        # carry no such field and must keep reading as valid, so absence is the unknown.
+        if name not in event:
+            if name not in START_OPTIONAL_FIELDS:
+                invalid.append(name)
+            continue
+        if not check(event[name]):
+            invalid.append(name)
     return f"invalid {kind} fields: {', '.join(invalid)}" if invalid else None
 
 
 def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
-    """Group the events by run identity in file order; gate and end rows without a start are diagnosed."""
+    """Group the full-run events by identity in file order; gate and end rows without a start are diagnosed.
+
+    Targeted and slip records have no run grouping of their own: they are validated and diagnosed
+    when malformed, but they never join a run, so the version-1 report keeps reading as it did.
+    """
     runs: dict[str, dict] = {}
     findings: list[str] = []
     order: list[str] = []
     invalid_runs: set[str] = set()
     for event in events:
-        run_id = event["run_id"]
         kind = event["event"]
+        if kind in (TARGETED, SLIP):
+            error = _record_error(event)
+            if error:
+                findings.append(f"{error} for check {event.get('check_id')}")
+            continue
+        run_id = event["run_id"]
         error = _record_error(event)
         if error:
             findings.append(f"{error} for run {run_id}")
@@ -512,6 +860,42 @@ def main(argv: list[str] | None = None) -> int:
     report = operations.add_parser("report", help="list recorded runs, or show one with --run")
     report.add_argument("--run", help="show this run's machine context and per-gate durations")
     report.set_defaults(handler=cmd_report)
+
+    targeted = operations.add_parser("targeted", help="append one targeted-check result record")
+    targeted.add_argument("--repository", required=True, help="the canonical repository path the check accepted")
+    targeted.add_argument("--worktree", required=True, help="the canonical worktree path the check ran in")
+    targeted.add_argument("--change", required=True, help="the change the attempt worked on")
+    targeted.add_argument("--verb", required=True, help="the runner verb that ran the check")
+    targeted.add_argument("--check", default=uuid.uuid4().hex, help="the check's own identity")
+    targeted.add_argument("--tests", default="", help="comma-separated selected whole test files")
+    targeted.add_argument("--gates", default="", help="comma-separated selected gate ids")
+    targeted.add_argument("--outcome", required=True, choices=("green", "red"), help="the check's outcome")
+    targeted.add_argument(
+        "--config-sha256",
+        default=None,
+        help="the gate configuration digest; computed from --repository when left out",
+    )
+    targeted.add_argument("--tree", required=True, help="the accepted checkpoint tree id")
+    targeted.add_argument("--commit", default=None, help="the accepted checkpoint commit")
+    targeted.set_defaults(handler=cmd_targeted)
+
+    slip = operations.add_parser("slip", help="append one slip record, deduplicated on the full run")
+    slip.add_argument("--repository", required=True, help="the repository the red full run measured")
+    slip.add_argument("--check", required=True, help="the matched targeted check's identity")
+    slip.add_argument("--run", required=True, help="the red full run's identity")
+    slip.add_argument("--tree", required=True, help="the checked tree the two runs share")
+    slip.add_argument("--failed-gates", default="", help="comma-separated blocking red gate ids")
+    slip.add_argument("--failed-tests", default="", help="comma-separated failed pytest ids, if known")
+    slip.add_argument("--config-sha256", default=None, help="the gate configuration digest both runs measured")
+    slip.set_defaults(handler=cmd_slip)
+
+    slips = operations.add_parser("slips", help="count distinct slipped full runs of one repository in a UTC interval")
+    slips.add_argument("--repository", required=True, help="the repository whose slips are counted")
+    slips.add_argument(
+        "--since", required=True, type=_utc_moment, help="inclusive interval start, ISO-8601 with offset"
+    )
+    slips.add_argument("--until", required=True, type=_utc_moment, help="exclusive interval end, ISO-8601 with offset")
+    slips.set_defaults(handler=cmd_slips)
 
     args = parser.parse_args(argv)
     try:

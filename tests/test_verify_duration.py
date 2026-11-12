@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -681,3 +682,401 @@ def test_writer_refuses_hard_linked_history(tmp_path, capsys):
     code, _, err = _run(capsys, "start")
     assert code == 2 and "refusing" in err
     assert victim.read_text() == "unchanged\n"
+
+
+# ---------------------------------------------------------------------------
+# Criterion 11 — targeted and slip records keep the history safe and compatible
+# ---------------------------------------------------------------------------
+
+
+def test_targeted_history_preserves_safety_and_legacy_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 11. Faults this pins: a new event kind breaking the version-1 reader or its
+    verdicts, raw output or a credential landing in a record, concurrent slip writers mixing or
+    doubling a row, a storage failure changing a verdict instead of being named, or a substituted
+    destination being written through by one of the new writers.
+    """
+    state = tmp_path / "state"
+    root = state / "coding-harness"
+    root.mkdir(parents=True)
+    path = root / verify_duration.HISTORY_NAME
+
+    # The version-1 records read exactly as before, beside targeted and slip rows: the new
+    # kinds never join a run, so the old run keeps its green verdict and its detail view.
+    legacy = _valid_records("legacy-run")
+    targeted_row = {
+        "v": 1,
+        "event": "targeted",
+        "check_id": "check-one",
+        "utc": "2026-11-04T10:02:00+00:00",
+        "repository": str(REPO_ROOT),
+        "worktree": str(tmp_path),
+        "change": "demo",
+        "verb": "implement",
+        "tests": ["tests/test_demo.py"],
+        "gates": ["criterion-ledger"],
+        "outcome": "green",
+        "config_sha256": "e" * 64,
+        "tree": "f" * 40,
+        "commit": None,
+    }
+    slip_row = {
+        "v": 1,
+        "event": "slip",
+        "check_id": "check-one",
+        "run_id": "legacy-run",
+        "utc": "2026-11-04T10:03:00+00:00",
+        "repository": str(REPO_ROOT),
+        "failed_gates": ["pytest"],
+        "failed_tests": None,
+        "config_sha256": "e" * 64,
+        "tree": "f" * 40,
+    }
+    path.write_text("\n".join(json.dumps(row) for row in [*legacy, targeted_row, slip_row]) + "\n", encoding="utf-8")
+    code, out, _ = _run(capsys, "report")
+    assert code == 0, out
+    assert "run legacy-run" in out and "green" in out and "1.500s" in out, out
+    assert "history note:" not in out, "a targeted or slip row was mistaken for a version-1 record"
+    code, out, _ = _run(capsys, "report", "--run", "legacy-run")
+    assert code == 0 and "probe" in out and "verdict: green" in out, out
+
+    # The runner's writer stores identifiers only: the field set leaves no room for command
+    # output, environment dumps or credentials.
+    verify_duration.append_targeted(
+        repository=str(tmp_path),
+        worktree=str(tmp_path / "wt"),
+        change="demo",
+        verb="implement",
+        check_id="check-two",
+        tests=["tests/test_demo.py"],
+        gates=["criterion-ledger"],
+        config_sha256="e" * 64,
+        tree="f" * 40,
+        commit=None,
+        outcome="green",
+    )
+    stored = _history(state)[-1]
+    assert stored["event"] == "targeted" and stored["check_id"] == "check-two"
+    assert set(stored) == {
+        "v",
+        "event",
+        "check_id",
+        "utc",
+        "repository",
+        "worktree",
+        "change",
+        "verb",
+        "tests",
+        "gates",
+        "outcome",
+        "config_sha256",
+        "tree",
+        "commit",
+    }, "the targeted record carries a field that is not a bounded identifier"
+
+    # Concurrent slip writers never mix lines and never count one full run twice: the
+    # deduplication shares the append's lock, so four racing writers leave one row.
+    def slip_event(run_id: str) -> dict:
+        return {
+            "v": 1,
+            "event": "slip",
+            "check_id": "check-two",
+            "run_id": run_id,
+            "utc": "2026-11-04T10:04:00+00:00",
+            "repository": str(REPO_ROOT),
+            "failed_gates": [],
+            "failed_tests": None,
+            "config_sha256": None,
+            "tree": "f" * 40,
+        }
+
+    results: list[bool] = []
+    writers = [
+        threading.Thread(target=lambda: results.append(verify_duration.append_slip(slip_event("race-run"))))
+        for _ in range(4)
+    ]
+    for worker in writers:
+        worker.start()
+    for worker in writers:
+        worker.join()
+    assert sum(results) == 1, f"one full run was counted {sum(results)} times under a race"
+    races = [row for row in _history(state) if row["event"] == "slip" and row["run_id"] == "race-run"]
+    assert len(races) == 1, "the racing writers left more than one slip row"
+
+    # Different full runs append independently under the same lock: two more rows, none mixed.
+    writers = [
+        threading.Thread(target=lambda rid=rid: results.append(verify_duration.append_slip(slip_event(rid))))
+        for rid in ("race-a", "race-b")
+    ]
+    for worker in writers:
+        worker.start()
+    for worker in writers:
+        worker.join()
+    assert sum(results) == 2, "a distinct full run was refused as a duplicate"
+    slips = [row for row in _history(state) if row["event"] == "slip"]
+    assert sorted(row["run_id"] for row in slips) == ["race-a", "race-b", "race-run"]
+    assert sum(1 for row in slips if row["run_id"] == "race-run") == 1
+    for line in path.read_text(encoding="utf-8").splitlines():
+        json.loads(line)  # a mixed or partial write would raise here
+
+    # A storage failure is named and leaves the standing records untouched — the caller keeps
+    # its verdict and reports that measurement is unavailable, never a silent pass.
+    before = path.read_text(encoding="utf-8")
+
+    def fail(*_args):
+        raise OSError(errno.ENOSPC, "injected storage failure")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(verify_duration.os, "write", fail)
+        with pytest.raises(verify_duration.StorageUnusable):
+            verify_duration.append_slip(slip_event("run-lost"))
+        with pytest.raises(verify_duration.StorageUnusable):
+            verify_duration.append_targeted(
+                repository=str(tmp_path),
+                worktree=str(tmp_path),
+                change="demo",
+                verb="implement",
+                check_id="check-lost",
+                tests=[],
+                gates=[],
+                config_sha256=None,
+                tree="f" * 40,
+                commit=None,
+                outcome="green",
+            )
+    assert path.read_text(encoding="utf-8") == before, "a failed write changed the standing history"
+
+    # A substituted destination is refused by the new writers exactly as by the old ones:
+    # nothing is written through the link.
+    victim = tmp_path / "victim.jsonl"
+    victim.write_text("do not write through me\n", encoding="utf-8")
+    path.unlink()
+    path.symlink_to(victim)
+    with pytest.raises(verify_duration.StorageUnusable):
+        verify_duration.append_slip(slip_event("run-sub"))
+    with pytest.raises(verify_duration.StorageUnusable):
+        verify_duration.append_slip(slip_event("run-sub"))
+    with pytest.raises(verify_duration.StorageUnusable):
+        verify_duration.append_targeted(
+            repository=str(tmp_path),
+            worktree=str(tmp_path),
+            change="demo",
+            verb="implement",
+            check_id="check-sub",
+            tests=[],
+            gates=[],
+            config_sha256=None,
+            tree="f" * 40,
+            commit=None,
+            outcome="green",
+        )
+    assert victim.read_text(encoding="utf-8") == "do not write through me\n"
+
+
+# ---------------------------------------------------------------------------
+# Criterion 12 — the slip report counts one repository's distinct slipped runs
+# ---------------------------------------------------------------------------
+
+
+def test_slip_report_counts_interval_and_reports_gaps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 12. Faults this pins: a duplicated full run counted twice, another repository
+    or interval counted, or missing, corrupt or incomplete evidence reported as a trustworthy
+    zero instead of an unavailable measurement.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    since = "2026-01-01T00:00:00+00:00"
+    until = "2027-01-01T00:00:00+00:00"
+
+    # No history at all: the measurement is unavailable, never zero.
+    fresh = tmp_path / "fresh-state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(fresh))
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 1 and "unavailable" in out, (code, out)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
+    # The runner's own flow: one accepted targeted green, then one correlated completed red
+    # full run on the same tree and gate configuration. The green carries the digest the run
+    # start recorded, exactly as the runner reads both from the same gate file.
+    tree = "d" * 40
+    check_id = "check-targeted"
+    correlation = "corr-" + "a" * 12
+    monkeypatch.setenv(verify_duration.CORRELATION_ENV, correlation)
+    code, run_id, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    run_id = run_id.strip()
+    monkeypatch.delenv(verify_duration.CORRELATION_ENV)
+    started = _history(tmp_path / "state")[-1]
+    assert started["event"] == "run_start" and started["correlation"] == correlation
+    verify_duration.append_targeted(
+        repository=str(repo),
+        worktree=str(tmp_path / "wt"),
+        change="demo",
+        verb="implement",
+        check_id=check_id,
+        tests=["tests/test_demo.py"],
+        gates=["pytest"],
+        config_sha256=started["config_sha256"],
+        tree=tree,
+        commit=None,
+        outcome="green",
+    )
+    code, _, _ = _run(
+        capsys,
+        "gate",
+        "--run",
+        run_id,
+        "--gate",
+        "pytest",
+        "--start",
+        "0.0",
+        "--end",
+        "1.0",
+        "--status",
+        "1",
+        "--enforcement",
+        "block",
+    )
+    assert code == 0
+    code, _, _ = _run(capsys, "end", "--run", run_id, "--start", "0.0", "--end", "9.0", "--verdict", "red")
+    assert code == 0
+    note = verify_duration.record_local_slip(str(repo), correlation, tree, ["tests/test_demo.py::test_demo"])
+    assert "recorded one local slip" in note, note
+
+    # The count CLI names the count and its interval and repository; the half-open window
+    # holds the slip once.
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.verify_duration",
+            "slips",
+            "--repository",
+            str(repo),
+            "--since",
+            since,
+            "--until",
+            until,
+        ],
+        cwd=REPO_ROOT,
+        env=dict(os.environ, XDG_STATE_HOME=str(tmp_path / "state")),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert done.returncode == 0, done
+    assert "slips: 1 distinct slipped full runs" in done.stdout, done.stdout
+    assert f"repository {repo}" in done.stdout, done.stdout
+
+    # Reprocessing the same completed red run adds nothing: one slip per full-run identity.
+    note = verify_duration.record_local_slip(str(repo), correlation, tree, ["tests/test_demo.py::test_demo"])
+    assert "stands already" in note, note
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 0 and "slips: 1" in out, out
+
+    # A second completed red run on the same green is a distinct slipped run: the count grows.
+    second_corr = "corr-" + "b" * 12
+    monkeypatch.setenv(verify_duration.CORRELATION_ENV, second_corr)
+    code, second_run, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    second_run = second_run.strip()
+    monkeypatch.delenv(verify_duration.CORRELATION_ENV)
+    code, _, _ = _run(
+        capsys,
+        "gate",
+        "--run",
+        second_run,
+        "--gate",
+        "pytest",
+        "--start",
+        "0.0",
+        "--end",
+        "1.0",
+        "--status",
+        "1",
+        "--enforcement",
+        "block",
+    )
+    assert code == 0
+    code, _, _ = _run(capsys, "end", "--run", second_run, "--start", "0.0", "--end", "8.0", "--verdict", "red")
+    assert code == 0
+    note = verify_duration.record_local_slip(str(repo), second_corr, tree, None)
+    assert "recorded one local slip" in note, note
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 0 and "slips: 2" in out, out
+
+    # A duplicated slip row for an already-counted run (an old writer's race, replayed here by
+    # appending directly) is not counted again: distinct run identities decide.
+    duplicate = dict(slip_event_like(check_id, second_run, str(repo), tree))
+    duplicate["check_id"] = "check-replay"
+    verify_duration.append_event(duplicate)
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 0 and "slips: 2" in out, out
+
+    # Another repository's slip stays out of this count.
+    other = tmp_path / "other"
+    other.mkdir()
+    verify_duration.append_event(slip_event_like("check-other", "run-other", str(other), tree))
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 0 and "slips: 2" in out, out
+    code, out, _ = _run(capsys, "slips", "--repository", str(other), "--since", since, "--until", until)
+    assert code == 0 and "slips: 1" in out, out
+
+    # The interval is half-open on UTC instants: a 2020 slip sits outside the 2026 window,
+    # inside its own window at the inclusive start, and outside at the exclusive end.
+    old = slip_event_like("check-old", "run-old", str(repo), tree)
+    old["utc"] = "2020-06-01T12:00:00+00:00"
+    verify_duration.append_event(old)
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 0 and "slips: 2" in out, out
+    code, out, _ = _run(
+        capsys,
+        "slips",
+        "--repository",
+        str(repo),
+        "--since",
+        "2020-06-01T12:00:00+00:00",
+        "--until",
+        "2020-06-01T12:00:01+00:00",
+    )
+    assert code == 0 and "slips: 1" in out and "inclusive" in out and "exclusive" in out, out
+    code, out, _ = _run(
+        capsys,
+        "slips",
+        "--repository",
+        str(repo),
+        "--since",
+        "2020-06-01T11:59:59+00:00",
+        "--until",
+        "2020-06-01T12:00:00+00:00",
+    )
+    assert code == 0 and "slips: 0" in out, out
+
+    # Corrupt rows and an invalid slip record make the count explicitly untrustworthy —
+    # it is never presented as a clean zero or a clean total.
+    path = tmp_path / "state" / "coding-harness" / verify_duration.HISTORY_NAME
+    broken_slip = slip_event_like("check-broken", "run-broken", str(repo), tree)
+    del broken_slip["tree"]
+    original = path.read_text(encoding="utf-8")
+    path.write_text(original + "not json at all{{\n" + json.dumps(broken_slip) + "\n", encoding="utf-8")
+    code, out, _ = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+    assert code == 1 and "not trustworthy" in out and "incomplete" in out, (code, out)
+
+
+def slip_event_like(check_id: str, run_id: str, repository: str, tree: str) -> dict:
+    """One valid slip record, used to seed reader cases directly."""
+    return {
+        "v": 1,
+        "event": "slip",
+        "check_id": check_id,
+        "run_id": run_id,
+        "utc": "2026-06-01T12:00:00+00:00",
+        "repository": repository,
+        "failed_gates": ["pytest"],
+        "failed_tests": None,
+        "config_sha256": None,
+        "tree": tree,
+    }
