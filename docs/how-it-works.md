@@ -169,6 +169,37 @@ These are operator details; you can skip them on a first read.
   whose declared `valid_until` date has not passed; the runner warns before
   it does.
 
+One call of the runner, from start to end. A verb that writes (`draft`,
+`implement`, `repair`) takes the whole path; a review verb ends after the
+answer is read, with its findings recorded:
+
+```mermaid
+flowchart TD
+    V[One verb for one change] --> P{Change folder, bead and endpoint in order?}
+    P -->|no| R1[Refused before any call]
+    P -->|yes| L{Leak check clean?}
+    L -->|no| R2[Stop, no fallback to another model]
+    L -->|yes| M[Start the model for this verb]
+    M --> A{Answer in the expected form?}
+    A -->|no, also after one reminder| X[Attempt failed]
+    A -->|review verb| F[Findings recorded]
+    A -->|writing verb| H{Only paths the verb may change?}
+    H -->|no| X
+    H -->|yes| C{Cheap checks green: ruff and the attempt's own tests?}
+    C -->|no| X
+    C -->|yes| T{Post-run check green?}
+    T -->|no| X
+    T -->|yes| K[One commit]
+    X --> N{Another route left?}
+    N -->|yes, with the diagnostics| M
+    N -->|no| U[Tree restored, attempt saved on a side ref, exit with an error]
+```
+
+The post-run check is the document gates for a draft, the full `make verify`
+for an implement attempt, and the targeted check or its full fallback for a
+repair. Deciding on findings, the tracker, worktrees and merges are outside
+the runner: the orchestrating session and the maintainer do them.
+
 ### Research swarm
 
 A `feature` or `architectural` change explores through the research swarm
