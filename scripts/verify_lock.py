@@ -63,47 +63,10 @@ entry with a diagnostic before any protected work: nothing here falls through
 unlocked, and no substituted file is written through. `VerifyLockRefused`
 exits 2, `MemoryFloorRefused` exits 3.
 
-**Run temporary area.** A supervised runner can instead ask for a *scope*
-(`--tmp-scope`): its own private temporary area, created in a managed
-container (`.harness-verify-tmp` beside the caller's absolute
-`PYTEST_DEBUG_TEMPROOT`, or beside the platform temporary parent when unset)
-and removed when the protected work ends — on success, on failure and on a
-trapped signal alike. The child receives `PYTEST_DEBUG_TEMPROOT=<area>`, so
-every pytest session of the run — numbered roots, xdist workers, the kit
-probe — writes inside the area, while `TMPDIR` and unrelated pytest options
-stay untouched; an inherited `--basetemp` (any accepted spelling in
-`PYTEST_ADDOPTS`) refuses the scope before any gate. A scope belongs to one
-supervised runner, not to one admission: an inherited admission still
-receives a fresh sibling area, two runs never share one, and a nested runner
-never removes its parent's. Publication and the start sweep serialize on a
-short `registry.lock` flock inside the container, separate from admission.
-The ownership record (`owner.json`, versioned, published before launch)
-carries the area's directory identity, supervisor and child pids, the
-protected process group and the retention request; the lease (`lease.lock`)
-is a flock the supervisor holds for the whole scope and the protected child
-inherits — so a killed supervisor alone never makes a live child's area an
-orphan. The start sweep reclaims an orphan only when its lease can be taken
-without waiting, its record matches the directory's identity and its
-protected group is gone; a busy lease means live work and the area is
-skipped, an unreadable or substituted candidate is reported and left
-untouched rather than guessed. With `HARNESS_VERIFY_KEEP_TMP=1` an
-*unsuccessful* run keeps its area and reports its absolute path on stderr
-(interrupted runs included; a successful run never retains); the caller
-inspects it and removes it, and no sweep deletes it. The query (`--tmp-held`)
-answers for the calling shell alone: it passes only when the shell is the
-recorded child of a live scope supervisor, so a deeper runner or a copied
-environment always receives a fresh area of its own.
-
 Command line:
 
     python -m scripts.verify_lock --held          # exit 0 when the environment names a valid admission
-    python -m scripts.verify_lock --tmp-held      # exit 0 when the calling shell is a live scope's child
     python -m scripts.verify_lock -- COMMAND...   # supervise one protected command
-    python -m scripts.verify_lock --tmp-scope -- COMMAND...
-                                                  # supervise one protected command in its own
-                                                  # temporary run area; a failed run is kept for
-                                                  # inspection with HARNESS_VERIFY_KEEP_TMP=1:
-                                                  # HARNESS_VERIFY_KEEP_TMP=1 PYTHON=.venv/bin/python3 make verify
 
 The supervisor queues, checks memory, publishes ownership for its child —
 which inherits the lock descriptor, so ownership outlives a killed supervisor
@@ -130,12 +93,10 @@ import math
 import os
 import re
 import secrets
-import shlex
 import signal
 import stat
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import uuid
@@ -145,22 +106,6 @@ from pathlib import Path
 LOCK_ENV = "HARNESS_VERIFY_LOCK_HELD"
 TOKEN_ENV = "HARNESS_VERIFY_LOCK_TOKEN"
 FLOOR_ENV = "HARNESS_VERIFY_MEMORY_FLOOR"
-# The run temporary area (bead coding-harness-bxxt.3): the container locator
-# and the scope marker travel in the scope environment, the retention request
-# is the caller's explicit opt-in, and the container is a private directory
-# beside the caller's absolute PYTEST_DEBUG_TEMPROOT or the platform temporary
-# parent — never inside the caller's TMPDIR, which stays untouched.
-TMP_CONTAINER_ENV = "HARNESS_VERIFY_TMP_CONTAINER"
-TMP_SCOPE_ENV = "HARNESS_VERIFY_TMP_SCOPE"
-KEEP_TMP_ENV = "HARNESS_VERIFY_KEEP_TMP"
-CONTAINER_NAME = ".harness-verify-tmp"
-AREA_PREFIX = "run-"
-TMP_REGISTRY_NAME = "registry.lock"
-LEASE_NAME = "lease.lock"
-SCOPE_RECORD_NAME = "owner.json"
-SCOPE_RECORD_VERSION = 1
-SCOPE_QUERY_SECONDS = 0.5
-SCOPE_QUERY_POLL_SECONDS = 0.01
 # The non-secret admission context (bead coding-harness-1um6): the id names the
 # admission to its descendants, the wait is the measured queue-plus-memory
 # seconds. The ownership token never travels in either — it stays in TOKEN_ENV
@@ -907,14 +852,9 @@ def _restore_signal_handlers(previous: dict[int, object]) -> None:
 
 
 def _spawn_child(
-    command: list[str], pass_fds: tuple[int, ...], admission: _Admission | None, scope: _TempScope | None = None
+    command: list[str], pass_fds: tuple[int, ...], admission: _Admission | None
 ) -> subprocess.Popen[bytes]:
-    """The protected command in its own session, stdout and stderr reaching the operator.
-
-    A scope hands its child the run area as `PYTEST_DEBUG_TEMPROOT` and the
-    container as the locator for nested scopes; `TMPDIR` is deliberately not
-    rewritten, so unrelated temporary writers keep their contract.
-    """
+    """The protected command in its own session, stdout and stderr reaching the operator."""
     env = dict(os.environ)
     if admission is not None:
         env[LOCK_ENV] = str(os.getpid())
@@ -927,10 +867,6 @@ def _spawn_child(
         # an ancestor's admission must not pass itself off as this child's own.
         env.pop(ADMISSION_ID_ENV, None)
         env.pop(ADMISSION_WAIT_ENV, None)
-    if scope is not None:
-        env["PYTEST_DEBUG_TEMPROOT"] = str(scope.area)
-        env[TMP_CONTAINER_ENV] = str(scope.container)
-        env[TMP_SCOPE_ENV] = str(scope.area)
     return subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
 
 
@@ -984,541 +920,28 @@ def end_lingering_group(group: int) -> None:
             time.sleep(CHILD_WATCH_SECONDS)
 
 
-# ---------------------------------------------------------------------------
-# The run temporary area (bead coding-harness-bxxt.3)
-# ---------------------------------------------------------------------------
-
-
-def _record_int(record: dict, name: str) -> int | None:
-    """A positive integer field of an ownership record, or None when absent or unusable."""
-    value = record.get(name)
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return None
-    return value
-
-
-def _record_optional_int(record: dict, name: str) -> int | None:
-    """A positive integer field that may legitimately be absent, or None otherwise.
-
-    An unusable value reads as absent: the callers treat both as "cannot be
-    established" and fail closed, never as a guess.
-    """
-    value = record.get(name)
-    if value is None:
-        return None
-    return _record_int(record, name)
-
-
-def _identity_of(path: Path) -> tuple[int, int]:
-    """The directory identity (device, inode) an ownership record is checked against."""
-    following = path.lstat()
-    return (following.st_dev, following.st_ino)
-
-
-def _flock_descriptor(fd: int) -> Iterator[None]:
-    """Hold one exclusive flock on an open descriptor for the block, release after."""
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    try:
-        yield
-    finally:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-
-
-def _read_scope_record(area: Path) -> dict | None:
-    """The scope ownership record, read without following symlinks; None when absent or unusable."""
-    try:
-        # Non-blocking, so a FIFO planted in the record's place is refused below, never waited on.
-        fd = os.open(area / SCOPE_RECORD_NAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return None
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return None
-        payload = b""
-        while len(payload) < 65536:
-            block = os.read(fd, 65536)
-            if not block:
-                break
-            payload += block
-    finally:
-        os.close(fd)
-    try:
-        record = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
-        return None
-    return record if isinstance(record, dict) else None
-
-
-def _lease_is_busy(area: Path) -> bool:
-    """True while someone still holds the area's lease — the supervisor or its inherited child."""
-    try:
-        fd = os.open(area / LEASE_NAME, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return False
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            return True
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        return False
-    finally:
-        os.close(fd)
-
-
-def _scope_record_holds(area: Path, record: dict) -> bool:
-    """The record is ours and its supervision is live: version, identity, child, supervisor, lease."""
-    version = record.get("version")
-    if isinstance(version, bool) or not isinstance(version, int) or version != SCOPE_RECORD_VERSION:
-        return False
-    dev, ino, supervisor = _record_int(record, "dev"), _record_int(record, "ino"), _record_int(record, "supervisor")
-    if dev is None or ino is None or supervisor is None:
-        return False
-    try:
-        if _identity_of(area) != (dev, ino):
-            return False
-    except OSError:
-        return False
-    if _record_optional_int(record, "child") != os.getppid():
-        # The calling shell is not the recorded child: a deeper runner or a copied
-        # environment must not inherit the answer (it receives a fresh area of its own).
-        return False
-    try:
-        os.kill(supervisor, 0)
-    except ProcessLookupError:
-        return False
-    except OSError:
-        pass  # exists but is not signallable by us: still live
-    return _lease_is_busy(area)
-
-
-def tmp_scope_held() -> bool:
-    """True when the calling shell is the recorded child of a live scope supervisor.
-
-    Only the immediate child passes: the query checks its calling shell's
-    identity (`getppid` against the published child pid), never the short-lived
-    query process itself. A record not yet naming its child belongs to a launch
-    in progress — the query waits a bounded moment for it before concluding the
-    scope is not ours; an area already gone fails at once.
-    """
-    marker = os.environ.get(TMP_SCOPE_ENV, "").strip()
-    if not marker or not Path(marker).is_absolute():
-        return False
-    area = Path(marker)
-    try:
-        area.lstat()
-    except OSError:
-        return False  # the area is gone; no scope of ours can live there
-    deadline = _now() + SCOPE_QUERY_SECONDS
-    while True:
-        record = _read_scope_record(area)
-        if record is not None:
-            return _scope_record_holds(area, record)
-        if _now() >= deadline:
-            return False
-        _sleep(SCOPE_QUERY_POLL_SECONDS)
-
-
-def _refuse_foreign_basetemp() -> None:
-    """Refuse inherited pytest options that would place pytest's basetemp outside the run area.
-
-    `PYTEST_ADDOPTS` is parsed the way pytest parses it (`shlex.split`); any
-    selection of `--basetemp` — `--basetemp PATH`, `--basetemp=PATH` or an
-    accepted abbreviation of the option — refuses the scope before any gate,
-    and malformed quoting refuses as well. Unrelated options pass untouched;
-    an option *value* that merely looks like the option also refuses, because
-    failing closed is the only direction that never escapes containment.
-    """
-    raw = os.environ.get("PYTEST_ADDOPTS")
-    if not raw:
-        return
-    try:
-        words = shlex.split(raw)
-    except ValueError as error:
-        raise VerifyLockRefused(
-            f"PYTEST_ADDOPTS={raw!r} cannot be parsed as pytest options ({error}); refusing the scope"
-        ) from None
-    for word in words:
-        if not word.startswith("--"):
-            continue
-        name = word[2:].split("=", 1)[0]
-        if name and "basetemp".startswith(name):
-            raise VerifyLockRefused(
-                f"PYTEST_ADDOPTS selects pytest's basetemp ({word}); it would write outside the run area; "
-                "refusing the scope"
-            )
-
-
-def _prepare_directory(path: Path) -> Path:
-    """Create a directory tree, refusing anything that cannot be created."""
-    try:
-        path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    except OSError as error:
-        raise VerifyLockRefused(f"the directory {path} cannot be created ({error.strerror or error})") from error
-    return path
-
-
-def _validate_container(path: Path) -> Path:
-    """The container must be a private directory owned by this user; anything else refuses."""
-    try:
-        following = path.lstat()
-    except OSError as error:
-        raise VerifyLockRefused(
-            f"the managed temporary container {path} is unusable ({error.strerror or error})"
-        ) from error
-    if stat.S_ISLNK(following.st_mode) or not stat.S_ISDIR(following.st_mode):
-        raise VerifyLockRefused(
-            f"the managed temporary container {path} is not a directory; refusing substituted state"
-        )
-    if following.st_uid != os.getuid() or following.st_mode & 0o077:
-        raise VerifyLockRefused(
-            f"the managed temporary container {path} is not a private directory owned by this user; refusing"
-        )
-    return path
-
-
-def _resolve_container() -> Path:
-    """The managed container of this run: an inherited locator, or a fresh one beside the parent.
-
-    The locator (`TMP_CONTAINER_ENV`) is carried with the scope environment so
-    a nested run allocates a sibling under the *original* container instead of
-    treating its inherited pytest root — an area, not a caller-selected
-    parent — as a new parent. An unusable locator refuses: sweeping a
-    different container would strand the orphans the first one holds.
-    """
-    given = os.environ.get(TMP_CONTAINER_ENV, "").strip()
-    if given:
-        container = Path(given)
-        if not container.is_absolute():
-            raise VerifyLockRefused(f"{TMP_CONTAINER_ENV}={given!r} is not an absolute path; refusing the scope")
-        return _validate_container(container)
-    raw = os.environ.get("PYTEST_DEBUG_TEMPROOT", "").strip()
-    if raw and not Path(raw).is_absolute():
-        raise VerifyLockRefused(
-            f"PYTEST_DEBUG_TEMPROOT={raw!r} is not an absolute path; refusing to place the run area beside it"
-        )
-    parent = Path(raw) if raw else Path(tempfile.gettempdir())
-    return _validate_container(_prepare_directory(parent / CONTAINER_NAME))
-
-
-def _clear_directory(dir_fd: int) -> None:
-    """Empty one open directory, descriptor-relative and no-follow: a symlink is unlinked, never followed."""
-    for name in os.listdir(dir_fd):
-        child = os.lstat(name, dir_fd=dir_fd)
-        if stat.S_ISDIR(child.st_mode):
-            nested = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY, dir_fd=dir_fd)
-            try:
-                _clear_directory(nested)
-            finally:
-                os.close(nested)
-            os.rmdir(name, dir_fd=dir_fd)  # noqa: PTH106 — pathlib has no dir_fd; no-follow removal needs it
-        else:
-            os.unlink(name, dir_fd=dir_fd)  # noqa: PTH108 — pathlib has no dir_fd; no-follow unlink needs it
-
-
-def _remove_tree(path: Path) -> None:
-    """Remove a directory tree without ever descending into a symlink.
-
-    Every step is descriptor-relative and no-follow, so a symlink planted
-    inside the tree is unlinked itself and nothing outside the tree — the
-    caller's parent, a substituted target — is touched.
-    """
-    following = path.lstat()  # FileNotFoundError propagates: the caller decides what absence means
-    if stat.S_ISLNK(following.st_mode) or not stat.S_ISDIR(following.st_mode):
-        raise VerifyLockRefused(f"{path} is not a directory; refusing to remove substituted state")
-    root_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
-    try:
-        _clear_directory(root_fd)
-    finally:
-        os.close(root_fd)
-    path.rmdir()
-
-
-def _sweep_container(container: Path) -> list[str]:
-    """Reclaim recognizable, unretained orphan areas; report and keep everything unsafe.
-
-    Called under the registry flock at a scope's start, before our own area
-    exists. Only `run-*` entries are candidates, so the container's own
-    registry, foreign files and legacy pytest roots are never swept. A
-    candidate is reclaimed only when its lease can be taken without waiting
-    (no live supervisor or inherited child holds it), its published record is
-    valid and matches the directory's identity, and its protected process
-    group is gone; a busy lease means live protected work and is skipped
-    silently. Every other verdict — unreadable record, unknown version,
-    substituted entry, live group, an explicitly retained area, a failed
-    removal — is reported and left untouched rather than guessed.
-    """
-    reports: list[str] = []
-    try:
-        names = sorted(os.listdir(container))
-    except OSError as error:
-        raise VerifyLockRefused(f"the managed container {container} cannot be read ({error})") from error
-    for name in names:
-        if not name.startswith(AREA_PREFIX):
-            continue
-        area = container / name
-        try:
-            following = area.lstat()
-        except OSError:
-            continue  # vanished between the listing and the look: nothing left to reclaim
-        if stat.S_ISLNK(following.st_mode) or not stat.S_ISDIR(following.st_mode):
-            reports.append(f"{area} is not a managed directory; left untouched")
-            continue
-        verdict = _reclaim_or_report(area, following)
-        if verdict is not None:
-            reports.append(verdict)
-    for line in reports:
-        _log(f"sweep: {line}")
-    return reports
-
-
-def _reclaim_or_report(area: Path, following: os.stat_result) -> str | None:
-    """One candidate's verdict: None when reclaimed, otherwise the reason it was left untouched."""
-    record = _read_scope_record(area)
-    if record is None:
-        return f"{area} has no usable ownership record; left untouched"
-    version = record.get("version")
-    if isinstance(version, bool) or not isinstance(version, int) or version != SCOPE_RECORD_VERSION:
-        return f"{area} carries an unknown record version; left untouched"
-    dev, ino = _record_int(record, "dev"), _record_int(record, "ino")
-    if dev is None or ino is None or (following.st_dev, following.st_ino) != (dev, ino):
-        return f"{area} does not match its published directory identity; left untouched"
-    try:
-        lease_fd = os.open(area / LEASE_NAME, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return f"{area} has no usable lease; left untouched"
-    try:
-        try:
-            fcntl.flock(lease_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            return None  # a live supervisor or inherited child holds it: an active sibling, not a finding
-        group = _record_optional_int(record, "group")
-        if group is not None and _group_alive(group):
-            return f"{area} names a live protected process group; left untouched"
-        if record.get("retention") is True and record.get("outcome") != 0:
-            # An unsuccessful or unknown run under an explicit request keeps its
-            # evidence; a known-successful one never retains (retention is for
-            # inspection, and only the caller removes a retained area).
-            return f"{area} is retained by {KEEP_TMP_ENV}=1; left for inspection"
-        try:
-            _remove_tree(area)
-        except VerifyLockError as error:
-            return f"{area} cannot be removed safely ({error}); left in place"
-        except OSError as error:
-            return f"{area} cannot be removed ({error.strerror or error}); left in place"
-        return None
-    finally:
-        os.close(lease_fd)
-
-
-@dataclasses.dataclass
-class _TempScope:
-    """One run's temporary area: container, lease, published ownership.
-
-    The scope belongs to one supervised runner, not to one admission: an
-    inherited admission still receives a fresh area without another queue or
-    memory wait, and two runs never share one.
-    """
-
-    container: Path
-    area: Path
-    identity: tuple[int, int]
-    lease_fd: int
-    registry_fd: int
-    retention: bool
-    started: str
-
-    @classmethod
-    def start(cls) -> _TempScope:
-        """Refuse foreign basetemps, resolve the container, sweep, allocate and publish our area."""
-        _refuse_foreign_basetemp()
-        container = _resolve_container()
-        registry_fd = _open_lock_file(container / TMP_REGISTRY_NAME)
-        area: Path | None = None
-        lease_fd: int | None = None
-        try:
-            with _flock_descriptor(registry_fd):
-                _sweep_container(container)
-                area, lease_fd = cls._allocate(container)
-                scope = cls(
-                    container=container,
-                    area=area,
-                    identity=_identity_of(area),
-                    lease_fd=lease_fd,
-                    registry_fd=registry_fd,
-                    # Snapshotted before the launch, so a recovery after a hard
-                    # kill can still honour the request it saw (the record is
-                    # all a later sweep can read).
-                    retention=os.environ.get(KEEP_TMP_ENV, "") == "1",
-                    started=_stamp(),
-                )
-                scope._publish(None)
-        except BaseException:
-            if lease_fd is not None:
-                os.close(lease_fd)
-            if area is not None:
-                with contextlib.suppress(OSError, VerifyLockError):
-                    _remove_tree(area)
-            os.close(registry_fd)
-            raise
-        return scope
-
-    @staticmethod
-    def _allocate(container: Path) -> tuple[Path, int]:
-        """A unique user-owned area with a fresh lease, inside the managed container."""
-        area = container / f"{AREA_PREFIX}{uuid.uuid4().hex}"
-        try:
-            area.mkdir(mode=0o700)
-        except OSError as error:
-            raise VerifyLockRefused(f"the run area {area} cannot be created ({error.strerror or error})") from error
-        lease_fd = _open_lock_file(area / LEASE_NAME)
-        try:
-            fcntl.flock(lease_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            os.close(lease_fd)
-            raise VerifyLockRefused(
-                f"the lease of the run area {area} cannot be held ({error.strerror or error})"
-            ) from error
-        return area, lease_fd
-
-    def _publish(self, child: int | None) -> None:
-        """Publish the ownership record under the registry flock; a planted hard link is never written through."""
-        record = {
-            "version": SCOPE_RECORD_VERSION,
-            "area": str(self.area),
-            "dev": self.identity[0],
-            "ino": self.identity[1],
-            "supervisor": os.getpid(),
-            # The child leads its own session (start_new_session), so its pid
-            # is the protected group until it exits; both are None until the
-            # launch has handed them to us.
-            "child": child,
-            "group": child,
-            "retention": self.retention,
-            "start": self.started,
-            "outcome": None,
-        }
-        payload = json.dumps(record).encode("utf-8")
-        fresh = self.area / f".{SCOPE_RECORD_NAME}.{os.getpid()}"
-        with contextlib.suppress(FileNotFoundError):
-            fresh.unlink()
-        try:
-            with _flock_descriptor(self.registry_fd):
-                descriptor = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-                with os.fdopen(descriptor, "wb") as handle:
-                    handle.write(payload)
-                fresh.replace(self.area / SCOPE_RECORD_NAME)
-        except OSError as error:
-            with contextlib.suppress(OSError):
-                fresh.unlink()
-            raise VerifyLockRefused(
-                f"the ownership record of the run area {self.area} cannot be published ({error.strerror or error})"
-            ) from error
-
-    def publish_child(self, child_pid: int) -> None:
-        """Name the protected child and its process group once the launch has handed them to us."""
-        self._publish(child_pid)
-
-    def _record_outcome(self, outcome: int) -> None:
-        """Record the final status so a later sweep can honour an unknown run's retention request.
-
-        Best effort: an unreadable or unwritable record is advisory here — the
-        removal decision below uses the supervisor's own knowledge, and a
-        sweep reading an unknown outcome conservatively honours the request.
-        """
-        record = _read_scope_record(self.area)
-        if record is None or record.get("version") != SCOPE_RECORD_VERSION:
-            return
-        record["outcome"] = outcome
-        payload = json.dumps(record).encode("utf-8")
-        fresh = self.area / f".{SCOPE_RECORD_NAME}.{os.getpid()}.out"
-        try:
-            with contextlib.suppress(FileNotFoundError):
-                fresh.unlink()
-            descriptor = os.open(fresh, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(payload)
-            fresh.replace(self.area / SCOPE_RECORD_NAME)
-        except OSError:
-            with contextlib.suppress(OSError):
-                fresh.unlink()
-
-    def finish(self, outcome: int) -> int | None:
-        """End the scope after the protected work: retain on an explicit request, otherwise remove.
-
-        Returns a replacement status only when an otherwise successful run
-        could not clean up (exit 2); a pre-existing failure or signal status is
-        preserved and the removal failure reported beside it. Runs in every
-        ending, after the protected group is gone and before admission is
-        released.
-        """
-        self._record_outcome(outcome)
-        if self.retention and outcome != 0:
-            _log(
-                f"{KEEP_TMP_ENV}=1 and an unsuccessful run: the run area {self.area} is retained for "
-                "inspection; remove it once it is no longer needed"
-            )
-            os.close(self.lease_fd)
-            os.close(self.registry_fd)
-            return None
-        try:
-            _remove_tree(self.area)
-        except (OSError, VerifyLockError) as error:
-            _log(f"the run area {self.area} cannot be removed ({error}); the area is left in place")
-            os.close(self.lease_fd)
-            os.close(self.registry_fd)
-            return 2 if outcome == 0 else None
-        os.close(self.lease_fd)
-        os.close(self.registry_fd)
-        return None
-
-
-def supervise(command: list[str], tmp_scope: bool = False) -> int:
-    """Queue, check memory and run one protected command; return its exit code.
-
-    With `tmp_scope` the command runs inside its own temporary run area
-    *instead of* an admission: the scope supervisor of `scripts.verify_all.sh`
-    holds no queue and no memory wait, and the runner it supervises enters the
-    ordinary admission one layer down. The area is finalized after the child's
-    process group is gone and before anything is released; a cleanup failure
-    after an otherwise successful run turns the status into 2, and a pre-
-    existing failure or signal status is preserved.
-    """
+def supervise(command: list[str]) -> int:
+    """Queue, check memory and run one protected command; return its exit code."""
     if not command:
         print("[verify-lock] no command given; nothing is protected", file=sys.stderr, flush=True)
         return 2
     previous = _install_signal_handlers()
     child: subprocess.Popen[bytes] | None = None
     admission: _Admission | None = None
-    scope: _TempScope | None = None
-    cleanup_status: int | None = None
-    code = 2
     try:
-        if tmp_scope:
-            scope = _TempScope.start()
+        inherited = nested_holder_pid()
+        if inherited is not None:
+            _log(f"inheriting admission from pid {inherited}; no queue and no memory wait")
             with _deferred_signals(previous):
-                try:
-                    child = _spawn_child(command, (scope.lease_fd,), None, scope)
-                    scope.publish_child(child.pid)
-                except OSError as error:
-                    raise VerifyLockRefused(
-                        f"the protected command cannot be started ({error.strerror or error})"
-                    ) from error
+                child = _spawn_child(command, (), None)
         else:
-            inherited = nested_holder_pid()
-            if inherited is not None:
-                _log(f"inheriting admission from pid {inherited}; no queue and no memory wait")
-                with _deferred_signals(previous):
-                    child = _spawn_child(command, (), None)
-            else:
-                admission = _Admission(_prepare_state(), command)
-                admission.enter()
-                with _deferred_signals(previous):
-                    child = _spawn_child(command, (admission.state.lock_fd,), admission)
+            admission = _Admission(_prepare_state(), command)
+            admission.enter()
+            with _deferred_signals(previous):
+                child = _spawn_child(command, (admission.state.lock_fd,), admission)
         code = _watch_child(child)
     except VerifyLockError as refused:
-        kind = "scope" if tmp_scope else "admission"
-        print(f"[verify-lock] {kind} refused: {refused}", file=sys.stderr, flush=True)
+        print(f"[verify-lock] admission refused: {refused}", file=sys.stderr, flush=True)
         code = 3 if isinstance(refused, MemoryFloorRefused) else 2
     except SupervisorInterrupted as stop:
         code = 128 + stop.signum
@@ -1529,13 +952,11 @@ def supervise(command: list[str], tmp_scope: bool = False) -> int:
                 _stop_child(child)
             if child is not None:
                 end_lingering_group(child.pid)
-            if scope is not None:
-                cleanup_status = scope.finish(code)
             if admission is not None:
                 admission.release()
         finally:
             _restore_signal_handlers(previous)
-    return cleanup_status if cleanup_status is not None else code
+    return code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1545,24 +966,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="exit 0 when the environment names a valid inherited admission, 1 otherwise",
     )
-    parser.add_argument(
-        "--tmp-held",
-        action="store_true",
-        help="exit 0 when the calling shell is a live scope's supervised child, 1 otherwise",
-    )
-    parser.add_argument(
-        "--tmp-scope",
-        action="store_true",
-        help="supervise the command inside its own private temporary run area",
-    )
     parser.add_argument("command", nargs=argparse.REMAINDER, metavar="COMMAND", help="the protected command, after --")
     args = parser.parse_args(argv)
     if args.held:
         return 0 if nested_holder_pid() is not None else 1
-    if args.tmp_held:
-        return 0 if tmp_scope_held() else 1
     command = args.command[1:] if args.command[:1] == ["--"] else list(args.command)
-    return supervise(command, tmp_scope=args.tmp_scope)
+    return supervise(command)
 
 
 if __name__ == "__main__":
