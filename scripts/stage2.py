@@ -5293,6 +5293,13 @@ def attempt_has_work(
         raise Refused("git diff-tree --raw returned a record without its path")
     findings_path = findings.relative_to(root).as_posix()
     plan_path = plan.relative_to(root).as_posix()
+    discounted_plan = None
+    if clearing is not None and clearing.records:
+        # Validate every captured entry before any path can qualify as work, even when
+        # the plan is not a model candidate or another changed path sorts before it.
+        discounted_plan = _undo_ledger_clearing(
+            _git_bytes(root, "cat-file", "blob", f"{after}:{plan_path}"), clearing.records
+        )
     for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
         parts = header.decode("ascii").lstrip(":").split(" ")
         if len(parts) != 5:
@@ -5317,8 +5324,8 @@ def attempt_has_work(
             old = _git_bytes(root, "cat-file", "blob", old_id)
             new = _git_bytes(root, "cat-file", "blob", new_id)
             # In memory only: this attempt's own captured clearing cannot qualify the attempt.
-            if clearing is not None and clearing.records:
-                new = _undo_ledger_clearing(new, clearing.records)
+            if discounted_plan is not None:
+                new = discounted_plan
             old_body, new_body = _minus_time_body(old), _minus_time_body(new)
             if old_body == new_body:
                 continue

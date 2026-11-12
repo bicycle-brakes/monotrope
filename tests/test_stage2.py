@@ -11367,7 +11367,7 @@ def test_runner_ledger_clearing_cannot_qualify_a_retry(
         assert text.count("targeted verification, not the full `make verify`") == 3
 
 
-@pytest.mark.parametrize("fault", ["capture", "undo"])
+@pytest.mark.parametrize("fault", ["capture", "undo", "undo-with-earlier-work"])
 def test_ledger_discount_measurement_failure_prevents_acceptance(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fault: str
 ) -> None:
@@ -11396,10 +11396,15 @@ def test_ledger_discount_measurement_failure_prevents_acceptance(
     steps = [
         {
             "stdout": "done",
-            "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                # This path sorts before the plan: work here must not bypass validation.
+                **({"docs/note.md": f"Model work in attempt {attempt}\n"} if fault == "undo-with-earlier-work" else {}),
+            },
             "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
         }
-        for _ in range(3)
+        for attempt in range(3)
     ]
     baseline = script_work(world, "implement", steps, [GREEN] * 3)
     assert world.run("implement") == 1
