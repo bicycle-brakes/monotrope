@@ -3974,15 +3974,18 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
             seen["command"] = list(command)
             seen["env"] = dict(env)
             seen["timeout"] = kwargs.get("timeout")
+            seen["limit"] = kwargs.get("limit")
             seen["pass_fds"] = kwargs.get("pass_fds", ())
         return real_launch(command, root, env, *rest, **kwargs)
 
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     monkeypatch.setattr(stage2, "launch", launch)
     assert world.run("draft") == 0
     assert order == ["admission", "launch"], "the document check ran outside the machine admission"
     assert seen["admission_command"] == seen["command"] == ["bash", *DOCS_ARGV], "one vector for admission and launch"
-    assert seen["timeout"] == stage2.VERIFY_SECONDS, "the shared step limit was swapped"
+    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
+    assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert seen["pass_fds"] != (), "the document check lost the admission's descriptor"
     assert seen["env"][verify_lock.LOCK_ENV], "the document check lost the inherited admission marker"
     assert seen["env"]["XDG_STATE_HOME"] == str(world.state), "the document check lost the shared state root"
@@ -6407,15 +6410,21 @@ def test_an_attempt_that_overwrites_ruff_fails_before_verify(world: World) -> No
     assert world.calls("make") == [], "a tampered tool must stop the attempt before `make verify`"
 
 
+def test_verify_step_limit_is_45_minutes() -> None:
+    """Criterion 1 of the verification limit: the unpatched shared step default is 45 minutes."""
+    assert stage2.VERIFY_SECONDS == 45 * 60
+
+
 def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
     """R-20: the runner's own steps are bounded, and the abort names the limit."""
-    with pytest.raises(stage2.CallFailed, match="after 30 minutes"):
+    minutes = stage2.VERIFY_SECONDS // 60
+    with pytest.raises(stage2.CallFailed, match=f"after {minutes} minutes"):
         stage2.launch(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             tmp_path,
             {**os.environ},
             timeout=0.2,
-            limit="the runner's step limit after 30 minutes",
+            limit=f"the runner's step limit after {minutes} minutes",
         )
 
 
@@ -6453,7 +6462,7 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     world.script(make=[{"stdout": "green\n"}])
     with world.plan.open("a", encoding="utf-8") as handle:
         handle.write("2026-10-07 10:00–10:05, 5 min\n")
-    seen: list[tuple[str, float | None]] = []
+    seen: list[tuple[str, float | None, str | None]] = []
     original = stage2.launch
 
     def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
@@ -6461,29 +6470,31 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
         # gate script's file name as mutation evidence, and this test seeds no
         # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
         name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
-        seen.append((name, timeout))
+        seen.append((name, timeout, limit))
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     monkeypatch.setattr(stage2, "launch", record)
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
-    assert ("renderer", stage2.TOOL_SECONDS) in seen
-    assert ("ruff", stage2.TOOL_SECONDS) in seen
-    assert ("make", stage2.VERIFY_SECONDS) in seen
-    assert all(timeout is not None for _, timeout in seen), seen
+    assert ("renderer", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+    assert ("ruff", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+    assert ("make", 7 * 60, "the runner's step limit after 7 minutes") in seen
+    assert all(timeout is not None for _, timeout, _ in seen), seen
 
 
 def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
+    minutes = stage2.VERIFY_SECONDS // 60
     original = stage2.launch
 
     def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         if command == ["make", "verify"]:
-            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+            raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", hang)
     problems = stage2.verify_attempt(world.root, world.plan)
-    assert len(problems) == 1 and "did not finish" in problems[0] and "30 minutes" in problems[0]
+    assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
 def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
@@ -24069,6 +24080,7 @@ class LocalCommands:
                 "env": dict(env),
                 "pass_fds": tuple(kwargs.get("pass_fds", ())),
                 "timeout": kwargs.get("timeout"),
+                "limit": kwargs.get("limit"),
             }
         )
         outcome = self.outcomes.get(kind)
@@ -24528,12 +24540,14 @@ def test_targeted_stage2_test_file_requires_full_verification(
     assert chosen.tests == []
     commands = targeted_mode(monkeypatch)
     commands.outcomes["make"] = (full_result, "full verification result\n")
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     scope: list[str] = []
     problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope)
     assert bool(problems) == bool(full_result), problems
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert make["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the shared step limit"
+    assert make["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert commands.of("gate") == []
     assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
     assert any(
@@ -24854,6 +24868,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
 ) -> None:
     """Criterion 9. Planted fault: the reviewer starts after a red, unstartable or timed-out full check, after the
     head or the substantive tree moved, on a dirty tree, or without a fresh check on a first review or a re-check."""
+    minutes = stage2.VERIFY_SECONDS // 60
     monkeypatch.setattr(stage2, "require_fresh_full_verification", REAL_FULL_GATE)
     make = [{"stdout": "red\n", "exit": 1}] if case == "red" else [{"stdout": "green\n"}]
     world.script(make=make, codex=[codex_ok("T1", rows(1))])
@@ -24874,7 +24889,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
         if case == "tree-moved":
             (Path(cwd) / "src" / "app.py").write_text("value = 9\n", encoding="utf-8")
         if case == "timeout":
-            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+            raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         if case == "unstartable":
             raise stage2.CallFailed("make could not be started: planted")
         return real(command, cwd, env, *args, **kwargs)
