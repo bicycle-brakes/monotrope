@@ -2677,7 +2677,7 @@ def test_amended_doctrine_and_research_roles_agree() -> None:
         "33 + 3N",
         "resumes",
         "F-1",
-        "Twelve verbs exist",
+        "Thirteen verbs exist",
     ):
         assert needle in workflow_flat, f"docs/WORKFLOW.md lacks '{needle}'"
     agents_flat = " ".join(agents.split())

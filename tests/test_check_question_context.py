@@ -11,6 +11,7 @@ only files the manifest carries.
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 import check_interview_minimums as counting  # noqa: E402
+import check_question_context as gate  # noqa: E402
 
 SCRIPT = REPO / "scripts" / "check_question_context.py"
 GATE_FILE = REPO / "decisions" / "gates.yaml"
@@ -542,6 +544,60 @@ def test_unmeasured_evidence_takes_exit_precedence(tmp_path: Path) -> None:
     assert "Q-1" in done.stdout and "Q-2" in done.stdout  # both are named, none is passed
 
 
+# --- the statement-only helper (bead coding-harness-nr6h) --------------------
+
+
+def test_statement_helper_matches_the_gate_reader() -> None:
+    """`statement_problems` returns exactly the reader's CannotMeasure messages,
+    one per answered record in document order — the same grammar, nothing
+    stronger and nothing weaker. Planted faults: the helper disagrees with the
+    existing statement grammar, reads a fenced example as a record, or starts
+    enforcing the context field or the adoption day itself."""
+    rel = "plans/changes/helper/decisions.md"
+    fenced_example = (
+        "```markdown\n"
+        "## Q-9 · a documented example\n\n"
+        "asked: 2026-10-14\nanswer: yes\nanswered_by: maintainer\nstatus: answered\n\n"
+        "In the context of an example, facing nothing, we decided nothing.\n"
+        "```\n"
+    )
+    text = "\n".join(
+        [
+            record("Q-1"),
+            record("Q-2", madr="In the context of a choice, facing two, we decided one. —\n2026-10-14\n"),
+            record(
+                "Q-3",
+                madr="In the context of a choice, we decided A, accepting B. "
+                "— 2026-10-14 (recorded on the bead the same day)\n",
+            ),
+            record("Q-4", madr="We decided. — 2026-10-14\n"),
+            record(
+                "Q-5", madr="In the context of one note, we decided A — 2026-10-14 and of another B — 2026-10-15.\n"
+            ),
+            record("Q-6", madr="In the context of a change, we decided. — 2026-13-45\n"),
+            record("Q-7", madr="In the context of a change, we decided. Recorded 2026-10-14.\n"),
+            record("Q-8", status="open"),
+            SKIP_BLOCK,
+            fenced_example,
+        ]
+    )
+    expected: list[str] = []
+    for record_id, body, marks in gate._records(text):
+        try:
+            gate._recording_day(rel, record_id, body, marks)
+        except gate.CannotMeasure as cannot:
+            expected.append(str(cannot))
+    problems = gate.statement_problems(text, rel)
+    assert problems == expected, "the helper is not the gate's statement reader"
+    assert len(problems) == 4  # Q-2's wrap and Q-3's remark stay readable; the fenced example stays out
+    for problem, record_id in zip(problems, ["Q-4", "Q-5", "Q-6", "Q-7"], strict=True):
+        assert problem.startswith(f"{rel}: {record_id} — "), problem
+    # The helper grades statements only: a subject record without a context
+    # field and an answer dated before any adoption day are not its findings.
+    assert gate.statement_problems(record("Q-10", context=None), rel) == []
+    assert gate.statement_problems(record("Q-10", day=EARLY, context=None), rel) == []
+
+
 # --- AC 10 · the gate is blocking in both placements ------------------------
 
 
@@ -590,3 +646,113 @@ def test_bare_context_over_indented_prose_names_the_block_fix(tmp_path: Path) ->
     assert done.returncode == 1, done.stdout
     assert "write `context: |`" in done.stdout
     assert "is blank" not in done.stdout
+
+
+# --- decision-statement-skeleton · AC 1 and 2 · the interview prompt ---------
+
+INTERVIEW = REPO / "prompts" / "01a-interview.md"
+
+
+def _rule_text(text: str) -> str:
+    """Read duties across Markdown emphasis, blank lines and hard wraps."""
+    return " ".join(text.replace("**", "").replace("`", "").split())
+
+
+def _downside_duties(text: str) -> dict[str, bool]:
+    flat = _rule_text(text)
+    return {
+        "ask the accepted downside with the choice": "asks the maintainer to accept one with the choice" in flat,
+        "ask now, rather than later": "never a later step" in flat,
+        "the agent must not supply the downside": "never the agent's to supply" in flat,
+    }
+
+
+def _recording_duties(text: str) -> dict[str, bool]:
+    flat = _rule_text(text)
+    return {
+        "record before the next question": "before the next question" in flat,
+        "do not defer recording to drafting": "never left for drafting" in flat,
+        "keep all statement clauses in the recording rule": "In the context of, facing, we decided, to achieve, accepting,"
+        in flat,
+        "date the statement on the recording day": "the date of the day you record" in flat,
+        "keep the complete dated statement template": bool(
+            re.search(
+                r"In the context of <situation>, facing <constraint>, we decided <option>, "
+                r"to achieve <goal>, accepting <consequence>\. — \d{4}-\d{2}-\d{2}",
+                flat,
+            )
+        ),
+        "never invent an accepted downside": "you never invent it" in flat,
+        "leave an unsettled downside open": "the record stays open" in flat,
+    }
+
+
+def _swap(text: str, old: str, new: str) -> str:
+    """Plant a missing duty across arbitrary whitespace; the caller diagnoses it."""
+    pattern = r"\s+".join(re.escape(word) for word in old.split())
+    return re.sub(pattern, lambda _: new, text)
+
+
+def _assert_duties(duties: dict[str, bool]) -> None:
+    missing = [duty for duty, present in duties.items() if not present]
+    assert not missing, "Interview prompt lost duties: " + "; ".join(missing)
+
+
+def test_interview_asks_the_accepted_downside() -> None:
+    """Counterexamples remove duties; rewrapping and heading edits preserve them."""
+    text = INTERVIEW.read_text(encoding="utf-8")
+    _assert_duties(_downside_duties(text))
+    _assert_duties(_downside_duties("\n\n".join(text.split())))
+    _assert_duties(
+        _downside_duties(text.replace("Every question asks which downside", "Each question asks what downside"))
+    )
+    for phrase, duty in (
+        ("asks the maintainer to accept one with the choice", "ask the accepted downside with the choice"),
+        ("never a later step", "ask now, rather than later"),
+        ("never the agent's to supply", "the agent must not supply the downside"),
+    ):
+        assert not _downside_duties(_swap(text, phrase, "[removed]"))[duty], f"Counterexample must remove duty: {duty}"
+
+
+def test_interview_records_the_statement_with_the_answer() -> None:
+    """Counterexamples name the missing duty, independent of Markdown wrapping."""
+    text = INTERVIEW.read_text(encoding="utf-8")
+    _assert_duties(_recording_duties(text))
+    _assert_duties(_recording_duties("\n\n".join(text.split())))
+    _assert_duties(_recording_duties(text.replace("Write the record at once", "Record the answer immediately")))
+    for phrase, duty in (
+        ("before the next question", "record before the next question"),
+        ("never left for drafting", "do not defer recording to drafting"),
+        ("you never invent it", "never invent an accepted downside"),
+        ("the record stays `open`", "leave an unsettled downside open"),
+        ("`accepting`,", "keep all statement clauses in the recording rule"),
+        ("accepting <consequence>. —", "keep the complete dated statement template"),
+        ("the date of the day you record", "date the statement on the recording day"),
+    ):
+        assert not _recording_duties(_swap(text, phrase, "[removed]"))[duty], f"Counterexample must remove duty: {duty}"
+
+
+def test_later_phase_decisions_ask_the_accepted_downside() -> None:
+    """Loop row L3-4: a `[DECISION]` raised while writing spec, design or plan
+    follows the form of prompts/02-spec.md and ends as an answered record too,
+    so that form asks the accepted downside as the interview does.
+    Counterexamples: the form line or the rule sentence removed."""
+    spec_prompt = (REPO / "prompts" / "02-spec.md").read_text(encoding="utf-8")
+
+    def asks(text: str) -> bool:
+        flat = " ".join(text.split())
+        return (
+            "Downside you accept:" in text
+            and "asks which downside the maintainer accepts with the choice" in flat
+            and "you never invent it" in flat
+            and "`accepting` clause" in flat
+        )
+
+    assert asks(spec_prompt)
+    assert not asks(_swap(spec_prompt, "Downside you accept:", "Note:"))
+    assert not asks(
+        _swap(spec_prompt, "asks which downside the maintainer accepts with the choice", "may mention a downside")
+    )
+    # The workflow names this file as the form of a question to a person, so
+    # the later phases have no second form that could miss the rule.
+    assert "prompts/02-spec.md" in WORKFLOW.read_text(encoding="utf-8")

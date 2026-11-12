@@ -134,7 +134,7 @@ archive:
 	esac
 
 help:
-	@echo 'make verify                             every locally runnable gate (the CI runs the same)'
+	@echo 'make verify                             local gates, cheap first; stops on blocking failure and names gates not run'
 	@echo 'make test                               the test suite, by hand'
 	@echo 'make staleness                          hygiene of the plans/ artefacts'
 	@echo 'make gates                              what the CI runs, read from decisions/gates.yaml'
