@@ -20,7 +20,7 @@ tags: [plan, stage-2, verification]
 ```text
 For you:     Implement and draft checks avoid unnecessary full-run waits; missing tests fail early and local misses are counted.
 Done when:   Routing, import-chain, refusal and slip-count regressions pass; full phase-6 and CI gates remain intact and make verify is green.
-Appetite:    Seven and a half hours (raised from six by the maintainer on 2026-11-12, decisions.md#Q-6) of phase 4 including repairs; stop at the limit under the existing appetite protocol.
+Appetite:    Ten and a half hours (raised from six to seven and a half, decisions.md#Q-6, and to ten and a half, decisions.md#Q-7, by the maintainer on 2026-11-12) of phase 4 including repairs; stop at the limit under the existing appetite protocol.
 Not now:     Splitting the runner, coverage instrumentation, smaller CI, admission redesign or a dashboard.
 Pre-mortem:  suppose it failed: most likely because the test-link graph misses an indirect dependency.
 Starts unless you say stop.

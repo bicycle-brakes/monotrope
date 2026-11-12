@@ -149,6 +149,25 @@ adds no block, to achieve the evidence of criterion 8 without growing
 findings.md by a block per attempt, accepting a longer time line in plan.md
 and an appetite raised from 6 to 7.5 hours — 2026-11-12
 
+## Q-7 · Appetite for the review loop
+
+asked: 2026-11-12
+answer: "a" — option A: the appetite rises by three hours to ten and a half; the review loop starts when the verify lock has a free place.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the time budget of the change targeted-check-more-verbs (bead coding-harness-0swp).
+  Intention: 7.4 of 7.5 hours are used; the review loop starts with a full make verify of about 25 minutes of its own and passes the limit for certain.
+  Today: the implementation is accepted at 2c561a88 with a green full make verify; about 1.6 of the 7.4 hours were waiting at the verify lock.
+  Repository change: the appetite figure in plan.md and this entry.
+  Architecture change: none.
+
+In the context of an accepted implementation whose appetite is spent,
+facing a review loop that cannot fit into the remaining six minutes,
+we decided to raise the appetite from 7.5 to 10.5 hours,
+to achieve a looped review before phase 6,
+accepting three more hours on a change planned at six — 2026-11-12
+
 ## Decided by the agent
 
 [DETAIL] **The scope of a passing attempt goes into the runner's time line in
