@@ -147,9 +147,10 @@ The runner starts other models for named phases
 (`python3 scripts/stage2.py <verb> <change>`) and checks the result before it
 commits anything. The check depends on the phase:
 
-- **Draft** (spec, design, plan): the document gates,
-  `bash scripts/verify_all.sh --job docs`.
-- **Implement**: `make verify`.
+- **Draft** (spec, design, plan): the locally runnable document gates,
+  outside the machine-wide verify lock.
+- **Implement**: a targeted check (the touched and linked tests and gates),
+  or `make verify` where that selection is not safe.
 - **Repair**: the red-first proof of each named test, then `make verify`.
 - **Reviews** (spec review, review loop, final review): the model only reads;
   the runner records its findings.

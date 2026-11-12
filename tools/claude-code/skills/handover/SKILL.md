@@ -40,6 +40,13 @@ Jede Aussage trägt ihren Stichtag (Datum, Commit).
 - parallele Sessions: `~/.claude/hooks/session-scan.sh "${CLAUDE_SESSION_ID}" "$PWD"`
   (Spalte 1 `clash` = selber Checkout)
 - was diese Session geprüft hat (Tests, verify), und was nicht
+- nur in coding-harness, bei der Morgen-Übergabe eines Nachtlaufs: die
+  lokalen Schlupf-Fehler des gezielten Checks (ein voller Check vor Phase 6
+  wurde rot, wo der gezielte Check desselben Stands grün war) mit
+  `python -m scripts.verify_duration slips --repository <Pfad> --since <UTC>
+  --until <UTC>` über das Intervall des Nachtlaufs. In die Übergabe gehören
+  die Zahl, das Repository und das Intervall; meldet der Befehl die Messung
+  als nicht verfügbar oder unvollständig, steht genau das drin, nie „0“
 
 Was nicht gelesen werden konnte, steht als „nicht gelesen“ drin, nie als „keine“.
 

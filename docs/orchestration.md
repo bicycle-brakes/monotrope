@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-12
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -45,8 +45,8 @@ stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
 then:
 
 1. **One verify-bearing step at a time, across all lanes.** Such a step runs
-   `make verify`: an implement or repair attempt, or the orchestrator's own
-   full run, which runs at lower priority (`nice -n 10`). The number of test
+   `make verify`: an implement or repair attempt whose targeted check falls
+   back to it, or the orchestrator's own full run, which runs at lower priority (`nice -n 10`). The number of test
    workers is sized from the machine: half the logical cores, at most one per
    2 GiB of memory (bead coding-harness-l7sc, #305).
 2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,
