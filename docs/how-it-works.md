@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-12
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -148,8 +148,19 @@ These are operator details; you can skip them on a first read.
   rung; a failed single rung is retired with
   `release-loop --stage-failed <model> --reason <text>`.
 - An implement or repair attempt fails fast: ruff and the attempt's own tests
-  run before the full `make verify` and stop at the first red one. A draft
-  runs only its document gates, not the full suite.
+  run first and stop at the first red one. An implement attempt then runs the
+  full `make verify`. A repair runs a targeted check (the touched and linked
+  test files and the gates their file kinds need) and falls back to the full
+  `make verify` when that selection cannot cover it safely; the final review
+  runs a fresh full `make verify` of its own. A draft runs only its document
+  gates, not the full suite.
+- The runner is one call per verb, not a service. Between calls its state
+  lives in git (the change folder, the branch, failed attempts under
+  `refs/stage2/attempts/`) and in a state directory outside the repository
+  (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/`), which holds
+  the loop record until the final review releases it into `findings.md`.
+- The `session` verb opens a macOS Terminal window through `osascript`, so it
+  needs a graphical login. Every other verb runs in a plain shell.
 - One admission per machine: a second `make verify` or runner check queues
   behind the first instead of running beside it, and waits while free memory
   is below a floor (`scripts/verify_lock.py`).

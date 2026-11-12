@@ -150,7 +150,10 @@ commits anything. The check depends on the phase:
 - **Draft** (spec, design, plan): the document gates,
   `bash scripts/verify_all.sh --job docs`.
 - **Implement**: `make verify`.
-- **Repair**: the red-first proof of each named test, then `make verify`.
+- **Repair**: the red-first proof of each named test, then a targeted check:
+  the touched and linked test files and the gates their file kinds need. The
+  full `make verify` runs instead when that selection cannot cover the repair
+  safely, and always before the final review.
 - **Reviews** (spec review, review loop, final review): the model only reads;
   the runner records its findings.
 
