@@ -168,6 +168,25 @@ we decided to raise the appetite from 7.5 to 10.5 hours,
 to achieve a looped review before phase 6,
 accepting three more hours on a change planned at six — 2026-11-12
 
+## Q-8 · How the change goes on without a working free review round
+
+asked: 2026-11-12
+answer: "A" — option A: straight to phase 6, once the Omnigent list repair (pull request 379) is merged; the pull request names the skipped review loop.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change targeted-check-more-verbs (bead coding-harness-0swp) and its review loop.
+  Intention: the loop failed twice in round 1 on 2026-11-12; the only free model, longcat-2.5-free, cuts its answer at its output limit each time.
+  Today: the runner then writes no round and cannot retire the stage (no stage snapshot); this is the known fault of bead coding-harness-1gzo. For the change no-work-ledger-marker the maintainer decided the same case the same way today. About 7.5 of 10.5 hours are used.
+  Repository change: none in code; the pull request names the skipped loop.
+  Architecture change: none.
+
+In the context of a review loop whose first stage cannot complete,
+facing a free model that truncates every answer and a runner that cannot retire the stage,
+we decided to go straight to the phase-6 review,
+to achieve a reviewed change without waiting days for the loop repair,
+accepting that no swarm round read this change — 2026-11-12
+
 ## Decided by the agent
 
 [DETAIL] **The scope of a passing attempt goes into the runner's time line in
