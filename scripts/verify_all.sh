@@ -237,6 +237,23 @@ try:
 except ValueError as exc:
     print(f"verify-tmp: PYTEST_ADDOPTS is not valid shell quoting ({exc}); refusing to start gates", file=sys.stderr)
     raise SystemExit(2)
+# pytest prepends ini addopts supplied by -o/--override-ini as well.
+overrides = []
+for index, word in enumerate(words):
+    if word in ("-o", "--override-ini") and index + 1 < len(words):
+        overrides.append(words[index + 1])
+    elif word.startswith("-o") and not word.startswith("--"):
+        overrides.append(word[2:])
+    elif word.startswith("--override-ini="):
+        overrides.append(word.partition("=")[2])
+try:
+    for override in overrides:
+        key, sep, value = override.partition("=")
+        if sep and key.strip() == "addopts":
+            words.extend(shlex.split(value))
+except ValueError as exc:
+    print(f"verify-tmp: PYTEST_ADDOPTS addopts is not valid shell quoting ({exc}); refusing to start gates", file=sys.stderr)
+    raise SystemExit(2)
 for word in words:
     if word.startswith("--"):
         name = word.partition("=")[0]
@@ -260,13 +277,18 @@ if [ -z "$verify_tmp_parent" ]; then
     esac
     verify_tmp_parent="$verify_tmp_base/verify-runs-$(id -u)"
 fi
-if ! mkdir -p -m 700 -- "$verify_tmp_parent" 2>/dev/null; then
-    echo "verify-tmp: cannot create the managed parent $verify_tmp_parent" >&2
+case "$verify_tmp_parent" in
+    /*/verify-runs-"$(id -u)") ;;
+    *) echo "verify-tmp: refusing $verify_tmp_parent: not an absolute managed parent named verify-runs-$(id -u)" >&2; exit 2 ;;
+esac
+if ! verify_tmp_error=$(mkdir -p -m 700 -- "$verify_tmp_parent" 2>&1); then
+    echo "verify-tmp: cannot create the managed parent $verify_tmp_parent: $verify_tmp_error" >&2
     exit 2
 fi
 # Validate the parent and reclaim dead siblings; the interpreter below decides
 # each entry and performs the removal itself, and never follows a symlink.
 if ! "$PYTHON" - "$verify_tmp_parent" <<'PYEOF'
+import ctypes
 import os
 import shutil
 import stat
@@ -288,6 +310,11 @@ if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
     refuse(parent, "not a real directory")
 if info.st_uid != os.geteuid():
     refuse(parent, "not owned by this user")
+if stat.S_IMODE(info.st_mode) != 0o700:
+    try:
+        os.chmod(parent, 0o700)
+    except OSError as exc:
+        refuse(parent, f"cannot make the managed parent private ({exc})")
 try:
     with os.scandir(parent) as scan:
         entries = sorted(scan, key=lambda entry: entry.name)
@@ -297,6 +324,13 @@ for entry in entries:
     name = entry.name
     if not name.isdigit():
         continue
+    pid_text = name.lstrip("0")
+    max_pid = (1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)) - 1
+    if not name.isascii() or not pid_text or len(pid_text) > len(str(max_pid)):
+        refuse(entry.path, "invalid pid: expected ASCII digits naming a positive process id within the platform range")
+    pid = int(pid_text)
+    if pid > max_pid:
+        refuse(entry.path, "invalid pid: outside the platform process-id range")
     try:
         info = entry.stat(follow_symlinks=False)
     except FileNotFoundError:
@@ -308,7 +342,7 @@ for entry in entries:
     if info.st_uid != os.geteuid():
         refuse(entry.path, "not owned by this user")
     try:
-        os.kill(int(name), 0)
+        os.kill(pid, 0)
     except ProcessLookupError:
         pass
     except OSError:
@@ -334,8 +368,8 @@ if [ "$verify_tmp_keep" -eq 1 ]; then
 else
     verify_tmp_area="$verify_tmp_parent/$$"
 fi
-if ! mkdir -m 700 -- "$verify_tmp_area" 2>/dev/null; then
-    echo "verify-tmp: cannot allocate the run area $verify_tmp_area — another run owns it, or a stale area with this process id blocks it" >&2
+if ! verify_tmp_error=$(mkdir -m 700 -- "$verify_tmp_area" 2>&1); then
+    echo "verify-tmp: cannot allocate the run area $verify_tmp_area: $verify_tmp_error" >&2
     exit 2
 fi
 export PYTEST_DEBUG_TEMPROOT="$verify_tmp_area"
@@ -351,8 +385,8 @@ verify_tmp_cleanup() {
     verify_tmp_status=$?
     trap - EXIT INT TERM HUP QUIT
     if [ "$verify_tmp_status" -eq 0 ] || [ "$verify_tmp_keep" -ne 1 ]; then
-        if ! rm -rf -- "$verify_tmp_area" 2>/dev/null; then
-            echo "verify-tmp: could not remove the run area $verify_tmp_area — remove it by hand" >&2
+        if ! verify_tmp_error=$(rm -rf -- "$verify_tmp_area" 2>&1); then
+            echo "verify-tmp: could not remove the run area $verify_tmp_area: $verify_tmp_error — remove it by hand" >&2
             [ "$verify_tmp_status" -eq 0 ] && verify_tmp_status=2
         fi
     else
@@ -363,7 +397,9 @@ verify_tmp_cleanup() {
 verify_tmp_signal() {
     trap - EXIT INT TERM HUP QUIT
     if [ "$verify_tmp_keep" -ne 1 ]; then
-        rm -rf -- "$verify_tmp_area" 2>/dev/null || echo "verify-tmp: could not remove the run area $verify_tmp_area — remove it by hand" >&2
+        if ! verify_tmp_error=$(rm -rf -- "$verify_tmp_area" 2>&1); then
+            echo "verify-tmp: could not remove the run area $verify_tmp_area: $verify_tmp_error — remove it by hand" >&2
+        fi
     else
         echo "verify-tmp: kept for inspection: $verify_tmp_area" >&2
     fi

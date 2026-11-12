@@ -22962,6 +22962,11 @@ def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> Non
     message = f"fatal: Unable to create '{path}': File exists.\n\nAnother git process seems to be running.\n"
     shortened = stage2.shorten_git_error(message)
     assert shortened == f"fatal: Unable to create '{path}': File exists."
+    assert stage2.shorten_git_error("warning: noisy prelude\n" + message) == shortened
+    assert (
+        stage2.shorten_git_error("warning: noisy prelude\nerror: failed operation\nfatal: later")
+        == "error: failed operation"
+    )
     assert stage2.shorten_git_error("  short  ") == "short"
     assert stage2.shorten_git_error("") == ""
     assert len(stage2.shorten_git_error("x" * 5000)) == 1000

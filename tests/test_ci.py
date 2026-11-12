@@ -1374,10 +1374,13 @@ def _runner_env(tree: Path, home: Path, path_dirs: list[Path], extra: dict[str, 
     # Each fake runner queues against its own state root under a floor of zero,
     # so no copied runner ever reaches the machine lock of the run that started
     # this suite — it would queue behind its own ancestor and hang.
+    (tree.parent / "tmp").mkdir(parents=True, exist_ok=True)
     env = {
         "HOME": str(home),
         "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"]),
         "XDG_STATE_HOME": str(tree.parent / "state"),
+        "PYTEST_DEBUG_TEMPROOT": str(tree.parent / "temproot"),
+        "TMPDIR": str(tree.parent / "tmp"),
         verify_lock.FLOOR_ENV: "0",
     }
     env.update(extra or {})
@@ -2756,6 +2759,16 @@ def test_verify_runner_reclaims_dead_pid_areas(tmp_path: Path) -> None:
     live_area = parent / str(os.getpid())
     live_area.mkdir()
     (live_area / "payload").write_text("a live sibling stays", encoding="utf-8")
+    # Invalid numeric-looking names must refuse with a path and reason, never a traceback.
+    validation_tree, _ = _tmp_runner_tree(base / "validation", "true")
+    for name in ("²", "99999999999", "0"):
+        invalid = parent / name
+        invalid.mkdir()
+        done = _tmp_run(validation_tree, temproot, tmp_path)
+        assert done.returncode == 2, f"{name}: {done.stdout}\n{done.stderr}"
+        assert str(invalid) in done.stderr and "pid" in done.stderr.lower(), done.stderr
+        assert "Traceback" not in done.stderr, done.stderr
+        invalid.rmdir()
     killed_started = base / "killed-started"
     killed_tree, _ = _tmp_runner_tree(base / "killed", f"touch {killed_started}; sleep 30")
     with _held_holder(killed_tree.parent / "state", pid=os.getpid()):
@@ -2772,11 +2785,30 @@ def test_verify_runner_reclaims_dead_pid_areas(tmp_path: Path) -> None:
     dead = [entry for entry in parent.iterdir() if entry.name != str(os.getpid())]
     assert len(dead) == 1 and dead[0].name.isdigit(), f"the killed runner left no reclaimable area: {dead}"
     sweeper_tree, _ = _tmp_runner_tree(base / "sweeper", "true")
-    # The runner pid may already have been reused while preparing the sweeper.
-    # Preserve its real leftover payload under a freshly checked dead pid.
-    dead_area = dead[0].rename(parent / str(_reaped_pid()))
-    done = _tmp_run(sweeper_tree, temproot, tmp_path)
-    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    dead_area = dead[0]
+    # With inherited admission the Popen pid is the allocating shell's pid.
+    # Retry an actual collision rather than predicting that a pid stays dead.
+    with _held_holder(sweeper_tree.parent / "state", pid=os.getpid()):
+        for _ in range(10):
+            sweeper = subprocess.Popen(
+                ["bash", str(sweeper_tree / "scripts" / "verify_all.sh")],
+                cwd=sweeper_tree,
+                env=_marker_env(sweeper_tree, temproot, tmp_path),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                stdout, stderr = sweeper.communicate(timeout=20)
+            finally:
+                if sweeper.poll() is None:
+                    sweeper.kill()
+                    sweeper.communicate(timeout=10)
+            if str(sweeper.pid) != dead_area.name:
+                assert sweeper.returncode == 0, f"exit {sweeper.returncode}\n{stdout}\n{stderr}"
+                break
+        else:
+            pytest.fail("the sweeper repeatedly reused the dead runner's pid")
     assert not dead_area.exists(), "the next start did not reclaim the hard-killed runner's area"
     assert (live_area / "payload").read_text(encoding="utf-8") == "a live sibling stays", (
         "a live pid's area was touched"
@@ -2807,8 +2839,18 @@ def test_verify_runner_preserves_unrelated_paths(tmp_path: Path) -> None:
     (live_area / "payload").write_text("live sibling", encoding="utf-8")
 
     tree, _ = _tmp_runner_tree(base / "tree", "true")
+    caller_parent = base / "caller-parent"
+    caller_parent.mkdir()
+    unrelated_numeric = caller_parent / str(_reaped_pid())
+    unrelated_numeric.mkdir()
+    done = _tmp_run(tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_TMP_PARENT": str(caller_parent)})
+    assert unrelated_numeric.is_dir(), "a caller-named parent was swept"
+    assert done.returncode == 2 and str(caller_parent) in done.stderr, done.stderr
+    assert "managed parent" in done.stderr, done.stderr
+
     done = _tmp_run(tree, temproot, tmp_path)
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert parent.stat().st_mode & 0o777 == 0o700, "the existing managed parent must be private"
     assert sentinel.read_text(encoding="utf-8") == "the caller's own file", "the caller's root was changed"
     assert (historical / "root").read_text(encoding="utf-8") == "history", "a non-managed entry was changed"
     assert (kept / "evidence").read_text(encoding="utf-8") == "requested evidence", "a kept entry was changed"
@@ -2836,6 +2878,17 @@ def test_verify_runner_preserves_unrelated_paths(tmp_path: Path) -> None:
     assert substituted.is_symlink(), "the sweep removed the substituted entry itself"
 
 
+def test_verify_runner_makes_existing_parent_private(tmp_path: Path) -> None:
+    """An existing 0755 managed parent must become private before gates run."""
+    tree, temproot = _tmp_runner_tree(tmp_path / "privacy", "true")
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True, mode=0o755)
+    parent.chmod(0o755)
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert parent.stat().st_mode & 0o777 == 0o700, "the managed parent remains accessible to other users"
+
+
 def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
     """Criterion 9: an allocation or sweep failure reports the path and the reason and returns
     unsuccessful before any gate, and a failed end-of-run cleanup never reads as green."""
@@ -2843,10 +2896,11 @@ def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
         pytest.skip("the failure injections of this change need an unprivileged user")
     base = tmp_path / "storage"
 
-    # (A) Allocation failure: the carried parent is not writable, so no area can be created.
-    readonly_parent = base / "readonly-parent"
-    readonly_parent.mkdir(parents=True)
-    readonly_parent.chmod(0o555)
+    # (A) Parent allocation fails beneath an unwritable directory, before any gate starts.
+    readonly_base = base / "readonly-base"
+    readonly_base.mkdir(parents=True)
+    readonly_base.chmod(0o555)
+    readonly_parent = _managed_parent(readonly_base)
     allocation_gate_ran = base / "allocation-gate-ran"
     tree_a, _ = _tmp_runner_tree(base / "allocation", f"touch {allocation_gate_ran}")
     done = _tmp_run(
@@ -2855,10 +2909,10 @@ def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
         tmp_path,
         extra_env={"HARNESS_VERIFY_TMP_PARENT": str(readonly_parent)},
     )
-    readonly_parent.chmod(0o755)
+    readonly_base.chmod(0o755)
     assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert not allocation_gate_ran.exists(), "gates started after a failed allocation"
-    assert str(readonly_parent) in done.stderr, done.stderr
+    assert str(readonly_parent) in done.stderr and "Permission denied" in done.stderr, done.stderr
 
     # (B) Sweep failure: a dead sibling that cannot be removed stops the run before any gate.
     temproot_b = base / "sweep-temproot"
@@ -2890,7 +2944,7 @@ def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
     tree_c, _ = _tmp_runner_tree(base / "cleanup", f"{lock_the_area}; true")
     done = _tmp_run(tree_c, temproot_c, tmp_path)
     assert done.returncode == 2, f"a failed cleanup came out {done.returncode}: {done.stdout}\n{done.stderr}"
-    assert "could not remove the run area" in done.stderr, done.stderr
+    assert "could not remove the run area" in done.stderr and "Permission denied" in done.stderr, done.stderr
     leftovers = list(_managed_parent(temproot_c).iterdir())
     assert len(leftovers) == 1, (
         f"expected exactly the unremovable run area, found {leftovers}: {done.stdout}\n{done.stderr}"
@@ -2998,6 +3052,9 @@ def test_verify_runner_preserves_entry_contracts(tmp_path: Path) -> None:
         ("--basetemp /elsewhere", "separate value"),
         ("--basetem /elsewhere", "abbreviated option"),
         ("--base=/elsewhere", "short prefix"),
+        ("-o addopts=--basetemp=/elsewhere", "ini override"),
+        ("-oaddopts=--basetemp=/elsewhere", "attached ini override"),
+        ("--override-ini='addopts=--basetemp /elsewhere'", "long ini override"),
         ("'unbalanced", "malformed quoting"),
     ],
 )

@@ -4176,14 +4176,13 @@ def release_loop(
 
 
 def shorten_git_error(text: str, bound: int = 1000) -> str:
-    """git's error line, whole: the reason stands in the first line, often after a long path.
+    """Keep git's first fatal/error line whole, or its first non-empty line.
 
-    The hint paragraph git adds after it (for a held lock, a stale-lock explanation) is dropped, so a
-    long temporary path no longer pushes the reason out of a fixed cut. Only a first line longer than
-    `bound` is cut, at its end.
+    Drop hint paragraphs while preserving the reason after a long temporary path.
+    Only a reason line longer than `bound` is cut, at its end.
     """
     lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
-    first = lines[0] if lines else ""
+    first = next((line for line in lines if line.startswith(("fatal:", "error:"))), lines[0] if lines else "")
     return first if len(first) <= bound else first[: bound - 1] + "…"
 
 
