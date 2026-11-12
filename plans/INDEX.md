@@ -492,6 +492,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/no-work-done/plan.md`](changes/no-work-done/plan.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/no-work-done/research.md`](changes/no-work-done/research.md) | draft | none | 2026-11-07 | coding-harness-te7q |
 | [`changes/no-work-done/spec.md`](changes/no-work-done/spec.md) | draft | none | 2026-11-07 | coding-harness-te7q |
+| [`changes/omnigent-test-not-blocking/research.md`](changes/omnigent-test-not-blocking/research.md) | draft | none | 2026-11-12 | coding-harness-i9df |
 | [`changes/origin-cell/decisions.md`](changes/origin-cell/decisions.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/findings.md`](changes/origin-cell/findings.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
 | [`changes/origin-cell/plan.md`](changes/origin-cell/plan.md) | draft | partial | 2026-11-07 | coding-harness-ywbh |
