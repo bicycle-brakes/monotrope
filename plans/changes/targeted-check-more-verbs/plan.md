@@ -171,31 +171,36 @@ full verification remain the runner's work after this draft.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_implement_routes_use_targeted_postchecks — a covered initial/retry/fallback attempt invokes make verify
-- 2: not yet written tests/test_stage2.py::test_draft_document_projection_runs_unadmitted — a held admission delays the draft, a marker leaks, or selection includes code gates
-- 3: not yet written tests/test_stage2.py::test_extended_targeted_routes_preserve_acceptance_guards — an existing preparation, tolerance or acceptance guard is bypassed
-- 4: not yet written tests/test_stage2.py::test_targeted_selection_follows_import_chains_per_snapshot — a chain, cycle, retained retry edit or deleted/renamed endpoint loses a whole test file
-- 5: not yet written tests/test_stage2.py::test_implement_refuses_uncovered_new_code_before_tests_or_fallback — uncovered Python/shell code reaches pytest, admission or a checkpoint
+- 1: tests/test_stage2.py::test_implement_routes_use_targeted_postchecks — a covered initial/retry/fallback attempt invokes make verify
+- 2: tests/test_stage2.py::test_draft_document_projection_runs_unadmitted — a held admission delays the draft, a marker leaks, or selection includes code gates
+- 3: tests/test_stage2.py::test_extended_targeted_routes_preserve_acceptance_guards — an existing preparation, tolerance or acceptance guard is bypassed
+- 4: tests/test_stage2.py::test_targeted_selection_follows_import_chains_per_snapshot — a chain, cycle, retained retry edit or deleted/renamed endpoint loses a whole test file
+- 5: tests/test_stage2.py::test_implement_refuses_uncovered_new_code_before_tests_or_fallback — uncovered Python/shell code reaches pytest, admission or a checkpoint
 - 6: tests/test_stage2.py::test_targeted_repair_falls_back_to_full_on_uncovered_inputs — unsupported or unsafe coverage gets targeted acceptance
 - 6: tests/test_stage2.py::test_targeted_stage2_test_file_requires_full_verification — the monolithic test file runs outside full admission
-- 6: not yet written tests/test_stage2.py::test_implement_preserves_full_fallback_boundaries — an implement route bypasses shared-infrastructure or unsafe-inventory fallback
-- 7: not yet written tests/test_stage2.py::test_extended_targeted_failures_never_checkpoint — red, launch failure or timeout is overridden instead of failing the attempt
-- 8: not yet written tests/test_stage2.py::test_all_targeted_verbs_record_actual_scope — scope is absent or document/targeted green claims a full pass
+- 6: tests/test_stage2.py::test_implement_preserves_full_fallback_boundaries — an implement route bypasses shared-infrastructure or unsafe-inventory fallback
+- 7: tests/test_stage2.py::test_extended_targeted_failures_never_checkpoint — red, launch failure or timeout is overridden instead of failing the attempt
+- 8: tests/test_stage2.py::test_all_targeted_verbs_record_actual_scope — scope is absent or document/targeted green claims a full pass
 - 9: tests/test_stage2.py::test_review_requires_fresh_full_verification_before_model_call — stale, moved or red input reaches a reviewer
 - 9: tests/test_ci.py::test_the_trigger_does_not_restrict_paths — a changed path ceases to trigger hosted verification
 - 9: not a test — review the unchanged hosted workflow against the complete gate list; any reduction of CI verification refutes criterion 9
-- 10: not yet written tests/test_stage2.py::test_phase6_records_only_correlated_local_slips — a matching completed red is missed, or a different tree/configuration or timeout is counted
-- 11: not yet written tests/test_verify_duration.py::test_targeted_history_preserves_safety_and_legacy_records — new events break old records, expose raw output, mix concurrent writes or change verdicts on storage failure
-- 12: not yet written tests/test_verify_duration.py::test_slip_report_counts_interval_and_reports_gaps — duplicate runs or other repositories are counted, or corrupt/incomplete evidence becomes zero
+- 10: tests/test_stage2.py::test_phase6_records_only_correlated_local_slips — a matching completed red is missed, or a different tree/configuration or timeout is counted
+- 11: tests/test_verify_duration.py::test_targeted_history_preserves_safety_and_legacy_records — new events break old records, expose raw output, mix concurrent writes or change verdicts on storage failure
+- 12: tests/test_verify_duration.py::test_slip_report_counts_interval_and_reports_gaps — duplicate runs or other repositories are counted, or corrupt/incomplete evidence becomes zero
 - 12: not a test — orchestrator review of the handover skill's count command and explicit repository/interval/unavailable wording; omission refutes criterion 12
-- 13: not yet written tests/test_stage2.py::test_verification_doctrine_covers_extended_targeted_routes — workflow, held instructions or the ADR contradict the agreed verification boundaries; orchestrator bootstrap owns this test
+- 13: tests/test_stage2.py::test_verification_doctrine_covers_extended_targeted_routes — workflow, held instructions or the ADR contradict the agreed verification boundaries; orchestrator bootstrap owns this test
 
 ## Runner route — 2026-11-12
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: fourth run from attempt 3's saved state on the maintainer's answer of 2026-11-12 (bead coding-harness-0swp); three tests still red: test_implement_refuses_uncovered_new_code_before_tests_or_fallback[baseline-only-test], test_secret_rules_outside_diagnostics_still_block_retry, test_targeted_history_preserves_safety_and_legacy_records.
 
 ## Time used
 
 2026-11-11 20:50:58–23:23:11 UTC, 9132 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-11 23:23:22–2026-11-12 00:07:48 UTC, 2666 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-12 00:08:25–01:04:53 UTC, 3387 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 11:30:43–12:27:43 UTC, 3420 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

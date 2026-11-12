@@ -739,7 +739,7 @@ def test_targeted_history_preserves_safety_and_legacy_records(
     assert "run legacy-run" in out and "green" in out and "1.500s" in out, out
     assert "history note:" not in out, "a targeted or slip row was mistaken for a version-1 record"
     code, out, _ = _run(capsys, "report", "--run", "legacy-run")
-    assert code == 0 and "probe" in out and "verdict: green" in out, out
+    assert code == 0 and "pytest" in out and "verdict: green" in out, out
 
     # The runner's writer stores identifiers only: the field set leaves no room for command
     # output, environment dumps or credentials.
@@ -805,6 +805,7 @@ def test_targeted_history_preserves_safety_and_legacy_records(
     assert len(races) == 1, "the racing writers left more than one slip row"
 
     # Different full runs append independently under the same lock: two more rows, none mixed.
+    results = []
     writers = [
         threading.Thread(target=lambda rid=rid: results.append(verify_duration.append_slip(slip_event(rid))))
         for rid in ("race-a", "race-b")
@@ -815,7 +816,7 @@ def test_targeted_history_preserves_safety_and_legacy_records(
         worker.join()
     assert sum(results) == 2, "a distinct full run was refused as a duplicate"
     slips = [row for row in _history(state) if row["event"] == "slip"]
-    assert sorted(row["run_id"] for row in slips) == ["race-a", "race-b", "race-run"]
+    assert sorted(row["run_id"] for row in slips) == ["legacy-run", "race-a", "race-b", "race-run"]
     assert sum(1 for row in slips if row["run_id"] == "race-run") == 1
     for line in path.read_text(encoding="utf-8").splitlines():
         json.loads(line)  # a mixed or partial write would raise here

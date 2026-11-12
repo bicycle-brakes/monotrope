@@ -3332,16 +3332,19 @@ def test_secret_rules_outside_diagnostics_still_block_retry(world: World, monkey
     """Criterion 6. Planted fault: the runner cleans the tree or skips the pre-call scan to pass the retry."""
     set_denylist(DENYLIST + FIXTURE_RULE)
     draft_world(world)
+    # The secret sits in the change folder, the one place a draft keeps: the draft's put-back would
+    # remove a stray file anywhere else, and the scan before the retry reads what the tree still holds.
+    leak = Path("plans") / "changes" / "demo" / "leak.md"
     plant = {
         "plans/changes/demo/plan.md": PLAN_CARD,
-        "src/leak.py": f"token = '{FIXTURE_SECRET}'\n",
+        leak.as_posix(): f"token = '{FIXTURE_SECRET}'\n",
     }
     world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "must not run")])
     commands = LocalCommands(monkeypatch)
     commands.outcomes["gate"] = (1, FIXTURE_TRACEBACK)
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 1
-    assert FIXTURE_SECRET in (world.root / "src" / "leak.py").read_text(encoding="utf-8")
+    assert FIXTURE_SECRET in (world.root / leak).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("anchor", ["^", "$"])
@@ -25668,6 +25671,8 @@ def test_implement_refuses_uncovered_new_code_before_tests_or_fallback(
         )
         git(world.root, "add", "-A")
         git(world.root, "commit", "--quiet", "-m", "a test that will be deleted")
+        # The commit moved HEAD: the attempt's baseline is the head that holds the test.
+        baseline = git(world.root, "rev-parse", "HEAD")
         step = {
             "stdout": "implemented",
             "plant": {"scripts/new_tool.py": "VALUE = 1\n"},

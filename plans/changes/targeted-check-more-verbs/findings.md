@@ -307,3 +307,123 @@ Stage-2 call, 2026-11-12: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_verify_duration.py::test_targeted_history_preserves_safety_and_legacy_records
 > 3 failed, 149 passed in 64.00s (0:01:04)
 > ```
+
+Stage-2 call, 2026-11-12: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason fourth run from attempt 3's saved state on the maintainer's answer of 2026-11-12 (bead coding-harness-0swp); three tests still red: test_implement_refuses_uncovered_new_code_before_tests_or_fallback[baseline-only-test], test_secret_rules_outside_diagnostics_still_block_retry, test_targeted_history_preserves_safety_and_legacy_records · leak check clean over 1040 files, 3990 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/targeted-check-more-verbs/plan.md` +12 -12
+> - `tests/test_stage2.py` +7 -2
+> - `tests/test_verify_duration.py` +3 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 562 lines of this gate left out …]
+>                 {"stdout": "must not run"},
+>                 {"stdout": "must not run"},
+>             ],
+>             ruff=[{}] * 8,
+>             python3=[{}] * 3,
+>             make=[red] * 3,
+>         )
+>         assert world.run("implement") == 1
+>         names = [call["name"] for call in world.calls()]
+> >       assert names[:7] == ["claude", "ruff", "ruff", "ruff", "ruff", "python3", "make"], names[:7]
+> E       AssertionError: ['claude', 'ruff', 'ruff', 'claude', 'ruff', 'ruff', ...]
+> E       assert ['claude', 'r..., 'ruff', ...] == ['claude', 'r...python3', ...]
+> E         
+> E         At index 3 diff: 'claude' != 'ruff'
+> E         Use -v to get more diff
+>
+> tests/test_stage2_fail_fast.py:223: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 32 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 32 files, 2 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> failed: implementation post-run checks failed after the allowed attempts; why each attempt failed and the files it changed: plans/changes/demo/findings.md
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=94603) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=94604) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/targeted-check-more-verbs/tests/test_stage2.py:21830: DeprecationWarning: This process (pid=94603) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_bash_call_beside_the_document_check_runs_the_real_bash
+> FAILED tests/test_stage2.py::test_runner_preserves_precall_time_on_final_verdict[False]
+> FAILED tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line
+> FAILED tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else
+> FAILED tests/test_stage2.py::test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else
+> FAILED tests/test_stage2.py::test_an_unmeasured_reason_stays_one_line_with_one_full_stop
+> FAILED tests/test_stage2.py::test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on
+> FAILED tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line[first-try]
+> FAILED tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line[after-a-failure]
+> FAILED tests/test_stage2.py::test_ruff_gets_the_verify_environment_without_credentials
+> FAILED tests/test_stage2.py::test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line
+> FAILED tests/test_stage2_fail_fast.py::test_empty_targets_skip_their_command
+> FAILED tests/test_stage2_fail_fast.py::test_cheap_green_still_requires_full_verification
+> 13 failed, 5653 passed, 17 skipped, 5 warnings in 1447.97s (0:24:07)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 38338 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
