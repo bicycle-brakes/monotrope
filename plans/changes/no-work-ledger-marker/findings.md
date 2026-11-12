@@ -2432,3 +2432,16 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > </longcat_think>
 > No finding
 > No finding
+
+Stage-2 call, 2026-11-12: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4000 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-12
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/stage2.py:5320 | Clearing-evidence validation depends on file order. If verification changes a captured ledger line after clearing, but the model also added `docs/note.md`, `attempt_has_work` returns `True` for that earlier-sorting file before validating the plan. Reproduced in memory: identical mismatched evidence raises `Refused` with the plan alone but returns `True` with the added document. A green verifier can therefore permit acceptance despite unreliable clearing evidence. Validate all captured clearing records before returning a successful work result. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d01c-3829-75e3-b9b1-4e919b5a68d0, 2026-11-12
+Reviewer session: codex 01a1d01c-3829-75e3-b9b1-4e919b5a68d0 — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
