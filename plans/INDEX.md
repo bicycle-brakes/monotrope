@@ -570,6 +570,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/triage-verb/plan.md`](changes/triage-verb/plan.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/triage-verb/research.md`](changes/triage-verb/research.md) | draft | none | 2026-11-07 | coding-harness-o2s1 |
 | [`changes/triage-verb/spec.md`](changes/triage-verb/spec.md) | draft | partial | 2026-11-07 | coding-harness-o2s1 |
+| [`changes/verify-cheap-first/decisions.md`](changes/verify-cheap-first/decisions.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-cheap-first/findings.md`](changes/verify-cheap-first/findings.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-cheap-first/plan.md`](changes/verify-cheap-first/plan.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-cheap-first/research.md`](changes/verify-cheap-first/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-cheap-first/spec.md`](changes/verify-cheap-first/spec.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-step-limit/decisions.md`](changes/verify-step-limit/decisions.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/findings.md`](changes/verify-step-limit/findings.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/plan.md`](changes/verify-step-limit/plan.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |

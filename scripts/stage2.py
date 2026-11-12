@@ -6129,7 +6129,7 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
 
     Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    gate-list order through the locked interpreter, as `verify_all.sh` runs them. The first blocking
+    declaration order through the locked interpreter. The first blocking
     red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
     reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
     """
