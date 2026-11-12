@@ -427,3 +427,49 @@ Stage-2 call, 2026-11-12: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-11-12: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason fifth run from attempt 4's saved state with the correction of decisions.md Q-6 (maintainer 2026-11-12, bead coding-harness-0swp): follow the plan section 'Correction for the fifth run' · leak check clean over 1040 files, 3999 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +17 -12
+> - `scripts/time_records.py` +9 -2
+> - `tests/test_stage2.py` +53 -21
+> - `tests/test_stage2_fail_fast.py` +27 -10
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .......F................................................................ [ 66%]
+> ....................................                                     [100%]
+> =================================== FAILURES ===================================
+> ________ test_a_bash_call_beside_the_document_check_runs_the_real_bash _________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/targeted-check-more-verbs/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-165/popen-gw0...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-165/popen-gw0/test_a_bash_call_beside_the_do0/state'))
+>
+>     def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
+>         # The stand-in shadows bash for every test; a call that is not the document check must neither
+>         # consume a scripted step nor answer green for a command no test scripted.
+>         world.script(docs=[{"stdout": "scripted", "exit": 0}])
+>         out = subprocess.run([str(world.bin / "bash"), "-c", "echo real; exit 3"], capture_output=True, text=True)
+>         assert (out.returncode, out.stdout) == (3, "real\n"), "a non-document bash call was stubbed"
+>         assert world.calls("bash") == [], "a non-document bash call was recorded as a document check"
+>         assert json.loads((world.bin / "scenario.json").read_text())["_bash"] == REAL_BASH != str(world.bin / "bash")
+>         world.script(bash=[{"stdout": "stub"}])
+>         out = subprocess.run([str(world.bin / "bash"), "-c", "echo real"], capture_output=True, text=True)
+> >       assert out.returncode == 97 and "not served" in out.stderr, "a scripted bash step was silently dropped"
+> E       AssertionError: a scripted bash step was silently dropped
+> E       assert (0 == 97)
+> E        +  where 0 = CompletedProcess(args=['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-165/popen-gw0/test_a_bash_call_beside_the_do0/bin/bash', '-c', 'echo real'], returncode=0, stdout='real\n', stderr='').returncode
+>
+> tests/test_stage2.py:4579: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_bash_call_beside_the_document_check_runs_the_real_bash
+> 1 failed, 107 passed in 109.07s (0:01:49)
+> ```

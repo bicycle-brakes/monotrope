@@ -4957,8 +4957,12 @@ def time_entry(
     started: dt.datetime,
     ended: dt.datetime,
     seconds: int,
+    scope: Sequence[str] = (),
 ) -> str:
     """The line the runner writes under `## Time used` for one completed attempt.
+
+    `scope` is a passing attempt's verification evidence: it stands after the verdict word, in one
+    line without the field separator, so the passing attempt leaves nothing else in findings.md.
 
     The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
     its date when that differs from the start's, so a span across midnight reads unambiguously.
@@ -4973,7 +4977,15 @@ def time_entry(
         route,
         model,
         time_records.ACCEPTED if accepted else time_records.REJECTED,
+        scope_in_time_line(scope),
     )
+
+
+def scope_in_time_line(scope: Sequence[str]) -> str | None:
+    """A scope record as the time line's single field: one line, no `·`, never blank - or None."""
+    plain = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in " ".join(scope))
+    text = " ".join(plain.split()).replace("·", "-").strip()
+    return text or None
 
 
 def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
@@ -9173,6 +9185,9 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
+                    # A passing attempt's verification scope stands in its time line, after the
+                    # verdict word; a failed attempt's stays in its one diagnostics block.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
                 ),
                 baseline_time,
                 inputs_before,
@@ -9188,16 +9203,6 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
-                if scope_record:
-                    # The runner's own evidence of how this repair was verified: never a model's claim.
-                    append(
-                        ctx.findings,
-                        quote_block(
-                            f"{SCOPE_LABEL}:\n" + "\n".join(scope_record),
-                            key,
-                            whole=scope_record,
-                        ),
-                    )
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
@@ -9753,9 +9758,9 @@ def draft(root: Path, change: str) -> None:
                     "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
             # The runner's own evidence of what the draft's check ran: never a model's claim, and
-            # never worded as tests or as the full verification (bead coding-harness-0swp).
+            # never worded as tests or as the full verification (bead coding-harness-0swp). A passing
+            # attempt leaves it in the checkpoint message only, nothing after its audit line.
             scope_line = f"- Attempt {attempt} ({route}): {scope}"
-            append(ctx.findings, quote_block(f"{SCOPE_LABEL}:\n{scope_line}", key, whole=[scope_line]))
             checkpoint(
                 root,
                 ctx.change,
