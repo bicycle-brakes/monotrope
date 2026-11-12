@@ -46,8 +46,11 @@ continuation. Existing tests require those rows to remain exempt
   `taken`, case-insensitively, in the record, a released block or any phase-6 block.
 - **Valid Origin:** the complete trimmed cell is `base` or `fix-r<N>`, where
   N is a positive decimal whole number without a leading zero; case matters.
-- **Block location:** the source in findings.md identified by its heading
-  and occurrence or line number, so repeated headings remain distinguishable.
+- **Row location:** the row's ID and its file (`loop.md` or `findings.md`).
+  Finding IDs are unique within a change, and a check refuses a duplicate ID
+  (including a release of loop rows that repeats an ID already in
+  `findings.md`), so the ID suffices; no block heading or occurrence is
+  computed (maintainer's answer A, 2026-11-11).
 
 ## Acceptance criteria
 
@@ -59,9 +62,9 @@ continuation. Existing tests require those rows to remain exempt
    *Refuted by:* any model or availability probe runs, an audit or time entry
    is appended, findings or record bytes change, stage state changes, or a commit is made.
 3. When the target-Origin check refuses, its diagnostic identifies every
-   invalid selected row by ID and source location and tells the orchestrator
+   invalid selected row by ID and file and tells the orchestrator
    to correct the cell to `base` or `fix-r<N>` with the stated positive-number rule.
-   *Refuted by:* an offending row or its older block cannot be located, a valid
+   *Refuted by:* an offending row cannot be found by its ID and file, a valid
    row is accused, or the message omits the allowed values or asks a reviewer to fix its answer.
 4. When older outstanding targets have valid Origins and all existing repair
    prerequisites hold, repair processes them in their original places without changing Origin.
@@ -110,7 +113,8 @@ None open. The reasoned interview skip and repair-only scope are already in
 [DETAIL] Check every selected target, including selected released rows, rather
 than re-auditing all historical rows: selection is the boundary recorded in
 `decisions.md`, and an actively selected legacy row differs from passive history.
-[DETAIL] Use a heading plus occurrence or line number for block locations,
-because re-check headings can repeat; this is reversible diagnostic wording.
+[DETAIL] Name an offending row by its ID and file only: IDs are unique within
+a change and a duplicate is refused, so no heading or occurrence is needed
+(maintainer's answer A, 2026-11-11, replacing the earlier heading-plus-occurrence wording).
 [DETAIL] Set a one-hour phase-4 appetite including repairs, a stop rather than
 an estimate, because the correction stays within one existing admission path.
