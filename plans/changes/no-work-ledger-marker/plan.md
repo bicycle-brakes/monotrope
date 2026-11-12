@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-twbl
@@ -86,18 +86,18 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_runner_ledger_clearing_cannot_qualify_a_retry — a time-only retry is accepted using a retained test's runner-cleared marker
-- 2: not yet written tests/test_stage2.py::test_ledger_discount_preserves_model_work — the discount hides model prose, a ledger rewrite, a model-cleared marker or another file's edit
+- 1: tests/test_stage2.py::test_runner_ledger_clearing_cannot_qualify_a_retry — a time-only retry is accepted using a retained test's runner-cleared marker
+- 2: tests/test_stage2.py::test_ledger_discount_preserves_model_work — the discount hides model prose, a ledger rewrite, a model-cleared marker or another file's edit
 - 2: tests/test_stage2.py::test_work_check_accepts_nonempty_changes — existing code, document, binary or mode work is refused
 - 3: tests/test_stage2.py::test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote — an eligible marker survives verification
 - 3: tests/test_stage2.py::test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify — clearing runs before formatting or after stamping/verification
 - 3: tests/test_stage2.py::test_clearing_the_ledger_refuses_an_aliased_parent_or_a_hard_link — capture or clearing writes through an alias
-- 3: not yet written tests/test_stage2.py::test_ledger_discount_keeps_clearing_in_both_verify_modes — full or targeted verification skips eligible entries or changes fenced/missing-test entries
-- 4: not yet written tests/test_stage2.py::test_runner_ledger_clearing_cannot_qualify_a_retry — marker-only retries lose diagnostics/records, mark repairs fixed or checkpoint on exhaustion
+- 3: tests/test_stage2.py::test_ledger_discount_keeps_clearing_in_both_verify_modes — full or targeted verification skips eligible entries or changes fenced/missing-test entries
+- 4: tests/test_stage2.py::test_runner_ledger_clearing_cannot_qualify_a_retry — marker-only retries lose diagnostics/records, mark repairs fixed or checkpoint on exhaustion
 - 4: tests/test_stage2.py::test_no_work_rejection_reaches_existing_retry — the next allowed call loses the no-work reason
 - 4: tests/test_stage2.py::test_empty_attempt_keeps_rejected_records — audit or measured time is lost, duplicated or accepted
 - 4: tests/test_stage2.py::test_all_empty_attempts_leave_no_checkpoint — exhaustion reports success or moves HEAD
-- 5: not yet written tests/test_stage2.py::test_ledger_discount_measurement_failure_prevents_acceptance — unreadable or ambiguous clearing evidence permits acceptance
+- 5: tests/test_stage2.py::test_ledger_discount_measurement_failure_prevents_acceptance — unreadable or ambiguous clearing evidence permits acceptance
 - 5: tests/test_stage2.py::test_work_measurement_failure_prevents_acceptance — failed tree or diff measurement permits acceptance
 
 ## Verification
@@ -124,4 +124,12 @@ route `flash`, model `glm-5.3-flash`; it records no Stage-1 fallback.
 The bounded class requires neither a design nor an ADR. The orchestrator
 shows the card with the already-recorded interview skip before implementation.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-12 02:31:16–03:06:16 UTC, 2100 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-12 03:06:27–03:14:54 UTC, 508 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-12 03:15:05–03:40:41 UTC, 1535 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

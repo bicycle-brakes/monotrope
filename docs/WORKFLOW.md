@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-09
+updated: 2026-11-12
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1027,7 +1027,14 @@ change's `findings.md` and the body of the plan's `## Time used` section, both
 put back by the runner, do not count. The verdict measures surviving model work
 after formatting and derived preparation, discounting the generated index and
 stamp-only changes in any document, whether or not checkpoint preparation restores
-them. Replacing only an existing `updated:` value does not count as work, even
+them. The runner's own ledger clearing is discounted with it: when verification
+removes a plan's `not yet written` marker because the named test exists, that
+exact removal — captured per attempt, in both the full and the targeted check —
+is put back in the comparison and cannot qualify the attempt, while every model
+edit beside it (plan prose, a changed ledger reference, a marker the model
+removed itself) stays visible, and clearing evidence that cannot be measured
+reliably rejects the attempt instead of discounting (bead coding-harness-twbl).
+Replacing only an existing `updated:` value does not count as work, even
 when the replacement is not a date. An edit formatting erases is no work.
 Any other addition, edit, deletion, binary or file-mode change counts, code or
 document, planned path or not. Each call is compared with its own pre-call state,

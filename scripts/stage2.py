@@ -171,7 +171,7 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -1951,10 +1951,10 @@ def _exception_problem(kind: str, record) -> str | None:
     """
     if not isinstance(record, dict):
         return f"an entry of the free rule's {kind} list must be a record with id, date and reason"
-    for field in ("id", "date", "reason"):
-        value = record.get(field)
+    for name in ("id", "date", "reason"):
+        value = record.get(name)
         if not isinstance(value, str) or not value.strip():
-            return f"an entry of the free rule's {kind} list has no {field}"
+            return f"an entry of the free rule's {kind} list has no {name}"
     if not DATE_ONLY.fullmatch(record["date"]) or not _valid_date(record["date"]):
         return f"the free rule's {kind} entry for {record['id']} has no ISO date (YYYY-MM-DD)"
     return None
@@ -5094,16 +5094,162 @@ def _minus_time_body(data: bytes) -> str:
     return text[: match.end()] + text[end:]
 
 
+@dataclass(frozen=True)
+class LedgerClearing:
+    """One ledger entry the runner's clearing rewrote, with its place in the plan.
+
+    `section` is the position of the entry's `## Criterion ledger` section among the plan's
+    sections when the clearing ran, `position` the entry line's position within that section;
+    positions, not criterion numbers, identify the entry, because several tests can hold one
+    criterion. `before` is the marked entry line as the clearing found it - the model call's
+    own bytes, the formatting already applied - and `after` the cleared line it wrote.
+    """
+
+    section: int
+    position: int
+    before: str
+    after: str
+
+
+@dataclass
+class ClearingEvidence:
+    """What one attempt's verification actually removed from its plan's criterion ledger.
+
+    A fresh container stands around every model call and travels with the verification
+    result to the work check. `records` are the clearing discount's exact shape; `problem`
+    set means the clearing could not be captured reliably, and the work check refuses
+    instead of measuring - never permissive (spec, criterion 5).
+    """
+
+    records: list[LedgerClearing] = field(default_factory=list)
+    problem: str | None = None
+
+
+def capture_ledger_clearing(root: Path, plan: Path, evidence: ClearingEvidence | None) -> None:
+    """The runner's ledger clearing, with the entries it rewrote recorded in `evidence`.
+
+    The plan bytes stand read immediately before and after the actual clearing - after the
+    formatting step and the cheap checks, before stamping and verification. Without a
+    container the clearing runs exactly as it always did. A diff the ledger entries cannot
+    explain - a line-count change, a line outside a criterion-ledger section, a fenced line,
+    a change that is not one marked entry going to its cleared form - is recorded as a
+    problem, not discounted. Read errors propagate to the caller's existing ledger
+    diagnostic, which fails the attempt.
+    """
+    if evidence is None:
+        check_criterion_ledger.clear_written(root, plan)
+        return
+    before = plan.read_bytes()
+    if not check_criterion_ledger.clear_written(root, plan):
+        return
+    after = plan.read_bytes()
+    records = _clearing_records(before, after)
+    if records is None:
+        evidence.problem = (
+            "the runner's ledger clearing wrote bytes its ledger entries cannot explain; "
+            "the work check refuses instead of discounting them"
+        )
+        return
+    evidence.records = records
+
+
+def _clearing_records(before: bytes, after: bytes) -> list[LedgerClearing] | None:
+    """The clearing's changed lines as entries with their section positions, or None.
+
+    `None` says the diff holds something the clearing cannot have written, so no discount
+    may be built from it.
+    """
+    before_lines = before.decode("utf-8", "surrogateescape").split("\n")
+    after_lines = after.decode("utf-8", "surrogateescape").split("\n")
+    if len(before_lines) != len(after_lines):
+        return None
+    lines = check_criterion_ledger._lines(before.decode("utf-8", "surrogateescape"))
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    places = {
+        number: (side, place) for side, section in enumerate(sections) for place, (number, _text) in enumerate(section)
+    }
+    records: list[LedgerClearing] = []
+    for number, (old, new) in enumerate(zip(before_lines, after_lines, strict=True), start=1):
+        if old == new:
+            continue
+        entry = check_criterion_ledger.parse_entry(old, number)
+        cleared = check_criterion_ledger.parse_entry(new, number)
+        if (
+            entry is None
+            or entry.kind != "not yet written"
+            or cleared is None
+            or cleared.kind == "not yet written"
+            or fenced[number - 1]
+            or number not in places
+        ):
+            return None
+        side, place = places[number]
+        records.append(LedgerClearing(section=side, position=place, before=old, after=new))
+    return records
+
+
+def _undo_ledger_clearing(final: bytes, records: Sequence[LedgerClearing]) -> bytes:
+    """The final plan bytes with this attempt's captured marker removals put back, in memory only.
+
+    Every recorded entry is matched within its recorded ledger section by position, and the
+    line there must still hold exactly the bytes the clearing wrote; anything else refuses
+    (fail closed). Every other byte stands as verification left it, so the comparison after
+    this undo still sees the model's own prose, ledger edits and marker removals.
+    """
+    text = final.decode("utf-8", "surrogateescape")
+    raw = text.split("\n")
+    lines = check_criterion_ledger._lines(text)
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    touched: set[int] = set()
+    for record in records:
+        if record.section >= len(sections):
+            raise Refused(
+                f"clearing evidence names criterion-ledger section {record.section + 1}; "
+                f"the plan to measure holds {len(sections)}"
+            )
+        section = sections[record.section]
+        if record.position >= len(section):
+            raise Refused(
+                f"clearing evidence names ledger line {record.position + 1} of section "
+                f"{record.section + 1}; that section holds {len(section)} lines"
+            )
+        number, _text = section[record.position]
+        if fenced[number - 1]:
+            raise Refused(f"clearing evidence names fenced ledger line {number}")
+        if number in touched:
+            raise Refused(f"two clearing records name ledger line {number}")
+        if raw[number - 1] != record.after:
+            raise Refused(f"ledger line {number} no longer holds the bytes the runner's clearing wrote")
+        raw[number - 1] = record.before
+        touched.add(number)
+    return "\n".join(raw).encode("utf-8", "surrogateescape")
+
+
 def attempt_has_work(
-    root: Path, before: str, after: str, findings: Path, plan: Path, *, model_after: str | None = None
+    root: Path,
+    before: str,
+    after: str,
+    findings: Path,
+    plan: Path,
+    *,
+    model_after: str | None = None,
+    clearing: ClearingEvidence | None = None,
 ) -> bool:
     """Measure surviving model work after verification, excluding writes the runner owns.
 
     Only paths changed by this call qualify. The final tree includes formatting and derived
     preparation; the generated index and stamp-only changes in any document are excluded
     from work, whether or not checkpoint preparation restores them. The unbounded raw
-    comparison also preserves binary and mode-only work.
+    comparison also preserves binary and mode-only work. The plan comparison alone puts this
+    attempt's captured ledger clearing back in memory: the runner's removal of a
+    pending-test marker cannot qualify the attempt, while every model edit beside it -
+    prose, a changed ledger reference, a marker the model removed itself - stays visible
+    against the pre-call plan. Unreliable clearing evidence refuses the measurement.
     """
+    if clearing is not None and clearing.problem:
+        raise Refused(clearing.problem)
     candidates = None
     if model_after is not None:
         candidates = set(
@@ -5142,6 +5288,9 @@ def attempt_has_work(
         if path == plan_path and status == "M" and old_mode == new_mode:
             old = _git_bytes(root, "cat-file", "blob", old_id)
             new = _git_bytes(root, "cat-file", "blob", new_id)
+            # In memory only: this attempt's own captured clearing cannot qualify the attempt.
+            if clearing is not None and clearing.records:
+                new = _undo_ledger_clearing(new, clearing.records)
             old_body, new_body = _minus_time_body(old), _minus_time_body(new)
             if old_body == new_body:
                 continue
@@ -6197,13 +6346,16 @@ def _targeted_body(
     previous_failures: Sequence[str],
     against: str,
     scope: list[str] | None,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
 
     Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
     `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
-    admitted full check instead. A passing result is never worded as full verification.
+    admitted full check instead. A passing result is never worded as full verification. The clearing
+    capture covers the fallback too: the clearing happened in the shared preparation, before the
+    selection chose the admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6226,7 +6378,7 @@ def _targeted_body(
     if cheap:
         return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
     try:
-        check_criterion_ledger.clear_written(root, plan)
+        capture_ledger_clearing(root, plan, clearing)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
     preparation = prepare_derived(root, env, key)
@@ -6277,6 +6429,7 @@ def verify_attempt(
     mode: str = "full",
     against: str = "HEAD",
     scope: list[str] | None = None,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -6289,6 +6442,8 @@ def verify_attempt(
     Return bounded diagnostics for failed preparation or postconditions, naming the gates that
     blocked. The time section must still be readable; the entry itself is the runner's
     (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
+    When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
+    for the work check's discount; without one, clearing stands unchanged for direct callers.
 
     `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
     preparation run outside the verify admission, and the repair's delta against `against` selects the
@@ -6330,7 +6485,7 @@ def verify_attempt(
         # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
         # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
         targeted = _targeted_body(
-            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope
+            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope, clearing
         )
         try:
             time_log(plan)
@@ -6368,7 +6523,7 @@ def verify_attempt(
             if cheap:
                 return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
             try:
-                check_criterion_ledger.clear_written(root, plan)
+                capture_ledger_clearing(root, plan, clearing)
             except (OSError, RuntimeError, ValueError) as error:
                 return [
                     f"the criterion ledger of {plan.name} could not be updated: "
@@ -8322,6 +8477,9 @@ def run_attempts(
                 restore_findings(kept)
 
         unmeasured: str | None = None
+        # This call's own ledger-clearing evidence, fresh per attempt: what verification actually
+        # removed from the plan, for the work check's discount (bead coding-harness-twbl).
+        clearing = ClearingEvidence()
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
@@ -8569,7 +8727,14 @@ def run_attempts(
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
-                        root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures
+                        root,
+                        ctx.plan,
+                        key,
+                        formatted,
+                        tools,
+                        inputs[ctx.plan],
+                        previous_failures,
+                        clearing=clearing,
                     )
                 else:
                     problems = verify_attempt(
@@ -8583,6 +8748,7 @@ def run_attempts(
                         mode=verify_mode,
                         against=baseline,
                         scope=scope_lines,
+                        clearing=clearing,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -8608,7 +8774,13 @@ def run_attempts(
             if not verified_exposed and work_unmeasured is None:
                 try:
                     worked = attempt_has_work(
-                        root, before, worktree_tree(root), ctx.findings, ctx.plan, model_after=after
+                        root,
+                        before,
+                        worktree_tree(root),
+                        ctx.findings,
+                        ctx.plan,
+                        model_after=after,
+                        clearing=clearing,
                     )
                 except (Refused, OSError, ValueError) as error:
                     work_unmeasured = str(error)
