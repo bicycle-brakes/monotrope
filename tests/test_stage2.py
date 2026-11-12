@@ -119,6 +119,10 @@ if alias == "bash":
     # No runner verb launches bash any more: every gate goes through `sh -c` in the shared
     # gate executor, so a bash call in a test is never scripted - it runs the real bash, and
     # it neither consumes a scripted step nor answers green for a command no test scripted.
+    # A step scripted under the key `bash` is a test mistake: end loudly instead of dropping it.
+    if scenario.get("bash"):
+        sys.stderr.write("stage2-stand-in: a scripted bash step is not served\\n")
+        sys.exit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
 log = here / "calls.jsonl"
 

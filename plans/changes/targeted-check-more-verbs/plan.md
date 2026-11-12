@@ -156,6 +156,17 @@ The fourth run's full check showed 13 red tests. Do this, nothing wider:
    branch. Put the guard back in the stand-in (the document-check branch
    stays removed); do not change the test's assertions.
 
+6. Seventh run (2026-11-12): the full check is green except
+   `tests/test_stage2.py::test_implement_and_fallback_repair_keep_full_verify_after_docs_draft`
+   ("the fallback must report its unsupported input"). Item 1 went one step
+   too far on the repair route: a repair that falls back to the full check
+   must still name the reason (the unsupported input) in findings.md, in the
+   note-line form the repair route has on `origin/main` (a runner note on
+   the attempt's line, not a quote block). Restore exactly that for the
+   repair route. The implement route keeps item 1: scope in the time line of
+   plan.md, nothing after a passing attempt's audit line. Do not change the
+   test.
+
 ## Files and ownership
 
 - Attempt: `scripts/stage2.py` — extend selection, early refusal, implement/draft dispatch, scope evidence and local-slip correlation; align embedded verification instructions.
@@ -240,6 +251,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: fourth run from a
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: fifth run from attempt 4's saved state with the correction of decisions.md Q-6 (maintainer 2026-11-12, bead coding-harness-0swp): follow the plan section 'Correction for the fifth run'.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: sixth run from attempt 5's saved state: one red test left, plan section 'Correction for the fifth run' item 5 (maintainer 2026-11-12, decisions.md Q-6, bead coding-harness-0swp).
+
 ## Time used
 
 2026-11-11 20:50:58–23:23:11 UTC, 9132 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -247,3 +262,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: fifth run from at
 2026-11-12 00:08:25–01:04:53 UTC, 3387 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-12 11:30:43–12:27:43 UTC, 3420 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-12 13:48:20–13:54:06 UTC, 346 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 13:55:21–14:41:31 UTC, 2770 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
