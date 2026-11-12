@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-10"
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, research-swarm]
 class: bounded
-appetite: 3
+appetite: 9
 adr_files: [docs/adr/0020-phase-1-research-swarm.md]
 neighbours: []
 ---
@@ -136,7 +136,7 @@ wording in `docs/WORKFLOW.md`; their policy change takes effect on merge.
 
 ## Definition of Done
 
-- The five answered interview records satisfy the ADR-change minimum; no
+- The six answered interview records satisfy the ADR-change minimum; no
   open decision remains. The existing ADR amendment travels in the same
   decision pull request, with `docs/WORKFLOW.md` brought into agreement.
 - Regression tests and `make verify` pass at the implementation commit.
@@ -155,8 +155,8 @@ None open. The invocation ceiling, unchanged contract, wrapped-object
 extraction, same-model correction and rejection of extra fields are answered
 in `decisions.md#Q-1` through `decisions.md#Q-5` (2026-11-10).
 
-[DETAIL] Retain the existing three-hour phase-4 appetite, repairs included;
-no maintainer answer changes it. Retain class `bounded`, so phase 2b does not
+[DETAIL] The phase-4 appetite, repairs included, started at three hours and
+was raised by the maintainer to nine hours on 2026-11-12 (`decisions.md#Q-6`). Retain class `bounded`, so phase 2b does not
 run and no new ADR draft is due; this change amends the existing ADR 0020.
 
 [DETAIL] Restrict tolerant extraction to topic reports, preserving strict

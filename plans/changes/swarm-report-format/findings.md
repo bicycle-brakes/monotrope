@@ -759,3 +759,5 @@ Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-3-20261112T182210769954Z-c54ed2d4.md
 > ```
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1040 files, 4030 commits, 12 rules.
