@@ -76,18 +76,36 @@ duplicates, how many can never fail, and the run time per test file.
 
 ## Three tiers
 
-| Tier | What belongs in it | Budget | Runs |
+| Tier | What belongs in it | Target budget | Runs |
 |---|---|---|---|
 | **fast** | Pure logic: parsing, selection, validation, rendering. No process, no git, no network, no sleep. | 60 s for the whole tier, 0.5 s per test | on every targeted check and every runner attempt |
 | **integration** | One real boundary: a git repository from a prepared template, one subprocess, the verify lock, a stand-in model. | 8 minutes for the tier, 10 s per test | when the touched code maps to the test (touch map), and always before phase 6 and in CI |
 | **system** | Whole runner verbs end to end, the swarm, the pinned Pi's real data, the kit probe in a throw-away repository. | 15 minutes, 60 s per test | before phase 6, in CI, and nightly — never inside a runner attempt |
 
-How a test gets its tier: by where it lives, not by a marker someone must
-remember — `tests/fast/`, `tests/integration/`, `tests/system/`, each
-mirroring the module it tests (`tests/fast/stage2/test_selection.py`). A
-collection hook refuses a test in `tests/fast/` that starts a process or
-touches the network. The budgets above are proposals to be set from a
-per-file duration measurement.
+How a test gets its tier (maintainer, 2026-11-12, answer C): it is derived
+from what the test asks for, not stored in a folder or a hand-set marker. One
+rule in `tests/conftest.py` blocks process starts and network access for
+every test. A test that needs a process or git requests the fixture that
+lifts the block, and requesting it is what makes the test `integration`; the
+fixtures for the swarm, the pinned Pi's real data and the kit probe make it
+`system`. A test that starts a process without the fixture fails. No file
+moves, a new test cannot be classified wrongly, and the rule travels with the
+kit in one file. Its limit: "starts a process" does not separate integration
+from system, so that boundary rests on the named fixtures and on the
+per-test budget. First step, before anything is built: one run with the block
+switched on, counting the tests that fail on it — that gives the size of the
+fast tier and shows whether the rule carries.
+
+Budgets (maintainer, 2026-11-12, answer A): measure first; each tier's budget
+starts at its measured time plus 10 % and may only go down from there; the
+values in the table are the targets worked towards. A gate turns red when a
+tier passes its budget and names the slowest tests. The budgets are values of
+the central configuration.
+
+The system tier never runs inside a runner attempt (maintainer, 2026-11-12,
+answer A): an attempt runs the fast tier and the touched integration tests;
+the system tier runs before phase 6, in CI and nightly. A fault it finds that
+an attempt called green is counted as a slip.
 
 ## Rules for adding and retiring tests
 
@@ -101,7 +119,17 @@ per-file duration measurement.
   (ADR 0023 material, bead coding-harness-1ga5 notes). The removal names the
   reason in the commit; the criterion-ledger entry moves to the surviving
   test. Today the ledger makes every listed test permanent; this rule gives
-  it an exit.
+  it an exit. The maintainer agreed on 2026-11-12 (answer A): the agent applies
+  (a) and (b) itself and names them in the pull request; (c) needs the
+  mutation evidence.
+- **Transition tests end with their bead** (maintainer's idea, 2026-11-12). A
+  test is either a lasting guarantee or a transition test: one that guards a
+  migration, an intermediate state or a one-off condition. A transition test
+  is marked "until bead X closes". A gate reads the bead's state through the
+  existing render; once the bead is closed it reports the test, which is then
+  deleted or deliberately promoted to a lasting guarantee. Every new test
+  chooses one of the two. A lasting guarantee never expires with a bead: its
+  work starts at the merge.
 - **Wording tests.** A test may pin the wording of a document only where
   another program reads that wording (a marker, a heading a gate parses, a
   command line). Prose is checked by review, not by assertion.
@@ -128,7 +156,7 @@ workflow in another repository. For tests this means:
 
 1. **Each test file is classified**: travels with the kit, or describes only
    this repository. The manifest already does this per file (35 lines name a
-   path under `tests/`, 2026-11-12); the tier folders must not break it.
+   path under `tests/`, 2026-11-12); the derived tiers leave it untouched.
 2. **A travelling test may not depend on this repository's stock** (its
    plans, its beads, its ADR numbers). It gets what it needs from fixtures.
    A gate runs the travelling tests inside the kit probe's throw-away
@@ -151,13 +179,13 @@ green that the full run found, bead coding-harness-0swp Q-5).
 
 ## Order of work
 
-1. Measure durations per test file once, isolated (extends bead
-   coding-harness-dca4).
+1. Measure durations per test file once, isolated, and run once with the
+   process block switched on (extends bead coding-harness-dca4).
 2. Split `tests/test_stage2.py` along `scripts/stage2.py`'s modules (bead
    coding-harness-vg9) — the single largest lever, because the targeted check
    then covers runner changes.
-3. Introduce the three folders and the collection hook; move files without
-   changing them; set the budgets from step 1.
+3. Introduce the blocking rule and the tier fixtures in `tests/conftest.py`;
+   set the budgets from step 1.
 4. Shared fixtures: git template, fake clock, record parser (bead
    coding-harness-dca4, second half).
 5. The targeted check's own time limit (bead coding-harness-dq4u).
@@ -165,13 +193,19 @@ green that the full run found, bead coding-harness-0swp Q-5).
    tests that cannot fail (bead coding-harness-1ga5).
 7. Kit: run the travelling tests in the probe repository as a gate.
 
-## Open decisions for the maintainer
+## Decisions of 2026-11-12
 
-1. Tier by folder (proposed) or by pytest marker?
-2. The budgets: 60 s / 8 min / 15 min, or other values after the measurement?
-3. May a ledger test be retired under the three conditions above?
-4. Does the system tier leave the runner's attempts entirely (proposed), so
-   that an attempt never waits for the swarm tests?
+The maintainer answered the draft's four questions on 2026-11-12; they are
+worked into the sections above. They are input for the ADR, which takes
+effect when its pull request merges.
+
+1. Tier: derived from the fixtures a test requests (answer C), with the
+   measurement run as the first step.
+2. Budgets: measured value plus 10 %, only downwards, with target values
+   (answer A).
+3. Retiring: allowed under the three conditions with the reason in the commit
+   (answer A), and transition tests end with their bead.
+4. The system tier leaves the runner's attempts (answer A).
 
 ## Sources
 
