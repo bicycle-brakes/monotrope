@@ -560,7 +560,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
-| [`changes/targeted-check-more-verbs/decisions.md`](changes/targeted-check-more-verbs/decisions.md) | draft | none | 2026-11-11 | coding-harness-0swp |
+| [`changes/targeted-check-more-verbs/decisions.md`](changes/targeted-check-more-verbs/decisions.md) | draft | none | 2026-11-12 | coding-harness-0swp |
 | [`changes/targeted-check-more-verbs/findings.md`](changes/targeted-check-more-verbs/findings.md) | draft | none | 2026-11-11 | coding-harness-0swp |
 | [`changes/targeted-check-more-verbs/plan.md`](changes/targeted-check-more-verbs/plan.md) | draft | none | 2026-11-11 | coding-harness-0swp |
 | [`changes/targeted-check-more-verbs/research.md`](changes/targeted-check-more-verbs/research.md) | draft | none | 2026-11-11 | coding-harness-0swp |

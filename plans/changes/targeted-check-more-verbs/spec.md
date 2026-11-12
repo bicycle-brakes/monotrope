@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-11
 last_reviewed: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -116,8 +116,12 @@ Research: `research.md`. Maintainer answers: `decisions.md`, Q-1 through Q-5.
    *Basis:* decisions.md#Q-1.
 8. When an implement, repair or draft post-check completes, its runner-owned
    evidence identifies the actual check scope and outcome.
+   The evidence adds no block to findings.md: a passing attempt's scope
+   stands in the runner's time line in plan.md, a failed attempt's inside its
+   one diagnostics block (decisions.md#Q-6).
    *Refuted by:* selected tests/gates or a full-fallback reason are absent,
-   draft claims tests it did not run, or targeted green is called full green.
+   draft claims tests it did not run, targeted green is called full green, or
+   a passing attempt leaves anything after its audit line in findings.md.
    *Basis:* decisions.md#Q-1.
 9. When phase 6 starts or repeats, a fresh full check of the committed head
    must pass before the reviewer is called.

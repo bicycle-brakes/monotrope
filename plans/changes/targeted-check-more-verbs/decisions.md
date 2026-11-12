@@ -5,8 +5,8 @@ status: draft
 implementation_status: none
 date: 2026-11-11
 created: 2026-11-11
-last_reviewed: 2026-11-11
-updated: 2026-11-11
+last_reviewed: 2026-11-12
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -128,6 +128,32 @@ count, to achieve that a rising slip rate is seen without a dashboard,
 accepting more runner code and a count that is local to one machine and
 leaves CI finds out — 2026-11-11
 
+## Q-6 · Where the runner writes the check scope
+
+asked: 2026-11-12
+answer: "A: Lauf mit Entwurfskorrektur (Empfohlen)" — the check scope is written into a line the runner writes anyway; the extra quote block after every attempt goes. The one test that encodes the old rule is rewritten to the new rule, three test fixtures are adapted, the ruff start on a text-only attempt is explained or repaired, and the appetite rises to 7.5 hours.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change targeted-check-more-verbs (bead coding-harness-0swp), the runner checks only what an implement or draft attempt touched.
+  Intention: the fourth implement run was rejected with 13 red tests in the full check; the maintainer asked whether those older tests are still relevant. Twelve are, one is superseded.
+  Today: eight of them guard that a passing attempt leaves only its audit line in findings.md and a failed one exactly one diagnostics block; the attempts' code writes an extra block "Runner verification scope" after every attempt, which the spec does not mention. 5.2 of 6 hours are used.
+  Repository change: a fifth implement run from the saved state with that correction; one sentence in spec criterion 8 and one plan step.
+  Architecture change: none.
+
+In the context of a targeted check whose scope must be visible afterwards,
+facing an extra block in findings.md that breaks the standing guarantee of
+one audit line per passing attempt and one diagnostics block per failed one,
+we decided that the runner writes the scope into lines it writes anyway and
+adds no block, to achieve the evidence of criterion 8 without growing
+findings.md by a block per attempt, accepting a longer time line in plan.md
+and an appetite raised from 6 to 7.5 hours — 2026-11-12
+
 ## Decided by the agent
 
-None yet.
+[DETAIL] **The scope of a passing attempt goes into the runner's time line in
+plan.md ("Time used"), not into the "Stage-2 call" audit line.** Reason: the
+audit line is written when the call starts, before any check has run; the
+time line is written after the verdict and is runner-owned already. A failed
+attempt names the scope inside its one diagnostics block, as the repair route
+does today. The run log (verify-duration.jsonl) keeps the scope as before.
