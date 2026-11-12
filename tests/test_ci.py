@@ -2405,6 +2405,617 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     assert len([e for e in events if e["event"] == "run_end"]) == 1
 
 
+# --------------------------------------------------------------------------
+# 2e · The runner-owned temporary area (bead coding-harness-bxxt.3)
+#
+# Every test here copies the runner as in 2/2c/2d and gives the run its own
+# `PYTEST_DEBUG_TEMPROOT`, so the managed parent and its areas live inside the
+# test's tree — no probe ever touches the machine's real temporary root. A
+# live sibling area in these probes is named after this very test process:
+# alive by construction, untouched by the runner's process-id rule.
+# --------------------------------------------------------------------------
+
+
+def _tmp_runner_tree(base: Path, gate: str) -> tuple[Path, Path]:
+    """A runner tree with one block gate, its interpreter, and an isolated temporary root.
+
+    The temporary root is what the probe hands the run as `PYTEST_DEBUG_TEMPROOT`: the runner
+    builds its managed parent under it, so areas never leave this test's own tree.
+    """
+    tree = _runner_tree(base / "tree", gate)
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    return tree, base / "temproot"
+
+
+def _managed_parent(temproot: Path) -> Path:
+    """Where the runner puts its private per-user parent for one temporary root."""
+    return temproot / f"verify-runs-{os.geteuid()}"
+
+
+def _tmp_run(
+    tree: Path, temproot: Path, tmp_path: Path, *args: str, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    """One runner run with the temporary root isolated to this test."""
+    return _run_runner(
+        tree,
+        tmp_path / "home",
+        [],
+        *args,
+        extra_env={**(extra_env or {}), "PYTEST_DEBUG_TEMPROOT": str(temproot)},
+    )
+
+
+def _marker_env(tree: Path, temproot: Path, tmp_path: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """A copied runner's environment with a valid inherited admission, so it runs inline."""
+    return _runner_env(
+        tree,
+        tmp_path / "home",
+        [],
+        {
+            **(extra or {}),
+            "PYTEST_DEBUG_TEMPROOT": str(temproot),
+            verify_lock.LOCK_ENV: str(os.getpid()),
+            verify_lock.TOKEN_ENV: HOLDER_TOKEN,
+        },
+    )
+
+
+def _start_runner(tree: Path, env: dict[str, str], *args: str) -> subprocess.Popen[bytes]:
+    """The runner as its own session leader, so a hard kill can take its whole group."""
+    bash = shutil.which("bash") or "/bin/bash"
+    return subprocess.Popen(
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args],
+        cwd=tree,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _await_marker(marker: Path, deadline_seconds: float = 10.0) -> None:
+    """Wait until a gate's marker appears — bounded, so a broken run fails fast."""
+    deadline = time.monotonic() + deadline_seconds
+    while time.monotonic() < deadline:
+        if marker.exists():
+            return
+        time.sleep(0.05)
+    pytest.fail(f"the gate never wrote its marker {marker}")
+
+
+def _reaped_pid() -> int:
+    """A pid that exists no more: a child, spawned and waited for.
+
+    A concurrently spawning process could take the freed pid back in between;
+    when that happened the caller would inject a live process's number, so the
+    helper checks and, on an instant reuse, hands out another one.
+    """
+    child = subprocess.Popen(["true"])
+    child.wait()
+    try:
+        os.kill(child.pid, 0)
+    except ProcessLookupError:
+        return child.pid
+    return _reaped_pid()
+
+
+def test_verify_runner_owns_distinct_pid_areas(tmp_path: Path) -> None:
+    """Criterion 1: every admitted run allocates its own process-id-named area, nested included.
+
+    Fault this pins: two live runs sharing one area, a nested run losing the pid naming, or a
+    nested run deleting its parent's area while the parent still runs. The nested run inherits a
+    valid admission from a holder this test keeps alive, so it runs inline exactly as a nested
+    verification would — and carries the managed parent through the inherited environment.
+    """
+    base = tmp_path / "areas"
+    temproot = base / "temproot"
+    outer_recorded = base / "outer-area.txt"
+    nested_recorded = base / "nested-area.txt"
+    parent_area_alive = base / "parent-area-alive"
+    nested_gate = (
+        f'test -d "$OUTER_AREA" && touch "{parent_area_alive}"; '
+        f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{nested_recorded}"'
+    )
+    nested_tree, _ = _tmp_runner_tree(base / "nested", nested_gate)
+    outer_gate = (
+        f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{outer_recorded}"; '
+        f'OUTER_AREA="$PYTEST_DEBUG_TEMPROOT" bash "{nested_tree / "scripts" / "verify_all.sh"}"'
+    )
+    tree, _ = _tmp_runner_tree(base / "outer", outer_gate)
+    _write_gate_file(tree, [_report_gate(base, "probe", "verify", "block", command=outer_gate)])
+    with _held_holder(tree.parent / "state", pid=os.getpid()):
+        done = _tmp_run(
+            tree,
+            temproot,
+            tmp_path,
+            extra_env={verify_lock.LOCK_ENV: str(os.getpid()), verify_lock.TOKEN_ENV: HOLDER_TOKEN},
+        )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert parent_area_alive.exists(), "the nested run deleted its parent's area while the parent still ran"
+    outer_area = Path(outer_recorded.read_text(encoding="utf-8"))
+    nested_area = Path(nested_recorded.read_text(encoding="utf-8"))
+    assert outer_area.name.isdigit(), f"the outer run's area is not pid-named: {outer_area}"
+    assert nested_area.name.isdigit(), f"the nested run's area is not pid-named: {nested_area}"
+    assert outer_area != nested_area, "two live runs shared one area"
+    assert outer_area.parent == nested_area.parent == _managed_parent(temproot), "areas left the managed parent"
+    assert not any(_managed_parent(temproot).iterdir()), "a green run left its area behind"
+
+
+def test_verify_runner_contains_pytest_sessions_and_workers(tmp_path: Path) -> None:
+    """Criterion 2: real pytest sessions and xdist workers keep their roots inside the run area.
+
+    Fault this pins: a serial session, a parallel one, or a second session in the same run
+    reporting a temporary path outside the area, or a second session erasing the first one's root.
+    """
+    base = tmp_path / "sessions"
+    temproot = base / "temproot"
+    area_recorded = base / "area.txt"
+    serial_first = base / "serial-first.txt"
+    serial_second = base / "serial-second.txt"
+    worker_recorded = base / "worker.txt"
+    tree, _ = _tmp_runner_tree(base / "outer", "true")
+    serial_probe = f'''\
+from pathlib import Path
+
+def test_probe(tmp_path):
+    sentinel = tmp_path / "sentinel"
+    sentinel.write_text("keep me", encoding="utf-8")
+    marker = Path("{serial_first}")
+    if marker.exists():
+        previous = Path(marker.read_text(encoding="utf-8"))
+        assert previous.exists(), f"a second session erased an earlier session's sentinel {{previous}}"
+        assert previous.read_text(encoding="utf-8") == "keep me"
+    marker.write_text(str(sentinel), encoding="utf-8")
+    with open({str(serial_second)!r}, "a", encoding="utf-8") as handle:
+        handle.write(f"{{tmp_path}}\\n")
+'''
+    worker_probe = f"""\
+def test_worker(tmp_path):
+    with open({str(worker_recorded)!r}, "a", encoding="utf-8") as handle:
+        handle.write(f"{{tmp_path}}\\n")
+"""
+    (tree / "test_serial_probe.py").write_text(serial_probe, encoding="utf-8")
+    (tree / "test_worker_probe.py").write_text(worker_probe, encoding="utf-8")
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(
+                base,
+                "serial-a",
+                "verify",
+                "block",
+                command=(
+                    f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; python3 -m pytest -q test_serial_probe.py'
+                ),
+            ),
+            _report_gate(base, "serial-b", "verify", "block", command="python3 -m pytest -q test_serial_probe.py"),
+            _report_gate(base, "xdist", "verify", "block", command="python3 -m pytest -q -n 2 test_worker_probe.py"),
+        ],
+    )
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    area = Path(area_recorded.read_text(encoding="utf-8"))
+    assert area.name.isdigit() and area.parent == _managed_parent(temproot), f"no pid-named area: {area}"
+    serial_lines = serial_second.read_text(encoding="utf-8").splitlines()
+    assert len(serial_lines) == 2 and serial_lines[0] != serial_lines[1], serial_lines
+    worker_lines = worker_recorded.read_text(encoding="utf-8").splitlines()
+    assert worker_lines, "the xdist worker never ran its test"
+    area_resolved = str(area.resolve())
+    for recorded in [*serial_lines, *worker_lines]:
+        assert Path(recorded).is_relative_to(area_resolved), f"a pytest temporary path escaped the run area: {recorded}"
+        assert "pytest-of-" in recorded, recorded
+    for recorded in worker_lines:
+        assert "popen-gw" in recorded, f"the xdist worker did not report its own directory: {recorded}"
+    assert not any(_managed_parent(temproot).iterdir()), "the run left its area behind"
+
+
+def test_verify_runner_cleans_normal_exit(tmp_path: Path) -> None:
+    """Criteria 3 and 6: green and red runs remove their area before returning the verdict, and a
+    successful run removes it even when retention was requested."""
+    for label, ending, keep, expected in (
+        ("green", "true", {}, 0),
+        ("red", "exit 1", {}, 1),
+        ("green-keep", "true", {"HARNESS_VERIFY_KEEP_TMP": "1"}, 0),
+    ):
+        base = tmp_path / label
+        temproot = base / "temproot"
+        area_recorded = base / "area.txt"
+        tree = _runner_tree(base / "tree", f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; {ending}')
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        done = _tmp_run(tree, temproot, tmp_path, extra_env=keep)
+        assert done.returncode == expected, f"{label}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        if expected == 1:
+            assert "VERIFY RED" in done.stdout, done.stdout
+        area = Path(area_recorded.read_text(encoding="utf-8"))
+        assert area.parent == _managed_parent(temproot), label
+        assert not any(_managed_parent(temproot).iterdir()), f"{label}: the run left its area behind"
+
+
+@pytest.mark.parametrize(("name", "number"), [("SIGINT", 2), ("SIGTERM", 15), ("SIGHUP", 1), ("SIGQUIT", 3)])
+def test_verify_runner_cleans_on_interrupt(tmp_path: Path, name: str, number: int) -> None:
+    """Criterion 4: a handled signal still removes the unretained area before the runner exits,
+    with the supervisor's 128-plus-signal status — and the run does not continue afterwards."""
+    base = tmp_path / "interrupt"
+    temproot = base / "temproot"
+    started = base / "first-gate-ran"
+    second_started = base / "second-gate-started"
+    second_done = base / "second-gate-ran"
+    third_never = base / "third-gate-ran"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "first", "verify", "block", command=f"touch {started}"),
+            _report_gate(
+                base,
+                "second",
+                "verify",
+                "block",
+                command=f"touch {second_started}; sleep 1; touch {second_done}",
+            ),
+            _report_gate(base, "third", "verify", "block", command=f"touch {third_never}"),
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    with _held_holder(base / "state", pid=os.getpid()):
+        runner = _start_runner(tree, _marker_env(tree, temproot, tmp_path))
+        try:
+            _await_marker(started)
+            parent = _managed_parent(temproot)
+            live = list(parent.iterdir())
+            assert len(live) == 1 and live[0].name.isdigit(), (
+                f"the run allocated no pid area: {sorted(entry.name for entry in live)}"
+            )
+            # Signal only once the second gate is inside its sleep: bash runs a
+            # deferred trap after the foreground gate finishes, so the arrival is
+            # deterministic — during a gate, never in the gap between gates.
+            _await_marker(second_started)
+            runner.send_signal(number)
+            assert runner.wait(timeout=30) == 128 + number, f"{name}: exit {runner.returncode}"
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+        assert second_done.exists(), f"{name}: the trap ran before the current gate finished"
+        assert not third_never.exists(), f"{name}: the run continued after a handled signal"
+        assert not any(parent.iterdir()), f"{name}: the interrupted run left its area behind"
+
+
+def test_verify_runner_retains_only_on_explicit_request(tmp_path: Path) -> None:
+    """Criterion 5: exactly HARNESS_VERIFY_KEEP_TMP=1 keeps a failed or interrupted run's area,
+    reports its absolute path, and no later start sweeps that evidence; another value removes."""
+    base = tmp_path / "retain"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    kept_tree, _ = _tmp_runner_tree(base / "kept", 'touch "$PYTEST_DEBUG_TEMPROOT/payload"; exit 1')
+    done = _tmp_run(kept_tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_KEEP_TMP": "1"})
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    kept = list(parent.iterdir())
+    assert len(kept) == 1, f"the requested evidence did not survive: {kept}"
+    kept_area = kept[0]
+    assert not kept_area.name.isdigit(), "a kept area must not carry a name a sweep would take"
+    assert (kept_area / "payload").exists(), "the kept area lost its payload"
+    assert str(kept_area) in done.stderr, "the runner did not report the kept area's absolute path"
+
+    # The next start under the same parent must leave the requested evidence alone.
+    later_tree, _ = _tmp_runner_tree(base / "later", "true")
+    done = _tmp_run(later_tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert kept_area.is_dir() and (kept_area / "payload").exists(), "a later run swept the requested evidence"
+    assert [entry.name for entry in parent.iterdir()] == [kept_area.name], "the later run left its own area behind"
+
+    # Any value other than exactly 1 removes normally.
+    other_tree, _ = _tmp_runner_tree(base / "other", 'touch "$PYTEST_DEBUG_TEMPROOT/payload"; exit 1')
+    done = _tmp_run(other_tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_KEEP_TMP": "yes"})
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert [entry.name for entry in parent.iterdir()] == [kept_area.name], "a value other than 1 retained an area"
+
+    # An interrupted run keeps its area on request too — the signal path, not the exit path.
+    signal_started = base / "signal-started"
+    signal_second = base / "signal-second-started"
+    signal_tree = _runner_tree_files(base / "signal" / "tree")
+    _write_gate_file(
+        signal_tree,
+        [
+            _report_gate(base, "first", "verify", "block", command=f"touch {signal_started}"),
+            _report_gate(base, "second", "verify", "block", command=f"touch {signal_second}; sleep 1; true"),
+        ],
+    )
+    _interpreter_wrapper(signal_tree / ".venv" / "bin" / "python3", "venv", base / "log-signal")
+    with _held_holder(base / "signal" / "state", pid=os.getpid()):
+        runner = _start_runner(
+            signal_tree,
+            _marker_env(signal_tree, temproot, tmp_path, {"HARNESS_VERIFY_KEEP_TMP": "1"}),
+        )
+        try:
+            _await_marker(signal_started)
+            _await_marker(signal_second)
+            runner.send_signal(15)
+            assert runner.wait(timeout=30) == 143, f"exit {runner.returncode}"
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+    remaining = list(parent.iterdir())
+    assert len(remaining) == 2 and all(not entry.name.isdigit() for entry in remaining), remaining
+    assert kept_area.name in {entry.name for entry in remaining}, "the earlier kept evidence disappeared"
+
+
+def test_verify_runner_reclaims_dead_pid_areas(tmp_path: Path) -> None:
+    """Criterion 7: a later start removes unretained areas whose process is gone — including one
+    left by a hard-killed and reaped runner — and never touches a live process's area."""
+    base = tmp_path / "reclaim"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True)
+    live_area = parent / str(os.getpid())
+    live_area.mkdir()
+    (live_area / "payload").write_text("a live sibling stays", encoding="utf-8")
+    killed_started = base / "killed-started"
+    killed_tree, _ = _tmp_runner_tree(base / "killed", f"touch {killed_started}; sleep 30")
+    with _held_holder(killed_tree.parent / "state", pid=os.getpid()):
+        runner = _start_runner(killed_tree, _marker_env(killed_tree, temproot, tmp_path))
+        try:
+            _await_marker(killed_started)
+            os.killpg(runner.pid, 9)
+            runner.wait(timeout=10)
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+    assert runner.returncode == -9, "the hard kill did not reach the runner"
+    dead = [entry for entry in parent.iterdir() if entry.name != str(os.getpid())]
+    assert len(dead) == 1 and dead[0].name.isdigit(), f"the killed runner left no reclaimable area: {dead}"
+    dead_area = dead[0]
+    sweeper_tree, _ = _tmp_runner_tree(base / "sweeper", "true")
+    done = _tmp_run(sweeper_tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not dead_area.exists(), "the next start did not reclaim the hard-killed runner's area"
+    assert (live_area / "payload").read_text(encoding="utf-8") == "a live sibling stays", (
+        "a live pid's area was touched"
+    )
+    assert [entry.name for entry in parent.iterdir()] == [str(os.getpid())], "the sweeping run left its own area behind"
+
+
+def test_verify_runner_preserves_unrelated_paths(tmp_path: Path) -> None:
+    """Criterion 8: while managing run areas, verification changes no unrelated path — the
+    caller's own temporary root, non-managed entries, a live sibling — and refuses, before any
+    gate and without touching anything, when a symlink substitutes a run area."""
+    base = tmp_path / "unrelated"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True)
+    sentinel = temproot / "caller-sentinel"
+    sentinel.write_text("the caller's own file", encoding="utf-8")
+    historical = parent / "pytest-of-historical"
+    historical.mkdir()
+    (historical / "root").write_text("history", encoding="utf-8")
+    kept = parent / "keep-4711"
+    kept.mkdir()
+    (kept / "evidence").write_text("requested evidence", encoding="utf-8")
+    loose = parent / "notes.txt"
+    loose.write_text("not an area", encoding="utf-8")
+    live_area = parent / str(os.getpid())
+    live_area.mkdir()
+    (live_area / "payload").write_text("live sibling", encoding="utf-8")
+
+    tree, _ = _tmp_runner_tree(base / "tree", "true")
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert sentinel.read_text(encoding="utf-8") == "the caller's own file", "the caller's root was changed"
+    assert (historical / "root").read_text(encoding="utf-8") == "history", "a non-managed entry was changed"
+    assert (kept / "evidence").read_text(encoding="utf-8") == "requested evidence", "a kept entry was changed"
+    assert loose.read_text(encoding="utf-8") == "not an area", "an unrelated file was changed"
+    assert (live_area / "payload").read_text(encoding="utf-8") == "live sibling", "a live sibling was changed"
+    assert {entry.name for entry in parent.iterdir()} == {
+        "pytest-of-historical",
+        "keep-4711",
+        "notes.txt",
+        str(os.getpid()),
+    }, "the sweep removed something it must skip"
+
+    # A symlink named like an area is refused before any gate, target untouched.
+    victim = temproot / "victim"
+    victim.mkdir()
+    (victim / "payload").write_text("do not delete", encoding="utf-8")
+    substituted = parent / str(_reaped_pid())
+    substituted.symlink_to(victim)
+    refusing_tree, _ = _tmp_runner_tree(base / "refusing", f"touch {base / 'gate-ran'}")
+    done = _tmp_run(refusing_tree, temproot, tmp_path)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not (base / "gate-ran").exists(), "gates started although an area entry was unsafe"
+    assert str(substituted) in done.stderr and "symlink" in done.stderr, done.stderr
+    assert (victim / "payload").exists(), "the sweep followed the substituted symlink"
+    assert substituted.is_symlink(), "the sweep removed the substituted entry itself"
+
+
+def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
+    """Criterion 9: an allocation or sweep failure reports the path and the reason and returns
+    unsuccessful before any gate, and a failed end-of-run cleanup never reads as green."""
+    if os.geteuid() == 0:
+        pytest.skip("the failure injections of this change need an unprivileged user")
+    base = tmp_path / "storage"
+
+    # (A) Allocation failure: the carried parent is not writable, so no area can be created.
+    readonly_parent = base / "readonly-parent"
+    readonly_parent.mkdir(parents=True)
+    readonly_parent.chmod(0o555)
+    allocation_gate_ran = base / "allocation-gate-ran"
+    tree_a, _ = _tmp_runner_tree(base / "allocation", f"touch {allocation_gate_ran}")
+    done = _tmp_run(
+        tree_a,
+        base / "unused-temproot",
+        tmp_path,
+        extra_env={"HARNESS_VERIFY_TMP_PARENT": str(readonly_parent)},
+    )
+    readonly_parent.chmod(0o755)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not allocation_gate_ran.exists(), "gates started after a failed allocation"
+    assert str(readonly_parent) in done.stderr, done.stderr
+
+    # (B) Sweep failure: a dead sibling that cannot be removed stops the run before any gate.
+    temproot_b = base / "sweep-temproot"
+    parent_b = _managed_parent(temproot_b)
+    parent_b.mkdir(parents=True)
+    stuck = parent_b / str(_reaped_pid())
+    stuck.mkdir()
+    (stuck / "locked").mkdir()
+    (stuck / "locked" / "payload").write_text("undeletable", encoding="utf-8")
+    (stuck / "locked").chmod(0o000)
+    sweep_gate_ran = base / "sweep-gate-ran"
+    tree_b, _ = _tmp_runner_tree(base / "sweep", f"touch {sweep_gate_ran}")
+    done = _tmp_run(tree_b, temproot_b, tmp_path)
+    assert stuck.is_dir() and (stuck / "locked").is_dir(), (
+        f"the start-up sweep removed the unreadable dead area instead of refusing it — exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    )
+    (stuck / "locked").chmod(0o755)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not sweep_gate_ran.exists(), "gates started although the sweep could not reclaim a dead area"
+    assert str(stuck) in done.stderr, done.stderr
+
+    # (C) A green run whose area cannot be removed reports the failure and returns 2, not green.
+    temproot_c = base / "cleanup-temproot"
+    lock_the_area = (
+        'mkdir "$PYTEST_DEBUG_TEMPROOT/locked"; '
+        'touch "$PYTEST_DEBUG_TEMPROOT/locked/payload"; '
+        'chmod 000 "$PYTEST_DEBUG_TEMPROOT/locked"'
+    )
+    tree_c, _ = _tmp_runner_tree(base / "cleanup", f"{lock_the_area}; true")
+    done = _tmp_run(tree_c, temproot_c, tmp_path)
+    assert done.returncode == 2, f"a failed cleanup came out {done.returncode}: {done.stdout}\n{done.stderr}"
+    assert "could not remove the run area" in done.stderr, done.stderr
+    leftovers = list(_managed_parent(temproot_c).iterdir())
+    assert len(leftovers) == 1, (
+        f"expected exactly the unremovable run area, found {leftovers}: {done.stdout}\n{done.stderr}"
+    )
+    assert (leftovers[0] / "locked").is_dir(), (
+        f"the leftover run area lost its locked subtree: {sorted(entry.name for entry in leftovers[0].iterdir())}"
+    )
+    leftovers[0].joinpath("locked").chmod(0o755)
+
+    # (D) A red run keeps its red verdict when the cleanup also fails.
+    temproot_d = base / "cleanup-red-temproot"
+    tree_d, _ = _tmp_runner_tree(base / "cleanup-red", f"{lock_the_area}; exit 1")
+    done = _tmp_run(tree_d, temproot_d, tmp_path)
+    assert done.returncode == 1, f"a red run's verdict changed to {done.returncode}: {done.stdout}\n{done.stderr}"
+    assert "VERIFY RED" in done.stdout and "could not remove the run area" in done.stderr, done.stderr
+    leftovers = list(_managed_parent(temproot_d).iterdir())
+    assert len(leftovers) == 1, (
+        f"expected exactly the unremovable run area, found {leftovers}: {done.stdout}\n{done.stderr}"
+    )
+    assert (leftovers[0] / "locked").is_dir(), (
+        f"the leftover run area lost its locked subtree: {sorted(entry.name for entry in leftovers[0].iterdir())}"
+    )
+    leftovers[0].joinpath("locked").chmod(0o755)
+
+
+def test_verify_runner_preserves_entry_contracts(tmp_path: Path) -> None:
+    """Criterion 10: with run-area management active, `--list` allocates nothing and enters no
+    admission, job and CI selection stay exact, a nested run reuses its ancestor's admission
+    instead of queueing behind it, and worker forwarding and duration ownership keep their
+    contracts."""
+    base = tmp_path / "contracts"
+    temproot = base / "temproot"
+    bash = shutil.which("bash") or "/bin/bash"
+
+    # --list: no managed parent, no area.
+    list_tree, _ = _tmp_runner_tree(base / "list", "true")
+    done = _tmp_run(list_tree, temproot, tmp_path, "--list")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "probe" in done.stdout, done.stdout
+    assert not temproot.exists(), "--list created the temporary infrastructure"
+
+    # Job selection still decides what runs.
+    selection_base = base / "selection"
+    selection_tree = _runner_tree_files(selection_base / "tree")
+    _write_gate_file(
+        selection_tree,
+        [
+            _report_gate(selection_base, "docs-only", "verify", "block", subsets=["docs"]),
+            _report_gate(selection_base, "verify-only", "verify", "block"),
+        ],
+    )
+    _interpreter_wrapper(selection_tree / ".venv" / "bin" / "python3", "venv", selection_base / "log")
+    done = _tmp_run(selection_tree, temproot, tmp_path, "--job", "docs")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert (selection_base / "docs-only.ran").exists(), "the docs selection did not run its own gate"
+    assert not (selection_base / "verify-only.ran").exists(), "an unselected gate executed"
+
+    # `--ci` stays exhaustive: a blocking failure reports but stops nothing.
+    ci_base = base / "ci"
+    ci_tree = _runner_tree_files(ci_base / "tree")
+    _write_gate_file(
+        ci_tree,
+        [
+            _report_gate(ci_base, "alpha", "verify", "block"),
+            _report_gate(ci_base, "beta", "verify", "block", command=f"touch {ci_base / 'beta.ran'}; exit 1"),
+            _report_gate(ci_base, "gamma", "verify", "block"),
+        ],
+    )
+    _interpreter_wrapper(ci_tree / ".venv" / "bin" / "python3", "venv", ci_base / "log")
+    done = _tmp_run(ci_tree, temproot, tmp_path, "--ci")
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert all((ci_base / f"{gid}.ran").exists() for gid in ("alpha", "beta", "gamma")), "--ci stopped early"
+
+    # A nested run reuses its ancestor's admission instead of queueing behind it.
+    nested_base = base / "nested"
+    nested_tree, _ = _tmp_runner_tree(nested_base, "true")
+    with _held_holder(nested_tree.parent / "state", pid=os.getpid()):
+        done = subprocess.run(
+            [bash, str(nested_tree / "scripts" / "verify_all.sh")],
+            cwd=nested_tree,
+            env=_marker_env(nested_tree, temproot, tmp_path),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    assert done.returncode == 0, f"a nested run queued behind its own ancestor: {done.stdout}\n{done.stderr}"
+
+    # The forwarded worker override reaches the gate verbatim, and the run keeps its duration history.
+    worker_base = base / "worker"
+    worker_seen = worker_base / "workers.txt"
+    worker_tree, _ = _tmp_runner_tree(worker_base, f'printf %s "$PYTEST_XDIST_AUTO_NUM_WORKERS" > "{worker_seen}"')
+    done = _tmp_run(worker_tree, temproot, tmp_path, extra_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": "3"})
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert worker_seen.read_text(encoding="utf-8") == "3", "the worker override was rewritten"
+    events = _tree_history(worker_tree)
+    assert len([e for e in events if e["event"] == "run_start"]) == 1, events
+    assert len([e for e in events if e["event"] == "gate"]) == 1, events
+    assert len([e for e in events if e["event"] == "run_end"]) == 1, events
+
+
+@pytest.mark.parametrize(
+    ("addopts", "reason"),
+    [
+        ("--basetemp=/elsewhere", "value form"),
+        ("--basetemp /elsewhere", "separate value"),
+        ("--basetem /elsewhere", "abbreviated option"),
+        ("--base=/elsewhere", "short prefix"),
+        ("'unbalanced", "malformed quoting"),
+    ],
+)
+def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopts: str, reason: str) -> None:
+    """Criterion 11: an inherited PYTEST_ADDOPTS that would select its own basetemp — in either
+    value form or a pytest-accepted abbreviation — refuses before any gate, malformed quoting
+    refuses instead of guessing, and unrelated options pass through verbatim."""
+    base = tmp_path / "addopts"
+    temproot = base / "temproot"
+    gate_ran = base / "gate-ran"
+    tree, _ = _tmp_runner_tree(base / "tree", f"touch {gate_ran}")
+    done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": addopts})
+    assert done.returncode == 2, f"{reason}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not gate_ran.exists(), f"{reason}: gates started despite the conflicting option"
+    assert "basetemp" in done.stderr or "quoting" in done.stderr, done.stderr
+    assert not _managed_parent(temproot).exists(), f"{reason}: the refusal still built temporary infrastructure"
+
+    # Unrelated options reach the gate verbatim.
+    ok_tree, ok_temproot = _tmp_runner_tree(base / "unrelated", f'printf %s "$PYTEST_ADDOPTS" > "{base / "seen.txt"}"')
+    done = _tmp_run(ok_tree, ok_temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": "-q -x"})
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert (base / "seen.txt").read_text(encoding="utf-8") == "-q -x", "unrelated options were rewritten"
+
+
 def test_no_second_verification_workflow() -> None:
     """There is exactly one verification list.
 

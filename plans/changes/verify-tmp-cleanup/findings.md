@@ -636,3 +636,310 @@ tracker write, commit or repository-changing git command was performed.
 Live PR state and the external session registry were not read under the
 worktree-only restriction. Next: show the plan card unchanged, then execute
 the runner-only plan within the recorded appetite.
+
+Stage-2 call, 2026-11-12: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1040 files, 3999 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `scripts/verify_all.sh` +181 -0
+> - `tests/test_ci.py` +587 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_ci.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> E         
+> E         [verify-lock] admitted
+> E         [verify-lock] available memory 67% at or above the 0% floor; starting
+> E         FEHLER: Gate-Datei verletzt das Schema: docs-only: job muss eins von ('verify', 'drift') sein, ist 'docs'; docs-only: subsets belong to verify gates only (a subset is a part of the verify job)
+> E         
+> E       assert 2 == 0
+> E        +  where 2 = CompletedProcess(args=['/opt/homebrew/bin/bash', '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-m...', 'drift') sein, ist 'docs'; docs-only: subsets belong to verify gates only (a subset is a part of the verify job)\n").returncode
+>
+> tests/test_ci.py:2918: AssertionError
+> ___________ test_verify_runner_contains_pytest_sessions_and_workers ____________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-198/popen-gw3/test_verify_runner_contains_py0')
+>
+>     def test_verify_runner_contains_pytest_sessions_and_workers(tmp_path: Path) -> None:
+>         """Criterion 2: real pytest sessions and xdist workers keep their roots inside the run area.
+>     
+>         Fault this pins: a serial session, a parallel one, or a second session in the same run
+>         reporting a temporary path outside the area, or a second session erasing the first one's root.
+>         """
+>         base = tmp_path / "sessions"
+>         temproot = base / "temproot"
+>         area_recorded = base / "area.txt"
+>         serial_first = base / "serial-first.txt"
+>         serial_second = base / "serial-second.txt"
+>         worker_recorded = base / "worker.txt"
+>         tree, _ = _tmp_runner_tree(base / "outer", "true")
+>         serial_probe = f'''\
+>     from pathlib import Path
+>     
+>     def test_probe(tmp_path):
+>         sentinel = tmp_path / "sentinel"
+>         sentinel.write_text("keep me", encoding="utf-8")
+>         marker = Path("{serial_first}")
+>         if marker.exists():
+>             previous = Path(marker.read_text(encoding="utf-8"))
+>             assert previous.exists(), f"a second session erased an earlier session's sentinel {{previous}}"
+>             assert previous.read_text(encoding="utf-8") == "keep me"
+>         marker.write_text(str(sentinel), encoding="utf-8")
+>         Path("{serial_second}").write_text(str(tmp_path), encoding="utf-8")
+>     '''
+>         worker_probe = f"""\
+>     def test_worker(tmp_path):
+>         with open({str(worker_recorded)!r}, "a", encoding="utf-8") as handle:
+>             handle.write(f"{{tmp_path}}\\n")
+>     """
+>         (tree / "test_serial_probe.py").write_text(serial_probe, encoding="utf-8")
+>         (tree / "test_worker_probe.py").write_text(worker_probe, encoding="utf-8")
+>         _write_gate_file(
+>             tree,
+>             [
+>                 _report_gate(
+>                     base,
+>                     "serial-a",
+>                     "verify",
+>                     "block",
+>                     command=(
+>                         f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; python3 -m pytest -q test_serial_probe.py'
+>                     ),
+>                 ),
+>                 _report_gate(base, "serial-b", "verify", "block", command="python3 -m pytest -q test_serial_probe.py"),
+>                 _report_gate(base, "xdist", "verify", "block", command="python3 -m pytest -q -n 2 test_worker_probe.py"),
+>             ],
+>         )
+>         done = _tmp_run(tree, temproot, tmp_path)
+>         assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+>         area = Path(area_recorded.read_text(encoding="utf-8"))
+>         assert area.name.isdigit() and area.parent == _managed_parent(temproot), f"no pid-named area: {area}"
+>         serial_lines = serial_second.read_text(encoding="utf-8").splitlines()
+> >       assert len(serial_lines) == 2 and serial_lines[0] != serial_lines[1], serial_lines
+> E       AssertionError: ['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-198/popen-gw3/test_verify_runner_contains_py0/sessions/temproot/verify-runs-501/51310/pytest-of-mikypiky/pytest-1/test_probe0']
+> E       assert (1 == 2)
+> E        +  where 1 = len(['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-198/popen-gw3/test_verify_runner_contains_py0/sessions/temproot/verify-runs-501/51310/pytest-of-mikypiky/pytest-1/test_probe0'])
+>
+> tests/test_ci.py:2591: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_ci.py::test_verify_runner_reports_temp_storage_failures - F...
+> FAILED tests/test_ci.py::test_verify_runner_preserves_entry_contracts - Asser...
+> FAILED tests/test_ci.py::test_verify_runner_contains_pytest_sessions_and_workers
+> 3 failed, 16 passed in 11.84s
+> ```
+
+Stage-2 call, 2026-11-12: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1040 files, 4005 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `tests/test_ci.py` +25 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_ci.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         Create a new directory at this given path.
+>         """
+>         try:
+> >           os.mkdir(self, mode)
+> E           FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-204/popen-gw0/test_verify_runner_reports_tem0/storage/readonly-parent'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1311: FileNotFoundError
+> ___________ test_verify_runner_contains_pytest_sessions_and_workers ____________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-204/popen-gw3/test_verify_runner_contains_py0')
+>
+>     def test_verify_runner_contains_pytest_sessions_and_workers(tmp_path: Path) -> None:
+>         """Criterion 2: real pytest sessions and xdist workers keep their roots inside the run area.
+>     
+>         Fault this pins: a serial session, a parallel one, or a second session in the same run
+>         reporting a temporary path outside the area, or a second session erasing the first one's root.
+>         """
+>         base = tmp_path / "sessions"
+>         temproot = base / "temproot"
+>         area_recorded = base / "area.txt"
+>         serial_first = base / "serial-first.txt"
+>         serial_second = base / "serial-second.txt"
+>         worker_recorded = base / "worker.txt"
+>         tree, _ = _tmp_runner_tree(base / "outer", "true")
+>         serial_probe = f'''\
+>     from pathlib import Path
+>     
+>     def test_probe(tmp_path):
+>         sentinel = tmp_path / "sentinel"
+>         sentinel.write_text("keep me", encoding="utf-8")
+>         marker = Path("{serial_first}")
+>         if marker.exists():
+>             previous = Path(marker.read_text(encoding="utf-8"))
+>             assert previous.exists(), f"a second session erased an earlier session's sentinel {{previous}}"
+>             assert previous.read_text(encoding="utf-8") == "keep me"
+>         marker.write_text(str(sentinel), encoding="utf-8")
+>         with open({str(serial_second)!r}, "a", encoding="utf-8") as handle:
+>             handle.write(f"{{tmp_path}}\\n")
+>     '''
+>         worker_probe = f"""\
+>     def test_worker(tmp_path):
+>         with open({str(worker_recorded)!r}, "a", encoding="utf-8") as handle:
+>             handle.write(f"{{tmp_path}}\\n")
+>     """
+>         (tree / "test_serial_probe.py").write_text(serial_probe, encoding="utf-8")
+>         (tree / "test_worker_probe.py").write_text(worker_probe, encoding="utf-8")
+>         _write_gate_file(
+>             tree,
+>             [
+>                 _report_gate(
+>                     base,
+>                     "serial-a",
+>                     "verify",
+>                     "block",
+>                     command=(
+>                         f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; python3 -m pytest -q test_serial_probe.py'
+>                     ),
+>                 ),
+>                 _report_gate(base, "serial-b", "verify", "block", command="python3 -m pytest -q test_serial_probe.py"),
+>                 _report_gate(base, "xdist", "verify", "block", command="python3 -m pytest -q -n 2 test_worker_probe.py"),
+>             ],
+>         )
+>         done = _tmp_run(tree, temproot, tmp_path)
+>         assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+>         area = Path(area_recorded.read_text(encoding="utf-8"))
+>         assert area.name.isdigit() and area.parent == _managed_parent(temproot), f"no pid-named area: {area}"
+>         serial_lines = serial_second.read_text(encoding="utf-8").splitlines()
+>         assert len(serial_lines) == 2 and serial_lines[0] != serial_lines[1], serial_lines
+>         worker_lines = worker_recorded.read_text(encoding="utf-8").splitlines()
+> >       assert len(worker_lines) == 2, worker_lines
+> E       AssertionError: ['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-204/popen-gw3/test_verify_runner_contains_py0/sessions/temproot/verify-runs-501/61110/pytest-of-mikypiky/pytest-2/popen-gw0/test_worker0']
+> E       assert 1 == 2
+> E        +  where 1 = len(['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-204/popen-gw3/test_verify_runner_contains_py0/sessions/temproot/verify-runs-501/61110/pytest-of-mikypiky/pytest-2/popen-gw0/test_worker0'])
+>
+> tests/test_ci.py:2603: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_ci.py::test_verify_runner_reports_temp_storage_failures - F...
+> FAILED tests/test_ci.py::test_verify_runner_contains_pytest_sessions_and_workers
+> 2 failed, 17 passed in 13.36s
+> ```
+
+Stage-2 call, 2026-11-12: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1040 files, 4007 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +11 -11
+> - `tests/test_ci.py` +2 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 185 lines of this gate left out …]
+>     @pytest.mark.parametrize("failure", ["index.lock", "oserror"])
+>     def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
+>         world: World, monkeypatch: pytest.MonkeyPatch, verification: str, failure: str
+>     ) -> None:
+>         # F6-1: a cleanup failure must reject even a green verifier, and remain visible beside a
+>         # failed or timed-out verifier. Plant a real Git lock after intent-to-add has succeeded.
+>         (world.root / "scripts/new_tool.py").write_text("VALUE = 1\n")
+>         lock = world.root / ".git/index.lock"
+>         original_launch = stage2.launch
+>     
+>         def verify(command, root, env, secret=None, **kwargs):
+>             if list(command) == ["make", "verify"]:
+>                 if failure == "index.lock":
+>                     lock.write_text("interrupted Git operation\n")
+>                 if verification == "timeout":
+>                     raise stage2.StepTimedOut("test verifier timed out")
+>                 return subprocess.CompletedProcess(command, int(verification == "red"), "", "")
+>             return original_launch(command, root, env, secret, **kwargs)
+>     
+>         if failure == "oserror":
+>     
+>             def fail_drop(*_args, **_kwargs):
+>                 raise OSError("test cleanup unavailable")
+>     
+>             monkeypatch.setattr(stage2, "drop_intended", fail_drop)
+>         monkeypatch.setattr(stage2, "launch", verify)
+>         try:
+>             problems = stage2.verify_attempt(world.root, world.plan)
+>         finally:
+>             lock.unlink(missing_ok=True)
+>         cleanup = [problem for problem in problems if "intent-to-add" in problem]
+>         assert cleanup, problems
+> >       assert ("index.lock" if failure == "index.lock" else "test cleanup unavailable") in cleanup[0]
+> E       assert 'index.lock' in "the attempt's intent-to-add entries could not be removed after `make verify`: git --literal-pathspecs failed: Schwerw...000gn/T/verify-runs-501/71859/pytest-of-mikypiky/pytest-1/popen-gw3/test_failed_intent_cleanup_rej2/repo/.git/index.lo"
+>
+> tests/test_stage2.py:22952: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=73460) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/tests/test_stage2.py:21688: DeprecationWarning: This process (pid=73462) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic[index.lock-green]
+> FAILED tests/test_stage2.py::test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic[index.lock-red]
+> FAILED tests/test_stage2.py::test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic[index.lock-timeout]
+> 3 failed, 5644 passed, 17 skipped, 5 warnings in 1880.10s (0:31:20)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 38406 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````

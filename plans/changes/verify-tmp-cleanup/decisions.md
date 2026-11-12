@@ -45,6 +45,25 @@ folders of dead processes at its start, to achieve cleanup for every way a
 run can end with about twenty lines in one script, accepting that a folder
 left by a hard kill stays until the next run starts — 2026-11-12
 
+## Q-2 · How the cut-off git error is repaired
+
+asked: 2026-11-12
+answer: "A: Runner kürzt klüger (Recommended)" — one helper in the runner keeps the start and the end of a git error, at both sites; scripts/stage2.py and one test join the plan's scope; one more runner run.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), every check run removes its own temporary files.
+  Intention: all three runner attempts were rejected; in the last, 3 of 5,664 tests were still red.
+  Today: the runner cuts git errors to their first 200 characters (scripts/stage2.py, two sites). The new temporary folder makes paths longer, so the message ends before the reason ("index.lock"). The fault would meet every machine with long paths. 2.8 of 4 hours are used.
+  Repository change: a helper of a few lines in scripts/stage2.py, one test, one plan section.
+  Architecture change: none.
+
+In the context of a run area that lengthens every temporary path,
+facing a runner that cuts a git error before its reason,
+we decided that the runner keeps the start and the end of the message,
+to achieve a readable reason at any path length,
+accepting two files more than the plan first allowed — 2026-11-12
+
 ## Decided by the agent
 
 [DETAIL] **The gate command line stays as it is.** The folder is set through
