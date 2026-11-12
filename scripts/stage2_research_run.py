@@ -162,37 +162,28 @@ CORRECTION_SUFFIX = "-correction"
 
 
 def _object_spans(text: str) -> list[str]:
-    """Every complete brace span of the text, in order: a `{` opening from depth zero to its closing `}`.
+    """Every decodable object span, skipping braces inside an already accepted object.
 
-    Quote state is tracked, so a brace or an escaped quote inside a JSON string never breaks the count.
-    An unfinished quote or brace makes the answer ambiguous and refuses extraction.
+    Try each opening brace independently: surrounding prose has no JSON quote state.
+    Decoding only locates candidates; the unchanged strict validator checks the selected text.
+    An object the answer's end cuts off - the decoder ran out of text, or a string in it never
+    closes - makes the answer ambiguous and refuses extraction, so a complete object nested in a
+    truncated one is never selected in its place.
     """
     spans: list[str] = []
-    depth = 0
-    start = 0
-    in_string = False
-    escaped = False
-    for index, char in enumerate(text):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
+    decoder = json.JSONDecoder()
+    end_of_answer = len(text.rstrip())
+    index = 0
+    while (start := text.find("{", index)) != -1:
+        try:
+            _, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError as error:
+            if error.pos >= end_of_answer or error.msg.startswith("Unterminated string"):
+                raise ResearchReportError("the answer holds an unclosed quote or object; none is selected") from error
+            index = start + 1
             continue
-        if char == '"':
-            in_string = True
-        elif char == "{":
-            if depth == 0:
-                start = index
-            depth += 1
-        elif char == "}" and depth:
-            depth -= 1
-            if depth == 0:
-                spans.append(text[start : index + 1])
-    if in_string or depth:
-        raise ResearchReportError("the answer holds an unclosed quote or object; none is selected")
+        spans.append(text[start:end])
+        index = end
     return spans
 
 
@@ -201,7 +192,7 @@ def topic_report_payload(stdout: str) -> str:
 
     A topic answer may carry harmless wrapping (decisions.md Q-3): the bare
     object itself, or one complete JSON object inside a fence with any text
-    around it. The candidates are the answer's balanced brace spans, so a bare
+    around it. The candidates are the answer's decodable object spans, so a bare
     object beside a fenced one is two candidates and stays invalid: extraction
     never chooses among objects. The selected text is parsed by the unchanged
     strict validator, so malformed JSON, duplicate keys, non-finite values and

@@ -1230,6 +1230,30 @@ def test_topic_report_refuses_unclosed_wrapping(wrapper: str) -> None:
     pytest.fail("unclosed wrapping around competing reports must be refused, never select a fenced report")
 
 
+@pytest.mark.parametrize(
+    "answer",
+    [
+        pytest.param('{"a": {"b": 1}, "c": ', id="nested-complete-in-truncated"),
+        pytest.param('note {"a": {"b": 1}, "c": "cut', id="nested-complete-before-open-string"),
+    ],
+)
+def test_topic_report_never_selects_an_object_nested_in_a_truncated_one(answer: str) -> None:
+    # Planted fault: each brace is tried on its own, so the complete inner object of an answer
+    # the end cuts off is selected in place of the truncated report (hand repair of L1-1).
+    with pytest.raises(stage2_research_run.ResearchReportError, match="unclosed quote or object"):
+        stage2_research_run.topic_report_payload(answer)
+
+
+def test_topic_report_refuses_competing_objects_hidden_by_prose_quotes() -> None:
+    # Two prose quotes must not hide the first object and select the fenced second one.
+    answer = 'He wrote 6" then: {"a": 1} and 7" later:\n```json\n{"b": 2}\n```'
+    try:
+        stage2_research_run.topic_report_payload(answer)
+    except stage2_research_run.ResearchReportError:
+        return
+    pytest.fail("both complete objects must count despite prose quotes; neither may be selected")
+
+
 @pytest.mark.parametrize("field", ["started_at", "ended_at"])
 def test_topic_correction_malformed_stored_time_has_no_allowance(sworld: SwarmWorld, field: str) -> None:
     # Planted fault: a malformed persisted timestamp resets a resumed seat's allowance.
