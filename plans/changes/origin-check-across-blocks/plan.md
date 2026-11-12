@@ -37,17 +37,20 @@ unchanged before implementation; this draft implements no code and commits nothi
 
 1. Add a repair-target Origin check in `scripts/stage2.py` over the exact
    `(place, row)` batch returned by `repair_targets`. Reuse `ORIGIN_VALUE`
-   full-cell validation after trimming; do not change selection, status case
-   handling, `findings_rows`, `record_rows` or the shared `origin_refusal` scope.
+   full-cell validation after trimming; preserve status case handling,
+   `findings_rows`, `record_rows` and the shared `origin_refusal` scope.
    Include selected record/released rows as well as every selected phase-6 row;
-   do not sweep unselected historical rows. Locate selected findings in the
-   existing source text by section and row, retaining a heading plus occurrence
-   or line number for diagnostics without changing stored row layouts.
+   do not sweep unselected historical rows. Per the maintainer's option D
+   (2026-11-12, superseding answer A), add one resolver for the latest row of
+   each finding ID across tables, the active record after findings history.
+   Both repair selection and its target-Origin check ask only that resolver.
+   Repeated IDs across tables are history; duplicate IDs within one table refuse.
+   Diagnostics name the resolved row's ID and file, with no back-computed location.
 2. Invoke that check in `repair` after the existing undecided-row refusal and
    before `time_log`, snapshots, probes, audit appends or `run_attempts`.
    Keep the existing record/newest-block `origin_refusal` call and all later
    admission checks. Aggregate invalid selected rows into one `Refused`
-   diagnostic with their IDs, source/block locations, allowed values and the
+   diagnostic with their IDs, files, allowed values and the
    orchestrator's correction instruction. Never infer or rewrite Origin.
 3. In `tests/test_stage2.py`, use `phase6_cells`, `phase6_block`, `World`,
    `origin_state`, `script_repair` and `repair_step` to exercise the real verb
@@ -57,13 +60,14 @@ unchanged before implementation; this draft implements no code and commits nothi
    record and default/Stage-2-off routes. Meet all unrelated preconditions.
    On refusal assert exit 2, no model/probe/verify calls, unchanged findings,
    record, plan, stage state and HEAD; test multiple invalid targets and repeated
-   headings for location diagnostics. Include invalid selected released rows.
+   headings for ID-and-file diagnostics. Include invalid selected released rows.
 4. Add successful multi-block repairs for `base`, `fix-r1`, `fix-r12`, checking
    the batch and in-place fixed marks with Origins preserved. Keep superseded
    invalid fixed/rejected rows in fixtures to prove they do not block. Pin the
    other three verbs' newest-block scopes with older taken rows; leave their
    existing decision refusals intact. Retain existing legacy-history,
-   control-flag, duplicate-ID, undecided and legacy-completion tests unchanged.
+   control-flag, undecided and legacy-completion tests. Scope duplicate-ID tests
+   to one table; add latest-row tests for both callers and in-place status writes.
 5. Update only the repair guarantee in `docs/WORKFLOW.md`: all selected rows
    need valid Origin before effects, including older phase-6 blocks and selected
    released rows; passive released/superseded history retains its exemptions.
@@ -106,12 +110,16 @@ verification and makes the commit after this draft.
 
 - 1: tests/test_stage2.py::test_repair_rejects_invalid_origins_in_selected_history — older taken or selected released rows with invalid Origin reach a repair attempt
 - 2: tests/test_stage2.py::test_repair_origin_refusal_has_no_effects_across_blocks — a call, audit, time entry, file/state mutation or commit precedes refusal
-- 3: tests/test_stage2.py::test_repair_origin_refusal_locates_every_selected_block — a bad target or distinguishable block location is omitted, a valid target is accused, or correction guidance is incomplete
+- 3: tests/test_stage2.py::test_repair_origin_refusal_locates_every_selected_block — a bad target or its source file is omitted, a valid target is accused, or correction guidance is incomplete
 - 4: tests/test_stage2.py::test_repair_preserves_valid_origins_across_blocks — valid older targets are refused, omitted, relocated or have their Origins rewritten
 - 5: tests/test_stage2.py::test_origin_history_check_is_limited_to_repair_targets — other verbs broaden validation or repair audits unselected historical rows
 - 5: tests/test_stage2.py::test_legacy_released_origin_does_not_hold_verbs — completed historical provenance blocks a verb
 - 5: tests/test_stage2.py::test_origin_release_controls_keep_distinct_validation_scopes — ordinary release audits superseded rows or control flags check Origin
 - 5: tests/test_stage2.py::test_an_undecided_row_holds_the_repair — pending decisions no longer hold repair
+- 3: tests/test_stage2.py::test_repair_and_origin_check_resolve_latest_finding — repair selection or Origin admission uses superseded history instead of the latest row
+- 3: tests/test_stage2.py::test_resolver_refuses_duplicate_ids_within_one_table — duplicates within one table are admitted
+- 4: tests/test_stage2.py::test_repair_marks_only_the_resolved_finding_row — a repair rewrites a historical row
+- 4: tests/test_stage2.py::test_repair_marks_only_the_resolved_record_row — a record repair rewrites a historical table
 - 6: not a test — phase-6 review reads the repair section of docs/WORKFLOW.md against criterion 6; missing the all-block pre-effect guarantee or demanding passive backfill refutes it
 
 ## Runner route — 2026-11-10
@@ -133,3 +141,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-11 23:28:06–2026-11-12 00:05:46 UTC, 2260 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-12 00:06:07–01:03:39 UTC, 3451 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-12 01:04:03–01:05:01 UTC, 58 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 20:47:03–22:14:41 UTC, 5258 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

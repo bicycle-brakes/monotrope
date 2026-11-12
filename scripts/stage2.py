@@ -3081,33 +3081,55 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
     return released, phase6
 
 
-def row_blocks(text: str) -> list[tuple[str, str, list[str]]]:
-    """Every released and phase-6 row with its place and block label, in document order.
+@dataclass
+class ResolvedFindingRow:
+    """A current finding and its source line, retained by the one resolver for status writes."""
 
-    Each section is parsed by `findings_rows` itself, so row selection cannot drift between
-    repair targeting and location diagnostics (bead coding-harness-3h96). The block label adds
-    the heading and its occurrence among blocks of the same kind, preserving document order
-    and distinguishing repeated headings without changing the shared parser.
+    place: str
+    cells: list[str]
+    line: int
+
+
+def resolve_finding_rows(record: str | None, findings_text: str) -> list[ResolvedFindingRow]:
+    """Current rows by ID: the last table wins; the active record follows findings history.
+
+    Repeated IDs across tables are history. Within one table an ID must be unique,
+    regardless of Status. Both repair selection and its Origin check use this resolver;
+    the shared parsers retain their other callers' historical scopes.
     """
-    blocks: list[tuple[str, str, list[str]]] = []
-    seen: dict[str, int] = {}
-    lines = text.splitlines(keepends=True)
-    starts = [index for index, line in enumerate(lines) if line.startswith("## ")]
-    if not starts:
-        return blocks
-    for start, end in zip(starts, starts[1:] + [len(lines)], strict=True):
-        heading = lines[start].strip()
-        if heading.startswith(RELEASE_HEADING):
-            kind = "released"
-        elif heading.startswith("## Phase 6"):
-            kind = "phase-6"
-        else:
-            continue
-        seen[kind] = seen.get(kind, 0) + 1
-        released, phase6 = findings_rows("".join(lines[start:end]))
-        rows = released if kind == "released" else phase6
-        blocks.extend((kind, f"`{heading}`, block {seen[kind]}", cells) for cells in rows)
-    return blocks
+    current: dict[str, ResolvedFindingRow] = {}
+    for source, text in (("findings", findings_text), ("record", record or "")):
+        heading = ""
+        seen: set[str] = set()
+        lines = _record_lines(text) if source == "record" else [(line, False) for line in text.splitlines()]
+        for index, (line, reviewer) in enumerate(lines):
+            if line.startswith("## "):
+                heading = line
+            if source == "findings" and KEPT_FROM.match(line):
+                heading = ""
+            cells = split_row(line) if not reviewer else None
+            if not cells:
+                seen.clear()
+                continue
+            if _furniture(cells):
+                if not all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                    seen.clear()  # a new table header, even without a blank line
+                continue
+            if source == "record":
+                rows = [("record", row) for row in record_rows(line)]
+            else:
+                released, phase6 = findings_rows(heading + "\n" + line)
+                rows = [("released", row) for row in released] + [("phase-6", row) for row in phase6]
+            for place, row in rows:
+                if row[0] in seen:
+                    file = "loop.md" if source == "record" else "findings.md"
+                    raise Refused(
+                        f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
+                    )
+                seen.add(row[0])
+                current.pop(row[0], None)
+                current[row[0]] = ResolvedFindingRow(place, row, index)
+    return sorted(current.values(), key=lambda item: item.place != "record")
 
 
 def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, list[str]]], list[str]]:
@@ -3119,22 +3141,14 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
     """
     taken: list[tuple[str, list[str]]] = []
     waiting: list[str] = []
-    if record is not None:
-        for row in record_rows(record):
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append(("record", row))
-            elif not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    released, phase6 = findings_rows(text)
-    for place, rows in (("released", released), ("phase-6", phase6)):
-        for row in rows:
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append((place, row))
-            elif place == "phase-6" and not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
+    for resolved in resolve_finding_rows(record, text):
+        place, row = resolved.place, resolved.cells
+        status = row[7].lower()
+        if status.startswith("taken"):
+            taken.append((place, row))
+        elif place in {"record", "phase-6"} and not status.startswith(("rejected", "fixed")):
+            waiting.append(row[0])
     return taken, waiting
 
 
@@ -3673,40 +3687,17 @@ def origin_refusal(record: str | None, findings_text: str) -> str | None:
     )
 
 
-def target_origin_refusal(taken: list[tuple[str, list[str]]], findings_text: str) -> str | None:
-    """The refusal that holds the repair while a selected row carries no valid Origin, or None.
-
-    Every row `repair_targets` selected - a record row, a released row or a phase-6 row of any
-    block - needs the orchestrator's provenance before the verb calls or writes; an older block's
-    selected row is no exception (bead coding-harness-3h96). Unselected history keeps the
-    exemptions of `origin_refusal`: released and superseded rows are passive and are never swept
-    here. The vocabulary is checked, never the causality; each finding names the row and its
-    block's heading and occurrence, so the orchestrator can correct the one cell.
-    """
+def target_origin_refusal(record: str | None, findings_text: str) -> str | None:
+    """Check only current taken rows, naming their ID and file without back-computing locations."""
     found: list[str] = []
-    located = [(place, "", row) for place, row in taken if place == "record"]
-    pending = [(place, row) for place, row in taken if place != "record"]
-    # Walk the source, not the batch: equal cells in repeated blocks have no identity in `taken`.
-    # Consume one selected occurrence at a time, preserving their document order and multiplicity.
-    for kind, label, cells in row_blocks(findings_text):
-        for index, (place, row) in enumerate(pending):
-            if kind == place and cells == row:
-                located.append((place, label, row))
-                pending.pop(index)
-                break
-    # Keep malformed or otherwise unlocated targets in the check rather than silently dropping them.
-    located.extend((place, "", row) for place, row in pending)
-    for place, label, row in located:
-        origin = row[3].strip() if len(row) > 3 else ""
-        if ORIGIN_VALUE.fullmatch(origin):
+    for resolved in resolve_finding_rows(record, findings_text):
+        place, row = resolved.place, resolved.cells
+        if not row[7].lower().startswith("taken"):
             continue
-        ident = row[0] if row else "<missing ID>"
-        if place == "record":
-            found.append(f"{ident} (loop record, Origin `{origin}`)")
-            continue
-        where = "released block" if place == "released" else "phase-6 table"
-        named = f"{ident} ({where}, Origin `{origin}`)"
-        found.append(f"{ident} ({where}, {label}, Origin `{origin}`)" if label else named)
+        origin = row[3].strip()
+        if not ORIGIN_VALUE.fullmatch(origin):
+            file = "loop.md" if place == "record" else "findings.md"
+            found.append(f"{row[0]} ({file}, Origin `{origin}`)")
     if not found:
         return None
     return (
@@ -7577,23 +7568,13 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     file's final newline included: the lines are split on `\\n`, so the ending empty line survives.
     """
     by_key = {(place, row[0]): row for place, row in taken}
-    lines: list[str] = []
-    kind = ""
-    for line in ctx.findings.read_text(encoding="utf-8").split("\n"):
-        if line.startswith("## "):
-            kind = ""
-            if line.startswith(RELEASE_HEADING):
-                kind = "released"
-            elif line.startswith("## Phase 6"):
-                kind = "phase-6"
-        elif kind == "released" and KEPT_FROM.match(line):
-            kind = ""
-        else:
-            cells = split_row(line) if kind else None
-            if cells and (kind, cells[0]) in by_key and cells == by_key[(kind, cells[0])]:
-                cells[7] = fixes[cells[0]]
-                line = "| " + " | ".join(cells) + " |"
-        lines.append(line)
+    text = ctx.findings.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    for resolved in resolve_finding_rows(None, text):
+        cells = resolved.cells
+        if cells == by_key.get((resolved.place, cells[0])):
+            cells[7] = fixes[cells[0]]
+            lines[resolved.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")
     stamp_updated(ctx.findings)
 
@@ -7641,20 +7622,12 @@ def _mark_record_rows(
             "no record was marked. Check these rows in findings.md; the maintainer must decide how to recover the record."
         )
     ending = "\n" if record.endswith("\n") else ""
-    lines: list[str] = []
-    for line, reviewer in _record_lines(record):
-        if not reviewer:
-            cells = split_row(line)
-            if (
-                cells
-                and len(cells) >= len(ROW_COLUMNS)
-                and LOOP_ID.fullmatch(cells[0])
-                and cells[0] in by_key
-                and [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]] == by_key[cells[0]]
-            ):
-                mark = (marks or {}).get(cells[0], cells[-1])
-                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
-        lines.append(line)
+    lines = record.splitlines()
+    for resolved in resolve_finding_rows(record, ""):
+        cells = resolved.cells
+        if cells == by_key.get(cells[0]):
+            mark = (marks or {}).get(cells[0], cells[-1])
+            lines[resolved.line] = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
     try:
         replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
     except OSError as error:
@@ -9604,7 +9577,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     # The selected rows' own Origin check goes first, so one refusal names every row the repair
     # would carry, older blocks included; the record/newest-block refusal after it keeps guarding
     # the accepted rows that no repair selects (bead coding-harness-3h96).
-    target_refusal = target_origin_refusal(taken, current)
+    target_refusal = target_origin_refusal(read_record(change, root), current)
     if target_refusal:
         raise Refused(target_refusal)
     refusal = origin_refusal(read_record(change, root), current)
@@ -9613,9 +9586,6 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
     ids = [row[0] for _, row in taken]
-    doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
-    if doubled:
-        raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.

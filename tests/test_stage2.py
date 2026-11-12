@@ -10012,8 +10012,8 @@ def test_a_doubled_taken_id_refuses_the_repair(
     """Criterion 5. Planted fault: the first row of an ID wins and the call starts."""
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
     seed_tests(world)
-    world.write_record([("L1-1", "taken — test_a", "no")])
-    world.write_findings(VERDICT, released_block([released_cells("L1-1", "taken — test_c", "no", "released finding")]))
+    world.write_record([("L1-1", "taken — test_a", "no"), ("L1-1", "taken — test_c", "no")])
+    world.write_findings(VERDICT)
     world.script(claude=[{"stdout": "must not run"}])
     assert world.run("repair") == 2
     assert world.calls() == []
@@ -10105,106 +10105,96 @@ def test_repair_rejects_invalid_origins_in_selected_history(
             assert "invalid Origin" in error, (shape, origin, status, record_present, stage2_off, error)
             assert "F-old" in error and "L1-3" in error, (shape, origin)
             if record_present and record_origin == "invalid":
-                assert "L1-1 (loop record, Origin `invalid`)" in error, (shape, origin)
+                assert "L1-1 (loop.md, Origin `invalid`)" in error, (shape, origin)
             else:
                 assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
             assert origin_state(world) == before, (shape, origin)
             assert world.calls() == [], (shape, origin)
 
 
-@pytest.mark.parametrize("selection_changes", [False, True])
-def test_row_blocks_uses_findings_rows_selection(monkeypatch: pytest.MonkeyPatch, selection_changes: bool) -> None:
-    """Block locations follow the row parser, including future changes to its selection rules."""
-    released = released_cells("L1-1", "taken — fix", "no", "released finding")
-    phase = phase6_cells("F-1", "taken — fix", "phase finding")
-    excluded = phase6_cells("F-excluded", "taken — fix", "selection changes exclude this row")
-    text = "\n\n".join(
-        [
-            released_block([released]),
-            "Kept from the loop record:",
-            render_row(released_cells("L1-2", "taken — fix", "no", "reviewer quotation")),
-            phase6_block([phase, excluded]),
-            "## Unrelated section",
-            render_row(phase),
-            phase6_block([phase.copy()]),
-            released_block([released.copy()]),
-        ]
-    )
-    parser = stage2.findings_rows
-    if selection_changes:
-        # Simulate a parser evolution: the locator must inherit it instead of duplicating its rules.
-        def changed_parser(source: str) -> tuple[list[list[str]], list[list[str]]]:
-            released_rows, phase_rows = parser(source)
-            return released_rows, [row for row in phase_rows if row[0] != "F-excluded"]
-
-        monkeypatch.setattr(stage2, "findings_rows", changed_parser)
-    expected_released, expected_phase = stage2.findings_rows(text)
-    located = stage2.row_blocks(text)
-    assert [row for place, _, row in located if place == "released"] == expected_released
-    assert [row for place, _, row in located if place == "phase-6"] == expected_phase, (
-        "every selected findings row must have a block under the same parser rules"
-    )
-    assert [label for place, label, _ in located if place == "released"] == [
-        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 1",
-        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 2",
-    ]
-    assert located[-2][1] == "`## Phase 6 — Codex, 2026-10-12`, block 2"
-
-
-@pytest.mark.parametrize("place", ["released", "phase-6"])
-def test_target_origin_refusal_lists_identical_rows_in_document_order(place: str) -> None:
-    """Identical selected cells keep their source occurrences when the batch is reordered."""
-    block = released_block if place == "released" else phase6_block
-    first = (
-        released_cells("L1-1", "taken — fix", "no", "repeated finding")
-        if place == "released"
-        else phase6_cells("F-1", "taken — fix", "repeated finding")
-    )
-    first[3] = "invalid"
-    middle = first.copy()
-    middle[0] = "L1-2" if place == "released" else "F-2"
-    text = "\n\n".join([block([first]), block([middle]), block([first.copy()])])
-    refusal = stage2.target_origin_refusal([(place, middle), (place, first.copy()), (place, first.copy())], text)
-    assert refusal is not None
-    locations = [f"block {number}, Origin `invalid`" for number in (1, 2, 3)]
-    assert refusal.index(locations[0]) < refusal.index(locations[1]) < refusal.index(locations[2]), (
-        "selected rows must be diagnosed in document order, including identical occurrences",
-        refusal,
-    )
-    entries = refusal.split(". The orchestrator", 1)[0].split("; ")
-    assert first[0] in entries[0] and middle[0] in entries[1] and first[0] in entries[2]
-
-
 @pytest.mark.parametrize("place", ["record", "released", "phase-6"])
-@pytest.mark.parametrize("row", [[], ["F-short"], ["F-short", "MINOR", "SPEC"]])
-def test_target_origin_refusal_handles_short_rows(place: str, row: list[str]) -> None:
-    """A selected row with no Origin cell yields a controlled refusal, never IndexError."""
-    try:
-        refusal = stage2.target_origin_refusal([(place, row)], "")
-    except IndexError:
-        pytest.fail("a short selected row must produce an Origin refusal instead of a traceback")
-    assert refusal is not None and "invalid Origin" in refusal
-    assert (row[0] if row else "missing ID") in refusal
-    assert "correct the cell" in refusal
+@pytest.mark.parametrize("status", ["taken — fix", "fixed — tests/test_fix.py::test_fix", "rejected — covered"])
+@pytest.mark.parametrize("origin", ["base", "invalid"])
+def test_repair_and_origin_check_resolve_latest_finding(world: World, place: str, status: str, origin: str) -> None:
+    """Option D: selection and Origin admission see the same latest row, never its history."""
+    old = phase6_cells("L1-1", "taken — old decision", "historical finding")
+    old[3] = "invalid"
+    latest = phase6_cells("L1-1", status, "current finding")
+    latest[3] = origin
+    if place == "record":
+        world.write_record([("L1-1", status, "no")])
+        set_row_origin(world, "L1-1", origin)
+        world.write_findings(phase6_block([old]))
+    elif place == "released":
+        latest = released_cells("L1-1", status, "no", "current finding")
+        latest[3] = origin
+        world.write_findings(phase6_block([old]), released_block([latest]))
+    else:
+        world.write_findings(phase6_block([old]), phase6_block([latest]))
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    record = world.record().read_text(encoding="utf-8") if place == "record" else None
+    taken, waiting = stage2.repair_targets(ctx, record)
+    assert waiting == []
+    assert [(source, row[0], row[3], row[7]) for source, row in taken] == (
+        [(place, "L1-1", origin, status)] if status.startswith("taken") else []
+    ), "only the latest row of a repeated ID may be selected"
+    refusal = stage2.target_origin_refusal(record, world.text())
+    if status.startswith("taken") and origin == "invalid":
+        assert refusal is not None
+        assert "L1-1" in refusal and ("loop.md" if place == "record" else "findings.md") in refusal
+        assert "block " not in refusal and "## Phase" not in refusal
+    else:
+        assert refusal is None, "historical provenance must not override the resolved current row"
 
 
 @pytest.mark.parametrize("place", ["released", "phase-6"])
-def test_target_origin_refusal_distinguishes_dated_block_headings(place: str) -> None:
-    """Block occurrences stay unique when only the heading's date changes."""
-    if place == "released":
-        first = released_cells("L1-1", "taken — fix", "no", "first finding")
-        second = released_cells("L1-2", "taken — fix", "no", "second finding")
-        block = released_block
-    else:
-        first = phase6_cells("F-1", "taken — fix", "first finding")
-        second = phase6_cells("F-2", "taken — fix", "second finding")
-        block = phase6_block
-    first[3] = second[3] = "invalid"
-    text = "\n\n".join([block([first]), block([second]).replace("2026-10-12", "2026-10-13")])
-    refusal = stage2.target_origin_refusal([(place, first), (place, second)], text)
-    assert refusal is not None
-    assert "2026-10-12`, block 1" in refusal
-    assert "2026-10-13`, block 2" in refusal, "different dates must not restart the block occurrence"
+def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
+    """Duplicate IDs in one table refuse even when only one row is taken."""
+    block = released_block if place == "released" else phase6_block
+    row = (
+        released_cells("L1-1", "taken — fix", "no", "finding")
+        if place == "released"
+        else phase6_cells("L1-1", "taken — fix", "finding")
+    )
+    duplicate = row.copy()
+    duplicate[7] = "rejected — different decision"
+    text = block([row, duplicate])
+    with pytest.raises(stage2.Refused, match="same id.*L1-1.*findings.md"):
+        stage2.resolve_finding_rows(None, text)
+
+
+@pytest.mark.parametrize("identical", [False, True])
+def test_repair_marks_only_the_resolved_finding_row(world: World, identical: bool) -> None:
+    """A successful repair changes the current table only, including identical historical cells."""
+    seed_tests(world)
+    old = phase6_cells("F-1", "taken — fix", "historical finding")
+    latest = old.copy()
+    if not identical:
+        latest[5] = "current finding"
+    world.write_findings(phase6_block([old]), phase6_block([latest]))
+    script_repair(world, [repair_step(stdout="F-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0, "a finding repeated across tables must be repaired once"
+    _, rows_now = stage2.findings_rows(world.text())
+    assert rows_now[0] == old
+    assert rows_now[1][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_repair_marks_only_the_resolved_record_row(world: World) -> None:
+    """The same resolver also limits record status writes to the latest table's row."""
+    world.write_record([("L1-1", "taken — fix", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    row = stage2.record_rows(original)[0]
+    path.write_text(original + "\n" + stage2.render_table(stage2.ROW_COLUMNS, [row]), encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, _ = stage2.repair_targets(ctx, path.read_text(encoding="utf-8"))
+    assert len(taken) == 1, "a record ID repeated in separate tables is history"
+    stage2.mark_repaired_record(
+        "demo", taken, {"L1-1": "fixed — tests/test_fix.py::test_fix"}, world.root, {"L1-1": "yes"}
+    )
+    rows_now = stage2.record_rows(path.read_text(encoding="utf-8"))
+    assert rows_now[0] == row
+    assert rows_now[1][7:] == ["fixed — tests/test_fix.py::test_fix", "yes"]
 
 
 def test_repair_origin_refusal_has_no_effects_across_blocks(
@@ -10268,13 +10258,11 @@ def test_repair_origin_refusal_locates_every_selected_block(
     capsys.readouterr()
     assert world.run("repair") == 2
     error = capsys.readouterr().err
-    assert "L1-1 (loop record, Origin `oops`)" in error
-    released_heading = "`## Phase 4b — loop rows, released 2026-10-12`"
-    assert f"L1-3 (released block, {released_heading}, block 1, Origin ``)" in error
-    assert f"L1-4 (released block, {released_heading}, block 2, Origin `fix-r0`)" in error
-    phase_heading = "`## Phase 6 — Codex, 2026-10-12`"
-    assert f"F-1 (phase-6 table, {phase_heading}, block 1, Origin `criterion 1`)" in error
-    assert f"F-2 (phase-6 table, {phase_heading}, block 2, Origin `BASE`)" in error
+    assert "L1-1 (loop.md, Origin `oops`)" in error
+    assert "L1-3 (findings.md, Origin ``)" in error
+    assert "L1-4 (findings.md, Origin `fix-r0`)" in error
+    assert "F-1 (findings.md, Origin `criterion 1`)" in error
+    assert "F-2 (findings.md, Origin `BASE`)" in error
     assert "F-ok" not in error, "a valid selected row was accused"
     assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
     assert "The orchestrator sets it" in error and "correct the cell" in error

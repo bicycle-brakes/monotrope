@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-3h96
@@ -43,14 +43,17 @@ continuation. Existing tests require those rows to remain exempt
 ## Terms
 
 - **Outstanding target:** a row selected by repair because Status begins
-  `taken`, case-insensitively, in the record, a released block or any phase-6 block.
+  `taken`, case-insensitively, on the current row returned by the resolver from
+  the record, a released block or any phase-6 block.
 - **Valid Origin:** the complete trimmed cell is `base` or `fix-r<N>`, where
   N is a positive decimal whole number without a leading zero; case matters.
-- **Row location:** the row's ID and its file (`loop.md` or `findings.md`).
-  Finding IDs are unique within a change, and a check refuses a duplicate ID
-  (including a release of loop rows that repeats an ID already in
-  `findings.md`), so the ID suffices; no block heading or occurrence is
-  computed (maintainer's answer A, 2026-11-11).
+- **Current row:** one resolver chooses the latest row of each finding ID across
+  tables, with the active loop record after findings history. Repair selection and
+  its target-Origin check both use only this resolver. Repeated IDs across tables
+  are history; IDs must be unique within each table, and duplicates there refuse repair.
+- **Row location:** the resolved row's ID and file (`loop.md` or `findings.md`);
+  no block heading or occurrence is back-computed (maintainer's option D,
+  2026-11-12, superseding answer A).
 
 ## Acceptance criteria
 
@@ -84,8 +87,9 @@ continuation. Existing tests require those rows to remain exempt
 
 - No automatic provenance inference, historical migration, reviewer-output
   rewriting, new Origin vocabulary, repair-brake policy or row format.
-- No change to which rows repair selects, its retry routes, targeted
-  verification, duplicate-ID checks or legacy completion checks.
+- No change to repair retry routes, targeted verification or legacy completion
+  checks. Selection follows the shared current-row resolver; duplicate-ID refusal
+  is scoped to one table, and repeated IDs across tables are history.
 - No design phase or ADR: this bounded correction adds an admission check
   inside the existing repair boundary.
 
@@ -113,8 +117,9 @@ None open. The reasoned interview skip and repair-only scope are already in
 [DETAIL] Check every selected target, including selected released rows, rather
 than re-auditing all historical rows: selection is the boundary recorded in
 `decisions.md`, and an actively selected legacy row differs from passive history.
-[DETAIL] Name an offending row by its ID and file only: IDs are unique within
-a change and a duplicate is refused, so no heading or occurrence is needed
-(maintainer's answer A, 2026-11-11, replacing the earlier heading-plus-occurrence wording).
+[DETAIL] Name the resolver's offending row by ID and file only. A finding's
+repeated ID across tables is history; only duplicates within one table refuse.
+Both repair selection and its target-Origin check ask the same resolver
+(maintainer's option D, 2026-11-12, superseding answer A of 2026-11-11).
 [DETAIL] Set a one-hour phase-4 appetite including repairs, a stop rather than
 an estimate, because the correction stays within one existing admission path.

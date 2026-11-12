@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-11
+updated: 2026-11-12
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1656,10 +1656,14 @@ N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
 naming the row and its place, while a taken or fixed row in the loop record
 or a phase-6 table carries any other value; the orchestrator corrects the cell
 and runs the verb again. These checks read the loop record and the newest
-phase-6 table. Repair additionally checks every selected taken row in every
-released block and phase-6 table before any call or write, including legacy
-released rows selected for repair. Ordinary release checks the record before
-writing the released block; released and superseded history that repair does
+phase-6 table. Repair uses one resolver for target selection and the
+target-Origin check: the latest row of each finding ID across tables is current,
+with the active loop record after findings history. Repeated IDs across tables are a finding's history; IDs must be
+unique only within one table, where duplicates refuse repair. Every selected current
+taken row needs valid Origin before any call or write, including older phase-6 and
+released tables. The refusal names each offending resolved row by ID and file
+(`loop.md` or `findings.md`), without back-computing headings or occurrences.
+Ordinary release checks the record before writing the released block; released and superseded history that repair does
 not select needs no backfill. `release-loop --restart` and
 `release-loop --stage-failed` do not check Origin. A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop

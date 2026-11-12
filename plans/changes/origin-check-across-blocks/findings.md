@@ -423,3 +423,10 @@ Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claud
 > 3 failed, 64 passed in 26.10s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/origin-check-across-blocks/stage2/attempts/origin-check-across-blocks/attempt-3-20261111T232754713407Z-0c4e2669.md
 > ```
+
+Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4035 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-12: repair · attempt 1 · route codex — lifecycle fields: plans/changes/origin-check-across-blocks/plan.md, plans/changes/origin-check-across-blocks/spec.md — unchanged
