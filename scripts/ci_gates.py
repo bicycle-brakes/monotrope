@@ -6,7 +6,10 @@ Dieses Modul ist ihr einziger Leser und leitet daraus alles ab:
 
   --list            menschenlesbare Uebersicht (auch nicht-lokale Gates)
   --format=json     maschinenlesbar
-  --commands        nur die ausfuehrbaren Kommandos eines Jobs
+  --commands        nur die ausfuehrbaren Kommandos eines Jobs; unter Schema 3
+                    ordnet `--placement lokal` sie billig-zuerst (cost:
+                    seconds vor minutes), alles andere bleibt in
+                    Deklarationsordnung (bead coding-harness-bxxt.1)
   --report          Commit-SHAs + Konfigurations-Hash: der Lauf bindet sich
   --check-schema    prueft die Gate-Datei gegen ihr eigenes Schema
   --generate-ci     erzeugt `.github/workflows/ci.yml` aus der Liste
@@ -71,7 +74,12 @@ _INTERPRETER = re.compile(r"3\.(?:0|[1-9][0-9]*)")
 # Aussage, kein Schweigen. SCHEMA_VERSION gehoert zur Gate-Datei: ein
 # Schemawechsel ist sichtbar, kein stiller.
 PLACEMENT: tuple[str, ...] = ("hosted", "writer", "both")
-SCHEMA_VERSION = 2
+# Schema 3 (bead coding-harness-bxxt.1): jeder Gate erklaert seine
+# Kostenklasse — das geschlossene Vokabular, aus dem der lokale Lauf seine
+# billig-zuerst-Ordnung ableitet. SCHEMA_VERSION gehoert zur Gate-Datei: ein
+# Schemawechsel ist sichtbar, kein stiller.
+SCHEMA_VERSION = 3
+COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
 
 # Scripts ohne Aufrufer in der erzeugten ci.yml — mit dem Grund, warum das
 # richtig ist (RB-G3). Jedes Script unter `scripts/` steht entweder als Gate-
@@ -345,8 +353,9 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     fehler: list[str] = []
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
-    if doc.get("schema_version") != SCHEMA_VERSION:
-        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {doc.get('schema_version')!r}")
+    version = doc.get("schema_version")
+    if type(version) is not int or version != SCHEMA_VERSION:
+        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
     fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
     if not isinstance(gate_liste, list) or not gate_liste:
@@ -369,6 +378,10 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: job muss eins von {JOBS} sein, ist {g.get('job')!r}")
         if g.get("enforcement") not in ENFORCEMENT:
             fehler.append(f"{gid}: enforcement muss eins von {ENFORCEMENT} sein")
+        if g.get("cost") not in COST_CLASSES:
+            fehler.append(
+                f"{gid}: cost muss eins von {COST_CLASSES} sein, ist {g.get('cost')!r} (bead coding-harness-bxxt.1)"
+            )
         if not isinstance(g.get("floor"), bool):
             fehler.append(f"{gid}: floor fehlt oder ist kein Boolean")
         if g.get("placement") not in PLACEMENT:
@@ -446,6 +459,7 @@ def gates() -> list[dict[str, Any]]:
                 "enforcement": g["enforcement"],
                 "floor": g["floor"],
                 "placement": g["placement"],
+                "cost": g["cost"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
                 "subsets": list(g.get("subsets") or []),
@@ -455,6 +469,18 @@ def gates() -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def kostenordnung(alle: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Die stabile Zwei-Klassen-Ordnung des lokalen Laufs (bead coding-harness-bxxt.1).
+
+    Jeder `seconds`-Gate vor jedem `minutes`-Gate, innerhalb einer Klasse die
+    Deklarationsordnung — die Entscheidung Q-1 nennt keine feinere Rangfolge,
+    also bleibt jeder Gleichstand bewahrt. Sie gilt nur fuer
+    `--commands --placement lokal` unter Schema 3; `gates()`, die CI-Ableitung
+    und alle anderen Ausgaben bleiben in Deklarationsordnung.
+    """
+    return sorted(alle, key=lambda g: g["cost"] != "seconds")
 
 
 def interpreters() -> list[str]:
@@ -481,7 +507,8 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
 
     Deterministic and unfiltered: every declared gate, in list order, with the
     fields the catalog promises (id, title, command or action, job,
-    enforcement, floor, placement, reason). A command gate and a hosted action
+    enforcement, cost, floor, placement, reason — the cost column since
+    schema 3, bead coding-harness-bxxt.1). A command gate and a hosted action
     are rendered distinctly, and an action with a local equivalent names it —
     the reader must see what runs where. `tests/test_gate_catalog.py` holds
     the committed inventory to this rendering.
@@ -489,8 +516,8 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
     if alle is None:
         alle = gates()
     zeilen = [
-        "| id | title | command / action | job | enforcement | floor | placement | reason |",
-        "|---|---|---|---|---|---|---|---|",
+        "| id | title | command / action | job | enforcement | cost | floor | placement | reason |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for g in alle:
         if g["action"]:
@@ -499,9 +526,10 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
                 einsatz = f"action `{g['action']}`; locally: `{g['command']}`"
         else:
             einsatz = f"`{g['command']}`"
+        kosten_zelle = f"{_zelle(g['cost'])} | "
         zeilen.append(
             f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
-            f"{_zelle(g['enforcement'])} | {'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
+            f"{_zelle(g['enforcement'])} | {kosten_zelle}{'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
             f"{_zelle(g['reason'])} |"
         )
     return "\n".join(zeilen)
@@ -845,13 +873,22 @@ def main() -> int:
         return 0
 
     if args.commands:
-        for g in alle:
-            if not in_job(g, args.job) or not g["local_runnable"]:
-                continue
-            if args.placement and not misst_in(g, args.placement):
-                continue
-            if args.skip_equivalents and g["via_local_equivalent"]:
-                continue
+        auswahl = [
+            g
+            for g in alle
+            if in_job(g, args.job)
+            and g["local_runnable"]
+            and (not args.placement or misst_in(g, args.placement))
+            and not (args.skip_equivalents and g["via_local_equivalent"])
+        ]
+        # Nur der lokale Lauf sortiert (bead coding-harness-bxxt.1): seconds
+        # vor minutes, stabil — innerhalb einer Klasse bleibt die
+        # Deklarationsordnung. Die Auswahl wird vorher gefiltert: Sortieren
+        # veraendert nie, WER misst, nur wann. `gates()`, die CI-Ableitung und
+        # jede andere Ausgabe bleiben in Deklarationsordnung.
+        if args.placement == "lokal":
+            auswahl = kostenordnung(auswahl)
+        for g in auswahl:
             if args.tsv:
                 print(f"{g['id']}\t{g['enforcement']}\t{g['command']}")
             else:
@@ -863,7 +900,7 @@ def main() -> int:
     for g in alle:
         marke = "~" if g["via_local_equivalent"] else (" " if g["local_runnable"] else "*")
         takt = " ⏱" if g["job"] == "drift" else ""
-        print(f"{marke}{takt} [{g['id']}] {g['name']}")
+        print(f"{marke}{takt} [{g['id']}] {g['name']} (cost: {g['cost']})")
         if g["local_runnable"]:
             zusatz = "  (lokales Aequivalent der Action)" if g["via_local_equivalent"] else ""
             if g["placement"] == "writer":

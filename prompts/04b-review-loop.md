@@ -89,6 +89,13 @@ explicitly, do not delete them.
    authorisation. A guard row ends as
    `fixed — guard test — tests/<path>::<function>`, with the mark
    `yes — guard test — …` written only after both proof legs passed.
+   Record each decision with `python3 scripts/stage2.py triage <change>
+   '<row>=<status>' '<reason>'` (both quoted: statuses and reasons hold
+   spaces), never by hand: the command calls no model,
+   changes only that row's `Status` cell and refuses a plain `taken` on a
+   row whose finding touches only tests, naming the corrective form
+   `taken — not a test — <reason>`. The `Broke a test` mark stays yours to
+   write after the repair, as step 3 says.
 2. A row whose remedy changes `status` or `implementation_status` in the
    change's `spec.md`, `design.md` or `plan.md` is repaired by hand first: the
    runner restores those two fields after every repair attempt, so the model

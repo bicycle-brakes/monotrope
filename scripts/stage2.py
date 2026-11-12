@@ -25,6 +25,9 @@ between the rule and the call.
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
+    python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
+    # Triage refuses ordinary taken for test-only locations; use taken — not a test — <reason>.
+    # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -181,6 +184,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -3431,7 +3435,10 @@ def holding_record(change: str, root: Path) -> Iterator[None]:
 def read_record(change: str, root: Path) -> str | None:
     path = record_dir(change, root) / "loop.md"
     try:
-        return path.read_text(encoding="utf-8") if path.exists() else None
+        if not path.exists():
+            return None
+        with path.open(encoding="utf-8", newline="") as stream:
+            return stream.read()
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(f"the loop record {path} cannot be read.") from error
 
@@ -3470,7 +3477,7 @@ def marks_a_test(cell: str) -> bool:
     return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
 
 
-def record_rows(record: str) -> list[list[str]]:
+def record_rows(record: str, *, strict: bool = False) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
     Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
@@ -3479,14 +3486,35 @@ def record_rows(record: str) -> list[list[str]]:
     Nine cells are known. A `|` the orchestrator typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
     than a row has is not skipped, which would let the release delete it with the record: it is refused,
-    by its id.
+    by its id. Triage uses `strict` to refuse any non-nine-cell row before editing;
+    the compatibility reader for other verbs still accepts typed Status pipes.
     """
     rows = []
+    in_table = False
     for line, reviewer in _record_lines(record):
-        cells = None if reviewer else split_row(line)
+        if reviewer:
+            in_table = False
+            continue
+        cells = split_row(line)
+        if strict:
+            # Check table syntax before filtering loop IDs: split_row deliberately returns None
+            # for missing boundary pipes, which must never hide a damaged runner-owned row.
+            first = _PIPE.split(line.strip().lstrip("|"), maxsplit=1)[0].strip()
+            table_line = (
+                line.lstrip().startswith("|")
+                or (in_table and bool(line.strip()))
+                or ("|" in line and (LOOP_ID.fullmatch(first) or first == ROW_COLUMNS[0]))
+            )
+            in_table = bool(table_line)
+            if table_line and (cells is None or len(cells) != len(ROW_COLUMNS)):
+                count = "missing boundary pipe" if cells is None else f"{len(cells)} cells"
+                raise Refused(
+                    f"the loop record has a malformed loop row/table line ({count}; "
+                    f"{len(ROW_COLUMNS)} cells are needed); mend it, nothing has been written."
+                )
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
-        if len(cells) < len(ROW_COLUMNS):
+        if len(cells) < len(ROW_COLUMNS) or (strict and len(cells) != len(ROW_COLUMNS)):
             raise Refused(
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
@@ -4299,7 +4327,7 @@ def refuse_repository_git(root: Path) -> None:
 
 
 TOOL_SECONDS = 5 * 60
-VERIFY_SECONDS = 30 * 60
+VERIFY_SECONDS = 45 * 60
 GIT_SECONDS = 2 * 60
 
 
@@ -6250,7 +6278,7 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
 
     Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    gate-list order through the locked interpreter, as `verify_all.sh` runs them. The first blocking
+    declaration order through the locked interpreter. The first blocking
     red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
     reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
     """
@@ -7714,6 +7742,153 @@ def _mark_record_rows(
     except OSError as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
+
+
+# ---------------------------------------------------------------------------
+# Triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+TRIAGE_STATUSES = ("taken", "rejected", "taken — not a test", "taken — guard test")
+
+# A Where cell splits on whitespace, commas and semicolons, and on the escaped pipe a cell carries.
+_WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
+
+
+def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
+    """Recognise only exact indexed paths and the Boundary's enumerated line suffixes.
+
+    Markdown links contribute their target, external URLs and prose contribute nothing. Other
+    path-like tokens refuse rather than guessing a tracked prefix or normalising another spelling.
+    """
+    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
+    locations = []
+    cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
+    for token in _WHERE_TOKEN_SPLIT.split(cell):
+        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
+        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
+            continue
+        # Check the whole name first: punctuation may itself belong to an indexed filename.
+        path = token if token in tracked else re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if path in tracked:
+            locations.append(path)
+        elif "/" in token or re.search(r"\.[\w-]+", token):
+            raise Refused(
+                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been written. "
+                "Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or #L<line>-L<line> suffix. "
+                "For test-only work, record `taken — not a test — <reason>` after correcting the location."
+            )
+    return locations
+
+
+def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
+    """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
+
+    A mechanical trigger on paths, not on words: prose that only says "test", a mixture with a
+    production location and a cell without any location stay the orchestrator's judgment - the command
+    cannot establish what a later repair will touch.
+    """
+    locations = where_locations(cell, root)
+    return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
+
+
+def triage_status(decision: str, reason: str) -> str:
+    """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
+    escaped = reason.replace("\\|", "|").replace("|", "\\|")
+    return f"{decision} — {escaped}"
+
+
+def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
+    """Splice one row's Status cell in its own physical line and publish the record whole.
+
+    The caller has validated the physical cells against ROW_COLUMNS with the strict reader under its lock.
+    Preserve the other cells, line spacing and line endings verbatim.
+    """
+    lines: list[str] = []
+    written = False
+    status_column = ROW_COLUMNS.index("Status")
+    for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
+        cells = None if reviewer else split_row(line)
+        if cells and len(cells) == len(ROW_COLUMNS) and cells[0] == ident:
+            separators = list(_PIPE.finditer(line))
+            start, end = separators[status_column].end(), separators[status_column + 1].start()
+            original = original[:start] + " " + status + " " + original[end:]
+            written = True
+        lines.append(original)
+    if not written:
+        raise Refused(f"loop row `{ident}` has no editable line; mend the record first, nothing has been written.")
+    replace_record(record_dir(change, root) / "loop.md", "".join(lines))
+
+
+def triage(root: Path, change: str, row_status: str | None, reason: str | None) -> None:
+    """Record one already-made loop-row decision in this worktree's own loop record, and nothing else.
+
+    The orchestrator has decided; this local command writes the decision down. It starts no model and
+    reads no credential, works on a dirty tree, and changes no repository file and no git state. Only
+    the named row's `Status` cell changes; every proof mark stays where it is, so a row marked `taken`
+    still waits for its `Broke a test` mark before the next round or the release. Invalid input, a
+    damaged record and a held lock refuse with exit 2; a failed replacement reports exit 1 and leaves
+    the prior record whole.
+    """
+    if not row_status:
+        raise Refused("triage needs a first operand '<row>=<status>' and a second operand <reason>.")
+    if not reason or not reason.strip():
+        raise Refused("triage needs a nonempty reason; an empty decision says nothing a later round can read.")
+    if reason.splitlines() != [reason]:
+        raise Refused("triage takes a single-line reason; a line break would break the record's table shape.")
+    reason = reason.strip()
+    row, equals, given = row_status.partition("=")
+    row = row.strip()
+    if not equals or not LOOP_ID.fullmatch(row):
+        raise Refused(f"`{row_status}` is no '<row>=<status>' operand: name a loop id like `L1-1`.")
+    decision = given.strip()
+    if decision not in TRIAGE_STATUSES:
+        raise Refused(
+            f"unsupported status `{decision}`; triage takes: "
+            + ", ".join(f"`{item}`" for item in TRIAGE_STATUSES)
+            + "."
+        )
+    folder_of(root, change)
+    status = triage_status(decision, reason)
+    if decision != "taken — guard test" and guard_authorised(status):
+        raise Refused("the reason would grant guard authority; supply `taken — guard test` explicitly as the decision.")
+    if decision == "taken — guard test" and not guard_authorised(status):
+        raise Refused("`taken — guard test` needs a nonempty unquoted reason; a quoted reason opens no guard proof.")
+    try:
+        with holding_record(change, root):
+            record = read_record(change, root)
+            if record is None:
+                raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
+            targets = [item for item in record_rows(record, strict=True) if item[0] == row]
+            if not targets:
+                raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
+            if len(targets) > 1:
+                raise Refused(
+                    f"two loop rows carry `{row}`; mend the record first, triage would not know which to decide."
+                )
+            existing_status = targets[0][ROW_COLUMNS.index("Status")]
+            existing_mark = targets[0][ROW_COLUMNS.index("Broke a test")]
+            if existing_status.lower().startswith("fixed"):
+                raise Refused(
+                    f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
+                )
+            if marks_a_test(existing_mark):
+                raise Refused(
+                    f"loop row `{row}` already pairs Status `{existing_status}` with Broke a test `{existing_mark}`; "
+                    "triage cannot re-decide a row carrying repair evidence."
+                )
+            test_only = where_is_test_only(targets[0][4], root)
+            if decision == "taken" and test_only:
+                raise Refused(
+                    f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
+                    "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
+                )
+            _write_triage_row(change, row, status, record, root)
+    except OSError as error:
+        raise CallFailed(f"the loop record could not be replaced ({error}); the prior record stands.") from error
+    print(f"triage: {row} recorded as {status}")
 
 
 # The explorer's role, stated by the runner in every exploration prompt (bead coding-harness-e7m): on
@@ -9199,6 +9374,34 @@ def answer_is_owed(root: Path, change: str) -> bool:
         return False
 
 
+def refuse_unreadable_statements(root: Path, change: str) -> None:
+    """The draft's early statement check (bead coding-harness-nr6h): no model call starts on an
+    interview whose answered records the question-context gate cannot read.
+
+    The document job finds a missing statement only after a model call, and a retry cannot repair
+    the answers — the drafter may not edit `decisions.md`. This reads this change's own file
+    through the gate's statement reader; other changes' records stay the repository-wide gate's
+    business, which still runs later. A read failure refuses too: the interview owns its records,
+    and the runner neither repairs nor replaces them.
+    """
+    path = folder_of(root, change) / "decisions.md"
+    rel = path.relative_to(root).as_posix()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(
+            f"{rel} cannot be read ({getattr(error, 'strerror', None) or error}); complete the interview first — "
+            "the runner neither repairs nor replaces decisions.md."
+        ) from error
+    problems = check_question_context.statement_problems(text, rel)
+    if problems:
+        raise Refused(
+            f"{rel} holds answered records whose decision statement cannot be read; complete the "
+            "interview first — the runner does not edit decisions.md:\n"
+            + "\n".join(f"- {problem}" for problem in problems)
+        )
+
+
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
 
 
@@ -9310,14 +9513,18 @@ def verify_draft(
 def draft(root: Path, change: str) -> None:
     """Phases 2, 2b and 3: Codex drafts the change; GLM 5.3 after two failed Codex attempts (ADR 0016).
 
-    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the leak check
-    before each call, the credential scans, the one commit - plus what a writing Codex call needs:
+    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the early
+    statement check on this change's `decisions.md`, the leak check before each call, the
+    credential scans, the one commit - plus what a writing Codex call needs:
     each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
     its own missing ADR answer, which only the maintainer can record.
     """
-    ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
+    # `decisions.md` is read by the early statement check below, which refuses an unreadable file
+    # with the remedy; the preflight does not read it a second time with a bare message.
+    ctx = preflight(root, change, CODEX, bead_file="research.md")
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
+    refuse_unreadable_statements(root, change)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
     started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
@@ -10171,6 +10378,7 @@ VERBS = {
     "draft": draft,
     "implement": implement,
     "repair": repair,
+    "triage": triage,
     "spec-review": spec_review,
     "review-loop": review_loop,
     "release-loop": release_loop,
@@ -10188,6 +10396,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument(
+        "row_status",
+        nargs="?",
+        default=None,
+        metavar="ROW=STATUS",
+        help=(
+            "triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'; "
+            "refuses ordinary taken for test-only locations: use taken — not a test — <reason>"
+        ),
+    )
+    parser.add_argument(
+        "reason_text",
+        nargs="?",
+        default=None,
+        metavar="REASON",
+        help=(
+            "triage only: the decision's own single-line reason; "
+            "the Broke a test proof mark stays the runner's; triage supplies no repair evidence"
+        ),
+    )
     parser.add_argument(
         "--stage2-off",
         nargs="?",
@@ -10298,12 +10526,14 @@ def _run(args: argparse.Namespace) -> int:
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+        if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
+            raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair"}:
+        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
             # The name is checked before the lock: the lock's path is built from it, and a name that
             # escapes the state directory must create nothing there (DL-A-9 of the deep review).
             folder_of(Path(args.root), args.change)
@@ -10312,6 +10542,10 @@ def _run(args: argparse.Namespace) -> int:
             # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
             with holding_record(args.change, Path(args.root)):
                 repair(Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "triage":
+            # A local record write, dispatched before any preflight or model call: no endpoint, no leak
+            # check, no credential - the record lock is triage's only shared resource.
+            triage(Path(args.root), args.change, args.row_status, args.reason_text)
         elif args.verb == "prepare-explore":
             prepare_explore(Path(args.root), args.change, args.klass, args.seats)
         elif args.verb == "explore":

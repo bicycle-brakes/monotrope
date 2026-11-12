@@ -230,6 +230,15 @@ its decision statement (a closing parenthetical remark may follow it); the adopt
 stay exempt and unchanged, and evidence the gate cannot read is not measured
 (exit 3) instead of passing.
 
+The interview asks the downside the maintainer accepts with every question and
+records the complete decision statement at once, with the answer and its
+recording day, never an invented downside. `draft` reads the selected change's
+`decisions.md` through the same statement reader before its first model call
+and refuses (no attempt consumed, no fallback, the file untouched) when the
+file cannot be read or an answered record lacks a readable statement. Other
+changes' records stay with the repository-wide gate, and the document job and
+the missing-ADR-answer tolerance are unchanged.
+
 **An ambiguity is not mechanics.** "The plan is the contract" governs departures
 from an *unambiguous* contract. Where the plan allows two readings, nothing is
 chosen: the note is `[DECISION]`, the rest is finished, then stop.
@@ -531,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make verify     # local gates, cheap first; stop at the first blocking failure
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -542,6 +551,12 @@ make index      # regenerate plans/INDEX.md
 `ci.yml` is generated from, and a hand edit of `ci.yml` fails the `ci-drift`
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
+
+Local verification orders selected gates by declared cost (`seconds` before
+`minutes`) and stops at the first blocking failure. It names every remaining
+selected gate as not run because of that failure; a red run is therefore not
+a complete check. Hosted CI and `--ci` continue through all selected gates.
+See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
@@ -999,6 +1014,7 @@ admission and cost values live in `model-endpoints.yaml`.
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
+| 4b Triage | none (a local command) | a local runner command for the orchestrator's already-made decision: it records one row's `Status` in this worktree's loop record and calls no model; a test-only `taken` is refused without `taken — not a test — <reason>`, and `Broke a test` stays the repair's proof mark |
 | Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
@@ -1165,7 +1181,7 @@ placements.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Twelve verbs exist:
+into a shell. Thirteen verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
@@ -1214,6 +1230,23 @@ into a shell. Twelve verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+- `triage` — the orchestrator records one already-made decision on the loop
+  record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
+  '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
+  test` or `taken — guard test` with a single-line reason, finds exactly that
+  row in this worktree's own record under the record lock, and replaces the
+  record atomically. It calls no model, reads no credential and works on a
+  dirty tree; only that row's `Status` cell changes — every other byte, the
+  reviewers' words and the final newline stay as they are. Invalid input, a
+  damaged record, a `fixed` row and a held lock refuse with exit 2; a failed
+  write reports exit 1 and leaves the prior record whole. A plain `taken` on
+  a row whose `Where` cell names only locations below `tests/` is refused with
+  the spelling it must take (`taken — not a test — <reason>`), because an
+  ordinary repair of it could not exist; a mixed or prose-only `Where` stays
+  the orchestrator's judgment. Triage never fills `Broke a test`: the proof
+  mark stays the repair's, so a row marked `taken` is decided but keeps its
+  round not clean until the mark is written; ADR 0023's explicit guard
+  exception is untouched.
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;
@@ -1369,13 +1402,20 @@ repository presents, not what else the disk holds.
 
 ### The draft (phases 2, 2b and 3)
 
-`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write
-`spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
-guards are `implement`'s: the preflight (a `research.md` with its bead, a
-`decisions.md`), the refusal of pre-existing changes outside the change's
-`findings.md`, the declaration and the leak check before each attempt's call,
-the credential scans, and exactly one commit when an attempt passes. A draft's
-Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
+[`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write `spec.md`, `design.md`
+and `plan.md` in one call (ADR 0016). The
+guards start with `implement`'s preflight: a `research.md` with its bead and
+an endpoint declaration check inside that preflight. Next comes the refusal
+of pre-existing changes outside the change's `findings.md`, then the draft's
+own early statement refusal: before any attempt the runner reads the change's
+`decisions.md` through the question-context gate's
+statement reader and refuses — naming the file, the question and the remedy,
+to complete the interview — an unreadable file or an answered record without
+a readable decision statement; `implement` has no such check. The leak check
+runs before each attempt's call, with credential scans and exactly one
+commit when an attempt passes. A draft's Codex call runs in the CLI's
+`workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.

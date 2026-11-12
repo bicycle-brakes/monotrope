@@ -84,15 +84,30 @@ def workflow(tmp_path, monkeypatch):
     return root
 
 
-def test_new_change_creates_the_folder_and_a_current_index(workflow) -> None:
-    """Acceptance of cke, first half: the entry scaffolds here."""
+def test_new_change_creates_the_folder_and_a_current_index(workflow, monkeypatch) -> None:
+    """Acceptance of cke, first half: the entry scaffolds here.
+
+    The scaffold's stamp date is pinned: a `date` subclass overriding only
+    `today()` sits on the shared `datetime` module (`new_change.dt`), and the
+    assertion reads the pinned value directly — this module's
+    `from datetime import date` is import-bound and would keep reading the
+    calendar clock after the write.
+    """
+    day = date(2026, 11, 10)
+
+    class PinnedDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return day
+
+    monkeypatch.setattr(new_change.dt, "date", PinnedDate)
     exit_code = new_change.main(["probe", "--bead", OPEN_BEAD])
     assert exit_code == 0
     assert (workflow / "changes" / "probe" / "research.md").is_file()
     assert reg.INDEX.is_file(), "the index was not rendered along"
     # qd7: a new document is born current, or the check behind `frontmatter-current` would report it.
     scaffold = (workflow / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
-    assert f"\nupdated: {date.today().isoformat()}\n" in scaffold.split("\n---\n", 1)[0] + "\n"
+    assert f"\nupdated: {day.isoformat()}\n" in scaffold.split("\n---\n", 1)[0] + "\n"
 
 
 def test_new_change_refuses_a_closed_bead(workflow) -> None:

@@ -1730,9 +1730,44 @@ def updated_of(path: Path) -> object:
     return check_frontmatter_current.read_updated(path.read_text(encoding="utf-8"))
 
 
-def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -> None:
+class PinnedStampDate:
+    """The settable date the stamp tests compare against (bead coding-harness-bxxt.5).
+
+    A test that reads the calendar clock on its own side of a stamp comparison
+    fails again when one verify run crosses local midnight. The pinned tests
+    take their date from this holder instead; `move_to` shifts it between the
+    runner verbs one test drives, and neither compared side touches a clock.
+    """
+
+    def __init__(self, day: dt.date) -> None:
+        self.current = day
+
+    def move_to(self, day: dt.date) -> None:
+        self.current = day
+
+
+def pinned_stamp_date(monkeypatch: pytest.MonkeyPatch, day: dt.date) -> PinnedStampDate:
+    """Pin the runner's stamp reads and the test's comparison onto one settable date.
+
+    A `dt.date` subclass overriding only its `today()` classmethod sits on the
+    shared `datetime` module (`stage2.dt`), the module-attribute precedent of
+    `tests/test_stage2_terms_expiry.py`: the stamp reads in `scripts/stage2.py`
+    and `stage2.today()` resolve it at call time.
+    """
+    pinned = PinnedStampDate(day)
+
+    class PinnedDate(dt.date):
+        @classmethod
+        def today(cls) -> dt.date:
+            return pinned.current
+
+    monkeypatch.setattr(stage2.dt, "date", PinnedDate)
+    return pinned
+
+
+def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Repair round 1, F-7: a findings.md older than today stays one the gate `frontmatter-current` accepts."""
-    today = dt.date.today()
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 8))
     world.findings.write_text(old_header(), encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     world.script(
@@ -1744,18 +1779,60 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
         pi=[{"stdout": rows(1)}],
     )
     assert world.run("spec-review") == 0
-    assert updated_of(world.findings) == today, "the call line left the header stale"
+    assert updated_of(world.findings) == day.current, "the call line left the header stale"
 
-    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    world.findings.write_text(
+        world.text().replace(f"updated: {day.current.isoformat()}", "updated: 2026-09-29", 1),
+        encoding="utf-8",
+    )
+    day.move_to(dt.date(2026, 11, 9))
     assert world.run("review-loop") == 0
-    assert updated_of(world.findings) == today
+    assert updated_of(world.findings) == day.current
     decide_record(world)
 
-    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    world.findings.write_text(
+        world.text().replace(f"updated: {day.current.isoformat()}", "updated: 2026-09-29", 1),
+        encoding="utf-8",
+    )
+    day.move_to(dt.date(2026, 11, 10))
     commit_review_findings(world)
     assert world.run("review") == 0
-    assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
+    assert updated_of(world.findings) == day.current, "the verdict, the release or the marks left the header stale"
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
+
+
+def test_stamp_tests_pin_the_date_they_compare() -> None:
+    """Bead coding-harness-bxxt.5: a stamp test compares against a date it set, never the calendar clock.
+
+    A body that reads the clock on its own side of a stamp comparison fails
+    again when one verify run crosses local midnight — the failure of
+    2026-11-09. The pinned bodies take their date from `pinned_stamp_date`
+    instead; this guard holds that none of them picks the clock back up.
+    """
+    names = [
+        "test_every_write_to_findings_keeps_its_updated_stamp_current",
+        "test_preparation_stamps_only_changed_held_documents",
+        "test_filling_the_marks_keeps_the_updated_stamp_current",
+        "test_runner_detaches_matching_hardlinked_plan_before_stamp",
+        "test_the_release_reconcile_refreshes_the_findings_date",
+        "test_review_accepts_runner_audit_date_stamp",
+        "test_first_implement_refreshes_derived_files_without_a_model_repair",
+        "test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics",
+        "test_new_change_creates_the_folder_and_a_current_index",
+        "checking_derived_make",
+    ]
+    here = Path(__file__).resolve().parent
+    sources = {
+        "tests/test_stage2.py": (here / "test_stage2.py").read_text(encoding="utf-8"),
+        "tests/test_workflow_entry.py": (here / "test_workflow_entry.py").read_text(encoding="utf-8"),
+    }
+    for name in names:
+        homes = [path for path, text in sources.items() if re.search(rf"(?m)^def {re.escape(name)}\(", text)]
+        assert homes, f"{name} sits in no scanned file — rename it here with the test"
+        assert len(homes) == 1, f"{name} sits in more than one scanned file: {homes}"
+        body = re.search(rf"(?ms)^def {re.escape(name)}\(.*?(?=^def |^class )", sources[homes[0]])
+        assert body is not None, f"{name} has no extractable body"
+        assert "date.today(" not in body.group(0), f"{name} reads the calendar clock itself; pin its compared date"
 
 
 # ---------------------------------------------------------------------------
@@ -1903,14 +1980,18 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     assert git(world.root, "status", "--porcelain") == ""
 
 
-def checking_derived_make(world: World) -> None:
-    """A verifier stand-in that refuses stale generated inputs before recording its call."""
-    checks = """
+def checking_derived_make(world: World, day: dt.date) -> None:
+    """A verifier stand-in that refuses stale generated inputs before recording its call.
+
+    The expected stamp date arrives from the calling test: the stand-in is a
+    separate process that cannot read the test's pinned date, so the day is
+    baked in here as a literal.
+    """
+    checks = f"""
 if name == "make":
-    import datetime
     index = Path("plans/INDEX.md").read_text()
     assert "changes/demo/findings.md" in index, "audit artefact missing from index"
-    assert "updated: " + datetime.date.today().isoformat() in Path("plans/changes/demo/plan.md").read_text()
+    assert "updated: {day.isoformat()}" in Path("plans/changes/demo/plan.md").read_text()
 """
     (world.bin / "make").write_text(
         STAND_IN.replace("@PYTHON@", sys.executable).replace("record = {", checks + "\nrecord = {"),
@@ -1918,9 +1999,12 @@ if name == "make":
     )
 
 
-def test_first_implement_refreshes_derived_files_without_a_model_repair(world: World) -> None:
+def test_first_implement_refreshes_derived_files_without_a_model_repair(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     successful_implementation(world)
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     assert world.run("implement") == 0
     assert len(world.calls("claude")) == 1
     assert len(world.calls("make")) == 1
@@ -1928,7 +2012,8 @@ def test_first_implement_refreshes_derived_files_without_a_model_repair(world: W
     assert git(world.root, "status", "--porcelain") == ""
 
 
-def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
+def test_preparation_stamps_only_changed_held_documents(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     clean = world.research.read_bytes()
     unheld = world.root / "src/note.md"
     unheld.write_text(old_header(), encoding="utf-8")
@@ -1947,7 +2032,7 @@ def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
     before_duplicate = duplicate.read_bytes()
     world.script(make=[{"stdout": "green"}])
     stage2.verify_attempt(world.root, world.plan)
-    assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {dt.date.today()}")
+    assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {day.current.isoformat()}")
     assert world.research.read_bytes() == clean
     assert unheld.read_text() == old_header()
     assert duplicate.read_bytes() == before_duplicate
@@ -1955,8 +2040,11 @@ def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
     assert not deleted.exists()
 
 
-def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(world: World) -> None:
-    checking_derived_make(world)
+def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
+    checking_derived_make(world, day.current)
     world.script(
         claude=[
             {
@@ -2000,7 +2088,9 @@ def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) 
     assert world.calls("make") == []
 
 
-def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(world: World) -> None:
+def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """R-19: the runner renders with the committed script, so a renderer broken in the baseline is fatal.
 
     A renderer the model writes during the call is not the one that runs - that half is
@@ -2008,6 +2098,7 @@ def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(w
     commit the run starts from is beyond a model's reach, so the existing attempt limits decide, and
     nothing is checkpointed.
     """
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     script = Path("scripts") / Path(plans_registry.__file__).name
     (world.root / script).write_text("print('renderer broken')\nraise SystemExit(7)\n")
     git(world.root, "commit", "-q", "-am", "broken renderer")
@@ -2017,7 +2108,7 @@ def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(w
         for n in range(1, 4)
     ]
     world.script(claude=[*steps, {"stdout": "must not run"}], make=[{"stdout": "green"}])
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     assert world.run("implement") == 1
     calls = world.calls("claude")
     assert len(calls) == 3
@@ -3430,9 +3521,58 @@ PLAN_CARD = (
     "```\n\n## Time used\n"
 )
 
+DECISIONS_HEADER = "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\n"
+DEMO_CONTEXT = (
+    "context: |\n"
+    "  Topic: The demo change's draft.\n"
+    "  Intention: A record the early statement check can read.\n"
+    "  Today: The decisions file records the demo question and its current answer status.\n"
+    "  Repository change: none.\n"
+    "  Architecture change: none.\n\n"
+)
+ANSWERED_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. — 2026-09-30\n"
+)
+WRAPPED_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. —\n2026-09-30\n"
+)
+REMARK_STATEMENT = (
+    "In the context of a demo draft without decisions, facing the empty file, we decided "
+    "one answered record, to achieve a start the checks admit, accepting the upkeep. "
+    "— 2026-09-30 (recorded on the bead the same day)\n"
+)
+OLD_STATEMENT = ANSWERED_STATEMENT.replace("— 2026-09-30", "— 2020-01-01")
+SKIP_RECORD = "## SKIP · interview\n\nstatus: skipped\nreason: nothing is owed here.\n"
+FENCED_EXAMPLE = (
+    "```markdown\n"
+    "## Q-9 · a documented example\n\n"
+    "asked: 2026-09-30\nanswer: yes\nanswered_by: maintainer\nstatus: answered\n\n"
+    "In the context of an example, facing nothing, we decided nothing.\n"
+    "```\n"
+)
+
+
+def demo_record(
+    qid: str = "Q-1",
+    *,
+    statement: str | None = ANSWERED_STATEMENT,
+    status: str = "answered",
+    answered_by: str = "maintainer",
+) -> str:
+    """One interview record of the demo change; `statement=None` records the answer without a
+    decision statement."""
+    head = (
+        f"## {qid} · the demo question\n\n"
+        f"asked: 2026-09-30\nanswer: yes\nanswered_by: {answered_by}\nstatus: {status}\n\n"
+    )
+    return head + DEMO_CONTEXT + (statement or "") + "\n"
+
 
 def draft_world(world: World) -> None:
-    """A change a draft can start from: no spec, no plan, a decisions.md with its bead, committed.
+    """A change a draft can start from: no spec, no plan, and a committed decisions.md with its
+    bead and one answered record whose statement the early check reads (bead coding-harness-nr6h).
 
     The commit that adds the existing ADR is also where `origin/main` goes, so the merge base a
     `draft_keep` reads holds that ADR and only a second, new one counts as new (spec, criterion 8).
@@ -3440,15 +3580,31 @@ def draft_world(world: World) -> None:
     folder = world.root / "plans" / "changes" / "demo"
     (folder / "spec.md").unlink()
     world.plan.unlink()
-    (folder / "decisions.md").write_text(
-        "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\nQ-1 answered.\n",
-        encoding="utf-8",
-    )
+    (folder / "decisions.md").write_text(DECISIONS_HEADER + "\n" + demo_record(), encoding="utf-8")
     (world.root / "docs" / "adr").mkdir(parents=True)
     (world.root / "docs" / "adr" / "0007-existing-record.md").write_text("# ADR\n\nheld.\n", encoding="utf-8")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "decisions")
     git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+
+def commit_decisions(world: World, body: str, message: str) -> str:
+    """Replace demo's decisions.md with `body`, committed — the statement tests need committed
+    input, or the pre-existing-change refusal would refuse first and pass them for the wrong
+    reason."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(body, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", message)
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def assert_no_dispatch(world: World, capsys: pytest.CaptureFixture[str]) -> str:
+    """A refusal before the first model call: no call, no attempt entry, no audit line."""
+    error = capsys.readouterr().err
+    assert world.calls() == [], "a model call started on refused input"
+    assert not world.findings.exists(), "an attempt entry was written"
+    assert "Stage-2 call" not in error
+    return error
 
 
 def clear_derived_leftovers(world: World) -> None:
@@ -3909,15 +4065,18 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
             seen["command"] = list(command)
             seen["env"] = dict(env)
             seen["timeout"] = kwargs.get("timeout")
+            seen["limit"] = kwargs.get("limit")
             seen["pass_fds"] = kwargs.get("pass_fds", ())
         return real_launch(command, root, env, *rest, **kwargs)
 
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     monkeypatch.setattr(stage2, "launch", launch)
     assert world.run("draft") == 0
     assert order == ["admission", "launch"], "the document check ran outside the machine admission"
     assert seen["admission_command"] == seen["command"] == ["bash", *DOCS_ARGV], "one vector for admission and launch"
-    assert seen["timeout"] == stage2.VERIFY_SECONDS, "the shared step limit was swapped"
+    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
+    assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert seen["pass_fds"] != (), "the document check lost the admission's descriptor"
     assert seen["env"][verify_lock.LOCK_ENV], "the document check lost the inherited admission marker"
     assert seen["env"]["XDG_STATE_HOME"] == str(world.state), "the document check lost the shared state root"
@@ -4141,6 +4300,232 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
     assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
+
+
+@pytest.mark.parametrize(
+    ("body", "identifier", "reason", "bullets", "extra"),
+    [
+        pytest.param(
+            DECISIONS_HEADER + "\n" + demo_record(statement=None),
+            "Q-1",
+            "states no decision statement",
+            1,
+            None,
+            id="absent",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(
+                statement=ANSWERED_STATEMENT
+                + "In the context of a second wording, we decided otherwise, accepting delay. — 2026-09-30\n"
+            ),
+            "Q-1",
+            "states 2 decision statements",
+            1,
+            None,
+            id="duplicate",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(
+                statement=(
+                    "In the context of a demo draft, facing the empty file, we decided one record, "
+                    "to achieve a start, accepting the upkeep. Recorded 2026-09-30.\n"
+                )
+            ),
+            "Q-1",
+            "no `— YYYY-MM-DD` date ends the decision statement",
+            1,
+            None,
+            id="without-the-dash",
+        ),
+        pytest.param(
+            DECISIONS_HEADER + "\n" + demo_record(statement=ANSWERED_STATEMENT.replace("2026-09-30", "2026-13-45")),
+            "Q-1",
+            "names no calendar day",
+            1,
+            None,
+            id="impossible-date",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record(statement=None).rstrip("\n")
+            + "\n```text\n"
+            + ANSWERED_STATEMENT
+            + "```\n\n",
+            "Q-1",
+            "states no decision statement",
+            1,
+            None,
+            id="fence-only",
+        ),
+        pytest.param(
+            DECISIONS_HEADER
+            + "\n"
+            + demo_record("Q-1")
+            + demo_record("Q-1", statement=None)
+            + demo_record("Q-2", answered_by="agent", statement=None),
+            "Q-1",
+            "states no decision statement",
+            2,
+            "Q-2",
+            id="repeated-and-agent",
+        ),
+    ],
+)
+def test_draft_refuses_unreadable_statements_before_dispatch(
+    world: World,
+    body: str,
+    identifier: str,
+    reason: str,
+    bullets: int,
+    extra: str | None,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Criterion 3 (bead coding-harness-nr6h). Planted fault: the draft dispatches on an unreadable
+    # statement, consumes a retry, or refuses without naming the record, the reason and the remedy.
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"credential read on refusal: {name}"))
+    draft_world(world)
+    head = commit_decisions(world, body, "unreadable statement")
+    assert world.run("draft") == 2
+    error = assert_no_dispatch(world, capsys)
+    assert "plans/changes/demo/decisions.md" in error
+    assert "decision statement cannot be read" in error, error
+    assert "complete the interview" in error
+    assert f"{identifier} —" in error and reason in error, error
+    if extra is not None:
+        assert f"{extra} —" in error, error
+    assert error.count("plans/changes/demo/decisions.md: ") == bullets, error
+    # Nothing was rewritten or committed: the interview owns the answers.
+    assert (world.root / "plans/changes/demo/decisions.md").read_text(encoding="utf-8") == body
+    assert git(world.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("read_failure", ["invalid-utf8", "permission-denied"])
+def test_draft_refuses_an_unreadable_decision_file_before_dispatch(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, read_failure: str
+) -> None:
+    # Criterion 4 (bead coding-harness-nr6h). Planted fault: an unreadable or invalidly encoded
+    # decisions.md becomes an empty passing interview, is rewritten, or reaches a model call.
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"credential read on refusal: {name}"))
+    draft_world(world)
+    path = world.root / "plans" / "changes" / "demo" / "decisions.md"
+    raw = (
+        b"---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\nIn the context of caf\xe9. \x97 2026-09-30\n"
+        if read_failure == "invalid-utf8"
+        else (DECISIONS_HEADER + "\n" + demo_record() + "\n").encode("utf-8")
+    )
+    path.write_bytes(raw)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "unreadable decisions")
+    head = git(world.root, "rev-parse", "HEAD")
+    if read_failure == "permission-denied":
+        real_read_text = Path.read_text
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path and candidate.exists():
+                raise PermissionError("decision file permission denied")
+            return real_read_text(candidate, *args, **kwargs)
+
+        # A deterministic OSError on the draft route, even when tests run as root.
+        monkeypatch.setattr(Path, "read_text", read_text)
+    assert world.run("draft") == 2
+    error = assert_no_dispatch(world, capsys)
+    assert "plans/changes/demo/decisions.md" in error and "cannot be read" in error, error
+    assert "complete the interview" in error, error
+    assert path.read_bytes() == raw, "the runner rewrote the unreadable file"
+    assert git(world.root, "rev-parse", "HEAD") == head
+    # The draft route and the helper give one refusal, with the remedy. A missing file refuses the same way.
+    with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview") as refused:
+        stage2.refuse_unreadable_statements(world.root, "demo")
+    assert "plans/changes/demo/decisions.md" in str(refused.value)
+    if read_failure == "permission-denied":
+        assert "decision file permission denied" in str(refused.value)
+    path.unlink()
+    with pytest.raises(stage2.Refused, match=r"cannot be read .*complete the interview"):
+        stage2.refuse_unreadable_statements(world.root, "demo")
+
+
+@pytest.mark.parametrize("change", ["", ".", "..", "../demo", "demo/../demo"])
+def test_statement_precheck_validates_its_own_change_name(world: World, change: str) -> None:
+    draft_world(world)
+    try:
+        stage2.refuse_unreadable_statements(world.root, change)
+    except stage2.Refused as error:
+        assert "single folder name" in str(error), "the helper must reject the name before reading any file"
+    else:
+        pytest.fail("the statement helper accepted an invalid change name")
+
+
+@pytest.mark.parametrize("read_failure", ["permission-denied", "missing"])
+def test_statement_read_failure_keeps_machine_paths_out(
+    world: World, monkeypatch: pytest.MonkeyPatch, read_failure: str
+) -> None:
+    draft_world(world)
+    path = world.root / "plans/changes/demo/decisions.md"
+    if read_failure == "missing":
+        path.unlink()
+        reason = "No such file or directory"
+    else:
+        real_read_text = Path.read_text
+        reason = "Permission denied"
+
+        def read_text(candidate: Path, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError(13, reason, str(path))
+            return real_read_text(candidate, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read_text)
+    with pytest.raises(stage2.Refused) as refused:
+        stage2.refuse_unreadable_statements(world.root, "demo")
+    message = str(refused.value)
+    assert str(world.root) not in message, "a runner refusal must not expose a machine-local path"
+    assert "plans/changes/demo/decisions.md" in message
+    assert reason in message, "the refusal must preserve the read-failure reason"
+    assert "complete the interview" in message
+
+
+def test_draft_statement_precheck_accepts_supported_records(world: World) -> None:
+    # Criterion 5 (bead coding-harness-nr6h). Planted fault: the early check rejects a supported
+    # wrapped statement or closing remark, or demands statements from open, skipped or fenced
+    # example records, or from an answer dated long before any adoption day.
+    body = (
+        DECISIONS_HEADER
+        + "\n"
+        + demo_record("Q-1", statement=WRAPPED_STATEMENT)
+        + demo_record("Q-2", statement=REMARK_STATEMENT)
+        + demo_record("Q-3", statement=OLD_STATEMENT)
+        + demo_record("Q-4", status="open", statement=None)
+        + SKIP_RECORD
+        + "\n"
+        + FENCED_EXAMPLE
+    )
+    draft_world(world)
+    commit_decisions(world, body, "supported records")
+    assert stage2.refuse_unreadable_statements(world.root, "demo") is None
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 1
+
+
+def test_draft_statement_precheck_ignores_other_changes(world: World) -> None:
+    # Criterion 6 (bead coding-harness-nr6h). Planted fault: the early check reads other changes'
+    # decision files, so a malformed live or archived neighbour prevents this first call despite
+    # the selected change's valid input.
+    draft_world(world)
+    for rel in ("plans/changes/other/decisions.md", "plans/changes/archive/old-neighbour/decisions.md"):
+        path = world.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(DECISIONS_HEADER + "\n" + demo_record("Q-1", statement=None), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "broken neighbours")
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 1
 
 
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
@@ -5763,8 +6148,9 @@ def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
     assert world.calls() == []
 
 
-def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None:
+def test_filling_the_marks_keeps_the_updated_stamp_current(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Repair round 2 (F-7 note): `fill_marks` stamps the file by itself, not only through the append before it."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     released = f"{stage2.RELEASE_HEADING} 2026-09-29\n\n" + stage2.render_table(
         stage2.RELEASED_COLUMNS,
         [["L1-1", "MAJOR", "MAINT", "base", "src/app.py:1", "f", "deepseek-v4.1-flash", "taken — t", "no", "—"]],
@@ -5772,7 +6158,7 @@ def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None
     world.findings.write_text(old_header() + "\n" + released + "\n", encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     stage2.fill_marks(world.findings, ["L1-1"], {"L1-1": "agree"})
-    assert updated_of(world.findings) == dt.date.today(), "filling the marks left the header stale"
+    assert updated_of(world.findings) == day.current, "filling the marks left the header stale"
     assert "| taken — t | no | agree |" in world.text()
 
 
@@ -6116,20 +6502,29 @@ def test_an_attempt_that_overwrites_ruff_fails_before_verify(world: World) -> No
     assert world.calls("make") == [], "a tampered tool must stop the attempt before `make verify`"
 
 
+def test_verify_step_limit_is_45_minutes() -> None:
+    """Criterion 1 of the verification limit: the unpatched shared step default is 45 minutes."""
+    assert stage2.VERIFY_SECONDS == 45 * 60
+
+
 def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
     """R-20: the runner's own steps are bounded, and the abort names the limit."""
-    with pytest.raises(stage2.CallFailed, match="after 30 minutes"):
+    minutes = stage2.VERIFY_SECONDS // 60
+    with pytest.raises(stage2.CallFailed, match=f"after {minutes} minutes"):
         stage2.launch(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             tmp_path,
             {**os.environ},
             timeout=0.2,
-            limit="the runner's step limit after 30 minutes",
+            limit=f"the runner's step limit after {minutes} minutes",
         )
 
 
-def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World, tmp_path: Path) -> None:
+def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """O188-1, R-19 at the call site: the attempt's renderer writes a marker, and the marker stays absent."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     marker = tmp_path / "renderer-ran"
     script = Path("scripts") / Path(plans_registry.__file__).name
     world.script(
@@ -6142,7 +6537,7 @@ def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World
         ],
         make=[{"stdout": "green\n"}],
     )
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     code = world.run("implement")
     assert not marker.exists(), "the attempt's own renderer ran"
     assert code == 0, "the committed renderer should have made the attempt green"
@@ -6162,7 +6557,7 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     world.script(make=[{"stdout": "green\n"}])
     with world.plan.open("a", encoding="utf-8") as handle:
         handle.write("2026-10-07 10:00–10:05, 5 min\n")
-    seen: list[tuple[str, float | None]] = []
+    seen: list[tuple[str, float | None, str | None]] = []
     original = stage2.launch
 
     def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
@@ -6170,29 +6565,31 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
         # gate script's file name as mutation evidence, and this test seeds no
         # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
         name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
-        seen.append((name, timeout))
+        seen.append((name, timeout, limit))
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     monkeypatch.setattr(stage2, "launch", record)
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
-    assert ("renderer", stage2.TOOL_SECONDS) in seen
-    assert ("ruff", stage2.TOOL_SECONDS) in seen
-    assert ("make", stage2.VERIFY_SECONDS) in seen
-    assert all(timeout is not None for _, timeout in seen), seen
+    assert ("renderer", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+    assert ("ruff", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+    assert ("make", 7 * 60, "the runner's step limit after 7 minutes") in seen
+    assert all(timeout is not None for _, timeout, _ in seen), seen
 
 
 def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
+    minutes = stage2.VERIFY_SECONDS // 60
     original = stage2.launch
 
     def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
         if command == ["make", "verify"]:
-            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+            raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", hang)
     problems = stage2.verify_attempt(world.root, world.plan)
-    assert len(problems) == 1 and "did not finish" in problems[0] and "30 minutes" in problems[0]
+    assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
 def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
@@ -11981,8 +12378,11 @@ def test_runner_early_refusal_recovers_time_destination_safely(
 
 
 @pytest.mark.parametrize("retry", [False, True])
-def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp_path: Path, retry: bool) -> None:
+def test_runner_detaches_matching_hardlinked_plan_before_stamp(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, retry: bool
+) -> None:
     """F-5: matching recovery bytes must not leave a hard link attached for the date stamp."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     prior = "---\nupdated: 2000-01-01\n---\n\n# Plan\n\n## Time used\n\n"
     old_entry = "previous trusted span · measured by the runner"
     prior = stage2.with_time_entry(prior, old_entry)
@@ -12008,7 +12408,7 @@ def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp
     assert target.read_bytes() == content
     assert world.plan.stat().st_nlink == 1
     assert not world.plan.samefile(target)
-    assert f"updated: {dt.date.today().isoformat()}" in world.plan.read_text(encoding="utf-8")
+    assert f"updated: {day.current.isoformat()}" in world.plan.read_text(encoding="utf-8")
     assert runner_entries(world.plan) == [old_entry, entry]
     if retry:
         assert inputs[world.plan] == content
@@ -17113,8 +17513,12 @@ def section(text: str, title: str) -> str:
 
 def routing_rows(text: str) -> dict[str, tuple[str, str]]:
     """Phase cell -> (model, why) for every routing row `| 2a Spec review | **model** | why |`."""
-    pattern = r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| \*\*([^*]+)\*\* \| (.*) \|$"
-    return {m[1]: (m[2], m[3]) for m in re.finditer(pattern, text, re.M)}
+    pattern = r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| ([^|]+) \| (.*) \|$"
+    return {
+        m[1]: (m[2].strip("*"), m[3])
+        for m in re.finditer(pattern, text, re.M)
+        if m[1] == "4b Triage" or (m[2].startswith("**") and m[2].endswith("**"))
+    }
 
 
 STAGE2_ROUTING = {
@@ -17125,6 +17529,7 @@ STAGE2_ROUTING = {
     "3 Plan": "gpt-6.1-sol",
     "4 Implement": "GLM 5.3 Flash",
     "4b Review loop": "the swarms, then the ladder",
+    "4b Triage": "none (a local command)",
     "6 Review": "gpt-6.1-sol",
 }
 
@@ -17314,7 +17719,7 @@ SOL_EFFORT_PLACES = (
 
 
 def routing_problems(workflow: str) -> list[str]:
-    """What the routing rows of the doctrine get wrong: section 4's eight rows and section 3's two."""
+    """What the routing rows of the doctrine get wrong: section 4's routing rows and section 3's two."""
     found = []
     stage2_rows = routing_rows(section(workflow, "## 4 · "))
     for phase, model in STAGE2_ROUTING.items():
@@ -17323,6 +17728,8 @@ def routing_problems(workflow: str) -> list[str]:
             found.append(f"section 4 has no routing row {phase}")
         elif row[0] != model:
             found.append(f"section 4 routes {phase} to {row[0]}, not {model}")
+        elif phase == "4b Triage":
+            continue  # local command: no model or effort
         elif phase == "2a Spec review":
             if "effort `xhigh`" not in row[1]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
@@ -17358,6 +17765,7 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
         ("| 4b Review loop | **the swarms, then the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 4b Triage | none (a local command) |", "| 4b Triage | misspelled-model |"),
         (
             f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
             f"| 2 Spec | **Opus 5.5** | effort {effort_reference('draft')}, one call",
@@ -17395,8 +17803,10 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
         (fragment.replace(effort_reference(verb), f"`{stage2.CODEX_EFFORTS[verb]}`"), "an independent literal stands"),
     ):
         doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
-        assert fragment in doc_text, (doc, fragment)
-        assert sol_effort_problems(*sol_texts(doc, doc_text.replace(fragment, planted, 1))), (doc, why)
+        pattern = r"\s+".join(re.escape(word) for word in fragment.split())
+        assert re.search(pattern, doc_text), (doc, fragment)
+        changed = re.sub(pattern, lambda _, replacement=planted: replacement, doc_text, count=1)
+        assert sol_effort_problems(*sol_texts(doc, changed)), (doc, why)
 
 
 def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
@@ -18422,8 +18832,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Eleven verbs exist" in four or "Twelve verbs exist" not in four:
-        found.append("section 4 does not say twelve verbs")
+    if "Eleven verbs exist" in four or "Thirteen verbs exist" not in four:
+        found.append("section 4 does not say thirteen verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
@@ -18450,7 +18860,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Twelve verbs exist", "Eleven verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Thirteen verbs exist", "Eleven verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — Codex, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -21364,6 +21774,7 @@ def test_the_loop_refuses_a_record_still_present_after_release(
 
 def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """L7-2: replacing a released block stamps findings.md just like appending one."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
     world.write_findings(VERDICT)
     crash_the_release_after_the_append(world, monkeypatch)
@@ -21372,7 +21783,7 @@ def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeyp
         world.record().read_text(encoding="utf-8").replace("taken — test_a", FIXED), encoding="utf-8"
     )
     assert world.run("release-loop") == 0
-    assert f"updated: {stage2.dt.date.today().isoformat()}\n" in world.text()
+    assert f"updated: {day.current.isoformat()}\n" in world.text()
     assert FIXED in world.text()
     assert world.text().count(stage2.RELEASE_HEADING) == 1
     assert not world.record().exists()
@@ -21480,6 +21891,629 @@ def test_marking_a_vanished_record_names_the_ids(world: World) -> None:
     assert "record is gone" in str(raised.value)
     assert "findings.md already carries the fixed status" in str(raised.value)
     assert "mark them by hand" not in str(raised.value)
+
+
+# ---------------------------------------------------------------------------
+# triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def triage_tracked_paths(world: World) -> None:
+    """Real index entries distinguish repository locations from reviewer prose and URLs."""
+    names = ("tests/test_stage2.py", "tests/helper.py", "README.md", "Makefile", "LICENSE", ".gitignore")
+    for name in names:
+        path = world.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n", encoding="utf-8")
+    git(world.root, "add", "--", *names)
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("decision", stage2.TRIAGE_STATUSES)
+@pytest.mark.parametrize(
+    "token",
+    [
+        "README.md.bak",
+        "README.md_",
+        "tests/test_stage2.py.bak",
+        "src/untracked.py",
+        "unknown.md",
+        "tests/test_stage2.py::test_x",
+        "tests/test_stage2.py#arbitrary-anchor",
+        "tests/test_stage2.py:12#anchor",
+        "./README.md",
+        "{root}/README.md",
+    ],
+)
+def test_triage_refuses_unrecognised_path_spellings_without_prefix_matching(
+    world: World, token: str, decision: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P6-8: only exact tracked paths with the enumerated suffixes are locations."""
+    token = token.replace("{root}", str(world.root))
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {token}")])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "the orchestrator decided") == 2, (
+        "an unrecognised path-like token must refuse every decision, never resolve a tracked prefix"
+    )
+    diagnostic = capsys.readouterr().err
+    assert token in diagnostic and "correct" in diagnostic
+    assert "taken — not a test — <reason>" in diagnostic
+    assert world.record().read_bytes() == before
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("location", ["Makefile:12", "LICENSE", ".gitignore:2", "[build](Makefile#L12)"])
+def test_triage_matches_extensionless_root_locations_against_tracked_files(world: World, location: str) -> None:
+    """A tracked root file must keep a mixed finding eligible for an ordinary repair."""
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0, (
+        "tracked root files, including extensionless names, must count as production locations"
+    )
+    assert stage2.record_rows(world.record().read_text())[0][7] == "taken — repair both files"
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("location", ["[reference](https://example.com/reference)", "https://example.com/src/app.py"])
+def test_triage_ignores_locations_absent_from_the_tracked_file_list(
+    world: World, location: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """External URLs do not turn a test-only finding into mixed repository work."""
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2
+    assert "taken — not a test — <reason>" in capsys.readouterr().err
+    assert world.record().read_bytes() == before
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+@pytest.mark.parametrize("suffix", ["", ":12", ":12-14", ":12–14", "#L12", "#L12-L14", "#L12–L14"])
+@pytest.mark.parametrize("layout", ["bare", "markdown", "quoted"])
+def test_triage_classifies_tracked_path_prefixes_independently_of_location_suffixes(
+    world: World, suffix: str, layout: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Allowed suffixes preserve exact test and production paths, even with a shorter tracked name."""
+    shorter_path = world.root / "tests/test_stage2"
+    shorter_path.write_text("another tracked file\n", encoding="utf-8")
+    git(world.root, "add", "--", "tests/test_stage2")
+    path = "tests/test_stage2.py"
+    location = f"{path}{suffix}"
+    if layout == "markdown":
+        location = f"[test location]({location})"
+    elif layout == "quoted":
+        location = f"`{location}`"
+    assert stage2.where_locations(location, world.root) == [path]
+    triage_record(world, [triage_row(where=location)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "strengthen the test") == 2
+    assert "taken — not a test — <reason>" in capsys.readouterr().err
+    assert world.record().read_bytes() == before
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "strengthen the test") == 0
+    triage_record(world, [triage_row(where=f"{location} and src/app.py{suffix}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both files") == 0
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["closing", "opening", "both", "header", "header-opening", "separator", "separator-opening", "non-loop-row"],
+)
+def test_triage_refuses_malformed_table_rows_before_publishing(
+    world: World, damage: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No damaged runner-owned table line may be silently skipped during strict validation."""
+    triage_record(world, [triage_row(), triage_row("L1-2", status="taken — previous", broke="yes")])
+    original = world.record().read_text(encoding="utf-8")
+    row = next(line for line in original.splitlines() if line.startswith("| L1-2 |"))
+    if damage in {"header", "header-opening"}:
+        row = next(line for line in original.splitlines() if line.startswith("| ID |"))
+    elif damage in {"separator", "separator-opening"}:
+        row = next(line for line in original.splitlines() if line.startswith("|---"))
+    if damage == "non-loop-row":
+        damaged = "| unexpected | malformed |"
+    elif damage in {"opening", "header-opening", "separator-opening"}:
+        damaged = row[1:]
+    elif damage == "both":
+        damaged = row[1:-1]
+    else:
+        damaged = row[:-1]
+    world.record().write_text(original.replace(row, damaged), encoding="utf-8")
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "repair the target") == 2, (
+        "every malformed table row must refuse before publishing the target update"
+    )
+    assert "loop row" in capsys.readouterr().err
+    assert world.record().read_bytes() == before, "a malformed record must remain byte-for-byte unchanged"
+
+
+def triage_record(w: World, rows_: list[list[str]]) -> None:
+    """A loop record of one round whose rows carry the Where locations and statuses triage reads."""
+    directory = w.record().parent
+    directory.mkdir(parents=True, exist_ok=True)
+    snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(loop_state(), sort_keys=True)}"
+    w.record().write_text(
+        f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
+        f"## Round 1 — deepseek-v4.1-flash, 2026-09-30\n\n"
+        f"{stage2.render_table(stage2.ROW_COLUMNS, rows_)}\n",
+        encoding="utf-8",
+    )
+
+
+def triage_row(
+    ident: str = "L1-1", where: str = "src/app.py:1", status: str = "", broke: str = "", finding: str = ""
+) -> list[str]:
+    """One nine-cell loop row; the Status and `Broke a test` cells default to undecided and empty."""
+    return [
+        ident,
+        "MAJOR",
+        "MAINT",
+        "impl",
+        where,
+        (finding or f"finding of {ident}").strip(),
+        "deepseek-v4.1-flash",
+        status,
+        broke,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("decision", "where"),
+    [
+        ("taken", "src/app.py:1"),
+        ("rejected", "src/app.py:1"),
+        ("taken — not a test", "tests/test_stage2.py:12"),
+        ("taken — guard test", "tests/test_stage2.py:12"),
+    ],
+)
+@pytest.mark.usefixtures("triage_tracked_paths")
+def test_triage_records_each_supported_decision_in_the_worktree_record(
+    world: World, tmp_path: Path, decision: str, where: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Planted fault: no verb, a valid form refused, or a sibling worktree's record written."""
+    triage_record(world, [triage_row(where=where)])
+    sibling = stage2.record_dir("demo", tmp_path / "sibling-repo") / "loop.md"
+    sibling.parent.mkdir(parents=True, exist_ok=True)
+    sibling_rows = [triage_row(finding="the sibling worktree's own row")]
+    sibling.write_text(
+        f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}\n\n"
+        + stage2.render_table(stage2.ROW_COLUMNS, sibling_rows)
+        + "\n",
+        encoding="utf-8",
+    )
+    sibling_before = sibling.read_bytes()
+    reason = "the orchestrator decided this row"
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", reason) == 0
+    out = capsys.readouterr().out
+    assert "L1-1" in out and decision in out
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == f"{decision} — {reason}", "the decision was not recorded as given"
+    assert rows[0][4] == where and rows[0][8] == "", "another cell of the row changed"
+    assert sibling.read_bytes() == sibling_before, "a sibling worktree's record was written"
+
+
+@pytest.mark.parametrize("layout", ["inserted", "reordered", "trailing"])
+def test_triage_splices_status_using_the_declared_columns(
+    world: World, monkeypatch: pytest.MonkeyPatch, layout: str
+) -> None:
+    """A changed schema must not redirect the Status splice into a neighbouring cell."""
+    values = dict(zip(stage2.ROW_COLUMNS, triage_row(status="open", broke="no"), strict=True))
+    columns = list(stage2.ROW_COLUMNS)
+    if layout == "inserted":
+        columns.insert(columns.index("Status"), "Context")
+        values["Context"] = "preserve this context"
+    elif layout == "reordered":
+        columns[7], columns[8] = columns[8], columns[7]
+    else:
+        columns.append("Context")
+        values["Context"] = "preserve this trailing cell"
+    monkeypatch.setattr(stage2, "ROW_COLUMNS", columns)
+    triage_record(world, [[values[column] for column in columns]])
+    before = world.record().read_text(encoding="utf-8")
+    stage2._write_triage_row("demo", "L1-1", "rejected — reason", before, world.root)
+    after = world.record().read_text(encoding="utf-8")
+    assert after == before.replace("| open |", "| rejected — reason |"), (
+        "the Status splice must follow ROW_COLUMNS and preserve every other cell"
+    )
+
+
+@pytest.mark.parametrize("status", ["open", "taken — old reason", "rejected — old reason"])
+@pytest.mark.parametrize("mark", ["yes", "no", "YES — demonstrated", "no — no regression needed"])
+@pytest.mark.parametrize("decision", ["taken", "rejected", "taken — not a test", "taken — guard test"])
+def test_triage_refuses_to_redecide_a_row_with_a_proof_mark(
+    world: World, capsys: pytest.CaptureFixture[str], status: str, mark: str, decision: str
+) -> None:
+    """A new decision must not inherit the proof mark of an earlier decision."""
+    triage_record(world, [triage_row(status=status, broke=mark)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "a new decision") == 2, (
+        "triage must refuse to re-decide a row carrying a proof mark"
+    )
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "Status" in error and "Broke a test" in error
+    assert status in error and mark in error, "the refusal must name the existing decision/proof pair"
+    assert world.record().read_bytes() == before, "a refusal must preserve the entire record"
+
+
+@pytest.mark.parametrize("layout", ["canonical", "padded"])
+@pytest.mark.parametrize("final_newline", [True, False])
+def test_triage_changes_only_the_target_status_and_escapes_pipes_once(
+    world: World, monkeypatch: pytest.MonkeyPatch, layout: str, final_newline: bool
+) -> None:
+    """Criterion 2. Planted fault: the reason's pipes reach the record raw, and `Broke a test` leaves its column."""
+    cells = "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding of L1-1 | deepseek-v4.1-flash"
+    canonical = f"{cells} |  |  |"
+    escaped = r"a \| b"
+    if layout == "padded":
+        prefix = "  |L1-1   | MAJOR| MAINT    |impl | src/app.py:1| finding of L1-1   |deepseek-v4.1-flash|"
+        undecided = prefix + "    |    |  "
+        decided = prefix + f" taken — {escaped} |    |  "
+    else:
+        undecided = canonical
+        decided = f"{cells} | taken — {escaped} |  |"
+
+    def seeded() -> None:
+        triage_record(
+            world,
+            [triage_row("L1-1"), triage_row("L1-2", where="src/db.py:9", status="rejected — out of scope", broke="no")],
+        )
+
+    seeded()
+    original = world.record().read_text(encoding="utf-8")
+    original = original.replace(canonical, undecided)
+    if not final_newline:
+        original = original.removesuffix("\n")
+    world.record().write_text(original, encoding="utf-8")
+    before = world.record().read_text(encoding="utf-8")
+    assert undecided in before, "the expectation names no undecided row line"
+    assert world.run("triage", "demo", "L1-1=taken", "a | b") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert text == before.replace(undecided, decided), "another byte than the target's Status cell changed"
+    rows = stage2.record_rows(text)
+    assert rows[0][7] == f"taken — {escaped}" and rows[0][8] == ""
+    physical = next(line for line in text.splitlines() if (stage2.split_row(line) or [""])[0] == "L1-1")
+    assert len(stage2.split_row(physical)) == len(stage2.ROW_COLUMNS), "`Broke a test` moved out of its column"
+    assert stage2.triage_status("rejected", escaped) == f"rejected — {escaped}", "an escaped reason was escaped twice"
+    # the counterpart: a status without the runner's escaping damages the record, and the reader refuses it
+    seeded()
+    monkeypatch.setattr(stage2, "triage_status", lambda decision, why: f"{decision} — {why}")
+    assert world.run("triage", "demo", "L1-1=taken", "a | b") == 0
+    with pytest.raises(stage2.Refused):
+        stage2.record_rows(world.record().read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("where", "decision", "code"),
+    [
+        ("tests/test_stage2.py:12", "taken", 2),
+        ("[test location](tests/test_stage2.py:12)", "taken", 2),
+        ("`[test location](tests/test_stage2.py:12)`", "taken", 2),
+        ("tests/test_stage2.py:12", "taken", 2),
+        ("[test location](tests/test_stage2.py#L12)", "taken", 2),
+        ("[test](tests/helper.py) and [production](src/app.py)", "taken", 0),
+        ("src/app.py:12 and tests/helper.py", "taken", 0),
+        ("tests/test_stage2.py:12", "taken — not a test", 0),
+        ("tests/test_stage2.py:12", "taken — guard test", 0),
+        ("tests/helper.py and src/app.py", "taken", 0),
+        ("the test helpers mislead the reader", "taken", 0),
+        ("src/app.py:12", "taken", 0),
+    ],
+)
+@pytest.mark.usefixtures("triage_tracked_paths")
+def test_triage_refuses_plain_taken_for_test_only_locations_with_a_correction(
+    world: World, where: str, decision: str, code: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3 (decisions.md#Q-1). Planted fault: the ordinary status written with a warning, or the explicit form refused."""
+    where = where.replace("{root}", str(world.root))
+    triage_record(world, [triage_row(where=where)])
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    assert world.run("triage", "demo", f"L1-1={decision}", "the orchestrator decided this row") == code
+    err = capsys.readouterr().err
+    if code == 2:
+        assert "refused:" in err and "taken — not a test —" in err, err
+        assert world.record().read_bytes() == before, "the refusal wrote the record"
+    else:
+        assert "refused:" not in err
+        rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+        assert rows[0][7].startswith(decision), "an explicitly supplied form was refused for the location"
+
+
+@pytest.mark.parametrize(
+    ("fault", "operand", "reason"),
+    [
+        ("no-equals", "L1-1taken", "r"),
+        ("no-loop-id", "R2-2=taken", "r"),
+        ("unsupported-status", "L1-1=decided", "r"),
+        ("empty-reason", "L1-1=taken", "   "),
+        *[
+            ("multiline-reason", "L1-1=taken", f"line one{separator}line two")
+            for separator in ("\n", "\r", "\r\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")
+        ],
+        ("unknown-row", "L1-9=taken", "r"),
+        ("duplicate-row", "L1-1=taken", "r"),
+        ("fixed-row", "L1-1=taken", "r"),
+        ("short-row", "L1-1=taken", "r"),
+        ("moved-mark", "L1-1=taken", "r"),
+        ("pipe-in-where", "L1-1=taken", "r"),
+        ("pipe-in-finding", "L1-1=taken", "r"),
+        ("typed-status-pipe", "L1-1=taken", "r"),
+        ("wide-undecided", "L1-1=taken", "r"),
+        ("damaged-other-row", "L1-1=taken", "r"),
+        ("unreadable-record", "L1-1=taken", "r"),
+        ("no-record", "L1-1=taken", "r"),
+    ],
+)
+def test_triage_invalid_requests_leave_the_record_unchanged(
+    world: World, fault: str, operand: str, reason: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a partial mutation, a created record, or a silent success."""
+    directory = world.record().parent
+    if fault == "duplicate-row":
+        triage_record(world, [triage_row("L1-1"), triage_row("L1-1", where="src/other.py:2")])
+    elif fault == "fixed-row":
+        triage_record(world, [triage_row(status="fixed — tests/test_stage2.py::test_fixes_it", broke="yes")])
+    elif fault in {
+        "short-row",
+        "moved-mark",
+        "pipe-in-where",
+        "pipe-in-finding",
+        "typed-status-pipe",
+        "wide-undecided",
+        "damaged-other-row",
+    }:
+        directory.mkdir(parents=True, exist_ok=True)
+        body = {
+            "pipe-in-where": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | extra | finding | reviewer | taken — x | yes |",
+            "pipe-in-finding": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | extra | reviewer | taken — x | yes |",
+            "typed-status-pipe": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — old | reason | no |",
+            "wide-undecided": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | old | reason |  |",
+            "damaged-other-row": (
+                "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |  |\n"
+                "| L1-2 | MAJOR | MAINT | impl | src/app.py:1 | finding | extra | reviewer | taken — x | yes |"
+            ),
+            "short-row": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer |  |",
+            "moved-mark": "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | finding | reviewer | taken — x | yes | extra |",
+        }[fault]
+        world.record().write_text(
+            f"{stage2.RECORD_HEADING}demo\n\n{stage2.RECORD_INTRO}\n\n"
+            f"## Round 1 — deepseek-v4.1-flash, 2026-09-30\n\n{body}\n",
+            encoding="utf-8",
+        )
+    elif fault == "unreadable-record":
+        directory.mkdir(parents=True, exist_ok=True)
+        world.record().write_bytes(b"\xff\xfe not utf-8")
+    elif fault != "no-record":
+        triage_record(world, [triage_row()])
+    before = world.record().read_bytes() if world.record().exists() else None
+    capsys.readouterr()
+    assert world.run("triage", "demo", operand, reason) == 2, f"{fault} did not refuse"
+    err = capsys.readouterr().err
+    assert "refused:" in err, err
+    if fault in {"pipe-in-where", "pipe-in-finding", "typed-status-pipe", "wide-undecided", "damaged-other-row"}:
+        assert "cells" in err and "loop row" in err, err
+    if before is None:
+        assert not world.record().exists(), "a missing record was created"
+        assert not directory.exists(), "a missing record's directory was created"
+    else:
+        assert world.record().read_bytes() == before, f"{fault} changed the record"
+
+
+def test_triage_holds_the_record_lock_and_replaces_atomically(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5. Planted fault: triage edits without the lock, or a failed replacement loses the prior record."""
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+    # while another runner holds the record, triage refuses and writes nothing
+    capsys.readouterr()
+    with stage2.holding_record("demo", world.root):
+        assert holds_record_lock(world, "demo")
+        assert world.run("triage", "demo", "L1-1=taken", "r") == 2
+        err = capsys.readouterr().err
+    assert "another run holds the loop record" in err, err
+    assert world.record().read_bytes() == before, "the held-lock refusal wrote the record"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after the refusal"
+    # the lock spans the record's read and its replacement
+    real = {name: getattr(stage2, name) for name in ("read_record", "replace_record")}
+    seen: list[str] = []
+
+    def observe(where: str) -> None:
+        assert holds_record_lock(world, "demo"), f"the record lock was free at {where}"
+        seen.append(where)
+
+    def read_record(change: str, root: Path) -> str | None:
+        observe("the record read")
+        return real["read_record"](change, root)
+
+    def replace_record(path: Path, text: str) -> None:
+        observe("the replacement")
+        real["replace_record"](path, text)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(stage2, "read_record", read_record)
+        patch.setattr(stage2, "replace_record", replace_record)
+        assert world.run("triage", "demo", "L1-1=taken", "the orchestrator decided this row") == 0
+        assert seen == ["the record read", "the replacement"], seen
+        assert not holds_record_lock(world, "demo"), "the lock stayed held after the command"
+    # an injected replacement failure reports exit 1 and keeps the prior record whole, no temp file left
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+
+    def failing(_path: Path, _text: str) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(stage2, "replace_record", failing)
+    capsys.readouterr()
+    assert world.run("triage", "demo", "L1-1=taken", "r") == 1
+    err = capsys.readouterr().err
+    assert "failed:" in err and "disk full" in err, err
+    assert world.record().read_bytes() == before, "a failed write changed the record"
+    assert sorted(path.name for path in world.record().parent.iterdir()) == ["loop.md"], "a temporary file stayed"
+
+
+def test_triage_is_local_and_does_not_write_proof_or_repository_state(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 6. Planted fault: triage demands a credential or a clean tree, or starts a call or an append."""
+    triage_record(world, [triage_row("L1-1"), triage_row("L1-2", where="tests/test_stage2.py:14")])
+    (world.root / "model-endpoints.yaml").unlink()
+    (world.root / "src" / "untracked.patch").write_text("a dirty tree\n", encoding="utf-8")
+
+    def no_call(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("triage started a model call, a call line or a findings append")
+
+    for name in ("begin_call", "run_codex", "append"):
+        monkeypatch.setattr(stage2, name, no_call)
+    tree = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
+    assert world.run("triage", "demo", "L1-1=taken — not a test", "no test can show it") == 0
+    after = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
+    assert after == tree, "triage changed a repository file"
+    assert not world.findings.exists(), "triage wrote findings.md"
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == "taken — not a test — no test can show it"
+    assert rows[0][8] == "", "triage filled the proof mark"
+    assert rows[1][7] == "", "triage decided a row the orchestrator did not name"
+
+
+@pytest.mark.parametrize(
+    ("decision", "where"),
+    [
+        ("taken", "src/app.py:1"),
+        ("taken — not a test", "tests/test_stage2.py:12"),
+        ("taken — guard test", "tests/test_stage2.py:12"),
+        ("rejected", "src/app.py:1"),
+    ],
+)
+@pytest.mark.usefixtures("triage_tracked_paths")
+def test_triage_preserves_guard_authority_and_existing_loop_rules(world: World, decision: str, where: str) -> None:
+    """Criterion 7. Planted fault: the status rewritten, plain guard authority, or a taken row counted as clean."""
+    triage_record(world, [triage_row(where=where)])
+    reason = "the orchestrator decided this row"
+    assert world.run("triage", "demo", f"L1-1={decision}", reason) == 0
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    status = rows[0][7]
+    assert status == f"{decision} — {reason}", "triage rewrote the decision's status"
+    assert stage2.guard_authorised(status) is (decision == "taken — guard test")
+    assert stage2.accepted_row(rows[0]) is decision.startswith("taken")
+    assert rows[0][8] == "", "triage wrote the proof mark"
+    if decision == "rejected":
+        assert stage2.clean_round(rows, 1), "a rejected row does not clean its round"
+        assert stage2.undecided(rows) == []
+    else:
+        assert stage2.undecided(rows) == ["L1-1"], "a taken row without its mark counts as decided"
+        assert not stage2.clean_round(rows, 1), "a taken row counted as a clean round"
+        refusal = stage2.undecided_refusal(rows, "the loop cannot go on")
+        assert refusal is not None and "L1-1" in refusal
+
+
+@pytest.mark.parametrize("reason", ["guard test — exercise the failure", "`ignored`guard test — exercise the failure"])
+def test_triage_refuses_guard_authority_in_an_ordinary_reason(world: World, reason: str) -> None:
+    """An ordinary decision must not acquire guard authority from its reason."""
+    triage_record(world, [triage_row()])
+    before = world.record().read_bytes()
+    assert world.run("triage", "demo", "L1-1=taken", reason) == 2, (
+        "triage must refuse implicit guard authority supplied through an ordinary reason"
+    )
+    assert world.record().read_bytes() == before
+
+
+@pytest.mark.parametrize("location", ["README.md", "README.md:12", "`README.md`", "[readme](README.md)"])
+@pytest.mark.usefixtures("triage_tracked_paths")
+def test_triage_accepts_mixed_test_and_root_file_locations(world: World, location: str) -> None:
+    """Root file locations count as production locations without opening them."""
+    triage_record(world, [triage_row(where=f"tests/test_stage2.py and {location}")])
+    assert world.run("triage", "demo", "L1-1=taken", "repair both locations") == 0, (
+        "a mixture of tests and a repository-root file must allow ordinary taken"
+    )
+    rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert rows[0][7] == "taken — repair both locations"
+
+
+@pytest.mark.parametrize("ending", [b"\r\n", b"\r"])
+@pytest.mark.parametrize("final_newline", [True, False])
+def test_triage_preserves_original_record_line_endings(world: World, ending: bytes, final_newline: bool) -> None:
+    """Changing one Status cell preserves every original newline byte."""
+    triage_record(world, [triage_row(), triage_row("L1-2")])
+    before = world.record().read_bytes().replace(b"\n", ending)
+    if not final_newline:
+        before = before.removesuffix(ending)
+    world.record().write_bytes(before)
+    old = b"| deepseek-v4.1-flash |  |  |"
+    new = "| deepseek-v4.1-flash | taken — repair the failure |  |".encode()
+    assert old in before
+    assert world.run("triage", "demo", "L1-1=taken", "repair the failure") == 0
+    assert world.record().read_bytes() == before.replace(old, new, 1), (
+        "triage must preserve original line endings and the final newline while replacing only the target Status"
+    )
+
+
+def test_triage_refuses_a_quoted_guard_reason(world: World) -> None:
+    """Criterion 7. A guard status whose reason is only quoted opens no planted run, so triage refuses it."""
+    triage_record(world, [triage_row(where="tests/test_stage2.py:12")])
+    before = world.record().read_bytes()
+    assert world.run("triage", "demo", "L1-1=taken — guard test", '"the planted fault"') == 2
+    assert world.record().read_bytes() == before
+    assert not holds_record_lock(world, "demo")
+
+
+def triage_instruction_problems(text: str) -> list[str]:
+    """What makes the doctrine's triage instruction unusable: no command, no refusal, no mark boundary, no locality."""
+    flat_text = flat(text)
+    found = []
+    if "python3 scripts/stage2.py triage <change>" not in flat_text:
+        found.append("the doctrine names no triage command")
+    if "taken — not a test — <reason>" not in flat_text:
+        found.append("the doctrine omits the test-only refusal's corrective form")
+    if "no model" not in flat_text:
+        found.append("the doctrine does not say triage calls no model")
+    if "`Broke a test`" not in flat_text:
+        found.append("the doctrine omits the proof mark's owner")
+    return found
+
+
+@pytest.mark.usefixtures("triage_tracked_paths")
+def test_triage_help_and_instructions_match_the_cli_and_proof_ownership(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 8. Planted fault: the documented example fails the parser, or the instructions omit refusal and marks."""
+    example = re.search(r"stage2\.py triage\s+<change> '(?P<row>[^']+)' '(?P<reason>[^']+)'", stage2.__doc__ or "")
+    assert example, "the runner help shows no triage example"
+    assert example.group("row").startswith("L1-1=")
+    triage_record(world, [triage_row(where="tests/test_stage2.py:12")])
+    capsys.readouterr()
+    example_code = world.run("triage", "demo", example.group("row"), example.group("reason"))
+    assert example_code == 0, "the documented example fails the parser"
+    assert stage2.record_rows(world.record().read_text(encoding="utf-8"))[0][7].startswith("taken — not a test")
+    with pytest.raises(SystemExit):
+        stage2.main(["--help"])
+    usage = capsys.readouterr().out
+    assert "triage" in usage and "ROW=STATUS" in usage and "REASON" in usage, usage
+    argument_help = usage.split("positional arguments:", 1)[1].split("options:", 1)[0]
+    for text in (stage2.__doc__ or "", argument_help):
+        for phrase in (
+            "refuses ordinary taken for test-only locations",
+            "taken — not a test — <reason>",
+            "Broke a test proof mark stays the runner's",
+            "triage supplies no repair evidence",
+        ):
+            assert phrase in flat(text), f"the command help omits: {phrase}"
+    for path in (WORKFLOW, PROMPTS / "04b-review-loop.md"):
+        text = path.read_text(encoding="utf-8")
+        assert triage_instruction_problems(text) == [], str(path)
+        for phrase in (
+            "python3 scripts/stage2.py triage <change>",
+            "taken — not a test — <reason>",
+            "no model",
+            "`Broke a test`",
+        ):
+            planted = flat(text).replace(phrase, "omitted")
+            assert triage_instruction_problems(planted), f"{path}: {phrase} is not held by the instruction test"
 
 
 @pytest.mark.parametrize("heading", ["## Phase 2a — spec review", "## Phase 6 — review"])
@@ -23373,6 +24407,7 @@ class LocalCommands:
                 "env": dict(env),
                 "pass_fds": tuple(kwargs.get("pass_fds", ())),
                 "timeout": kwargs.get("timeout"),
+                "limit": kwargs.get("limit"),
             }
         )
         outcome = self.outcomes.get(kind)
@@ -23832,12 +24867,14 @@ def test_targeted_stage2_test_file_requires_full_verification(
     assert chosen.tests == []
     commands = targeted_mode(monkeypatch)
     commands.outcomes["make"] = (full_result, "full verification result\n")
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     scope: list[str] = []
     problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, scope=scope)
     assert bool(problems) == bool(full_result), problems
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert make["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the shared step limit"
+    assert make["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert commands.of("gate") == []
     assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
     assert any(
@@ -24158,6 +25195,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
 ) -> None:
     """Criterion 9. Planted fault: the reviewer starts after a red, unstartable or timed-out full check, after the
     head or the substantive tree moved, on a dirty tree, or without a fresh check on a first review or a re-check."""
+    minutes = stage2.VERIFY_SECONDS // 60
     monkeypatch.setattr(stage2, "require_fresh_full_verification", REAL_FULL_GATE)
     make = [{"stdout": "red\n", "exit": 1}] if case == "red" else [{"stdout": "green\n"}]
     world.script(make=make, codex=[codex_ok("T1", rows(1))])
@@ -24178,7 +25216,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
         if case == "tree-moved":
             (Path(cwd) / "src" / "app.py").write_text("value = 9\n", encoding="utf-8")
         if case == "timeout":
-            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+            raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         if case == "unstartable":
             raise stage2.CallFailed("make could not be started: planted")
         return real(command, cwd, env, *args, **kwargs)
@@ -24325,12 +25363,13 @@ def test_review_audit_only_preserves_verdict_and_session_at_every_placement(plac
 
 
 @pytest.mark.parametrize("case", ["disk", "staged", "wrong-date", "other-header", "phase6"])
-def test_review_accepts_runner_audit_date_stamp(world: World, case: str) -> None:
+def test_review_accepts_runner_audit_date_stamp(world: World, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
     """F6-3: append's next-day stamp passes, but other header dates/inputs and phase-6 edits do not.
 
     Planted fault: stripping only the call line rejects the real append's updated header before make runs.
     """
-    yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
+    yesterday = (day.current - dt.timedelta(days=1)).isoformat()
     world.findings.write_text(
         old_header(yesterday)
         + "\n## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n"
