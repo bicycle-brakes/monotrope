@@ -7079,12 +7079,13 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     assert len(world.calls()) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
-    world.write_record([("L1-1", "", "")])
+    # Later scenarios use a fresh round and finding ID after the successful release.
+    world.write_record([("L2-1", "", "")], number=2)
     (world.bin / "calls.jsonl").unlink()
     assert world.run("review") == 2 and world.calls() == []
     assert not holds_record_lock(world, "demo"), "the lock stayed held after the undecided-row refusal"
 
-    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.write_record([("L2-1", "taken — test_a", "no")], number=2)
     # The call log is cleared before `script`, which counts the calls already logged.
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
@@ -7093,7 +7094,7 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
-    world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
+    world.script(codex=[codex_ok("T1", rows(1, prefix="Y")), {"stdout": "", "exit": 1}])
     commit_review_findings(world)
     assert world.run("review") == 1 and len(world.calls()) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
@@ -9533,106 +9534,27 @@ def test_repair_rejects_invalid_origins_in_selected_history(
             assert "invalid Origin" in error, (shape, origin, status, record_present, stage2_off, error)
             assert "F-old" in error and "L1-3" in error, (shape, origin)
             if record_present and record_origin == "invalid":
-                assert "L1-1 (loop record, Origin `invalid`)" in error, (shape, origin)
+                assert f"L1-1 ({world.record()}, Origin `invalid`)" in error, (shape, origin)
             else:
                 assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
             assert origin_state(world) == before, (shape, origin)
             assert world.calls() == [], (shape, origin)
 
 
-@pytest.mark.parametrize("selection_changes", [False, True])
-def test_row_blocks_uses_findings_rows_selection(monkeypatch: pytest.MonkeyPatch, selection_changes: bool) -> None:
-    """Block locations follow the row parser, including future changes to its selection rules."""
-    released = released_cells("L1-1", "taken — fix", "no", "released finding")
-    phase = phase6_cells("F-1", "taken — fix", "phase finding")
-    excluded = phase6_cells("F-excluded", "taken — fix", "selection changes exclude this row")
-    text = "\n\n".join(
-        [
-            released_block([released]),
-            "Kept from the loop record:",
-            render_row(released_cells("L1-2", "taken — fix", "no", "reviewer quotation")),
-            phase6_block([phase, excluded]),
-            "## Unrelated section",
-            render_row(phase),
-            phase6_block([phase.copy()]),
-            released_block([released.copy()]),
-        ]
-    )
-    parser = stage2.findings_rows
-    if selection_changes:
-        # Simulate a parser evolution: the locator must inherit it instead of duplicating its rules.
-        def changed_parser(source: str) -> tuple[list[list[str]], list[list[str]]]:
-            released_rows, phase_rows = parser(source)
-            return released_rows, [row for row in phase_rows if row[0] != "F-excluded"]
-
-        monkeypatch.setattr(stage2, "findings_rows", changed_parser)
-    expected_released, expected_phase = stage2.findings_rows(text)
-    located = stage2.row_blocks(text)
-    assert [row for place, _, row in located if place == "released"] == expected_released
-    assert [row for place, _, row in located if place == "phase-6"] == expected_phase, (
-        "every selected findings row must have a block under the same parser rules"
-    )
-    assert [label for place, label, _ in located if place == "released"] == [
-        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 1",
-        f"`{stage2.RELEASE_HEADING} 2026-10-12`, block 2",
-    ]
-    assert located[-2][1] == "`## Phase 6 — Codex, 2026-10-12`, block 2"
-
-
-@pytest.mark.parametrize("place", ["released", "phase-6"])
-def test_target_origin_refusal_lists_identical_rows_in_document_order(place: str) -> None:
-    """Identical selected cells keep their source occurrences when the batch is reordered."""
-    block = released_block if place == "released" else phase6_block
-    first = (
-        released_cells("L1-1", "taken — fix", "no", "repeated finding")
-        if place == "released"
-        else phase6_cells("F-1", "taken — fix", "repeated finding")
-    )
-    first[3] = "invalid"
-    middle = first.copy()
-    middle[0] = "L1-2" if place == "released" else "F-2"
-    text = "\n\n".join([block([first]), block([middle]), block([first.copy()])])
-    refusal = stage2.target_origin_refusal([(place, middle), (place, first.copy()), (place, first.copy())], text)
-    assert refusal is not None
-    locations = [f"block {number}, Origin `invalid`" for number in (1, 2, 3)]
-    assert refusal.index(locations[0]) < refusal.index(locations[1]) < refusal.index(locations[2]), (
-        "selected rows must be diagnosed in document order, including identical occurrences",
-        refusal,
-    )
-    entries = refusal.split(". The orchestrator", 1)[0].split("; ")
-    assert first[0] in entries[0] and middle[0] in entries[1] and first[0] in entries[2]
-
-
 @pytest.mark.parametrize("place", ["record", "released", "phase-6"])
 @pytest.mark.parametrize("row", [[], ["F-short"], ["F-short", "MINOR", "SPEC"]])
 def test_target_origin_refusal_handles_short_rows(place: str, row: list[str]) -> None:
-    """A selected row with no Origin cell yields a controlled refusal, never IndexError."""
+    """Defensive only: repair_targets never supplies short rows.
+
+    Keep a controlled refusal if a future parser change supplies one without an Origin cell.
+    """
     try:
-        refusal = stage2.target_origin_refusal([(place, row)], "")
+        refusal = stage2.target_origin_refusal([(place, row)], Path("findings.md"), Path("loop.md"))
     except IndexError:
         pytest.fail("a short selected row must produce an Origin refusal instead of a traceback")
     assert refusal is not None and "invalid Origin" in refusal
     assert (row[0] if row else "missing ID") in refusal
     assert "correct the cell" in refusal
-
-
-@pytest.mark.parametrize("place", ["released", "phase-6"])
-def test_target_origin_refusal_distinguishes_dated_block_headings(place: str) -> None:
-    """Block occurrences stay unique when only the heading's date changes."""
-    if place == "released":
-        first = released_cells("L1-1", "taken — fix", "no", "first finding")
-        second = released_cells("L1-2", "taken — fix", "no", "second finding")
-        block = released_block
-    else:
-        first = phase6_cells("F-1", "taken — fix", "first finding")
-        second = phase6_cells("F-2", "taken — fix", "second finding")
-        block = phase6_block
-    first[3] = second[3] = "invalid"
-    text = "\n\n".join([block([first]), block([second]).replace("2026-10-12", "2026-10-13")])
-    refusal = stage2.target_origin_refusal([(place, first), (place, second)], text)
-    assert refusal is not None
-    assert "2026-10-12`, block 1" in refusal
-    assert "2026-10-13`, block 2" in refusal, "different dates must not restart the block occurrence"
 
 
 def test_repair_origin_refusal_has_no_effects_across_blocks(
@@ -9672,7 +9594,7 @@ def test_repair_origin_refusal_locates_every_selected_block(
     world: World,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Criterion 3. Planted fault: a bad row or its older block cannot be located, a valid target is accused, or the correction guidance is incomplete."""
+    """Criterion 3. Planted fault: a bad row cannot be located by ID and file, a valid target is accused, or the correction guidance is incomplete."""
     seed_tests(world)
     world.write_record([("L1-1", "taken — test_a", "no")])
     set_row_origin(world, "L1-1", "oops")
@@ -9696,13 +9618,10 @@ def test_repair_origin_refusal_locates_every_selected_block(
     capsys.readouterr()
     assert world.run("repair") == 2
     error = capsys.readouterr().err
-    assert "L1-1 (loop record, Origin `oops`)" in error
-    released_heading = "`## Phase 4b — loop rows, released 2026-10-12`"
-    assert f"L1-3 (released block, {released_heading}, block 1, Origin ``)" in error
-    assert f"L1-4 (released block, {released_heading}, block 2, Origin `fix-r0`)" in error
-    phase_heading = "`## Phase 6 — Codex, 2026-10-12`"
-    assert f"F-1 (phase-6 table, {phase_heading}, block 1, Origin `criterion 1`)" in error
-    assert f"F-2 (phase-6 table, {phase_heading}, block 2, Origin `BASE`)" in error
+    assert f"L1-1 ({world.record()}, Origin `oops`)" in error
+    for ident, origin in (("L1-3", ""), ("L1-4", "fix-r0"), ("F-1", "criterion 1"), ("F-2", "BASE")):
+        assert f"{ident} ({world.findings}, Origin `{origin}`)" in error
+    assert "block 1" not in error and "## Phase" not in error
     assert "F-ok" not in error, "a valid selected row was accused"
     assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
     assert "The orchestrator sets it" in error and "correct the cell" in error
@@ -23949,3 +23868,31 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
     else:
         assert chosen.fallback is None, chosen.fallback
         assert chosen.tests == ["tests/test_seed.py"]
+
+
+@pytest.mark.parametrize("verb", ["repair", "release-loop"])
+@pytest.mark.parametrize("place", ["record", "released", "phase-6"])
+@pytest.mark.parametrize("status", ["taken — test_a", FIXED, "rejected — covered"])
+def test_repair_and_release_refuse_duplicate_finding_ids(
+    world: World, capsys: pytest.CaptureFixture[str], verb: str, place: str, status: str
+) -> None:
+    """Answer A: any status collision refuses before effects, including release after a verdict.
+
+    Planted fault: checking only taken IDs or only released loop IDs admits the duplicate.
+    """
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    if place == "record":
+        world.write_record([("L1-1", "taken — test_a", "no"), ("L1-1", status, "no")])
+        block = phase6_block([])
+    elif place == "released":
+        block = released_block([released_cells("L1-1", status, "no", "duplicate")])
+    else:
+        block = phase6_block([phase6_cells("L1-1", status, "duplicate")])
+    world.write_findings(block, phase6_block([]), VERDICT)
+    before = origin_state(world)
+    assert world.run(verb) == 2
+    error = capsys.readouterr().err
+    assert "same id" in error and "L1-1" in error
+    assert origin_state(world) == before
+    assert world.calls() == []
