@@ -6,6 +6,7 @@ updated: 2026-11-12
 last_reviewed: 2026-11-12
 status: draft
 implementation_status: none
+owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "Fable 5.2, 2026-11-12"}
 review: {status: pending, approved_by: null, approved_at: null}
