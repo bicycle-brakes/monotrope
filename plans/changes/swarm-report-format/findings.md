@@ -606,3 +606,48 @@ Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-3-20261111T232754714541Z-9c52523c.md
 > ```
+
+Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 984 files, 3970 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L1-1: no fixed line
+> - L1-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-1-20261112T003738892168Z-6c7b64d3.md
+> ```
+
+Stage-2 call, 2026-11-12: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 984 files, 3970 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L1-1: no fixed line
+> - L1-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-2-20261112T003738892168Z-6c7b64d3.md
+> ```
+
+Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 984 files, 3970 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L1-1: tests/test_stage2_swarm.py::test_topic_report_refuses_unclosed_wrapping: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - L1-2: tests/test_stage2_swarm.py::test_topic_correction_malformed_stored_time_has_no_allowance: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-3-20261112T003738892168Z-6c7b64d3.md
+> ```
