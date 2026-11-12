@@ -22718,13 +22718,22 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
 
     monkeypatch.setattr(verify_lock, "hold_admission", spy)
     commands = targeted_mode(monkeypatch)
-    # A real outer admission is active in this state root, as when make verify starts the runner.
-    # inherit_env can recover it even though the targeted body stripped its explicit environment.
-    with real_hold(["outer", "verify"]), monkeypatch.context() as inherited:
-        admission = verify_lock.inherit_env(dict(os.environ))
-        for name in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV):
-            inherited.setenv(name, admission[name])
-        assert world.run("repair") == 0
+    # The outer check is a separate process, as when make verify starts the runner.
+    # A same-process outer holder would violate verify-slots' one-admission boundary.
+    ready = world.state / "targeted-outer-ready"
+    holder = _real_holder(ready, seconds=60)
+    try:
+        _holder_acquired(ready)
+        record = verify_lock.read_slot_holder(verify_lock.state_root(), 0)
+        assert record is not None, "the outer admission did not publish its slot"
+        with monkeypatch.context() as inherited:
+            inherited.setenv(verify_lock.LOCK_ENV, str(record["pid"]))
+            inherited.setenv(verify_lock.TOKEN_ENV, record["token"])
+            inherited.setenv(verify_lock.SLOT_ENV, "0")
+            assert world.run("repair") == 0
+    finally:
+        holder.terminate()
+        holder.wait(timeout=10)
     assert commands.records
     for record in commands.records:
         assert verify_lock.LOCK_ENV not in record["env"] and verify_lock.TOKEN_ENV not in record["env"], record["kind"]

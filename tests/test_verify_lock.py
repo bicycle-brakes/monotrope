@@ -542,7 +542,8 @@ def test_low_memory_wait_holds_exclusion_and_rechecks(
     Fault this pins: protected work starting on a below-floor reading, the
     exclusion dropped during the wait, or the 30-second rechecks and logs
     stopping. Capacity one is selected explicitly: the waiting admission must
-    hold its reservation through the memory wait, so the second one queues.
+    hold its reservation through the memory wait. A second request in this
+    process refuses immediately, including while the first waits for memory.
     """
     state = tmp_path / "state"
     _write_capacity(state, "1")
@@ -572,15 +573,21 @@ def test_low_memory_wait_holds_exclusion_and_rechecks(
     monkeypatch.setattr(verify_lock, "read_available_memory", reader)
 
     started = threading.Event()
-    second_started = threading.Event()
+    second_refused = threading.Event()
+    errors: list[BaseException] = []
 
     def first() -> None:
         with verify_lock.hold_admission(["first", "work"]):
             started.set()
 
     def second() -> None:
-        with verify_lock.hold_admission(["second", "work"]):
-            second_started.set()
+        try:
+            with verify_lock.hold_admission(["second", "work"]):
+                errors.append(AssertionError("a second admission entered during the memory wait"))
+        except verify_lock.VerifyLockRefused as error:
+            if "slot 0" not in str(error):
+                errors.append(AssertionError(f"refusal did not name the held slot: {error}"))
+            second_refused.set()
 
     thread = threading.Thread(target=first)
     other = threading.Thread(target=second)
@@ -588,15 +595,18 @@ def test_low_memory_wait_holds_exclusion_and_rechecks(
         thread.start()
         assert entered_gate.wait(10.0), "the first admission never reached the memory gate"
         other.start()
-        assert not second_started.wait(0.5), "another admission entered while the first waited for memory"
+        assert second_refused.wait(2.0), "the second admission waited instead of refusing immediately"
         release.set()
         assert started.wait(10.0), "a sufficient reading did not start the work"
-        assert second_started.wait(10.0), "the second admission never entered after the first finished"
     finally:
         release.set()
         thread.join(10.0)
         if other.is_alive():
             other.join(10.0)
+    assert not errors, errors
+    assert not thread.is_alive() and not other.is_alive(), "an admission thread did not finish"
+    with verify_lock.hold_admission(["after", "release"]):
+        pass
     assert reads, "the memory gate never rechecked"
     assert waits and all(value == verify_lock.MEMORY_POLL_SECONDS for value in waits), waits
     err = capsys.readouterr().err
@@ -1745,11 +1755,16 @@ def test_slot_release_preserves_peers_and_inherited_children(tmp_path: Path) -> 
         assert entry.wait(timeout=60) == 0
 
 
-@pytest.mark.parametrize("release_outer_first", [False, True])
+@pytest.mark.parametrize("threaded", [False, True])
 def test_overlapping_admissions_preserve_remaining_context(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release_outer_first: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, threaded: bool
 ) -> None:
-    """L2-2: releasing either overlapping admission preserves the survivor's child inheritance."""
+    """A second entry refuses at once, preserving the held slot and all child inheritance.
+
+    Faults pinned (L3-2 and L3-3): same-process entries publishing over each
+    other or replacing the slot, descriptors and measured context a child inherits.
+    Both reentrant calls and calls from another thread obey the boundary.
+    """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
     for name in (
@@ -1760,29 +1775,36 @@ def test_overlapping_admissions_preserve_remaining_context(
         verify_lock.ADMISSION_WAIT_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
-    with contextlib.ExitStack() as cleanup:
-        outer = contextlib.ExitStack()
-        cleanup.callback(outer.close)
-        outer_fd = outer.enter_context(verify_lock.hold_admission(["outer"]))
-        outer_context = verify_lock.admission_context()
-        outer_env = verify_lock.inherit_env({})
-        outer_fds = verify_lock.inherit_fds(outer_fd)
-        inner = contextlib.ExitStack()
-        cleanup.callback(inner.close)
-        inner_fd = inner.enter_context(verify_lock.hold_admission(["inner"]))
-        inner_context = verify_lock.admission_context()
-        inner_env = verify_lock.inherit_env({})
-        inner_fds = verify_lock.inherit_fds(inner_fd)
-        assert outer_context.admission_id != inner_context.admission_id
-        if release_outer_first:
-            outer.close()
-            expected_context, expected_env, expected_fds, owned = inner_context, inner_env, inner_fds, inner_fd
+    with verify_lock.hold_admission(["outer"]) as owned:
+        expected_context = verify_lock.admission_context()
+        expected_env = verify_lock.inherit_env({})
+        expected_fds = verify_lock.inherit_fds(owned)
+        root = verify_lock.state_root()
+        records = {path.name: path.read_bytes() for path in root.glob("*.holder.json")}
+        errors: list[BaseException] = []
+
+        def second() -> None:
+            try:
+                with verify_lock.hold_admission(["inner"]):
+                    errors.append(AssertionError("a second admission entered instead of refusing"))
+            except verify_lock.VerifyLockRefused as error:
+                if f"slot {expected_env[verify_lock.SLOT_ENV]}" not in str(error):
+                    errors.append(AssertionError(f"refusal did not name the held slot: {error}"))
+            except Exception as error:
+                errors.append(AssertionError(f"expected an admission refusal, got {error!r}"))
+
+        if threaded:
+            thread = threading.Thread(target=second, daemon=True)
+            thread.start()
+            thread.join(2.0)
+            assert not thread.is_alive(), "a second admission waited instead of refusing immediately"
         else:
-            inner.close()
-            expected_context, expected_env, expected_fds, owned = outer_context, outer_env, outer_fds, outer_fd
-        assert verify_lock.admission_context() == expected_context, "the surviving admission lost its context"
-        assert verify_lock.inherit_env({}) == expected_env, "the surviving admission lost its marker"
-        assert verify_lock.inherit_fds(owned) == expected_fds, "the surviving admission lost its compatibility lock"
+            second()
+        assert not errors, errors
+        assert verify_lock.admission_context() == expected_context, "refusal changed the first admission's context"
+        assert verify_lock.inherit_env({}) == expected_env, "refusal changed the first admission's marker"
+        assert verify_lock.inherit_fds(owned) == expected_fds, "refusal changed the first admission's descriptors"
+        assert {path.name: path.read_bytes() for path in root.glob("*.holder.json")} == records
         probe = (
             "import sys; sys.path.insert(0, 'scripts'); import verify_lock; "
             "assert verify_lock.nested_holder_pid() is not None; "
@@ -1800,6 +1822,8 @@ def test_overlapping_admissions_preserve_remaining_context(
             timeout=10,
         )
         assert child.returncode == 0, child.stderr
+    with verify_lock.hold_admission(["after", "release"]):
+        pass
 
 
 def test_each_slot_checks_memory_before_work(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1834,14 +1858,23 @@ def test_each_slot_checks_memory_before_work(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(verify_lock, "_sleep", fake_sleep)
     monkeypatch.setattr(verify_lock, "read_available_memory", reader)
 
-    with verify_lock.hold_admission(["slot", "0"]):
-        work_started.append(0)
+    with verify_lock.hold_admission(["initial", "probe"]):
         assert probes == [30.0], "the first admission skipped its own memory probe"
+    # The occupied peer must be an independent process: a second admission
+    # in this process is outside the supported boundary and refuses.
+    marker = tmp_path / "peer-started"
+    peer = _supervised(state, RECORD_BODY, {"PROBE_STARTED": str(marker), "PROBE_SLEEP": "60"})
+    try:
+        assert _wait_until(marker.is_file), "the independent peer never reserved slot 0"
+        work_started.append(0)
         mode["reading"] = 10.0
         with verify_lock.hold_admission(["slot", "1"]):
             work_started.append(1)
             second_lock = verify_lock.state_root() / verify_lock.slot_lock_name(1)
             assert second_lock.is_file(), "the second reservation is not slot 1"
+    finally:
+        peer.terminate()
+        peer.wait(timeout=10)
     assert work_started == [0, 1]
     assert probes == [30.0, 10.0, 30.0], "the second slot's admission did not apply its own memory policy"
     assert sleeps == [verify_lock.MEMORY_POLL_SECONDS]

@@ -552,10 +552,11 @@ def _registry_lock(state: State) -> Iterator[None]:
         fcntl.flock(state.registry_fd, fcntl.LOCK_UN)
 
 
+# Reserve the process boundary before opening state or publishing anything;
+# retain it through failed entry and release, so concurrent threads cannot race.
+_ADMISSION_LOCK = threading.Lock()
 _ACTIVE_LOCK = threading.Lock()
 _ACTIVE: _Admission | None = None
-# Keep every live admission: contexts can overlap and release in either order.
-_ACTIVE_ADMISSIONS: list[_Admission] = []
 
 
 def _active_pid() -> int | None:
@@ -693,12 +694,11 @@ class _Admission:
     def enter(self) -> None:
         """Queue for the work lock, publish ownership, then hold the memory gate."""
         self.entered = _now()
-        self._queue_wait()
-        self._publish()
         with _ACTIVE_LOCK:
             global _ACTIVE
-            _ACTIVE_ADMISSIONS.append(self)
             _ACTIVE = self
+        self._queue_wait()
+        self._publish()
         self._memory_gate()
         self.wait_seconds = _now() - self.entered
         # The same ownership, republished with the measured wait: a nested
@@ -712,9 +712,8 @@ class _Admission:
         self._released = True
         with _ACTIVE_LOCK:
             global _ACTIVE
-            if self in _ACTIVE_ADMISSIONS:
-                _ACTIVE_ADMISSIONS.remove(self)
-            _ACTIVE = _ACTIVE_ADMISSIONS[-1] if _ACTIVE_ADMISSIONS else None
+            if _ACTIVE is self:
+                _ACTIVE = None
         # Only the owner removes its own slot's record, and only while it still names this
         # process and token: a cancelled waiter never published one and must not delete the
         # slot's active holder's (review row F6-1), and a peer's slot state stays untouched.
@@ -1002,23 +1001,29 @@ def hold_admission(command: list[str]) -> Iterator[int | None]:
     ancestor's admission. Use inherit_fds() for local children: they must
     inherit both the slot lock and the shared compatibility lock. Refusals raise
     VerifyLockRefused or MemoryFloorRefused before the body runs; release
-    happens in every ending, after any child cleanup the caller does.
+    happens in every ending, after any child cleanup the caller does. A
+    second same-process entry refuses immediately, naming the held slot;
+    callers must launch nested work in a child with inherited ownership.
     """
-    inherited = nested_holder_pid()
-    if inherited is not None:
-        _log(f"inheriting admission from pid {inherited}; no queue and no memory wait")
-        yield None
-        return
-    admission = _Admission(_prepare_state(), command)
+    if not _ADMISSION_LOCK.acquire(blocking=False):
+        with _ACTIVE_LOCK:
+            slot = _ACTIVE.slot_index if _ACTIVE is not None else None
+        held = f"holds slot {slot}" if slot is not None else "has an admission entering or releasing"
+        raise VerifyLockRefused(f"this process already {held}; refusing a second admission")
     try:
-        admission.enter()
-    except BaseException:
-        admission.release()
-        raise
-    try:
-        yield admission.slot_fd
+        inherited = nested_holder_pid()
+        if inherited is not None:
+            _log(f"inheriting admission from pid {inherited}; no queue and no memory wait")
+            yield None
+            return
+        admission = _Admission(_prepare_state(), command)
+        try:
+            admission.enter()
+            yield admission.slot_fd
+        finally:
+            admission.release()
     finally:
-        admission.release()
+        _ADMISSION_LOCK.release()
 
 
 def inherit_env(env: dict[str, str]) -> dict[str, str]:
