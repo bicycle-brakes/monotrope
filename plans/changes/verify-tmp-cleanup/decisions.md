@@ -64,6 +64,25 @@ we decided that the runner keeps the start and the end of the message,
 to achieve a readable reason at any path length,
 accepting two files more than the plan first allowed — 2026-11-12
 
+## Q-3 · The cut git error, second approach, and the appetite
+
+asked: 2026-11-12
+answer: "A: Erste Zeile ganz (Recommended)" — the runner keeps the first line of git's message whole and drops the hint paragraph; the orchestrator implements it by hand and accepts it by hand; the appetite rises by 2 hours to 6; the full make verify follows before phase 6.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), every check run removes its own temporary files.
+  Intention: the appetite was reached (3.9 of 4 hours) and the correction Q-2 (keep the start and the end of git's message) did not carry.
+  Today: git states the reason in its first line, in the middle of the long path, and adds a long hint paragraph after it; start plus end cuts exactly the middle with the reason, so the three tests stayed red. The fourth attempt also did not finish its full check (45-minute step limit on a fully loaded machine). Everything is saved on side refs.
+  Repository change: a few lines in scripts/stage2.py, the test adjusted.
+  Architecture change: none.
+
+In the context of a runner whose git errors lose their reason behind a long path,
+facing a hint paragraph that git appends after the reason line,
+we decided to keep git's first line whole and drop the hint,
+to achieve a readable reason at any path length,
+accepting a hand acceptance of real code and two more hours — 2026-11-12
+
 ## Decided by the agent
 
 [DETAIL] **The gate command line stays as it is.** The folder is set through

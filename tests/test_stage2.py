@@ -22956,6 +22956,17 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
         assert any("`make verify` did not finish" in problem for problem in problems)
 
 
+def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> None:
+    """Fault this pins: a fixed cut of git's message loses the reason behind a long temporary path."""
+    path = "/tmp/" + "d" * 300 + "/.git/index.lock"
+    message = f"fatal: Unable to create '{path}': File exists.\n\nAnother git process seems to be running.\n"
+    shortened = stage2.shorten_git_error(message)
+    assert shortened == f"fatal: Unable to create '{path}': File exists."
+    assert stage2.shorten_git_error("  short  ") == "short"
+    assert stage2.shorten_git_error("") == ""
+    assert len(stage2.shorten_git_error("x" * 5000)) == 1000
+
+
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

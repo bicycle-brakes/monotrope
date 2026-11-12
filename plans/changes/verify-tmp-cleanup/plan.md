@@ -20,7 +20,7 @@ tags: [plan, verification, temporary-files]
 ```text
 For you:     Full checks remove their own pytest folders; failed runs can be kept explicitly, and the next run removes dead-process leftovers.
 Done when:   Isolated tests prove placement, exit/interrupt cleanup, retention and next-start recovery; make verify is green.
-Appetite:    4 hours of phase 4, repairs included; stop at the limit.
+Appetite:    6 hours of phase 4, repairs included; stop at the limit (raised from 4 by the maintainer on 2026-11-12, decisions.md#Q-3).
 Not now:     Standalone targeted tests, historical leftovers, free-disk admission or supervisor changes.
 Pre-mortem:  suppose it failed: most likely because a nested run deleted its parent's folder.
 Starts unless you say stop.
@@ -121,6 +121,14 @@ they are and add only this:
    whose reason follows a path longer than the bound still shows the reason
    and the start. The three red cases pass unchanged; do not weaken them.
 
+## Correction of the correction — 2026-11-12 (decisions.md#Q-3)
+
+Keeping the start and the end of git's message did not carry: git states the
+reason in its first line, behind the long path, and adds a hint paragraph
+after it, so the middle with the reason was cut again. The helper now keeps
+git's first non-empty line whole (bounded at 1,000 characters) and drops the
+hint. Done by the orchestrator by hand and accepted on the maintainer's answer.
+
 ## Boundaries and route
 
 `scripts/stage2.py` and `tests/test_stage2.py` may be edited only as the
@@ -149,8 +157,13 @@ owns index regeneration and tracker-backed registry/full verification.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: three attempts rejected; the fourth run starts from the kept third attempt with the plan correction Q-2.
+
 ## Time used
 
 2026-11-12 13:48:41–15:35:51 UTC, 6429 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-12 15:36:03–16:04:37 UTC, 1714 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-12 16:04:51–16:39:14 UTC, 2063 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 18:16:39–19:18:51 UTC, 3732 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

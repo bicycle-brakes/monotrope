@@ -4175,6 +4175,18 @@ def release_loop(
     release(root, change)
 
 
+def shorten_git_error(text: str, bound: int = 1000) -> str:
+    """git's error line, whole: the reason stands in the first line, often after a long path.
+
+    The hint paragraph git adds after it (for a held lock, a stale-lock explanation) is dropped, so a
+    long temporary path no longer pushes the reason out of a fixed cut. Only a first line longer than
+    `bound` is cut, at its end.
+    """
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    first = lines[0] if lines else ""
+    return first if len(first) <= bound else first[: bound - 1] + "…"
+
+
 def _git_output(
     root: Path,
     *args: str,
@@ -4197,7 +4209,7 @@ def _git_output(
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
     return os.fsdecode(done.stdout)
 
 
@@ -4533,7 +4545,7 @@ def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin:
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
     return done.stdout
 
 

@@ -943,3 +943,17 @@ Stage-2 call, 2026-11-12: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-11-12: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason three attempts rejected; the fourth run starts from the kept third attempt with the plan correction Q-2 · leak check clean over 1040 files, 4011 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +12 -2
+> - `tests/test_stage2.py` +10 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - `make verify` did not finish: make was stopped by the runner's step limit after 45 minutes
+> ```
