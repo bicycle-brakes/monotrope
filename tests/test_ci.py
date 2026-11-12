@@ -2497,6 +2497,8 @@ def _reaped_pid() -> int:
         os.kill(child.pid, 0)
     except ProcessLookupError:
         return child.pid
+    except PermissionError:
+        pass  # The pid was reused by a live process owned by another user.
     return _reaped_pid()
 
 
@@ -2603,7 +2605,9 @@ def test_worker(tmp_path):
     assert worker_lines, "the xdist worker never ran its test"
     area_resolved = str(area.resolve())
     for recorded in [*serial_lines, *worker_lines]:
-        assert Path(recorded).is_relative_to(area_resolved), f"a pytest temporary path escaped the run area: {recorded}"
+        assert Path(recorded).resolve().is_relative_to(area_resolved), (
+            f"a pytest temporary path escaped the run area: {recorded}"
+        )
         assert "pytest-of-" in recorded, recorded
     for recorded in worker_lines:
         assert "popen-gw" in recorded, f"the xdist worker did not report its own directory: {recorded}"
@@ -2696,7 +2700,7 @@ def test_verify_runner_retains_only_on_explicit_request(tmp_path: Path) -> None:
     kept_area = kept[0]
     assert not kept_area.name.isdigit(), "a kept area must not carry a name a sweep would take"
     assert (kept_area / "payload").exists(), "the kept area lost its payload"
-    assert str(kept_area) in done.stderr, "the runner did not report the kept area's absolute path"
+    assert str(kept_area.resolve()) in done.stderr, "the runner did not report the kept area's absolute path"
 
     # The next start under the same parent must leave the requested evidence alone.
     later_tree, _ = _tmp_runner_tree(base / "later", "true")
@@ -2767,8 +2771,10 @@ def test_verify_runner_reclaims_dead_pid_areas(tmp_path: Path) -> None:
     assert runner.returncode == -9, "the hard kill did not reach the runner"
     dead = [entry for entry in parent.iterdir() if entry.name != str(os.getpid())]
     assert len(dead) == 1 and dead[0].name.isdigit(), f"the killed runner left no reclaimable area: {dead}"
-    dead_area = dead[0]
     sweeper_tree, _ = _tmp_runner_tree(base / "sweeper", "true")
+    # The runner pid may already have been reused while preparing the sweeper.
+    # Preserve its real leftover payload under a freshly checked dead pid.
+    dead_area = dead[0].rename(parent / str(_reaped_pid()))
     done = _tmp_run(sweeper_tree, temproot, tmp_path)
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert not dead_area.exists(), "the next start did not reclaim the hard-killed runner's area"
