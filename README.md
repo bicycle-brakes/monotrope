@@ -226,8 +226,8 @@ re-read on 2026-11-03 at `b424be3a`.
 
 ### Checked by tools
 
-- One gate list drives `make verify` and CI: 23 gates, of which 19 block,
-  3 report and 1 is advisory (`b424be3a`, 2026-11-03). Every gate has a
+- One gate list drives `make verify` and CI: 24 gates, of which 20 block,
+  3 report and 1 is advisory (`8c54b1a0`, 2026-11-12). Every gate has a
   mutation test, a run that turns it red, or a stated reason in a list that
   may only shrink.
 - The runner checks the endpoint and runs the leak check before every call to

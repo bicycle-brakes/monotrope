@@ -253,9 +253,9 @@ flowchart LR
 
 - **Files, because a change must outlive the session, the machine and the
   harness.** A state kept inside a tool dies with the tool.
-- **One list, because two lists drift.** 23 gates live in one file
-  (`decisions/gates.yaml`); 19 block, 3 report, 1 advisory (as of 2026-11-02,
-  `c9692afd`).
+- **One list, because two lists drift.** 24 gates live in one file
+  (`decisions/gates.yaml`); 20 block, 3 report, 1 advisory (as of 2026-11-12,
+  `8c54b1a0`).
   The file drives the local runner and the CI generator, and a gate holds the
   generated workflow to it byte for byte. `AGENTS.md` is the same kind of single
   entry for the agents; a test fails if a harness-specific file would replace
