@@ -255,6 +255,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: fifth run from at
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: sixth run from attempt 5's saved state: one red test left, plan section 'Correction for the fifth run' item 5 (maintainer 2026-11-12, decisions.md Q-6, bead coding-harness-0swp).
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: seventh run from attempt 6's saved state: one red test left, plan section 'Correction for the fifth run' item 6 (maintainer 2026-11-12, decisions.md Q-6, bead coding-harness-0swp).
+
 ## Time used
 
 2026-11-11 20:50:58–23:23:11 UTC, 9132 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -263,3 +267,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: sixth run from at
 2026-11-12 11:30:43–12:27:43 UTC, 3420 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-12 13:48:20–13:54:06 UTC, 346 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-12 13:55:21–14:41:31 UTC, 2770 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 14:43:33–16:04:20 UTC, 4847 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
