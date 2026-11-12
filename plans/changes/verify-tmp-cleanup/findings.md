@@ -589,3 +589,50 @@ the worktree-only restriction.
 >          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 > TypeError: 'generator' object does not support the context manager protocol
 > ```
+
+Stage-2 call, 2026-11-12: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 3994 commits, 12 rules.
+
+
+## Runner-only redraft after rollback — 2026-11-12
+
+Revised `spec.md` and `plan.md` against `a320748b`, after the rejected
+implementation was removed at `86242545`, and the maintainer's answered
+Q-1 of 2026-11-12. Added the current source baseline to `research.md`.
+The previous draft diagnostics are preserved above; their obsolete
+`--tmp-scope` startup failure does not describe this checkout.
+
+The class remains bounded, with no design or ADR due. The eleven criterion
+numbers remain. Criteria 1, 4 and 7 now express Q-1's runner/PID ownership,
+handled-interrupt cleanup and next-start dead-PID sweep; the boundary no
+longer promises descendant leases or deletion after process-group cleanup.
+`scripts/verify_lock.py` and its tests are protected from implementation
+edits. The ledger names new runner-level tests as not yet written, since
+the rejected implementation's tests were also removed. These revisions
+follow Q-1, not an attempt to weaken a criterion to pass a check. No phase-2a
+rows with Status open were found; the historical reports remain unchanged.
+
+The new `## Time used` section is empty as this draft prompt requires.
+The rejected implementation durations remain in the earlier dated evidence
+above and count against the existing four-hour appetite; no fresh budget
+or maintainer answer is recorded.
+
+Fresh direct checks on 2026-11-12, all exit 0 with
+`PYTHONDONTWRITEBYTECODE=1` and this worktree's `.venv/bin/python3`:
+
+- `scripts/check_interview_minimums.py --change verify-tmp-cleanup`:
+  green on the answered Q-1.
+- `scripts/check_criterion_ledger.py`: green, including every replacement
+  runner-test entry marked not yet written.
+- `scripts/check_research_handoff.py --change verify-tmp-cleanup`:
+  measured, explicitly exempt from research-swarm/v2 obligations.
+- `scripts/check_frontmatter_current.py`: green.
+
+The requested `scripts/validate_change_artefacts.py` and `templates/plan.md`
+are absent. The draft uses the phase-3 form; full verification, index
+regeneration and the tracker-backed registry gate remain the orchestrator's
+work. Only change-folder artifacts were edited; the existing runner call
+record in this findings file was preserved. No source/test implementation,
+tracker write, commit or repository-changing git command was performed.
+Live PR state and the external session registry were not read under the
+worktree-only restriction. Next: show the plan card unchanged, then execute
+the runner-only plan within the recorded appetite.

@@ -582,7 +582,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-step-limit/spec.md`](changes/verify-step-limit/spec.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-tmp-cleanup/decisions.md`](changes/verify-tmp-cleanup/decisions.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
 | [`changes/verify-tmp-cleanup/findings.md`](changes/verify-tmp-cleanup/findings.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
-| [`changes/verify-tmp-cleanup/plan.md`](changes/verify-tmp-cleanup/plan.md) | draft | none | 2026-11-11 | coding-harness-bxxt.3 |
-| [`changes/verify-tmp-cleanup/research.md`](changes/verify-tmp-cleanup/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.3 |
-| [`changes/verify-tmp-cleanup/spec.md`](changes/verify-tmp-cleanup/spec.md) | draft | none | 2026-11-11 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/plan.md`](changes/verify-tmp-cleanup/plan.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/research.md`](changes/verify-tmp-cleanup/research.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/spec.md`](changes/verify-tmp-cleanup/spec.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |

@@ -3,8 +3,8 @@ title: "Research — verify-tmp-cleanup"
 status: draft
 implementation_status: none
 date: 2026-11-10
-last_reviewed: 2026-11-10
-updated: 2026-11-10
+last_reviewed: 2026-11-12
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -90,3 +90,35 @@ Gate source: `decisions/gates.yaml` (gate `pytest`). Runner: `scripts/verify_all
 `decisions/gates.yaml` and `Makefile` **together** if the gate command line changes (W-6 pin, tests/test_ci.py:507-534); a mechanism that avoids editing the command line bypasses that pin. `scripts/verify_all.sh` for a runner-side mechanism, held command-free by tests/test_ci.py:1256-1267. `scripts/verify_lock.py`'s `supervise()` cleanup path is the only in-tree hook that provably runs on normal exit, red gates, cancellation and trapped signals — and its "Boundary" (verify_lock.py:44-49) states that a SIGKILLed supervisor leaves nothing to clean with; no in-process design escapes that case. `scripts/stage2.py` (targeted/cheap/proof launch sites) and `scripts/kit/probe.py` if their pytest runs must share the guarantee. `pyproject.toml` is the only existing in-tree pytest config point (retention ini options available there). Existing tests that must stay green: the ones listed under "Where it lives".
 
 **Neighbours.** The header's one neighbour, docs/research/2026-11-09-make-verify-long-term.md, carries the parent diagnosis and proposes exactly this cleanup step beside bead 87b0 (its "How the approach is structured today", "What has to be better" 7, "Proposed order of work" 1). Suggested additions from this pass: `plans/changes/archive/2026-11-06-verify-machine-lock/` (the state-root-vs-TMPDIR precedent, decisions.md:41) and `plans/changes/night-machine-facts/research.md` (the 87b0 boundary statement, line 54).
+
+
+## Current baseline — 2026-11-12
+
+Read at `a320748b` on branch `fix/verify-tmp-cleanup`. The maintainer's
+answered Q-1 in `decisions.md` supersedes the old interview skip and the
+supervisor-based implementation. Commit `86242545` removes the rejected
+source/tests; the earlier draft diagnostics remain historical evidence,
+not the current baseline's behavior.
+
+The current `scripts/verify_all.sh` parses `--list` before admission, then
+re-execs unchanged through `python -m scripts.verify_lock -- bash …` when
+admission is not inherited. After valid admission it starts duration/report
+work and runs gates. It has no area allocation or exit/signal cleanup.
+The current `scripts/verify_lock.py` contains only the existing admission
+and process-group supervision, not `_TempScope`, `_flock_descriptor` or the
+`--tmp-scope`/`--tmp-held` interfaces named by the rejected attempts. Thus the
+previous generator/context-manager failure is no longer the startup blocker
+reported on the old tree; no fresh full verification result is inferred.
+
+`tests/test_ci.py` still has copied-runner helpers, command pins and admission,
+worker and duration regression tests. Its rejected temporary-scope tests and
+those in `tests/test_verify_lock.py` are absent; the revised ledger must mark
+new runner tests not yet written. No open phase-2a review table rows were
+found in `findings.md`. `templates/plan.md` and the requested
+`scripts/validate_change_artefacts.py` are absent. The plan uses the phase-3
+prompt and existing checks rather than inventing those files.
+
+The most recent repository handover (`docs/journal/handover/2026-11-12-night-ten-lanes.md`)
+parks this lane for a smaller plan. Q-1 and the later rollback resolve that
+planning boundary. Live PR state and the external session registry are not
+read under this attempt's worktree-only restriction; no tracker write is made.

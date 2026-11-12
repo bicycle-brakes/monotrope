@@ -3,14 +3,14 @@ title: "Spec — verify-tmp-cleanup"
 status: draft
 implementation_status: none
 date: 2026-11-10
-last_reviewed: 2026-11-11
-updated: 2026-11-11
+last_reviewed: 2026-11-12
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-10"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-12"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, verification, temporary-files]
 class: bounded
@@ -21,149 +21,149 @@ neighbours: [docs/research/2026-11-09-make-verify-long-term.md]
 
 # Spec — verify-tmp-cleanup
 
-Each full verification run owns its pytest temporary area and removes it
-after use, including failure and interruption, unless the caller explicitly
-keeps a failed run for inspection (bead coding-harness-bxxt.3).
-Research: `research.md`. Decisions: `decisions.md`.
+Each verification runner owns and removes its pytest temporary area, with
+explicit failed-run retention and next-start recovery after a hard kill
+(bead coding-harness-bxxt.3 — verification temporary-folder cleanup).
+Research: `research.md`. Decisions: `decisions.md`, answered Q-1 of 2026-11-12.
 
 ## Problem
 
-- On 2026-11-10, exploration found that verification never assigns or removes
-  a run-specific pytest temporary area; pytest's default retains numbered
-  roots until a later session prunes them (`research.md`, "What exists today").
-- The orchestrator recorded two finished runs leaving 1.3 and 1.5 GiB and a
-  full-volume failure on 2026-11-09; these figures are the intent's report,
-  not a measurement reproduced by exploration (`research.md`, "Intent of
-  the bead" and "Evidence of that root on this machine").
-- Process cleanup already covers ordinary endings and trapped signals,
-  but does not remove files; indiscriminate temporary-root cleanup would
-  also remove unrelated hook/statusline data (`research.md`, "What cleans
-  up today" and "Constraints a base folder must respect", 2026-11-10).
+- Exploration on 2026-11-10 found no run-specific pytest temporary root or
+  end-of-run file cleanup; pytest instead prunes numbered roots on a later
+  session (`research.md`, "What exists today" and "What cleans up today").
+- The orchestrator reported 1.3 and 1.5 GiB left by finished runs and a full
+  volume on 2026-11-09; these are reported figures, not measurements repeated
+  by this draft (`research.md`, "Intent of the bead").
+- The maintainer rejected the large supervisor-based implementation and
+  chose runner-owned, process-id-named folders with dead-process cleanup at
+  startup (`decisions.md#Q-1`, answered 2026-11-12). The rollback at
+  `86242545` removes that implementation; at `a320748b` the runner again has
+  no temporary-area lifecycle (`research.md`, "Current baseline — 2026-11-12").
 
 ## Terms
 
-**Run:** An executing invocation of `scripts/verify_all.sh`, including job
-subsets and `--ci`; `--list` executes no gates and is not a run.
-**Run area:** The run's private temporary directory containing its pytest
-session roots; successive pytest sessions need not share a basetemp.
-**Retained:** Deliberately kept after an unsuccessful run for inspection.
-**Orphan:** An unretained managed area whose supervisor and protected work
-have ended; age or a missing supervisor alone does not prove this.
+**Run:** An admitted execution of `scripts/verify_all.sh`, including job
+subsets and `--ci`; `--list` executes no gates and owns no area.
+**Run area:** A private directory named after the executing runner's process
+id, containing that run's pytest session roots.
+**Orphan:** An unretained managed run area whose named process no longer
+exists; this is a process-id check, not descendant tracking.
+**Retained:** Explicitly kept for inspection, excluded from orphan sweeping.
 
 ## Acceptance criteria
 
-1. When a run starts, it receives a distinct run area even if it inherits
-   verification admission from an ancestor.
-   *Refuted by:* Two runs share an area, or a nested run removes its parent's area.
-2. When a pytest session inherits the run's environment, its temporary
-   session root and xdist worker directories lie inside that run area.
-   *Refuted by:* A real serial or parallel pytest probe reports a temporary
-   path outside the area, including a second session in the same run.
-3. When a run ends normally without an explicit retention request, its run
-   area is removed before its supervisor returns the original run status.
-   *Refuted by:* A successful or failed run leaves its area, or cleanup masks
-   a failing status when removal succeeds.
-4. When the supervisor receives SIGINT, SIGTERM, SIGHUP or SIGQUIT, the run
-   area is removed after protected process cleanup, absent requested retention.
-   *Refuted by:* A signal leaves the area, removes it while the supervised
-   group can still write, or changes the existing 128-plus-signal status.
-5. If `HARNESS_VERIFY_KEEP_TMP=1` is set and the run ends unsuccessfully,
-   its run area is retained with its absolute path reported to the caller.
-   *Refuted by:* The area is removed immediately or by a later sweep, or no
-   usable inspection path is reported; interrupted runs count as unsuccessful.
-6. When a run succeeds, its run area is removed regardless of the retention
-   variable's value.
-   *Refuted by:* A successful run with `HARNESS_VERIFY_KEEP_TMP=1` leaves its area.
-7. When a later run starts in the same managed temporary location, it reclaims
-   orphan areas without reclaiming areas still used by protected work.
-   *Refuted by:* A completed hard-killed run's orphan survives the next start,
-   or a surviving protected child loses its area when its supervisor is killed.
-8. While allocating, sweeping or removing run areas, verification leaves
-   unrelated paths and symlink targets untouched.
-   *Refuted by:* An active sibling run, the caller's parent contents outside
-   the managed subtree, a default pytest root, unrelated file or substituted
-   symlink target is removed or modified.
+1. When an admitted run starts, it receives its own process-id-named area,
+   including when it inherits admission from an ancestor.
+   *Refuted by:* Two live runs share an area or a nested run deletes its parent's area.
+   *Basis:* decisions.md#Q-1.
+2. When a pytest session inherits the run's environment, its temporary root
+   and xdist worker directories lie inside that run area.
+   *Refuted by:* Real serial/parallel probes or a second session report a
+   temporary path outside the area or erase another session's root.
+3. When a run ends normally without requested retention, it removes its
+   area before returning its original verification status.
+   *Refuted by:* Success or failure leaves payloads, or successful removal
+   changes a gate verdict.
+   *Basis:* decisions.md#Q-1.
+4. When the runner handles SIGINT, SIGTERM, SIGHUP or SIGQUIT, it applies
+   end-of-run area cleanup before exiting, unless retention was requested.
+   *Refuted by:* A handled interruption leaves unretained payloads or the
+   existing public supervisor's 128-plus-signal status is lost.
+   *Basis:* decisions.md#Q-1.
+5. If `HARNESS_VERIFY_KEEP_TMP=1` is set and a run ends unsuccessfully,
+   its area remains available at an absolute path reported to the caller.
+   *Refuted by:* Failure/interruption removes requested evidence, no path is
+   reported, or the next run sweeps that evidence.
+6. When a run succeeds, it removes its area regardless of the retention variable.
+   *Refuted by:* A successful run with `HARNESS_VERIFY_KEEP_TMP=1` leaves payloads.
+7. When a later run starts under the same managed parent, it removes
+   unretained sibling areas whose named processes no longer exist.
+   *Refuted by:* An area left by a hard-killed and reaped runner survives
+   that startup, or an area named for a live process is reclaimed.
+   *Basis:* decisions.md#Q-1.
+8. While managing run areas, verification leaves unrelated paths and
+   symlink targets untouched.
+   *Refuted by:* A live sibling area, caller-parent sentinel, historical
+   pytest root, non-managed entry or substituted symlink target changes.
 9. If allocation or required cleanup cannot complete safely, the invocation
-   reports the affected area and reason and returns an unsuccessful status.
-   *Refuted by:* Gates start after allocation failed, cleanup failure is
-   silent, success is returned despite it, or an existing failure/signal
-   status is replaced by success.
-10. When run-area management is enabled, existing gate commands, admission
-    reuse, worker selection and execution verdicts retain their contracts.
-    *Refuted by:* Gate/Makefile command pins change, nested work waits on its
-    own admission, duration ownership changes, worker overrides are lost,
-    or `--list` allocates an area or enters admission.
-11. If inherited pytest options explicitly select a basetemp outside run
-    management, the run refuses before executing gates with an explanation.
-    *Refuted by:* `PYTEST_ADDOPTS` redirects pytest writes outside the area
-    without a refusal, or unrelated pytest options are discarded.
+   reports the affected path and reason and returns an unsuccessful status.
+   *Refuted by:* Gates start after failed allocation, removal failure is
+   silent, or the final status is success despite a storage failure.
+10. When run-area management is active, gate commands, admission reuse,
+    worker selection, duration ownership and execution verdicts keep their contracts.
+    *Refuted by:* A command pin changes, nested work queues behind its own
+    ancestor, duration ownership/worker overrides change, or `--list`
+    allocates an area or enters admission.
+11. If inherited pytest options select an explicit basetemp, the runner
+    refuses before gates with an explanation.
+    *Refuted by:* An accepted basetemp spelling escapes management,
+    malformed quoting proceeds silently, or unrelated pytest options are discarded.
 
 ## Non-goals
 
-- Independently launched Stage-2 targeted, cheap and red-first pytest checks,
-  direct `make test`/pytest calls, and subprocesses deliberately replacing
-  the inherited pytest environment; they require a separate extension.
-- Reclaiming historical default `pytest-of-*` roots, arbitrary temporary
-  files, kit scratch repositories or application caches.
-- A free-disk admission floor (separate work, bead coding-harness-87b0),
-  changes to memory policy, scheduling, duration records or gate membership.
-- Immediate cleanup after an uncatchable SIGKILL of the supervisor; recovery
-  happens on a later run, once protected work has ended.
-- A retention browser, expiry policy or automatic deletion of explicitly
-  retained areas; the caller removes those areas after inspection.
-- Design phase 2b and an ADR: this remains the bounded lifecycle fix already
-  classified in `research.md` and `decisions.md`.
+- Standalone Stage-2 targeted, cheap and red-first checks, direct `make test`
+  or pytest calls, and subprocesses replacing the inherited pytest environment.
+- Historical `pytest-of-*` roots, arbitrary temporary files, kit scratch
+  repositories and application caches; only managed run areas are reclaimed.
+- A free-disk admission floor (separate work, bead coding-harness-87b0 —
+  minimum free disk space), admission policy, scheduling or gate membership.
+- A supervisor/lease registry, descendant liveness proof, process-group
+  changes, a retention expiry policy or an inspection interface.
+- Design phase 2b and an ADR: Q-1 keeps this a bounded runner change.
 
 ## Protected areas
 
+`scripts/verify_lock.py` stays unchanged, as Q-1 explicitly requires; so do
+`tests/test_verify_lock.py` and the admission/process-group contract.
 `decisions/gates.yaml`, `Makefile`, `pyproject.toml`, `scripts/stage2.py`,
 `scripts/kit/probe.py` and `scripts/verify_duration.py` stay unchanged: the
-existing gate source, dependency/configuration contract and separate test
-entry points do not need edits. No held harness configuration, governance
-file, prompt, template or ADR is edited.
+existing commands, dependencies, separate entry points and duration
+ownership do not need edits. No held harness/governance path is edited.
 
 ## Boundary
 
-The promise covers pytest sessions inheriting the runner environment,
-including the ordinary pytest gate and kit probe; it does not capture every
-temporary write by every test. Cleanup follows the existing process-group
-supervision boundary: descendants detached into another group after a hard
-kill of an intermediate process are not guaranteed detectable. An area whose
-liveness or ownership cannot be established safely is left untouched and
-reported, rather than guessed orphaned. A later run using another temporary
-parent cannot discover an orphan in the previous parent.
+A hard kill cannot run an exit trap: its unretained area stays until a later
+run under the same parent observes the runner process gone. A reused process
+id may defer reclamation. A dead runner's surviving descendants do not keep
+its area alive; the process-id rule promises no descendant-protection lease
+or ordering of area removal after the last descendant stops. Existing
+process-group supervision remains responsible for processes. An inaccessible
+or unsafe candidate is reported and left untouched. Runs using another
+parent cannot recover this parent's orphans. Retained areas require manual
+removal; an explicit retention request with an unknown hard-kill outcome is
+preserved conservatively.
 
 ## Definition of Done
 
 - `PYTHON=.venv/bin/python3 make verify` is green at the implementation commit.
-- The same pull request carries `scripts/verify_all.sh`,
-  `scripts/verify_lock.py`, `tests/test_ci.py`, `tests/test_verify_lock.py`
-  and the change artifacts; the runner regenerates `plans/INDEX.md`.
-- The file list demonstrates the protected areas untouched and non-goals unbuilt.
-- The pull request closes bead coding-harness-bxxt.3 and its last commit
-  carries `Closes-Bead: coding-harness-bxxt.3`.
-- Revision-bound evidence covers real pytest/xdist placement, exit/signal
-  cleanup, requested retention and hard-kill recovery in isolated fixtures.
+- The pull request carries `scripts/verify_all.sh`, `tests/test_ci.py` and
+  the change artifacts; the orchestrator regenerates `plans/INDEX.md`.
+- The file list shows the protected areas untouched and non-goals unbuilt.
+- The pull request closes bead coding-harness-bxxt.3 — verification temporary-folder
+  cleanup; its final commit carries `Closes-Bead: coding-harness-bxxt.3`.
+- Revision-bound isolated probes cover real pytest/xdist placement, normal
+  exit, interruption, retention and next-start hard-kill recovery.
 
 ## Open decisions
 
-None open. The reasoned interview skip remains a skip; this draft records
-no maintainer answer and does not claim that the skip was confirmed.
+None open. The maintainer's answered Q-1 replaces the earlier interview skip
+and the supervisor-based plan; this draft records no new maintainer answer.
 
-- [DETAIL] Use exactly `HARNESS_VERIFY_KEEP_TMP=1` as the request; absent,
-  empty or other values mean normal removal, making retention explicit.
-- [DETAIL] Use a private managed subtree under the caller's
-  `PYTEST_DEBUG_TEMPROOT`, or the platform temporary parent when unset;
-  keep `TMPDIR` unchanged so unrelated temporary writers keep their contract.
-- [DETAIL] Retain interrupted runs on the same explicit request, because an
-  interrupted check also needs inspectable failure evidence; after SIGKILL,
-  recovery honors that request when the run's final outcome is unknown.
-- [DETAIL] Preserve a pre-existing nonzero/signal status on cleanup failure;
-  turn an otherwise successful invocation into exit 2 and report the failure.
-- [DETAIL] Reject conflicting inherited `--basetemp` options rather than
-  deleting a caller-owned directory or silently claiming containment.
-- [DETAIL] The phase-4 appetite is four hours including repairs, a stop limit
-  chosen for the lifecycle and process tests; no previous appetite is recorded.
+- [DETAIL] Exactly `HARNESS_VERIFY_KEEP_TMP=1` requests retention; other
+  values remove normally, because keeping evidence must be explicit.
+- [DETAIL] Use a private per-user managed parent beneath the caller's
+  `PYTEST_DEBUG_TEMPROOT`, or platform temporary parent when unset. Preserve
+  that parent for nested runs and leave `TMPDIR` unchanged, so only inherited
+  pytest sessions move and nested runs can find sibling orphans.
+- [DETAIL] Publish the retention request before gates, so startup recovery
+  cannot discard requested evidence after an unknown hard-kill outcome.
+- [DETAIL] Preserve an existing nonzero/signal status on removal failure;
+  return 2 after otherwise successful work and report the failure, so a
+  storage failure cannot turn verification green.
+- [DETAIL] Refuse explicit basetemp options rather than silently rewriting
+  caller options; retain all unrelated options unchanged.
+- [DETAIL] Keep the existing four-hour phase-4 appetite, repairs included;
+  rejected attempts already recorded in `findings.md` count against it.
 
-These reversible details specify the operational interface without widening
-the full-check scope fixed in `decisions.md`.
+These reversible details are decided here with their reasons; they do not
+reopen Q-1 or add a supervisor lifecycle.
