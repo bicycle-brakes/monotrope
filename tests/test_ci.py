@@ -1247,6 +1247,33 @@ def test_the_schema_rejects_a_malformed_interpreter_list(
     assert "tools.python" in seen.err + seen.out
 
 
+def test_repository_gate_schema_is_v3() -> None:
+    """Final activation test of verify-cheap-first (criteria 1 and 10 of its spec).
+
+    The real gate list declares schema 3 with a cost on every gate: pytest and
+    the kit probe are the minutes class, every other current gate seconds. The
+    obsolete claim that pytest must run first locally is gone — the declared
+    cost order replaced it. And once schema 3 is active, a version-2 list is
+    rejected, not accepted.
+    """
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert doc["schema_version"] == 3, doc.get("schema_version")
+    kosten = {g["id"]: g.get("cost") for g in doc["gates"]}
+    assert set(kosten.values()) == {"seconds", "minutes"}, kosten
+    assert kosten["pytest"] == "minutes", "pytest is the minutes class of the duration baseline (2026-11-05)"
+    assert kosten["leerprobe"] == "minutes", "the kit probe is the minutes class"
+    uebrig = {gid: cost for gid, cost in kosten.items() if gid not in ("pytest", "leerprobe")}
+    assert set(uebrig.values()) == {"seconds"}, uebrig
+    pytest_gate = next(g for g in doc["gates"] if g["id"] == "pytest")
+    assert "runs it first" not in pytest_gate["reason"], "the obsolete pytest-order claim must go with schema 3"
+
+    v2 = copy.deepcopy(doc)
+    v2["schema_version"] = 2
+    for g in v2["gates"]:
+        g.pop("cost", None)
+    assert ci_gates.validate_schema(v2), "with schema 3 active, a version-2 list must be rejected, not accepted"
+
+
 # --------------------------------------------------------------------------
 # 2 · The local runner holds no list of its own
 # --------------------------------------------------------------------------
@@ -1303,7 +1330,7 @@ def _runner_tree_files(tree: Path) -> Path:
 
 def _write_gate_file(tree: Path, gate_list: list[dict]) -> None:
     gate_file = {
-        "schema_version": 2,
+        "schema_version": 3,
         "tools": {"python": ["3.11", "3.12"]},
         "gates": gate_list,
     }
@@ -1320,6 +1347,7 @@ def _runner_tree(base: Path, gate_command: str) -> Path:
                 "title": "The one gate of the runner tree",
                 "command": gate_command,
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -1700,10 +1728,12 @@ def test_runner_worker_detection_degrades_without_failure(
 
 def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
     """Criterion 5: with the default applied the run behaves as before — every
-    gate inherits it, an advisory failure reports without blocking, a blocking
-    failure turns the run red, and the gates after it still run."""
+    gate inherits it, an advisory failure reports without blocking, and a
+    blocking failure turns the run red and stops before the later gates
+    (cheap-first, bead coding-harness-bxxt.1)."""
     tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="8", memory="8589934592")
     order = tmp_path / "order.txt"
+    gelaufen: list[str] = []
 
     def gate(gid: str, enforcement: str, ending: str) -> dict:
         return {
@@ -1714,15 +1744,16 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
                 f'echo {gid} >> "{order}"; {ending}'
             ),
             "job": "verify",
+            "cost": "seconds",
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",
             "reason": "a verdict seed for the worker-default test",
         }
 
-    for scenario, beta_enforcement, verdict, marker in (
-        ("advisory", "advisory", 0, "rot, aber nur advisory"),
-        ("blocking", "block", 1, "RED (block)"),
+    for scenario, beta_enforcement, verdict, banner, walked in (
+        ("advisory", "advisory", 0, "rot, aber nur advisory", ("alpha", "beta", "gamma")),
+        ("blocking", "block", 1, "RED (block)", ("alpha", "beta")),
     ):
         base = tmp_path / f"{scenario}-run"
         tree = _runner_tree_files(base / "tree")
@@ -1733,12 +1764,15 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
         _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
         done = _run_runner(tree, tmp_path / "home", [tools])
         assert done.returncode == verdict, f"{scenario}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-        assert marker in done.stdout, done.stdout
-        for gid in ("alpha", "beta", "gamma"):
+        assert banner in done.stdout, done.stdout
+        for gid in walked:
             assert (tmp_path / f"{gid}.inherited").read_text(encoding="utf-8") == "4", scenario
-    # Both runs walked their gates in list order: gamma started after beta's
-    # failure in each — an advisory and even a blocking failure stop nothing.
-    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n" * 2
+        gelaufen.extend(walked)
+        if scenario == "blocking":
+            assert "──   [gamma] not run" in done.stdout, "the stop did not name the gate it did not run"
+    # The advisory run walked its gates in list order — an advisory failure
+    # stops nothing. The blocking run stopped at beta: gamma did not start.
+    assert order.read_text(encoding="utf-8") == "".join(f"{gid}\n" for gid in gelaufen)
 
 
 # Generated per run: a literal token here reads as a key assignment to the leak check and blocks every review prompt
@@ -1878,6 +1912,7 @@ def _report_gate(
         "id": gid,
         "title": f"The {gid} gate",
         "job": job,
+        "cost": "seconds",
         "enforcement": enforcement,
         "floor": True,
         "placement": placement,
@@ -2001,8 +2036,9 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
 
     Ledger criterion 4 of docs-job-report-header, measured on a docs selection —
     the subset whose report used to name verify: an unselected gate stays out even
-    when it would fail, a blocking failure turns the run red without abandoning a
-    later gate, and solely advisory or report failures speak up without blocking.
+    when it would fail, a blocking failure turns the run red and stops before a
+    later gate (cheap-first, bead coding-harness-bxxt.1), and solely advisory or
+    report failures speak up without blocking.
     """
     home = tmp_path / "home"
     gitless = tmp_path / "bin"
@@ -2025,7 +2061,7 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
     # (label, expected exit, expected banner, expected execution order, gate shapes)
     scenarios = [
         ("selected-pass", 0, "VERIFY GREEN", ["docs-a", "docs-b"], selected_pass),
-        ("blocking-failure", 1, "VERIFY RED", ["docs-a", "docs-b", "docs-c"], blocking),
+        ("blocking-failure", 1, "VERIFY RED", ["docs-a", "docs-b"], blocking),
         ("nonblocking-failures", 0, "VERIFY GREEN", ["docs-a", "docs-b", "docs-c"], nonblocking),
     ]
     for label, verdict, banner, ordered, listed in scenarios:
@@ -2076,6 +2112,9 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
             assert (base / f"{gid}.ran").exists(), f"{label}: {gid} left no marker"
         assert not (base / "verify-other.ran").exists(), f"{label}: an unselected gate executed"
         assert _runner_report(done.stdout)["job"] == "docs", f"{label}: the report did not name the docs selection"
+        if label == "blocking-failure":
+            assert not (base / "docs-c.ran").exists(), "a blocking failure did not stop the docs selection"
+            assert "──   [docs-c] not run" in done.stdout, "the stop did not name the gate it did not run"
         if label == "nonblocking-failures":
             assert "rot, aber nur advisory" in done.stdout and "rot, aber nur report" in done.stdout, done.stdout
 
@@ -2102,7 +2141,9 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
 
     Fault this pins: an advisory failure reported without a duration or
     labelled passed, an unexecuted gate presented as measured, or a gate record
-    losing its raw exit status in history.
+    losing its raw exit status in history. A blocking failure stops the run —
+    delta is named as not run and leaves no history event (cheap-first, bead
+    coding-harness-bxxt.1).
     """
     base = tmp_path / "durations"
     order = base / "order.txt"
@@ -2114,6 +2155,7 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
             "title": f"The {gid} gate",
             "command": f'echo {gid} >> "{order}"; {ending}',
             "job": "verify",
+            "cost": "seconds",
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",
@@ -2136,19 +2178,21 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
     assert "── [beta] rot, aber nur advisory" in done.stdout, done.stdout
     assert "── [gamma] RED (block)" in done.stdout, done.stdout
     # Every executed gate — passing, advisory-failing and blocking-failing
-    # alike — shows its measured seconds beside its verdict.
-    for gid in ("alpha", "beta", "gamma", "delta"):
+    # alike — shows its measured seconds beside its verdict. delta is not
+    # executed: gamma's blocking failure stopped the run before it.
+    for gid in ("alpha", "beta", "gamma"):
         assert re.search(rf"── \[{gid}\] [0-9]+\.[0-9]+s", done.stdout), done.stdout
-    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\ndelta\n"
+    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
+    assert "──   [delta] not run" in done.stdout, "the stop did not name the gate it did not run"
 
     events = _tree_history(tree)
     starts = [e for e in events if e["event"] == "run_start"]
     assert len(starts) == 1 and starts[0]["job"] == "verify" and starts[0]["placement"] == "local"
     run_id = starts[0]["run_id"]
     gate_events = [e for e in events if e["event"] == "gate"]
-    assert len(gate_events) == 4, gate_events
+    assert len(gate_events) == 3, gate_events
     gate_rows = {e["gate"]: e for e in gate_events}
-    assert set(gate_rows) == {"alpha", "beta", "gamma", "delta"}, gate_rows
+    assert set(gate_rows) == {"alpha", "beta", "gamma"}, gate_rows
     assert all(row["run_id"] == run_id for row in gate_rows.values())
     assert gate_rows["beta"]["exit"] == 1 and gate_rows["beta"]["enforcement"] == "advisory", gate_rows["beta"]
     assert gate_rows["gamma"]["exit"] == 1
@@ -2217,7 +2261,8 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     """Criterion 8: timing changes no selection, no enforcement, no worker forwarding, no admission.
 
     Fault this pins: a docs selection running verify gates, a later gate
-    dropped after a failure, a forwarded worker override rewritten, or a
+    running after a local blocking failure (cheap-first, bead
+    coding-harness-bxxt.1), a forwarded worker override rewritten, or a
     nested run queueing behind its own ancestor or inventing a fresh wait.
     """
     # Check the classification boundary itself as well as the copied runners
@@ -2293,8 +2338,9 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     ends = [e for e in events if e["event"] == "run_end"]
     assert len(ends) == 1 and ends[0]["verdict"] == "green"
 
-    # (B) A blocking failure under the same timing: the run is red and the
-    # gate after it still runs.
+    # (B) A blocking failure under the same timing: the run is red and stops
+    # before the gate after it, naming it as not run (cheap-first, bead
+    # coding-harness-bxxt.1).
     order.unlink()
     base = tmp_path / "blocking"
     tree = _runner_tree_files(base / "tree")
@@ -2310,7 +2356,9 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     done = _run_runner(tree, home, [], "--job", "docs")
     assert done.returncode == 1, f"blocking: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "VERIFY RED" in done.stdout and "RED (block)" in done.stdout, done.stdout
-    assert order.read_text(encoding="utf-8") == "docs-a\ndocs-b\ndocs-c\n", "a failure stopped the later gates"
+    assert order.read_text(encoding="utf-8") == "docs-a\ndocs-b\n", "the run did not stop at the blocking failure"
+    assert not (base / "docs-c.ran").exists(), "the gate after the blocking failure executed anyway"
+    assert "──   [docs-c] not run" in done.stdout, "the stop did not name the gate it did not run"
     ends = [e for e in _tree_history(tree) if e["event"] == "run_end"]
     assert len(ends) == 1 and ends[0]["verdict"] == "red"
 
