@@ -4327,7 +4327,7 @@ def refuse_repository_git(root: Path) -> None:
 
 
 TOOL_SECONDS = 5 * 60
-VERIFY_SECONDS = 30 * 60
+VERIFY_SECONDS = 45 * 60
 GIT_SECONDS = 2 * 60
 
 

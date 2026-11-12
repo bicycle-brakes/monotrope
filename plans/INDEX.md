@@ -467,6 +467,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/midnight-stamp-test/decisions.md`](changes/midnight-stamp-test/decisions.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
+| [`changes/midnight-stamp-test/findings.md`](changes/midnight-stamp-test/findings.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
+| [`changes/midnight-stamp-test/plan.md`](changes/midnight-stamp-test/plan.md) | draft | none | 2026-11-11 | coding-harness-bxxt.5 |
+| [`changes/midnight-stamp-test/research.md`](changes/midnight-stamp-test/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
+| [`changes/midnight-stamp-test/spec.md`](changes/midnight-stamp-test/spec.md) | draft | done | 2026-11-11 | coding-harness-bxxt.5 |
 | [`changes/night-heartbeat/decisions.md`](changes/night-heartbeat/decisions.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/findings.md`](changes/night-heartbeat/findings.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
 | [`changes/night-heartbeat/plan.md`](changes/night-heartbeat/plan.md) | draft | none | 2026-11-06 | coding-harness-7x3c |
@@ -570,4 +575,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-first/plan.md`](changes/verify-cheap-first/plan.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/research.md`](changes/verify-cheap-first/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/spec.md`](changes/verify-cheap-first/spec.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-step-limit/decisions.md`](changes/verify-step-limit/decisions.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-step-limit/findings.md`](changes/verify-step-limit/findings.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-step-limit/plan.md`](changes/verify-step-limit/plan.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-step-limit/research.md`](changes/verify-step-limit/research.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-step-limit/spec.md`](changes/verify-step-limit/spec.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
