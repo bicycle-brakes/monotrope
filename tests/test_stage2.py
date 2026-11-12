@@ -4578,8 +4578,11 @@ def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     out = subprocess.run([str(world.bin / "bash"), "-c", "echo real"], capture_output=True, text=True)
     assert out.returncode == 97 and "not served" in out.stderr, "a scripted bash step was silently dropped"
     world.script(docs=[{"stdout": "scripted", "exit": 4}])
-    respelt = subprocess.run([str(world.bin / "bash"), *stage2.DOCS_VERIFY[1:]], capture_output=True, text=True)
-    assert (respelt.returncode, respelt.stdout) == (4, "scripted"), "the runner's own vector is not the document check"
+    # The runner no longer launches bash for the document check (it runs the registry's local docs gates
+    # itself), so no spelling of a bash call reaches a scripted `docs` step: it runs the real bash.
+    vector = [str(world.bin / "bash"), "-c", "echo real-again; exit 4"]
+    respelt = subprocess.run(vector, capture_output=True, text=True)
+    assert (respelt.returncode, respelt.stdout) == (4, "real-again\n"), "a bash call was answered by a scripted step"
 
 
 OWED_ANSWER = (
@@ -5894,11 +5897,18 @@ def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: Worl
 def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> None:
     # Criterion 5. Planted fault: the ruff launch given `glm_env` or the caller's environment.
     venv_ruff(world)
-    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    # The extra `src/app.py` edit has no linked test, so the attempt takes the admitted full fallback
+    # and a `make` call exists to compare with; the targeted preparation's ruff runs without the
+    # admission names that only the full check's `make` carries.
+    attempt = formatted_attempt(
+        plant={"scripts/a.py": "a=1\n", "tests/test_a.py": A_FIX_TEST, "src/app.py": "value = 2\n"}
+    )
+    world.script(claude=[attempt], ruff=[{}] * 4, make=[{"stdout": "green\n"}])
     assert world.run("implement") == 0
     make_env = world.calls("make")[0]["env"]
+    assert world.calls("ruff"), "the attempt started no ruff"
     for call in world.calls("ruff"):
-        assert call["env"] == make_env
+        assert call["env"] == {name: make_env[name] for name in call["env"]}, "ruff got another environment"
         assert KEY not in call["env"].values()
         for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
             assert name not in call["env"], name
@@ -10380,7 +10390,8 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     for relative, content in inputs.items():
         if relative != "plans/changes/demo/plan.md":
             assert (world.root / relative).read_bytes() == content
-    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in runner_entries(world.plan)[-1]
+    assert runner_entries(world.plan)[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -10487,7 +10498,8 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
         assert f"> - `{relative}`" in world.text()
-    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in runner_entries(world.plan)[-1]
+    assert runner_entries(world.plan)[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -11031,7 +11043,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     entries = [line for line in plan.splitlines() if line.endswith("measured by the runner")]
     assert len(entries) == attempt
     assert [line.count("rejected") for line in entries] == [1] * (attempt - 1) + [0]
-    assert entries[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
@@ -11925,9 +11937,15 @@ def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, mo
     assert world.run("implement") == 0
     (entry,) = runner_entries(world.plan)
     # The elapsed span is the monotonic difference (45 s), whatever the wall clock did meanwhile (46 s).
-    assert entry == (
+    # The src/app.py-only attempt has no linked test: the full fallback's scope follows the verdict word.
+    head = (
         f"2026-10-20 23:59:30–2026-10-21 00:00:16 UTC, 45 s — implement · attempt 1 · route flash · "
-        f"model {stage2.GLM_FLASH[1]} · accepted · measured by the runner"
+        f"model {stage2.GLM_FLASH[1]} · accepted"
+    )
+    assert entry.startswith(head + " · full `make verify` ran (result: green)")
+    assert entry.endswith(" · measured by the runner")
+    assert stage2.time_entry("implement", 1, "flash", "m", True, UTC_START, UTC_START, 0).endswith(
+        "model m · accepted · measured by the runner"
     )
     same_day = stage2.time_entry("repair", 2, "codex-repair", "m", False, UTC_START, UTC_START, 0)
     assert same_day == (
@@ -12052,7 +12070,13 @@ def test_runner_preserves_precall_time_on_final_verdict(
 
     monkeypatch.setattr(stage2, "run_work_model", model)
     world.script(
-        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        # Each attempt declares its work in a `.txt` input the targeted selector does not cover, so the
+        # route is the admitted full check the `make` steps below script.
+        claude=[
+            {"stdout": "one", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+            {"stdout": "two", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+            {"stdout": "three", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+        ],
         make=[{"stdout": "red\n", "exit": 1}] * 2
         + [{"stdout": "green\n" if accepted else "red\n", "exit": 0 if accepted else 1}],
     )
@@ -13531,7 +13555,7 @@ def test_repair_lifecycle_fields_are_restored_before_verification(
     # The plan's time section is the runner's bookkeeping: the model's in-section append went with
     # the entry write, and the accepted entry stands beside the restored fields.
     entries = runner_entries(world.plan)
-    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    assert entries and " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     # The checkpoint committed the restored bytes.
     for relative, (status, implementation) in LIFECYCLE_STATES.items():
         shown = git(world.root, "show", f"HEAD:{relative}")
@@ -14129,7 +14153,7 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
     assert "last_reviewed: 2026-11-01" not in committed_plan
     assert "The attempt also wrote this line." in committed_plan
     entries = runner_entries(world.plan)
-    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    assert entries and " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     # A second repair that also edits the protected fields passes the same checks: the restoration
     # alone never rejects it. It carries one real edit, because an attempt whose only change is the
     # restored fields leaves no model work and is rejected (no-work-done; maintainer 2026-11-09).
@@ -25123,7 +25147,11 @@ def test_repair_records_verification_scope_and_outcome(
     assert world.run("repair") == 0
     body = git(world.root, "log", "-1", "--format=%B")
     text = world.text()
-    assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" in text
+    # The passing attempt's scope stands in its time line, not as a block in findings.md (Q-6).
+    assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" not in text
+    plan_lines = world.plan.read_text(encoding="utf-8").splitlines()
+    time_line = [line for line in plan_lines if "measured by the runner" in line]
+    assert time_line and "· accepted · " in time_line[-1] and "result: " in time_line[-1]
     if mode == "targeted":
         assert "targeted verification, not the full `make verify`; result: green" in body
         assert "`tests/test_fix.py`" in body and "a fresh full `make verify` is still required before phase 6" in body
@@ -25735,13 +25763,14 @@ def test_implement_refuses_uncovered_new_code_before_tests_or_fallback(
     elif case == "existing-uncovered-fallback":
         assert len(commands.of("make")) == 1
         assert commands.of("gate") == []
-        assert "has no linked test" in world.text()
+        assert "has no linked test" in world.plan.read_text(encoding="utf-8")
     elif case == "covered-shell-fallback":
         assert len(commands.of("make")) == 1
-        assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in world.text()
+        scope = world.plan.read_text(encoding="utf-8")
+        assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in scope
     else:
         assert len(commands.of("make")) == 1
-        assert "planted inventory fault" in world.text()
+        assert "planted inventory fault" in world.plan.read_text(encoding="utf-8")
         assert "new production code without a reachable test" not in world.text()
         assert git(world.root, "rev-parse", "HEAD") != baseline
 
@@ -25798,15 +25827,17 @@ def test_implement_preserves_full_fallback_boundaries(
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
     assert make["timeout"] == stage2.VERIFY_SECONDS
     assert commands.of("gate") == [], "the full fallback also ran targeted gates"
-    assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in world.text()
+    # A passing attempt's scope stands in its time line in plan.md, not in findings.md (Q-6).
+    scope = world.plan.read_text(encoding="utf-8")
+    assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in scope
     assert git(world.root, "rev-parse", "HEAD") != baseline
     if boundary == "shared-infrastructure":
-        assert "shared execution infrastructure" in world.text()
+        assert "shared execution infrastructure" in scope
     elif boundary == "stage2-test-file":
-        assert "tests/test_stage2.py" in world.text()
+        assert "tests/test_stage2.py" in scope
         assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
     else:
-        assert "planted inventory fault" in world.text()
+        assert "planted inventory fault" in scope
 
 
 @pytest.mark.parametrize("fault", ["red-pytest", "red-gate", "timeout", "launch-error"])
@@ -25888,7 +25919,8 @@ def test_all_targeted_verbs_record_actual_scope(
         assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in body
         assert "has no linked test" in body
     else:
-        assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" in text
+        assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" not in text
+        assert "· accepted · targeted verification" in world.plan.read_text(encoding="utf-8")
         assert "targeted verification, not the full `make verify`; result: green" in body
         assert "`tests/test_fix.py`" in body
     assert "VERIFY GREEN" not in body and "full verification green" not in body.lower()
