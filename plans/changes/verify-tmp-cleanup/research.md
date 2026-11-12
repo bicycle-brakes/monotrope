@@ -3,8 +3,8 @@ title: "Research — verify-tmp-cleanup"
 status: draft
 implementation_status: none
 date: 2026-11-10
-last_reviewed: 2026-11-10
-updated: 2026-11-10
+last_reviewed: 2026-11-12
+updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -90,3 +90,52 @@ Gate source: `decisions/gates.yaml` (gate `pytest`). Runner: `scripts/verify_all
 `decisions/gates.yaml` and `Makefile` **together** if the gate command line changes (W-6 pin, tests/test_ci.py:507-534); a mechanism that avoids editing the command line bypasses that pin. `scripts/verify_all.sh` for a runner-side mechanism, held command-free by tests/test_ci.py:1256-1267. `scripts/verify_lock.py`'s `supervise()` cleanup path is the only in-tree hook that provably runs on normal exit, red gates, cancellation and trapped signals — and its "Boundary" (verify_lock.py:44-49) states that a SIGKILLed supervisor leaves nothing to clean with; no in-process design escapes that case. `scripts/stage2.py` (targeted/cheap/proof launch sites) and `scripts/kit/probe.py` if their pytest runs must share the guarantee. `pyproject.toml` is the only existing in-tree pytest config point (retention ini options available there). Existing tests that must stay green: the ones listed under "Where it lives".
 
 **Neighbours.** The header's one neighbour, docs/research/2026-11-09-make-verify-long-term.md, carries the parent diagnosis and proposes exactly this cleanup step beside bead 87b0 (its "How the approach is structured today", "What has to be better" 7, "Proposed order of work" 1). Suggested additions from this pass: `plans/changes/archive/2026-11-06-verify-machine-lock/` (the state-root-vs-TMPDIR precedent, decisions.md:41) and `plans/changes/night-machine-facts/research.md` (the 87b0 boundary statement, line 54).
+
+## Redraft baseline — 2026-11-12
+
+Repository-only follow-up at `2fd91ebc`, after the maintainer answered Q-1
+in `decisions.md`. The 2026-11-10 exploration above describes the original
+baseline; it must not be read as a description of the rejected-attempt code
+now present in this checkout.
+
+- `scripts/verify_all.sh` still re-execs through `--tmp-scope` and queries
+  `--tmp-held` before its ordinary admission block. `scripts/verify_lock.py`
+  contains `_TempScope` and associated lifecycle code. Read-only comparison
+  against the checkout's `origin/main` reports 606 added and 15 removed
+  lines in that module. The new decision requires leaving this module
+  unchanged and replacing the runner's use of that lifecycle.
+- `tests/test_ci.py` already has real copied-runner placement, nesting,
+  verdict, option and entry-contract tests; they currently read the old
+  scope marker and container naming. `tests/test_verify_lock.py` ends with
+  the rejected architecture's temporary-scope block; the ordinary admission
+  and process-group tests precede it. Replacement behavioral proofs belong
+  at the runner entry Q-1 selected, without removing those ordinary tests.
+- `findings.md` records three rejected implementation attempts, with red
+  temporary-scope tests. It contains no open phase-2a review rows. Its
+  latest call record identifies this redraft; earlier green draft checks
+  are historical evidence, not a claim about the current implementation.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` were not
+  found in this worktree. The spec template, phase-3 prompt and available
+  interview, criterion-ledger, research-handoff and frontmatter checks are
+  present. No external source is needed for this bounded redraft.
+
+External session-registry and live pull-request state were not read under
+this attempt's worktree-and-git-directory restriction. No tracker write or
+repository-changing git command was made.
+
+### Draft retry diagnosis — 2026-11-12
+
+The first decision-aligned draft's post-run document check failed before
+executing a gate. At `2fd91ebc`, `scripts/verify_all.sh` still invokes
+`scripts.verify_lock --tmp-scope` before admission. In that module,
+`_flock_descriptor` yields but has no context-manager decorator;
+`_TempScope.start` uses its generator in a `with` statement, matching the
+reported `TypeError`. This is a source-code baseline failure, not a failed
+document criterion. No fresh full-run result is claimed from this reading.
+
+Q-1 already requires replacing that runner entry and leaving the module
+unchanged. Phase 4 therefore removes the obsolete entry while implementing
+the runner-local lifecycle; it does not repair or reactivate `_TempScope`.
+Until then, the runner's document-job post-check remains blocked even when
+the directly invoked document checks pass. This draft cannot remove that
+blocker within its permitted artifact-only writes.

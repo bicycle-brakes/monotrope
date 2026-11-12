@@ -5,14 +5,14 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
-last_reviewed: 2026-11-11
+last_reviewed: 2026-11-12
 updated: 2026-11-12
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-11-10"}
+produced_by: {kind: llm-session, name: claude-code, model: glm-5.3, version: "2026-11-12"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [findings, stage-2]
 ---
@@ -358,4 +358,234 @@ Stage-2 call, 2026-11-12: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[2]
 > FAILED tests/test_verify_lock.py::test_temp_scope_signals_clean_after_process_group[1]
 > 14 failed, 7 passed in 21.15s
+> ```
+
+Stage-2 call, 2026-11-12: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 3991 commits, 12 rules.
+
+## Decision-aligned redraft — 2026-11-12
+
+Updated `spec.md` and `plan.md` against checkout `2fd91ebc` and the
+maintainer's answered Q-1 of 2026-11-12. Added the repository-only baseline
+follow-up to `research.md`. The class remains bounded; no design or ADR is
+due. No phase-2a rows with Status open were found.
+
+The revised runner owns process-id-named areas, end/interrupt cleanup and
+next-start removal of dead-pid areas. It no longer delegates this lifecycle
+to `scripts/verify_lock.py`, which is protected from implementation edits.
+The plan replaces the rejected architecture's temporary-scope-only tests
+with runner-level proofs while preserving admission/process-group tests.
+The eleven criterion numbers remain; Q-1 replaces the former supervisor
+and protected-descendant lifecycle in criteria 4 and 7. The explicit hard-kill
+boundary now follows that answer's next-start, process-id rule. No criterion
+was changed to accommodate a gate failure.
+
+Historical phase-4 time copied from the superseded plan, not erased or
+reset by its new empty time section (runner measurements):
+
+- 2026-11-11 22:24:30–23:22:10 UTC: 3459 s, implement attempt 1,
+  route flash, model `glm-5.3-flash`, rejected.
+- 2026-11-11 23:22:37–23:26:39 UTC: 241 s, implement attempt 2,
+  route flash-repair, model `glm-5.3-flash`, rejected.
+- 2026-11-11 23:26:50–23:27:40 UTC: 50 s, implement attempt 3,
+  route stage-1, model `claude-sonnet-5-5`, rejected.
+
+No source/test implementation, tracker write, commit or git mutation was
+performed by this draft. Full verification and index regeneration belong
+to the runner. Live PR state and external session ownership were not read
+under the worktree-only restriction.
+
+Draft checks on 2026-11-12, all exit 0, using the checkout's
+`.venv/bin/python3` with `PYTHONDONTWRITEBYTECODE=1`:
+
+- `scripts/check_interview_minimums.py --change verify-tmp-cleanup`:
+  green on the answered Q-1, not the superseded skip.
+- `scripts/check_criterion_ledger.py`: green, including replacement
+  runner-test entries marked not yet written.
+- `scripts/check_research_handoff.py --change verify-tmp-cleanup`:
+  measured and explicitly exempt from research-swarm/v2 obligations.
+- `scripts/check_frontmatter_current.py`: green.
+- `git diff --check`: green.
+
+The requested change-artifact validator is absent, so its gate was not run;
+no full `make verify` result is claimed by this draft.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/findings.md` +48 -1
+> - `plans/changes/verify-tmp-cleanup/plan.md` +84 -131
+> - `plans/changes/verify-tmp-cleanup/research.md` +34 -2
+> - `plans/changes/verify-tmp-cleanup/spec.md` +117 -121
+>
+> Diagnostics:
+> ```text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> Traceback (most recent call last):
+>   File "<frozen runpy>", line 198, in _run_module_as_main
+>   File "<frozen runpy>", line 88, in _run_code
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1569, in <module>
+>     raise SystemExit(main())
+>                      ^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1565, in main
+>     return supervise(command, tmp_scope=args.tmp_scope)
+>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1498, in supervise
+>     scope = _TempScope.start()
+>             ^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1340, in start
+>     with _flock_descriptor(registry_fd):
+>          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> TypeError: 'generator' object does not support the context manager protocol
+> ```
+
+Stage-2 call, 2026-11-12: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 1040 files, 3991 commits, 12 rules.
+
+## Draft retry evidence — 2026-11-12
+
+Reviewed the existing decision-aligned spec and plan against `2fd91ebc`,
+the answered Q-1 and the latest repository handover of 2026-11-12. The
+decision record and commit are newer than that handover's parked-lane
+recommendation. The class, eleven acceptance criteria, maintainer answer,
+four-hour appetite and opening plan card remain unchanged. No open phase-2a
+review rows were found; a bounded change requires no design or ADR draft.
+
+Extended `research.md` with the reported post-run failure and a read-only
+source diagnosis: `_flock_descriptor` yields without a context-manager
+decorator, while `_TempScope.start` uses it in a `with` statement. The old
+runner calls that code before gates, including for `--job docs`. Updated
+the spec's problem evidence and the plan's implementation and verification
+instructions to make this blocker explicit. Q-1 already requires removing
+that obsolete runner entry; fixing the protected module or bypassing a gate
+would contradict this draft's scope. Artifact-only edits cannot make the
+runner's post-check green before implementation. The full check remains
+blocked; the first attempt's diagnostic is not represented as a fresh run.
+
+Direct checks on 2026-11-12, all exit 0 with `PYTHONDONTWRITEBYTECODE=1`
+and this worktree's `.venv/bin/python3`:
+
+- `scripts/check_interview_minimums.py --change verify-tmp-cleanup`.
+- `scripts/check_criterion_ledger.py`.
+- `scripts/check_research_handoff.py --change verify-tmp-cleanup`, explicitly
+  exempt from swarm-specific obligations.
+- `scripts/check_frontmatter_current.py`.
+- A read-only structure/source check: required headers, bounded class,
+  eleven refuting cases, opening card, exactly one ledger, empty time
+  section, no design due and the undecorated generator in the baseline.
+
+`git diff --check` also passed. `templates/plan.md` and
+`scripts/validate_change_artefacts.py` remain absent. These direct checks
+do not replace the runner's document-job post-check or full `make verify`.
+
+This retry edited only `research.md`, `spec.md`, `plan.md` and this findings
+file in the change folder. The pre-existing `plans/INDEX.md` modification
+was left untouched. No source/test change, tracker write, commit or git
+mutation was made. External session-registry and live pull-request state
+were not read under the worktree-only restriction. Next: the orchestrator
+handles the blocked draft-to-implementation transition under Q-1; phase 4
+executes the revised plan only after the unchanged card is shown.
+
+> Attempt 2 (codex-repair): the runner put back what a draft may not change:
+> - `plans/INDEX.md`
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/findings.md` +44 -0
+> - `plans/changes/verify-tmp-cleanup/plan.md` +12 -2
+> - `plans/changes/verify-tmp-cleanup/research.md` +17 -0
+> - `plans/changes/verify-tmp-cleanup/spec.md` +4 -0
+>
+> Diagnostics:
+> ```text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> Traceback (most recent call last):
+>   File "<frozen runpy>", line 198, in _run_module_as_main
+>   File "<frozen runpy>", line 88, in _run_code
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1569, in <module>
+>     raise SystemExit(main())
+>                      ^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1565, in main
+>     return supervise(command, tmp_scope=args.tmp_scope)
+>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1498, in supervise
+>     scope = _TempScope.start()
+>             ^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1340, in start
+>     with _flock_descriptor(registry_fd):
+>          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> TypeError: 'generator' object does not support the context manager protocol
+> ```
+
+Stage-2 call, 2026-11-12: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1040 files, 3991 commits, 12 rules.
+
+## GLM draft evidence — 2026-11-12
+
+Attempt 3 reviewed the decision-aligned `spec.md` and `plan.md` against
+checkout `2fd91ebc`, the answered Q-1 and this worktree's tree state. Both
+artifacts stand as written, so this attempt verifies their premises instead
+of rewriting them; no criterion, decision, class or card text moved.
+
+Verified by reading the tree and the gate sources, not by executing them:
+
+- All eight already-named ledger tests are defined in `tests/test_ci.py`
+  (`test_the_makefile_runs_what_the_one_list_runs` 507,
+  `test_runner_holds_no_command_list_of_its_own` 1282,
+  `test_verify_runs_have_distinct_nested_temp_areas` 2441,
+  `test_verify_pytest_sessions_and_workers_use_run_area` 2510,
+  `test_verify_temp_cleanup_preserves_exit_status` 2569,
+  `test_temp_scope_preserves_runner_entry_contracts` 2596,
+  `test_verify_rejects_external_basetemp_options` 2691,
+  `test_verify_keeps_unrelated_and_refuses_malformed_addopts` 2710),
+  and none of the six `test_verify_runner_*` not-yet-written entries is
+  defined anywhere under `tests/`, as `check_criterion_ledger.py` demands.
+- `scripts/verify_all.sh` lines 115-116 still re-exec through the obsolete
+  `--tmp-scope` entry, so the runner's document-job post-check still aborts
+  in `_TempScope.start` exactly as diagnosed in `research.md` ("Draft retry
+  diagnosis — 2026-11-12"): a baseline source failure outside the change
+  folder, which artifact-only writes cannot remove. The plan's step 2
+  removes that entry in phase 4; this draft leaves it visibly blocked.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` remain
+  absent; the change folder holds exactly the five expected artifacts and
+  no `design.md`, correct for class `bounded`.
+
+Changed only the three `produced_by` lines (this attempt's model) and this
+evidence section. This attempt has no shell and ran no check script; the
+previous attempts' green direct checks were read back against their sources
+and the tree, and no fresh check output is claimed. The class stays
+bounded, no design or ADR draft is due, and no phase-2a rows with Status
+open exist. The pre-existing `plans/INDEX.md` modification was left
+untouched; the runner owns index regeneration, full verification and the
+commit. No tracker write and no repository-changing git command was made;
+external session-registry and live pull-request state were not read under
+the worktree-only restriction.
+
+> Attempt 3 (glm): the runner put back what a draft may not change:
+> - `plans/INDEX.md`
+
+> Attempt 3 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/findings.md` +42 -1
+> - `plans/changes/verify-tmp-cleanup/plan.md` +1 -1
+> - `plans/changes/verify-tmp-cleanup/spec.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - `bash scripts/verify_all.sh --job docs` exited 1
+> Traceback (most recent call last):
+>   File "<frozen runpy>", line 198, in _run_module_as_main
+>   File "<frozen runpy>", line 88, in _run_code
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1569, in <module>
+>     raise SystemExit(main())
+>                      ^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1565, in main
+>     return supervise(command, tmp_scope=args.tmp_scope)
+>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1498, in supervise
+>     scope = _TempScope.start()
+>             ^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-tmp-cleanup/scripts/verify_lock.py", line 1340, in start
+>     with _flock_descriptor(registry_fd):
+>          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> TypeError: 'generator' object does not support the context manager protocol
 > ```
