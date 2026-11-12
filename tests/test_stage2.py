@@ -22956,6 +22956,16 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
         assert any("`make verify` did not finish" in problem for problem in problems)
 
 
+def test_shorten_git_error_keeps_the_start_and_the_reason_after_a_long_path() -> None:
+    message = "fatal: Unable to create '" + "/tmp/" + "d" * 300 + "/.git/index.lock': File exists."
+    shortened = stage2.shorten_git_error(message)
+    assert len(shortened) <= 200
+    assert shortened.startswith("fatal: Unable to create")
+    assert shortened.endswith("File exists.")
+    assert "index.lock" in shortened
+    assert stage2.shorten_git_error("  short  ") == "short"
+
+
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

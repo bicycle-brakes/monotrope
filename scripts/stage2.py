@@ -4175,6 +4175,16 @@ def release_loop(
     release(root, change)
 
 
+def shorten_git_error(text: str, bound: int = 200) -> str:
+    """Cut a git error to `bound` characters, keeping its start and its end (the reason comes last)."""
+    text = text.strip()
+    if len(text) <= bound:
+        return text
+    marker = " … "
+    head = (bound - len(marker)) // 2
+    return text[:head] + marker + text[len(text) - (bound - len(marker) - head) :]
+
+
 def _git_output(
     root: Path,
     *args: str,
@@ -4197,7 +4207,7 @@ def _git_output(
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
     return os.fsdecode(done.stdout)
 
 
@@ -4533,7 +4543,7 @@ def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin:
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
     return done.stdout
 
 

@@ -149,8 +149,13 @@ owns index regeneration and tracker-backed registry/full verification.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: three attempts rejected; the fourth run starts from the kept third attempt with the plan correction Q-2.
+
 ## Time used
 
 2026-11-12 13:48:41–15:35:51 UTC, 6429 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-12 15:36:03–16:04:37 UTC, 1714 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-12 16:04:51–16:39:14 UTC, 2063 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-12 18:16:39–19:18:51 UTC, 3732 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
