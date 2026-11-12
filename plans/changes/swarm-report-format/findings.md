@@ -700,3 +700,13 @@ Stage-2 call, 2026-11-12: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` could not be run: .venv/bin/python3 was stopped by the runner's tool limit after 5 minutes
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/swarm-report-format/stage2/attempts/swarm-report-format/attempt-3-20261112T112815024704Z-39d0d54b.md
 > ```
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1040 files, 3997 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1040 files, 3997 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 1040 files, 3997 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4002 commits, 12 rules.
+
+Runner restoration, 2026-11-12: repair · attempt 1 · route codex — lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged; plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
