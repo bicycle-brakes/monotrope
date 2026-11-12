@@ -2452,3 +2452,16 @@ Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-12: repair · attempt 1 · route codex — lifecycle fields: plans/changes/no-work-ledger-marker/plan.md, plans/changes/no-work-ledger-marker/spec.md — unchanged
+
+Stage-2 call, 2026-11-12: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4032 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-12
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+
+Phase 6 verdict: codex 01a1d17f-ef53-7fa3-9d5a-a1c3ea8a3c73, 2026-11-12
+Reviewer session: codex 01a1d17f-ef53-7fa3-9d5a-a1c3ea8a3c73 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
