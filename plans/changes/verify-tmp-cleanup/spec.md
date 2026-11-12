@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-12"
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, verification, temporary-files]
 class: bounded
-appetite: 4
+appetite: 6
 adr_files: []
 neighbours: [docs/research/2026-11-09-make-verify-long-term.md]
 ---
@@ -98,6 +98,12 @@ exists; this is a process-id check, not descendant tracking.
     refuses before gates with an explanation.
     *Refuted by:* An accepted basetemp spelling escapes management,
     malformed quoting proceeds silently, or unrelated pytest options are discarded.
+12. When a git command of the runner fails, its diagnostic keeps git's
+    reason line whole however long the temporary path in it is
+    (`decisions.md#Q-2`, `decisions.md#Q-3`).
+    *Refuted by:* A long path pushes the reason (for a held lock,
+    `index.lock`) out of the diagnostic, or a warning line before git's
+    `fatal:` or `error:` line replaces the reason.
 
 ## Non-goals
 
@@ -115,10 +121,13 @@ exists; this is a process-id check, not descendant tracking.
 
 `scripts/verify_lock.py` stays unchanged, as Q-1 explicitly requires; so do
 `tests/test_verify_lock.py` and the admission/process-group contract.
-`decisions/gates.yaml`, `Makefile`, `pyproject.toml`, `scripts/stage2.py`,
+`decisions/gates.yaml`, `Makefile`, `pyproject.toml`,
 `scripts/kit/probe.py` and `scripts/verify_duration.py` stay unchanged: the
 existing commands, dependencies, separate entry points and duration
 ownership do not need edits. No held harness/governance path is edited.
+`scripts/stage2.py` and `tests/test_stage2.py` change only for criterion 12:
+the one helper that shortens a git error and its test (`decisions.md#Q-2`,
+`decisions.md#Q-3`).
 
 ## Boundary
 
@@ -136,8 +145,9 @@ preserved conservatively.
 ## Definition of Done
 
 - `PYTHON=.venv/bin/python3 make verify` is green at the implementation commit.
-- The pull request carries `scripts/verify_all.sh`, `tests/test_ci.py` and
-  the change artifacts; the orchestrator regenerates `plans/INDEX.md`.
+- The pull request carries `scripts/verify_all.sh`, `tests/test_ci.py`,
+  `scripts/stage2.py`, `tests/test_stage2.py` (criterion 12 only) and the
+  change artifacts; the orchestrator regenerates `plans/INDEX.md`.
 - The file list shows the protected areas untouched and non-goals unbuilt.
 - The pull request closes bead coding-harness-bxxt.3 — verification temporary-folder
   cleanup; its final commit carries `Closes-Bead: coding-harness-bxxt.3`.
@@ -147,7 +157,8 @@ preserved conservatively.
 ## Open decisions
 
 None open. The maintainer's answered Q-1 replaces the earlier interview skip
-and the supervisor-based plan; this draft records no new maintainer answer.
+and the supervisor-based plan; Q-2 and Q-3 (2026-11-12) add the git-error
+helper of criterion 12 and raise the appetite to six hours.
 
 - [DETAIL] Exactly `HARNESS_VERIFY_KEEP_TMP=1` requests retention; other
   values remove normally, because keeping evidence must be explicit.
@@ -162,8 +173,9 @@ and the supervisor-based plan; this draft records no new maintainer answer.
   storage failure cannot turn verification green.
 - [DETAIL] Refuse explicit basetemp options rather than silently rewriting
   caller options; retain all unrelated options unchanged.
-- [DETAIL] Keep the existing four-hour phase-4 appetite, repairs included;
-  rejected attempts already recorded in `findings.md` count against it.
+- [DETAIL] The phase-4 appetite is six hours, repairs included (raised from
+  four by the maintainer on 2026-11-12, `decisions.md#Q-3`); rejected attempts
+  already recorded in `findings.md` count against it.
 
 These reversible details are decided here with their reasons; they do not
 reopen Q-1 or add a supervisor lifecycle.

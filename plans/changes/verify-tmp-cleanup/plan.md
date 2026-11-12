@@ -102,8 +102,13 @@ and its tests are unchanged and the only lifecycle owner is the shell runner.
 - 10: tests/test_ci.py::test_the_makefile_runs_what_the_one_list_runs — the gate command and Makefile recipe drift.
 - 10: tests/test_ci.py::test_verify_runner_preserves_entry_contracts — list allocates/admit work, job/CI selection changes, nested admission requeues or worker/duration ownership changes.
 - 11: tests/test_ci.py::test_verify_runner_refuses_conflicting_pytest_options — basetemp escapes, malformed quoting passes or unrelated options are lost.
+- 12: tests/test_stage2.py::test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path — a long path or a leading warning line pushes git's reason out of the diagnostic.
 
-## Correction for the fourth run — 2026-11-12 (decisions.md#Q-2)
+## Correction for the fourth run — 2026-11-12 (decisions.md#Q-2) — superseded
+
+Superseded by the next section (decisions.md#Q-3): keeping the start and the
+end did not carry; do not implement this section.
+
 
 The third attempt left three red tests, all cases of
 `tests/test_stage2.py::test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic`
@@ -148,7 +153,7 @@ were found. Explore used Stage 2 on 2026-11-10, route flash, endpoint
 `glm-coding-plan`, model `glm-5.3-flash`; no Explore fallback is recorded.
 The historical implement fallback was Stage 1, model `claude-sonnet-5-5`,
 because two Flash post-run checks failed; its rejected time remains in
-`findings.md` and counts against the four-hour appetite, not a fresh budget.
+`findings.md` and counts against the six-hour appetite, not a fresh budget.
 `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent at
 `a320748b`; use the phase-3 form and existing artifact gates. The orchestrator
 owns index regeneration and tracker-backed registry/full verification.

@@ -1010,3 +1010,9 @@ Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_ci.py`, `tests/test_repo_settings.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
 
 Runner restoration, 2026-11-12: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1040 files, 4033 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1040 files, 4034 commits, 12 rules.
+
+Stage-2 call, 2026-11-12: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 1040 files, 4034 commits, 12 rules.
