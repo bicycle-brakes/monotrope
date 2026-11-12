@@ -87,6 +87,7 @@ Options:               each named after what it does, with its consequence
 Recommendation:        <one option> — because <one sentence>
 If you say "ok":       <exactly what will then be built>
 What is lost:          <what the other option would have given>
+Downside you accept:   <per option, the downside that comes with choosing it>
 ```
 
 The five context lines come first, in the maintainer's language, before any
@@ -94,6 +95,14 @@ option; identifiers are explained at first use, and the actual question
 stands last, on its own line. When the answer is recorded, the context shown
 here goes into the record's own `context` field
 (`docs/WORKFLOW.md`, "The question protocol").
+
+The question asks which downside the maintainer accepts with the choice, as
+the interview does (`prompts/01a-interview.md`, "How you ask"): every option
+names its downside, an answer accepts only a downside that was shown or that
+the maintainer stated, and where it is not settled the record stays `open` —
+you never invent it. The answered record carries the complete decision
+statement with its `accepting` clause and the date of the day it is
+recorded; `draft` refuses a change whose answered record has none.
 
 Answers are: **ok** · **option N** · **change criterion N to "…"** · **no,
 because …**. That is the decision record (MADR) in question form. Shorthand

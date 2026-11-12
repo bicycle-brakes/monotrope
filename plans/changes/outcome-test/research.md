@@ -4,27 +4,20 @@ status: draft
 implementation_status: partial
 date: 2026-11-06
 last_reviewed: 2026-11-06
-updated: 2026-11-08
+updated: 2026-11-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-3nm5
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol draft gap check, 2026-11-06; exploration attributed below"}
+produced_by:
+  - {kind: llm-session, name: claude-code, model: glm-5.3-flash, version: "2026-11-06"}
+  - {kind: llm-session, name: codex, model: gpt-6.1-sol, version: "2026-11-06"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # outcome test — Research
-
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
 
 Stage-2 call, 2026-11-06: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 909 files, 3362 commits, 12 rules.
 
