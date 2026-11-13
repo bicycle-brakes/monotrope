@@ -1174,6 +1174,9 @@ def test_topic_report_preserves_bare_and_exact_fence(sworld: SwarmWorld, name: s
     ("name", "wrap"),
     [
         ("prose-before", lambda body: f"Here is my report.\n\n{fenced(body)}"),
+        ("json-fragment-before", lambda body: "See {}.\n" + fenced(body)),
+        ("json-fragment-after", lambda body: fenced(body) + '\nExample: {"note": 1}'),
+        ("object-beside-fence", lambda body: f"{body}\n{fenced(body)}"),
         ("residue-after", lambda body: f"{fenced(body)}\n</arg_value></tool_call>"),
         ("prose-and-residue", lambda body: f"Sure:\n\n{fenced(body)}\n</arg_value></tool_call>"),
         ("thick-fence", lambda body: fenced(body, ticks="````")),
@@ -1215,7 +1218,6 @@ def test_topic_report_ignores_brace_fragments_around_one_fence(before: str, afte
     ("name", "answer"),
     [
         ("two-fences", lambda body: f"Draft:\n{fenced(body)}\nFinal:\n{fenced(body)}"),
-        ("bare-beside-fence", lambda body: f"{body}\n{fenced(body)}"),
         (
             "duplicate-keys",
             lambda _body: fenced(
@@ -1269,14 +1271,15 @@ def test_topic_report_never_selects_an_object_nested_in_a_truncated_one(answer: 
         stage2_research_run.topic_report_payload(answer)
 
 
-def test_topic_report_refuses_competing_objects_hidden_by_prose_quotes() -> None:
-    # Two prose quotes must not hide the first object and select the fenced second one.
-    answer = 'He wrote 6" then: {"a": 1} and 7" later:\n```json\n{"b": 2}\n```'
+def test_topic_report_ignores_json_in_prose_around_one_fence() -> None:
+    # Planted fault: incidental complete JSON objects in prose reject the sole fenced report.
+    body = repository_report(2)
+    answer = 'He wrote 6" then: {} and 7" later:\n' + fenced(body) + '\nSee {"note": 1}.'
     try:
-        stage2_research_run.topic_report_payload(answer)
-    except stage2_research_run.ResearchReportError:
-        return
-    pytest.fail("both complete objects must count despite prose quotes; neither may be selected")
+        selected = stage2_research_run.topic_report_payload(answer)
+    except stage2_research_run.ResearchReportError as error:
+        pytest.fail(f"only the single fence's content may be parsed, regardless of surrounding JSON: {error}")
+    assert selected == body, "surrounding JSON must not change the selected report"
 
 
 @pytest.mark.parametrize("field", ["started_at", "ended_at"])
@@ -1478,6 +1481,34 @@ def test_topic_correction_persists_attempts_and_resumes_final_report(sworld: Swa
     assert not any(item[0] in reused_ids for item in final["resume"]["not_reused"]), (
         "dispatching a correction must not call the reused initial batch unplanned"
     )
+
+
+def test_topic_correction_appends_to_first_batch_reuse_audit(sworld: SwarmWorld, monkeypatch) -> None:
+    # Planted fault: planning the correction batch again erases the initial batch's discard reasons.
+    bad = with_extra_field(repository_report(4))
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": bad}, {"stdout": bad}]})
+    assert sworld.run() == 1
+    (sworld.bin / "calls.jsonl").unlink()
+    audits = []
+    original = stage2_research_run.Run.run_stage
+
+    def capture(run, stage, *args, **kwargs):
+        result = original(run, stage, *args, **kwargs)
+        if stage == "topics":
+            audits.append(set(run.not_reused))
+        return result
+
+    monkeypatch.setattr(stage2_research_run.Run, "run_stage", capture)
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": bad}, {"stdout": repository_report(4)}]})
+    assert sworld.run() == 0
+    assert len(audits) == 2, "both initial and correction dispatch batches must run"
+    first_topics = {item for item in audits[0] if item[0].startswith("topics-")}
+    assert ("topics-4-2", "outcome") in first_topics
+    assert ("topics-4-2-correction", "not planned") in first_topics
+    final = {tuple(item) for item in manifest_of(sworld)["resume"]["not_reused"]}
+    assert first_topics <= final, "every initial batch discard reason must survive the correction batch"
+    assert ("topics-4-2-correction", "outcome") in final, "the correction adds its own reuse decision"
+    assert len(final) == len(manifest_of(sworld)["resume"]["not_reused"]), "audit entries are not duplicated"
 
 
 def test_topic_corrections_account_for_every_invocation(sworld: SwarmWorld) -> None:

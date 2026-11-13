@@ -161,43 +161,26 @@ def payload_text(stdout: str) -> str:
 CORRECTION_SUFFIX = "-correction"
 
 
-def _object_spans(text: str) -> list[str]:
-    """Detect competing objects outside a fence; never select report content here."""
-    spans = []
-    decoder = json.JSONDecoder()
-    index = 0
-    while (start := text.find("{", index)) != -1:
-        try:
-            _, end = decoder.raw_decode(text, start)
-        except (ValueError, RecursionError):
-            # A prose brace is not a competing JSON object. Keep looking for
-            # complete candidates without repairing or selecting this fragment.
-            index = start + 1
-            continue
-        spans.append(text[start:end])
-        index = end
-    return spans
-
-
 def topic_report_payload(stdout: str) -> str:
     """Accept a whole JSON object or one JSON/unlabelled fence, never a nested candidate.
 
-    Wrapping may carry prose or tool residue, but no competing object. The unchanged
-    strict validator still checks duplicate keys, finite values and the report schema.
+    With exactly one fence, only its content is parsed; surrounding prose is ignored.
+    The unchanged strict validator checks duplicate keys, finite values and the report schema.
     """
     text = (stdout or "").strip()
-    try:
-        value = json.loads(text)
-    except RecursionError as error:
-        raise ResearchReportError("JSON decoder recursion limit exceeded") from error
-    except ValueError:
-        pass
-    else:
+    # Count every fence before parsing: when one block exists, surrounding prose
+    # never enters a JSON decoder. Other languages and multiple blocks stay invalid.
+    markers = list(re.finditer(r"^(`{3,})([^\n]*)$", text, re.M))
+    if not markers:
+        try:
+            value = json.loads(text)
+        except RecursionError as error:
+            raise ResearchReportError("JSON decoder recursion limit exceeded") from error
+        except ValueError as error:
+            raise ResearchReportError("unclosed quote or object: expected a whole object or one JSON fence") from error
         if isinstance(value, dict):
             return text
         raise ResearchReportError("the report must be a JSON object")
-    # Count every fence, including other languages, rather than choosing one usable block.
-    markers = list(re.finditer(r"^(`{3,})([^\n]*)$", text, re.M))
     if (
         len(markers) != 2
         or markers[0][1] != markers[1][1]
@@ -206,10 +189,6 @@ def topic_report_payload(stdout: str) -> str:
     ):
         raise ResearchReportError("unclosed quote or object: expected a whole object or one JSON fence")
     opening, closing = markers
-    # Never join prose across the report: disconnected fragments must not
-    # manufacture a competing object that was absent from the answer.
-    if _object_spans(text[: opening.start()]) or _object_spans(text[closing.end() :]):
-        raise ResearchReportError("a competing object outside the fence refuses extraction")
     selected = text[opening.end() : closing.start()].strip()
     try:
         value = json.loads(selected)
@@ -951,7 +930,9 @@ class Run:
         configured allowance (a correction batch passes each seat's remaining original allowance).
         """
         assert self.store is not None and self.run_id is not None and self.source is not None
+        additional_batch = stage in self.stage_order
         self.stage_order.append(stage)
+        batch_ids = {e["slot_id"] for e in entries}
         planned = [
             {k: e[k] for k in ("slot_id", "stage", "topic", "seat", "endpoint", "model", "prompt_sha256")}
             for e in (
@@ -960,16 +941,19 @@ class Run:
                     **{k: v for k, v in self.records.items() if v["stage"] == stage and v.get("reused_from")},
                 }.values()
             )
+            if not additional_batch or e["slot_id"] in batch_ids
         ]
         prefix = stage + "-"
+
+        def in_scope(key: str) -> bool:
+            return key in batch_ids if additional_batch else key == stage or key.startswith(prefix)
+
         scoped = dataclasses.replace(
             self.source,
-            results={k: v for k, v in self.source.results.items() if k == stage or k.startswith(prefix)},
-            interrupted=[k for k in self.source.interrupted if k == stage or k.startswith(prefix)],
+            results={k: v for k, v in self.source.results.items() if in_scope(k)},
+            interrupted=[k for k in self.source.interrupted if in_scope(k)],
             older={
-                run: kept
-                for run, slots in self.source.older.items()
-                if (kept := [k for k in slots if k == stage or k.startswith(prefix)])
+                run: kept for run, slots in self.source.older.items() if (kept := [k for k in slots if in_scope(k)])
             },
         )
         reuse = plan_reuse(
@@ -979,13 +963,11 @@ class Run:
             and bool(self.records[record["slot_id"]].get("reused_from"))
             or validate(self.entries[record["slot_id"]], record),
         )
-        # A second batch supersedes the same stage's audit, rather than calling its other
-        # planned contributions "not planned". Adopted invalid first attempts remain evidence.
-        self.not_reused = [(key, why) for key, why in self.not_reused if not (key == stage or key.startswith(prefix))]
-        self.not_reused.extend(
-            (key, why) for key, why in reuse.not_reused if not self.records.get(key, {}).get("reused_from")
-        )
-        batch_ids = {e["slot_id"] for e in entries}
+        # A correction batch adds its own decisions without reclassifying or erasing
+        # the initial batch's reuse/launch evidence. Keep each historical reason once.
+        for key, why in reuse.not_reused:
+            if not self.records.get(key, {}).get("reused_from") and (key, why) not in self.not_reused:
+                self.not_reused.append((key, why))
         for slot_id, record in reuse.reused.items():
             if slot_id not in batch_ids:
                 continue
