@@ -2660,3 +2660,14 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1048 files, 4136 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-17 | BLOCKER | SPEC | Phase 6 | plans/changes/explore-provenance/spec.md:174; plans/changes/explore-provenance/plan.md:249 | [DIVERGENT] The specification protects every other change’s research file, but the plan authorizes corrections to `decision-statement-skeleton/research.md` and `verify-step-limit/research.md`, and commit `b287d473` implements them. These edits follow the maintainer’s decision Q-6, yet fail the specification’s explicit scope restriction. Record the approved two-file exception in the specification so its acceptance contract agrees with the plan and implementation. [Protected areas; Definition of Done] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d6a3-860e-7062-9c13-a26166bb22d7, 2026-11-13
+Reviewer session: codex 01a1d6a3-860e-7062-9c13-a26166bb22d7 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
