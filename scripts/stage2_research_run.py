@@ -182,8 +182,8 @@ def topic_report_payload(stdout: str) -> str:
     markers = list(re.finditer(r"^(`{3,})([^\n]*)$", text, re.M))
     if (
         len(markers) != 2
-        or markers[0][1] != markers[1][1]
-        or markers[0][2].strip() not in ("", "json")
+        or len(markers[1][1]) < len(markers[0][1])
+        or markers[0][2].strip().lower() not in ("", "json")
         or markers[1][2].strip()
     ):
         raise ResearchReportError("unclosed quote or object: expected a whole object or one JSON fence")

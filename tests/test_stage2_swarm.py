@@ -1193,6 +1193,38 @@ def test_topic_report_accepts_single_wrapped_object(sworld: SwarmWorld, name: st
 
 
 @pytest.mark.parametrize(
+    ("info", "opening", "closing"),
+    [
+        ("JSON", "```", "```"),
+        ("JsOn", "```", "```"),
+        ("json", "```", "`````"),
+        ("", "````", "`````"),
+        ("JSON", "````", "`````"),
+    ],
+)
+def test_topic_report_accepts_case_insensitive_json_and_longer_closing_fence(
+    info: str, opening: str, closing: str
+) -> None:
+    body = repository_report(2)
+    answer = f"Here is the report.\n{opening}{info}\n{body}\n{closing}\n</tool_call>"
+    try:
+        selected = stage2_research_run.topic_report_payload(answer)
+    except stage2_research_run.ResearchReportError as error:
+        pytest.fail(f"a JSON label in any case and a sufficiently long closing fence must be accepted: {error}")
+    assert selected == body, "extraction must preserve the report exactly"
+
+
+@pytest.mark.parametrize(
+    ("info", "opening", "closing"),
+    [("javascript", "```", "`````"), ("json", "`````", "````"), ("JSON", "````", "```")],
+)
+def test_topic_report_refuses_other_labels_and_shorter_closing_fence(info: str, opening: str, closing: str) -> None:
+    body = repository_report(2)
+    with pytest.raises(stage2_research_run.ResearchReportError):
+        stage2_research_run.topic_report_payload(f"Report:\n{opening}{info}\n{body}\n{closing}\nDone.")
+
+
+@pytest.mark.parametrize(
     ("before", "after"),
     [
         ("A prose fragment {x}.\n", ""),

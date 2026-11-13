@@ -876,3 +876,10 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
 
 Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1040 files, 4059 commits, 12 rules.
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4064 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+
+Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
