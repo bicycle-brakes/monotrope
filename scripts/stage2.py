@@ -4175,15 +4175,13 @@ def release_loop(
     release(root, change)
 
 
-def shorten_git_error(text: str, bound: int = 1000) -> str:
+def shorten_git_error(text: str) -> str:
     """Keep git's first fatal/error line whole, or its first non-empty line.
 
     Drop hint paragraphs while preserving the reason after a long temporary path.
-    Only a reason line longer than `bound` is cut, at its end.
     """
     lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
-    first = next((line for line in lines if line.startswith(("fatal:", "error:"))), lines[0] if lines else "")
-    return first if len(first) <= bound else first[: bound - 1] + "…"
+    return next((line for line in lines if line.startswith(("fatal:", "error:"))), lines[0] if lines else "")
 
 
 def _git_output(
@@ -4202,7 +4200,7 @@ def _git_output(
             text=not preserve_newlines,
             errors=None if preserve_newlines else "replace",
             check=False,
-            env=env,
+            env={**(os.environ if env is None else env), "LC_ALL": "C"},
             timeout=GIT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:
@@ -4538,7 +4536,7 @@ def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin:
             capture_output=True,
             text=False,
             check=False,
-            env=env,
+            env={**(os.environ if env is None else env), "LC_ALL": "C"},
             timeout=GIT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:

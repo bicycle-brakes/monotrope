@@ -22958,7 +22958,7 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
 
 def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> None:
     """Fault this pins: a fixed cut of git's message loses the reason behind a long temporary path."""
-    path = "/tmp/" + "d" * 300 + "/.git/index.lock"
+    path = "/tmp/" + "d" * 5000 + "/.git/index.lock"
     message = f"fatal: Unable to create '{path}': File exists.\n\nAnother git process seems to be running.\n"
     shortened = stage2.shorten_git_error(message)
     assert shortened == f"fatal: Unable to create '{path}': File exists."
@@ -22969,7 +22969,40 @@ def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> Non
     )
     assert stage2.shorten_git_error("  short  ") == "short"
     assert stage2.shorten_git_error("") == ""
-    assert len(stage2.shorten_git_error("x" * 5000)) == 1000
+    assert stage2.shorten_git_error("x" * 5000) == "x" * 5000
+
+
+@pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])
+@pytest.mark.parametrize("explicit_env", [False, True])
+def test_git_errors_use_c_locale_and_keep_reason_after_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper: str, explicit_env: bool
+) -> None:
+    """A localized fatal line after a warning must not disappear from diagnostics."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"} if explicit_env else None
+    observed = {}
+
+    def fail_git(command, **kwargs):
+        env = kwargs["env"]
+        observed.update(os.environ if env is None else env)
+        prefix = "fatal:" if observed.get("LC_ALL") == "C" else "Schwerwiegend:"
+        stderr = f"warning: noisy prelude\n{prefix} Unable to create '/tmp/repo/.git/index.lock': File exists.\n"
+        if not kwargs.get("text", False):
+            stderr = stderr.encode()
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        getattr(stage2, helper)(tmp_path, "status", env=supplied)
+    assert "index.lock" in str(failure.value), "Git's reason must survive a leading warning in any caller locale"
+    assert "warning:" not in str(failure.value)
+    assert observed["LC_ALL"] == "C"
+    if supplied is None:
+        assert observed["GIT_TEST_SENTINEL"] == "inherited"
+    else:
+        assert observed["GIT_INDEX_FILE"] == "private-index"
+        assert supplied["LC_ALL"] == "de_DE.UTF-8", "Do not mutate the caller's environment"
 
 
 def test_intend_new_files_passes_no_file_name_on_the_command_line(

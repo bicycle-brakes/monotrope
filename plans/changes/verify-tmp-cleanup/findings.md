@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -1023,3 +1023,52 @@ Stage-2 call, 2026-11-12: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-12: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1040 files, 4044 commits, 12 rules.
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4044 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +4 -6
+> - `tests/test_stage2.py` +35 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` did not finish: make was stopped by the runner's step limit after 45 minutes
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-1-20261113T060017607037Z-ea00750c.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1040 files, 4047 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-2-20261113T060017607037Z-ea00750c.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1040 files, 4049 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-3-20261113T060017607037Z-ea00750c.md
+> ```
