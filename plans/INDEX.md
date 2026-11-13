@@ -580,6 +580,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-first/plan.md`](changes/verify-cheap-first/plan.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/research.md`](changes/verify-cheap-first/research.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/spec.md`](changes/verify-cheap-first/spec.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
+| [`changes/verify-result-reuse/research.md`](changes/verify-result-reuse/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.2 |
 | [`changes/verify-step-limit/decisions.md`](changes/verify-step-limit/decisions.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/findings.md`](changes/verify-step-limit/findings.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/plan.md`](changes/verify-step-limit/plan.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
