@@ -560,6 +560,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/swarm-shared-fixture/decisions.md`](changes/swarm-shared-fixture/decisions.md) | draft | none | 2026-11-13 | coding-harness-wnka |
 | [`changes/swarm-shared-fixture/research.md`](changes/swarm-shared-fixture/research.md) | draft | none | 2026-11-13 | coding-harness-wnka |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
