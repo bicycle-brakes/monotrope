@@ -25954,6 +25954,12 @@ def test_phase6_records_only_correlated_local_slips(
     """Criterion 10. Planted fault: a matching completed red full run is not recorded, a slip is
     counted twice, a different tree or gate configuration is blamed, or a timeout or an unstartable
     run is counted."""
+    # A known configuration is required for measured correlation; the minimal World fixture
+    # otherwise has no gate declaration and correctly returns an unknown digest.
+    (world.root / "decisions").mkdir(exist_ok=True)
+    (world.root / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
+    git(world.root, "add", "decisions/gates.yaml")
+    git(world.root, "commit", "--quiet", "-m", "seed readable gate configuration")
     commands = targeted_mode(monkeypatch)
     counter = {"runs": 0, "reuse": None}
 
@@ -26175,3 +26181,34 @@ def test_verification_doctrine_covers_extended_targeted_routes() -> None:
     ):
         problems = verification_doctrine_problems(**{**texts, "adr": texts["adr"].replace(before, after, 1)})
         assert problems, before
+
+
+def test_new_conftest_fixture_keeps_full_fallback(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """New automatically loaded fixtures retain the shared-test-configuration fallback."""
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["make"] = (0, "green\n")
+    step = dict(COVERED_IMPLEMENT)
+    step["plant"] = dict(
+        step["plant"],
+        **{"tests/conftest.py": "import pytest\n\n@pytest.fixture\ndef automatic_fixture():\n    return 42\n"},
+    )
+    world.script(claude=[step])
+    assert world.run("implement") == 0, world.text()
+    assert len(commands.of("make")) == 1
+    assert "shared test configuration" in world.plan.read_text(encoding="utf-8")
+    assert "new production code without a reachable test" not in world.text()
+
+
+def test_red_full_check_with_changed_content_never_records_slip(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A red check that changes checked content cannot blame an earlier targeted green."""
+    recorded = []
+    monkeypatch.setattr(stage2, "_local_slip_note", lambda *args: recorded.append(args) or "recorded")
+
+    def moved_red(*_args, **_kwargs):
+        (world.root / "src" / "app.py").write_text("value = 99\n", encoding="utf-8")
+        return ["VERIFY RED"]
+
+    monkeypatch.setattr(stage2, "full_verify", moved_red)
+    with pytest.raises(stage2.CallFailed):
+        stage2.require_fresh_full_verification(world.root, "demo")
+    assert recorded == [], "a changed checked tree was attributed to an earlier targeted green"

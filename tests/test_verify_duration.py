@@ -1081,3 +1081,86 @@ def slip_event_like(check_id: str, run_id: str, repository: str, tree: str) -> d
         "config_sha256": None,
         "tree": tree,
     }
+
+
+def seed_correlated_red(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys, config: str | None, target_config: str | None
+) -> str:
+    """An isolated accepted green and completed blocking red with runner correlation."""
+    monkeypatch.setattr(verify_duration, "_gate_file_digest", lambda: config)
+    monkeypatch.setattr(verify_duration, "_git", lambda argv: "commit" if argv[0] == "rev-parse" else "")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv(verify_duration.CORRELATION_ENV, "correlation")
+    _, run, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    run = run.strip()
+    verify_duration.append_targeted(
+        repository=str(repo),
+        worktree=str(repo),
+        change="demo",
+        verb="implement",
+        check_id="green",
+        tests=["tests/test_demo.py"],
+        gates=["pytest"],
+        config_sha256=target_config,
+        tree="d" * 40,
+        commit="commit",
+        outcome="green",
+    )
+    _run(
+        capsys,
+        "gate",
+        "--run",
+        run,
+        "--gate",
+        "pytest",
+        "--start",
+        "0",
+        "--end",
+        "1",
+        "--status",
+        "1",
+        "--enforcement",
+        "block",
+    )
+    _run(capsys, "end", "--run", run, "--start", "0", "--end", "2", "--verdict", "red")
+    return run
+
+
+def test_slips_detects_failed_correlated_append(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """A lost slip append leaves a visible measurement gap rather than a trustworthy zero."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    seed_correlated_red(repo, monkeypatch, capsys, "a" * 64, "a" * 64)
+
+    def fail_append(_event):
+        raise verify_duration.StorageUnusable("planted storage failure")
+
+    append_slip = verify_duration.append_slip
+    monkeypatch.setattr(verify_duration, "append_slip", fail_append)
+    with pytest.raises(verify_duration.StorageUnusable):
+        verify_duration.record_local_slip(str(repo), "correlation", "d" * 40, None)
+    code, out, _ = _run(
+        capsys, "slips", "--repository", str(repo), "--since", "2020-01-01T00:00:00Z", "--until", "2100-01-01T00:00:00Z"
+    )
+    assert code == 1 and "not measured" in out and "slips: 0" not in out, out
+    # Reprocessing after storage recovers fills the gap; the reader then trusts the one count.
+    monkeypatch.setattr(verify_duration, "append_slip", append_slip)
+    assert "recorded one local slip" in verify_duration.record_local_slip(str(repo), "correlation", "d" * 40, None)
+    code, out, _ = _run(
+        capsys, "slips", "--repository", str(repo), "--since", "2020-01-01T00:00:00Z", "--until", "2100-01-01T00:00:00Z"
+    )
+    assert code == 0 and "slips: 1" in out, out
+
+
+@pytest.mark.parametrize("config,target_config", [(None, None), (None, "a" * 64), ("a" * 64, None)])
+def test_unknown_gate_digests_never_correlate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, config: str | None, target_config: str | None
+) -> None:
+    """Two unreadable gate digests are unknown identities, never a matching configuration."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    seed_correlated_red(repo, monkeypatch, capsys, config, target_config)
+    note = verify_duration.record_local_slip(str(repo), "correlation", "d" * 40, None)
+    assert "unmeasured" in note, note
+    events, _ = verify_duration._read_events()
+    assert not [event for event in events if event["event"] == verify_duration.SLIP]

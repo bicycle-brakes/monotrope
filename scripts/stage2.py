@@ -3303,6 +3303,15 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "them back, then run review again. No reviewer was called."
         )
     problems = full_verify(root, env, None, correlation=correlation)
+    try:
+        after = standing()
+    except (Refused, OSError) as error:
+        raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
+    if after != (head, dirty, audit):
+        raise CallFailed(
+            f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
+            "no reviewer was called. Run review again."
+        )
     if problems:
         if tree:
             print(_local_slip_note(root, correlation, tree, "\n".join(problems)), file=sys.stderr)
@@ -3313,15 +3322,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             )
         raise CallFailed(
             "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
-        )
-    try:
-        after = standing()
-    except (Refused, OSError) as error:
-        raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
-    if after != (head, dirty, audit):
-        raise CallFailed(
-            f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
-            "no reviewer was called. Run review again."
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
 
@@ -6025,6 +6025,7 @@ def new_code_without_test(root: Path, env: dict[str, str], against: str) -> list
         and not posix.startswith("prompts/")
         and posix not in SHARED_INFRASTRUCTURE
         and not _is_test_module(posix)
+        and posix.rsplit("/", 1)[-1] != "conftest.py"
         and not links.get(posix)
     )
 
@@ -9679,6 +9680,9 @@ def draft(root: Path, change: str) -> None:
             key = read_secret("GLM_KEY")
             if key is None:
                 raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        prior_plan = ctx.plan.read_text(encoding="utf-8") if ctx.plan.exists() else ""
+        prior_time = prior_plan if TIME_HEADING.search(prior_plan) else "## Time used\n"
+        started_wall, started_mono = utc_now(), monotonic_now()
         prompt = draft_prompt(ctx, diagnostics)
         begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
         unmeasured: str | None = None
@@ -9770,9 +9774,29 @@ def draft(root: Path, change: str) -> None:
                     f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
                     "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
+            ended_wall, ended_mono = utc_now(), monotonic_now()
+            persist_time_entry(
+                root,
+                ctx.plan,
+                time_entry(
+                    "draft",
+                    attempt,
+                    route,
+                    endpoint[1],
+                    True,
+                    started_wall,
+                    ended_wall,
+                    max(0, round(ended_mono - started_mono)),
+                    [protect_diagnostics(scope, key)],
+                ),
+                prior_time,
+                {ctx.plan: prior_plan.encode("utf-8")},
+                accepted=True,
+                retry=False,
+            )
             # The runner's own evidence of what the draft's check ran: never a model's claim, and
             # never worded as tests or as the full verification (bead coding-harness-0swp). A passing
-            # attempt leaves it in the checkpoint message only, nothing after its audit line.
+            # attempt leaves it in the time line and checkpoint message, nothing after its audit line.
             scope_line = f"- Attempt {attempt} ({route}): {scope}"
             checkpoint(
                 root,

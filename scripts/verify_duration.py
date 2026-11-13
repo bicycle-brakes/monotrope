@@ -324,6 +324,8 @@ def record_local_slip(repository: str, correlation: str, tree: str, failed_tests
             start = event
     if start is None or _record_error(start):
         return "the red full run carries no recorded start identity; it stays unmeasured"
+    if not start.get("config_sha256"):
+        return "the full run has an unreadable gate configuration; it stays unmeasured"
     run_id = start["run_id"]
     ends = [event for event in events if event["event"] == RUN_END and event.get("run_id") == run_id]
     if not ends or _record_error(ends[-1]) or ends[-1].get("verdict") != "red":
@@ -346,7 +348,11 @@ def record_local_slip(repository: str, correlation: str, tree: str, failed_tests
             continue
         if str(Path(str(event.get("repository", ""))).resolve()) != home:
             continue
-        if event.get("config_sha256") != start.get("config_sha256") or event.get("tree") != tree:
+        if (
+            not event.get("config_sha256")
+            or event.get("config_sha256") != start.get("config_sha256")
+            or event.get("tree") != tree
+        ):
             continue
         match = event  # file order: the latest matching green of this repository wins
     if match is None:
@@ -552,11 +558,50 @@ def cmd_slips(args: argparse.Namespace) -> int:
         and str(Path(str(event.get("repository", ""))).resolve()) == repository
         and args.since <= datetime.datetime.fromisoformat(event["utc"]).astimezone(datetime.UTC) < args.until
     }
+    # A failed append leaves no slip row to validate. Inspect correlated completed red runs
+    # as well: without their record a matching (or unreadable) identity is unmeasured.
+    recorded_runs = {event["run_id"] for event in slips if not _record_error(event)}
+    greens = [
+        event
+        for event in events
+        if event["event"] == TARGETED
+        and not _record_error(event)
+        and event.get("outcome") == "green"
+        and str(Path(event["repository"]).resolve()) == repository
+    ]
+    for start in events:
+        if (
+            start["event"] != RUN_START
+            or _record_error(start)
+            or not start.get("correlation")
+            or str(Path(start["repository"]).resolve()) != repository
+            or start["run_id"] in recorded_runs
+        ):
+            continue
+        ends = [
+            event
+            for event in events
+            if event["event"] == RUN_END and event["run_id"] == start["run_id"] and not _record_error(event)
+        ]
+        if not ends or ends[-1]["verdict"] != "red":
+            continue
+        ended = datetime.datetime.fromisoformat(ends[-1]["utc"]).astimezone(datetime.UTC)
+        if not args.since <= ended < args.until:
+            continue
+        # Legacy starts have no checked tree. A green on a potentially matching configuration
+        # cannot establish a trustworthy zero when the caller's correlation append is missing.
+        if any(
+            not start.get("config_sha256")
+            or not green.get("config_sha256")
+            or start["config_sha256"] == green["config_sha256"]
+            for green in greens
+        ):
+            broken.append(f"correlated red full run {start['run_id']} has no slip record; not measured")
     interval = f"{args.since.isoformat()} (inclusive) to {args.until.isoformat()} (exclusive)"
     if broken:
         for note in broken:
             _log(f"slip measurement incomplete: {note}")
-        print(f"slip measurement is incomplete; this count is not trustworthy: {len(counted)}")
+        print(f"slip measurement is incomplete; not measured reliably; this count is not trustworthy: {len(counted)}")
         print(f"interval {interval} · repository {repository}")
         return 1
     print(f"slips: {len(counted)} distinct slipped full runs")
