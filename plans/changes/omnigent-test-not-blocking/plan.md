@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-12
 last_reviewed: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-i9df
@@ -93,13 +93,16 @@ absent at baseline; use the available gates above, not a claimed validator run.
 
 - 1: tests/test_omnigent_deny_layers.py::test_the_list_matches_omnigents_native_surface — this test still probes the installed version instead of the synthetic matching surface
 - 2: tests/test_omnigent_deny_layers.py::test_the_list_matches_omnigents_native_surface — a matching synthetic surface has no explicit match report
-- 2: not yet written tests/test_omnigent_deny_layers.py::test_surface_report_names_both_directions_without_blocking — an added or removed name is missing, or drift returns nonzero
-- 2: not yet written tests/test_omnigent_deny_layers.py::test_installer_reports_surface_after_each_successful_install — the install or unchanged reinstall omits the report
-- 3: not yet written tests/test_omnigent_deny_layers.py::test_installer_preserves_merge_failure_and_ignores_report_failure — a failed merge becomes successful or an unsuccessful report fails installation
-- 4: not yet written tests/test_omnigent_deny_layers.py::test_surface_report_states_when_discovery_is_unavailable — an exception propagates or produces silence or a match claim
+- 2: tests/test_omnigent_deny_layers.py::test_surface_report_names_both_directions_without_blocking — an added or removed name is missing, or drift returns nonzero
+- 2: tests/test_omnigent_deny_layers.py::test_installer_reports_surface_after_each_successful_install — the install or unchanged reinstall omits the report
+- 3: tests/test_omnigent_deny_layers.py::test_installer_preserves_merge_failure_and_ignores_report_failure — a failed merge becomes successful or an unsuccessful report fails installation
+- 4: tests/test_omnigent_deny_layers.py::test_surface_report_states_when_discovery_is_unavailable — an exception propagates or produces silence or a match claim
 - 5: tests/test_omnigent_deny_layers.py::test_every_name_is_listed_once_with_a_reason — overlapping classes or an empty reason stops failing
 - 5: tests/test_omnigent_deny_layers.py::test_a_hand_edit_or_a_stale_render_is_caught — tampered render no longer yields differences
 - 5: tests/test_omnigent_deny_layers.py::test_settings_deny_every_denied_tool — a missing deny rule stops failing
 - 5: tests/test_omnigent_deny_layers.py::test_check_names_a_missing_ask_rule_and_an_asked_tool_moved_to_deny_or_allow — broken ask classification stops failing
 
 ## Time used
+
+2026-11-13 06:03:07–07:24:52 UTC, 4905 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 07:25:26–09:01:27 UTC, 5761 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · accepted · measured by the runner

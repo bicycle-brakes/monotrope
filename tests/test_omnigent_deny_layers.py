@@ -6,8 +6,10 @@ Layer 1 is `permissions.deny` in `.claude/settings.json`; layer 2 is
 from that module, so a tool moved between the two lists moves in the tests too.
 
 Tests marked "Omnigent" run Omnigent's own code in a subprocess under Omnigent's
-interpreter and skip, saying why, where Omnigent is not installed (CI). Nothing here
-touches the real ~/.omnigent: every config path is under `tmp_path`.
+interpreter and skip, saying why, where Omnigent is not installed (CI). The surface
+comparison and the installer's report wiring run without Omnigent: synthetic surfaces
+in process, a logging fake interpreter for the installer (omnigent-test-not-blocking).
+Nothing here touches the real ~/.omnigent: every config path is under `tmp_path`.
 """
 
 from __future__ import annotations
@@ -147,17 +149,201 @@ def test_a_hand_edit_or_a_stale_render_is_caught(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Criterion 2 - complete against the installed Omnigent
+# Criteria 1-4 - the surface comparison is an install-time report, not a pass condition
 # ---------------------------------------------------------------------------
 
 
-def test_the_list_matches_omnigents_native_surface(omnigent_py: str, tmp_path: Path) -> None:
-    done = _run(omnigent_py, ["--surface"], tmp_path)
+def _matching_surface() -> list[str]:
+    """A synthetic surface equal to the three lists; stand-in for the installed Omnigent."""
+    return sorted({*op.DENIED_TOOLS, *op.ASKED_TOOLS, *op.ALLOWED_TOOLS})
+
+
+def _report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    surface: list[str] | Exception,
+) -> str:
+    """Run the real reporting CLI in process with a synthetic `_surface`; return its stdout.
+
+    Exit 0 is asserted here: drift and an unreadable surface are reports, never failures.
+    """
+
+    def synthetic() -> list[str]:
+        if isinstance(surface, Exception):
+            raise surface
+        return list(surface)
+
+    monkeypatch.setattr(op, "_surface", synthetic)
+    try:
+        code = op.main(["--report-surface"])
+    except SystemExit as exc:  # the mode is missing: the fault this section guards against
+        pytest.fail(f"--report-surface is not a mode of scripts/omnigent_policy.py (argparse exited {exc.code})")
+    assert code == 0, f"a surface report must not fail: exit {code}"
+    return capsys.readouterr().out
+
+
+def test_the_list_matches_omnigents_native_surface(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A surface equal to the lists is reported as a match (criterion 2).
+
+    The suite no longer compares the installed Omnigent (criterion 1): the real handler runs
+    against a synthetic surface, so an external tool change cannot fail this test.
+    """
+    out = _report(monkeypatch, capsys, _matching_surface())
+    assert "matches the classification lists" in out
+    assert "not classified" not in out and "not offered" not in out
+
+
+def test_surface_report_names_both_directions_without_blocking(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An added and a removed tool name are each reported, in their direction, with exit 0 (criteria 1-3)."""
+    drifted = [name for name in _matching_surface() if name != "sys_os_read"] + ["brand_new_future_tool"]
+    out = _report(monkeypatch, capsys, drifted)
+    assert "not classified here: brand_new_future_tool" in out, out
+    assert "not offered by the installed Omnigent: sys_os_read" in out, out
+    assert "matches the classification lists" not in out, "drift was reported as a match"
+
+
+def test_surface_report_states_when_discovery_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unreadable surface is reported as not performed - not silence, a match or an empty surface (criterion 4)."""
+    out = _report(monkeypatch, capsys, ImportError("No module named 'omnigent'"))
+    assert "not performed" in out and "ImportError" in out, out
+    assert "matches the classification lists" not in out, out
+
+
+def _run_installer(env: dict[str, str], *args: str, terminal: bool) -> subprocess.CompletedProcess[str]:
+    """Run install.sh with a pseudo-terminal on stdin when it needs one (the maintainer's console stands in)."""
+    master = slave = None
+    if terminal:
+        master, slave = pty.openpty()
+    try:
+        return subprocess.run(
+            ["/bin/bash", str(INSTALLER), *args],
+            stdin=slave if terminal else subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+            check=False,
+        )
+    finally:
+        for fd in (master, slave):
+            if fd is not None:
+                os.close(fd)
+
+
+def _fake_reporting_python(directory: Path) -> Path:
+    """An interpreter that logs each call to ``$FAKE_PY_LOG`` and answers the merge and report modes like the real ones.
+
+    Its merge prints "created:"/"unchanged:" and writes a stub config, so a second install is a
+    genuine no-op. `FAKE_MERGE_FAIL` / `FAKE_REPORT_FAIL` (nonempty in the env) make one mode exit
+    nonzero, to prove the installer preserves the merge's failure and ignores the report's.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "python3"
+    path.write_text(
+        "#!/bin/sh\n"
+        'echo "$@" >> "$FAKE_PY_LOG"\n'
+        "mode=\n"
+        'for arg in "$@"; do\n'
+        '  case "$arg" in --merge-config) mode=merge ;; --report-surface) mode=report ;; esac\n'
+        "done\n"
+        'if [ "$mode" = merge ]; then\n'
+        '  if [ -n "${FAKE_MERGE_FAIL:-}" ]; then\n'
+        '    exit "$FAKE_MERGE_FAIL"\n'
+        "  fi\n"
+        '  if [ -f "$3" ]; then\n'
+        '    echo "unchanged: $3"\n'
+        "  else\n"
+        '    mkdir -p "$(dirname "$3")"\n'
+        "    printf 'policies: {}\\n' > \"$3\"\n"
+        '    echo "created: $3"\n'
+        "  fi\n"
+        'elif [ "$mode" = report ]; then\n'
+        '  if [ -n "${FAKE_REPORT_FAIL:-}" ]; then\n'
+        '    exit "$FAKE_REPORT_FAIL"\n'
+        "  fi\n"
+        '  echo "surface comparison: the installed Omnigent\'s tool surface matches the classification lists"\n'
+        "fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
+def test_installer_reports_surface_after_each_successful_install(tmp_path: Path) -> None:
+    """First install and no-op reinstall both run the merge and then the report; check and remove never report."""
+    log = tmp_path / "fake-python.log"
+    env = _env(tmp_path)
+    env["OMNIGENT_PYTHON"] = str(_fake_reporting_python(tmp_path / "bin"))
+    env["FAKE_PY_LOG"] = str(log)
+
+    first = _run_installer(env, terminal=True)
+    assert first.returncode == 0, first.stderr
+    assert "surface comparison" in first.stdout and "created:" in first.stdout, first.stdout
+
+    second = _run_installer(env, terminal=True)
+    assert second.returncode == 0, second.stderr
+    assert "surface comparison" in second.stdout and "unchanged:" in second.stdout, second.stdout
+
+    check = _run_installer(env, "--check", terminal=False)
+    assert check.returncode == 0, check.stderr
+    remove = _run_installer(env, "--remove", terminal=True)
+    assert remove.returncode == 0, remove.stderr
+
+    lines = log.read_text(encoding="utf-8").splitlines()
+    merges = [i for i, line in enumerate(lines) if "--merge-config" in line and "--remove" not in line]
+    reports = [i for i, line in enumerate(lines) if "--report-surface" in line]
+    assert len(merges) == 2 and len(reports) == 2, lines
+    assert merges[0] < reports[0] and merges[1] < reports[1], lines
+
+
+def test_installer_preserves_merge_failure_and_ignores_report_failure(tmp_path: Path) -> None:
+    """Criterion 3: a failed merge keeps its exit status and is not followed by a report;
+    a failed report keeps exit 0.
+    """
+    log = tmp_path / "fake-python.log"
+    env = _env(tmp_path)
+    env["OMNIGENT_PYTHON"] = str(_fake_reporting_python(tmp_path / "bin"))
+    env["FAKE_PY_LOG"] = str(log)
+
+    env["FAKE_MERGE_FAIL"] = "7"
+    failed = _run_installer(env, terminal=True)
+    assert failed.returncode == 7, (failed.returncode, failed.stdout, failed.stderr)
+
+    env["FAKE_MERGE_FAIL"] = ""
+    env["FAKE_REPORT_FAIL"] = "9"
+    ignored = _run_installer(env, terminal=True)
+    assert ignored.returncode == 0, (ignored.returncode, ignored.stderr)
+    assert "surface comparison" not in ignored.stdout
+
+    lines = log.read_text(encoding="utf-8").splitlines()
+    merges = [i for i, line in enumerate(lines) if "--merge-config" in line and "--remove" not in line]
+    reports = [i for i, line in enumerate(lines) if "--report-surface" in line]
+    assert len(merges) == 2 and len(reports) == 1, lines
+    assert reports[0] > merges[-1], lines
+
+
+def test_a_no_op_reinstall_reports_through_the_real_module(tmp_path: Path) -> None:
+    """A no-op reinstall through the real merge ends in the surface report (criterion 2, the unchanged reinstall).
+
+    The config is pre-merged with validation off, so the installer's merge is `unchanged` - which
+    needs no Omnigent - and this interpreter answers the report: without Omnigent it says the
+    comparison was not performed, with one it reports the comparison. Either way the report is there.
+    """
+    target = Path(_env(tmp_path)["OMNIGENT_CONFIG_HOME"]) / "config.yaml"
+    op.merge_config(target, validate=False)
+    env = _env(tmp_path)
+    env["OMNIGENT_PYTHON"] = sys.executable
+    done = _run_installer(env, terminal=True)
     assert done.returncode == 0, done.stderr
-    surface = set(json.loads(done.stdout))
-    listed = set(op.DENIED_TOOLS) | set(op.ASKED_TOOLS) | set(op.ALLOWED_TOOLS)
-    assert surface - listed == set(), f"Omnigent offers tools this list does not classify: {sorted(surface - listed)}"
-    assert listed - surface == set(), f"listed tools Omnigent does not offer: {sorted(listed - surface)}"
+    assert "unchanged:" in done.stdout, done.stdout
+    assert "surface comparison" in done.stdout, done.stdout
 
 
 # ---------------------------------------------------------------------------

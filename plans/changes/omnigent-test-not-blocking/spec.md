@@ -1,10 +1,10 @@
 ---
 title: "Spec — omnigent-test-not-blocking"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-12
 last_reviewed: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-i9df
