@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -95,69 +97,97 @@ def test_active_model_research_has_no_false_human_provenance():
     assert affected == [], f"active research violates the publication contract: {affected}"
 
 
+def git(root: Path, *args: str, day: str | None = None) -> None:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    if day:
+        env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = f"{day}T12:00:00+00:00"
+    subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+
+
+def make_repo(root: Path, *, record: bool = True) -> Path:
+    """A small temporary git repository; the adoption day is recorded as 2026-11-10."""
+    root.mkdir(exist_ok=True)
+    git(root, "init", "-q")
+    if record:
+        (root / "decisions").mkdir()
+        record_text = "schema_version: 1\nadopted:\n  research-census: 2026-11-10\n"
+        (root / "decisions" / "adoption.yaml").write_text(record_text)
+    return root
+
+
+def commit(root: Path, path: Path, day: str) -> None:
+    git(root, "add", "--", str(path))
+    git(root, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "research", day=day)
+
+
 def test_uncorrected_stock_only_shrinks(tmp_path):
-    # A stock file loses its exemption when it changes on the adoption day; correcting it
-    # and subsequently breaking it cannot restore the exemption under its old creation date.
+    # EP6-13: git, not a date in the file, decides. A stock file loses its exemption at its
+    # first change from the adoption day on; correcting and breaking it again does not restore it.
     import research_census as census
 
-    path = tmp_path / "research.md"
-    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
-    path.write_text(header + "# Research\n")
-    assert census.census_findings([path], tmp_path)
-    try:
-        findings = census.census_findings([path], tmp_path, apply_adoption=True)
-    except TypeError as error:
-        pytest.fail(f"The census must apply the adoption day instead of a fixed file list: {error}")
-    assert findings == [], "pre-adoption research is stock regardless of its path"
-    changed = header.replace("updated: 2026-11-05", "updated: 2026-11-10")
-    path.write_text(changed + "# Research\n")
-    assert census.census_findings([path], tmp_path, apply_adoption=True)
-    path.write_text(changed.replace("human-written", "ai-drafted-reviewed") + "# Research\n")
-    assert census.census_findings([path], tmp_path, apply_adoption=True) == []
-    path.write_text(changed + "# Research\n")
-    assert census.census_findings([path], tmp_path, apply_adoption=True)
+    root = make_repo(tmp_path / "repo")
+    path = root / "research.md"
+    broken = valid_research_header().replace("ai-drafted-reviewed", "human-written") + "# Research\n"
+    path.write_text(broken)
+    commit(root, path, "2026-11-09")
+    assert census.census_findings([path], root), "the raw census must report stock defects"
+    assert census.census_findings([path], root, apply_adoption=True) == [], "committed before adoption is stock"
+    path.write_text(broken + "More.\n")
+    assert census.census_findings([path], root, apply_adoption=True), "an uncommitted change ends the exemption"
+    commit(root, path, "2026-11-10")
+    assert census.census_findings([path], root, apply_adoption=True), "a change on the adoption day is measured"
+    path.write_text(broken.replace("human-written", "ai-drafted-reviewed"))
+    commit(root, path, "2026-11-11")
+    assert census.census_findings([path], root, apply_adoption=True) == []
+    path.write_text(broken)
+    commit(root, path, "2026-11-12")
+    assert census.census_findings([path], root, apply_adoption=True)
 
 
-@pytest.mark.parametrize("stamp", ["2026-11-09", "2026-11-10", "2026-11-11", "invalid", None])
-def test_census_exemption_is_limited_to_the_listed_files(tmp_path, stamp):
-    # Historical name retained for the ledger: Q-5 replaces listed paths with one adoption
-    # day. Equal-day, later and unreadable dates must never obtain the stock exemption.
+@pytest.mark.parametrize("case", ["before", "adoption-day", "later", "uncommitted", "no-repo", "no-record"])
+def test_census_exemption_is_limited_to_the_listed_files(tmp_path, case):
+    # Historical name retained for the ledger: the exemption is the adoption day read from
+    # decisions/adoption.yaml against the file's last git change. Equal-day, later,
+    # uncommitted, history-less and record-less files never obtain it.
     import research_census as census
 
-    path = tmp_path / "new-name" / "research.md"
-    path.parent.mkdir()
-    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
-    header = header.replace("updated: 2026-11-05\n", f"updated: {stamp}\n" if stamp else "")
-    path.write_text(header + "# Research\n")
-    raw = census.census_findings([path], tmp_path)
-    assert raw, "the raw census must still report stock defects"
-    try:
-        findings = census.census_findings([path], tmp_path, apply_adoption=True)
-    except TypeError as error:
-        pytest.fail(f"The census must apply its adoption day: {error}")
-    assert findings == ([] if stamp == "2026-11-09" else raw)
-
-
-@pytest.mark.parametrize("evidence", ["date", "last_reviewed", "producer", "publication", "duplicate-update"])
-def test_census_adoption_rejects_stale_stamps_over_new_evidence(tmp_path, evidence):
-    import research_census as census
-
-    header = valid_research_header().replace("ai-drafted-reviewed", "human-written")
-    body = "# Research\n"
-    if evidence in {"date", "last_reviewed"}:
-        header = header.replace(f"{evidence}: 2026-11-04", f"{evidence}: 2026-11-10")
-    elif evidence == "producer":
-        header = header.replace('version: "2026-11-05"', 'version: "2026-11-10"')
-    elif evidence == "duplicate-update":
-        header = header.replace("updated: 2026-11-05", "updated: 2026-11-10\nupdated: 2026-11-05")
+    root = tmp_path / "repo"
+    if case == "no-repo":
+        root.mkdir()
     else:
-        body += (
-            "Stage-2 call, 2026-11-10: explore · endpoint glm-coding-plan\n"
-            "## Runner exploration — 2026-11-10\n\nAccepted research.\n"
-        )
-    path = tmp_path / "research.md"
-    path.write_text(header + body)
-    assert census.census_findings([path], tmp_path, apply_adoption=True), "new evidence must be measured"
+        make_repo(root, record=case != "no-record")
+    path = root / "new-name" / "research.md"
+    path.parent.mkdir()
+    path.write_text(valid_research_header().replace("ai-drafted-reviewed", "human-written") + "# Research\n")
+    days = {"before": "2026-11-09", "adoption-day": "2026-11-10", "later": "2026-11-11", "no-record": "2026-11-09"}
+    if case in days:
+        commit(root, path, days[case])
+    raw = census.census_findings([path], root)
+    assert raw, "the raw census must still report stock defects"
+    assert census.census_findings([path], root, apply_adoption=True) == ([] if case == "before" else raw)
+
+
+def test_census_exemption_ignores_dates_written_in_the_file(tmp_path):
+    # EP6-13: a later date inside a recognised legacy producer spelling cannot hide behind,
+    # nor break, the stock verdict of git; the raw census still reports it.
+    import research_census as census
+
+    root = make_repo(tmp_path / "repo")
+    path = root / "research.md"
+    header = valid_research_header().replace('version: "2026-11-05"', 'version: "GLM 5.3 Flash, 2026-11-10"')
+    path.write_text(header.replace("updated: 2026-11-05", "updated: 2026-11-09") + "# Research\n")
+    commit(root, path, "2026-11-09")
+    raw = census.census_findings([path], root)
+    assert any("produced_by.version" in line for line in raw)
+    assert census.census_findings([path], root, apply_adoption=True) == []
+    path.write_text(header.replace("updated: 2026-11-05", "updated: 2026-11-01") + "# Research\n")
+    commit(root, path, "2026-11-10")
+    assert census.census_findings([path], root, apply_adoption=True), "a git change on the adoption day is measured"
 
 
 @pytest.mark.parametrize("notice", stage2.skeleton_notices())
@@ -335,45 +365,44 @@ def test_census_swarm_heading_ends_stock_exemption(tmp_path, eol, later_older_pu
     path.write_bytes((header + body).replace("\n", eol).encode())
     raw = census.census_findings([path], tmp_path)
     assert any("provenance: expected" in finding for finding in raw)
-    assert census.census_findings([path], tmp_path, apply_adoption=True) == raw, (
-        "any post-adoption swarm heading must end the stock exemption, even before an older publication"
-    )
+    # Without a recorded adoption day nothing is exempt, so the scan equals the raw census.
+    assert census.census_findings([path], tmp_path, apply_adoption=True) == raw
     if later_older_publication is None:
         assert any("missing publication program/date" in finding for finding in raw)
-    # Examples and pre-adoption publications must still permit the stock exemption.
-    for stock_body in (
-        body.replace("2026-11-10", "2026-11-09"),
+    # Fenced, quoted and envelope-less examples establish no swarm publication.
+    for example in (
         "```markdown\n" + body + "```\n",
         "".join("> " + line for line in body.splitlines(keepends=True)),
         "## Research swarm — 2026-11-10\nA heading without a published envelope.\n",
     ):
-        path.write_bytes((header + stock_body).replace("\n", eol).encode())
-        assert census.census_findings([path], tmp_path, apply_adoption=True) == []
+        assert census.publication_evidence(example.replace("\n", eol)) == (None, None)
 
 
 @pytest.mark.parametrize("apply_adoption", [False, True])
-@pytest.mark.parametrize("version", ["2026-11-09", "2026-11-10"])
-def test_census_reports_unquoted_producer_date_and_continues(tmp_path, apply_adoption, version):
+@pytest.mark.parametrize("commit_day", ["2026-11-09", "2026-11-10"])
+def test_census_reports_unquoted_producer_date_and_continues(tmp_path, apply_adoption, commit_day):
     import research_census as census
 
-    path = tmp_path / "research.md"
-    header = valid_research_header().replace('version: "2026-11-05"', f"version: {version}")
+    root = make_repo(tmp_path / "repo")
+    path = root / "research.md"
+    header = valid_research_header().replace('version: "2026-11-05"', "version: 2026-11-09")
     header = header.replace("updated: 2026-11-05", "updated: 2026-11-09")
     body = (
         "# Research\nStage-2 call, 2026-11-09: explore · endpoint glm-coding-plan\n"
         "## Runner exploration — 2026-11-09\nAccepted research.\n"
     )
     path.write_text(header + body)
-    later = tmp_path / "later.md"
+    commit(root, path, commit_day)
+    later = root / "later.md"
     later.write_text("# Missing frontmatter\n")
     try:
-        findings = census.census_findings([path, later], tmp_path, apply_adoption=apply_adoption)
+        findings = census.census_findings([path, later], root, apply_adoption=apply_adoption)
     except TypeError as error:
         pytest.fail(f"An unquoted producer date must produce diagnostics and allow the scan to continue: {error}")
     assert "later.md: unreadable header (no frontmatter)" in findings
     producer_findings = [finding for finding in findings if finding.startswith("research.md:")]
-    if apply_adoption and version == "2026-11-09":
-        assert producer_findings == [], "a pre-adoption invalid producer date still belongs to stock"
+    if apply_adoption and commit_day == "2026-11-09":
+        assert producer_findings == [], "a file committed before adoption still belongs to stock"
     else:
         assert "research.md: produced_by.version: expected one publication date" in producer_findings
         assert "research.md: produced_by: missing publication program/date" in producer_findings
@@ -537,3 +566,32 @@ def test_census_ignores_commonmark_fenced_publication_examples(tmp_path, opener,
     path = tmp_path / "research.md"
     path.write_bytes(("---\nprovenance: human-written\n---\n" + body).replace("\n", eol).encode())
     assert census.census_findings([path], tmp_path) == [], "unpublished human research must pass the census"
+
+
+@pytest.mark.parametrize("apply_adoption", [False, True])
+def test_census_reports_recursive_yaml_and_continues(tmp_path, apply_adoption):
+    import research_census as census
+
+    # EP6-14: one malformed file among good ones; stock files committed before adoption stay reported
+    # when their metadata cannot be read at all.
+    root = make_repo(tmp_path / "repo")
+    good = root / "good.md"
+    good.write_text(valid_research_header() + "# Research\n")
+    malformed = root / "recursive.md"
+    malformed.write_text(re.sub(r"produced_by:.*", "produced_by: &p [*p]", valid_research_header()) + "# Research\n")
+    unreadable = root / "unreadable.md"
+    unreadable.write_bytes(b"\xff")
+    later = root / "later.md"
+    later.write_text("# Missing frontmatter\n")
+    for stock in (good, malformed, unreadable, later):
+        commit(root, stock, "2026-11-09")
+    try:
+        findings = census.census_findings(
+            [good, malformed, unreadable, later, good], root, apply_adoption=apply_adoption
+        )
+    except RecursionError as error:
+        pytest.fail(f"Recursive producer YAML must be reported without aborting the scan: {error}")
+    assert any(line.startswith("recursive.md:") and "recursive metadata structure" in line for line in findings)
+    assert "unreadable.md: unreadable file (not UTF-8)" in findings
+    assert "later.md: unreadable header (no frontmatter)" in findings
+    assert not any(line.startswith("good.md:") for line in findings)

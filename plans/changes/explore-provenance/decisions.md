@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-10
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -102,3 +102,22 @@ change that can merge without correcting every earlier file first, accepting
 that false producer records in the earlier files (on 2026-11-10 at least
 go-wire-apis and origin-cell) stay until someone corrects them on purpose
 — 2026-11-10
+
+## Q-6 · Two research files that the git-dated census finds
+
+asked: 2026-11-13
+answer: "A: Hier mitkorrigieren (Recommended)" — the headers of the two research files (decision-statement-skeleton, verify-step-limit) are corrected by hand in this change: provenance, producer and review fields, and the leftover skeleton notice; no content changes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change explore-provenance (bead coding-harness-g19n), option C (the stock date comes from git).
+  Intention: the repair was built; its checks failed only because the census now finds two research files merged after the adoption day with a wrong header.
+  Today: the plan forbids edits in other change folders; the census does what it should.
+  Repository change: two research headers, one plan note.
+  Architecture change: none.
+
+In the context of a census that now dates files by git,
+facing two research files merged after the adoption day with skeleton headers,
+we decided to correct their headers in this change,
+to achieve a clean main under the strict census,
+accepting a one-time edit outside this change's folder — 2026-11-13

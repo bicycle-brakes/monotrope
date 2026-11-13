@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-11
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -2396,3 +2396,198 @@ Stage-2 call, 2026-11-11: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1cccf-81c7-7890-95fc-1f8e44ebd0f0, 2026-11-11
 Reviewer session: codex 01a1cccf-81c7-7890-95fc-1f8e44ebd0f0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1048 files, 4089 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_census.py` +27 -1
+> - `tests/test_explore_provenance.py` +24 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .................................................................F....F. [ 86%]
+> ...........                                                              [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:204: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:95: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:95: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 2 failed, 81 passed in 24.78s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-1-20261113T161942552416Z-96468e7c.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1048 files, 4091 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ...................................................................F.... [ 86%]
+> F..........                                                              [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:204: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:95: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:95: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 2 failed, 81 passed in 23.83s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-2-20261113T161942552416Z-96468e7c.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1048 files, 4091 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `decisions/adoption.yaml` +1 -0
+> - `scripts/research_census.py` +93 -76
+> - `tests/test_explore_provenance.py` +107 -73
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/explore-provenance/plan.md, plans/changes/explore-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [ 75%]
+> .........F...F.........                                                  [100%]
+> =================================== FAILURES ===================================
+> ________________________ test_active_census_is_enabled _________________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_census_is_enabled():
+>         # L5-1: the repository guard must execute, rather than remain a bootstrap skip.
+>         marks = getattr(test_active_model_research_has_no_false_human_provenance, "pytestmark", [])
+>         assert not any(mark.name in {"skip", "skipif"} for mark in marks), "enable the active-research census"
+> >       test_active_model_research_has_no_false_human_provenance()
+>
+> tests/test_explore_provenance.py:234: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:97: AssertionError
+> ___________ test_active_model_research_has_no_false_human_provenance ___________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/explore-provenance/.venv/bin/python3
+>
+>     def test_active_model_research_has_no_false_human_provenance():
+>         import research_census as census
+>     
+>         affected = census.census_findings(active_research_files(), REPO_ROOT, apply_adoption=True)
+> >       assert affected == [], f"active research violates the publication contract: {affected}"
+> E       AssertionError: active research violates the publication contract: ['plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research', 'plans/changes/verify-step-limit/research.md: produced_by: expected exactly one field', 'plans/changes/verify-step-limit/research.md: review: expected exactly one field', 'plans/changes/verify-step-limit/research.md: provenance: expected ai-drafted-reviewed', 'plans/changes/verify-step-limit/research.md: produced_by: [… 320 characters left out …]
+> E       assert ['plans/chang...am/date', ...] == []
+> E         
+> E         Left contains 8 more items, first extra item: 'plans/changes/decision-statement-skeleton/research.md: opening skeleton notice over published research'
+> E         Use -v to get more diff
+>
+> tests/test_explore_provenance.py:97: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_explore_provenance.py::test_active_census_is_enabled - Asse...
+> FAILED tests/test_explore_provenance.py::test_active_model_research_has_no_false_human_provenance
+> 2 failed, 93 passed in 24.41s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261113T161942552416Z-96468e7c.md
+> ```
