@@ -68,9 +68,11 @@ violations, not material to discard until a report passes.
 
 3. If an answer has competing object candidates or malformed JSON, extraction
    does not turn it into an accepted report by choosing or repairing content.
-   *Refuted by:* two object fences, a bare object beside a fenced object,
-   duplicate keys, non-finite values or a truncated object becomes accepted.
-   *Basis:* `decisions.md#Q-2`; `decisions.md#Q-3`.
+   The candidates are the fenced blocks; text outside the one fenced block is
+   never read (`decisions.md#Q-7`).
+   *Refuted by:* two object fences, duplicate keys, non-finite values or a
+   truncated object becomes accepted, or text outside the fence is parsed.
+   *Basis:* `decisions.md#Q-2`; `decisions.md#Q-3`; `decisions.md#Q-7`.
 
 4. When extracted content violates the existing report contract, validation
    rejects it with a reason suitable for a correction request.

@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-10
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-4q9y
@@ -150,3 +150,22 @@ hand and to rerun the runner repair for the code rows only, to achieve that
 the repairs already understood are not lost to one misplaced edit, accepting
 that this bounded change now takes three times its first budget and that the
 runner flaw behind the discard stays open in its own bead — 2026-11-12
+
+## Q-7 · A loose JSON object beside the one fenced block
+
+asked: 2026-11-13
+answer: "Ja" to option A — the fenced block is the protocol: only fenced blocks are candidates; text outside the one fenced block is never read; two fenced blocks with objects stay invalid. Spec criterion 3 follows. A bead for structured output instead of text parsing is opened.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change swarm-report-format (bead coding-harness-4q9y), when a model answer counts as a report.
+  Intention: review round 6 reported a BLOCKER (L6-1): spec criterion 3 refuted a bare object beside a fenced object, while the code after loop row L4-3 no longer reads text outside the fenced block.
+  Today: the maintainer's answer of 2026-11-12 ~14:20 UTC said no brace scanning selects anything; four findings in three rounds came from scanning prose for objects.
+  Repository change: one sentence in spec criterion 3 and this record.
+  Architecture change: none.
+
+In the context of model answers that wrap their report in prose,
+facing four findings from heuristics that scan prose for JSON objects,
+we decided that the one fenced block is the report and text outside it is never read,
+to achieve one unambiguous delimiter instead of guessing,
+accepting that a stray object a model writes into its prose is ignored rather than refused — 2026-11-13
