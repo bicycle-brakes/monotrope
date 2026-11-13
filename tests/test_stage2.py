@@ -10309,6 +10309,37 @@ def test_repair_refuses_to_mark_a_changed_findings_line(world: World, mutation: 
     assert world.text() == changed, "refusal must preserve the concurrent edit and every other row"
 
 
+@pytest.mark.parametrize("mutation", ["replace", "insert", "truncate"])
+def test_repair_refuses_to_mark_a_changed_record_line(world: World, mutation: str) -> None:
+    """A record edit after resolution must survive without any fixed statuses written."""
+    world.write_record([("L1-1", "taken — fix", "no"), ("L1-2", "taken — fix", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    resolved = stage2.resolve_finding_rows(original, "")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, _ = stage2.repair_targets(ctx, original, resolved=resolved)
+    lines = original.splitlines()
+    index = resolved[-1].line
+    if mutation == "replace":
+        lines[index] = "Unrelated text added after resolution."
+    elif mutation == "insert":
+        lines.insert(index, "Unrelated text added after resolution.")
+    else:
+        lines = lines[:index]
+    changed = "\n".join(lines) + "\n"
+    path.write_text(changed, encoding="utf-8")
+    fixes = {row[0]: "fixed — tests/test_fix.py::test_fix" for _, row in taken}
+    try:
+        stage2.mark_repaired_record("demo", taken, fixes, world.root, lock_held=True, resolved=resolved)
+    except stage2.Refused as error:
+        assert "L1-2" in str(error) and "loop.md" in str(error)
+    except IndexError:
+        pytest.fail("a vanished resolved record line must refuse with its finding ID and file")
+    else:
+        pytest.fail("a changed resolved record line must refuse before writing any fixed status")
+    assert path.read_text(encoding="utf-8") == changed, "refusal must preserve the edit and every other record row"
+
+
 def test_repair_marks_only_the_resolved_record_row(world: World) -> None:
     """The same resolver also limits record status writes to the latest table's row."""
     world.write_record([("L1-1", "taken — fix", "no")])
