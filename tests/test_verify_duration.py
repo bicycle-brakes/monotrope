@@ -681,3 +681,121 @@ def test_writer_refuses_hard_linked_history(tmp_path, capsys):
     code, _, err = _run(capsys, "start")
     assert code == 2 and "refusing" in err
     assert victim.read_text() == "unchanged\n"
+
+
+# ---------------------------------------------------------------------------
+# Conditional skips — their own additive event (bead coding-harness-w2ay)
+# ---------------------------------------------------------------------------
+
+
+def test_skip_history_is_separate_and_old_history_stays_readable(tmp_path: Path, capsys) -> None:
+    """A conditional skip is its own event — never a gate execution — and old history reads unchanged.
+
+    Fault this pins: a skip counted as an executed gate, a skip recorded with a
+    fabricated exit status or duration, an old file broken by the new event
+    type, or a malformed skip silently completing its run.
+    """
+    state = tmp_path / "state"
+    # Old history, exactly as version 1 wrote it before skips existed.
+    alt = _valid_records("alt")
+    path = verify_duration.history_path()
+    path.parent.mkdir(parents=True)
+    # New run: one executed gate, one conditional skip, green end — mixed into
+    # the same file, because the runner appends across schema generations.
+    skip_row = {
+        "v": 1,
+        "event": "gate_skip",
+        "run_id": "neu",
+        "utc": "2026-11-13T11:01:00+00:00",
+        "gate": "leerprobe",
+        "enforcement": "block",
+        "reason": "skip: no measured change matches paths scripts/kit/manifest.yaml"
+        " (merge-base with origin/main abcdef123456)",
+    }
+    neu_start = {**alt[0], "run_id": "neu", "utc": "2026-11-13T11:00:00+00:00"}
+    neu_gate = {**alt[1], "run_id": "neu", "utc": "2026-11-13T11:00:30+00:00"}
+    neu_end = {**alt[2], "run_id": "neu", "utc": "2026-11-13T11:02:00+00:00"}
+    zeilen = alt + [neu_start, neu_gate, skip_row, neu_end]
+    path.write_text("\n".join(json.dumps(e) for e in zeilen) + "\n", encoding="utf-8")
+
+    # The old run reads exactly as it did before the event existed.
+    code, out, _ = _run(capsys, "report")
+    assert code == 0, out
+    alt_zeile = next(zeile for zeile in out.splitlines() if zeile.startswith("run alt"))
+    assert "1 gates" in alt_zeile and "skipped" not in alt_zeile, alt_zeile
+    assert "green" in alt_zeile and "1.500s" in alt_zeile, alt_zeile
+    # The new run shows its skip beside, not instead of, its executed gate.
+    neu_zeile = next(zeile for zeile in out.splitlines() if zeile.startswith("run neu"))
+    assert "1 gates · 1 skipped" in neu_zeile, neu_zeile
+
+    code, out, _ = _run(capsys, "report", "--run", "neu")
+    assert code == 0, out
+    assert "skipped: leerprobe" in out
+    assert "merge-base with origin/main abcdef123456" in out
+
+    # The raw record carries no exit status and no duration: nothing ran.
+    roh = [e for e in _history(state) if e.get("event") == "gate_skip"]
+    assert len(roh) == 1
+    assert "seconds" not in roh[0] and "exit" not in roh[0]
+    assert roh[0]["gate"] == "leerprobe" and roh[0]["enforcement"] == "block"
+
+    # Malformed skips: a missing, empty or blank reason, a fabricated duration
+    # or exit status, an unknown enforcement, an empty gate — each one is
+    # diagnosed and leaves its run incomplete, never green.
+    fehlerhaft = [
+        {k: v for k, v in skip_row.items() if k != "reason"},
+        {**skip_row, "reason": "   "},
+        {**skip_row, "reason": None},
+        {**skip_row, "seconds": 1.5},
+        {**skip_row, "exit": 0},
+        {**skip_row, "enforcement": "unknown"},
+        {**skip_row, "gate": ""},
+        {**skip_row, "gate": None},
+    ]
+    for schlecht in fehlerhaft:
+        path.write_text(
+            "\n".join(json.dumps(e) for e in [neu_start, schlecht, neu_end]) + "\n",
+            encoding="utf-8",
+        )
+        code, out, _ = _run(capsys, "report")
+        assert code != 0, (schlecht, out)
+        assert "history note:" in out and "incomplete" in out, schlecht
+        assert "verdict green" not in out, schlecht
+
+    # The writer's own operation records the runner's skip; an unexplained one
+    # is refused and appends nothing.
+    code, geschrieben, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    lauf = geschrieben.strip()
+    code, _, _ = _run(
+        capsys,
+        "skip",
+        "--run",
+        lauf,
+        "--gate",
+        "leerprobe",
+        "--enforcement",
+        "block",
+        "--reason",
+        "skip: no measured change (first parent of main abcdef123456)",
+    )
+    assert code == 0
+    letzter = _history(state)[-1]
+    assert letzter["event"] == "gate_skip"
+    assert "seconds" not in letzter and "exit" not in letzter
+    assert letzter["utc"].endswith("+00:00")
+    vorher = len(_history(state))
+    code, _, fehler = _run(
+        capsys,
+        "skip",
+        "--run",
+        lauf,
+        "--gate",
+        "leerprobe",
+        "--enforcement",
+        "block",
+        "--reason",
+        "   ",
+    )
+    assert code == 2 and "reason" in fehler, fehler
+    assert len(_history(state)) == vorher

@@ -10,6 +10,13 @@ appends one version-1 JSON line to `verify-duration.jsonl` under
 outside the repository, local only: no command output, no credentials, no
 upload (bead coding-harness-1um6, spec "Non-goals").
 
+A gate the local runner conditionally skipped on a declared local change
+condition is its own additive event, `gate_skip` (bead
+coding-harness-w2ay): run id, UTC, gate id, enforcement and the measured
+reason including the comparison base — and deliberately no exit status and
+no duration, because nothing ran. The report counts skips beside the
+executed gates, never as them, and names each skipped gate under its run.
+
 **Time.** Elapsed seconds are differences of `time.monotonic()`, so a wall
 clock adjustment cannot produce negative or inflated durations, and an
 inherited admission's wait is recorded as the shared context it is — never
@@ -34,6 +41,8 @@ Command line:
     python -m scripts.verify_duration start --job verify --placement local
     python -m scripts.verify_duration gate --run ID --gate GID \
             --start T0 --end T1 --status N --enforcement block
+    python -m scripts.verify_duration skip --run ID --gate GID \
+            --enforcement block --reason "skip: no measured change (...)"
     python -m scripts.verify_duration end --run ID --start T0 --end T1 --verdict green
     python -m scripts.verify_duration report [--run ID]
 """
@@ -61,8 +70,9 @@ HISTORY_NAME = "verify-duration.jsonl"
 EVENT_VERSION = 1
 RUN_START = "run_start"
 GATE = "gate"
+GATE_SKIP = "gate_skip"
 RUN_END = "run_end"
-EVENTS = (RUN_START, GATE, RUN_END)
+EVENTS = (RUN_START, GATE, GATE_SKIP, RUN_END)
 GATE_FILE = Path("decisions") / "gates.yaml"
 GIT_TIMEOUT_SECONDS = 10.0
 
@@ -250,6 +260,31 @@ def cmd_gate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skip(args: argparse.Namespace) -> int:
+    """Append one conditional-skip record — evidence of a declared skip, never a gate execution.
+
+    A skip carries no exit status and no duration, because nothing ran; the
+    reason names the comparison base and the matching trigger (or measured
+    absence), exactly as the runner printed it. Nothing goes to stdout: a
+    skip never poses as a gate's measured output.
+    """
+    reason = args.reason.strip()
+    if not reason:
+        _log("an unexplained skip is not recorded — carry the measured reason")
+        return 2
+    event = {
+        "v": EVENT_VERSION,
+        "event": GATE_SKIP,
+        "run_id": args.run,
+        "utc": _utc_now(),
+        "gate": args.gate,
+        "enforcement": args.enforcement,
+        "reason": reason,
+    }
+    append_event(event)
+    return 0
+
+
 def cmd_end(args: argparse.Namespace) -> int:
     """Append the run's completion record and print the execution/wait summary line."""
     seconds = _seconds(args.start, args.end)
@@ -361,9 +396,21 @@ def _record_error(event: dict) -> str | None:
                 "enforcement": lambda v: v in ("block", "advisory", "report"),
             }
         )
+    elif kind == GATE_SKIP:
+        fields.update(
+            {
+                "gate": text,
+                "enforcement": lambda v: v in ("block", "advisory", "report"),
+                "reason": text,
+            }
+        )
     else:
         fields.update({"seconds": seconds, "verdict": lambda v: v in ("green", "red")})
     invalid = [name for name, check in fields.items() if name not in event or not check(event[name])]
+    if not invalid and kind == GATE_SKIP:
+        fabricated = [name for name in ("seconds", "exit") if name in event]
+        if fabricated:
+            return f"invalid {kind} fields: a conditional skip carries no {' and no '.join(fabricated)}"
     return f"invalid {kind} fields: {', '.join(invalid)}" if invalid else None
 
 
@@ -384,7 +431,7 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
             if run_id in runs:
                 findings.append(f"a second start for run {run_id}")
                 continue
-            runs[run_id] = {"start": event, "gates": [], "end": None}
+            runs[run_id] = {"start": event, "gates": [], "skips": [], "end": None}
             order.append(run_id)
         elif run_id not in runs:
             findings.append(f"line with {kind} for unknown run {run_id} — its start row is missing or malformed")
@@ -392,6 +439,8 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str]]:
             continue
         elif kind == GATE:
             runs[run_id]["gates"].append(event)
+        elif kind == GATE_SKIP:
+            runs[run_id]["skips"].append(event)
         elif runs[run_id]["end"] is None:
             runs[run_id]["end"] = event
         else:
@@ -437,8 +486,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             print(
                 f"run {run_id} · {start.get('utc')} · job {start.get('job')} · placement {start.get('placement')}"
                 f" · verdict {_verdict_of(run)} · execution {_fmt_seconds(execution)}"
-                f" · {len(run['gates'])} gates"
+                f" · {len(run['gates'])} gates" + (f" · {len(run['skips'])} skipped" if run["skips"] else "")
             )
+            # The skip is identified, not only counted: its gate name under the
+            # run line, its measured reason in the `--run` detail and in the
+            # history event — never inside the executed-gates count.
+            for skip in run["skips"]:
+                print(f"    skipped: {skip.get('gate')}")
     for finding in findings:
         print(f"history note: {finding}")
     return 1 if grouping else 0
@@ -474,6 +528,8 @@ def _detail(run: dict) -> str:
             f"    {gate.get('gate')}  {_fmt_seconds(gate.get('seconds'))}  exit {gate.get('exit')}"
             f"  {gate.get('enforcement')}"
         )
+    for skip in run["skips"]:
+        lines.append(f"    skipped: {skip.get('gate')}  {_shown(skip.get('reason'))}")
     if run["end"] is None:
         lines.append("  execution: unknown · verdict: incomplete (no completion recorded)")
     else:
@@ -501,6 +557,13 @@ def main(argv: list[str] | None = None) -> int:
     gate.add_argument("--status", required=True, type=int, help="the gate command's raw exit status")
     gate.add_argument("--enforcement", required=True, help="the gate's enforcement (block|advisory|report)")
     gate.set_defaults(handler=cmd_gate)
+
+    skip = operations.add_parser("skip", help="record one conditionally skipped gate — no exit, no duration")
+    skip.add_argument("--run", required=True, help="the run identity of this run")
+    skip.add_argument("--gate", required=True, help="the gate id as the one list names it")
+    skip.add_argument("--enforcement", required=True, help="the gate's enforcement (block|advisory|report)")
+    skip.add_argument("--reason", required=True, help="the measured reason, including the comparison base")
+    skip.set_defaults(handler=cmd_skip)
 
     end = operations.add_parser("end", help="record the run's execution seconds and final verdict")
     end.add_argument("--run", required=True, help="the run identity of this run")

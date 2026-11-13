@@ -97,6 +97,19 @@ def _expected_cells(g: dict[str, Any]) -> dict[str, str]:
             einsatz = f"action `{g['action']}` (hosted CI only)"
     else:
         einsatz = f"`{g['command']}`"
+        # The declared local condition, formatted independently of the
+        # renderer's own helper: the catalog exposes the declaration, never a
+        # checkout-specific evaluation of it (bead coding-harness-w2ay).
+        dekl = g.get("local_when")
+        if dekl:
+            teile = []
+            if dekl.get("paths"):
+                teile.append("paths " + ", ".join(dekl["paths"]))
+            if dekl.get("kit_manifest"):
+                teile.append("kit manifest " + str(dekl["kit_manifest"]))
+            if dekl.get("membership"):
+                teile.append("membership changes")
+            einsatz += "; local: conditional — " + " · ".join(teile)
     return {
         "id": _shown(g["id"]),
         "title": _shown(g["name"]),
@@ -243,3 +256,34 @@ def test_catalog_drift_is_rejected() -> None:
     assert _drift(alle, [rows[0], gelogen, rows[2]]) == [
         "probe-hosted: enforcement reads 'block', the gate declares 'advisory'"
     ]
+
+
+def test_catalog_exposes_a_declared_local_condition() -> None:
+    """A declared local condition is shown as declared — never evaluated against this checkout.
+
+    The cell names the triggers the gate file declares; an undeclared gate's
+    cell stays exactly the bare command, and the two-sided comparison holds
+    both together.
+    """
+    bedingt = {
+        **_fixture_gates()[0],
+        "id": "probe-conditional",
+        "command": "python3 scripts/kit/probe.py --strict",
+        "local_when": {
+            "paths": ["scripts/kit/manifest.yaml", "scripts/kit/probe.py"],
+            "kit_manifest": "scripts/kit/manifest.yaml",
+            "membership": True,
+        },
+    }
+    alle = [_fixture_gates()[0], bedingt]
+    nach_id = {r["id"]: r for r in _rows(catalog_rows(alle))}
+    zelle = nach_id["probe-conditional"]["command / action"]
+    assert zelle.startswith("`python3 scripts/kit/probe.py --strict`; local: conditional — "), zelle
+    assert (
+        "paths scripts/kit/manifest.yaml, scripts/kit/probe.py"
+        " · kit manifest scripts/kit/manifest.yaml · membership changes" in zelle
+    ), zelle
+    # The undeclared gate's cell stays exactly the bare command — no suffix
+    # invents a condition the list does not carry.
+    assert nach_id["probe-command"]["command / action"] == "`python3 -m probe --strict`"
+    assert _drift(alle, list(nach_id.values())) == []

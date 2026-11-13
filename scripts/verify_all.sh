@@ -11,6 +11,16 @@
 # minutes), and the first blocking failure stops the run — it names every
 # selected gate it did not reach. `--ci` keeps running every selected gate.
 #
+# Under schema 4 a gate may declare a local change condition (`local_when` in
+# decisions/gates.yaml, bead coding-harness-w2ay). The local run then asks the
+# reader for the declared decision of every selected gate — run, or skip with
+# its measured reason naming the comparison base and the matching trigger —
+# and executes only the run rows. A reached skip is printed outside the
+# machine gate frames and recorded as its own gate_skip history event; a gate
+# the blocking failure ended the run before is not reached and gets only the
+# existing not-run summary. `--ci` ignores the declarations and stays
+# unconditional. No gate id, no kit path rule and no extra command lives here.
+#
 # Usage:
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
@@ -246,30 +256,34 @@ dur_call RUN_ID start --job "$JOB" --placement "$duration_placement"
 # Auslassen.
 platzierung=lokal
 [ "$CI_MODE" -eq 1 ] && platzierung=ci
-gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement "$platzierung" --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
-    || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
+if [ "$CI_MODE" -eq 1 ]; then
+    # `--ci` misst denselben Satz wie die abgeleitete Workflow; die
+    # bedingten lokalen Entscheidungen gehoeren nur zum lokalen Lauf, die
+    # gehostete Ausfuehrung bleibt unbedingt — drei Felder je Gate wie bisher.
+    gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement "$platzierung" --tsv --skip-equivalents) \
+        || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
+else
+    # Der lokale Lauf fragt zusaetzlich die deklarierte lokale Bedingung
+    # (Schema 4) ab: fuenf Felder je Gate — id, enforcement, run|skip, Grund,
+    # Kommando. Die Deklaration lebt in der Gate-Liste, nicht hier; der
+    # Runner entscheidet nichts selbst, er folgt den gefragten Zeilen.
+    gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement "$platzierung" --tsv --with-local-decisions) \
+        || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
+fi
 [ -n "$gate_tsv" ] || { echo "die Gate-Liste ist leer — ein Job ohne messbare Gates ist ein Konfigurationsfehler" >&2; exit 2; }
 
 echo ""
 echo "── gates: job=$JOB ──────────────────────────────────────────────"
 
-# The commands come out of the one list — id, enforcement, command, per tab.
-# The runner respects the vocabulary: only `block` turns the run red,
-# `report`/`advisory` speak up without blocking.
-fehler=0
-stop_gate=""
-verbleibend=""
-while IFS="$(printf '\t')" read -r gid enf cmd; do
-    [ -z "$cmd" ] && continue
-    # Cheap-first stop (bead coding-harness-bxxt.1): after the first blocking
-    # failure no further selected gate runs. The remaining ids are collected
-    # from the already obtained TSV and named in one summary below the loop;
-    # `--ci` never sets stop_gate and keeps running every selected gate.
-    if [ "$CI_MODE" -ne 1 ] && [ -n "$stop_gate" ]; then
-        verbleibend="${verbleibend}${gid}
-"
-        continue
-    fi
+# One selected gate: frame, timing around the unchanged command, verdict line,
+# blocking bookkeeping. Writes the globals fehler and stop_gate. The commands
+# come out of the one list; the runner respects the enforcement vocabulary —
+# only `block` turns the run red, `report`/`advisory` speak up without
+# blocking.
+fuehre_gate_aus() {
+    gid="$1"
+    enf="$2"
+    cmd="$3"
     # Werkzeuge aus dem Pin aufloesen (gates.md G-12): `python3` in der Liste
     # heisst "der gepinnte Interpreter", nicht "was der PATH gerade hergibt".
     # Die CI macht dasselbe ueber setup-python mit derselben Version.
@@ -304,9 +318,55 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
     fi
     # The measured seconds of this gate, beside its verdict (criterion 1).
     [ -n "$g_secs" ] && echo "── [$gid] ${g_secs}s"
-done <<GATES
+    return 0
+}
+
+fehler=0
+stop_gate=""
+verbleibend=""
+declared_skips=0
+if [ "$CI_MODE" -eq 1 ]; then
+    while IFS="$(printf '\t')" read -r gid enf cmd; do
+        [ -z "$cmd" ] && continue
+        fuehre_gate_aus "$gid" "$enf" "$cmd"
+    done <<GATES
 $gate_tsv
 GATES
+else
+    # Cheap-first stop first (bead coding-harness-bxxt.1), then the declared
+    # decision (bead coding-harness-w2ay): a gate the blocking failure ended
+    # the run before is not reached — it gets only the not-run summary below,
+    # never a conditional-skip event. A reached skip is printed with three
+    # spaces after `──` (outside the gate-frame format the evidence parser
+    # reads), recorded as its own gate_skip history event, and never becomes a
+    # green gate frame, an exit status or test seconds.
+    while IFS="$(printf '\t')" read -r gid enf entscheidung grund cmd; do
+        [ -z "$cmd" ] && continue
+        if [ -n "$stop_gate" ]; then
+            verbleibend="${verbleibend}${gid}
+"
+            continue
+        fi
+        case "$entscheidung" in
+            run) ;;
+            skip)
+                declared_skips=$((declared_skips + 1))
+                echo "──   [$gid] skipped — $grund"
+                if [ -n "$RUN_ID" ]; then
+                    dur_call skip_vermerkt skip --run "$RUN_ID" --gate "$gid" --enforcement "$enf" --reason "$grund"
+                fi
+                continue
+                ;;
+            *)
+                echo "die Entscheidung von [$gid] ist weder run noch skip — die Gate-Liste liess sich nicht entscheiden" >&2
+                exit 2
+                ;;
+        esac
+        fuehre_gate_aus "$gid" "$enf" "$cmd"
+    done <<GATES
+$gate_tsv
+GATES
+fi
 
 # The not-run summary (bead coding-harness-bxxt.1): every selected gate the
 # run did not execute because of the blocking failure, and only those —
@@ -338,5 +398,9 @@ if [ "$fehler" -ne 0 ]; then
     echo "VERIFY RED — at least one gate failed; the report above names it."
     exit 1
 fi
-echo "VERIFY GREEN — every local gate of the '$JOB' job passed."
+if [ "$declared_skips" -gt 0 ]; then
+    echo "VERIFY GREEN — every executed gate of the '$JOB' job passed; $declared_skips declared local skip(s) above — hosted CI measures them."
+else
+    echo "VERIFY GREEN — every local gate of the '$JOB' job passed."
+fi
 exit 0

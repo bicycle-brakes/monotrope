@@ -10,6 +10,11 @@ Dieses Modul ist ihr einziger Leser und leitet daraus alles ab:
                     ordnet `--placement lokal` sie billig-zuerst (cost:
                     seconds vor minutes), alles andere bleibt in
                     Deklarationsordnung (bead coding-harness-bxxt.1)
+  --with-local-decisions
+                    zu --commands --placement lokal --tsv: fuenf Felder je
+                    Gate — id, enforcement, run|skip, Grund, Kommando; der
+                    Grund nennt die Vergleichsbasis und den gemessenen
+                    Ausloeser (bead coding-harness-w2ay)
   --report          Commit-SHAs + Konfigurations-Hash: der Lauf bindet sich
   --check-schema    prueft die Gate-Datei gegen ihr eigenes Schema
   --generate-ci     erzeugt `.github/workflows/ci.yml` aus der Liste
@@ -27,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -79,7 +85,24 @@ PLACEMENT: tuple[str, ...] = ("hosted", "writer", "both")
 # billig-zuerst-Ordnung ableitet. SCHEMA_VERSION gehoert zur Gate-Datei: ein
 # Schemawechsel ist sichtbar, kein stiller.
 SCHEMA_VERSION = 3
+# Schema 4 (bead coding-harness-w2ay) adds the optional per-gate declaration
+# `local_when` — the general local-change condition of the expensive local
+# gates. During the bootstrap attempt this reader accepts both versions: the
+# held real list is still schema 3, and the strict activation (schema 4 only,
+# schema-3 compatibility removed) belongs to the change's orchestrator step.
+SCHEMA_VERSIONS: tuple[int, ...] = (3, 4)
 COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
+
+# The closed trigger vocabulary of `local_when` (bead coding-harness-w2ay).
+# Any supplied trigger is sufficient; a gate without the declaration runs
+# unconditionally. `paths` holds repository-relative file/directory prefixes,
+# `kit_manifest` selects the travelling paths through the kit manifest's own
+# classifier, and `membership` means any added or removed path in any measured
+# state — including a rename, which arrives as a removal and an addition.
+LOCAL_WHEN_KEYS: tuple[str, ...] = ("paths", "kit_manifest", "membership")
+
+# One local decision of the runner's middle field: ("run" | "skip", single-line reason).
+Decision = tuple[str, str]
 
 # Scripts ohne Aufrufer in der erzeugten ci.yml — mit dem Grund, warum das
 # richtig ist (RB-G3). Jedes Script unter `scripts/` steht entweder als Gate-
@@ -344,6 +367,67 @@ def _tools_fehler(tools: Any) -> list[str]:
     return fehler
 
 
+def _pfad_deklaration_fehler(gid: str, feld: str, eintrag: Any) -> list[str]:
+    """One declared path entry: relative, repository-bound, /-separated text.
+
+    A path that escapes the checkout (`..`), an absolute one, a backslash or a
+    control character would make the measured comparison guess what a later
+    reader meant — the declaration says what it means or the schema refuses it.
+    """
+    if not isinstance(eintrag, str):
+        return [f"{gid}: local_when.{feld}: {eintrag!r} is not a path text"]
+    if not eintrag.strip():
+        return [f"{gid}: local_when.{feld}: a declared path is empty"]
+    if eintrag.startswith("/"):
+        return [f"{gid}: local_when.{feld}: {eintrag!r} is absolute — declare repository-relative"]
+    if "\\" in eintrag:
+        return [f"{gid}: local_when.{feld}: {eintrag!r} carries a backslash — declare / separators"]
+    if any(segment == ".." for segment in eintrag.split("/")):
+        return [f"{gid}: local_when.{feld}: {eintrag!r} escapes the repository"]
+    if any(character in eintrag for character in "\0\n\r\t"):
+        return [f"{gid}: local_when.{feld}: {eintrag!r} carries a control character"]
+    return []
+
+
+def _local_when_fehler(gid: str, dekl: Any, gate: dict[str, Any]) -> list[str]:
+    """The optional general local-condition declaration (schema 4, bead coding-harness-w2ay).
+
+    Valid only on command gates that measure locally; an action has no local
+    condition, and a hosted-only gate would render the declaration silence —
+    both are refused, not ignored.
+    """
+    if not isinstance(dekl, dict):
+        return [f"{gid}: local_when must be a mapping of triggers, is {dekl!r}"]
+    fehler = [
+        f"{gid}: local_when.{schluessel} is no trigger — declare from {list(LOCAL_WHEN_KEYS)}"
+        for schluessel in dekl
+        if schluessel not in LOCAL_WHEN_KEYS
+    ]
+    if not dekl:
+        fehler.append(f"{gid}: local_when is empty — declare at least one of {list(LOCAL_WHEN_KEYS)}")
+    if gate.get("action"):
+        fehler.append(f"{gid}: local_when belongs to command gates — an action has no local condition")
+    if gate.get("placement") == "hosted":
+        fehler.append(f"{gid}: a hosted-only gate never measures locally — local_when would be silence")
+    if "paths" in dekl:
+        praefixe = dekl["paths"]
+        if not isinstance(praefixe, list) or not praefixe:
+            fehler.append(f"{gid}: local_when.paths must be a non-empty list of repository-relative paths")
+        else:
+            gesehen: set[str] = set()
+            for eintrag in praefixe:
+                fehler.extend(_pfad_deklaration_fehler(gid, "paths", eintrag))
+                if isinstance(eintrag, str):
+                    if eintrag in gesehen:
+                        fehler.append(f"{gid}: local_when.paths: {eintrag!r} appears twice")
+                    gesehen.add(eintrag)
+    if "kit_manifest" in dekl:
+        fehler.extend(_pfad_deklaration_fehler(gid, "kit_manifest", dekl["kit_manifest"]))
+    if "membership" in dekl and dekl["membership"] is not True:
+        fehler.append(f"{gid}: local_when.membership must be true — {dekl['membership']!r} declares no trigger")
+    return fehler
+
+
 def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     """Prueft die Gate-Datei gegen ihr Schema. Liefert Fehler, leer = ok."""
     if doc is None:
@@ -354,8 +438,9 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
     version = doc.get("schema_version")
-    if type(version) is not int or version != SCHEMA_VERSION:
-        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
+    if type(version) is not int or version not in SCHEMA_VERSIONS:
+        expected = " oder ".join(str(v) for v in SCHEMA_VERSIONS)
+        fehler.append(f"schema_version muss {expected} sein, ist {version!r}")
     fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
     if not isinstance(gate_liste, list) or not gate_liste:
@@ -411,6 +496,15 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
                 fehler.append(f"{gid}: subsets names one subset twice")
             if g.get("job") != "verify":
                 fehler.append(f"{gid}: subsets belong to verify gates only (a subset is a part of the verify job)")
+        if "local_when" in g:
+            # Ein Gate ohne die Deklaration bleibt unbedingt; die Feldpruefung
+            # haelt das Schema an die geschlossenen Ausloeser (w2ay).
+            if version == 3:
+                fehler.append(
+                    f"{gid}: local_when needs schema_version 4 — the schema-3 reader would silently ignore the declaration"
+                )
+            else:
+                fehler.extend(_local_when_fehler(gid, g["local_when"], g))
         if not g.get("reason"):
             fehler.append(f"{gid}: ohne reason — ein Gate ohne Warum wird nicht gepflegt")
         if g.get("action") and not isinstance(g.get("with"), dict | None):
@@ -464,6 +558,7 @@ def gates() -> list[dict[str, Any]]:
                 "needs_history": bool(g.get("needs_history")),
                 "subsets": list(g.get("subsets") or []),
                 "reason": g.get("reason", ""),
+                "local_when": g.get("local_when"),
                 "local_runnable": kommando is not None or ersatz is not None,
                 "via_local_equivalent": ersatz is not None,
             }
@@ -525,7 +620,7 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
             if g["via_local_equivalent"]:
                 einsatz = f"action `{g['action']}`; locally: `{g['command']}`"
         else:
-            einsatz = f"`{g['command']}`"
+            einsatz = f"`{g['command']}`" + _lokale_bedingung_text(g.get("local_when"))
         kosten_zelle = f"{_zelle(g['cost'])} | "
         zeilen.append(
             f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
@@ -541,6 +636,231 @@ def _git(*args: str) -> str | None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
     return erg.stdout.strip() or None
+
+
+def _git_ausgabe(*args: str) -> str | None:
+    """One git answer as raw stdout — "" is an answer, None only a failure.
+
+    `_git` folds empty output into None, which would read an empty diff as a
+    broken git and make every clean tree indeterminate. The comparison needs
+    the difference, so it takes the raw form.
+    """
+    try:
+        erg = subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
+    return erg.stdout
+
+
+def _vergleichsbasis() -> tuple[str | None, str]:
+    """The base of the measured change, or the reason no base could be named.
+
+    A named feature branch compares against its merge base with `origin/main`;
+    `main` compares against its first parent. A detached checkout is
+    indeterminate — its merge base can differ from the branch reading, and a
+    checkout standing at the base itself has no distinct change set. Fail-closed:
+    every indeterminate answer runs the gate, never skips it.
+    """
+    if _git("rev-parse", "HEAD") is None:
+        return None, "git could not answer the commit of this checkout"
+    branch = _git("symbolic-ref", "--short", "HEAD")
+    if branch is None:
+        return None, "detached HEAD — no branch to compare against"
+    if branch == MAIN_BRANCH:
+        base = _git("rev-parse", "HEAD^")
+        if base is None:
+            return None, "main has no first parent to compare against"
+        return base, f"first parent of main {base[:12]}"
+    base = _git("merge-base", "HEAD", "origin/main")
+    if base is None:
+        return None, f"branch {branch} has no merge base with origin/main"
+    return base, f"merge-base with origin/main {base[:12]}"
+
+
+# A name-status byte that means the file joined or left the set, whatever its
+# content; M and T mean content change of a path that stays.
+_AENDERUNGSART = {"A": "added", "D": "removed", "M": "content", "T": "content"}
+
+
+def _geaenderte_pfade(basis: str) -> tuple[set[str], set[tuple[str, str]]] | None:
+    """The measured change: committed, staged and unstaged states plus nonignored untracked paths.
+
+    Every state diffs NUL-delimited with rename detection off — a rename
+    reaches this reader as a removal and an addition, which is exactly a
+    membership change. Index and working tree are taken separately, so a
+    staged edit cannot vanish because its working copy matches the base. A
+    state git cannot answer, an odd field count, an unknown status byte or an
+    unusable path is `None`: indeterminate, never an empty change.
+    """
+    pfade: set[str] = set()
+    mitgliedschaft: set[tuple[str, str]] = set()
+    zustaende = (
+        ("diff", "-z", "--name-status", "--no-renames", basis, "HEAD"),
+        ("diff", "-z", "--name-status", "--no-renames", "--cached", basis),
+        ("diff", "-z", "--name-status", "--no-renames", "HEAD"),
+    )
+    for args in zustaende:
+        ausgabe = _git_ausgabe(*args)
+        if ausgabe is None:
+            return None
+        felder = [feld for feld in ausgabe.split("\0") if feld]
+        if len(felder) % 2 != 0:
+            return None
+        for i in range(0, len(felder), 2):
+            status, pfad = felder[i], felder[i + 1]
+            art = _AENDERUNGSART.get(status)
+            if art is None or not pfad:
+                return None
+            pfade.add(pfad)
+            mitgliedschaft.add((pfad, art))
+    ausgabe = _git_ausgabe("ls-files", "-z", "--others", "--exclude-standard")
+    if ausgabe is None:
+        return None
+    for pfad in (feld for feld in ausgabe.split("\0") if feld):
+        if not pfad:
+            return None
+        pfade.add(pfad)
+        mitgliedschaft.add((pfad, "added"))
+    return pfade, mitgliedschaft
+
+
+def _gemessene_aenderung() -> dict[str, Any]:
+    """The measured change against the comparison base — or its named indeterminacy.
+
+    Computed on every call, without caching: the runner asks once per run, and
+    the answer must describe that run's own tree, not a remembered one.
+    """
+    try:
+        basis, basis_text = _vergleichsbasis()
+        if basis is None:
+            return {"base": basis_text, "failure": basis_text, "paths": None, "membership": None}
+        gemessen = _geaenderte_pfade(basis)
+        if gemessen is None:
+            grund = "git could not answer the change comparison"
+            return {"base": f"{basis_text}; {grund}", "failure": grund, "paths": None, "membership": None}
+        return {"base": basis_text, "failure": None, "paths": gemessen[0], "membership": gemessen[1]}
+    except Exception as aufsehen:  # noqa: BLE001 — a broken measurement never reads as an empty change
+        grund = f"the change comparison failed ({type(aufsehen).__name__})"
+        return {"base": grund, "failure": grund, "paths": None, "membership": None}
+
+
+def _pfad_trifft(praefix: str, pfad: str) -> bool:
+    """By path segment: the declared path itself or everything below it."""
+    stamm = praefix.rstrip("/")
+    if not stamm:
+        return False
+    return pfad == stamm or pfad.startswith(stamm + "/")
+
+
+_kit_module: dict[str, Any] = {}
+
+
+def _kit_reisende(manifest: str) -> set[str] | None:
+    """The tracked paths the declared kit manifest classifies `mechanismus`.
+
+    The classifier is loaded once per invocation from beside the declared
+    manifest — no second role matcher lives here, and no reader that never
+    sees a manifest condition pays for the import (bead coding-harness-w2ay).
+    `None` is the fail-closed answer: an unreadable manifest or classifier
+    runs the gate.
+    """
+    if "module" not in _kit_module:
+        helfer = (REPO_ROOT / manifest).parent / "probe.py"
+        modul = None
+        if helfer.is_file():
+            try:
+                spez = importlib.util.spec_from_file_location("ci_gates_kit_probe", helfer)
+                if spez is not None and spez.loader is not None:
+                    modul = importlib.util.module_from_spec(spez)
+                    spez.loader.exec_module(modul)
+            except Exception:  # noqa: BLE001 — any broken helper stays indeterminate, never empty
+                modul = None
+        _kit_module["module"] = modul
+    geladen = _kit_module["module"]
+    if geladen is None:
+        return None
+    try:
+        return set(geladen.mechanism_paths(REPO_ROOT / manifest))
+    except Exception:  # noqa: BLE001 — a manifest that cannot be read is indeterminate
+        return None
+
+
+def _einzeilig(text: str) -> str:
+    """A reason as one TSV-safe line: tabs and newlines become spaces.
+
+    Filenames are never interpreted as shell input anywhere — the runner
+    quotes nothing it reads from here into a command, it only prints it.
+    """
+    return re.sub(r"[\t\r\n\0]+", " ", text).strip()
+
+
+def _entscheidung(gate: dict[str, Any], aenderung: dict[str, Any]) -> Decision:
+    """One gate's local decision: run, or a skip with its measured reason.
+
+    A gate without a declaration is unconditional — the declaration decides,
+    never the gate id, so a mixed selection answers the fixed run reason for
+    it and measures only what a declared trigger names. Any supplied trigger
+    suffices; the checks name their trigger and the comparison base, so the
+    recorded skip says what was measured, not only that nothing matched.
+    """
+    dekl = gate.get("local_when")
+    if dekl is None:
+        return "run", "unconditional — no local condition declared"
+    if aenderung["failure"] is not None:
+        return "run", _einzeilig(f"run: comparison indeterminate — {aenderung['failure']}")
+    pfade = aenderung["paths"]
+    mitgliedschaft = aenderung["membership"]
+    praefixe = list(dekl.get("paths") or [])
+    for pfad in sorted(pfade):
+        for praefix in praefixe:
+            if _pfad_trifft(praefix, pfad):
+                return "run", _einzeilig(f"run: {pfad} matches declared path {praefix} ({aenderung['base']})")
+    for pfad, art in sorted(mitgliedschaft):
+        if art in ("added", "removed"):
+            return "run", _einzeilig(f"run: membership change {art} {pfad} ({aenderung['base']})")
+    manifest = dekl.get("kit_manifest")
+    if manifest:
+        reisende = _kit_reisende(manifest)
+        if reisende is None:
+            return "run", _einzeilig(
+                f"run: the kit manifest {manifest} cannot be read — the condition is indeterminate"
+            )
+        gemeinsam = sorted(pfade & reisende)
+        if gemeinsam:
+            return "run", _einzeilig(f"run: {gemeinsam[0]} travels per kit manifest {manifest} ({aenderung['base']})")
+    deklariert = ", ".join(praefixe) if praefixe else "none"
+    kost = f", kit manifest {manifest}" if manifest else ""
+    return "skip", _einzeilig(
+        f"skip: no measured change matches paths {deklariert}{kost} or membership ({aenderung['base']})"
+    )
+
+
+def lokale_entscheidungen(auswahl: list[dict[str, Any]]) -> dict[str, Decision]:
+    """run/skip and the measured reason for every selected gate, against this tree's change.
+
+    Gates without a declaration are unconditional and cost no git call: the
+    measured change is computed only when a selected gate declares a
+    condition, and never cached across calls.
+    """
+    bedingt = [g for g in auswahl if g.get("local_when")]
+    if not bedingt:
+        return {g["id"]: ("run", "unconditional — no local condition declared") for g in auswahl}
+    aenderung = _gemessene_aenderung()
+    return {g["id"]: _entscheidung(g, aenderung) for g in auswahl}
+
+
+def _lokale_bedingung_text(dekl: dict[str, Any] | None) -> str:
+    """A declared local condition as the catalogue cell shows it — declared, never evaluated."""
+    if not dekl:
+        return ""
+    teile = []
+    if dekl.get("paths"):
+        teile.append("paths " + ", ".join(dekl["paths"]))
+    if dekl.get("kit_manifest"):
+        teile.append("kit manifest " + str(dekl["kit_manifest"]))
+    if dekl.get("membership"):
+        teile.append("membership changes")
+    return "; local: conditional — " + " · ".join(teile)
 
 
 def report(job: str) -> dict[str, Any]:
@@ -835,7 +1155,23 @@ def main() -> int:
         action="store_true",
         help="the one list as a Markdown table on stdout (docs/governance/gate-catalog.md)",
     )
+    ap.add_argument(
+        "--with-local-decisions",
+        action="store_true",
+        help="zu --commands --placement lokal --tsv: fuenf Felder je Gate — "
+        "id, enforcement, run|skip, Grund, Kommando (bead coding-harness-w2ay)",
+    )
     args = ap.parse_args()
+
+    if args.with_local_decisions and (
+        not args.commands or not args.tsv or args.placement != "lokal" or args.format != "text" or args.skip_equivalents
+    ):
+        # Der lokale Runner ist der eine Abnehmer der fuenf Felder; jede
+        # andere Kombination liesse die Entscheidungsfelder schweigend fallen.
+        ap.error(
+            "--with-local-decisions needs exactly --commands --placement lokal --tsv in text format "
+            "without --skip-equivalents"
+        )
 
     try:
         alle = gates()
@@ -888,6 +1224,12 @@ def main() -> int:
         # jede andere Ausgabe bleiben in Deklarationsordnung.
         if args.placement == "lokal":
             auswahl = kostenordnung(auswahl)
+        if args.with_local_decisions:
+            entscheidungen = lokale_entscheidungen(auswahl)
+            for g in auswahl:
+                entscheidung, grund = entscheidungen[g["id"]]
+                print(f"{g['id']}\t{g['enforcement']}\t{entscheidung}\t{_einzeilig(grund)}\t{g['command']}")
+            return 0
         for g in auswahl:
             if args.tsv:
                 print(f"{g['id']}\t{g['enforcement']}\t{g['command']}")

@@ -419,3 +419,92 @@ def test_research_handoff_checker_and_tests_travel() -> None:
         rule = probe.rolle(path)
         assert rule is not None and rule[0] == "mechanismus", path
         assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+
+
+# ---------------------------------------------------------------------------
+# Classification mode and unchanged full probe (bead coding-harness-w2ay)
+# ---------------------------------------------------------------------------
+
+
+def _verweigere_den_leerlauf() -> dict[str, bool]:
+    """Stand-in for the expensive runner: any call means the classification started it."""
+    raise AssertionError("the classification started the throwaway test run")
+
+
+def test_classification_mode_keeps_verdict_without_running_tests(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The classification mode keeps the existing verdict and never starts the throwaway run.
+
+    Planted faults: an unclassified tracked file passing, strict untracked
+    drift passing, an exemption verdict silently dropped, or the mode quietly
+    calling the expensive test runner after all. The file listings are patched,
+    so the verdict is measured against a fixed, hermetic tree.
+    """
+    monkeypatch.setattr(probe, "fahre", _verweigere_den_leerlauf)
+    monkeypatch.setattr(probe, "getrackte_dateien", lambda: ["Makefile", "scripts/kit/probe.py"])
+    echte_regeln = probe.regeln
+
+    # A tracked file without a rule still blocks (BLOCK, exit 2).
+    ohne_makefile = [r for r in echte_regeln() if r["prefix"] != "Makefile"]
+    monkeypatch.setattr(probe, "regeln", lambda: ohne_makefile)
+    monkeypatch.setattr(probe, "unversionierte_dateien", lambda: [])
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--classification-only"])
+    assert probe.main() == 2, "an unclassified tracked file passes the classification mode"
+    assert "fall under no rule" in capsys.readouterr().out
+
+    # Untracked drift: 1 under --strict, passable without it — the same
+    # strictness contract as the full command, never relaxed.
+    monkeypatch.setattr(probe, "regeln", echte_regeln)
+    monkeypatch.setattr(probe, "unversionierte_dateien", lambda: ["gar-keine-regel-x7q.txt"])
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--classification-only", "--strict"])
+    assert probe.main() == 1, "strict untracked drift passes the classification mode"
+    assert "untracked file(s) fall under no rule" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--classification-only"])
+    assert probe.main() == 0, "untracked drift without --strict must stay passable, as before"
+    capsys.readouterr()
+
+    # The exemption vocabulary and its cap are part of this verdict, not only
+    # of the full run.
+    monkeypatch.setattr(probe, "REIST_NICHT", {**probe.REIST_NICHT, "tests.erfunden::test_x": "weil-halt"})
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--classification-only"])
+    assert probe.main() == 2, "an invented exemption reason passes the classification mode"
+    assert "weil-halt" in capsys.readouterr().out
+
+    # The mode stands alone: list and measurement are refused, not mixed in.
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--classification-only", "--list"])
+    with pytest.raises(SystemExit) as erhoben:
+        probe.main()
+    assert erhoben.value.code == 2, "--classification-only combined with --list must be refused"
+
+
+def test_default_full_probe_keeps_all_existing_checks(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The standalone full command keeps classification and the case verdicts.
+
+    Planted faults: the default mode skipping the throwaway run (a red case or
+    an orphaned exemption entry never noticed) or losing the exemption checks
+    to the split. The file listings are patched for hermeticity; the fake
+    runner records that the default mode still runs the throwaway set.
+    """
+    aufrufe: list[int] = []
+
+    def gefaelschte_fahre() -> dict[str, bool]:
+        aufrufe.append(1)
+        return {**GRUENE_FAELLE, "tests.tuer::test_unerklaert_rot": False}
+
+    monkeypatch.setattr(probe, "fahre", gefaelschte_fahre)
+    monkeypatch.setattr(probe, "getrackte_dateien", lambda: ["Makefile", "scripts/kit/probe.py"])
+    monkeypatch.setattr(probe, "unversionierte_dateien", lambda: [])
+    monkeypatch.setattr(sys, "argv", ["probe.py", "--strict"])
+    assert probe.main() == 2, "a red case without a declared reason must block the full command"
+    assert aufrufe == [1], "the full command must run the throwaway set exactly once"
+    out = capsys.readouterr().out
+    assert "red case(s) without a declared reason" in out
+    # Every real exemption entry has no case in the fake set: the orphan check
+    # fires exactly as it did before the classification mode was split off.
+    assert "no case any more" in out
+    # The third exemption direction, directly: a reason whose case went green expires.
+    v = probe.pruefe(faelle={next(iter(probe.REIST_NICHT)): True})
+    assert "went green" in _blockgruende(v), _blockgruende(v)

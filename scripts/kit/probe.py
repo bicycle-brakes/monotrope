@@ -15,6 +15,8 @@ red elsewhere, or it would be a ratchet over an empty set.
     python3 scripts/kit/probe.py            # run and compare
     python3 scripts/kit/probe.py --list     # only say what would be copied
     python3 scripts/kit/probe.py --messen   # print the red names, to add them
+    python3 scripts/kit/probe.py --classification-only
+                                            # the verdict before the throwaway run
 """
 
 from __future__ import annotations
@@ -314,6 +316,21 @@ def nach_rolle() -> dict[str, list[str]]:
     return aus
 
 
+def mechanism_paths(manifest_path: Path) -> set[str]:
+    """The tracked files the manifest at `manifest_path` classifies `mechanismus`.
+
+    The one classifier behind the gate reader's local kit conditions:
+    `scripts/ci_gates.py` loads this module beside a declared `kit_manifest`
+    instead of copying the longest-prefix rule, so a manifest edit that makes a
+    path newly travelling is seen through the same rule set the probe uses.
+    A manifest that cannot be read raises — the caller treats every failure as
+    an indeterminate condition, never as an empty travelling set.
+    """
+    dokument = yaml.safe_load(Path(manifest_path).read_text(encoding="utf-8"))
+    fremde_regeln = dokument["rules"]
+    return {pfad for pfad in getrackte_dateien() if (rolle(pfad, fremde_regeln) or ("", ""))[0] == "mechanismus"}
+
+
 # ---------------------------------------------------------------------------
 # The probe
 # ---------------------------------------------------------------------------
@@ -385,7 +402,15 @@ def fahre() -> dict[str, bool]:
 # ---------------------------------------------------------------------------
 
 
-def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
+def classification_verdict() -> Verdict:
+    """The verdict that stands before the throwaway test run — and never starts it.
+
+    Tracked/untracked classification against the manifest, the nonempty
+    travelling set, the closed exemption vocabulary and its cap. The cheap
+    classification mode (`--classification-only`) reads exactly this verdict;
+    `pruefe` opens with it, so both modes keep one strictness. Blocks stay
+    blocks and drift stays drift — nothing here is relaxed, only split apart.
+    """
     v = Verdict()
     verteilt = nach_rolle()
 
@@ -416,6 +441,16 @@ def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
             f"REIST_NICHT has {len(REIST_NICHT)} entries, the cap stands at {DECKEL}",
             "The list may only shrink. Whoever grows it raises the cap visibly.",
         )
+
+    return v
+
+
+def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
+    v = classification_verdict()
+    # The empty travelling set ends the verdict here, exactly as before: the
+    # throwaway run never starts when nothing would be measured (RB-G7).
+    if not nach_rolle()["mechanismus"]:
+        return v
 
     faelle = fahre() if faelle is None else faelle
     if not faelle:
@@ -462,6 +497,7 @@ def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
             "\n".join(abgelaufen[:25]) + "\n\nAn expired reason reads like a living decision. Remove it.",
         )
 
+    verteilt = nach_rolle()
     v.info(
         f"{len(gruen)} of {len(faelle)} cases carry into a foreign repository ({100 * len(gruen) // len(faelle)} %)",
         f"mechanismus {len(verteilt['mechanismus'])} · bestand {len(verteilt['bestand'])} file(s)",
@@ -474,7 +510,21 @@ def main() -> int:
     p.add_argument("--list", action="store_true", help="only print what would be copied")
     p.add_argument("--messen", action="store_true", help="print the red names as a Python dict (measure)")
     p.add_argument("--strict", action="store_true", help="DRIFT blocks too")
+    p.add_argument(
+        "--classification-only",
+        action="store_true",
+        help="the verdict before the throwaway run: classification, travelling set, exemption "
+        "checks — no throwaway repository, no tests",
+    )
     args = p.parse_args()
+
+    if args.classification_only and (args.list or args.messen):
+        p.error("--classification-only stands alone (beside --strict) — not with --list or --messen")
+
+    if args.classification_only:
+        v = classification_verdict()
+        print(v.render())
+        return v.exit_code(strict=args.strict)
 
     if args.list:
         verteilt = nach_rolle()
