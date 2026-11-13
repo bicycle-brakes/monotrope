@@ -4270,7 +4270,9 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
     assert [record["command"] for record in commands.of("make")] == [["make", "verify"]], (
         "repair skipped required full fallback"
     )
-    assert "verification-scope.txt" in world.text(), "the fallback must report its unsupported input"
+    assert "verification-scope.txt" in world.plan.read_text(encoding="utf-8"), (
+        "the fallback must report its unsupported input in the plan time line"
+    )
     assert world.calls("bash") == [], "repair ran the document subset"
 
 
@@ -25120,6 +25122,31 @@ def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPa
     assert world.calls("bash") == [], "the draft's document check went through bash again"
     assert commands.of("make") == []
     assert "document checks only" in scope and "result: green" in scope
+
+
+def test_passing_full_fallback_repair_keeps_scope_only_in_plan(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 8: plant unsafe coverage and exercise the successful full-fallback repair branch."""
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+
+    def unreadable(_repo: str, **_kwargs) -> None:
+        raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+    monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+    assert world.run("repair") == 0
+    assert len(commands.of("make")) == 1, "the repair did not exercise full fallback"
+    time_lines = [
+        line for line in world.plan.read_text(encoding="utf-8").splitlines() if "measured by the runner" in line
+    ]
+    assert len(time_lines) == 1
+    assert "· accepted · full `make verify` ran (result: green)" in time_lines[0]
+    assert "the link inventory could not be read" in time_lines[0] and "planted inventory fault" in time_lines[0]
+    lines = world.text().splitlines()
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    assert len(audits) == 1
+    after_audit = "\n".join(lines[audits[-1] + 1 :])
+    assert "full `make verify`" not in after_audit, "the passing repair left a separate scope note after its audit line"
+    assert "planted inventory fault" not in world.text(), "the scope reason leaked out of the plan time line"
 
 
 @pytest.mark.parametrize("mode", ["targeted", "fallback", "fallback-launch-failure"])

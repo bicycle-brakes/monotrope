@@ -9111,19 +9111,6 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
-                if verb == "repair":
-                    # A repair that fell back to the full check names why, as one runner note line
-                    # (not a quote block) in findings.md; the implement route keeps its scope in the
-                    # plan's time line only.
-                    for line in scope_lines:
-                        if line.startswith("full `make verify`"):
-                            append(
-                                ctx.findings,
-                                protect_diagnostics(
-                                    f"Runner note, {today()}: {verb} · attempt {attempt} · route {route} — {line}",
-                                    key,
-                                ),
-                            )
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).

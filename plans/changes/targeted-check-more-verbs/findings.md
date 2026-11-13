@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-11
 created: 2026-11-11
 last_reviewed: 2026-11-11
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -938,7 +938,7 @@ Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol �
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | F6-13 | BLOCKER | SPEC | base | docs/adr/0025-targeted-check-after-repair.md:119 | [DIVERGENT] The amendment promises automatic slip recording and a `slips` command when this PR merges, while the current spec explicitly defers that functionality. The CLI exposes no `slips` command or slip writer. Mark this clause and its cost consequence as deferred so the decision PR reflects the agreed scope. [Acceptance criterion 13; deferral of criteria 10–12] | Codex | fixed — not a test: orchestrator hand edit of the ADR 0025 amendment (point 6 and the cost consequence) with the text the maintainer approved on 2026-11-13; the runner may not commit docs/adr/ | — |
-| F6-14 | MINOR | SPEC | base | scripts/stage2.py:9114 | A successful repair using full fallback appends a separate verification-scope note to findings.md after its audit line. Executing this branch in memory confirms the extra note. Keep passing-attempt scope in the existing plan.md time line, as specified. [Acceptance criterion 8] | Codex | taken — a passing repair attempt that used the full fallback writes its verification scope only into the existing time line of plan.md and appends no separate scope note to findings.md (criterion 8, decisions.md#Q-6); a test runs that branch and reads both files | — |
+| F6-14 | MINOR | SPEC | base | scripts/stage2.py:9114 | A successful repair using full fallback appends a separate verification-scope note to findings.md after its audit line. Executing this branch in memory confirms the extra note. Keep passing-attempt scope in the existing plan.md time line, as specified. [Acceptance criterion 8] | Codex | fixed — tests/test_stage2.py::test_passing_full_fallback_repair_keeps_scope_only_in_plan | — |
 
 Phase 6 verdict: codex 01a1d68e-dc95-73e0-86bd-ee17114e5a56, 2026-11-13
 Reviewer session: codex 01a1d68e-dc95-73e0-86bd-ee17114e5a56 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -946,3 +946,9 @@ Reviewer session: codex 01a1d68e-dc95-73e0-86bd-ee17114e5a56 — a fresh session
 Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4134 commits, 12 rules.
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged; plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4159 commits, 12 rules.
+
+Runner note, 2026-11-14: repair · attempt 1 · route codex — full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-14: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged

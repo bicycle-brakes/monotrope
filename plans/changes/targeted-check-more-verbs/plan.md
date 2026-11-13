@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-11
 last_reviewed: 2026-11-11
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-0swp
@@ -250,3 +250,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-13 19:20:04–19:23:43 UTC, 219 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-13 19:23:50–19:25:53 UTC, 123 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-13 19:26:01–19:26:57 UTC, 57 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-13 22:58:13–23:16:22 UTC, 1089 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
