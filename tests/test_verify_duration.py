@@ -1067,6 +1067,50 @@ def test_slip_report_counts_interval_and_reports_gaps(
     assert code == 1 and "not trustworthy" in out and "incomplete" in out, (code, out)
 
 
+@pytest.mark.parametrize("kind", ["targeted", "slip"])
+@pytest.mark.parametrize("missing", ["tree", "config_sha256"])
+def test_slip_report_rejects_incomplete_evidence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], kind: str, missing: str
+) -> None:
+    """Incomplete targeted and slip rows must diagnose a gap, never a trustworthy zero."""
+    repo = tmp_path / "repo"
+    event = slip_event_like("check-one", "run-one", str(repo), "a" * 40)
+    if kind == "targeted":
+        event.update(
+            event="targeted",
+            worktree=str(repo),
+            change="demo",
+            verb="implement",
+            tests=[],
+            gates=[],
+            outcome="green",
+            commit=None,
+        )
+        for field in ("run_id", "failed_gates", "failed_tests"):
+            del event[field]
+    path = tmp_path / "state" / "coding-harness" / verify_duration.HISTORY_NAME
+    path.parent.mkdir(parents=True)
+    args = (
+        "slips",
+        "--repository",
+        str(repo),
+        "--since",
+        "2026-01-01T00:00:00+00:00",
+        "--until",
+        "2027-01-01T00:00:00+00:00",
+    )
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+    code, out, _ = _run(capsys, *args)
+    assert code == 0, out
+
+    del event[missing]
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+    code, out, err = _run(capsys, *args)
+    assert code == 1 and "not measured" in out, (code, out, err)
+    assert missing in err, err
+    assert "slips: 0 distinct slipped full runs" not in out, out
+
+
 def slip_event_like(check_id: str, run_id: str, repository: str, tree: str) -> dict:
     """One valid slip record, used to seed reader cases directly."""
     return {

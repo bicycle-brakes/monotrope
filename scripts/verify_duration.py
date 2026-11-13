@@ -550,22 +550,19 @@ def cmd_slips(args: argparse.Namespace) -> int:
         return 1
     slips = [event for event in events if event["event"] == SLIP]
     broken = list(findings)
-    broken += [f"invalid slip fields: {event.get('check_id')}" for event in slips if _record_error(event)]
     counted = {
         event["run_id"]
         for event in slips
-        if not _record_error(event)
-        and str(Path(str(event.get("repository", ""))).resolve()) == repository
+        if str(Path(event["repository"]).resolve()) == repository
         and args.since <= datetime.datetime.fromisoformat(event["utc"]).astimezone(datetime.UTC) < args.until
     }
     # A failed append leaves no slip row to validate. Inspect correlated completed red runs
     # as well: without their record a matching (or unreadable) identity is unmeasured.
-    recorded_runs = {event["run_id"] for event in slips if not _record_error(event)}
+    recorded_runs = {event["run_id"] for event in slips}
     greens = [
         event
         for event in events
         if event["event"] == TARGETED
-        and not _record_error(event)
         and event.get("outcome") == "green"
         and str(Path(event["repository"]).resolve()) == repository
     ]
@@ -653,6 +650,11 @@ def _read_events() -> tuple[list[dict], list[str]]:
         if type(event.get("v")) is not int or event["v"] != EVENT_VERSION:
             findings.append(f"line {number}: unsupported event version {event.get('v')!r}; expected {EVENT_VERSION}")
             continue
+        if event["event"] in (TARGETED, SLIP):
+            error = _record_error(event)
+            if error:
+                findings.append(f"line {number}: {error} for check {event['check_id']}")
+                continue
         events.append(event)
     return events, findings
 

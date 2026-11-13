@@ -808,7 +808,11 @@ Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-7 | MAJOR | SPEC | base | scripts/verify_duration.py | A valid JSON `targeted` history row missing `tree` is accepted by `_read_events`, then silently excluded from `greens`. Reproduced with that history: `slips` prints `slips: 0 distinct slipped full runs` and exits 0, although `_record_error` identifies the missing field. Only malformed slip rows contribute validation errors, so incomplete targeted evidence becomes a trustworthy zero instead of an unavailable measurement. [Acceptance criteria 11–12] | Codex | taken — slips reports 'not measured' when a targeted history row lacks a required field (tree, config) instead of dropping it from the greens; one choke point validates every targeted and slip row the same way; a test with a targeted row missing tree | — |
+| F6-7 | MAJOR | SPEC | base | scripts/verify_duration.py | A valid JSON `targeted` history row missing `tree` is accepted by `_read_events`, then silently excluded from `greens`. Reproduced with that history: `slips` prints `slips: 0 distinct slipped full runs` and exits 0, although `_record_error` identifies the missing field. Only malformed slip rows contribute validation errors, so incomplete targeted evidence becomes a trustworthy zero instead of an unavailable measurement. [Acceptance criteria 11–12] | Codex | fixed — tests/test_verify_duration.py::test_slip_report_rejects_incomplete_evidence | — |
 
 Phase 6 verdict: codex 01a1d480-5796-7020-808e-8e0caf357d84, 2026-11-13
 Reviewer session: codex 01a1d480-5796-7020-808e-8e0caf357d84 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4064 commits, 12 rules.
+
+Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
