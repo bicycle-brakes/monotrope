@@ -11,6 +11,9 @@ bead: coding-harness-bxxt.2
 owner: Data Architect
 provenance: human-written
 tags: [research]
+neighbours:
+  - plans/changes/archive/2026-11-06-verify-machine-lock/spec.md
+  - plans/changes/archive/2026-11-06-verify-duration/spec.md
 ---
 
 # verify result reuse — Research
