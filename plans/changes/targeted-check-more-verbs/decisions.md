@@ -195,3 +195,18 @@ audit line is written when the call starts, before any check has run; the
 time line is written after the verdict and is runner-owned already. A failed
 attempt names the scope inside its one diagnostics block, as the repair route
 does today. The run log (verify-duration.jsonl) keeps the scope as before.
+
+## Q-9 · Whether the slip counter stays in this change
+
+asked: 2026-11-13
+answer: "Abtrennen (Empfohlen)" — the slip counter leaves this change and becomes a change of its own (bead coding-harness-bxxt.7); the targeted check goes out as the decision pull request for the ADR 0025 amendment. Decision Q-5 is met by that second change.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: this change holds the targeted check after implement and draft, and a counter of the faults the targeted check lets through (decision Q-5, spec criteria 10 to 12).
+  Intention: the sixth phase-6 re-check found a new case in the counter again (F6-12, after F6-3, F6-7, F6-8 and F6-10), while the targeted check itself had no finding; the appetite stands at about 10 of 10.5 hours.
+  Today: the targeted check cannot merge because the counter sits in the same pull request.
+  Repository change: the counter's code, tests, spec criteria 10 to 12 and their text in workflow and prompts leave this change; a new change under bead coding-harness-bxxt.7 takes them up.
+  Architecture change: none; until the second change merges nothing measures automatically what the targeted check lets through.
+
+In the context of a counter that drew a new finding in each of six re-checks, facing a choice between a further case repair here and a change of its own, we decided to split the counter out, to achieve that the targeted check merges now, accepting that slips are not measured automatically until the second change merges. — 2026-11-13
