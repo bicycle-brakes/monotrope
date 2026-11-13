@@ -4176,12 +4176,8 @@ def release_loop(
 
 
 def shorten_git_error(text: str) -> str:
-    """Keep git's first fatal/error line whole, or its first non-empty line.
-
-    Drop hint paragraphs while preserving the reason after a long temporary path.
-    """
-    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
-    return next((line for line in lines if line.startswith(("fatal:", "error:"))), lines[0] if lines else "")
+    """Join every non-empty line of git's diagnostic without truncating its reason."""
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
 
 
 def _git_output(

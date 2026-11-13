@@ -376,7 +376,7 @@ fi
 export PYTEST_DEBUG_TEMPROOT="$verify_tmp_area"
 export HARNESS_VERIFY_TMP_PARENT="$verify_tmp_parent"
 if [ "$verify_tmp_keep" -eq 1 ]; then
-    echo "verify-tmp: keeping this run's area on request (HARNESS_VERIFY_KEEP_TMP=1): $verify_tmp_area" >&2
+    echo "verify-tmp: will keep this run's area only on failure or interruption (HARNESS_VERIFY_KEEP_TMP=1); success removes it: $verify_tmp_area" >&2
 fi
 # End-of-run cleanup, idempotent across the signal and EXIT handlers: the
 # first handler disarms every trap. A failed removal keeps an existing nonzero

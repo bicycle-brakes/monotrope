@@ -22957,17 +22957,23 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
 
 
 def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> None:
-    """Fault this pins: a fixed cut of git's message loses the reason behind a long temporary path."""
+    """Dropping any diagnostic line can hide git's reason, even after an unbounded path."""
     path = "/tmp/" + "d" * 5000 + "/.git/index.lock"
-    message = f"fatal: Unable to create '{path}': File exists.\n\nAnother git process seems to be running.\n"
-    shortened = stage2.shorten_git_error(message)
-    assert shortened == f"fatal: Unable to create '{path}': File exists."
-    assert stage2.shorten_git_error("warning: noisy prelude\n" + message) == shortened
-    assert (
-        stage2.shorten_git_error("warning: noisy prelude\nerror: failed operation\nfatal: later")
-        == "error: failed operation"
+    fatal = f"fatal: Unable to create '{path}': File exists."
+    reason = "Another git process seems to be running."
+    message = f"{fatal}\n\n{reason}\n"
+    assert stage2.shorten_git_error(message) == f"{fatal} {reason}"
+    assert stage2.shorten_git_error("warning: noisy prelude\n" + message) == (
+        f"warning: noisy prelude {fatal} {reason}"
+    )
+    assert stage2.shorten_git_error("error: failed operation\n\nfatal: later reason\n") == (
+        "error: failed operation fatal: later reason"
+    )
+    assert stage2.shorten_git_error("error: failed operation\nexplanation on a later line\n") == (
+        "error: failed operation explanation on a later line"
     )
     assert stage2.shorten_git_error("  short  ") == "short"
+    assert stage2.shorten_git_error("\n  \n") == ""
     assert stage2.shorten_git_error("") == ""
     assert stage2.shorten_git_error("x" * 5000) == "x" * 5000
 
@@ -22996,7 +23002,7 @@ def test_git_errors_use_c_locale_and_keep_reason_after_warning(
     with pytest.raises(stage2.Refused) as failure:
         getattr(stage2, helper)(tmp_path, "status", env=supplied)
     assert "index.lock" in str(failure.value), "Git's reason must survive a leading warning in any caller locale"
-    assert "warning:" not in str(failure.value)
+    assert "warning: noisy prelude fatal:" in str(failure.value)
     assert observed["LC_ALL"] == "C"
     if supplied is None:
         assert observed["GIT_TEST_SENTINEL"] == "inherited"
