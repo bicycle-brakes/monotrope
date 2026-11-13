@@ -3127,6 +3127,8 @@ def resolve_finding_rows(record: str | None, findings_text: str) -> list[Resolve
                     rows = [("released", cells)]
                 elif heading.startswith("## Phase 6") and len(cells) == len(ROW_COLUMNS):
                     rows = [("phase-6", cells)]
+            if not rows:
+                seen.clear()  # a non-finding row ends the preceding finding table
             for place, row in rows:
                 file = "loop.md" if source == "record" else "findings.md"
                 if row[0] in seen:
@@ -3156,11 +3158,11 @@ def repair_targets(
     *,
     resolved: list[ResolvedFindingRow] | None = None,
 ) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """Every taken row with its place (record, released block, phase-6 table), and the IDs that hold the repair.
+    """Taken current rows with their places, and the current undecided IDs that hold repair.
 
-    A record row whose Status begins none of `taken`, `rejected` and `fixed` waits, and so does a
-    phase-6 row whose Status is blank or begins `open`: one call should carry every taken row, so the
-    verb refuses while a row stands undecided.
+    The resolver chooses one current row per finding ID across findings tables and the active
+    record. Only those rows enter the batch or hold the verb: a current record or phase-6 row whose
+    Status begins none of `taken`, `rejected` and `fixed` waits. Superseded rows stay history.
     """
     taken: list[tuple[str, list[str]]] = []
     waiting: list[str] = []
@@ -7591,7 +7593,14 @@ def _read_quietly(path: Path) -> str:
 
 def _require_unchanged_resolved_row(lines: list[str], item: ResolvedFindingRow) -> None:
     """Refuse a stale row location before either status writer replaces it."""
-    if item.line >= len(lines) or split_row(lines[item.line]) != item.cells:
+    rows = []
+    if item.line < len(lines):
+        if item.place == "record":
+            rows = record_rows(lines[item.line])
+        else:
+            cells = split_row(lines[item.line])
+            rows = [cells] if cells else []
+    if rows != [item.cells]:
         source = "loop.md" if item.place == "record" else "findings.md"
         raise Refused(f"{item.cells[0]} in {source} changed since resolution; no fixed statuses were written.")
 

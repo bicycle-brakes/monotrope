@@ -1658,15 +1658,17 @@ or a phase-6 table carries any other value; the orchestrator corrects the cell
 and runs the verb again. These checks read the loop record and the newest
 phase-6 table. Repair uses one resolver for target selection and the
 target-Origin check: the latest row of each finding ID across tables is current,
-with the active loop record after findings history. Repeated IDs across tables are a finding's history; IDs must be
-unique only within one table: duplicates involving a taken row refuse repair;
-decided duplicates in passive history produce a notice. Every selected current
-taken row needs valid Origin before any call or write, including older phase-6 and
-released tables. The refusal names each offending resolved row by ID and file
-(`loop.md` or `findings.md`), without back-computing headings or occurrences.
-Ordinary release checks the record before writing the released block; released and superseded history that repair does
-not select needs no backfill. `release-loop --restart` and
-`release-loop --stage-failed` do not check Origin. A round whose
+with the active loop record after findings history. Repeated IDs across tables
+are a finding's history; IDs must be unique only within one table: duplicates
+involving a taken row refuse repair; decided duplicates in passive history
+produce a notice. Every selected current
+taken row needs valid Origin before any call or write, including older phase-6
+and released tables. The refusal names each offending resolved row by ID and
+file (`loop.md` or `findings.md`), without back-computing headings or occurrences.
+Ordinary release checks the record before writing the released block; released
+and superseded history that repair does not select needs no backfill.
+`release-loop --restart` and `release-loop --stage-failed` do not check Origin.
+A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and

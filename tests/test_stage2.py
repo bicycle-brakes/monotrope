@@ -10163,6 +10163,30 @@ def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
         stage2.resolve_finding_rows(None, text)
 
 
+@pytest.mark.parametrize("boundary", ["separator", "header", "blank", "prose", "non-finding row"])
+def test_resolver_duplicate_ids_follow_table_boundaries(boundary: str) -> None:
+    """A separator keeps the table's IDs; a new header or non-row ends their scope."""
+    row = phase6_cells("F-1", "taken — fix", "finding")
+    line = "| " + " | ".join(row) + " |"
+    between = {
+        "separator": "| " + " | ".join(["---"] * len(row)) + " |",
+        "header": "| " + " | ".join(stage2.ROW_COLUMNS) + " |",
+        "blank": "",
+        "prose": "Another table follows.",
+        "non-finding row": "| Other | Columns |",
+    }[boundary]
+    text = "\n".join(["## Phase 6", line, between, line])
+    if boundary == "separator":
+        with pytest.raises(stage2.Refused, match="same id.*F-1.*findings.md"):
+            stage2.resolve_finding_rows(None, text)
+    else:
+        try:
+            resolved = stage2.resolve_finding_rows(None, text)
+        except stage2.Refused as error:
+            pytest.fail(f"IDs in distinct tables must resolve to the latest row: {error}")
+        assert len(resolved) == 1 and resolved[0].line == 3
+
+
 @pytest.mark.parametrize("status", [FIXED, "rejected — covered"])
 def test_repair_ignores_decided_duplicate_in_released_history(
     world: World, capsys: pytest.CaptureFixture[str], status: str
@@ -10356,6 +10380,34 @@ def test_repair_marks_only_the_resolved_record_row(world: World) -> None:
     rows_now = stage2.record_rows(path.read_text(encoding="utf-8"))
     assert rows_now[0] == row
     assert rows_now[1][7:] == ["fixed — tests/test_fix.py::test_fix", "yes"]
+
+
+@pytest.mark.parametrize("pipe", ["|", r"\|"])
+def test_repair_marks_record_status_with_typed_pipe(world: World, pipe: str) -> None:
+    """The stale-row guard uses the resolver's normalized record Status cells."""
+    world.write_record([("L1-1", f"taken — first {pipe} second", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    row = stage2.record_rows(original)[0]
+    row[7] = f"taken — first {pipe} second"
+    lines = original.split("\n")
+    index = stage2.resolve_finding_rows(original, "")[0].line
+    lines[index] = "| " + " | ".join(row) + " |"
+    original = "\n".join(lines)
+    path.write_text(original, encoding="utf-8")
+    resolved = stage2.resolve_finding_rows(original, "")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, waiting = stage2.repair_targets(ctx, original, resolved=resolved)
+    assert not waiting and len(taken) == 1
+    fixed = "fixed — tests/test_fix.py::test_fix"
+    try:
+        stage2.mark_repaired_record(
+            "demo", taken, {"L1-1": fixed}, world.root, {"L1-1": "yes"}, lock_held=True, resolved=resolved
+        )
+    except stage2.Refused as error:
+        pytest.fail(f"an unchanged record Status with a typed pipe must be marked fixed: {error}")
+    rows = stage2.record_rows(path.read_text(encoding="utf-8"))
+    assert rows == [[*taken[0][1][:7], fixed, "yes"]]
 
 
 def test_repair_origin_refusal_has_no_effects_across_blocks(
