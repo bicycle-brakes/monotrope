@@ -816,3 +816,15 @@ Reviewer session: codex 01a1d480-5796-7020-808e-8e0caf357d84 — a fresh session
 Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4064 commits, 12 rules.
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4070 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-8 | MAJOR | SPEC | base | scripts/verify_duration.py | With a targeted green and a completed red full run, removing `config_sha256` from the full-run start or `verdict` from its end makes `slips` print `slips: 0 distinct slipped full runs` and exit 0. Reproduced in memory: `_read_events` emits no diagnostic, and the counter silently skips the malformed records. Incomplete evidence must make the measurement unavailable. [Acceptance criteria 11–12] | Codex | taken — third finding of one mechanism (F6-3, F6-7): end case repair at the choke point. One schema per record kind slips reads (targeted, full-run start, full-run end, slip) names every required field; _read_events validates every record against it, and any record of a kind slips uses that misses a required field makes slips report 'not measured' with the record named; tests for each missing field | — |
+| F6-9 | MAJOR | SPEC | base | scripts/verify_duration.py | A red full run completed at 23:59 UTC but recorded after midnight receives the recording timestamp. Reproduced by recording at 00:02: the completion-day report returns zero with exit 0, while the following day counts one. This also affects reprocessing after a failed append. Attribute the slip to the full run’s completion time so interval reports count the correct runs. [Acceptance criterion 12] | Codex | taken — a slip carries the full run's completion time, not the recording time; interval reports count by that time; a test recorded after midnight for a run completed before it | — |
+
+Phase 6 verdict: codex 01a1d4f8-7c9b-7801-aa80-b5a29221dbff, 2026-11-13
+Reviewer session: codex 01a1d4f8-7c9b-7801-aa80-b5a29221dbff — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
