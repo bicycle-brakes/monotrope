@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-11
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -203,6 +203,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-04 16:42:41–18:07:04 UTC, 5063 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -231,6 +235,9 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-10 23:42:50–2026-11-11 02:36:28 UTC, 10417 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-11 02:36:39–03:31:54 UTC, 3314 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-11-11 20:51:37–20:56:32 UTC, 295 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-13 16:20:05–16:22:50 UTC, 165 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 16:23:10–16:25:18 UTC, 128 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 16:25:39–16:28:56 UTC, 197 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 

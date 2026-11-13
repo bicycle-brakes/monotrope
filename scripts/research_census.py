@@ -6,34 +6,31 @@ It only reads; correcting existing research files is a separate change (bead cod
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from collections.abc import Iterable, Mapping
 from datetime import date
 from pathlib import Path
 
-import stage2
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import adoption  # noqa: E402
+import stage2  # noqa: E402
 
 FRONTMATTER = re.compile(r"\A\ufeff?---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.S)
 PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
-# Q-5 (maintainer, 2026-11-10): one prospective boundary replaces the path inventory.
-# updated is the current-file edit stamp; the adoption day itself is measured.
-ADOPTION_DAY = date(2026, 11, 10)
+# Q-5 and option C (maintainer, 2026-11-12): the adoption day is read from decisions/adoption.yaml;
+# a file's last change is read from git, never from a date written in the file.
+GATE = "research-census"
 PENDING = {"status": "pending", "approved_by": None, "approved_at": None}
 SINGLE_PUBLICATION = re.compile(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S")
 SWARM_PUBLICATION = re.compile(
     r"(?ms)^<!-- research-swarm/v2 run [0-9a-f]+ -->\r?\n.+?^<!-- /research-swarm/v2 -->[ \t]*\r?$"
 )
 SWARM_DAY = re.compile(r"(?m)^## Research swarm — (\d{4}-\d{2}-\d{2})[ \t]*\r?$")
-
-
-def publication_days(body: str) -> list[str]:
-    """Keep dates from every visible publication, irrespective of their document order."""
-    visible = stage2.research_visible_text(body)
-    days = [match.group(1) for match in SINGLE_PUBLICATION.finditer(visible)]
-    for swarm in SWARM_PUBLICATION.finditer(visible):
-        days.extend(SWARM_DAY.findall(swarm.group()))
-    return days
 
 
 def publication_evidence(body: str) -> tuple[str | None, str | None]:
@@ -78,7 +75,19 @@ def metadata_problems(
         if keys.count(key) != 1:
             problems.append(f"{key}: expected exactly one field")
 
+    ancestors = set()
+
     def duplicates(value, field):
+        identity = id(value)
+        if identity in ancestors:
+            raise ValueError(f"{field}: recursive metadata structure")
+        ancestors.add(identity)
+        try:
+            duplicate_children(value, field)
+        finally:
+            ancestors.remove(identity)
+
+    def duplicate_children(value, field):
         if isinstance(value, yaml.MappingNode):
             nested_keys = [child.value for child, _ in value.value]
             if len(nested_keys) != len(set(nested_keys)):
@@ -140,58 +149,92 @@ def model_attribution(producer) -> bool:
     return any(isinstance(record, Mapping) and record.get("kind") == "llm-session" for record in records)
 
 
+def last_change_day(root: Path, relative: str) -> date | None:
+    """The day of the last commit touching the file, or None when it is uncommitted,
+    modified, untracked or git cannot say. None means: no stock exemption (fail closed)."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", "-C", str(root), *args], capture_output=True, text=True, timeout=60, check=False, env=env
+        )
+
+    try:
+        status = git("status", "--porcelain", "--", relative)
+        if status.returncode != 0 or status.stdout.strip():
+            return None
+        log = git("log", "-1", "--format=%cs", "--", relative)
+        if log.returncode != 0:
+            return None
+        return date.fromisoformat(log.stdout.strip())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def adoption_day(root: Path) -> date | None:
+    """The recorded adoption day of the census, or None when it is not recorded."""
+    try:
+        return adoption.adopted_on(root, GATE)
+    except adoption.NotRecorded:
+        return None
+
+
+def _file_findings(path: Path, relative: str, text_findings: list[str]) -> None:
+    """Read one file and append every defect it has, before any exemption."""
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        text_findings.append(f"{relative}: unreadable file (not UTF-8)")
+        return
+    except OSError as error:
+        text_findings.append(f"{relative}: unreadable file ({error})")
+        return
+    frontmatter = FRONTMATTER.match(text)
+    if frontmatter is None:
+        text_findings.append(f"{relative}: unreadable header (no frontmatter)")
+        return
+    try:
+        header = yaml.safe_load(frontmatter.group(1))
+    except (yaml.YAMLError, ValueError):
+        text_findings.append(f"{relative}: unreadable header (malformed YAML)")
+        return
+    if not isinstance(header, Mapping):
+        text_findings.append(f"{relative}: unreadable header (not a mapping)")
+        return
+    body = text[frontmatter.end() :]
+    try:
+        program, publication_day = publication_evidence(body)
+    except ValueError as error:
+        text_findings.append(f"{relative}: {error}")
+        program, publication_day = None, None
+    if program or model_attribution(header.get("produced_by")) or header.get("provenance") == "ai-drafted-reviewed":
+        text_findings.extend(
+            f"{relative}: {problem}"
+            for problem in metadata_problems(header, frontmatter.group(1), program, publication_day)
+        )
+        if stage2.research_opening_notices(text, frontmatter.end()):
+            text_findings.append(f"{relative}: opening skeleton notice over published research")
+
+
 def census_findings(paths: Iterable[Path], root: Path, *, apply_adoption: bool = False) -> list[str]:
-    """Read current research and report every path-specific defect before exemptions."""
-    affected = []
+    """Report every defect of every file; one file's failure never ends the scan.
+
+    With apply_adoption, a file with metadata findings is stock, and not reported, only when
+    git shows it committed unchanged and its last commit lies before the recorded adoption
+    day. Uncommitted, modified, untracked or unreadable history fails closed (EP6-13)."""
+    day = adoption_day(root) if apply_adoption else None
+    affected: list[str] = []
     for path in paths:
         relative = path.relative_to(root).as_posix()
-        first_finding = len(affected)
+        found: list[str] = []
         try:
-            text = path.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
-            affected.append(f"{relative}: unreadable file (not UTF-8)")
-            continue
-        except OSError as error:
-            affected.append(f"{relative}: unreadable file ({error})")
-            continue
-        frontmatter = FRONTMATTER.match(text)
-        if frontmatter is None:
-            affected.append(f"{relative}: unreadable header (no frontmatter)")
-            continue
-        try:
-            header = yaml.safe_load(frontmatter.group(1))
-        except (yaml.YAMLError, ValueError):
-            affected.append(f"{relative}: unreadable header (malformed YAML)")
-            continue
-        if not isinstance(header, Mapping):
-            affected.append(f"{relative}: unreadable header (not a mapping)")
-            continue
-        body = text[frontmatter.end() :]
-        try:
-            program, publication_day = publication_evidence(body)
-        except ValueError as error:
-            affected.append(f"{relative}: {error}")
-            program, publication_day = None, None
-        producer = header.get("produced_by")
-        model_written = model_attribution(producer)
-        if program or model_written or header.get("provenance") == "ai-drafted-reviewed":
-            affected.extend(
-                f"{relative}: {problem}"
-                for problem in metadata_problems(header, frontmatter.group(1), program, publication_day)
-            )
-            notices = stage2.research_opening_notices(text, frontmatter.end())
-            if notices:
-                affected.append(f"{relative}: opening skeleton notice over published research")
-        # Collect the complete diagnostics first. Only a readable pre-adoption edit stamp
-        # establishes stock. Missing/bad stamps fail closed; later publication evidence
-        # cannot hide behind an old edit stamp. No history reconstruction or path list.
-        updated = header.get("updated")
-        updated_fields = [key for key, _ in yaml.compose(frontmatter.group(1)).value if key.value == "updated"]
-        if apply_adoption and len(updated_fields) == 1 and is_day(updated) and str(updated) < ADOPTION_DAY.isoformat():
-            records = producer if isinstance(producer, list) else [producer]
-            known_days = [header.get("date"), header.get("last_reviewed"), publication_day]
-            known_days.extend(publication_days(body))
-            known_days.extend(record.get("version") for record in records if isinstance(record, Mapping))
-            if not any(is_day(day) and str(day) >= ADOPTION_DAY.isoformat() for day in known_days):
-                del affected[first_finding:]
+            _file_findings(path, relative, found)
+        except Exception as error:  # any YAML or read failure is this file's finding (EP6-14)
+            found = [f"{relative}: unreadable metadata ({type(error).__name__}: {error})"]
+        metadata_defect = bool(found) and not any(": unreadable " in line for line in found)
+        if metadata_defect and day is not None:
+            changed = last_change_day(root, relative)
+            if changed is not None and changed < day:
+                found = []
+        affected.extend(found)
     return affected
