@@ -131,7 +131,8 @@ they are and add only this:
 Keeping the start and the end of git's message did not carry: git states the
 reason in its first line, behind the long path, and adds a hint paragraph
 after it, so the middle with the reason was cut again. The helper now keeps
-git's first non-empty line whole (bounded at 1,000 characters) and drops the
+git's first non-empty line whole (first bounded at 1,000 characters; the
+bound was removed by loop row L3-2 of 2026-11-13) and drops the
 hint. Done by the orchestrator by hand and accepted on the maintainer's answer.
 
 ## Boundaries and route

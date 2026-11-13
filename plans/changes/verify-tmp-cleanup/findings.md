@@ -1072,3 +1072,5 @@ Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claud
 > - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-3-20261113T060017607037Z-ea00750c.md
 > ```
+
+Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1040 files, 4056 commits, 12 rules.

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -127,7 +127,9 @@ existing commands, dependencies, separate entry points and duration
 ownership do not need edits. No held harness/governance path is edited.
 `scripts/stage2.py` and `tests/test_stage2.py` change only for criterion 12:
 the one helper that shortens a git error and its test (`decisions.md#Q-2`,
-`decisions.md#Q-3`).
+`decisions.md#Q-3`), and the C locale (`LC_ALL=C`) for every git command the
+runner starts, so git's reason line is English and recognisable (loop row
+L3-1 of 2026-11-13).
 
 ## Boundary
 

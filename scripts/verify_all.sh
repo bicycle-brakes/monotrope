@@ -219,9 +219,10 @@ fi
 # unretained sibling area whose named process no longer exists. Liveness is a
 # process-id check only: no descendant protection, no lease, and a reused
 # process id may defer reclamation (its stale area fails allocation loudly
-# instead of being shared). Only numeric direct children of the parent are
-# inspected; any other name is skipped, never followed or touched. An
-# inaccessible or unsafe entry is reported with its path and reason and ends
+# instead of being shared). Only direct children of the parent whose names are
+# all digits are inspected; any other name is skipped, never followed or
+# touched. A digit name that is no valid process id (0, a non-ASCII digit, a
+# number beyond the platform's range) and an inaccessible or unsafe entry is reported with its path and reason and ends
 # the run before any gate — a storage failure never turns verification green.
 # The managed parent lives under the caller's original PYTEST_DEBUG_TEMPROOT,
 # or the platform temporary parent, and travels to nested runs through
