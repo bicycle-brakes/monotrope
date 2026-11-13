@@ -28,14 +28,19 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
 import stage2_availability  # noqa: E402
 import stage2_research_limits  # noqa: E402
 import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
+from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 from test_stage2 import REQUIRED_PI_SETTINGS  # noqa: E402
+
+# The stand-in embeds the shared log protocol at its render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -193,6 +198,10 @@ import sys
 import time
 from pathlib import Path
 
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
+
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
 program_path = sys.argv[0]
@@ -200,11 +209,10 @@ if name == "pin-pi":
     name = "pi"
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
-previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+previous = read_records(log)
 argv = sys.argv[1:]
 if name == "pi" and argv == ["--version"]:
-    with (here / "infrastructure.jsonl").open("a") as handle:
-        handle.write(json.dumps({"path": program_path, "argv": argv}) + "\\n")
+    append_record(here / "infrastructure.jsonl", {"path": program_path, "argv": argv})
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     raise SystemExit(0)
 
@@ -267,20 +275,20 @@ record = {
     if os.path.isdir(os.environ.get("HOME", ""))
     else None,
 }
-with log.open("a") as handle:
-    handle.write(json.dumps(record) + "\\n")
+append_record(log, record)
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 receipts = os.environ.get("STAGE2_PUBLIC_RECEIPTS")
 if receipts and step.get("receipts"):
-    with Path(receipts).open("a") as handle:
-        for line in step["receipts"]:
-            handle.write(json.dumps(line).replace("@KEY@", key) + "\\n")
+    text_append(
+        Path(receipts),
+        "".join(json.dumps(line).replace("@KEY@", key) + "\\n" for line in step["receipts"]),
+        lock_dir=here,
+    )
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
     Path(relative).write_text(text.replace("@KEY@", key))
 for relative, text in step.get("append", {}).items():
-    with Path(relative).open("a") as handle:
-        handle.write(text.replace("@KEY@", key))
+    text_append(Path(relative), text.replace("@KEY@", key), lock_dir=here)
 stdout = step.get("stdout", "")
 if stdout == "AUTO" and kind == "merge":
     merged = {category: {} for category in ("code", "rules", "tests", "neighbours")}
@@ -369,8 +377,7 @@ class SwarmWorld:
         (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
 
     def calls(self, kind: str | None = None) -> list[dict]:
-        log = self.bin / "calls.jsonl"
-        found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        found = read_records(self.bin / "calls.jsonl")
         return [call for call in found if kind is None or call["kind"] == kind]
 
     def run(self, *options: str) -> int:
@@ -468,9 +475,10 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     bin_dir.mkdir()
     for name in ("claude", "pin-pi"):
         program = bin_dir / name
-        program.write_text(
-            STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-        )
+        rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        program.write_text(rendered, encoding="utf-8")
         program.chmod(0o755)
     # A bare executable is a trap: every production launch must use the pin.
     bare_pi = bin_dir / "pi"
@@ -566,7 +574,7 @@ def test_swarm_uses_only_the_injected_pi_wrapper(sworld: SwarmWorld) -> None:
     sworld.complete()
     assert sworld.run() == 0
     pinned = str(sworld.bin / "pin-pi")
-    infrastructure = [json.loads(line) for line in (sworld.bin / "infrastructure.jsonl").read_text().splitlines()]
+    infrastructure = read_records(sworld.bin / "infrastructure.jsonl")
     assert {tuple(call["argv"]) for call in infrastructure} == {("--version",)}
     assert all(call["path"] == pinned for call in infrastructure)
     calls = [call for call in sworld.calls() if call["name"] == "pi"]
@@ -1472,6 +1480,8 @@ def test_a_refused_run_is_printed_before_any_model_call(sworld: SwarmWorld, monk
     assert sworld.run() == 2
     refused_run = manifest_of(sworld)["run_id"]
     sworld.research.write_text(SEED, encoding="utf-8")
+    # The leaking run may log no model call of its own (flaky-swarm-leak-test, criterion 6).
+    assert sworld.calls() == [], "the leaking run started model calls before its refusal"
     (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
     printed: list[tuple[str, int]] = []
 
