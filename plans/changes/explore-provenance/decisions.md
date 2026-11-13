@@ -121,3 +121,18 @@ facing two research files merged after the adoption day with skeleton headers,
 we decided to correct their headers in this change,
 to achieve a clean main under the strict census,
 accepting a one-time edit outside this change's folder — 2026-11-13
+
+## Q-7 · Two more research files after the merge of main
+
+asked: 2026-11-13
+answer: "Hier mitkorrigieren (Empfohlen)" — the headers of two more research files are corrected by hand in this change, as in Q-6: provenance, producer and review fields and the leftover skeleton notice of omnigent-test-not-blocking and swarm-report-format; no content changes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: after the merge of origin/main the full check before the pull request was red: the git-dated census found two research files of other changes with a false or incomplete header.
+  Intention: phase 6 had no finding; the change cannot go out while its own census is red.
+  Today: omnigent-test-not-blocking/research.md was merged on 2026-11-13 with a model-written body under a "human-written" header; swarm-report-format/research.md still carries the skeleton notice and became subject to the census only through an `updated:` stamp the orchestrator set after the merge.
+  Repository change: header-only corrections of the two files; the spec's exception names four files.
+  Architecture change: none; from this change's merge the census catches such files itself.
+
+In the context of a census that is red on two files merged after its adoption day, facing a choice between correcting them here and a bead of their own, we decided to correct them here, to achieve a green check and a pull request today, accepting that the exception of Q-6 grows from two files to four. — 2026-11-13
