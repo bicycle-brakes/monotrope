@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-12
+updated: 2026-11-13
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1659,7 +1659,8 @@ and runs the verb again. These checks read the loop record and the newest
 phase-6 table. Repair uses one resolver for target selection and the
 target-Origin check: the latest row of each finding ID across tables is current,
 with the active loop record after findings history. Repeated IDs across tables are a finding's history; IDs must be
-unique only within one table, where duplicates refuse repair. Every selected current
+unique only within one table: duplicates involving a taken row refuse repair;
+decided duplicates in passive history produce a notice. Every selected current
 taken row needs valid Origin before any call or write, including older phase-6 and
 released tables. The refusal names each offending resolved row by ID and file
 (`loop.md` or `findings.md`), without back-computing headings or occurrences.
@@ -1719,13 +1720,16 @@ rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
 loop record, of every released block and of every phase-6 table — to Codex
-in one guarded call, and refuses while a row stands undecided or an ID is
-doubled. Before the first call or write it checks every selected row's
+in one guarded call, using the latest row of each ID across tables, with the
+active loop record after findings history. Repeated IDs across tables are history.
+It refuses while a row stands undecided or an ID is doubled within one table
+and either duplicate is taken; decided duplicates in passive history produce a
+notice. Before the first call or write it checks every selected row's
 `Origin`, an older block's selected row included: a selected row of any
 block — the loop record, a released block, any phase-6 table — whose
 complete trimmed cell is not `base` or `fix-r<N>` (N a positive whole
 number without a leading zero) refuses the repair, which names every
-offending row with its id and its block's heading and occurrence, and the
+offending row by ID and file (`loop.md` or `findings.md`), and the
 orchestrator corrects the cell and starts the repair again. Released and
 superseded rows that no repair selects keep their exemption: history is
 never swept for provenance, and no other verb gains this check.

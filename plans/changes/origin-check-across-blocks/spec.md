@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-3h96
@@ -50,7 +50,8 @@ continuation. Existing tests require those rows to remain exempt
 - **Current row:** one resolver chooses the latest row of each finding ID across
   tables, with the active loop record after findings history. Repair selection and
   its target-Origin check both use only this resolver. Repeated IDs across tables
-  are history; IDs must be unique within each table, and duplicates there refuse repair.
+  are history; duplicates within one table refuse when either row is taken. Decided
+  duplicates in passive history produce a notice without holding repair.
 - **Row location:** the resolved row's ID and file (`loop.md` or `findings.md`);
   no block heading or occurrence is back-computed (maintainer's option D,
   2026-11-12, superseding answer A).
@@ -89,7 +90,8 @@ continuation. Existing tests require those rows to remain exempt
   rewriting, new Origin vocabulary, repair-brake policy or row format.
 - No change to repair retry routes, targeted verification or legacy completion
   checks. Selection follows the shared current-row resolver; duplicate-ID refusal
-  is scoped to one table, and repeated IDs across tables are history.
+  is scoped to one table and touches taken rows only; decided historical duplicates
+  produce a notice. Repeated IDs across tables are history.
 - No design phase or ADR: this bounded correction adds an admission check
   inside the existing repair boundary.
 
@@ -118,7 +120,8 @@ None open. The reasoned interview skip and repair-only scope are already in
 than re-auditing all historical rows: selection is the boundary recorded in
 `decisions.md`, and an actively selected legacy row differs from passive history.
 [DETAIL] Name the resolver's offending row by ID and file only. A finding's
-repeated ID across tables is history; only duplicates within one table refuse.
+repeated ID across tables is history; duplicates within one table refuse only
+when either row is taken. Decided duplicates in passive history produce a notice.
 Both repair selection and its target-Origin check ask the same resolver
 (maintainer's option D, 2026-11-12, superseding answer A of 2026-11-11).
 [DETAIL] Set a one-hour phase-4 appetite including repairs, a stop rather than

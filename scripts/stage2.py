@@ -3093,15 +3093,16 @@ class ResolvedFindingRow:
 def resolve_finding_rows(record: str | None, findings_text: str) -> list[ResolvedFindingRow]:
     """Current rows by ID: the last table wins; the active record follows findings history.
 
-    Repeated IDs across tables are history. Within one table an ID must be unique,
-    regardless of Status. Both repair selection and its Origin check use this resolver;
+    Repeated IDs across tables are history. Duplicates within a table refuse when
+    either row is taken; decided duplicates in passive history produce a notice.
+    Both repair selection and its Origin check use this resolver;
     the shared parsers retain their other callers' historical scopes.
     """
     current: dict[str, ResolvedFindingRow] = {}
     for source, text in (("findings", findings_text), ("record", record or "")):
         heading = ""
-        seen: set[str] = set()
-        lines = _record_lines(text) if source == "record" else [(line, False) for line in text.splitlines()]
+        seen: dict[str, list[str]] = {}
+        lines = _record_lines(text) if source == "record" else [(line, False) for line in text.split("\n")]
         for index, (line, reviewer) in enumerate(lines):
             if line.startswith("## "):
                 heading = line
@@ -3118,21 +3119,43 @@ def resolve_finding_rows(record: str | None, findings_text: str) -> list[Resolve
             if source == "record":
                 rows = [("record", row) for row in record_rows(line)]
             else:
-                released, phase6 = findings_rows(heading + "\n" + line)
-                rows = [("released", row) for row in released] + [("phase-6", row) for row in phase6]
+                # The row is already split on physical newlines. Reviewer prose may contain
+                # Unicode separators that splitlines() would mistake for additional source lines.
+                wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
+                rows = []
+                if heading.startswith(RELEASE_HEADING) and wide:
+                    rows = [("released", cells)]
+                elif heading.startswith("## Phase 6") and len(cells) == len(ROW_COLUMNS):
+                    rows = [("phase-6", cells)]
             for place, row in rows:
+                file = "loop.md" if source == "record" else "findings.md"
                 if row[0] in seen:
-                    file = "loop.md" if source == "record" else "findings.md"
-                    raise Refused(
-                        f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
+                    if any(item[7].lower().startswith("taken") for item in (seen[row[0]], row)):
+                        raise Refused(
+                            f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
+                        )
+                    print(
+                        f"notice: duplicate decided id {row[0]} in one table ({file}); history left unchanged.",
+                        file=sys.stderr,
                     )
-                seen.add(row[0])
-                current.pop(row[0], None)
+                seen[row[0]] = row
+                previous = current.pop(row[0], None)
+                if source == "record" and previous is not None and previous.place != "record":
+                    print(
+                        f"notice: {row[0]} in findings.md is shadowed by the live row in loop.md; findings copy left unchanged.",
+                        file=sys.stderr,
+                    )
                 current[row[0]] = ResolvedFindingRow(place, row, index)
     return sorted(current.values(), key=lambda item: item.place != "record")
 
 
-def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, list[str]]], list[str]]:
+def repair_targets(
+    ctx: Context,
+    record: str | None,
+    findings_text: str | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
+) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Every taken row with its place (record, released block, phase-6 table), and the IDs that hold the repair.
 
     A record row whose Status begins none of `taken`, `rejected` and `fixed` waits, and so does a
@@ -3141,9 +3164,13 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
     """
     taken: list[tuple[str, list[str]]] = []
     waiting: list[str] = []
-    text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    for resolved in resolve_finding_rows(record, text):
-        place, row = resolved.place, resolved.cells
+    if resolved is None:
+        text = findings_text
+        if text is None:
+            text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        resolved = resolve_finding_rows(record, text)
+    for item in resolved:
+        place, row = item.place, item.cells
         status = row[7].lower()
         if status.startswith("taken"):
             taken.append((place, row))
@@ -3687,11 +3714,13 @@ def origin_refusal(record: str | None, findings_text: str) -> str | None:
     )
 
 
-def target_origin_refusal(record: str | None, findings_text: str) -> str | None:
+def target_origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
     """Check only current taken rows, naming their ID and file without back-computing locations."""
     found: list[str] = []
-    for resolved in resolve_finding_rows(record, findings_text):
-        place, row = resolved.place, resolved.cells
+    for item in resolved if resolved is not None else resolve_finding_rows(record, findings_text):
+        place, row = item.place, item.cells
         if not row[7].lower().startswith("taken"):
             continue
         origin = row[3].strip()
@@ -3704,7 +3733,7 @@ def target_origin_refusal(record: str | None, findings_text: str) -> str | None:
         f"selected repair rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it "
         "decides a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without "
         "a leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
-        "answer. Nothing is called, released, repaired or removed."
+        "answer. Nothing is called or repaired."
     )
 
 
@@ -7560,7 +7589,13 @@ def _read_quietly(path: Path) -> str:
         return ""
 
 
-def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fixes: dict[str, str]) -> None:
+def mark_repaired_findings(
+    ctx: Context,
+    taken: list[tuple[str, list[str]]],
+    fixes: dict[str, str],
+    *,
+    resolved: list[ResolvedFindingRow],
+) -> None:
     """Write each taken findings row's fixed Status in its place, before the checkpoint commit.
 
     Only the Status cell (index 7) of a taken row changes; a `|` of a reason stands escaped, as the
@@ -7570,11 +7605,11 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     by_key = {(place, row[0]): row for place, row in taken}
     text = ctx.findings.read_text(encoding="utf-8")
     lines = text.split("\n")
-    for resolved in resolve_finding_rows(None, text):
-        cells = resolved.cells
-        if cells == by_key.get((resolved.place, cells[0])):
+    for item in resolved:
+        cells = item.cells.copy()
+        if item.place != "record" and cells == by_key.get((item.place, cells[0])):
             cells[7] = fixes[cells[0]]
-            lines[resolved.line] = "| " + " | ".join(cells) + " |"
+            lines[item.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")
     stamp_updated(ctx.findings)
 
@@ -7587,6 +7622,7 @@ def mark_repaired_record(
     marks: dict[str, str] | None = None,
     *,
     lock_held: bool = False,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
@@ -7598,20 +7634,26 @@ def mark_repaired_record(
     if not by_key:
         return
     if lock_held:
-        _mark_record_rows(change, by_key, fixes, root, marks)
+        _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
         return
     # The record is read and rewritten whole: a round appended in between, or a release that removes
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
     try:
         with holding_record(change, root):
-            _mark_record_rows(change, by_key, fixes, root, marks)
+            _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
     except Refused as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
 def _mark_record_rows(
-    change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path, marks: dict[str, str] | None = None
+    change: str,
+    by_key: dict[str, list[str]],
+    fixes: dict[str, str],
+    root: Path,
+    marks: dict[str, str] | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     record = read_record(change, root)
     if record is None:
@@ -7623,11 +7665,11 @@ def _mark_record_rows(
         )
     ending = "\n" if record.endswith("\n") else ""
     lines = record.splitlines()
-    for resolved in resolve_finding_rows(record, ""):
-        cells = resolved.cells
-        if cells == by_key.get(cells[0]):
+    for item in resolved if resolved is not None else resolve_finding_rows(record, ""):
+        cells = item.cells
+        if item.place == "record" and cells == by_key.get(cells[0]):
             mark = (marks or {}).get(cells[0], cells[-1])
-            lines[resolved.line] = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
+            lines[item.line] = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
     try:
         replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
     except OSError as error:
@@ -9570,17 +9612,19 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
-    taken, waiting = repair_targets(ctx, read_record(change, root))
+    record = read_record(change, root)
+    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    resolved = resolve_finding_rows(record, current)
+    taken, waiting = repair_targets(ctx, record, current, resolved=resolved)
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
-    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     # The selected rows' own Origin check goes first, so one refusal names every row the repair
     # would carry, older blocks included; the record/newest-block refusal after it keeps guarding
     # the accepted rows that no repair selects (bead coding-harness-3h96).
-    target_refusal = target_origin_refusal(read_record(change, root), current)
+    target_refusal = target_origin_refusal(record, current, resolved=resolved)
     if target_refusal:
         raise Refused(target_refusal)
-    refusal = origin_refusal(read_record(change, root), current)
+    refusal = origin_refusal(record, current)
     if refusal:
         raise Refused(refusal)
     if not taken:
@@ -9612,7 +9656,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
-    rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
+    rows_before = findings_rows(current)
     standing: dict[str, str] = {}
     tools = tool_state(root)  # before any model runs; the answer check and the attempts share it (R-21)
 
@@ -9648,8 +9692,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
-        before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True),
+        before_commit=lambda: mark_repaired_findings(ctx, taken, fixes, resolved=resolved),
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,

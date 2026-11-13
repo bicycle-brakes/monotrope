@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-3h96
@@ -44,7 +44,8 @@ unchanged before implementation; this draft implements no code and commits nothi
    (2026-11-12, superseding answer A), add one resolver for the latest row of
    each finding ID across tables, the active record after findings history.
    Both repair selection and its target-Origin check ask only that resolver.
-   Repeated IDs across tables are history; duplicate IDs within one table refuse.
+   Repeated IDs across tables are history; duplicate IDs within one table refuse
+   when either row is taken. Decided duplicates in passive history produce a notice.
    Diagnostics name the resolved row's ID and file, with no back-computed location.
 2. Invoke that check in `repair` after the existing undecided-row refusal and
    before `time_log`, snapshots, probes, audit appends or `run_attempts`.
@@ -93,7 +94,7 @@ The implementation worktree needs `make venv` and `bash tools/pi/install.sh`
 once before full verification. Run these commands verbatim:
 
 ```sh
-.venv/bin/python3 -m pytest tests/test_stage2.py -q -k 'origin or repair_lists_every_taken_row or repair_skips_canonical_hand_repairs or undecided_row_holds_the_repair or doubled_taken_id or repair_refuses_legacy_completed'
+.venv/bin/python3 -m pytest tests/test_stage2.py -q -k 'origin or repair_lists_every_taken_row or repair_skips_canonical_hand_repairs or undecided_row_holds_the_repair or doubled_taken_id or repair_refuses_legacy_completed or resolver_refuses_duplicate_ids_within_one_table or repair_marks_only_the_resolved_finding_row or repair_marks_only_the_resolved_record_row'
 python3 scripts/check_interview_minimums.py --change origin-check-across-blocks
 python3 scripts/check_research_handoff.py --change origin-check-across-blocks
 python3 scripts/check_criterion_ledger.py
@@ -142,3 +143,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-12 00:06:07–01:03:39 UTC, 3451 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-12 01:04:03–01:05:01 UTC, 58 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-12 20:47:03–22:14:41 UTC, 5258 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-13 06:08:56–10:43:27 UTC, 16469 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

@@ -10163,6 +10163,106 @@ def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
         stage2.resolve_finding_rows(None, text)
 
 
+@pytest.mark.parametrize("status", [FIXED, "rejected — covered"])
+def test_repair_ignores_decided_duplicate_in_released_history(
+    world: World, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    """Decided duplicate history is a notice, never a demand to rewrite a released block."""
+    repair_world(world)
+    old = released_cells("L9-1", status, "no", "historical finding")
+    old[3] = "legacy provenance"
+    world.write_findings(released_block([old, old.copy()]), phase6_block([]), VERDICT)
+    before = released_block([old, old.copy()])
+    assert world.run("repair") == 0, "decided duplicate history must not hold an unrelated repair"
+    assert before in world.text()
+    error = capsys.readouterr().err
+    assert "notice" in error.lower() and "L9-1" in error and "findings.md" in error
+
+
+def test_repair_preserves_unicode_separator_in_finding(world: World) -> None:
+    """A Unicode prose separator must not shift the physical line marked fixed."""
+    seed_tests(world)
+    old = phase6_cells("F-old", FIXED, "first\u2028continued")
+    target = phase6_cells("F-2", "taken — fix", "second")
+    world.write_findings(phase6_block([old, target]), VERDICT)
+    script_repair(world, [repair_step(stdout="F-2: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0, "the target must stay on its physical row and get its fixed mark"
+    text = world.text()
+    assert "| " + " | ".join(old) + " |" in text
+    target[7] = "fixed — tests/test_fix.py::test_fix"
+    assert phase6_block([old, target]) + "\n\n" + VERDICT in text, (
+        "repair must replace the target in place, not append a second row"
+    )
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_repair_resolves_before_call_only(world: World, monkeypatch: pytest.MonkeyPatch, duplicate: bool) -> None:
+    """Duplicates refuse before a call; status writers use the already resolved admission rows."""
+    repair_world(world)
+    if duplicate:
+        row = phase6_cells("F-1", "taken — fix", "finding")
+        world.write_findings(phase6_block([row, row.copy()]), VERDICT)
+    original = stage2.resolve_finding_rows
+
+    def resolve(*args, **kwargs):
+        assert not world.calls("codex"), "status writers must not resolve or refuse after the model call"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "resolve_finding_rows", resolve)
+    assert world.run("repair") == (2 if duplicate else 0)
+    assert len(world.calls("codex")) == (0 if duplicate else 1)
+
+
+def test_repair_names_findings_shadowed_by_record(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """A crash's released copy remains unchanged but its record override is named."""
+    repair_world(world)
+    old = released_cells("L1-1", "taken — test_a", "no", "released copy")
+    world.write_findings(released_block([old]), VERDICT)
+    assert world.run("repair") == 0
+    assert released_block([old]) in world.text()
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "findings.md" in error and "loop.md" in error
+    assert "shadow" in error.lower()
+    assert stage2.record_rows(world.record().read_text(encoding="utf-8"))[0][7].startswith("fixed")
+
+
+def test_repair_admission_uses_one_snapshot(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Selection and both Origin checks share one record and findings read."""
+    repair_world(world)
+    original_read = stage2.read_record
+    original_text = Path.read_text
+    reads = []
+    finding_reads = []
+    observed = []
+
+    def read_record(change, root):
+        text = original_read(change, root)
+        reads.append(text)
+        return text
+
+    def read_text(path, *args, **kwargs):
+        text = original_text(path, *args, **kwargs)
+        if path == world.findings:
+            finding_reads.append(text)
+        return text
+
+    for name in ("repair_targets", "target_origin_refusal", "origin_refusal"):
+        original = getattr(stage2, name)
+
+        def observe(*args, _name=name, _original=original, **kwargs):
+            observed.append((_name, len(reads), len(finding_reads)))
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(stage2, name, observe)
+    monkeypatch.setattr(stage2, "read_record", read_record)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(stage2, "run_attempts", lambda *_args, **_kwargs: None)
+    assert world.run("repair") == 0
+    assert [name for name, _, _ in observed] == ["repair_targets", "target_origin_refusal", "origin_refusal"]
+    assert [n for _, n, _ in observed] == [1, 1, 1], "all admission checks need the same single record read"
+    assert len({n for _, _, n in observed}) == 1, "no findings reread between admission checks"
+
+
 @pytest.mark.parametrize("identical", [False, True])
 def test_repair_marks_only_the_resolved_finding_row(world: World, identical: bool) -> None:
     """A successful repair changes the current table only, including identical historical cells."""
@@ -17505,9 +17605,9 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
     seen = []
     real = stage2.mark_repaired_findings
 
-    def spy_findings(ctx: stage2.Context, taken: list, fixes: dict) -> None:
+    def spy_findings(ctx: stage2.Context, taken: list, fixes: dict, **options: object) -> None:
         seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
-        real(ctx, taken, fixes)
+        real(ctx, taken, fixes, **options)
 
     def spy_record(
         _change: str, _taken: list, _fixes: dict, _root: Path, _marks: dict | None = None, **_options: object
