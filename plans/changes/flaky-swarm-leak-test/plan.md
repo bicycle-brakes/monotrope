@@ -130,15 +130,23 @@ run in this drafting phase; the runner owns full verification.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete — a reader observes a forced partial append
-- 2: not yet written tests/test_atomic_test_log.py::test_concurrent_writers_preserve_every_record — missing, duplicate or damaged large records after writers join
-- 3: not yet written tests/test_atomic_test_log.py::test_corrupt_log_is_not_hidden — malformed JSON silently becomes a successful observation
-- 4: not yet written tests/test_atomic_test_log.py::test_missing_log_is_empty — an absent log raises instead of yielding no records
-- 4: not yet written tests/test_atomic_test_log.py::test_text_appends_preserve_bytes — helper adds a newline or alters scenario text
+- 1: tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete — a reader observes a forced partial append
+- 2: tests/test_atomic_test_log.py::test_concurrent_writers_preserve_every_record — missing, duplicate or damaged large records after writers join
+- 3: tests/test_atomic_test_log.py::test_corrupt_log_is_not_hidden — malformed JSON silently becomes a successful observation
+- 4: tests/test_atomic_test_log.py::test_missing_log_is_empty — an absent log raises instead of yielding no records
+- 4: tests/test_atomic_test_log.py::test_text_appends_preserve_bytes — helper adds a newline or alters scenario text
 - 4: not a test — review the 17-site inventory and all corresponding readers/renderings; the five migrated suites verify existing fixture behavior
-- 5: not yet written tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a bypass remains in the repository inventory
-- 5: not yet written tests/test_atomic_test_log.py::test_guard_detects_new_unlocked_log_appends — planted direct or embedded bypasses pass, or exact non-log controls fail
+- 5: tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a bypass remains in the repository inventory
+- 5: tests/test_atomic_test_log.py::test_guard_detects_new_unlocked_log_appends — planted direct or embedded bypasses pass, or exact non-log controls fail
 - 6: tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call — leak accepted, clean run refused, or notice absent/late
 - 7: not a test — review dated red/green and ten-run loaded evidence with commands and commit/patch identity in this plan and the PR
 
+## Runner route — 2026-11-13
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-13 19:17:30–20:17:30 UTC, 3600 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 20:17:37–21:01:10 UTC, 2613 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 21:01:17–21:38:55 UTC, 2258 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
