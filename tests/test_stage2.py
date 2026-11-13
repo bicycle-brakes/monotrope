@@ -1032,9 +1032,9 @@ def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
         and isinstance(node.elts[0], ast.Name)
         and node.elts[0].id == "GIT"
     ]
-    # Seven since red-first-own-refs (bead coding-harness-wkxm): the proofs run in a private clone
-    # through `_git_output`, so the `worktree remove` and `prune` launches are gone.
-    assert len(named) >= 7, "fewer git launches name GIT than the seven this check was written against"
+    # Six since merge-base also uses `_git_output` for the shared diagnostic and C locale.
+    # The red-first proofs already use that helper in a private clone, without worktree launches.
+    assert len(named) >= 6, "fewer git launches name GIT than the six this check was written against"
 
 
 @pytest.mark.parametrize(
@@ -22974,6 +22974,28 @@ def test_git_error_text_keeps_every_non_empty_line_after_a_long_path() -> None:
     assert stage2.git_error_text("\n  \n") == ""
     assert stage2.git_error_text("") == ""
     assert stage2.git_error_text("x" * 5000) == "x" * 5000
+
+
+@pytest.mark.parametrize(
+    "diagnostic", ["fatal: bad object HEAD", "warning: noisy prelude\n\nfatal: bad object HEAD\nhint: check the ref\n"]
+)
+def test_merge_base_keeps_git_diagnostic_in_c_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostic: str
+) -> None:
+    """A merge-base failure must report git's actual reason and every diagnostic line."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    observed = {}
+
+    def fail_git(command, **kwargs):
+        observed.update(kwargs)
+        assert command == [stage2.GIT, "-C", str(tmp_path), "merge-base", "HEAD", "origin/main"]
+        return subprocess.CompletedProcess(command, 128, "", diagnostic)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2._merge_base(tmp_path)
+    assert stage2.git_error_text(diagnostic) in str(failure.value), "merge-base discarded git's actual failure reason"
+    assert observed.get("env", {}).get("LC_ALL") == "C", "merge-base must use the same C locale as other git calls"
 
 
 @pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])

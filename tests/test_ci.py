@@ -3077,8 +3077,21 @@ def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopt
         f"from pathlib import Path\ndef test_probe(tmp_path):\n    Path({str(test_ran)!r}).touch()\n",
         encoding="utf-8",
     )
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "before-pytest", "verify", "block", subsets=["docs"]),
+            _report_gate(base, "pytest", "verify", "block", command="python3 -m pytest -q test_probe.py"),
+        ],
+    )
     options = addopts.format(outside=outside, args_file=args_file)
+    docs = _tmp_run(tree, temproot, tmp_path, "--job", "docs", extra_env={"PYTEST_ADDOPTS": options})
+    assert docs.returncode == 0, f"a test-free run has nothing to guard: {docs.stdout}\n{docs.stderr}"
+    assert (base / "before-pytest.ran").exists(), "the test-free gate did not run"
+    assert not test_ran.exists(), "the docs selection started pytest"
+    (base / "before-pytest.ran").unlink()
     done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": options})
+    assert (base / "before-pytest.ran").exists(), "options were refused before the test-free gate"
     if reason == "ordinary run":
         assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
         assert test_ran.exists(), "an ordinary pytest run was blocked"
@@ -3087,8 +3100,16 @@ def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopt
         assert not test_ran.exists(), f"{reason}: tests ran despite the conflicting option"
         assert any(text in done.stderr for text in ("basetemp", "quotation", "unrecognized arguments")), done.stderr
         assert sentinel.read_text(encoding="utf-8") == "untouched", "pytest touched the escaped root"
+        assert list(outside.iterdir()) == [sentinel], "pytest created a temporary test folder outside the run"
     parent = _managed_parent(temproot)
     assert not parent.exists() or not list(parent.iterdir()), "the run left its area behind"
+
+    # This row repairs the written contract: keep its promise tied to the measured moment,
+    # rather than letting the spec demand a runner-side option parser again (decision Q-7).
+    spec = (REPO_ROOT / "plans/changes/verify-tmp-cleanup/spec.md").read_text(encoding="utf-8")
+    criterion = " ".join(spec.split("\n11. ", 1)[1].split("\n12. ", 1)[0].split())
+    assert "before any test runs or any temporary test folder is created" in criterion
+    assert "before gates" not in criterion, "the spec contradicts the measured pytest-start refusal"
 
 
 @pytest.mark.parametrize("ending", ["true", "kill -TERM $$"])
