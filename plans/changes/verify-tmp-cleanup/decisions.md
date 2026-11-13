@@ -165,3 +165,18 @@ check; widening silently would be scope the maintainer has not seen.
 
 [DETAIL] **No free-disk check is added here.** Reason: that is its own bead
 (coding-harness-87b0).
+
+## Q-7 · Where an explicit basetemp is refused
+
+asked: 2026-11-13
+answer: "ja" — decision Q-6 holds and the spec follows it: criterion 11 reads that an explicit basetemp outside the run area is refused before any test runs or any temporary test folder is created; a run that starts no pytest has nothing to guard. The regression test gains a gate that runs no tests, so it measures the difference.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-6 row F6-3 found the spec and a later decision in disagreement about when a foreign pytest temporary folder is refused.
+  Intention: the row is marked divergent and blocks the merge until the maintainer says which text holds; the maintainer asked for the most long-term solution.
+  Today: criterion 11 demands the refusal before any gate; decision Q-6 puts the check into a pytest plugin, so it happens when pytest starts, after the other gates, and never in a documents run.
+  Repository change: criterion 11 is reworded to the plugin's moment; the regression test gets a second, test-free gate.
+  Architecture change: none; pytest stays the one authority on its resolved temporary folder, and no runner-side parser of pytest options returns.
+
+In the context of a spec criterion and a later decision that disagree on the moment of refusal, facing a choice between an earlier runner-side check and the plugin's moment, we decided that the plugin's moment holds and the criterion follows it, to achieve one authority on the folder pytest resolves, accepting that gates which start no pytest run before the refusal. — 2026-11-13
