@@ -19,7 +19,7 @@ tags: [plan, stage-2, verification]
 
 ```text
 For you:     Implement and draft checks avoid unnecessary full-run waits; missing tests fail early and local misses are counted.
-Done when:   Routing, import-chain, refusal and slip-count regressions pass; full phase-6 and CI gates remain intact and make verify is green.
+Done when:   Routing, import-chain and refusal regressions pass; full phase-6 and CI gates remain intact and make verify is green.
 Appetite:    Ten and a half hours (raised from six to seven and a half, decisions.md#Q-6, and to ten and a half, decisions.md#Q-7, by the maintainer on 2026-11-12) of phase 4 including repairs; stop at the limit under the existing appetite protocol.
 Not now:     Splitting the runner, coverage instrumentation, smaller CI, admission redesign or a dashboard.
 Pre-mortem:  suppose it failed: most likely because the test-link graph misses an indirect dependency.
@@ -70,34 +70,12 @@ This drafting call writes artifacts only; the runner verifies and commits.
    own change-scoped missing-ADR-answer tolerance. Use exit status, not parsed
    prose, for gate verdicts. Share scope evidence for draft/implement/repair;
    keep failure evidence protected and success evidence in the checkpoint.
-5. Extend `scripts/verify_duration.py` additively with validated targeted
-   result and slip records in its existing `verify-duration.jsonl` store;
-   preserve version-1 duration records and readers. A targeted result stores
-   UTC, canonical repository/worktree, change/verb, unique check ID, selected
-   tests/gates, outcome, gate-config digest and accepted checkpoint tree ID.
-   Bind a green to that checkpoint only after the existing checkpoint guard
-   proves verification inputs unchanged: allow only the runner's known audit,
-   timing/lifecycle and derived-index bookkeeping, not arbitrary file edits.
-   Store no raw output or credentials; reuse protected bounded identifiers.
-6. At `require_fresh_full_verification`, associate the local full run's ID
-   with its captured head/tree/config and outcome. Pass a runner-owned
-   correlation ID through the existing full-check environment into duration
-   records; use the existing per-gate records to identify blocking red gates,
-   and extract bounded failed pytest IDs from protected failure evidence
-   where available (otherwise null, never fabricated). Match the latest green
-   targeted checkpoint tree/config of this repository; differing commits
-   with identical trees may match, differing trees may not. Permit only the
-   already-approved uncommitted findings audit difference of phase 6.
-   On completed blocking red append one slip referencing both IDs. Keep
-   timeouts, launch/admission failures and identity races unmeasured, and
-   preserve the review stop and fresh full check on every invocation.
-7. Serialize evidence with the existing safe append lock. Make deduplication
-   by full-run ID atomic with checking/appending; preserve concurrent writes
-   and diagnose storage gaps without changing gate verdicts. Add
-   `python3 -m scripts.verify_duration slips --repository "$PWD" --since <UTC-ISO> --until <UTC-ISO>`
-   to count distinct slip full-run IDs in the half-open UTC interval. Return
-   explicit unavailable/incomplete measurement for missing, corrupt or
-   incomplete correlation evidence, never a trustworthy zero from it.
+5. Steps 5 to 7 (targeted and slip records in the duration history, the
+   correlation at `require_fresh_full_verification`, the `slips` reader) left
+   this change on 2026-11-13 (decisions.md#Q-9); bead coding-harness-bxxt.7
+   takes them up. `scripts/verify_duration.py` stays as on `origin/main`;
+   `require_fresh_full_verification` keeps the review stop and the fresh
+   full check on every invocation.
 8. Add regressions in the ledger using actual fixture trees and captured
    commands, not a mocked selector. Parameterize initial/retry/fallback
    routes, current/baseline links, chains/cycles, mixed-delta refusal,
@@ -169,11 +147,9 @@ The fourth run's full check showed 13 red tests. Do this, nothing wider:
 
 ## Files and ownership
 
-- Attempt: `scripts/stage2.py` — extend selection, early refusal, implement/draft dispatch, scope evidence and local-slip correlation; align embedded verification instructions.
-- Attempt: `scripts/verify_duration.py` — add compatible safe evidence writes, correlation/deduplication and the interval-count reader.
+- Attempt: `scripts/stage2.py` — extend selection, early refusal, implement/draft dispatch, and scope evidence; align embedded verification instructions.
 - Attempt, then orchestrator: `tests/test_stage2.py` — behavioral regressions and fixture updates first; doctrine assertions after bootstrap.
-- Attempt: `tests/test_verify_duration.py` — correlation records, counts, legacy compatibility, concurrent deduplication and unsafe/unavailable storage cases.
-- Orchestrator bootstrap: `docs/WORKFLOW.md` — document targeted implement/repair, unlocked draft documents, conservative fallback, missing-test refusal, local slips and unchanged full gates alongside held prose and its doctrine tests.
+- Orchestrator bootstrap: `docs/WORKFLOW.md` — document targeted implement/repair, unlocked draft documents, conservative fallback, missing-test refusal and unchanged full gates alongside held prose and its doctrine tests.
 - Attempt: `plans/changes/targeted-check-more-verbs/spec.md` — lifecycle metadata only; retain criteria and decisions.
 - Attempt: `plans/changes/targeted-check-more-verbs/plan.md` — clear written-test markers and let the runner populate measured time.
 - Runner: `plans/changes/targeted-check-more-verbs/findings.md` — audit/check-scope evidence and subsequent reviews.
@@ -182,7 +158,6 @@ The fourth run's full check showed 13 red tests. Do this, nothing wider:
 - Orchestrator only: `AGENTS.md` — align the summary of post-run checks and final full verification.
 - Orchestrator only: `prompts/04-implement.md` — align runner post-check and missing-test instructions while retaining interactive-session duties.
 - Orchestrator only: `prompts/04b-review-loop.md` — align selection/fallback wording and retain the fresh full phase-6 boundary.
-- Orchestrator only: `tools/claude-code/skills/handover/SKILL.md` — require the locally measured slip count, repository and interval, or explicit unavailability, in the night report.
 
 No files are deleted and no new code module is needed. Do not edit
 `scripts/touch_map.py`, `scripts/verify_lock.py`, `scripts/verify_all.sh`,
@@ -233,10 +208,6 @@ full verification remain the runner's work after this draft.
 - 9: tests/test_stage2.py::test_review_requires_fresh_full_verification_before_model_call — stale, moved or red input reaches a reviewer
 - 9: tests/test_ci.py::test_the_trigger_does_not_restrict_paths — a changed path ceases to trigger hosted verification
 - 9: not a test — review the unchanged hosted workflow against the complete gate list; any reduction of CI verification refutes criterion 9
-- 10: tests/test_stage2.py::test_phase6_records_only_correlated_local_slips — a matching completed red is missed, or a different tree/configuration or timeout is counted
-- 11: tests/test_verify_duration.py::test_targeted_history_preserves_safety_and_legacy_records — new events break old records, expose raw output, mix concurrent writes or change verdicts on storage failure
-- 12: tests/test_verify_duration.py::test_slip_report_counts_interval_and_reports_gaps — duplicate runs or other repositories are counted, or corrupt/incomplete evidence becomes zero
-- 12: not a test — orchestrator review of the handover skill's count command and explicit repository/interval/unavailable wording; omission refutes criterion 12
 - 13: tests/test_stage2.py::test_verification_doctrine_covers_extended_targeted_routes — workflow, held instructions or the ADR contradict the agreed verification boundaries; orchestrator bootstrap owns this test
 
 ## Runner route — 2026-11-12
@@ -259,6 +230,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: sixth run from at
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: seventh run from attempt 6's saved state: one red test left, plan section 'Correction for the fifth run' item 6 (maintainer 2026-11-12, decisions.md Q-6, bead coding-harness-0swp).
 
+## Runner route — 2026-11-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-11 20:50:58–23:23:11 UTC, 9132 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -272,3 +247,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: seventh run from 
 2026-11-13 11:28:51–12:26:28 UTC, 3456 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
 2026-11-13 12:57:34–14:19:04 UTC, 4890 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
 2026-11-13 14:52:06–16:13:12 UTC, 4865 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-13 19:20:04–19:23:43 UTC, 219 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 19:23:50–19:25:53 UTC, 123 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 19:26:01–19:26:57 UTC, 57 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

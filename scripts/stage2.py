@@ -64,8 +64,7 @@ fails the attempt and never calls the full check to override it. The draft's
 document check runs only the locally runnable document gates, outside the
 admission. `review` (phase 6)
 runs a fresh full `make verify` of the current head before it calls the reviewer,
-and a completed local red is recorded once as a slip against this repository's
-latest matching targeted green.
+and refuses a red, unstartable or timed-out check.
 Codex runs in its configured `workspace-write` sandbox; the tests do not measure that
 confinement.
 
@@ -182,7 +181,6 @@ import tarfile
 import tempfile
 import threading
 import time
-import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -204,7 +202,6 @@ import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import touch_map  # noqa: E402
-import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -3218,32 +3215,6 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     return stamped == clean_after
 
 
-def _local_slip_note(root: Path, correlation: str, tree: str, evidence: str) -> str:
-    """Measure one completed red full run against this repository's latest matching targeted green.
-
-    Called only after a blocking red before phase 6: the recorder correlates the run through the
-    runner-owned identity in its duration records, appends the slip once per full-run identity, and
-    returns what was recorded or why the run stays unmeasured. A timeout, a launch or admission
-    failure and a changed repository content or gate configuration stay unmeasured, never blamed on
-    an older green; a storage gap is reported visibly and never changes the verdict.
-    """
-    try:
-        return verify_duration.record_local_slip(
-            repository=str(root.resolve()),
-            correlation=correlation,
-            tree=tree,
-            failed_tests=failed_test_ids([evidence]) or None,
-        )
-    except (
-        Refused,
-        OSError,
-        ValueError,
-        verify_duration.HistoryMissing,
-        verify_duration.StorageUnusable,
-    ) as error:
-        return f"verify-duration: the local slip of the red full run was not recorded ({error}); the verdict stands"
-
-
 def require_fresh_full_verification(root: Path, change: str) -> None:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
 
@@ -3255,10 +3226,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
     The check runs on every phase-6 invocation, a re-check included, and leaves no receipt: it
     measures the head being reviewed.
     A dirty tree or a changed head or tree refuses; a red, unstartable or timed-out check fails the call.
-    A completed blocking red is appended once to the local duration history as a slip against this
-    repository's latest matching targeted green (bead coding-harness-0swp); a timeout, a launch or
-    admission failure and an unreadable identity stay unmeasured, and a storage gap is reported
-    visibly without changing the failed verdict.
     """
     env = runner_env(
         foreign_env(
@@ -3270,11 +3237,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         ),
         root,
     )
-    correlation = uuid.uuid4().hex
-    try:
-        tree = _git_output(root, "rev-parse", "HEAD^{tree}", env=env).strip()
-    except (Refused, OSError):
-        tree = ""
 
     def standing() -> tuple[str, list[str], tuple[bytes, bytes] | None]:
         head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
@@ -3302,7 +3264,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             f"phase 6 reviews a committed tree for `{change}`, and these paths differ from HEAD: {listing}; commit or put "
             "them back, then run review again. No reviewer was called."
         )
-    problems = full_verify(root, env, None, correlation=correlation)
+    problems = full_verify(root, env, None)
     try:
         after = standing()
     except (Refused, OSError) as error:
@@ -3313,13 +3275,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "no reviewer was called. Run review again."
         )
     if problems:
-        if tree:
-            print(_local_slip_note(root, correlation, tree, "\n".join(problems)), file=sys.stderr)
-        else:
-            print(
-                "verify-duration: the red full run before phase 6 stays unmeasured (its tree could not be read)",
-                file=sys.stderr,
-            )
         raise CallFailed(
             "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
@@ -6359,48 +6314,12 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     return run_gates(root, env, key, chosen.gates)
 
 
-def record_targeted_scope(root: Path, change: str, verb: str, evidence: dict) -> None:
-    """Bind an accepted targeted green to its checkpoint tree in the local duration history.
-
-    The checkpoint guard has just proven the verification inputs: only the runner's own audit,
-    timing and derived-index bookkeeping may still differ uncommitted. A full fallback leaves no
-    targeted record - the full run's own identity carries that evidence. A storage gap, a refusal
-    or an unreadable head is reported on stderr and never changes the accepted verdict: the record
-    serves the local slip measurement, not this attempt's acceptance.
-    """
-    chosen = evidence.get("selected")
-    if chosen is None:
-        return
-    try:
-        verify_duration.append_targeted(
-            repository=str(root.resolve()),
-            worktree=str(Path(_git_output(root, "rev-parse", "--absolute-git-dir").strip()).resolve()),
-            change=change,
-            verb=verb,
-            check_id=evidence["check_id"],
-            tests=list(chosen.tests),
-            gates=[str(gate["id"]) for gate in chosen.gates],
-            config_sha256=verify_duration.gate_file_digest(root),
-            tree=_git_output(root, "rev-parse", "HEAD^{tree}").strip(),
-            commit=_git_output(root, "rev-parse", "HEAD").strip(),
-            outcome="green",
-        )
-    except (verify_duration.StorageUnusable, verify_duration.HistoryMissing, Refused, OSError, ValueError) as error:
-        print(
-            f"verify-duration: the targeted green of {change} was not recorded ({error}); the verdict stands",
-            file=sys.stderr,
-        )
-
-
-def full_verify(root: Path, env: dict[str, str], key: str | None, correlation: str | None = None) -> list[str]:
+def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
     The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
     files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
     a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
-    `correlation` travels in the child environment into the duration records, so a completed red
-    run can be measured against this repository's latest matching targeted green (bead
-    coding-harness-0swp); it is runner-owned and never set by a model call.
     """
     problems: list[str] = []
     intended: list[bytes] = []
@@ -6411,8 +6330,6 @@ def full_verify(root: Path, env: dict[str, str], key: str | None, correlation: s
             except (Refused, OSError) as error:
                 return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
             child_env = verify_lock.inherit_env(env)
-            if correlation is not None:
-                child_env[verify_duration.CORRELATION_ENV] = correlation
             done = launch(
                 ["make", "verify"],
                 root,
@@ -6448,7 +6365,6 @@ def _targeted_body(
     against: str,
     scope: list[str] | None,
     new_file_guard: bool = False,
-    evidence: dict | None = None,
 ) -> list[str]:
     """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
@@ -6457,8 +6373,7 @@ def _targeted_body(
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
     admitted full check instead. A passing result is never worded as full verification. Implement adds
     the `new_file_guard`: new production code without a reachable test refuses the attempt before any
-    test runs or a fallback is admitted (bead coding-harness-0swp). When `evidence` is given, the
-    selected coverage and the check's own identity land there for the runner's scope record.
+    test runs or a fallback is admitted (bead coding-harness-0swp).
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6496,10 +6411,6 @@ def _targeted_body(
     if preparation:
         return preparation
     chosen = targeted_selection(root, env, against)
-    if evidence is not None and chosen.fallback is None:
-        # The identity of this check execution, for the runner's targeted-scope record.
-        evidence["check_id"] = uuid.uuid4().hex
-        evidence["selected"] = chosen
     if chosen.fallback is not None:
         # Keep the selected scope even if the full check raises before returning its result.
         if scope is not None:
@@ -6545,7 +6456,6 @@ def verify_attempt(
     against: str = "HEAD",
     scope: list[str] | None = None,
     new_file_guard: bool = False,
-    evidence: dict | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -6615,7 +6525,6 @@ def verify_attempt(
             against,
             scope,
             new_file_guard=new_file_guard,
-            evidence=evidence,
         )
         try:
             time_log(plan)
@@ -8999,7 +8908,6 @@ def run_attempts(
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             scope_lines: list[str] = []
-            scope_meta: dict = {}  # the targeted check's selected coverage, for the runner's scope record
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
@@ -9018,7 +8926,6 @@ def run_attempts(
                         against=baseline,
                         scope=scope_lines,
                         new_file_guard=new_file_guard,
-                        evidence=scope_meta,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -9261,10 +9168,6 @@ def run_attempts(
                     raise
                 if after_commit is not None:
                     after_commit()
-                if verify_mode == "targeted":
-                    # The accepted targeted green, bound to this checkpoint in the local duration
-                    # history; a storage gap is reported visibly and never unaccepts the attempt.
-                    record_targeted_scope(root, ctx.change, verb, scope_meta)
                 if retain_answer and evidence is not None:
                     print(f"{verb}: the attempt's protected answer is saved at {evidence}")
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")

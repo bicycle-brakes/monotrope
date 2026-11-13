@@ -861,3 +861,72 @@ Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1d648-ac63-7b42-8ead-9b1316c13038, 2026-11-13
 Reviewer session: codex 01a1d648-ac63-7b42-8ead-9b1316c13038 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4110 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +1 -16
+> - `plans/changes/targeted-check-more-verbs/plan.md` +24 -51
+> - `plans/changes/targeted-check-more-verbs/spec.md` +13 -44
+> - `scripts/stage2.py` +4 -101
+> - `scripts/verify_duration.py` +12 -461
+> - `tests/test_stage2.py` +2 -192
+> - `tests/test_verify_duration.py` +11 -638
+> - `tools/claude-code/skills/handover/SKILL.md` +0 -7
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 0.60s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/targeted-check-more-verbs/stage2/attempts/targeted-check-more-verbs/attempt-1-20261113T191955315889Z-97a8f371.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1040 files, 4110 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/targeted-check-more-verbs/plan.md` +18 -48
+> - `plans/changes/targeted-check-more-verbs/spec.md` +9 -42
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 0.73s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/targeted-check-more-verbs/stage2/attempts/targeted-check-more-verbs/attempt-2-20261113T191955315889Z-97a8f371.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1040 files, 4110 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/targeted-check-more-verbs/plan.md` +9 -38
+> - `plans/changes/targeted-check-more-verbs/spec.md` +2 -31
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 0.80s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/targeted-check-more-verbs/stage2/attempts/targeted-check-more-verbs/attempt-3-20261113T191955315889Z-97a8f371.md
+> ```

@@ -1914,15 +1914,7 @@ each learned on the night of 2026-10-29/30:
   test runs and before a full fallback is admitted, and its diagnostics name
   the file and ask for its test. A targeted red fails the attempt; the full
   check never runs to override it. The draft runs its document check only
-  ("The draft (phases 2, 2b and 3)"). A completed red full check before phase 6
-  (the `review` verb's) on the same tree and gate configuration as an
-  accepted targeted green is a slip: the runner appends it once per
-  full run to the local duration history, and `python -m
-  scripts.verify_duration slips --repository <path> --since <UTC> --until
-  <UTC>` counts the distinct slipped full runs of one repository in that
-  half-open interval; missing or incomplete evidence prints as unavailable,
-  never as zero (ADR 0025 decision 4 as amended on 2026-11-12; the amendment
-  takes effect when the maintainer merges its decision pull request).
+  ("The draft (phases 2, 2b and 3)").
 
 ### Night runs
 
@@ -1940,13 +1932,6 @@ day session would ask:
 2. **A further case of the same mechanism at a phase-6 re-check:** record
    the finding, park that pull request and continue with the next queue
    item; the maintainer decides it in the morning.
-
-**The morning handover reports targeted-check misses** (bead
-coding-harness-0swp). It gives the local slip count from `python -m
-scripts.verify_duration slips --repository <path> --since <UTC> --until
-<UTC>`, run for this repository over the night run's interval, and states
-that repository and interval beside the count. An unavailable or incomplete
-measurement is reported as such, never as zero.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the

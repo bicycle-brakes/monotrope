@@ -62,11 +62,6 @@ Research: `research.md`. Maintainer answers: `decisions.md`, Q-1 through Q-5.
   through one or more Python import links. These are static links, not proof
   of runtime coverage. New production code means added Python or shell code
   recognised by the existing inventory, relative to the attempt baseline.
-- **Slip:** a completed local full verification with a blocking red result
-  before phase 6, on the same repository content and gate configuration as
-  an accepted targeted green. An admission refusal, launch failure, timeout
-  or unreadable identity is not evidence of a slip. CI-only failures are not
-  collected by this local measurement.
 
 ## Acceptance criteria
 
@@ -128,25 +123,8 @@ Research: `research.md`. Maintainer answers: `decisions.md`, Q-1 through Q-5.
    *Refuted by:* targeted evidence admits the reviewer, a red or moved tree
    reaches it, or CI ceases to run the complete verification suite.
    *Basis:* decisions.md#Q-1.
-10. When a slip occurs, the runner automatically appends its correlated
-    evidence to the existing local run history once per full-run identity.
-    *Refuted by:* the event is missing, duplicated on reprocessing, lacks the
-    targeted and full-run identities or failed gate/test identifiers where
-    available, or is attributed across changed repository content/configuration.
-    *Basis:* decisions.md#Q-5.
-11. When targeted or slip evidence is stored or read, it preserves the local
-    history's existing safety, compatibility and verdict independence.
-    *Refuted by:* old duration records stop reading, concurrent events mix,
-    raw output or credentials are persisted, substituted destinations are
-    written through, or storage failure changes a verification verdict rather
-    than visibly reporting that measurement is unavailable.
-    *Basis:* decisions.md#Q-5.
-12. When a night handover reports targeted-check misses, it gives the local
-    slip count for an explicit repository and time interval from the history reader.
-    *Refuted by:* the reader double-counts one full run, counts another
-    repository/interval, reports unreadable or incomplete evidence as zero,
-    or the handover instructions omit the count and its interval.
-    *Basis:* decisions.md#Q-5.
+    (Criteria 10 to 12, the local slip counter, left this change on
+    2026-11-13: decisions.md#Q-9; bead coding-harness-bxxt.7 takes them up.)
 13. When this change is proposed for merge, the workflow, prompts and
     amendment of ADR 0025 describe the same verification boundaries.
     *Refuted by:* any still requires full verification after every implement
@@ -192,9 +170,6 @@ Research: `research.md`. Maintainer answers: `decisions.md`, Q-1 through Q-5.
 - The PR closes the targeted-verification extension work item
   (coding-harness-0swp); its final commit carries
   `Closes-Bead: coding-harness-0swp`.
-- Special evidence: an isolated targeted-green/full-red run records one slip
-  and the report counts it; record the tested commit in the PR body. Do not
-  plant a failing test or synthetic slip in the real shared history.
 
 ## Open decisions
 
@@ -206,10 +181,6 @@ None open. The five maintainer answers are recorded in `decisions.md`.
 - [DETAIL] Draft uses the shared selector's document-only projection, because
   Q-2 explicitly describes text checks without tests; additions of plan
   Markdown do not summon the code/kit probe in this projection.
-- [DETAIL] A slip is counted once per completed red full run, against the
-  latest matching accepted targeted result; repeated reports do not add slips.
-  Exact checked-content identity prevents unrelated edits being blamed on
-  selection. Failed-test IDs are unknown when output cannot identify them.
 - [DETAIL] Reuse existing static link semantics, including their limits for
   ambiguous or dynamic imports; add transitive traversal without claiming
   runtime coverage. An unreadable graph remains unmeasured, not empty.

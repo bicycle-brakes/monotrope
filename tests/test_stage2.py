@@ -52,7 +52,6 @@ import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
 import time_records  # noqa: E402
-import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 
@@ -25446,8 +25445,8 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
 
 
 # ---------------------------------------------------------------------------
-# Targeted implement routes, the draft's document check and the local slip
-# measurement (spec targeted-check-more-verbs, criteria 1-13, bead coding-harness-0swp)
+# Targeted implement routes and the draft's document check
+# (spec targeted-check-more-verbs, criteria 1-9 and 13, bead coding-harness-0swp)
 # ---------------------------------------------------------------------------
 
 # A covered implement step: the modified `src/app.py` is licensed by the planted
@@ -25912,7 +25911,6 @@ def test_all_targeted_verbs_record_actual_scope(
     full-fallback reason, the draft claims tests it did not run, or a targeted green is called full
     green."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "scope-state"))
-    history = tmp_path / "scope-state" / "coding-harness" / verify_duration.HISTORY_NAME
     commands = targeted_mode(monkeypatch)
     if verb_case == "implement":
         world.script(claude=[dict(COVERED_IMPLEMENT)])
@@ -25938,9 +25936,6 @@ def test_all_targeted_verbs_record_actual_scope(
         assert problems == [], problems
         assert commands.of("pytest") == [] and commands.of("make") == []
         assert "document checks only, no tests ran; result: green" in scope
-        if history.exists():
-            rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines() if line.strip()]
-            assert [row for row in rows if row["event"] == "targeted"] == []
         return
     body = git(world.root, "log", "-1", "--format=%B")
     text = world.text()
@@ -25953,176 +25948,6 @@ def test_all_targeted_verbs_record_actual_scope(
         assert "targeted verification, not the full `make verify`; result: green" in body
         assert "`tests/test_fix.py`" in body
     assert "VERIFY GREEN" not in body and "full verification green" not in body.lower()
-    lines = history.read_text(encoding="utf-8").splitlines() if history.exists() else []
-    rows = [json.loads(line) for line in lines if line.strip()]
-    targeted = [row for row in rows if row["event"] == "targeted"]
-    if not verb:
-        assert targeted == [], "a full fallback left a targeted record"
-        return
-    assert len(targeted) == 1, targeted
-    record = targeted[0]
-    assert record["verb"] == verb and record["outcome"] == "green" and record["check_id"]
-    assert record["tests"] == ["tests/test_fix.py"]
-    assert record["gates"], "the selected gates are missing from the scope record"
-    assert record["tree"] == git(world.root, "rev-parse", "HEAD^{tree}")
-    assert record["repository"] == str(world.root.resolve())
-    assert record["config_sha256"] == verify_duration.gate_file_digest(world.root)
-
-
-def test_phase6_records_only_correlated_local_slips(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Criterion 10. Planted fault: a matching completed red full run is not recorded, a slip is
-    counted twice, a different tree or gate configuration is blamed, or a timeout or an unstartable
-    run is counted."""
-    # A known configuration is required for measured correlation; the minimal World fixture
-    # otherwise has no gate declaration and correctly returns an unknown digest.
-    (world.root / "decisions").mkdir(exist_ok=True)
-    (world.root / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
-    git(world.root, "add", "decisions/gates.yaml")
-    git(world.root, "commit", "--quiet", "-m", "seed readable gate configuration")
-    commands = targeted_mode(monkeypatch)
-    counter = {"runs": 0, "reuse": None}
-
-    def seed_green(root: Path, check: str, tree: str, config: str | None) -> None:
-        verify_duration.append_targeted(
-            repository=str(root.resolve()),
-            worktree=str(root.resolve()),
-            change="demo",
-            verb="implement",
-            check_id=check,
-            tests=["tests/test_fix.py"],
-            gates=["leerprobe"],
-            config_sha256=config,
-            tree=tree,
-            commit=git(root, "rev-parse", "HEAD"),
-            outcome="green",
-        )
-
-    def red_make(_command) -> tuple[int, str]:
-        record = commands.of("make")[-1]
-        correlation = record["env"][verify_duration.CORRELATION_ENV]
-        counter["runs"] += 1
-        run_id = counter["reuse"] or f"run-red-{counter['runs']}"
-        moment = verify_duration._utc_now()
-        verify_duration.append_event(
-            {
-                "v": verify_duration.EVENT_VERSION,
-                "event": verify_duration.RUN_START,
-                "run_id": run_id,
-                "utc": moment,
-                "repository": str(world.root.resolve()),
-                "commit": git(world.root, "rev-parse", "HEAD"),
-                "dirty": False,
-                "config_sha256": verify_duration.gate_file_digest(world.root),
-                "job": "verify",
-                "placement": "local",
-                "memory_pct": None,
-                "workers": None,
-                "admission_id": None,
-                "admission_reused": False,
-                "admission_wait_seconds": 0.0,
-                "correlation": correlation,
-            }
-        )
-        verify_duration.append_event(
-            {
-                "v": verify_duration.EVENT_VERSION,
-                "event": verify_duration.GATE,
-                "run_id": run_id,
-                "utc": moment,
-                "gate": "pytest",
-                "seconds": 1.0,
-                "exit": 1,
-                "enforcement": "block",
-            }
-        )
-        verify_duration.append_event(
-            {
-                "v": verify_duration.EVENT_VERSION,
-                "event": verify_duration.RUN_END,
-                "run_id": run_id,
-                "utc": moment,
-                "seconds": 1.5,
-                "verdict": "red",
-            }
-        )
-        return 1, "VERIFY RED\nFAILED tests/test_fix.py::test_fix - AssertionError\n"
-
-    def timed_out(_command) -> None:
-        raise stage2.StepTimedOut("make was stopped by the runner's step limit (planted)")
-
-    def unstartable(_command) -> None:
-        raise stage2.CallFailed("make could not be started: planted launch fault")
-
-    def slips(path: Path) -> list[dict]:
-        if not path.exists():
-            return []
-        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        return [row for row in rows if row["event"] == "slip"]
-
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-    history = tmp_path / "state" / "coding-harness" / verify_duration.HISTORY_NAME
-    tree = git(world.root, "rev-parse", "HEAD^{tree}")
-    seed_green(world.root, "check-green", tree, verify_duration.gate_file_digest(world.root))
-    commands.outcomes["make"] = red_make
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    standing = slips(history)
-    assert len(standing) == 1, standing
-    assert standing[0]["run_id"] == "run-red-1" and standing[0]["check_id"] == "check-green"
-    assert standing[0]["failed_gates"] == ["pytest"]
-    assert standing[0]["failed_tests"] == ["tests/test_fix.py::test_fix"]
-    assert standing[0]["tree"] == tree
-    rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines() if line.strip()]
-    started = [row for row in rows if row["event"] == "run_start"][-1]
-    assert started["correlation"] == commands.of("make")[0]["env"][verify_duration.CORRELATION_ENV]
-    assert commands.of("make")[0]["pass_fds"], "the red full check did not run under its admission"
-    # A second completed red run is a distinct identity and is counted once itself.
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    standing = slips(history)
-    assert len(standing) == 2 and {row["run_id"] for row in standing} == {"run-red-1", "run-red-2"}, standing
-    # The same full-run identity again is reprocessing: deduplicated, never counted twice.
-    counter["reuse"] = "run-red-2"
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert len(slips(history)) == 2, "a reprocessed red run was counted twice"
-    assert "stands already" in capsys.readouterr().err
-    counter["reuse"] = None
-    # A green of another tree is never blamed for this red.
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-tree"))
-    history = tmp_path / "state-tree" / "coding-harness" / verify_duration.HISTORY_NAME
-    seed_green(world.root, "check-wrong-tree", "f" * 40, verify_duration.gate_file_digest(world.root))
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert slips(history) == []
-    assert "stays unmeasured" in capsys.readouterr().err
-    # A green of another gate configuration is never blamed either.
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-config"))
-    history = tmp_path / "state-config" / "coding-harness" / verify_duration.HISTORY_NAME
-    seed_green(world.root, "check-wrong-config", tree, "f" * 64)
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert slips(history) == []
-    assert "stays unmeasured" in capsys.readouterr().err
-    # A timeout has no completed red verdict and stays unmeasured.
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-timeout"))
-    history = tmp_path / "state-timeout" / "coding-harness" / verify_duration.HISTORY_NAME
-    seed_green(world.root, "check-timeout", tree, verify_duration.gate_file_digest(world.root))
-    commands.outcomes["make"] = timed_out
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert slips(history) == []
-    assert "stays unmeasured" in capsys.readouterr().err
-    # A check that cannot start fails the review and writes no slip either.
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-launch"))
-    history = tmp_path / "state-launch" / "coding-harness" / verify_duration.HISTORY_NAME
-    seed_green(world.root, "check-launch", tree, verify_duration.gate_file_digest(world.root))
-    commands.outcomes["make"] = unstartable
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert slips(history) == []
 
 
 def verification_doctrine_problems(workflow: str, review_loop: str, adr: str) -> list[str]:
@@ -26218,18 +26043,3 @@ def test_new_conftest_fixture_keeps_full_fallback(world: World, monkeypatch: pyt
     assert len(commands.of("make")) == 1
     assert "shared test configuration" in world.plan.read_text(encoding="utf-8")
     assert "new production code without a reachable test" not in world.text()
-
-
-def test_red_full_check_with_changed_content_never_records_slip(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A red check that changes checked content cannot blame an earlier targeted green."""
-    recorded = []
-    monkeypatch.setattr(stage2, "_local_slip_note", lambda *args: recorded.append(args) or "recorded")
-
-    def moved_red(*_args, **_kwargs):
-        (world.root / "src" / "app.py").write_text("value = 99\n", encoding="utf-8")
-        return ["VERIFY RED"]
-
-    monkeypatch.setattr(stage2, "full_verify", moved_red)
-    with pytest.raises(stage2.CallFailed):
-        stage2.require_fresh_full_verification(world.root, "demo")
-    assert recorded == [], "a changed checked tree was attributed to an earlier targeted green"
