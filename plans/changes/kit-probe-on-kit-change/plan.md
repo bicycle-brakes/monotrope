@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-w2ay
@@ -87,4 +87,12 @@ Draft checks on 2026-11-13, working tree based on `7c37d013`: the interview-mini
 
 The Stage-2 attempt owns unheld implementation/tests and synthetic proofs; the orchestrator owns the held gate list and CI file plus their activation-dependent fixture changes. The declaration is implemented in the reader, never by a gate-ID branch in the runner. Leave `scripts/stage2.py`, `scripts/verify_lock.py`, both kit/export manifests, probe exemptions, all ADRs, model routes, prompts, templates, agent configuration and other change folders untouched. The new test file is already classified by the manifest's `tests/` fallback; no transfer-rule edit is needed. A new manifest-selected test prefix in a synthetic fixture proves dynamic membership without altering real classifications. The orchestrator presents the card unchanged and owns the decision PR for the gate-list edit; this draft neither implements nor commits it.
 
+## Runner route — 2026-11-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-13 21:25:59–22:37:46 UTC, 4307 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 22:37:52–22:59:35 UTC, 1302 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 23:00:08–23:00:44 UTC, 36 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
