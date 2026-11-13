@@ -18049,14 +18049,15 @@ def draft_document_check_problems(workflow: str) -> list[str]:
         return ["section 4 has no draft section"]
     prose = flat(draft.partition("A drafted change runs in this order:")[0])
     found = []
-    if "`bash scripts/verify_all.sh --job docs`" not in prose:
+    if "(`document_gates` in `scripts/stage2.py`)" not in prose or "no pytest" not in prose:
         found.append("the draft prose does not name the document check")
-    if "`implement` keeps the full `make verify`" not in prose:
-        found.append("the draft prose does not keep implement's full check")
-    if "`repair` takes the targeted check" not in prose or "full suite as its fallback and before phase 6" not in prose:
-        found.append("the draft prose lost the targeted repair and final full-check boundary")
-    if "`implement` and `repair` keep the full" in prose:
-        found.append("the draft prose still requires unconditional full repair verification")
+    if (
+        "`implement` and `repair` take the targeted check" not in prose
+        or "a fresh full `make verify` still runs before phase 6" not in prose
+    ):
+        found.append("the draft prose lost the targeted implement and repair check and the final full-check boundary")
+    if "`implement` keeps the full `make verify`" in prose or "`implement` and `repair` keep the full" in prose:
+        found.append("the draft prose still requires an unconditional full check")
     if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
         found.append("the draft prose does not make the check's exit code the verdict")
     if "ADR_ANSWERS_TOLERATE_CHANGE" not in prose:
@@ -18069,16 +18070,16 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     # check again, or makes parsed gate output the verdict's source.
     text = WORKFLOW.read_text(encoding="utf-8")
     assert draft_document_check_problems(text) == []
-    planted = text.replace("`bash scripts/verify_all.sh --job docs`", "`make verify`", 1)
+    planted = text.replace("(`document_gates` in `scripts/stage2.py`)", "(`make verify`)", 1)
     assert draft_document_check_problems(planted), "the full suite passes as the draft's check again"
     parsed = text.replace("the check's exit code decides", "the parsed gate output decides", 1)
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
     # The sentence is matched across any line wrapping, so rewrapping WORKFLOW.md cannot turn this
     # planted fault into a no-op.
-    full_suite = r"\s+".join(map(re.escape, "`implement` keeps the full `make verify`;".split()))
+    full_suite = r"\s+".join(map(re.escape, "`implement` and `repair` take the targeted check,".split()))
     dropped = re.sub(full_suite + r"[^.]*\.\s*", "", text, count=1)
-    assert dropped != text, "the full-suite sentence was not found to drop"
-    assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
+    assert dropped != text, "the targeted-check sentence was not found to drop"
+    assert draft_document_check_problems(dropped), "a draft section without the targeted-check sentence passes"
     obsolete = re.sub(full_suite + r"[^.]*\.", "`implement` and `repair` keep the full `make verify`.", text, count=1)
     assert obsolete != text and draft_document_check_problems(obsolete)
 
@@ -18436,7 +18437,10 @@ def flash_runner_doctrine_problems(texts: dict[str, str]) -> list[str]:
             phrase in one.lower() for phrase in ("without fallback", "never falls back", "never selects the fallback")
         ):
             found.append(f"{name} does not stop on a leak without fallback")
-    if not re.search(r"runner runs (?:exactly )?`make verify`", workflow) or "checkpoint commit" not in workflow:
+    if (
+        not re.search(r"runner runs its post-run check|runner runs (?:exactly )?`make verify`", workflow)
+        or "checkpoint commit" not in workflow
+    ):
         found.append("workflow does not give verification and the checkpoint to the runner")
     if "file tools but no command tool" not in implement:
         found.append("implement prompt does not state its no-command boundary")
