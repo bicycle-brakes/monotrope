@@ -1286,3 +1286,15 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_all.sh` is shared execution infrastructure
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4100 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | BLOCKER | SPEC | base | scripts/verify_all.sh:408–423; spec.md criterion 11; decisions.md Q-6 | [DIVERGENT] With `PYTEST_ADDOPTS='--basetemp=/outside'`, the runner starts non-pytest gates before rejecting the option; `--job docs` never invokes the guard. Criterion 11 requires refusal before gates, while decision Q-6 authorizes checking during `pytest_configure`. The regression test contains only a pytest gate and does not detect this disagreement. [Criterion 11] | Codex | open | — |
+| F6-4 | MAJOR | SPEC | base | scripts/stage2.py:2521–2530 | `_merge_base` still discards git’s entire diagnostic. A read-only probe supplying exit 128 and `fatal: bad object HEAD` produced only “there is no merge base with origin/main; the diff cannot be built.” This runner path bypasses the new diagnostic helper and C-locale setting, so git failures still lose their actual reason. [Criterion 12] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d63d-f960-72c0-8804-7f43bfde3c80, 2026-11-13
+Reviewer session: codex 01a1d63d-f960-72c0-8804-7f43bfde3c80 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
