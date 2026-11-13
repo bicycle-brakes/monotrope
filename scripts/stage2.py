@@ -3136,8 +3136,15 @@ def resolve_finding_rows(record: str | None, findings_text: str) -> list[Resolve
                         raise Refused(
                             f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
                         )
+                    status = (
+                        "decided"
+                        if all(item[7].lower().startswith(("fixed", "rejected")) for item in (seen[row[0]], row))
+                        else "undecided"
+                    )
+                    scope = "record" if source == "record" else "history"
                     print(
-                        f"notice: duplicate decided id {row[0]} in one table ({file}); history left unchanged.",
+                        f"notice: duplicate {status} id {row[0]} in one table ({file}); "
+                        f"latest row in {scope} used for resolution.",
                         file=sys.stderr,
                     )
                 seen[row[0]] = row
@@ -3683,23 +3690,42 @@ def accepted_row(row: list[str]) -> bool:
 ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
 
 
-def origin_refusal(record: str | None, findings_text: str) -> str | None:
+def origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
     """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
 
     Accepted (`taken` or `fixed`) rows in the loop record and phase-6 table are checked. Released
     history was checked before release and is never re-checked; legacy rows need no backfill.
     A rejected or undecided row needs no provenance.
+    Repair supplies its resolved rows, so superseded rows in either source remain exempt.
     The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
     values the orchestrator may write.
     """
     # A re-check supersedes earlier phase-6 blocks, even when the newest block has no rows.
     # Do not change findings_rows: repair targeting and the brake still read their full history.
     heads = list(re.finditer(r"^## Phase 6[^\n]*$", findings_text, re.M))
-    _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
-    places = (
-        ("loop record", record_rows(record) if record is not None else []),
-        ("phase-6 table", phase6),
-    )
+    if resolved is None:
+        _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
+        places = (
+            ("loop record", record_rows(record) if record is not None else []),
+            ("phase-6 table", phase6),
+        )
+    else:
+        # Repair admits only current rows. Retain the shared check's newest-block scope,
+        # but never let a superseded row in that block or in the record hold repair.
+        newest_line = findings_text.count("\n", 0, heads[-1].start()) if heads else None
+        places = (
+            ("loop record", [item.cells for item in resolved if item.place == "record"]),
+            (
+                "phase-6 table",
+                [
+                    item.cells
+                    for item in resolved
+                    if item.place == "phase-6" and newest_line is not None and item.line > newest_line
+                ],
+            ),
+        )
     found = [
         f"{row[0]} ({place}, Origin `{row[3]}`)"
         for place, rows in places
@@ -7631,6 +7657,24 @@ def mark_repaired_findings(
     stamp_updated(ctx.findings)
 
 
+def require_unchanged_repair_rows(
+    ctx: Context, taken: list[tuple[str, list[str]]], resolved: list[ResolvedFindingRow]
+) -> None:
+    """Check both sources before writing findings statuses or making the checkpoint.
+
+    Repair holds the record lock throughout; its record marks still follow the commit.
+    """
+    selected = {(place, row[0]): row for place, row in taken}
+    record = read_record(ctx.change, ctx.root)
+    sources = {
+        "record": record.splitlines() if record is not None else [],
+        "findings": ctx.findings.read_text(encoding="utf-8").split("\n"),
+    }
+    for item in resolved:
+        if item.cells == selected.get((item.place, item.cells[0])):
+            _require_unchanged_resolved_row(sources["record" if item.place == "record" else "findings"], item)
+
+
 def mark_repaired_record(
     change: str,
     taken: list[tuple[str, list[str]]],
@@ -9636,13 +9680,12 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     taken, waiting = repair_targets(ctx, record, current, resolved=resolved)
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
-    # The selected rows' own Origin check goes first, so one refusal names every row the repair
-    # would carry, older blocks included; the record/newest-block refusal after it keeps guarding
-    # the accepted rows that no repair selects (bead coding-harness-3h96).
+    # Both checks share the resolver's current rows. The target check covers older selected
+    # rows too; the shared check retains its scope without re-admitting superseded history.
     target_refusal = target_origin_refusal(record, current, resolved=resolved)
     if target_refusal:
         raise Refused(target_refusal)
-    refusal = origin_refusal(record, current)
+    refusal = origin_refusal(record, current, resolved=resolved)
     if refusal:
         raise Refused(refusal)
     if not taken:
@@ -9696,6 +9739,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             marks.update(proven)
         return problems
 
+    def before_commit() -> None:
+        require_unchanged_repair_rows(ctx, taken, resolved)
+        mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+
     run_attempts(
         ctx,
         "repair",
@@ -9710,7 +9757,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
-        before_commit=lambda: mark_repaired_findings(ctx, taken, fixes, resolved=resolved),
+        before_commit=before_commit,
         after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),

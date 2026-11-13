@@ -10163,6 +10163,73 @@ def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
         stage2.resolve_finding_rows(None, text)
 
 
+@pytest.mark.parametrize("source", ["phase-6", "record", "later-table"])
+@pytest.mark.parametrize("status", ["taken — old decision", FIXED])
+def test_repair_verb_ignores_shadowed_invalid_origin(world: World, source: str, status: str) -> None:
+    """L8-1: a superseded accepted row must not re-enter the second Origin check."""
+    repair_world(world)
+    if source in {"phase-6", "later-table"}:
+        old = phase6_cells("L1-1", status, "superseded finding")
+        old[3] = "invalid"
+        if source == "later-table":
+            world.record().unlink()
+            latest = phase6_cells("L1-1", "taken — fix", "current finding")
+            world.write_findings(
+                phase6_block([old]) + "\n\n" + stage2.render_table(stage2.ROW_COLUMNS, [latest]), VERDICT
+            )
+        else:
+            world.write_findings(phase6_block([old]), VERDICT)
+        history = phase6_block([old])
+    else:
+        path = world.record()
+        old_text = path.read_text(encoding="utf-8")
+        old = stage2.record_rows(old_text)[0]
+        old[3], old[7] = "invalid", status
+        history = stage2.render_table(stage2.ROW_COLUMNS, [old])
+        path.write_text(history + "\n\n" + old_text, encoding="utf-8")
+    assert world.run("repair") == 0, "superseded invalid Origin must not refuse the full repair verb"
+    assert len(repair_calls(world)) == 1
+    current_record = world.record().read_text(encoding="utf-8") if world.record().exists() else None
+    assert history in (current_record if source == "record" else world.text())
+    current = (
+        stage2.record_rows(current_record) if current_record is not None else stage2.findings_rows(world.text())[1]
+    )
+    assert current[-1][7].startswith("fixed")
+
+
+def test_repair_checks_stale_record_before_fixed_statuses_and_commit(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L8-2: a changed record refuses before findings marks or a checkpoint exist."""
+    baseline = repair_world(world)
+    row = phase6_cells("F-1", "taken — fix", "finding")
+    world.write_findings(phase6_block([row]), VERDICT)
+    script_repair(
+        world,
+        [repair_step(stdout="L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix")],
+        make=[{"stdout": "green\n"}],
+    )
+    real = stage2.run_attempts
+
+    def run(*args, **kwargs):
+        before = kwargs["before_commit"]
+
+        def mutate_then_mark():
+            path = world.record()
+            path.write_text(path.read_text(encoding="utf-8").replace("test_a", "concurrent edit"), encoding="utf-8")
+            before()
+
+        kwargs["before_commit"] = mutate_then_mark
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_attempts", run)
+    assert world.run("repair") == 2, "a stale record must refuse before the checkpoint"
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "stale-row refusal must precede the checkpoint"
+    assert stage2.findings_rows(world.text())[1][0] == row, "findings must remain unmarked on stale-record refusal"
+    assert "concurrent edit" in world.record().read_text(encoding="utf-8")
+    assert "changed since resolution" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("boundary", ["separator", "header", "blank", "prose", "non-finding row"])
 def test_resolver_duplicate_ids_follow_table_boundaries(boundary: str) -> None:
     """A separator keeps the table's IDs; a new header or non-row ends their scope."""
