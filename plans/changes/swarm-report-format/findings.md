@@ -883,3 +883,23 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 > - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_stage2_declaration.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/swarm-report-format/plan.md, plans/changes/swarm-report-format/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1040 files, 4069 commits, 12 rules.
+
+Loop attempt: 2026-11-13 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Notice: the data terms of longcat-2.0 expire on 2026-11-16 (3 days left).
+
+Notice: the data terms of glm-5.3-flash expire on 2026-11-16 (3 days left).
+
+Notice: the data terms of qwen3.8-flash expire on 2026-11-16 (3 days left).
+
+Notice: the data terms of gpt-6-luna expire on 2026-11-16 (3 days left).
+
+Notice: the data terms of claude-haiku-5-5 expire on 2026-11-16 (3 days left).
+
+Notice: the data terms of minimax-m3 expire on 2026-11-16 (3 days left).
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
+
+Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1040 files, 4069 commits, 12 rules.
