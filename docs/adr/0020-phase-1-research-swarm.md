@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-15
 last_reviewed: 2026-10-18
-updated: 2026-10-21
+updated: 2026-11-13
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
@@ -23,6 +23,10 @@ tags: [adr, research, swarm, stage-2]
   no agent-written approval. Decider: maintainer; prepared by Codex, with
   the Q-12 to Q-14 amendments drafted by Claude Code (Opus 5.5).
 * Date: 2026-10-15 · takes effect on merge.
+* Amended 2026-11-10 (point 9, the ceiling for one correction call per topic
+  report): the maintainer's answer in the orchestrating conversation of that
+  day, for the change swarm-report-format; the amendment takes effect on the
+  merge of its pull request.
 
 ## Context
 
@@ -237,7 +241,11 @@ checkable.
    refusal cancels queued work and stops/reaps active children, retaining
    available partial evidence as cancelled; exit 2 takes precedence. Freeze `N`
    selected Go free
-   models before model calls; the budget is at most `39 + 3N` invocations. A
+   models before model calls; the budget is at most `39 + 3N` invocations.
+   Amended 2026-11-10: a topic report that fails its format contract may be
+   corrected once by the model that wrote it; with those calls, at most
+   `33 + 3N` more, the budget is at most `72 + 6N` invocations. No other
+   retry is allowed and the time limits stay as they are. A
    bounded Go-only Pi catalog refresh must succeed in each run's preparation; failures exit 1
    before models and never use cached/shipped rosters or Zen. Both catalog
    reads start together and share 60 seconds; abort unfinished requests at
@@ -313,7 +321,8 @@ checkable.
     validates, from the latest stored run only. Reuse needs equal input
     digests, ignoring that run's own research append and HEAD, and the same
     stage, topic, seat, endpoint, model and prompt hash. The run launches
-    the rest within `39 + 3N` and marks reused and interrupted slots. A
+    the rest within the ceiling of point 9 (`39 + 3N`, or `72 + 6N` with
+    corrections) and marks reused and interrupted slots. A
     stored run with a security refusal is never resumed; a complete
     publication clears the store; a failed store write stops the run with
     exit 1.
@@ -331,7 +340,7 @@ checkable.
   explicit includes remain hard requirements and exit 1 if ineligible.
 * Each run gains a preparation step and a report the orchestrator relays
   before the run; the selected models are reported, not fixed in the spec.
-  Probes cost a few small calls outside `39 + 3N`, a Claude Code seat's
+  Probes cost a few small calls outside the run's ceiling (point 9), a Claude Code seat's
   probe included. No Go seat names a model, so a vanished
   Flash model blocks nothing; a new model needs only an admitted terms
   record, so the pool follows the Go catalog by itself. Every research run

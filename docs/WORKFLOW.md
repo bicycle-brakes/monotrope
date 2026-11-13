@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-11
+updated: 2026-11-12
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -540,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make verify     # local gates, cheap first; stop at the first blocking failure
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -551,6 +551,12 @@ make index      # regenerate plans/INDEX.md
 `ci.yml` is generated from, and a hand edit of `ci.yml` fails the `ci-drift`
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
+
+Local verification orders selected gates by declared cost (`seconds` before
+`minutes`) and stops at the first blocking failure. It names every remaining
+selected gate as not run because of that failure; a red run is therefore not
+a complete check. Hosted CI and `--ci` continue through all selected gates.
+See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
@@ -1037,7 +1043,14 @@ change's `findings.md` and the body of the plan's `## Time used` section, both
 put back by the runner, do not count. The verdict measures surviving model work
 after formatting and derived preparation, discounting the generated index and
 stamp-only changes in any document, whether or not checkpoint preparation restores
-them. Replacing only an existing `updated:` value does not count as work, even
+them. The runner's own ledger clearing is discounted with it: when verification
+removes a plan's `not yet written` marker because the named test exists, that
+exact removal — captured per attempt, in both the full and the targeted check —
+is put back in the comparison and cannot qualify the attempt, while every model
+edit beside it (plan prose, a changed ledger reference, a marker the model
+removed itself) stays visible, and clearing evidence that cannot be measured
+reliably rejects the attempt instead of discounting (bead coding-harness-twbl).
+Replacing only an existing `updated:` value does not count as work, even
 when the replacement is not a date. An edit formatting erases is no work.
 Any other addition, edit, deletion, binary or file-mode change counts, code or
 document, planned path or not. Each call is compared with its own pre-call state,
@@ -1094,11 +1107,18 @@ and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
-is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
-models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
-topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
-for topics 9-11, 3 per free model for the online topics) and one fresh Opus
-5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+has `39 + 3N` logical slots for `N` selected free models: three finders, one
+Opus map merge, one Opus public sentence, `33 + 3N` topic slots (24 on the
+repository seats for topics 1-8, 9 on the online seats for topics 9-11, 3 per
+free model for the online topics) and one fresh Opus 5.5 judge. A topic answer
+that ends process-successful but fails its report format (extraction or
+validation) gets at most one correction call from the same frozen seat, in a
+second batch after every first topic call has ended; the correction carries
+the rejected answer and the rejection reason as data, stays inside the seat's
+remaining original topic allowance, the run deadline and the judge reserve,
+and a second rejection ends the seat. With those calls a run is at most
+`72 + 6N` sequential-by-queue invocations (ADR 0020, point 9, amended
+2026-11-10); a run without a rejected report stays at `39 + 3N`. The Go models ride the pinned Pi, at most four per provider at a
 time, required slots before free ones; the Opus calls ride official Claude
 Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
@@ -1106,7 +1126,8 @@ content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
 the first live free call). Deadlines are monotonic — the judge keeps its
 configured allowance reserved (initially 15 minutes) inside the configured
-whole-run allowance (initially 160 minutes) — with no retry and no debate. The
+whole-run allowance (initially 160 minutes) — with no other retry, no
+extension of a time limit and no debate. The
 allowances live in `research-swarm-limits.yaml` at the worktree root:
 `run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
 `sentence`, `topics` and `judge`, all in minutes. Each invocation reads the

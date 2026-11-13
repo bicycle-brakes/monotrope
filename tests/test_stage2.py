@@ -1730,9 +1730,44 @@ def updated_of(path: Path) -> object:
     return check_frontmatter_current.read_updated(path.read_text(encoding="utf-8"))
 
 
-def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -> None:
+class PinnedStampDate:
+    """The settable date the stamp tests compare against (bead coding-harness-bxxt.5).
+
+    A test that reads the calendar clock on its own side of a stamp comparison
+    fails again when one verify run crosses local midnight. The pinned tests
+    take their date from this holder instead; `move_to` shifts it between the
+    runner verbs one test drives, and neither compared side touches a clock.
+    """
+
+    def __init__(self, day: dt.date) -> None:
+        self.current = day
+
+    def move_to(self, day: dt.date) -> None:
+        self.current = day
+
+
+def pinned_stamp_date(monkeypatch: pytest.MonkeyPatch, day: dt.date) -> PinnedStampDate:
+    """Pin the runner's stamp reads and the test's comparison onto one settable date.
+
+    A `dt.date` subclass overriding only its `today()` classmethod sits on the
+    shared `datetime` module (`stage2.dt`), the module-attribute precedent of
+    `tests/test_stage2_terms_expiry.py`: the stamp reads in `scripts/stage2.py`
+    and `stage2.today()` resolve it at call time.
+    """
+    pinned = PinnedStampDate(day)
+
+    class PinnedDate(dt.date):
+        @classmethod
+        def today(cls) -> dt.date:
+            return pinned.current
+
+    monkeypatch.setattr(stage2.dt, "date", PinnedDate)
+    return pinned
+
+
+def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Repair round 1, F-7: a findings.md older than today stays one the gate `frontmatter-current` accepts."""
-    today = dt.date.today()
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 8))
     world.findings.write_text(old_header(), encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     world.script(
@@ -1744,18 +1779,60 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
         pi=[{"stdout": rows(1)}],
     )
     assert world.run("spec-review") == 0
-    assert updated_of(world.findings) == today, "the call line left the header stale"
+    assert updated_of(world.findings) == day.current, "the call line left the header stale"
 
-    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    world.findings.write_text(
+        world.text().replace(f"updated: {day.current.isoformat()}", "updated: 2026-09-29", 1),
+        encoding="utf-8",
+    )
+    day.move_to(dt.date(2026, 11, 9))
     assert world.run("review-loop") == 0
-    assert updated_of(world.findings) == today
+    assert updated_of(world.findings) == day.current
     decide_record(world)
 
-    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    world.findings.write_text(
+        world.text().replace(f"updated: {day.current.isoformat()}", "updated: 2026-09-29", 1),
+        encoding="utf-8",
+    )
+    day.move_to(dt.date(2026, 11, 10))
     commit_review_findings(world)
     assert world.run("review") == 0
-    assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
+    assert updated_of(world.findings) == day.current, "the verdict, the release or the marks left the header stale"
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
+
+
+def test_stamp_tests_pin_the_date_they_compare() -> None:
+    """Bead coding-harness-bxxt.5: a stamp test compares against a date it set, never the calendar clock.
+
+    A body that reads the clock on its own side of a stamp comparison fails
+    again when one verify run crosses local midnight — the failure of
+    2026-11-09. The pinned bodies take their date from `pinned_stamp_date`
+    instead; this guard holds that none of them picks the clock back up.
+    """
+    names = [
+        "test_every_write_to_findings_keeps_its_updated_stamp_current",
+        "test_preparation_stamps_only_changed_held_documents",
+        "test_filling_the_marks_keeps_the_updated_stamp_current",
+        "test_runner_detaches_matching_hardlinked_plan_before_stamp",
+        "test_the_release_reconcile_refreshes_the_findings_date",
+        "test_review_accepts_runner_audit_date_stamp",
+        "test_first_implement_refreshes_derived_files_without_a_model_repair",
+        "test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics",
+        "test_new_change_creates_the_folder_and_a_current_index",
+        "checking_derived_make",
+    ]
+    here = Path(__file__).resolve().parent
+    sources = {
+        "tests/test_stage2.py": (here / "test_stage2.py").read_text(encoding="utf-8"),
+        "tests/test_workflow_entry.py": (here / "test_workflow_entry.py").read_text(encoding="utf-8"),
+    }
+    for name in names:
+        homes = [path for path, text in sources.items() if re.search(rf"(?m)^def {re.escape(name)}\(", text)]
+        assert homes, f"{name} sits in no scanned file — rename it here with the test"
+        assert len(homes) == 1, f"{name} sits in more than one scanned file: {homes}"
+        body = re.search(rf"(?ms)^def {re.escape(name)}\(.*?(?=^def |^class )", sources[homes[0]])
+        assert body is not None, f"{name} has no extractable body"
+        assert "date.today(" not in body.group(0), f"{name} reads the calendar clock itself; pin its compared date"
 
 
 # ---------------------------------------------------------------------------
@@ -1903,14 +1980,18 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     assert git(world.root, "status", "--porcelain") == ""
 
 
-def checking_derived_make(world: World) -> None:
-    """A verifier stand-in that refuses stale generated inputs before recording its call."""
-    checks = """
+def checking_derived_make(world: World, day: dt.date) -> None:
+    """A verifier stand-in that refuses stale generated inputs before recording its call.
+
+    The expected stamp date arrives from the calling test: the stand-in is a
+    separate process that cannot read the test's pinned date, so the day is
+    baked in here as a literal.
+    """
+    checks = f"""
 if name == "make":
-    import datetime
     index = Path("plans/INDEX.md").read_text()
     assert "changes/demo/findings.md" in index, "audit artefact missing from index"
-    assert "updated: " + datetime.date.today().isoformat() in Path("plans/changes/demo/plan.md").read_text()
+    assert "updated: {day.isoformat()}" in Path("plans/changes/demo/plan.md").read_text()
 """
     (world.bin / "make").write_text(
         STAND_IN.replace("@PYTHON@", sys.executable).replace("record = {", checks + "\nrecord = {"),
@@ -1918,9 +1999,12 @@ if name == "make":
     )
 
 
-def test_first_implement_refreshes_derived_files_without_a_model_repair(world: World) -> None:
+def test_first_implement_refreshes_derived_files_without_a_model_repair(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     successful_implementation(world)
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     assert world.run("implement") == 0
     assert len(world.calls("claude")) == 1
     assert len(world.calls("make")) == 1
@@ -1928,7 +2012,8 @@ def test_first_implement_refreshes_derived_files_without_a_model_repair(world: W
     assert git(world.root, "status", "--porcelain") == ""
 
 
-def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
+def test_preparation_stamps_only_changed_held_documents(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     clean = world.research.read_bytes()
     unheld = world.root / "src/note.md"
     unheld.write_text(old_header(), encoding="utf-8")
@@ -1947,7 +2032,7 @@ def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
     before_duplicate = duplicate.read_bytes()
     world.script(make=[{"stdout": "green"}])
     stage2.verify_attempt(world.root, world.plan)
-    assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {dt.date.today()}")
+    assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {day.current.isoformat()}")
     assert world.research.read_bytes() == clean
     assert unheld.read_text() == old_header()
     assert duplicate.read_bytes() == before_duplicate
@@ -1955,8 +2040,11 @@ def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
     assert not deleted.exists()
 
 
-def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(world: World) -> None:
-    checking_derived_make(world)
+def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
+    checking_derived_make(world, day.current)
     world.script(
         claude=[
             {
@@ -2000,7 +2088,9 @@ def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) 
     assert world.calls("make") == []
 
 
-def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(world: World) -> None:
+def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """R-19: the runner renders with the committed script, so a renderer broken in the baseline is fatal.
 
     A renderer the model writes during the call is not the one that runs - that half is
@@ -2008,6 +2098,7 @@ def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(w
     commit the run starts from is beyond a model's reach, so the existing attempt limits decide, and
     nothing is checkpointed.
     """
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     script = Path("scripts") / Path(plans_registry.__file__).name
     (world.root / script).write_text("print('renderer broken')\nraise SystemExit(7)\n")
     git(world.root, "commit", "-q", "-am", "broken renderer")
@@ -2017,7 +2108,7 @@ def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(w
         for n in range(1, 4)
     ]
     world.script(claude=[*steps, {"stdout": "must not run"}], make=[{"stdout": "green"}])
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     assert world.run("implement") == 1
     calls = world.calls("claude")
     assert len(calls) == 3
@@ -6057,8 +6148,9 @@ def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
     assert world.calls() == []
 
 
-def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None:
+def test_filling_the_marks_keeps_the_updated_stamp_current(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Repair round 2 (F-7 note): `fill_marks` stamps the file by itself, not only through the append before it."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     released = f"{stage2.RELEASE_HEADING} 2026-09-29\n\n" + stage2.render_table(
         stage2.RELEASED_COLUMNS,
         [["L1-1", "MAJOR", "MAINT", "base", "src/app.py:1", "f", "deepseek-v4.1-flash", "taken — t", "no", "—"]],
@@ -6066,7 +6158,7 @@ def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None
     world.findings.write_text(old_header() + "\n" + released + "\n", encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     stage2.fill_marks(world.findings, ["L1-1"], {"L1-1": "agree"})
-    assert updated_of(world.findings) == dt.date.today(), "filling the marks left the header stale"
+    assert updated_of(world.findings) == day.current, "filling the marks left the header stale"
     assert "| taken — t | no | agree |" in world.text()
 
 
@@ -6428,8 +6520,11 @@ def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> No
         )
 
 
-def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World, tmp_path: Path) -> None:
+def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """O188-1, R-19 at the call site: the attempt's renderer writes a marker, and the marker stays absent."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     marker = tmp_path / "renderer-ran"
     script = Path("scripts") / Path(plans_registry.__file__).name
     world.script(
@@ -6442,7 +6537,7 @@ def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World
         ],
         make=[{"stdout": "green\n"}],
     )
-    checking_derived_make(world)
+    checking_derived_make(world, day.current)
     code = world.run("implement")
     assert not marker.exists(), "the attempt's own renderer ran"
     assert code == 0, "the committed renderer should have made the attempt green"
@@ -11189,6 +11284,138 @@ def test_work_measurement_failure_prevents_acceptance(
     assert "could not measure whether the attempt produced work" in world.text()
 
 
+# ---------------------------------------------------------------------------
+# The runner's own ledger clearing cannot qualify an attempt (bead coding-harness-twbl)
+# ---------------------------------------------------------------------------
+
+# A plan whose pending entry names the test the first attempt plants; the second row holds the
+# ledger's shape stable beside the cleared one.
+MARKED_LEDGER_PLAN = (
+    "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+    "- 1: not yet written tests/test_fix.py::test_fix — the attempt writes it\n"
+    "- 2: not a test — nobody writes a test for this row\n\n## Time used\n"
+)
+
+
+def seeded_ledger_plan(world: World) -> None:
+    """A committed plan with the pending entry, so every attempt's pre-call bytes carry the marker."""
+    world.plan.write_text(MARKED_LEDGER_PLAN, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan with a pending ledger marker")
+
+
+def counting_capture(monkeypatch: pytest.MonkeyPatch, clearings: list[int]) -> None:
+    """The real clearing capture, with the number of entries each verification recorded."""
+    real = stage2.capture_ledger_clearing
+
+    def capture(root: Path, plan: Path, evidence: stage2.ClearingEvidence | None) -> None:
+        real(root, plan, evidence)
+        clearings.append(0 if evidence is None else len(evidence.records))
+
+    monkeypatch.setattr(stage2, "capture_ledger_clearing", capture)
+
+
+@pytest.mark.parametrize(
+    ("verb", "forced_full"),
+    [("implement", False), ("repair", True), ("repair", False)],
+    ids=["implement-full", "repair-full-fallback", "repair-targeted"],
+)
+def test_runner_ledger_clearing_cannot_qualify_a_retry(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verb: str, forced_full: bool
+) -> None:
+    """Criteria 1 and 4. Planted fault: a time-body-only retry is accepted because verification
+    cleared the retained test's runner-owned marker; or a marker-only retry loses its diagnostic,
+    its rejected records or its taken rows, or checkpoints or reports success on exhaustion."""
+    seeded_ledger_plan(world)
+    clearings: list[int] = []
+    counting_capture(monkeypatch, clearings)
+    targeted = None
+    if verb == "repair" and not forced_full:
+        # The actual targeted path, not the fallback: attempt 1's targeted pytest is the one red run.
+        targeted = targeted_mode(monkeypatch)
+        targeted.outcomes["pytest"] = lambda _command: RED_PYTEST if len(targeted.of("pytest")) == 2 else None
+    first = work_step(verb)
+    if verb == "implement":
+        first = {**first, "plant": {**first["plant"], "tests/test_fix.py": FIX_TEST}}
+    if verb == "repair" and forced_full:
+        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover.
+        first = {**first, "plant": {**first["plant"], "verification-scope.txt": "requires full verification\n"}}
+    baseline = script_work(
+        world,
+        verb,
+        [first, idle_step("time-body-only"), idle_step("time-body-only")],
+        [{"stdout": "red\n", "exit": 1}, GREEN, GREEN],
+    )
+    held = world.record().read_text(encoding="utf-8") if verb == "repair" else None
+    assert world.run(verb) == 1, "a retry whose model spent only the time body was accepted"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert clearings == [1, 1, 1], clearings
+    entries = runner_entries(world.plan)
+    assert len(entries) == 3
+    assert all("rejected" in line and "accepted" not in line for line in entries)
+    assert world.text().count("Stage-2 call,") == 3
+    text = world.text()
+    assert text.count(stage2.NO_WORK) == 2, text
+    # The retained test stayed across the retries; each retry's clearing (counted above) shows the
+    # restored plan brought the marker back before verification cleared it again.
+    assert (world.root / "tests" / "test_fix.py").is_file()
+    assert "verified and committed" not in capsys.readouterr().out
+    if held is not None:
+        assert world.record().read_text(encoding="utf-8") == held, "a repair row was marked without a fix"
+    if targeted is not None:
+        assert targeted.of("make") == [], "the repair did not take the actual targeted path"
+        assert text.count("targeted verification, not the full `make verify`") == 3
+
+
+@pytest.mark.parametrize("fault", ["capture", "undo", "undo-with-earlier-work"])
+def test_ledger_discount_measurement_failure_prevents_acceptance(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fault: str
+) -> None:
+    """Criterion 5. Planted fault: unreadable or mismatched clearing evidence is treated as work
+    and the attempt reaches a checkpoint, instead of being rejected with its reason."""
+    seeded_ledger_plan(world)
+    if fault == "capture":
+        monkeypatch.setattr(stage2, "_clearing_records", lambda *_args, **_kwargs: None)
+    else:
+        real_prepare = stage2.prepare_derived
+
+        def tampering(root: Path, env: dict[str, str], key: str | None) -> list[str]:
+            # After stamping: the cleared line no longer holds the bytes the clearing wrote.
+            problems = real_prepare(root, env, key)
+            if not problems:
+                world.plan.write_text(
+                    world.plan.read_text(encoding="utf-8").replace(
+                        "- 1: tests/test_fix.py::test_fix — the attempt writes it",
+                        "- 1: tests/test_fix.py::test_fix — tampered after the clearing",
+                    ),
+                    encoding="utf-8",
+                )
+            return problems
+
+        monkeypatch.setattr(stage2, "prepare_derived", tampering)
+    steps = [
+        {
+            "stdout": "done",
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                # This path sorts before the plan: work here must not bypass validation.
+                **({"docs/note.md": f"Model work in attempt {attempt}\n"} if fault == "undo-with-earlier-work" else {}),
+            },
+            "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+        }
+        for attempt in range(3)
+    ]
+    baseline = script_work(world, "implement", steps, [GREEN] * 3)
+    assert world.run("implement") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    text = world.text()
+    assert text.count(stage2.NO_WORK) == 3
+    assert "could not measure whether the attempt produced work" in text
+    assert ("cannot explain" if fault == "capture" else "no longer holds the bytes") in text
+    assert "verified and committed" not in capsys.readouterr().out
+
+
 def test_nonempty_repair_still_requires_answer_proof(world: World) -> None:
     """Criterion 7. Planted fault: real work bypasses the repair answer check, so an unproven repair is committed."""
     steps = [
@@ -12156,8 +12383,11 @@ def test_runner_early_refusal_recovers_time_destination_safely(
 
 
 @pytest.mark.parametrize("retry", [False, True])
-def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp_path: Path, retry: bool) -> None:
+def test_runner_detaches_matching_hardlinked_plan_before_stamp(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, retry: bool
+) -> None:
     """F-5: matching recovery bytes must not leave a hard link attached for the date stamp."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     prior = "---\nupdated: 2000-01-01\n---\n\n# Plan\n\n## Time used\n\n"
     old_entry = "previous trusted span · measured by the runner"
     prior = stage2.with_time_entry(prior, old_entry)
@@ -12183,7 +12413,7 @@ def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp
     assert target.read_bytes() == content
     assert world.plan.stat().st_nlink == 1
     assert not world.plan.samefile(target)
-    assert f"updated: {dt.date.today().isoformat()}" in world.plan.read_text(encoding="utf-8")
+    assert f"updated: {day.current.isoformat()}" in world.plan.read_text(encoding="utf-8")
     assert runner_entries(world.plan) == [old_entry, entry]
     if retry:
         assert inputs[world.plan] == content
@@ -21549,6 +21779,7 @@ def test_the_loop_refuses_a_record_still_present_after_release(
 
 def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """L7-2: replacing a released block stamps findings.md just like appending one."""
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
     world.write_findings(VERDICT)
     crash_the_release_after_the_append(world, monkeypatch)
@@ -21557,7 +21788,7 @@ def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeyp
         world.record().read_text(encoding="utf-8").replace("taken — test_a", FIXED), encoding="utf-8"
     )
     assert world.run("release-loop") == 0
-    assert f"updated: {stage2.dt.date.today().isoformat()}\n" in world.text()
+    assert f"updated: {day.current.isoformat()}\n" in world.text()
     assert FIXED in world.text()
     assert world.text().count(stage2.RELEASE_HEADING) == 1
     assert not world.record().exists()
@@ -23522,6 +23753,107 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
     assert problems and "plan" in problems[0]
 
 
+# ---------------------------------------------------------------------------
+# The clearing discount keeps model work visible (bead coding-harness-twbl)
+# ---------------------------------------------------------------------------
+
+CLEARED_ENTRY = "- 1: not yet written tests/test_new.py::test_new — the attempt writes it"
+REWRITTEN_ENTRY = "- 1: not yet written tests/test_new.py::test_new — a better proof"
+MODEL_CLEARED_ENTRY = "- 1: tests/test_new.py::test_new — the attempt writes it"
+
+
+def seeded_pending_entry(world: World) -> None:
+    """A committed plan with one pending entry whose test already exists."""
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        f"{CLEARED_ENTRY}\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "pending entry and its test")
+
+
+@pytest.mark.parametrize(
+    ("edit", "expected"),
+    [
+        ("clearing-only", False),
+        ("plan-prose", True),
+        ("ledger-rewrite", True),
+        ("model-cleared-marker", True),
+        ("other-file", True),
+    ],
+)
+def test_ledger_discount_preserves_model_work(world: World, edit: str, expected: bool) -> None:
+    """Criterion 2. Planted fault: the clearing discount hides model prose, a ledger rewrite, a
+    model-cleared marker or another file's edit - or fails to discount a bare runner clearing."""
+    seeded_pending_entry(world)
+    before = stage2.worktree_tree(world.root)
+    plan = world.plan
+    if edit == "plan-prose":
+        plan.write_text(plan.read_text(encoding="utf-8").replace("# Plan\n", "# Plan changed\n"), encoding="utf-8")
+    elif edit == "ledger-rewrite":
+        plan.write_text(plan.read_text(encoding="utf-8").replace(CLEARED_ENTRY, REWRITTEN_ENTRY), encoding="utf-8")
+    elif edit == "model-cleared-marker":
+        plan.write_text(plan.read_text(encoding="utf-8").replace(CLEARED_ENTRY, MODEL_CLEARED_ENTRY), encoding="utf-8")
+    elif edit == "other-file":
+        (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    evidence = stage2.ClearingEvidence()
+    stage2.capture_ledger_clearing(world.root, plan, evidence)
+    after = stage2.worktree_tree(world.root)
+    assert len(evidence.records) == (0 if edit == "model-cleared-marker" else 1), evidence
+    worked = stage2.attempt_has_work(
+        world.root, before, after, world.findings, plan, model_after=after, clearing=evidence
+    )
+    assert worked is expected, edit
+
+
+@pytest.mark.parametrize("mode", ["full", "targeted"])
+def test_ledger_discount_keeps_clearing_in_both_verify_modes(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Criterion 3. Planted fault: full or targeted verification skips the eligible entries once
+    capture is wired in, or rewrites the fenced and missing-test entries it must leave marked."""
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_new.py").write_text(
+        "def test_new():\n    assert True\n\n\ndef test_target():\n    assert True\n", encoding="utf-8"
+    )
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — cleared\n"
+        "- 2: not yet written tests/test_new.py::test_missing — missing stays\n"
+        "- 3: not yet written tests/test_new.py::test_target — cleared too\n\n"
+        "~~~\n"
+        "- 9: not yet written tests/test_new.py::test_fenced — a fenced example\n"
+        "~~~\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "pending entries in both kinds")
+    commands = targeted_mode(monkeypatch)
+    evidence = stage2.ClearingEvidence()
+    if mode == "full":
+        problems = stage2.verify_attempt(world.root, world.plan, clearing=evidence)
+    else:
+        baseline = git(world.root, "rev-parse", "HEAD")
+        problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, clearing=evidence)
+    assert problems == [], problems
+    if mode == "targeted":
+        assert commands.of("make") == [], "the targeted check fell back to full verification"
+    # The section's first line is the blank one under the heading, so the entries stand at 1, 2, 3.
+    assert [(record.section, record.position) for record in evidence.records] == [(0, 1), (0, 3)]
+    assert [record.before for record in evidence.records] == [
+        "- 1: not yet written tests/test_new.py::test_new — cleared",
+        "- 3: not yet written tests/test_new.py::test_target — cleared too",
+    ]
+    text = world.plan.read_text(encoding="utf-8")
+    assert "- 1: tests/test_new.py::test_new — cleared" in text
+    assert "- 3: tests/test_new.py::test_target — cleared too" in text
+    assert "- 2: not yet written tests/test_new.py::test_missing — missing stays" in text
+    assert "- 9: not yet written tests/test_new.py::test_fenced — a fenced example" in text
+
+
 @pytest.mark.parametrize("interruption", [KeyboardInterrupt, stage2.Terminated])
 def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     world: World, monkeypatch, tmp_path: Path, interruption
@@ -25036,12 +25368,13 @@ def test_review_audit_only_preserves_verdict_and_session_at_every_placement(plac
 
 
 @pytest.mark.parametrize("case", ["disk", "staged", "wrong-date", "other-header", "phase6"])
-def test_review_accepts_runner_audit_date_stamp(world: World, case: str) -> None:
+def test_review_accepts_runner_audit_date_stamp(world: World, monkeypatch: pytest.MonkeyPatch, case: str) -> None:
     """F6-3: append's next-day stamp passes, but other header dates/inputs and phase-6 edits do not.
 
     Planted fault: stripping only the call line rejects the real append's updated header before make runs.
     """
-    yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
+    yesterday = (day.current - dt.timedelta(days=1)).isoformat()
     world.findings.write_text(
         old_header(yesterday)
         + "\n## Phase 6 — Codex\nNo finding.\n\nPhase 6 verdict: codex T7, 2026-10-12\n"
@@ -25120,3 +25453,28 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
     else:
         assert chosen.fallback is None, chosen.fallback
         assert chosen.tests == ["tests/test_seed.py"]
+
+
+def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """coding-harness-dq4u: the targeted pytest step shares the full check's step limit (it measured 8.5 to 10.5
+    minutes on the swarm tests, past the 5-minute tool limit); the gates keep the tool limit."""
+    python = tmp_path / stage2.PYTEST[0]
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    seen: list[tuple[str, float | None, str | None]] = []
+
+    def record(command, *_args, timeout=None, limit=None, **_kwargs):
+        seen.append((command[0], timeout, limit))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(stage2, "launch", record)
+    gate = {"id": "some-gate", "enforcement": "block", "command": "true"}
+    chosen = stage2.Targeted(["tests/test_x.py"], [], [gate])
+    assert stage2.run_targeted(tmp_path, {}, None, chosen) == ([], [])
+    assert stage2.TARGETED_PYTEST_SECONDS == stage2.VERIFY_SECONDS
+    minutes = stage2.TARGETED_PYTEST_SECONDS // 60
+    pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
+    assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
+    assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
