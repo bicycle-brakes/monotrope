@@ -23,10 +23,15 @@ protected files. Nothing else in the repository types the list.
     python3 scripts/omnigent_policy.py --merge-config P   # merge the policies into Omnigent's config P
     python3 scripts/omnigent_policy.py --merge-config P --remove
     python3 scripts/omnigent_policy.py --installed P      # do the policies in P equal this repository's?
+    python3 scripts/omnigent_policy.py --report-surface   # the installed surface vs the three lists (advisory)
 
 Two modes run only under Omnigent's own interpreter (they import Omnigent):
 ``--surface`` prints the tool names of Omnigent's native surface, ``--evaluate``
-runs events read from stdin through the rendered policies.
+runs events read from stdin through the rendered policies. ``--report-surface``
+compares that surface with the three lists and is advisory: it names the offered
+tools the lists do not classify and the classified ones Omnigent no longer
+offers, states a match, or says that the surface could not be read - exit 0 in
+every case, and ``install.sh`` prints it after a successful merge.
 
 ``--print-python`` names that interpreter (``$OMNIGENT_PYTHON``, else the ``omnigent`` launcher's).
 It needs nothing but the standard library, so any ``python3`` can ask; ``install.sh`` does, and
@@ -544,6 +549,32 @@ def _surface() -> list[str]:
     return sorted(set(_NATIVE_RELAY_BUILTIN_TOOLS) | os_tools)
 
 
+def surface_report() -> str:
+    """The installer's advisory surface comparison: drift by name, a match, or why it could not run.
+
+    Never raises and never reports a failure: drift and an unreadable surface both leave the
+    caller's result alone, so `install.sh` can print this after a successful merge without
+    changing what that merge decided (omnigent-test-not-blocking, criteria 2-4).
+    """
+    listed = set(DENIED_TOOLS) | set(ASKED_TOOLS) | set(ALLOWED_TOOLS)
+    try:
+        surface = set(_surface())
+    except Exception as exc:  # an import or discovery error is a report here, not a failure
+        return (
+            f"surface comparison not performed: Omnigent's tool surface could not be read ({type(exc).__name__}: {exc})"
+        )
+    unclassified = sorted(surface - listed)
+    missing = sorted(listed - surface)
+    if not unclassified and not missing:
+        return "surface comparison: the installed Omnigent's tool surface matches the classification lists"
+    lines = ["surface comparison (advisory; the installation result is unchanged):"]
+    if unclassified:
+        lines.append(f"- offered by the installed Omnigent but not classified here: {', '.join(unclassified)}")
+    if missing:
+        lines.append(f"- classified here but not offered by the installed Omnigent: {', '.join(missing)}")
+    return "\n".join(lines)
+
+
 def _evaluate(events: list[dict]) -> list[dict]:
     """Per event and policy: what `cel_policy` returns, and what celpy raises on the raw expression."""
     import celpy
@@ -589,6 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--installed", metavar="PATH", help="do the policies at PATH equal the repository's?")
     mode.add_argument("--print-python", action="store_true", help="print Omnigent's interpreter; exit 1 if none")
     mode.add_argument("--surface", action="store_true", help="(Omnigent's Python) print the native tool surface")
+    mode.add_argument("--report-surface", action="store_true", help="compare the surface with the lists (advisory)")
     mode.add_argument("--evaluate", action="store_true", help="(Omnigent's Python) evaluate events from stdin")
     parser.add_argument("--remove", action="store_true", help="with --merge-config: take the owned policies out")
     args = parser.parse_args(argv)
@@ -610,6 +642,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.surface:
         print(json.dumps(_surface()))
+        return 0
+
+    if args.report_surface:
+        print(surface_report())
         return 0
 
     if args.evaluate:

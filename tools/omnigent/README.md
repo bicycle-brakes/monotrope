@@ -38,3 +38,19 @@ tools/omnigent/install.sh --remove   # take them out again
   and never starts or stops anything itself.
 - `$OMNIGENT_CONFIG_HOME` moves the config, `$OMNIGENT_PYTHON` names Omnigent's
   interpreter.
+
+## The install-time surface report
+
+A successful install or reinstall ends in a surface comparison: the tool names
+the installed Omnigent offers, against the three lists. It names the offered
+tools the lists do not classify and the classified tools Omnigent no longer
+offers, or states that the surface matches; when the surface cannot be read, it
+says that the comparison was not performed.
+
+The report is advisory. It never changes the installer's exit status, a failed
+merge is not followed by one, and it neither classifies new tools nor updates
+Omnigent - reading it and changing the list stays a maintainer step. It runs
+with this installer (and `python3 scripts/omnigent_policy.py --report-surface`),
+not automatically on package-manager upgrades. The blocking checks are
+unchanged: `install.sh --check` and the repository's rule tests still fail on
+real defects.
