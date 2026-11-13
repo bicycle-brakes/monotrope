@@ -135,6 +135,11 @@ git's first non-empty line whole (first bounded at 1,000 characters; the
 bound was removed by loop row L3-2 of 2026-11-13) and drops the
 hint. Done by the orchestrator by hand and accepted on the maintainer's answer.
 
+## Third correction — 2026-11-13 (decisions.md#Q-4)
+
+Supersedes the first-line rule above: the runner keeps git's whole error
+output, every non-empty line, in the C locale; only blank lines drop.
+
 ## Boundaries and route
 
 `scripts/stage2.py` and `tests/test_stage2.py` may be edited only as the
