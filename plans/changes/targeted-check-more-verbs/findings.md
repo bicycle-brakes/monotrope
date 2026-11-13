@@ -930,3 +930,15 @@ Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claud
 > no tests ran in 0.80s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/targeted-check-more-verbs/stage2/attempts/targeted-check-more-verbs/attempt-3-20261113T191955315889Z-97a8f371.md
 > ```
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4132 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-13 | BLOCKER | SPEC | base | docs/adr/0025-targeted-check-after-repair.md:119 | [DIVERGENT] The amendment promises automatic slip recording and a `slips` command when this PR merges, while the current spec explicitly defers that functionality. The CLI exposes no `slips` command or slip writer. Mark this clause and its cost consequence as deferred so the decision PR reflects the agreed scope. [Acceptance criterion 13; deferral of criteria 10–12] | Codex | open | — |
+| F6-14 | MINOR | SPEC | base | scripts/stage2.py:9114 | A successful repair using full fallback appends a separate verification-scope note to findings.md after its audit line. Executing this branch in memory confirms the extra note. Keep passing-attempt scope in the existing plan.md time line, as specified. [Acceptance criterion 8] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d68e-dc95-73e0-86bd-ee17114e5a56, 2026-11-13
+Reviewer session: codex 01a1d68e-dc95-73e0-86bd-ee17114e5a56 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
