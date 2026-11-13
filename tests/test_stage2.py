@@ -22956,26 +22956,24 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
         assert any("`make verify` did not finish" in problem for problem in problems)
 
 
-def test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path() -> None:
+def test_git_error_text_keeps_every_non_empty_line_after_a_long_path() -> None:
     """Dropping any diagnostic line can hide git's reason, even after an unbounded path."""
     path = "/tmp/" + "d" * 5000 + "/.git/index.lock"
     fatal = f"fatal: Unable to create '{path}': File exists."
     reason = "Another git process seems to be running."
     message = f"{fatal}\n\n{reason}\n"
-    assert stage2.shorten_git_error(message) == f"{fatal} {reason}"
-    assert stage2.shorten_git_error("warning: noisy prelude\n" + message) == (
-        f"warning: noisy prelude {fatal} {reason}"
-    )
-    assert stage2.shorten_git_error("error: failed operation\n\nfatal: later reason\n") == (
+    assert stage2.git_error_text(message) == f"{fatal} {reason}"
+    assert stage2.git_error_text("warning: noisy prelude\n" + message) == (f"warning: noisy prelude {fatal} {reason}")
+    assert stage2.git_error_text("error: failed operation\n\nfatal: later reason\n") == (
         "error: failed operation fatal: later reason"
     )
-    assert stage2.shorten_git_error("error: failed operation\nexplanation on a later line\n") == (
+    assert stage2.git_error_text("error: failed operation\nexplanation on a later line\n") == (
         "error: failed operation explanation on a later line"
     )
-    assert stage2.shorten_git_error("  short  ") == "short"
-    assert stage2.shorten_git_error("\n  \n") == ""
-    assert stage2.shorten_git_error("") == ""
-    assert stage2.shorten_git_error("x" * 5000) == "x" * 5000
+    assert stage2.git_error_text("  short  ") == "short"
+    assert stage2.git_error_text("\n  \n") == ""
+    assert stage2.git_error_text("") == ""
+    assert stage2.git_error_text("x" * 5000) == "x" * 5000
 
 
 @pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])

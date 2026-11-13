@@ -102,7 +102,7 @@ and its tests are unchanged and the only lifecycle owner is the shell runner.
 - 10: tests/test_ci.py::test_the_makefile_runs_what_the_one_list_runs — the gate command and Makefile recipe drift.
 - 10: tests/test_ci.py::test_verify_runner_preserves_entry_contracts — list allocates/admit work, job/CI selection changes, nested admission requeues or worker/duration ownership changes.
 - 11: tests/test_ci.py::test_verify_runner_refuses_conflicting_pytest_options — basetemp escapes, malformed quoting passes or unrelated options are lost.
-- 12: tests/test_stage2.py::test_shorten_git_error_keeps_the_first_line_whole_after_a_long_path — a long path or a leading warning line pushes git's reason out of the diagnostic.
+- 12: tests/test_stage2.py::test_git_error_text_keeps_every_non_empty_line_after_a_long_path — a long path or a leading warning line pushes git's reason out of the diagnostic.
 
 ## Correction for the fourth run — 2026-11-12 (decisions.md#Q-2) — superseded
 
@@ -176,6 +176,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: three attempts re
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-12 13:48:41–15:35:51 UTC, 6429 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -188,3 +192,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-13 06:47:44–08:27:27 UTC, 5982 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-13 08:27:40–09:42:34 UTC, 4494 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-13 11:23:39–12:26:40 UTC, 3781 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-13 13:07:27–13:08:50 UTC, 83 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 13:09:09–13:10:14 UTC, 64 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-13 13:10:34–13:10:51 UTC, 17 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

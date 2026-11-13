@@ -1085,3 +1085,65 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
 
 Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1040 files, 4069 commits, 12 rules.
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4072 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +1 -1
+> - `scripts/stage2.py` +3 -3
+> - `tests/test_stage2.py` +9 -11
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 1.72s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-1-20261113T130705159614Z-4c93e301.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1040 files, 4072 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 1.78s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-2-20261113T130705159614Z-4c93e301.md
+> ```
+
+Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1040 files, 4072 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-tmp-cleanup/plan.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 1.79s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-tmp-cleanup/stage2/attempts/verify-tmp-cleanup/attempt-3-20261113T130705159614Z-4c93e301.md
+> ```

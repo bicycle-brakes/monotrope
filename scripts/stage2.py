@@ -4175,7 +4175,7 @@ def release_loop(
     release(root, change)
 
 
-def shorten_git_error(text: str) -> str:
+def git_error_text(text: str) -> str:
     """Join every non-empty line of git's diagnostic without truncating its reason."""
     return " ".join(line.strip() for line in text.splitlines() if line.strip())
 
@@ -4202,7 +4202,7 @@ def _git_output(
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
+        raise Refused(f"git {args[0]} failed: {git_error_text(os.fsdecode(done.stderr))}")
     return os.fsdecode(done.stdout)
 
 
@@ -4538,7 +4538,7 @@ def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin:
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {shorten_git_error(os.fsdecode(done.stderr))}")
+        raise Refused(f"git {args[0]} failed: {git_error_text(os.fsdecode(done.stderr))}")
     return done.stdout
 
 
