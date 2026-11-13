@@ -466,6 +466,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/kit-probe-on-kit-change/decisions.md`](changes/kit-probe-on-kit-change/decisions.md) | draft | none | 2026-11-13 | coding-harness-w2ay |
 | [`changes/kit-probe-on-kit-change/research.md`](changes/kit-probe-on-kit-change/research.md) | draft | none | 2026-11-13 | coding-harness-w2ay |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
 | [`changes/midnight-stamp-test/decisions.md`](changes/midnight-stamp-test/decisions.md) | draft | none | 2026-11-10 | coding-harness-bxxt.5 |
