@@ -25232,7 +25232,7 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     python.write_text("", encoding="utf-8")
     seen: list[tuple[str, float | None, str | None]] = []
 
-    def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
+    def record(command, *_args, timeout=None, limit=None, **_kwargs):
         seen.append((command[0], timeout, limit))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
