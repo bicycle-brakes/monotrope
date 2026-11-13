@@ -1014,7 +1014,13 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     assert block["online_seats"] == [{"endpoint": "opencode-go"}] * 3
     rule = block["availability_preflight"]
     assert rule["max_age_seconds"] == 900
-    assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
+    # The research free rule keeps the review loop's exclusions (maintainer, 2026-11-13, bead coding-harness-363r.2).
+    assert block["online_free"] == {
+        "provider": "opencode-go",
+        "suffix": "-free",
+        "include": [],
+        "exclude": ["iceman-contributor-free", "longcat-2.5-free"],
+    }
     # Criterion 4: exactly the three measured APIs, with matching mappings.
     assert _measured_apis_problems(geladen) == []
     # The check's own teeth: each planted fault names its disagreement, on a

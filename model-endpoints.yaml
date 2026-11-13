@@ -703,7 +703,17 @@ research_swarm:
     max_age_seconds: 900
     exclude_until: []
     measured_wire_apis: [openai-completions, anthropic-messages, openai-responses]
-  online_free: {provider: opencode-go, suffix: "-free", include: [], exclude: []}
+  # The research swarm's free rule keeps the same exclusions as the review
+  # loop's free stage (maintainer, 2026-11-13; bead coding-harness-363r.2):
+  # iceman-contributor-free may train on request data (decision Q-12 of
+  # 2026-10-17, Go privacy table read 2026-11-06), and the longcat models left
+  # for good on 2026-11-13 as too slow. Until one shared exclusion list exists,
+  # an exclusion added above is added here as well.
+  online_free:
+    provider: opencode-go
+    suffix: "-free"
+    include: []
+    exclude: [iceman-contributor-free, longcat-2.5-free]
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft
