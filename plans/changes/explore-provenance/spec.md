@@ -172,7 +172,12 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
 ## Protected areas
 
 - Other changes' checked-in research and all their other artifacts — the former
-  cross-folder correction authorisation is superseded by Q-4.
+  cross-folder correction authorisation is superseded by Q-4, with exactly one
+  exception approved by the maintainer in [decisions.md#Q-6](decisions.md#q-6--two-research-files-that-the-git-dated-census-finds)
+  on 2026-11-13: `plans/changes/decision-statement-skeleton/research.md` and
+  `plans/changes/verify-step-limit/research.md`. Only their provenance, producer
+  and review fields and leftover skeleton notice may be corrected; research
+  content and every other change's artifacts remain protected.
 - `plans/changes/archive/` and `plans/specs/` — historical evidence and unrelated
   capability contracts are outside this correction.
 - `provenance.yaml`, `decisions/`, `docs/adr/`, `AGENTS.md`, `prompts/`,
@@ -205,7 +210,11 @@ separate work.
   is green at the implementation commit; each ledger test rejects its fault.
 - The same pull request includes the runner fix, read-only census library and
   tests; no normaliser or bulk research edits remain. No model or ADR edits.
-- The pull request's file list respects protected areas and the deferred scope.
+- The pull request's file list respects protected areas and the deferred scope,
+  including only the two-file exception approved in decisions.md#Q-6
+  (2026-11-13): provenance, producer and review fields and the leftover skeleton
+  notice in `plans/changes/decision-statement-skeleton/research.md` and
+  `plans/changes/verify-step-limit/research.md`, without research content changes.
 - The pull request closes the truthful-Explore-provenance task and its final
   commit carries `Closes-Bead: coding-harness-g19n`.
 - Special runs: none requiring live model calls; tests use local stand-ins.
