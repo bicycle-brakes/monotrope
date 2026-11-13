@@ -1736,6 +1736,19 @@ orchestrator corrects the cell and starts the repair again. Released and
 superseded rows that no repair selects keep their exemption: history is
 never swept for provenance, and no other verb gains this check.
 
+When the live record shadows a released copy in `findings.md`, repair fixes
+only the live row and prints a notice. The released copy stays unchanged: an
+outstanding status there remains outstanding after a successful repair until
+the next `release-loop` rewrites the released block from the record.
+
+After the model call, verification and answer check, repair checks every
+selected row against its resolved contents and location on disk. If a selected
+row changed since resolution, repair refuses before the checkpoint commit and
+writes no fixed status to either `findings.md` or `loop.md`. The diagnostic
+names the row ID and file and says that no fixed statuses were written. This
+is a late check: the model call has already run, unlike the Origin refusal
+before the first call or write.
+
 The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`

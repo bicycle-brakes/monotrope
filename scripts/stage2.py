@@ -3151,7 +3151,9 @@ def resolve_finding_rows(record: str | None, findings_text: str) -> list[Resolve
                 previous = current.pop(row[0], None)
                 if source == "record" and previous is not None and previous.place != "record":
                     print(
-                        f"notice: {row[0]} in findings.md is shadowed by the live row in loop.md; findings copy left unchanged.",
+                        f"notice: {row[0]} in findings.md is shadowed by the live row in loop.md; "
+                        "findings copy left unchanged; any outstanding released copy stays outstanding "
+                        "until the next release-loop rewrites the block from the record.",
                         file=sys.stderr,
                     )
                 current[row[0]] = ResolvedFindingRow(place, row, index)

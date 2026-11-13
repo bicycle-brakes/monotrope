@@ -73,6 +73,14 @@ unchanged before implementation; this draft implements no code and commits nothi
    need valid Origin before effects, including older phase-6 blocks and selected
    released rows; passive released/superseded history retains its exemptions.
    Preserve the pinned ownership phrases in the row-decision paragraph.
+   Document the later stale-row refusal in the spec and workflow: after the
+   model call, verification and answer check, compare all selected rows with
+   their resolved contents and locations on disk, before any fixed-status write
+   or checkpoint commit. Refuse if any selected row changed since resolution;
+   write no fixed status to either source. The model call has already run.
+   Explain that a live record shadows its released copy without repairing that
+   copy: an outstanding released status remains until the next `release-loop`
+   rewrites the block from the record.
 
 ## Files and ownership
 
@@ -122,6 +130,7 @@ verification and makes the commit after this draft.
 - 4: tests/test_stage2.py::test_repair_marks_only_the_resolved_finding_row — a repair rewrites a historical row
 - 4: tests/test_stage2.py::test_repair_marks_only_the_resolved_record_row — a record repair rewrites a historical table
 - 6: not a test — phase-6 review reads the repair section of docs/WORKFLOW.md against criterion 6; missing the all-block pre-effect guarantee or demanding passive backfill refutes it
+- 7: not a test — phase-6 review reads the spec, build sequence and repair section of docs/WORKFLOW.md; omitting the stale-row refusal after the model call or its guarantee of no fixed-status writes refutes it
 
 ## Runner route — 2026-11-10
 
@@ -148,3 +157,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-13 13:03:41–14:18:19 UTC, 4478 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-13 14:23:45–16:13:03 UTC, 6558 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-11-13 18:37:18–19:53:27 UTC, 4570 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-13 20:04:27–20:28:22 UTC, 1435 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

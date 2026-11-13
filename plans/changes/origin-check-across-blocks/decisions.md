@@ -25,7 +25,7 @@ below).
 ## SKIP · interview
 
 status: skipped
-reason: A bounded bug fix whose intent and fix the bead already state — an older phase-6 row with an invalid Origin escapes validation once a newer phase-6 block exists, and the fix is to validate the outstanding repair targets across phase-6 blocks before any effect (bead coding-harness-3h96, class bounded). The maintainer decided on 2026-11-09 that this finding of the origin-cell review becomes a follow-up of its own. The exploration found one place for the check that contradicts no pinned test, so no choice is left for the maintainer.
+reason: A bounded bug fix whose intent and fix the bead already state — an older phase-6 row with an invalid Origin escapes validation once a newer phase-6 block exists, and the fix is to validate the outstanding repair targets across phase-6 blocks before any effect (bead coding-harness-3h96, class bounded). The maintainer decided on 2026-11-09 that this finding of the origin-cell review becomes a follow-up of its own. The initial exploration located the repair-target check. The later choice of a shared current-row resolver is recorded in Q-1 below; the maintainer answered it on 2026-11-12.
 
 ## Decided by the agent
 

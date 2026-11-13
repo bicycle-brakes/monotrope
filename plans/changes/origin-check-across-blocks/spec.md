@@ -51,7 +51,10 @@ continuation. Existing tests require those rows to remain exempt
   tables, with the active loop record after findings history. Repair selection and
   its target-Origin check both use only this resolver. Repeated IDs across tables
   are history; duplicates within one table refuse when either row is taken. Decided
-  duplicates in passive history produce a notice without holding repair.
+  duplicates in passive history produce a notice without holding repair. When a
+  live record shadows a released copy in `findings.md`, that copy stays unchanged;
+  an outstanding status remains outstanding until the next `release-loop` rewrites
+  the released block from the record, even if repair fixes the live row.
 - **Row location:** the resolved row's ID and file (`loop.md` or `findings.md`);
   no block heading or occurrence is back-computed (maintainer's option D,
   2026-11-12, superseding answer A).
@@ -83,6 +86,14 @@ continuation. Existing tests require those rows to remain exempt
    phase-6 block are checked for valid Origin before calls or writes.
    *Refuted by:* the repair section permits an older selected row to escape
    validation or requires passive historical backfill to continue other verbs.
+7. After the model call, verification and answer check, repair checks that every
+   selected row still matches the row on disk at its resolved location. If a
+   selected row changed since resolution, repair refuses before the checkpoint
+   commit and writes no fixed status to either source. This late refusal is
+   distinct from the pre-call Origin check; the model call has already run.
+   *Refuted by:* a changed selected row is overwritten, any fixed status is
+   written before this check passes for all selected rows, or the workflow
+   describes this refusal as occurring before the model call.
 
 ## Non-goals
 
@@ -113,8 +124,10 @@ templates, governance, settings, endpoint configuration, tracker data or ADRs.
 
 ## Open decisions
 
-None open. The reasoned interview skip and repair-only scope are already in
-`decisions.md`; this draft supplies no maintainer answer.
+None open. The initial reasoned interview skip and repair-only scope are in
+`decisions.md`. Q-1 there records the maintainer's option D of 2026-11-12,
+superseding answer A: one current-row resolver shared by repair selection
+and the target-Origin check, with finding IDs unique within each table.
 
 [DETAIL] Check every selected target, including selected released rows, rather
 than re-auditing all historical rows: selection is the boundary recorded in
