@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-02
-updated: 2026-11-11
+updated: 2026-11-12
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -59,7 +59,7 @@ a test that would have passed anyway.
 | Where | When | Role |
 | --- | --- | --- |
 | Stop hook | at the end of an agent's turn, only when Python changed since `HEAD` | comfort: an agent does not hand back a red tree. It is not the enforcement. |
-| `make verify` | before a commit of code, and inside every runner attempt after the attempt's cheap checks (ruff, its own tests) are green | selected local gates in cheap-first order; stops at the first blocking failure and names the remaining selected gates as not run; one run per machine at a time, a second one queues; test workers sized from the machine |
+| `make verify` | before a commit of code, inside every implement attempt after the attempt's cheap checks (ruff, its own tests) are green, inside a repair attempt when its targeted check cannot cover the repair safely, and before the final review | selected local gates in cheap-first order; stops at the first blocking failure and names the remaining selected gates as not run; one run per machine at a time, a second one queues; test workers sized from the machine |
 | Hosted CI, job `verify` | on each pull request, against its merge commit with `main`, and again in the merge queue against the current `main` | the merge gate; the branch ruleset requires it |
 | Hosted CI, job `drift` | on a schedule | gates that change with time, not with a commit (strict plan hygiene, research currency) |
 

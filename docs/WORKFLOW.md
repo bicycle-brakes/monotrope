@@ -1044,7 +1044,14 @@ change's `findings.md` and the body of the plan's `## Time used` section, both
 put back by the runner, do not count. The verdict measures surviving model work
 after formatting and derived preparation, discounting the generated index and
 stamp-only changes in any document, whether or not checkpoint preparation restores
-them. Replacing only an existing `updated:` value does not count as work, even
+them. The runner's own ledger clearing is discounted with it: when verification
+removes a plan's `not yet written` marker because the named test exists, that
+exact removal — captured per attempt, in both the full and the targeted check —
+is put back in the comparison and cannot qualify the attempt, while every model
+edit beside it (plan prose, a changed ledger reference, a marker the model
+removed itself) stays visible, and clearing evidence that cannot be measured
+reliably rejects the attempt instead of discounting (bead coding-harness-twbl).
+Replacing only an existing `updated:` value does not count as work, even
 when the replacement is not a date. An edit formatting erases is no work.
 Any other addition, edit, deletion, binary or file-mode change counts, code or
 document, planned path or not. Each call is compared with its own pre-call state,
@@ -1101,11 +1108,18 @@ and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
-is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
-models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
-topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
-for topics 9-11, 3 per free model for the online topics) and one fresh Opus
-5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+has `39 + 3N` logical slots for `N` selected free models: three finders, one
+Opus map merge, one Opus public sentence, `33 + 3N` topic slots (24 on the
+repository seats for topics 1-8, 9 on the online seats for topics 9-11, 3 per
+free model for the online topics) and one fresh Opus 5.5 judge. A topic answer
+that ends process-successful but fails its report format (extraction or
+validation) gets at most one correction call from the same frozen seat, in a
+second batch after every first topic call has ended; the correction carries
+the rejected answer and the rejection reason as data, stays inside the seat's
+remaining original topic allowance, the run deadline and the judge reserve,
+and a second rejection ends the seat. With those calls a run is at most
+`72 + 6N` sequential-by-queue invocations (ADR 0020, point 9, amended
+2026-11-10); a run without a rejected report stays at `39 + 3N`. The Go models ride the pinned Pi, at most four per provider at a
 time, required slots before free ones; the Opus calls ride official Claude
 Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
@@ -1113,7 +1127,8 @@ content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
 the first live free call). Deadlines are monotonic — the judge keeps its
 configured allowance reserved (initially 15 minutes) inside the configured
-whole-run allowance (initially 160 minutes) — with no retry and no debate. The
+whole-run allowance (initially 160 minutes) — with no other retry, no
+extension of a time limit and no debate. The
 allowances live in `research-swarm-limits.yaml` at the worktree root:
 `run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
 `sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
@@ -1662,10 +1677,20 @@ positive whole number without a leading zero) for a finding that repair round
 N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
 naming the row and its place, while a taken or fixed row in the loop record
 or a phase-6 table carries any other value; the orchestrator corrects the cell
-and runs the verb again. Ordinary release checks the record before writing
-the released block; already released history is never re-checked, including
-legacy rows released before this check existed. `release-loop --restart` and
-`release-loop --stage-failed` do not check Origin. A round whose
+and runs the verb again. These checks read the loop record and the newest
+phase-6 table. Repair uses one resolver for target selection and the
+target-Origin check: the latest row of each finding ID across tables is current,
+with the active loop record after findings history. Repeated IDs across tables
+are a finding's history; IDs must be unique only within one table: duplicates
+involving a taken row refuse repair; decided duplicates in passive history
+produce a notice. Every selected current
+taken row needs valid Origin before any call or write, including older phase-6
+and released tables. The refusal names each offending resolved row by ID and
+file (`loop.md` or `findings.md`), without back-computing headings or occurrences.
+Ordinary release checks the record before writing the released block; released
+and superseded history that repair does not select needs no backfill.
+`release-loop --restart` and `release-loop --stage-failed` do not check Origin.
+A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
@@ -1719,8 +1744,34 @@ rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
 loop record, of every released block and of every phase-6 table — to Codex
-in one guarded call, and refuses while a row stands undecided or an ID is
-doubled. The model answers one **fixed line** per row, `<ID>: fixed —
+in one guarded call, using the latest row of each ID across tables, with the
+active loop record after findings history. Repeated IDs across tables are history.
+It refuses while a row stands undecided or an ID is doubled within one table
+and either duplicate is taken; decided duplicates in passive history produce a
+notice. Before the first call or write it checks every selected row's
+`Origin`, an older block's selected row included: a selected row of any
+block — the loop record, a released block, any phase-6 table — whose
+complete trimmed cell is not `base` or `fix-r<N>` (N a positive whole
+number without a leading zero) refuses the repair, which names every
+offending row by ID and file (`loop.md` or `findings.md`), and the
+orchestrator corrects the cell and starts the repair again. Released and
+superseded rows that no repair selects keep their exemption: history is
+never swept for provenance, and no other verb gains this check.
+
+When the live record shadows a released copy in `findings.md`, repair fixes
+only the live row and prints a notice. The released copy stays unchanged: an
+outstanding status there remains outstanding after a successful repair until
+the next `release-loop` rewrites the released block from the record.
+
+After the model call, verification and answer check, repair checks every
+selected row against its resolved contents and location on disk. If a selected
+row changed since resolution, repair refuses before the checkpoint commit and
+writes no fixed status to either `findings.md` or `loop.md`. The diagnostic
+names the row ID and file and says that no fixed statuses were written. This
+is a late check: the model call has already run, unlike the Origin refusal
+before the first call or write.
+
+The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the

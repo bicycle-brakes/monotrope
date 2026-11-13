@@ -46,7 +46,8 @@ then:
 
 1. **One verify-bearing step at a time, across all lanes.** Such a step runs
    `make verify`: an implement or repair attempt whose targeted check falls
-   back to it, or the orchestrator's own full run, which runs at lower priority (`nice -n 10`). The number of test
+   back to the full run, the final review's own check, or the orchestrator's
+   own full run, which runs at lower priority (`nice -n 10`). The number of test
    workers is sized from the machine: half the logical cores, at most one per
    2 GiB of memory (bead coding-harness-l7sc, #305).
 2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,

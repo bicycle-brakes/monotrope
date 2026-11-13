@@ -183,7 +183,7 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -1964,10 +1964,10 @@ def _exception_problem(kind: str, record) -> str | None:
     """
     if not isinstance(record, dict):
         return f"an entry of the free rule's {kind} list must be a record with id, date and reason"
-    for field in ("id", "date", "reason"):
-        value = record.get(field)
+    for name in ("id", "date", "reason"):
+        value = record.get(name)
         if not isinstance(value, str) or not value.strip():
-            return f"an entry of the free rule's {kind} list has no {field}"
+            return f"an entry of the free rule's {kind} list has no {name}"
     if not DATE_ONLY.fullmatch(record["date"]) or not _valid_date(record["date"]):
         return f"the free rule's {kind} entry for {record['id']} has no ISO date (YYYY-MM-DD)"
     return None
@@ -3090,31 +3090,112 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
     return released, phase6
 
 
-def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """Every taken row with its place (record, released block, phase-6 table), and the IDs that hold the repair.
+@dataclass
+class ResolvedFindingRow:
+    """A current finding and its source line, retained by the one resolver for status writes."""
 
-    A record row whose Status begins none of `taken`, `rejected` and `fixed` waits, and so does a
-    phase-6 row whose Status is blank or begins `open`: one call should carry every taken row, so the
-    verb refuses while a row stands undecided.
+    place: str
+    cells: list[str]
+    line: int
+
+
+def resolve_finding_rows(record: str | None, findings_text: str) -> list[ResolvedFindingRow]:
+    """Current rows by ID: the last table wins; the active record follows findings history.
+
+    Repeated IDs across tables are history. Duplicates within a table refuse when
+    either row is taken; decided duplicates in passive history produce a notice.
+    Both repair selection and its Origin check use this resolver;
+    the shared parsers retain their other callers' historical scopes.
+    """
+    current: dict[str, ResolvedFindingRow] = {}
+    for source, text in (("findings", findings_text), ("record", record or "")):
+        heading = ""
+        seen: dict[str, list[str]] = {}
+        lines = _record_lines(text) if source == "record" else [(line, False) for line in text.split("\n")]
+        for index, (line, reviewer) in enumerate(lines):
+            if line.startswith("## "):
+                heading = line
+            if source == "findings" and KEPT_FROM.match(line):
+                heading = ""
+            cells = split_row(line) if not reviewer else None
+            if not cells:
+                seen.clear()
+                continue
+            if _furniture(cells):
+                if not all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                    seen.clear()  # a new table header, even without a blank line
+                continue
+            if source == "record":
+                rows = [("record", row) for row in record_rows(line)]
+            else:
+                # The row is already split on physical newlines. Reviewer prose may contain
+                # Unicode separators that splitlines() would mistake for additional source lines.
+                wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
+                rows = []
+                if heading.startswith(RELEASE_HEADING) and wide:
+                    rows = [("released", cells)]
+                elif heading.startswith("## Phase 6") and len(cells) == len(ROW_COLUMNS):
+                    rows = [("phase-6", cells)]
+            if not rows:
+                seen.clear()  # a non-finding row ends the preceding finding table
+            for place, row in rows:
+                file = "loop.md" if source == "record" else "findings.md"
+                if row[0] in seen:
+                    if any(item[7].lower().startswith("taken") for item in (seen[row[0]], row)):
+                        raise Refused(
+                            f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
+                        )
+                    status = (
+                        "decided"
+                        if all(item[7].lower().startswith(("fixed", "rejected")) for item in (seen[row[0]], row))
+                        else "undecided"
+                    )
+                    scope = "record" if source == "record" else "history"
+                    print(
+                        f"notice: duplicate {status} id {row[0]} in one table ({file}); "
+                        f"latest row in {scope} used for resolution.",
+                        file=sys.stderr,
+                    )
+                seen[row[0]] = row
+                previous = current.pop(row[0], None)
+                if source == "record" and previous is not None and previous.place != "record":
+                    print(
+                        f"notice: {row[0]} in findings.md is shadowed by the live row in loop.md; "
+                        "findings copy left unchanged; any outstanding released copy stays outstanding "
+                        "until the next release-loop rewrites the block from the record.",
+                        file=sys.stderr,
+                    )
+                current[row[0]] = ResolvedFindingRow(place, row, index)
+    return sorted(current.values(), key=lambda item: item.place != "record")
+
+
+def repair_targets(
+    ctx: Context,
+    record: str | None,
+    findings_text: str | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
+) -> tuple[list[tuple[str, list[str]]], list[str]]:
+    """Taken current rows with their places, and the current undecided IDs that hold repair.
+
+    The resolver chooses one current row per finding ID across findings tables and the active
+    record. Only those rows enter the batch or hold the verb: a current record or phase-6 row whose
+    Status begins none of `taken`, `rejected` and `fixed` waits. Superseded rows stay history.
     """
     taken: list[tuple[str, list[str]]] = []
     waiting: list[str] = []
-    if record is not None:
-        for row in record_rows(record):
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append(("record", row))
-            elif not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
-    text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    released, phase6 = findings_rows(text)
-    for place, rows in (("released", released), ("phase-6", phase6)):
-        for row in rows:
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append((place, row))
-            elif place == "phase-6" and not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
+    if resolved is None:
+        text = findings_text
+        if text is None:
+            text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        resolved = resolve_finding_rows(record, text)
+    for item in resolved:
+        place, row = item.place, item.cells
+        status = row[7].lower()
+        if status.startswith("taken"):
+            taken.append((place, row))
+        elif place in {"record", "phase-6"} and not status.startswith(("rejected", "fixed")):
+            waiting.append(row[0])
     return taken, waiting
 
 
@@ -3620,23 +3701,42 @@ def accepted_row(row: list[str]) -> bool:
 ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
 
 
-def origin_refusal(record: str | None, findings_text: str) -> str | None:
+def origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
     """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
 
     Accepted (`taken` or `fixed`) rows in the loop record and phase-6 table are checked. Released
     history was checked before release and is never re-checked; legacy rows need no backfill.
     A rejected or undecided row needs no provenance.
+    Repair supplies its resolved rows, so superseded rows in either source remain exempt.
     The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
     values the orchestrator may write.
     """
     # A re-check supersedes earlier phase-6 blocks, even when the newest block has no rows.
     # Do not change findings_rows: repair targeting and the brake still read their full history.
     heads = list(re.finditer(r"^## Phase 6[^\n]*$", findings_text, re.M))
-    _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
-    places = (
-        ("loop record", record_rows(record) if record is not None else []),
-        ("phase-6 table", phase6),
-    )
+    if resolved is None:
+        _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
+        places = (
+            ("loop record", record_rows(record) if record is not None else []),
+            ("phase-6 table", phase6),
+        )
+    else:
+        # Repair admits only current rows. Retain the shared check's newest-block scope,
+        # but never let a superseded row in that block or in the record hold repair.
+        newest_line = findings_text.count("\n", 0, heads[-1].start()) if heads else None
+        places = (
+            ("loop record", [item.cells for item in resolved if item.place == "record"]),
+            (
+                "phase-6 table",
+                [
+                    item.cells
+                    for item in resolved
+                    if item.place == "phase-6" and newest_line is not None and item.line > newest_line
+                ],
+            ),
+        )
     found = [
         f"{row[0]} ({place}, Origin `{row[3]}`)"
         for place, rows in places
@@ -3650,6 +3750,29 @@ def origin_refusal(record: str | None, findings_text: str) -> str | None:
         "a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without a "
         "leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
         "answer. Nothing is called, released, repaired or removed."
+    )
+
+
+def target_origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
+    """Check only current taken rows, naming their ID and file without back-computing locations."""
+    found: list[str] = []
+    for item in resolved if resolved is not None else resolve_finding_rows(record, findings_text):
+        place, row = item.place, item.cells
+        if not row[7].lower().startswith("taken"):
+            continue
+        origin = row[3].strip()
+        if not ORIGIN_VALUE.fullmatch(origin):
+            file = "loop.md" if place == "record" else "findings.md"
+            found.append(f"{row[0]} ({file}, Origin `{origin}`)")
+    if not found:
+        return None
+    return (
+        f"selected repair rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it "
+        "decides a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without "
+        "a leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
+        "answer. Nothing is called or repaired."
     )
 
 
@@ -4341,6 +4464,9 @@ def refuse_repository_git(root: Path) -> None:
 
 TOOL_SECONDS = 5 * 60
 VERIFY_SECONDS = 45 * 60
+# The targeted pytest step of a repair or implement attempt is a slice of the full check, so it shares that limit:
+# the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
+TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
 
 
@@ -5147,16 +5273,162 @@ def _minus_time_body(data: bytes) -> str:
     return text[: match.end()] + text[end:]
 
 
+@dataclass(frozen=True)
+class LedgerClearing:
+    """One ledger entry the runner's clearing rewrote, with its place in the plan.
+
+    `section` is the position of the entry's `## Criterion ledger` section among the plan's
+    sections when the clearing ran, `position` the entry line's position within that section;
+    positions, not criterion numbers, identify the entry, because several tests can hold one
+    criterion. `before` is the marked entry line as the clearing found it - the model call's
+    own bytes, the formatting already applied - and `after` the cleared line it wrote.
+    """
+
+    section: int
+    position: int
+    before: str
+    after: str
+
+
+@dataclass
+class ClearingEvidence:
+    """What one attempt's verification actually removed from its plan's criterion ledger.
+
+    A fresh container stands around every model call and travels with the verification
+    result to the work check. `records` are the clearing discount's exact shape; `problem`
+    set means the clearing could not be captured reliably, and the work check refuses
+    instead of measuring - never permissive (spec, criterion 5).
+    """
+
+    records: list[LedgerClearing] = field(default_factory=list)
+    problem: str | None = None
+
+
+def capture_ledger_clearing(root: Path, plan: Path, evidence: ClearingEvidence | None) -> None:
+    """The runner's ledger clearing, with the entries it rewrote recorded in `evidence`.
+
+    The plan bytes stand read immediately before and after the actual clearing - after the
+    formatting step and the cheap checks, before stamping and verification. Without a
+    container the clearing runs exactly as it always did. A diff the ledger entries cannot
+    explain - a line-count change, a line outside a criterion-ledger section, a fenced line,
+    a change that is not one marked entry going to its cleared form - is recorded as a
+    problem, not discounted. Read errors propagate to the caller's existing ledger
+    diagnostic, which fails the attempt.
+    """
+    if evidence is None:
+        check_criterion_ledger.clear_written(root, plan)
+        return
+    before = plan.read_bytes()
+    if not check_criterion_ledger.clear_written(root, plan):
+        return
+    after = plan.read_bytes()
+    records = _clearing_records(before, after)
+    if records is None:
+        evidence.problem = (
+            "the runner's ledger clearing wrote bytes its ledger entries cannot explain; "
+            "the work check refuses instead of discounting them"
+        )
+        return
+    evidence.records = records
+
+
+def _clearing_records(before: bytes, after: bytes) -> list[LedgerClearing] | None:
+    """The clearing's changed lines as entries with their section positions, or None.
+
+    `None` says the diff holds something the clearing cannot have written, so no discount
+    may be built from it.
+    """
+    before_lines = before.decode("utf-8", "surrogateescape").split("\n")
+    after_lines = after.decode("utf-8", "surrogateescape").split("\n")
+    if len(before_lines) != len(after_lines):
+        return None
+    lines = check_criterion_ledger._lines(before.decode("utf-8", "surrogateescape"))
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    places = {
+        number: (side, place) for side, section in enumerate(sections) for place, (number, _text) in enumerate(section)
+    }
+    records: list[LedgerClearing] = []
+    for number, (old, new) in enumerate(zip(before_lines, after_lines, strict=True), start=1):
+        if old == new:
+            continue
+        entry = check_criterion_ledger.parse_entry(old, number)
+        cleared = check_criterion_ledger.parse_entry(new, number)
+        if (
+            entry is None
+            or entry.kind != "not yet written"
+            or cleared is None
+            or cleared.kind == "not yet written"
+            or fenced[number - 1]
+            or number not in places
+        ):
+            return None
+        side, place = places[number]
+        records.append(LedgerClearing(section=side, position=place, before=old, after=new))
+    return records
+
+
+def _undo_ledger_clearing(final: bytes, records: Sequence[LedgerClearing]) -> bytes:
+    """The final plan bytes with this attempt's captured marker removals put back, in memory only.
+
+    Every recorded entry is matched within its recorded ledger section by position, and the
+    line there must still hold exactly the bytes the clearing wrote; anything else refuses
+    (fail closed). Every other byte stands as verification left it, so the comparison after
+    this undo still sees the model's own prose, ledger edits and marker removals.
+    """
+    text = final.decode("utf-8", "surrogateescape")
+    raw = text.split("\n")
+    lines = check_criterion_ledger._lines(text)
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    touched: set[int] = set()
+    for record in records:
+        if record.section >= len(sections):
+            raise Refused(
+                f"clearing evidence names criterion-ledger section {record.section + 1}; "
+                f"the plan to measure holds {len(sections)}"
+            )
+        section = sections[record.section]
+        if record.position >= len(section):
+            raise Refused(
+                f"clearing evidence names ledger line {record.position + 1} of section "
+                f"{record.section + 1}; that section holds {len(section)} lines"
+            )
+        number, _text = section[record.position]
+        if fenced[number - 1]:
+            raise Refused(f"clearing evidence names fenced ledger line {number}")
+        if number in touched:
+            raise Refused(f"two clearing records name ledger line {number}")
+        if raw[number - 1] != record.after:
+            raise Refused(f"ledger line {number} no longer holds the bytes the runner's clearing wrote")
+        raw[number - 1] = record.before
+        touched.add(number)
+    return "\n".join(raw).encode("utf-8", "surrogateescape")
+
+
 def attempt_has_work(
-    root: Path, before: str, after: str, findings: Path, plan: Path, *, model_after: str | None = None
+    root: Path,
+    before: str,
+    after: str,
+    findings: Path,
+    plan: Path,
+    *,
+    model_after: str | None = None,
+    clearing: ClearingEvidence | None = None,
 ) -> bool:
     """Measure surviving model work after verification, excluding writes the runner owns.
 
     Only paths changed by this call qualify. The final tree includes formatting and derived
     preparation; the generated index and stamp-only changes in any document are excluded
     from work, whether or not checkpoint preparation restores them. The unbounded raw
-    comparison also preserves binary and mode-only work.
+    comparison also preserves binary and mode-only work. The plan comparison alone puts this
+    attempt's captured ledger clearing back in memory: the runner's removal of a
+    pending-test marker cannot qualify the attempt, while every model edit beside it -
+    prose, a changed ledger reference, a marker the model removed itself - stays visible
+    against the pre-call plan. Unreliable clearing evidence refuses the measurement.
     """
+    if clearing is not None and clearing.problem:
+        raise Refused(clearing.problem)
     candidates = None
     if model_after is not None:
         candidates = set(
@@ -5172,6 +5444,13 @@ def attempt_has_work(
         raise Refused("git diff-tree --raw returned a record without its path")
     findings_path = findings.relative_to(root).as_posix()
     plan_path = plan.relative_to(root).as_posix()
+    discounted_plan = None
+    if clearing is not None and clearing.records:
+        # Validate every captured entry before any path can qualify as work, even when
+        # the plan is not a model candidate or another changed path sorts before it.
+        discounted_plan = _undo_ledger_clearing(
+            _git_bytes(root, "cat-file", "blob", f"{after}:{plan_path}"), clearing.records
+        )
     for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
         parts = header.decode("ascii").lstrip(":").split(" ")
         if len(parts) != 5:
@@ -5195,6 +5474,9 @@ def attempt_has_work(
         if path == plan_path and status == "M" and old_mode == new_mode:
             old = _git_bytes(root, "cat-file", "blob", old_id)
             new = _git_bytes(root, "cat-file", "blob", new_id)
+            # In memory only: this attempt's own captured clearing cannot qualify the attempt.
+            if discounted_plan is not None:
+                new = discounted_plan
             old_body, new_body = _minus_time_body(old), _minus_time_body(new)
             if old_body == new_body:
                 continue
@@ -6304,8 +6586,8 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
                 root,
                 targeted_pytest_env(root, env),
                 key,
-                timeout=TOOL_SECONDS,
-                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
             )
         except (StepTimedOut, CallFailed) as error:
             return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
@@ -6365,6 +6647,7 @@ def _targeted_body(
     against: str,
     scope: list[str] | None,
     new_file_guard: bool = False,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
@@ -6373,7 +6656,9 @@ def _targeted_body(
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
     admitted full check instead. A passing result is never worded as full verification. Implement adds
     the `new_file_guard`: new production code without a reachable test refuses the attempt before any
-    test runs or a fallback is admitted (bead coding-harness-0swp).
+    test runs or a fallback is admitted (bead coding-harness-0swp). The clearing capture covers the
+    fallback too: the clearing happened in the shared preparation, before the selection chose the
+    admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6404,7 +6689,7 @@ def _targeted_body(
     if cheap:
         return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
     try:
-        check_criterion_ledger.clear_written(root, plan)
+        capture_ledger_clearing(root, plan, clearing)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
     preparation = prepare_derived(root, env, key)
@@ -6456,6 +6741,7 @@ def verify_attempt(
     against: str = "HEAD",
     scope: list[str] | None = None,
     new_file_guard: bool = False,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -6468,6 +6754,8 @@ def verify_attempt(
     Return bounded diagnostics for failed preparation or postconditions, naming the gates that
     blocked. The time section must still be readable; the entry itself is the runner's
     (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
+    When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
+    for the work check's discount; without one, clearing stands unchanged for direct callers.
 
     `mode="targeted"` is the implement and repair post-run check (bead coding-harness-0swp): the same
     format, cheap checks, ledger clearing and derived preparation run outside the verify admission,
@@ -6524,6 +6812,7 @@ def verify_attempt(
             previous_failures,
             against,
             scope,
+            clearing=clearing,
             new_file_guard=new_file_guard,
         )
         try:
@@ -6562,7 +6851,7 @@ def verify_attempt(
             if cheap:
                 return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
             try:
-                check_criterion_ledger.clear_written(root, plan)
+                capture_ledger_clearing(root, plan, clearing)
             except (OSError, RuntimeError, ValueError) as error:
                 return [
                     f"the criterion ledger of {plan.name} could not be updated: "
@@ -7662,7 +7951,27 @@ def _read_quietly(path: Path) -> str:
         return ""
 
 
-def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fixes: dict[str, str]) -> None:
+def _require_unchanged_resolved_row(lines: list[str], item: ResolvedFindingRow) -> None:
+    """Refuse a stale row location before either status writer replaces it."""
+    rows = []
+    if item.line < len(lines):
+        if item.place == "record":
+            rows = record_rows(lines[item.line])
+        else:
+            cells = split_row(lines[item.line])
+            rows = [cells] if cells else []
+    if rows != [item.cells]:
+        source = "loop.md" if item.place == "record" else "findings.md"
+        raise Refused(f"{item.cells[0]} in {source} changed since resolution; no fixed statuses were written.")
+
+
+def mark_repaired_findings(
+    ctx: Context,
+    taken: list[tuple[str, list[str]]],
+    fixes: dict[str, str],
+    *,
+    resolved: list[ResolvedFindingRow],
+) -> None:
     """Write each taken findings row's fixed Status in its place, before the checkpoint commit.
 
     Only the Status cell (index 7) of a taken row changes; a `|` of a reason stands escaped, as the
@@ -7670,25 +7979,34 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     file's final newline included: the lines are split on `\\n`, so the ending empty line survives.
     """
     by_key = {(place, row[0]): row for place, row in taken}
-    lines: list[str] = []
-    kind = ""
-    for line in ctx.findings.read_text(encoding="utf-8").split("\n"):
-        if line.startswith("## "):
-            kind = ""
-            if line.startswith(RELEASE_HEADING):
-                kind = "released"
-            elif line.startswith("## Phase 6"):
-                kind = "phase-6"
-        elif kind == "released" and KEPT_FROM.match(line):
-            kind = ""
-        else:
-            cells = split_row(line) if kind else None
-            if cells and (kind, cells[0]) in by_key and cells == by_key[(kind, cells[0])]:
-                cells[7] = fixes[cells[0]]
-                line = "| " + " | ".join(cells) + " |"
-        lines.append(line)
+    text = ctx.findings.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    for item in resolved:
+        cells = item.cells.copy()
+        if item.place != "record" and cells == by_key.get((item.place, cells[0])):
+            _require_unchanged_resolved_row(lines, item)
+            cells[7] = fixes[cells[0]]
+            lines[item.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")
     stamp_updated(ctx.findings)
+
+
+def require_unchanged_repair_rows(
+    ctx: Context, taken: list[tuple[str, list[str]]], resolved: list[ResolvedFindingRow]
+) -> None:
+    """Check both sources before writing findings statuses or making the checkpoint.
+
+    Repair holds the record lock throughout; its record marks still follow the commit.
+    """
+    selected = {(place, row[0]): row for place, row in taken}
+    record = read_record(ctx.change, ctx.root)
+    sources = {
+        "record": record.splitlines() if record is not None else [],
+        "findings": ctx.findings.read_text(encoding="utf-8").split("\n"),
+    }
+    for item in resolved:
+        if item.cells == selected.get((item.place, item.cells[0])):
+            _require_unchanged_resolved_row(sources["record" if item.place == "record" else "findings"], item)
 
 
 def mark_repaired_record(
@@ -7699,6 +8017,7 @@ def mark_repaired_record(
     marks: dict[str, str] | None = None,
     *,
     lock_held: bool = False,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
@@ -7710,20 +8029,26 @@ def mark_repaired_record(
     if not by_key:
         return
     if lock_held:
-        _mark_record_rows(change, by_key, fixes, root, marks)
+        _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
         return
     # The record is read and rewritten whole: a round appended in between, or a release that removes
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
     try:
         with holding_record(change, root):
-            _mark_record_rows(change, by_key, fixes, root, marks)
+            _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
     except Refused as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
 def _mark_record_rows(
-    change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path, marks: dict[str, str] | None = None
+    change: str,
+    by_key: dict[str, list[str]],
+    fixes: dict[str, str],
+    root: Path,
+    marks: dict[str, str] | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     record = read_record(change, root)
     if record is None:
@@ -7734,20 +8059,13 @@ def _mark_record_rows(
             "no record was marked. Check these rows in findings.md; the maintainer must decide how to recover the record."
         )
     ending = "\n" if record.endswith("\n") else ""
-    lines: list[str] = []
-    for line, reviewer in _record_lines(record):
-        if not reviewer:
-            cells = split_row(line)
-            if (
-                cells
-                and len(cells) >= len(ROW_COLUMNS)
-                and LOOP_ID.fullmatch(cells[0])
-                and cells[0] in by_key
-                and [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]] == by_key[cells[0]]
-            ):
-                mark = (marks or {}).get(cells[0], cells[-1])
-                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
-        lines.append(line)
+    lines = record.splitlines()
+    for item in resolved if resolved is not None else resolve_finding_rows(record, ""):
+        cells = item.cells
+        if item.place == "record" and cells == by_key.get(cells[0]):
+            _require_unchanged_resolved_row(lines, item)
+            mark = (marks or {}).get(cells[0], cells[-1])
+            lines[item.line] = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
     try:
         replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
     except OSError as error:
@@ -8664,6 +8982,9 @@ def run_attempts(
                 restore_findings(kept)
 
         unmeasured: str | None = None
+        # This call's own ledger-clearing evidence, fresh per attempt: what verification actually
+        # removed from the plan, for the work check's discount (bead coding-harness-twbl).
+        clearing = ClearingEvidence()
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
@@ -8911,7 +9232,14 @@ def run_attempts(
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
-                        root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures
+                        root,
+                        ctx.plan,
+                        key,
+                        formatted,
+                        tools,
+                        inputs[ctx.plan],
+                        previous_failures,
+                        clearing=clearing,
                     )
                 else:
                     problems = verify_attempt(
@@ -8926,6 +9254,7 @@ def run_attempts(
                         against=baseline,
                         scope=scope_lines,
                         new_file_guard=new_file_guard,
+                        clearing=clearing,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -8951,7 +9280,13 @@ def run_attempts(
             if not verified_exposed and work_unmeasured is None:
                 try:
                     worked = attempt_has_work(
-                        root, before, worktree_tree(root), ctx.findings, ctx.plan, model_after=after
+                        root,
+                        before,
+                        worktree_tree(root),
+                        ctx.findings,
+                        ctx.plan,
+                        model_after=after,
+                        clearing=clearing,
                     )
                 except (Refused, OSError, ValueError) as error:
                     work_unmeasured = str(error)
@@ -9750,26 +10085,32 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
-    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
+    `Broke a test` and starts no review. Every selected row's `Origin` is checked before any call
+    or write, an older block's selected row included (bead coding-harness-3h96). A taken Status that
+    already names a fix in the old hand-written form (`; fixed by`, `; fixed:`, `; repaired by`)
+    refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
-    taken, waiting = repair_targets(ctx, read_record(change, root))
+    record = read_record(change, root)
+    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    resolved = resolve_finding_rows(record, current)
+    taken, waiting = repair_targets(ctx, record, current, resolved=resolved)
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
-    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    refusal = origin_refusal(read_record(change, root), current)
+    # Both checks share the resolver's current rows. The target check covers older selected
+    # rows too; the shared check retains its scope without re-admitting superseded history.
+    target_refusal = target_origin_refusal(record, current, resolved=resolved)
+    if target_refusal:
+        raise Refused(target_refusal)
+    refusal = origin_refusal(record, current, resolved=resolved)
     if refusal:
         raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
     ids = [row[0] for _, row in taken]
-    doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
-    if doubled:
-        raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
@@ -9796,7 +10137,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
-    rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
+    rows_before = findings_rows(current)
     standing: dict[str, str] = {}
     tools = tool_state(root)  # before any model runs; the answer check and the attempts share it (R-21)
 
@@ -9818,6 +10159,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             marks.update(proven)
         return problems
 
+    def before_commit() -> None:
+        require_unchanged_repair_rows(ctx, taken, resolved)
+        mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+
     run_attempts(
         ctx,
         "repair",
@@ -9832,8 +10177,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
-        before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True),
+        before_commit=before_commit,
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
