@@ -365,7 +365,7 @@ def record_local_slip(repository: str, correlation: str, tree: str, failed_tests
         "event": SLIP,
         "check_id": str(match["check_id"]),
         "run_id": run_id,
-        "utc": _utc_now(),
+        "utc": ends[-1]["utc"],
         "repository": home,
         "failed_gates": failed_gates,
         "failed_tests": None if failed_tests is None else bounded_failed_tests(list(failed_tests)),
@@ -519,12 +519,20 @@ def cmd_targeted(args: argparse.Namespace) -> int:
 
 def cmd_slip(args: argparse.Namespace) -> int:
     """Append one slip record, deduplicated on its full-run identity; print what stands."""
+    events, _findings = _read_events()
+    ends = [
+        event
+        for event in events
+        if event["event"] == RUN_END and event.get("run_id") == args.run and not _record_error(event)
+    ]
+    if not ends or ends[-1]["verdict"] != "red":
+        raise StorageUnusable(f"full run {args.run} has no completed red verdict; its slip is not measured")
     event = {
         "v": EVENT_VERSION,
         "event": SLIP,
         "check_id": args.check,
         "run_id": args.run,
-        "utc": _utc_now(),
+        "utc": ends[-1]["utc"],
         "repository": str(Path(args.repository).resolve()),
         "failed_gates": _comma_list(args.failed_gates),
         "failed_tests": _comma_list(args.failed_tests) or None,
@@ -548,6 +556,9 @@ def cmd_slips(args: argparse.Namespace) -> int:
     except HistoryMissing as missing:
         print(f"slip measurement unavailable: {missing}")
         return 1
+    # Full-run records remain available to the legacy report so it can mark their
+    # runs incomplete. Never use malformed records for correlation or counting.
+    events = [event for event in events if not _record_error(event)]
     slips = [event for event in events if event["event"] == SLIP]
     broken = list(findings)
     counted = {
@@ -641,19 +652,18 @@ def _read_events() -> tuple[list[dict], list[str]]:
             findings.append(f"line {number}: not valid JSON — a truncated row stays a diagnosed gap, never a run")
             continue
         if not isinstance(event, dict) or event.get("event") not in EVENTS:
-            findings.append(f"line {number}: not a version-1 verify-duration event")
+            findings.append(f"line {number}: invalid event field; not a version-1 verify-duration event")
             continue
         identity = "check_id" if event["event"] in (TARGETED, SLIP) else "run_id"
-        if not isinstance(event.get(identity), str):
-            findings.append(f"line {number}: not a version-1 verify-duration event")
-            continue
         if type(event.get("v")) is not int or event["v"] != EVENT_VERSION:
-            findings.append(f"line {number}: unsupported event version {event.get('v')!r}; expected {EVENT_VERSION}")
+            findings.append(f"line {number}: unsupported event version v={event.get('v')!r}; expected {EVENT_VERSION}")
             continue
-        if event["event"] in (TARGETED, SLIP):
-            error = _record_error(event)
-            if error:
-                findings.append(f"line {number}: {error} for check {event['check_id']}")
+        error = _record_error(event)
+        if error:
+            findings.append(f"line {number}: {error} for {identity} {event.get(identity)!r}")
+            # Preserve malformed duration rows with a usable identity for the
+            # legacy report's incomplete-run diagnosis, never as valid evidence.
+            if event["event"] in (TARGETED, SLIP) or not isinstance(event.get(identity), str):
                 continue
         events.append(event)
     return events, findings
@@ -745,7 +755,7 @@ def _record_error(event: dict) -> str | None:
         # `correlation` arrived with coding-harness-0swp: version-1 records written before it
         # carry no such field and must keep reading as valid, so absence is the unknown.
         if name not in event:
-            if name not in START_OPTIONAL_FIELDS:
+            if kind != RUN_START or name not in START_OPTIONAL_FIELDS:
                 invalid.append(name)
             continue
         if not check(event[name]):

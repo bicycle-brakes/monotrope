@@ -1208,3 +1208,89 @@ def test_unknown_gate_digests_never_correlate(
     assert "unmeasured" in note, note
     events, _ = verify_duration._read_events()
     assert not [event for event in events if event["event"] == verify_duration.SLIP]
+
+
+@pytest.mark.parametrize("kind", ["targeted", "run_start", "run_end", "slip"])
+def test_slips_validate_every_required_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, kind: str
+) -> None:
+    """Every missing evidence field is diagnosed at read time, including nullable fields."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    seed_correlated_red(repo, monkeypatch, capsys, "a" * 64, "a" * 64)
+    assert "recorded one local slip" in verify_duration.record_local_slip(str(repo), "correlation", "d" * 40, None)
+    path = verify_duration.history_path()
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    index = next(index for index, record in enumerate(records) if record["event"] == kind)
+    required = set(records[index]) - ({"correlation"} if kind == "run_start" else set())
+    for missing in sorted(required):
+        changed = [dict(record) for record in records]
+        del changed[index][missing]
+        path.write_text("\n".join(map(json.dumps, changed)) + "\n")
+        _, findings = verify_duration._read_events()
+        assert any(f"line {index + 1}:" in note and missing in note for note in findings), (missing, findings)
+        code, out, err = _run(
+            capsys,
+            "slips",
+            "--repository",
+            str(repo),
+            "--since",
+            "2020-01-01T00:00:00Z",
+            "--until",
+            "2100-01-01T00:00:00Z",
+        )
+        assert code == 1 and "not measured" in out, (missing, code, out, err)
+        assert "distinct slipped full runs" not in out, (missing, out)
+
+
+@pytest.mark.parametrize("retry_append", [False, True])
+@pytest.mark.parametrize("route", ["runner", "cli"])
+def test_slip_uses_full_run_completion_day(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, retry_append: bool, route: str
+) -> None:
+    """Delayed recording and retry after a failed append retain the completed run's UTC day."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    completed = "2026-11-12T23:59:00+00:00"
+    monkeypatch.setattr(verify_duration, "_utc_now", lambda: completed)
+    run_id = seed_correlated_red(repo, monkeypatch, capsys, "a" * 64, "a" * 64)
+
+    def record():
+        if route == "runner":
+            assert "recorded one local slip" in verify_duration.record_local_slip(
+                str(repo), "correlation", "d" * 40, None
+            )
+        else:
+            code, out, err = _run(
+                capsys, "slip", "--repository", str(repo), "--check", "green", "--run", run_id, "--tree", "d" * 40
+            )
+            assert code == 0 and "recorded one slip" in out, (code, out, err)
+
+    append = verify_duration.append_slip
+    if retry_append:
+
+        def fail_append(_event):
+            raise verify_duration.StorageUnusable("planted append failure")
+
+        monkeypatch.setattr(verify_duration, "append_slip", fail_append)
+        if route == "runner":
+            with pytest.raises(verify_duration.StorageUnusable):
+                verify_duration.record_local_slip(str(repo), "correlation", "d" * 40, None)
+        else:
+            code, out, err = _run(
+                capsys, "slip", "--repository", str(repo), "--check", "green", "--run", run_id, "--tree", "d" * 40
+            )
+            assert code == 2 and "planted append failure" in err, (code, out, err)
+        monkeypatch.setattr(verify_duration, "append_slip", append)
+    monkeypatch.setattr(verify_duration, "_utc_now", lambda: "2026-11-13T00:02:00+00:00")
+    record()
+    events, findings = verify_duration._read_events()
+    assert not findings, findings
+    slip = next(event for event in events if event["event"] == "slip")
+    assert slip["utc"] == completed, "the slip must carry completion time, not append time"
+    for since, until, expected in (
+        ("2026-11-12T00:00:00Z", "2026-11-13T00:00:00Z", 1),
+        ("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z", 0),
+    ):
+        code, out, err = _run(capsys, "slips", "--repository", str(repo), "--since", since, "--until", until)
+        assert code == 0 and f"slips: {expected} distinct slipped full runs" in out, (code, out, err)
