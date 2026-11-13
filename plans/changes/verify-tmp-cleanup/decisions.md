@@ -121,6 +121,25 @@ we decided to end the loop and go to the phase-6 review,
 to achieve a final review without more rounds of polish,
 accepting that no further loop round reads the last repair — 2026-11-13
 
+## Q-6 · How the runner keeps pytest inside the run area
+
+asked: 2026-11-13
+answer: "Ja" to the plugin solution — a small pytest plugin the runner loads into every pytest run checks, in pytest_configure, the temporary folder pytest itself resolved and stops the run with a clear message when it lies outside this run's area; the runner's own parser for PYTEST_ADDOPTS goes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), phase-6 finding F6-1.
+  Intention: Codex showed two more spellings (-o=addopts=…, @args.txt) by which a caller can give pytest its own basetemp; the second finding of this mechanism after L2-12.
+  Today: the runner parses PYTEST_ADDOPTS to refuse --basetemp; each rule misses the next spelling. Pydantic or Jinja do not help: only pytest knows what it makes of its option sources.
+  Repository change: a plugin of about fifteen lines, the parser in scripts/verify_all.sh removed, tests for the spellings.
+  Architecture change: none.
+
+In the context of pytest options that arrive through several channels,
+facing a parser of our own that misses each new spelling,
+we decided that a plugin asks pytest for the temporary folder it resolved and stops a run outside the area,
+to achieve one check that covers every spelling,
+accepting a plugin loaded into every pytest run of make verify — 2026-11-13
+
 ## Decided by the agent
 
 [DETAIL] **The gate command line stays as it is.** The folder is set through
