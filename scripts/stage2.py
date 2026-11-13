@@ -3136,8 +3136,15 @@ def resolve_finding_rows(record: str | None, findings_text: str) -> list[Resolve
                         raise Refused(
                             f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
                         )
+                    status = (
+                        "decided"
+                        if all(item[7].lower().startswith(("fixed", "rejected")) for item in (seen[row[0]], row))
+                        else "undecided"
+                    )
+                    source_kind = "record" if source == "record" else "history"
                     print(
-                        f"notice: duplicate decided id {row[0]} in one table ({file}); history left unchanged.",
+                        f"notice: duplicate {status} id {row[0]} in one table ({file}, {source_kind}); "
+                        "the latest row is used.",
                         file=sys.stderr,
                     )
                 seen[row[0]] = row
@@ -3683,23 +3690,33 @@ def accepted_row(row: list[str]) -> bool:
 ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
 
 
-def origin_refusal(record: str | None, findings_text: str) -> str | None:
+def origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
     """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
 
     Accepted (`taken` or `fixed`) rows in the loop record and phase-6 table are checked. Released
     history was checked before release and is never re-checked; legacy rows need no backfill.
-    A rejected or undecided row needs no provenance.
+    A rejected or undecided row needs no provenance. Repair passes its resolved admission snapshot
+    so superseded rows within these scopes are exempt too; other verbs keep their existing scopes.
     The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
     values the orchestrator may write.
     """
     # A re-check supersedes earlier phase-6 blocks, even when the newest block has no rows.
-    # Do not change findings_rows: repair targeting and the brake still read their full history.
+    # Other verbs retain their existing parser scope; repair uses its one resolved snapshot.
     heads = list(re.finditer(r"^## Phase 6[^\n]*$", findings_text, re.M))
-    _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
-    places = (
-        ("loop record", record_rows(record) if record is not None else []),
-        ("phase-6 table", phase6),
-    )
+    if resolved is None:
+        _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
+        loop_rows = record_rows(record) if record is not None else []
+    else:
+        loop_rows = [item.cells for item in resolved if item.place == "record"]
+        newest_line = findings_text.count("\n", 0, heads[-1].start()) if heads else None
+        phase6 = [
+            item.cells
+            for item in resolved
+            if item.place == "phase-6" and newest_line is not None and item.line > newest_line
+        ]
+    places = (("loop record", loop_rows), ("phase-6 table", phase6))
     found = [
         f"{row[0]} ({place}, Origin `{row[3]}`)"
         for place, rows in places
@@ -7602,7 +7619,7 @@ def _require_unchanged_resolved_row(lines: list[str], item: ResolvedFindingRow) 
             rows = [cells] if cells else []
     if rows != [item.cells]:
         source = "loop.md" if item.place == "record" else "findings.md"
-        raise Refused(f"{item.cells[0]} in {source} changed since resolution; no fixed statuses were written.")
+        raise Refused(f"{item.cells[0]} in {source} changed since resolution; refusing to overwrite its Status.")
 
 
 def mark_repaired_findings(
@@ -7621,10 +7638,21 @@ def mark_repaired_findings(
     by_key = {(place, row[0]): row for place, row in taken}
     text = ctx.findings.read_text(encoding="utf-8")
     lines = text.split("\n")
+    # Validate both sources before writing any fixed Status or making the checkpoint. The record
+    # remains locked throughout repair, but its resolved locations must be checked here too.
+    record_lines = None
+    for item in resolved:
+        if item.cells != by_key.get((item.place, item.cells[0])):
+            continue
+        if item.place == "record":
+            if record_lines is None:
+                record_lines = (read_record(ctx.change, ctx.root) or "").split("\n")
+            _require_unchanged_resolved_row(record_lines, item)
+        else:
+            _require_unchanged_resolved_row(lines, item)
     for item in resolved:
         cells = item.cells.copy()
         if item.place != "record" and cells == by_key.get((item.place, cells[0])):
-            _require_unchanged_resolved_row(lines, item)
             cells[7] = fixes[cells[0]]
             lines[item.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")
@@ -7651,7 +7679,11 @@ def mark_repaired_record(
     if not by_key:
         return
     if lock_held:
-        _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
+        try:
+            _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
+        except Refused as error:
+            waiting = ", ".join(sorted(by_key))
+            raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
         return
     # The record is read and rewritten whole: a round appended in between, or a release that removes
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
@@ -9637,12 +9669,12 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
     # The selected rows' own Origin check goes first, so one refusal names every row the repair
-    # would carry, older blocks included; the record/newest-block refusal after it keeps guarding
-    # the accepted rows that no repair selects (bead coding-harness-3h96).
+    # would carry, older blocks included. Both checks use the same resolved rows, so the second
+    # check retains its record/newest-block scope without rechecking superseded history.
     target_refusal = target_origin_refusal(record, current, resolved=resolved)
     if target_refusal:
         raise Refused(target_refusal)
-    refusal = origin_refusal(record, current)
+    refusal = origin_refusal(record, current, resolved=resolved)
     if refusal:
         raise Refused(refusal)
     if not taken:

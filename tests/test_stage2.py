@@ -10147,6 +10147,63 @@ def test_repair_and_origin_check_resolve_latest_finding(world: World, place: str
         assert refusal is None, "historical provenance must not override the resolved current row"
 
 
+@pytest.mark.parametrize("place", ["record", "released", "phase-6"])
+@pytest.mark.parametrize("historical_status", ["taken — old decision", FIXED])
+def test_repair_ignores_superseded_invalid_origin_in_full_verb(
+    world: World, place: str, historical_status: str
+) -> None:
+    """Both admission checks must use the resolved current row, including record history."""
+    seed_tests(world)
+    old = phase6_cells("L1-1", historical_status, "historical finding")
+    old[3] = "invalid"
+    if place == "phase-6":
+        # Two tables in the newest block: the second supersedes the first.
+        latest = phase6_cells("L1-1", "taken — fix", "current finding")
+        world.write_findings(phase6_block([old]) + "\n\n" + phase6_block([latest]).split("\n", 1)[1])
+    elif place == "released":
+        latest = released_cells("L1-1", "taken — fix", "no", "current finding")
+        world.write_findings(phase6_block([old]), released_block([latest]))
+    else:
+        world.write_record([("L1-1", "taken — fix", "no")])
+        record = world.record().read_text(encoding="utf-8")
+        historical = record.replace("| base |", "| invalid |").replace("taken — fix", historical_status)
+        world.record().write_text(historical + "\n" + record, encoding="utf-8")
+        world.write_findings(phase6_block([old]))
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0, "superseded invalid provenance must not hold the full repair verb"
+    assert len(repair_calls(world)) == 1
+    assert phase6_block([old]) in world.text(), "the historical Origin and Status must stay unchanged"
+    if place == "record":
+        assert historical in world.record().read_text(encoding="utf-8")
+
+
+def test_repair_checks_record_staleness_before_any_fixed_write_or_commit(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A stale record must refuse before findings fixed statuses reach a checkpoint."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — fix", "no")])
+    target = phase6_cells("F-1", "taken — fix", "finding")
+    world.write_findings(phase6_block([target]))
+    baseline = git(world.root, "rev-parse", "HEAD")
+    real = stage2.mark_repaired_findings
+    changed = world.record().read_text(encoding="utf-8").replace("taken — fix", "taken — concurrent edit")
+
+    def change_record_before_marking(*args, **kwargs):
+        world.record().write_text(changed, encoding="utf-8")
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "mark_repaired_findings", change_record_before_marking)
+    answer = "L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix"
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 2, "a changed record must refuse at the pre-commit check"
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "loop.md" in error and "changed since resolution" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "a stale record must refuse before a checkpoint"
+    assert stage2.findings_rows(world.text())[1] == [target], "no findings fixed Status may precede refusal"
+    assert world.record().read_text(encoding="utf-8") == changed
+
+
 @pytest.mark.parametrize("place", ["released", "phase-6"])
 def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
     """Duplicate IDs in one table refuse even when only one row is taken."""
@@ -10355,8 +10412,9 @@ def test_repair_refuses_to_mark_a_changed_record_line(world: World, mutation: st
     fixes = {row[0]: "fixed — tests/test_fix.py::test_fix" for _, row in taken}
     try:
         stage2.mark_repaired_record("demo", taken, fixes, world.root, lock_held=True, resolved=resolved)
-    except stage2.Refused as error:
+    except stage2.CallFailed as error:
         assert "L1-2" in str(error) and "loop.md" in str(error)
+        assert "mark L1-1, L1-2 by hand" in str(error)
     except IndexError:
         pytest.fail("a vanished resolved record line must refuse with its finding ID and file")
     else:
