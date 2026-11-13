@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-3h96
@@ -51,3 +51,33 @@ guarantee moves**: the repair section says that repair refuses a selected
 row of any phase-6 table whose Origin is invalid. Reason: a test pins
 phrases of the Origin paragraph
 (`test_origin_workflow_assigns_provenance_to_the_orchestrator`).
+
+## Q-1 · Which row is current for a finding id
+
+asked: 2026-11-11
+answer: Option D, stated by the maintainer on 2026-11-12 about 07:30 UTC (recorded in the notes of bead coding-harness-3h96; it supersedes answer A of 2026-11-11) — one resolver function in scripts/stage2.py decides which row is current for a finding id (the latest in its block); the Origin check and the repair-target selection both ask only that function; repeated ids across tables are a finding's history, not an error; ids must be unique only within one table.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: a phase-6 re-check may repeat a finding id that an earlier table already holds, and two code paths each decided on their own which row counts.
+  Intention: a repair attempt was parked on 2026-11-11 because the uniqueness rule for finding ids was undecided; the maintainer asked for the most lasting solution.
+  Today: the Origin check and the repair-target selection resolve rows separately, so one can validate a row the other does not repair.
+  Repository change: one resolver in scripts/stage2.py that both callers ask; the duplicate-id refusal is scoped to one table; the saved tests follow.
+  Architecture change: none; one choke point replaces two readings of the same tables.
+
+In the context of finding ids that repeat across phase-6 tables, facing a choice between uniqueness per block kind, uniqueness across everything with renumbering, the old back-computation, and one resolver, we decided for one resolver that names the current row of an id, to achieve that the Origin check and the repair selection can never disagree, accepting that a repeated id across tables is read as history and no longer refused. — 2026-11-12
+
+## Q-2 · Ending the review loop after round 9
+
+asked: 2026-11-13
+answer: "ja" — after the repair of the three rows of round 9 the change goes straight to phase 6, without a tenth loop round; the pull request names it.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the review loop of this change has run nine rounds with 35 rows and no clean round.
+  Intention: round 9 brought three documentation rows and none on the behaviour of the code; the appetite of one hour is long spent.
+  Today: the rule is rounds until a clean one, each followed by a repair with a full check.
+  Repository change: none in code; the pull request states that the loop ended after round 9.
+  Architecture change: none.
+
+In the context of a loop that finds something new in every round, facing a choice between a tenth round and phase 6, we decided to go to phase 6 after this repair, to achieve an end to the change, accepting that a further loop round might have found what phase 6 misses. — 2026-11-13
