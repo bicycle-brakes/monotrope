@@ -9,20 +9,16 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-13"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # verify cheap before admission — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1's runner-returned exploration is preserved below; the dated draft
+addendum resolves repository gaps needed for the specification and plan.
 
 Stage-2 call, 2026-11-13: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1044 files, 4105 commits, 12 rules.
 
@@ -76,3 +72,62 @@ Admission boundary: `scripts/verify_all.sh` (re-exec block, then report/selectio
 `scripts/verify_all.sh` (admission boundary, run identity/report/selection placement, gate loop, summaries); `scripts/ci_gates.py` (the TSV payload must carry the cost class or a new flag; `kostenordnung()` already supplies the split); `decisions/gates.yaml` only if the Q-1 exception mark becomes a schema field (held path — the orchestrator owns it, per verify-cheap-first spec "Protected areas"; a schema bump and the derived `.github/workflows/ci.yml` + `docs/governance/gate-catalog.md` regeneration follow via the `gate-schema`/`ci-drift` gates); `scripts/verify_lock.py` likely unchanged (`supervise`/`hold_admission` accept any command); `scripts/verify_duration.py` if events must distinguish phases; doctrine text in `docs/WORKFLOW.md`, `docs/how-it-works.md`, `docs/orchestration.md`, `docs/testing.md`, `prompts/05-verify.md`; tests in `tests/test_verify_cheap_first.py` (or a sibling), `tests/test_verify_duration.py` (if event schema changes), and the frame guard in `tests/test_stage2.py`; `scripts/kit/manifest.yaml` only if a new script is added.
 
 Neighbours found: `plans/changes/verify-cheap-first/spec.md` (bead coding-harness-bxxt.1, implemented, phase 6 clean 2026-11-12), `plans/changes/verify-step-limit/spec.md` (bead coding-harness-xkvr, partial), `plans/specs/implementation-verification/spec.md` (living spec, bead coding-harness-mfv), `plans/changes/archive/2026-11-06-verify-machine-lock/spec.md`, `plans/changes/archive/2026-11-06-verify-duration/spec.md`, `plans/changes/archive/2026-11-06-verify-worker-cap/spec.md` (all archived; not read in this pass beyond their existence), `docs/research/2026-11-09-make-verify-long-term.md`.
+
+## Draft gap resolution — 2026-11-13
+
+Repository evidence below was read at `b1d4e621`; implementation is not started.
+
+- **The outer runner must participate.** `scripts/stage2.py::full_verify`,
+  `verify_attempt` in full mode, and `verify_draft` each acquire
+  `verify_lock.hold_admission` before launching the full or document check.
+  Full-mode preparation, including formatting and the attempt's cheap checks,
+  also sits inside that admission. Moving only the shell's admission would
+  leave these paths waiting before cheap gates. The targeted path already
+  prepares outside admission. The common gate scheduler must therefore also
+  serve these three runner paths; targeted checks and independently admitted
+  proof/import probes are separate operations and retain their rules.
+- **Execution limits have an existing seam.** `stage2.launch` takes a timeout,
+  starts a process group, registers it for cancellation, kills it on timeout,
+  and ends lingering descendants before returning. The new scheduler can use
+  it as its gate-execution callback, with the remaining shared execution
+  allowance. Waiting in `hold_admission` stays outside that allowance without
+  adding an unbounded outer `make` subprocess. This changes the runner's
+  internal launch route, not gate membership: the shell entry point and the
+  runner use the same scheduler and reader. Existing tests of a whole-run
+  `make` stand-in must become tests of real scheduler gates and preserve the
+  timeout, cleanup, refusal, environment and diagnostic assertions.
+- **Selection need not change the TSV contract.** `ci_gates.gates()` already
+  returns normalized records, and `in_job`, `misst_in`, and `kostenordnung`
+  supply selection and local ordering. A common Python scheduler can consume
+  those records directly. Existing `--tsv` consumers in
+  `tests/test_gate_machinery.py`, `tests/test_ci.py`, and
+  `tests/test_verify_cheap_first.py` can keep their three-column interface.
+- **No current exception is identified.** The declared seconds commands use
+  read/check modes, including `plans_registry.py --check`,
+  `check_frontmatter_current.py` without `--stamp`, schema/CI comparisons,
+  and the ruleset assertion tests. Tracker readers use
+  `bead_render.py`/`render_beads_export.py::_render_nach`, which exports through
+  `tools/bd` into a private temporary file; this is not a tracker update.
+  `check_research_currency.py` can append to the caller's
+  `GITHUB_STEP_SUMMARY`; that is a job's report, not machine-shared verification
+  work. Tool caches and per-run reports do not alone require the machine's
+  expensive-work slot. None of the current seconds gates is proposed for the
+  exception mark. Implementation must audit these entry points again before
+  activating the held gate-list documentation; no blanket claim is made about
+  future gates or third-party tool internals.
+- **Fingerprint scope is an implementation detail still to define.** A dirty
+  boolean or porcelain status alone cannot detect a second edit to an already
+  dirty file. Compare HEAD identity, semantic index entries, tracked working
+  contents/types/modes/deletions, and non-ignored untracked paths and contents.
+  Use NUL-delimited Git path inventories and bounded reads; an unreadable or
+  unstable snapshot cannot authorize reuse. This is an in-run comparison, not
+  a cache of gate results between invocations. External tracker, network and
+  machine state are not frozen by a repository comparison.
+- **Available draft gates.** `templates/plan.md` and
+  `scripts/validate_change_artefacts.py` do not exist in this checkout. The
+  spec/design templates, phase-3 prompt, interview check, criterion-ledger
+  check and plans registry do. `findings.md` contains the draft-call record
+  only; it has no phase-2a rows to resolve. Live pull-request state, current
+  interactive-session inventory and tracker task state were not read within
+  this runner's worktree-only boundary. The latest local handover read was
+  `docs/journal/handover/2026-11-13-night-five-lanes.md`; it predates this change.
