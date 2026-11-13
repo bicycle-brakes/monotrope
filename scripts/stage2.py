@@ -9625,6 +9625,8 @@ def verify_draft(
         gates = document_gates()
     except (Refused, OSError, ValueError, yaml.YAMLError) as error:
         return [f"the document gates could not be selected ({error})"], owed, not_completed
+    if not gates:
+        return ["no locally runnable document gates were selected; the draft check cannot run"], owed, not_completed
     problems, notes = run_gates(root, env, key, gates)
     if not problems:
         owed = answer_is_owed(root, ctx.change)

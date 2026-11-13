@@ -1111,6 +1111,33 @@ def test_slip_report_rejects_incomplete_evidence(
     assert "slips: 0 distinct slipped full runs" not in out, out
 
 
+@pytest.mark.parametrize("orphan", ["gate", "run_end", "both"])
+def test_slips_refuses_orphan_run_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, orphan: str
+) -> None:
+    """Missing start rows must reach the output's diagnostic barrier, never a numeric count."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    seed_correlated_red(repo, monkeypatch, capsys, "a" * 64, "a" * 64)
+    path = verify_duration.history_path()
+    events = _history(tmp_path / "state")
+    # Keep the accepted green and selected red gate/end rows, losing only the start.
+    events = [
+        event
+        for event in events
+        if event["event"] == "targeted"
+        or (event["event"] == "gate" and orphan in ("gate", "both"))
+        or (event["event"] == "run_end" and orphan in ("run_end", "both"))
+    ]
+    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    code, out, err = _run(
+        capsys, "slips", "--repository", str(repo), "--since", "2020-01-01T00:00:00Z", "--until", "2100-01-01T00:00:00Z"
+    )
+    assert code == 1, "orphan run evidence must make the slip measurement unavailable"
+    assert "not measured" in out and "start row is missing" in err, (out, err)
+    assert not re.search(r"\d", out.split("interval", 1)[0]), out
+
+
 def slip_event_like(check_id: str, run_id: str, repository: str, tree: str) -> dict:
     """One valid slip record, used to seed reader cases directly."""
     return {

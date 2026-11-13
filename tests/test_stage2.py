@@ -25491,6 +25491,27 @@ def test_implement_routes_use_targeted_postchecks(world: World, monkeypatch: pyt
     assert git(world.root, "rev-parse", "HEAD") != baseline
 
 
+def test_draft_refuses_registry_without_document_gates(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An otherwise valid registry without document gates must never produce a green draft."""
+    commands = targeted_mode(monkeypatch)
+    registry = world.root / "decisions" / "gates.yaml"
+    data = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    for gate in data["gates"]:
+        gate.pop("subsets", None)
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", registry)
+    assert ci_gates.validate_schema() == []
+    assert ci_gates.gates() and stage2.document_gates() == []
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems, "a draft with no document gates must fail its post-run check"
+    assert "no locally runnable document gates" in " ".join(problems), problems
+    assert "result: green" not in scope, scope
+    assert not commands.of("gate") and not commands.of("make") and not commands.of("pytest")
+
+
 def test_draft_document_projection_runs_unadmitted(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 2. Planted fault: the draft's document check waits for the verify admission,
     leaks one of its ownership markers into a gate's environment, runs pytest, or leaves the

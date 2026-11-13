@@ -544,6 +544,22 @@ def cmd_slip(args: argparse.Namespace) -> int:
     return 0
 
 
+def _slip_measurement_output(
+    args: argparse.Namespace, repository: str, counted: set[str], diagnostics: list[str]
+) -> int:
+    """The sole count-output boundary: every reader's diagnostics prohibit a numeric result."""
+    interval = f"{args.since.isoformat()} (inclusive) to {args.until.isoformat()} (exclusive)"
+    if diagnostics:
+        for note in diagnostics:
+            _log(f"slip measurement incomplete: {note}")
+        print("slip measurement unavailable or incomplete; not measured reliably; this count is not trustworthy")
+        print(f"interval {interval} · repository {repository}")
+        return 1
+    print(f"slips: {len(counted)} distinct slipped full runs")
+    print(f"interval {interval} · repository {repository}")
+    return 0
+
+
 def cmd_slips(args: argparse.Namespace) -> int:
     """Count distinct slipped full runs of one repository in the half-open [since, until) UTC interval.
 
@@ -554,8 +570,9 @@ def cmd_slips(args: argparse.Namespace) -> int:
     try:
         events, findings = _read_events()
     except HistoryMissing as missing:
-        print(f"slip measurement unavailable: {missing}")
-        return 1
+        return _slip_measurement_output(args, repository, set(), [str(missing)])
+    _grouped, grouping = _runs(events)
+    findings.extend(grouping)
     # Full-run records remain available to the legacy report so it can mark their
     # runs incomplete. Never use malformed records for correlation or counting.
     events = [event for event in events if not _record_error(event)]
@@ -605,16 +622,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
             for green in greens
         ):
             broken.append(f"correlated red full run {start['run_id']} has no slip record; not measured")
-    interval = f"{args.since.isoformat()} (inclusive) to {args.until.isoformat()} (exclusive)"
-    if broken:
-        for note in broken:
-            _log(f"slip measurement incomplete: {note}")
-        print(f"slip measurement is incomplete; not measured reliably; this count is not trustworthy: {len(counted)}")
-        print(f"interval {interval} · repository {repository}")
-        return 1
-    print(f"slips: {len(counted)} distinct slipped full runs")
-    print(f"interval {interval} · repository {repository}")
-    return 0
+    return _slip_measurement_output(args, repository, counted, broken)
 
 
 def _read_events() -> tuple[list[dict], list[str]]:
