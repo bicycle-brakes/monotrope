@@ -16,7 +16,7 @@ tags: [spec, research-swarm]
 class: bounded
 appetite: 9
 adr_files: [docs/adr/0020-phase-1-research-swarm.md]
-neighbours: []
+neighbours: [plans/changes/archive/2026-11-06-research-swarm/spec.md, plans/changes/archive/2026-11-06-research-swarm/design.md, plans/changes/archive/2026-11-06-swarm-time-limits/spec.md, plans/changes/archive/2026-11-06-loop-until-clean/spec.md, plans/changes/swarm-test-speed/spec.md]
 ---
 
 # Spec — swarm-report-format
