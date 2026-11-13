@@ -803,6 +803,31 @@ def test_spec_covers_private_brief_normalization():
     assert "No change to model selection, prompts," not in spec, "the prompt non-goal must allow this normalization"
 
 
+def test_next_day_swarm_resume_passes_research_census(sworld: SwarmWorld, monkeypatch):
+    import research_census
+    import yaml
+
+    # EP6-16: the real resumed envelope must agree with the retained producer day.
+    seed = re.sub(r"\d{4}-\d{2}-\d{2}", "2026-11-04", swarm.swarm_skeleton())
+    sworld.research.write_text(seed, encoding="utf-8")
+    sworld.commit()
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-12")
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = yaml.safe_load(sworld.research.read_text().split("---", 2)[1])["produced_by"]
+    assert research_census.census_findings([sworld.research], sworld.root) == []
+    (sworld.bin / "calls.jsonl").unlink()
+    monkeypatch.setattr(stage2, "today", lambda: "2026-11-13")
+    sworld.complete()
+    assert sworld.run() == 0
+    findings = research_census.census_findings([sworld.research], sworld.root)
+    assert findings == [], f"next-day resume must publish census-compliant metadata: {findings}"
+    retained = yaml.safe_load(sworld.research.read_text().split("---", 2)[1])["produced_by"]
+    assert retained == first, "resume must retain the earlier producer attribution"
+    assert manifest_of(sworld)["resume"]["usable"] is True
+    assert [call["kind"] for call in sworld.calls()] == ["judge"]
+
+
 def test_producer_history_survives_swarm_resume(sworld: SwarmWorld, monkeypatch):
     import yaml
 

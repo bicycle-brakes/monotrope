@@ -147,6 +147,8 @@ Keep the Definition of Done pending until the runner's full run is green.
 
 ## Criterion ledger
 
+- 2: tests/test_stage2_research_deep_review.py::test_next_day_swarm_resume_passes_research_census — a later-day resumed envelope disagrees with retained producer attribution
+- 8: tests/test_stage2_research_deep_review.py::test_next_day_swarm_resume_passes_research_census — a later-day resume fails the census or repeats successful seats
 - 1: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — Flash or fallback leaves false provenance
 - 1: tests/test_stage2_swarm.py::test_swarm_publication_corrects_research_provenance — complete/incomplete swarm publication leaves false provenance
 - 2: tests/test_stage2.py::test_explore_publishes_truthful_research_provenance — the publication's producer or date is wrong
@@ -238,6 +240,7 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-13 16:20:05–16:22:50 UTC, 165 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-13 16:23:10–16:25:18 UTC, 128 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-13 16:25:39–16:28:56 UTC, 197 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-13 19:47:05–20:05:28 UTC, 1102 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Appetite overrun — 2026-11-04
 

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-11
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -51,11 +51,14 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
   active change folder, excluding `archive/`. Existing model attribution or
   accepted publication evidence establishes model-written research regardless
   of its current provenance label, including manually seeded work.
-- **Stock exemption** — the adoption day of 2026-11-10 (maintainer, `decisions.md`
-  Q-5), applied at one place in the census (`ADOPTION_DAY` in
-  `scripts/research_census.py`). An active research file whose single readable
-  `updated` stamp lies before that day, and which carries no evidence dated on
-  or after it, is stock: its findings are not reported. The removed fixed
+- **Stock exemption** — the adoption day recorded for the census in
+  `decisions/adoption.yaml` (maintainer, `decisions.md` Q-5 and option C,
+  2026-11-12), applied at one place in `scripts/research_census.py`. An active
+  research file is stock only when it is unchanged in the working tree and its
+  last change in Git was committed before that day: its findings are not
+  reported. Dates and producer evidence inside the file do not decide the
+  exemption. Uncommitted files or unreadable Git history are subject to the
+  census. The removed fixed
   `UNCORRECTED` file set is no longer required anywhere. Stock files await the
   separate history-based correction (bead coding-harness-2i7x — normalise
   existing research).
@@ -132,13 +135,15 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
    *Basis:* decisions.md#Q-1; research.md, “Where it lives”.
 
 9. While existing research correction is deferred, the stock exemption is
-   decided only by the adoption day: a file stays exempt only while its edit
-   stamp lies before that day and it carries no later evidence, so correcting
-   and then changing a file, or any change from the adoption day on, ends it.
-   *Refuted by:* a file with an equal-day, later or unreadable edit stamp, or
-   with evidence dated from the adoption day on, obtaining the exemption; or
-   an exemption by directory or file name.
-   *Basis:* decisions.md#Q-4; decisions.md#Q-5.
+   decided by the file's last change in Git against the recorded adoption day.
+   An unchanged file last committed before that day is stock, regardless of
+   dates or producer evidence written inside it. A last change committed on
+   that day or later, any uncommitted change or unavailable Git history makes
+   the file subject to the census.
+   *Refuted by:* exemption for an equal-day or later Git change, an uncommitted
+   file or unreadable Git history; refusal of stock exemption based on dates
+   or producer evidence inside the file; or exemption by directory or file name.
+   *Basis:* decisions.md#Q-4; decisions.md#Q-5; maintainer option C, 2026-11-12.
 
 10. When the read-only census examines active research, it reports each unreadable
     file and each model-written file violating the metadata contract or retaining
@@ -185,13 +190,14 @@ future Explore publication still applies when the target is a stock file.
 Atomic replacement protects an existing file until replacement completes; it
 makes no rollback promise after a successful replacement and later sync failure.
 
-Adoption day (maintainer, 2026-11-10, `decisions.md` Q-5): the census holds
-from the day this change merges. A research file that reached `main` before
-that day is stock and exempt, whatever change it belongs to; the exemption is
-decided by that day at one place in the census, not by a list of file names
-that every later merge outgrows. A research file published or changed from
-the adoption day on is measured in full. Correcting stock files stays separate
-work.
+Adoption day (`decisions.md` Q-5; maintainer option C, 2026-11-12): the census
+uses the day recorded for it in `decisions/adoption.yaml`. Stock exemption
+depends only on the file's last committed Git change predating that day and
+the absence of uncommitted changes, whatever change folder it belongs to.
+Dates and producer evidence inside the file cannot grant or end exemption.
+Files changed on or after adoption, uncommitted files and files whose Git
+history cannot be read are measured in full. Correcting stock files stays
+separate work.
 
 ## Definition of Done
 

@@ -1429,7 +1429,9 @@ class Run:
     def compose(self, status: str) -> str:
         parts = [
             f"<!-- research-swarm/v2 run {self.run_id} -->",
-            f"## Research swarm — {self.runner.today()}",
+            # The prepared publication and its producer day survive a later-day resume.
+            # Date this envelope consistently; publish_research stamps the actual edit day.
+            f"## Research swarm — {self.publication_day}",
             f"run {self.run_id} · class {self.klass} · baseline HEAD {self.manifest['head'][:12]} · "
             f"input digest {self.manifest['digest'][:16]}",
             fence(
