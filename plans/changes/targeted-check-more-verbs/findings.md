@@ -832,3 +832,15 @@ Reviewer session: codex 01a1d4f8-7c9b-7801-aa80-b5a29221dbff — a fresh session
 Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4071 commits, 12 rules.
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4080 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-10 | MAJOR | SPEC | base | scripts/verify_duration.py | With a targeted green and blocking-red gate/end records whose start row is missing, `slips` prints zero and exits 0. Reproduced in memory: `_runs` diagnoses the orphan records, but `cmd_slips` never incorporates those diagnostics. Incomplete run evidence must make the measurement unavailable. [Acceptance criteria 11–12] | Codex | taken — fourth finding of one mechanism (F6-3, F6-7, F6-8): close it at the output. cmd_slips prints a number only when every diagnostic of every reader it uses (_read_events, _runs and any later one) is empty; otherwise it reports 'not measured' with the diagnostics, through one function all of them feed; a test with orphan gate/end records | — |
+| F6-11 | MAJOR | SPEC | base | scripts/stage2.py | A schema-valid registry with no document-subset gates lets `verify_draft` succeed without executing any gate. Reproduced in memory: it returns no problems and reports `result: green; gates none`. The previous document runner explicitly refused an empty selection; that prerequisite must remain mandatory. [Acceptance criterion 3] | Codex | taken — an empty document-subset selection refuses the draft check (exit nonzero with the reason), as the previous runner did; a test with a registry that has no document gates | — |
+
+Phase 6 verdict: codex 01a1d55f-d953-79f1-ba8b-8db26a490532, 2026-11-13
+Reviewer session: codex 01a1d55f-d953-79f1-ba8b-8db26a490532 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
