@@ -2591,3 +2591,15 @@ Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claud
 > 2 failed, 93 passed in 24.41s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/explore-provenance/stage2/attempts/explore-provenance/attempt-3-20261113T161942552416Z-96468e7c.md
 > ```
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1048 files, 4110 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| EP6-15 | BLOCKER | SPEC | base | plans/changes/explore-provenance/spec.md:134; scripts/research_census.py:235; tests/test_explore_provenance.py:174 | [DIVERGENT] The specification forbids exemption when producer evidence dates from adoption onward, but implementation and tests require exemption based solely on Git history. The test commits research on 2026-11-09 with producer evidence dated 2026-11-10 and expects no findings. The spec requires this same file to fail. Align the acceptance contract with the chosen Git-based rule. [AC7, AC9] | Codex | open | — |
+| EP6-16 | MAJOR | SPEC | base | scripts/stage2_research_run.py:419; scripts/stage2_research_run.py:1432; scripts/research_census.py:122 | Resuming an incomplete swarm on the following day produces research that fails the census. Resume preserves the original producer version, such as `"2026-11-12"`, while `compose()` dates the new envelope 2026-11-13. The census then requires attribution dated at least 2026-11-13 and reports `produced_by: missing publication program/date`. Reproduced using the real composition, publication and census functions with the writer intercepted. A successful resume must produce metadata accepted by the repository gate while retaining earlier attribution. [AC2, AC7, AC8] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d65e-329a-7f53-a195-75617506a223, 2026-11-13
+Reviewer session: codex 01a1d65e-329a-7f53-a195-75617506a223 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
