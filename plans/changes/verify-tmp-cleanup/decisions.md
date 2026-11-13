@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -82,6 +82,25 @@ facing a hint paragraph that git appends after the reason line,
 we decided to keep git's first line whole and drop the hint,
 to achieve a readable reason at any path length,
 accepting a hand acceptance of real code and two more hours — 2026-11-12
+
+## Q-4 · The whole git message instead of one line
+
+asked: 2026-11-13
+answer: "A: Ganze Meldung (Recommended)" — the runner keeps every non-empty line of git's error output (only blank lines drop); this replaces the first-line rule of Q-3.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), the runner's git error message.
+  Intention: review round 5 brought the third finding of one mechanism: keeping one selected line loses the reason when git puts it on a later line. The repository rule ends case repair at the second finding of a mechanism and fixes it at one place.
+  Today: Q-3 chose the first line whole; since then git runs in the C locale and the length cut is gone.
+  Repository change: a few lines in scripts/stage2.py, tests, spec criterion 12.
+  Architecture change: none.
+
+In the context of git errors whose reason can stand on any line,
+facing a third finding against picking one line,
+we decided that the runner keeps git's whole error output without blank lines,
+to achieve a reason that cannot be lost,
+accepting messages that are sometimes a few lines longer — 2026-11-13
 
 ## Decided by the agent
 

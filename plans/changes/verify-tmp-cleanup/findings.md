@@ -1074,3 +1074,5 @@ Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1040 files, 4056 commits, 12 rules.
+
+Stage-2 call, 2026-11-13: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1040 files, 4058 commits, 12 rules.

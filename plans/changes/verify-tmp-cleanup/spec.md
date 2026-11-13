@@ -98,12 +98,12 @@ exists; this is a process-id check, not descendant tracking.
     refuses before gates with an explanation.
     *Refuted by:* An accepted basetemp spelling escapes management,
     malformed quoting proceeds silently, or unrelated pytest options are discarded.
-12. When a git command of the runner fails, its diagnostic keeps git's
-    reason line whole however long the temporary path in it is
-    (`decisions.md#Q-2`, `decisions.md#Q-3`).
+12. When a git command of the runner fails, its diagnostic keeps git's whole
+    error output (every non-empty line) however long the temporary path in it
+    is (`decisions.md#Q-2`, `decisions.md#Q-3`, `decisions.md#Q-4`).
     *Refuted by:* A long path pushes the reason (for a held lock,
-    `index.lock`) out of the diagnostic, or a warning line before git's
-    `fatal:` or `error:` line replaces the reason.
+    `index.lock`) out of the diagnostic, or a line of git's output, the reason
+    included, is dropped.
 
 ## Non-goals
 
