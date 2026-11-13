@@ -35,3 +35,18 @@ context: |
   Architecture change: none; the production fail-closed rule (scripts/stage2_research_dispatch.py) stays untouched.
 
 In the context of a flaky swarm test caused by unlocked concurrent appends to a stand-in call log, facing a choice between a fix inside the one failing test and a shared atomic helper for every such append in the test suite, we decided for the shared helper at all 17 sites, to achieve that no sibling test fails the same way later, accepting a wider diff over five test files. — 2026-11-13
+
+## Q-2 · A guard against new unlocked log appends
+
+asked: 2026-11-13
+answer: "ja" — the change includes a guard test that fails when a test file opens a log for appending without the shared atomic helper.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: after Q-1 the 17 known unlocked log appends in the test suite use one shared atomic helper.
+  Intention: close the mechanism at its choke point, not case by case; nothing today stops a future test from appending without a lock again.
+  Today: no check reads tests/ for append-mode log writes.
+  Repository change: one small guard test in this change that reads tests/ and fails on an append-mode open outside the shared helper.
+  Architecture change: none.
+
+In the context of a root repair of unlocked test-log appends (Q-1), facing a choice between fixing the 17 known sites only and also guarding against new ones, we decided to add a guard test in this change, to achieve that the same torn-read flake cannot return through a new test, accepting a slightly wider scope for a bounded change. — 2026-11-13
