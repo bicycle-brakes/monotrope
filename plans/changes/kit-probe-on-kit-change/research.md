@@ -9,20 +9,18 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-w2ay
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2, model: glm-5.3-flash, version: "2026-11-13"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # kit probe on kit change — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
+The original runner exploration below is preserved as received. Its model
+provenance is recorded in the header; Codex's draft-stage supplement follows
+the original output.
 
 Stage-2 call, 2026-11-13: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1044 files, 4116 commits, 12 rules.
 
@@ -73,3 +71,28 @@ The exploration is complete. Here is the research, ready to append to `plans/cha
 ---
 
 Two notes for the runner: the skeleton's frontmatter reminder stands — filling this file with model output makes it `provenance: ai-drafted-reviewed` with `produced_by:` and `review:` per `provenance.yaml`. And the file's stage-2 call line (attempt 1, route flash, leak check clean) is already recorded; everything above belongs below it.
+
+## Draft-stage repository gaps resolved — 2026-11-13
+
+Read at `7c37d013` by Codex (`gpt-6.1-sol`), within this worktree only:
+
+- `scripts/check_interview_minimums.py::_base` already distinguishes main's
+  first parent, a named branch's merge base and an indeterminate detached
+  checkout at `origin/main`. Its `_changed_paths` unions separate index and
+  working-tree diffs with nonignored untracked paths using NUL delimiters
+  and disabled rename detection. This is a usable comparison precedent,
+  including the staged-edit/working-copy-restored case.
+- `scripts/kit/manifest.yaml` classifies `scripts/kit/`, the reader, runner,
+  duration helper and their needed verdict module as `mechanismus`; its
+  `tests/` fallback classifies a new test file as `bestand`. Existing
+  `tests/test_kit.py` travels. No new runtime module or manifest rule is
+  required by the proposed split.
+- `scripts/verify_duration.py` accepts version-1 run-start, gate and run-end
+  events only, and groups all gate records as executed measurements. A
+  conditional skip therefore needs an explicit event and reader/report
+  treatment, rather than a zero-second successful gate.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent.
+  `templates/spec.md`, the phase-3 prompt and the existing cheap-first plan
+  supply the available forms. The interview gate discovers a change through
+  its spec, so the pre-draft invocation reported no measurable change folder;
+  it must run again once the spec exists.
