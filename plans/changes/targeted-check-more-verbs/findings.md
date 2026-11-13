@@ -850,3 +850,14 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 Runner note, 2026-11-13: repair · attempt 1 · route codex — full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+
+Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4103 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-12 | MAJOR | SPEC | base | scripts/verify_duration.py:610 | If a completed red full run loses its `run_end` record because that append fails, `slips` reports zero with exit 0. Reproduced in memory with a matching targeted green, valid correlated start and blocking-red gate: `_runs` emits no diagnostic, and `cmd_slips` silently skips the incomplete run. Report the measurement as unavailable instead of a trustworthy zero. [Acceptance criteria 11–12] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d648-ac63-7b42-8ead-9b1316c13038, 2026-11-13
+Reviewer session: codex 01a1d648-ac63-7b42-8ead-9b1316c13038 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
