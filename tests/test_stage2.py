@@ -22976,6 +22976,28 @@ def test_git_error_text_keeps_every_non_empty_line_after_a_long_path() -> None:
     assert stage2.git_error_text("x" * 5000) == "x" * 5000
 
 
+def test_merge_base_keeps_git_diagnostic_in_c_locale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed merge-base must explain the actual git failure, including every diagnostic line."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    observed = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: bad object HEAD\nhint: check the reference\n"
+
+    def fail_git(command, **kwargs):
+        assert command == [stage2.GIT, "-C", str(tmp_path), "merge-base", "HEAD", "origin/main"]
+        observed.update(kwargs.get("env", {}))
+        return subprocess.CompletedProcess(command, 128, "", diagnostic)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2._merge_base(tmp_path)
+    assert "warning: noisy prelude fatal: bad object HEAD hint: check the reference" in str(failure.value), (
+        "merge-base discarded git's explanation"
+    )
+    assert observed.get("LC_ALL") == "C", "merge-base must request English git diagnostics"
+    assert observed.get("GIT_TEST_SENTINEL") == "inherited", "merge-base lost the inherited environment"
+
+
 @pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])
 @pytest.mark.parametrize("explicit_env", [False, True])
 def test_git_errors_use_c_locale_and_keep_reason_after_warning(

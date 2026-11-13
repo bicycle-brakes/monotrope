@@ -2521,11 +2521,17 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
 def _merge_base(root: Path) -> str:
     """The merge base with origin/main, refused when there is none."""
     done = subprocess.run(
-        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
+        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "LC_ALL": "C"},
     )
     base = done.stdout.strip()
     if done.returncode != 0 or not base:
-        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+        raise Refused(
+            "there is no merge base with origin/main; the diff cannot be built. " + git_error_text(done.stderr)
+        )
     return base
 
 
