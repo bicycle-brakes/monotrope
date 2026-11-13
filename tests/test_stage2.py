@@ -12061,7 +12061,7 @@ def counting_capture(monkeypatch: pytest.MonkeyPatch, clearings: list[int]) -> N
 
 @pytest.mark.parametrize(
     ("verb", "forced_full"),
-    [("implement", False), ("repair", True), ("repair", False)],
+    [("implement", True), ("repair", True), ("repair", False)],
     ids=["implement-full", "repair-full-fallback", "repair-targeted"],
 )
 def test_runner_ledger_clearing_cannot_qualify_a_retry(
@@ -12081,8 +12081,9 @@ def test_runner_ledger_clearing_cannot_qualify_a_retry(
     first = work_step(verb)
     if verb == "implement":
         first = {**first, "plant": {**first["plant"], "tests/test_fix.py": FIX_TEST}}
-    if verb == "repair" and forced_full:
-        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover.
+    if forced_full:
+        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover. Implement
+        # takes the targeted route too since bead coding-harness-0swp, so its full case is forced alike.
         first = {**first, "plant": {**first["plant"], "verification-scope.txt": "requires full verification\n"}}
     baseline = script_work(
         world,
