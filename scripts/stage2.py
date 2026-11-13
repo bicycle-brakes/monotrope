@@ -1235,9 +1235,9 @@ def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
     """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
     node = yaml.compose(block)
     spans = []
-    for field, value in node.value:
-        if field.value == key:
-            start = block.rfind("\n", 0, field.start_mark.index) + 1
+    for key_node, value in node.value:
+        if key_node.value == key:
+            start = block.rfind("\n", 0, key_node.start_mark.index) + 1
             end = value.end_mark.index
             # A block mapping's end mark includes its final line ending; keep that separator.
             while end > start and block[end - 1] in "\r\n":
