@@ -25220,3 +25220,28 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
     else:
         assert chosen.fallback is None, chosen.fallback
         assert chosen.tests == ["tests/test_seed.py"]
+
+
+def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """coding-harness-dq4u: the targeted pytest step shares the full check's step limit (it measured 8.5 to 10.5
+    minutes on the swarm tests, past the 5-minute tool limit); the gates keep the tool limit."""
+    python = tmp_path / stage2.PYTEST[0]
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    seen: list[tuple[str, float | None, str | None]] = []
+
+    def record(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
+        seen.append((command[0], timeout, limit))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(stage2, "launch", record)
+    gate = {"id": "some-gate", "enforcement": "block", "command": "true"}
+    chosen = stage2.Targeted(["tests/test_x.py"], [], [gate])
+    assert stage2.run_targeted(tmp_path, {}, None, chosen) == ([], [])
+    assert stage2.TARGETED_PYTEST_SECONDS == stage2.VERIFY_SECONDS
+    minutes = stage2.TARGETED_PYTEST_SECONDS // 60
+    pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
+    assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
+    assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen

@@ -4328,6 +4328,9 @@ def refuse_repository_git(root: Path) -> None:
 
 TOOL_SECONDS = 5 * 60
 VERIFY_SECONDS = 45 * 60
+# The targeted pytest step of a repair or implement attempt is a slice of the full check, so it shares that limit:
+# the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
+TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
 
 
@@ -6147,7 +6150,12 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
         identity = "`" + " ".join(PYTEST) + "`"
         try:
             done = launch(
-                [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
+                [*PYTEST, *chosen.tests],
+                root,
+                targeted_pytest_env(root, env),
+                key,
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
             )
         except (StepTimedOut, CallFailed) as error:
             return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
