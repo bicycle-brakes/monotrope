@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-02
-updated: 2026-11-12
+updated: 2026-11-13
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -25,7 +25,7 @@ one repository's numbers.
 | --- | --- | --- | --- |
 | 1 | Every criterion names its proof | Each acceptance criterion in `spec.md` says what refutes it. The plan's `## Criterion ledger` names the test that proves it. A gate turns red when that test disappears. | `spec.md`, `plan.md`, gate `criterion-ledger` (`scripts/check_criterion_ledger.py`) |
 | 2 | Red first | A repair of code counts only when its test fails on the code before the repair. The runner checks this itself: it runs the named test alone against the old code in a temporary worktree. | [Repairing taken findings](WORKFLOW.md#repairing-taken-findings-repair) |
-| 3 | One gate list | `make verify` and the hosted CI run the same list. `scripts/verify_all.sh` asks `scripts/ci_gates.py`, and that reads [`decisions/gates.yaml`](../decisions/gates.yaml). `ci.yml` is generated from the same file, and a hand edit fails the gate `ci-drift`. | [Verification](WORKFLOW.md#verification-runs-through-git-and-ci-not-through-the-harness), [gate catalog](governance/gate-catalog.md) |
+| 3 | One gate list | `make verify` and the hosted CI run the same list. `scripts/verify_all.sh` asks `scripts/ci_gates.py`, and that reads [`decisions/gates.yaml`](../decisions/gates.yaml); the shared scheduler `scripts/verify_run.py` orders and runs it in two phases. `ci.yml` is generated from the same file, and a hand edit fails the gate `ci-drift`. | [Verification](WORKFLOW.md#verification-runs-through-git-and-ci-not-through-the-harness), [gate catalog](governance/gate-catalog.md) |
 | 4 | The gates test themselves | Every gate has a mutation test: a run that turns red when the thing the gate protects is broken. A gate without one needs a reason in a list that may only shrink (rule RB-G4). An empty set is no result: every gate asserts that what it measured is not empty (rule RB-G7). | [Rule table](governance/regelwerk.md), `scripts/mutation_evidence.py`, `tests/test_ci.py` |
 | 5 | A locked environment | Each checkout builds its own `.venv` from a lock with a hash for every package. Pinned outside tools are tested as the real program against offline contracts, not as expected arguments. A local green means what a CI green means. | `requirements-ci.txt`, `make venv` |
 | 6 | The kit probe | The probe copies everything the kit manifest marks as mechanism into an empty repository and runs the tests there. A red case must be listed with its reason, or the gate `leerprobe` blocks. This is how "the workflow can be handed over" becomes a run. | `scripts/kit/probe.py`, `scripts/kit/manifest.yaml` |
@@ -59,14 +59,15 @@ a test that would have passed anyway.
 | Where | When | Role |
 | --- | --- | --- |
 | Stop hook | at the end of an agent's turn, only when Python changed since `HEAD` | comfort: an agent does not hand back a red tree. It is not the enforcement. |
-| `make verify` | before a commit of code, inside every implement attempt after the attempt's cheap checks (ruff, its own tests) are green, inside a repair attempt when its targeted check cannot cover the repair safely, and before the final review | selected local gates in cheap-first order; stops at the first blocking failure and names the remaining selected gates as not run; one run per machine at a time, a second one queues; test workers sized from the machine |
+| `make verify` | before a commit of code, inside every implement attempt after the attempt's cheap checks (ruff, its own tests) are green, inside a repair attempt when its targeted check cannot cover the repair safely, and before the final review | all cheap gates (unmarked `seconds`) run first, every diagnostic collected even past a blocking red; then one admission covers the protected `minutes` work, where the run stops at its first blocking failure and names the remaining selected gates as not run; only the protected phase queues, one per machine at a time; test workers sized from the machine |
 | Hosted CI, job `verify` | on each pull request, against its merge commit with `main`, and again in the merge queue against the current `main` | the merge gate; the branch ruleset requires it |
 | Hosted CI, job `drift` | on a schedule | gates that change with time, not with a commit (strict plan hygiene, research currency) |
 
-A red local run may be incomplete: gates named as not run have no verdict.
-Hosted CI and `--ci` continue through every selected gate after a blocking
-failure. The [gate catalog](governance/gate-catalog.md) lists declared costs
-and enforcement.
+A red local run may be incomplete: only protected gates can be named as not
+run, and they have no verdict — every selected cheap gate always carries its
+own diagnostic. Hosted CI and `--ci` continue through every selected gate
+after a blocking failure. The [gate catalog](governance/gate-catalog.md)
+lists declared costs, admission marks and enforcement.
 
 A change to Markdown outside `scripts/`, `tests/`, `prompts/` and
 `decisions/` skips the local `make verify`; CI is its gate.

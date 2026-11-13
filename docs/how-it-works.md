@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-11-02
-updated: 2026-11-12
+updated: 2026-11-13
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -161,9 +161,11 @@ These are operator details; you can skip them on a first read.
   the loop record until the final review releases it into `findings.md`.
 - The `session` verb opens a macOS Terminal window through `osascript`, so it
   needs a graphical login. Every other verb runs in a plain shell.
-- One admission per machine: a second `make verify` or runner check queues
-  behind the first instead of running beside it, and waits while free memory
-  is below a floor (`scripts/verify_lock.py`).
+- One admission per machine, for protected work only: a run's cheap gates —
+  every unmarked `seconds` gate — execute before any wait, so a lint failure
+  appears in seconds even while another check holds the slot; the queue and
+  the memory floor (`scripts/verify_lock.py`) are entered once, by the
+  shared scheduler (`scripts/verify_run.py`), for the `minutes` gates.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
@@ -336,8 +338,8 @@ What is particular to this repository:
   2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
   4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
   test workers from the machine (half the cores, at most one per 2 GiB of
-  memory), and all lanes share one verification slot, enforced by one
-  admission per machine ([lanes](orchestration.md)).
+  memory), and all lanes share one verification slot for protected work,
+  enforced by one admission per machine ([lanes](orchestration.md)).
 
 ## Follow one completed change
 

@@ -212,7 +212,7 @@ def test_records_bind_results_to_revision_and_configuration(
     commits = iter(["a" * 40, "b" * 40])
     porcelains = iter(["", " M scripts/x.py"])
 
-    def fake_git(arguments: list[str]) -> str | None:
+    def fake_git(arguments: list[str], cwd: Path | None = None) -> str | None:  # noqa: ARG001 - the real `_git` binds a checkout
         if arguments == ["rev-parse", "HEAD"]:
             return next(commits, None)
         if arguments == ["status", "--porcelain"]:
@@ -681,3 +681,87 @@ def test_writer_refuses_hard_linked_history(tmp_path, capsys):
     code, _, err = _run(capsys, "start")
     assert code == 2 and "refusing" in err
     assert victim.read_text() == "unchanged\n"
+
+
+# ---------------------------------------------------------------------------
+# Criterion 8 — the completion context of a cheap-before-admission run
+# ---------------------------------------------------------------------------
+
+
+def test_completion_context_is_additive_and_old_history_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Old records still read; a completion block speaks for the whole run or is refused wholesale.
+
+    Fault this pins: the additive completion fields rejected as an unknown
+    version, an old start-only record failing to read, the reader preferring
+    the stale start context over the final one, a cheap-only run shown with a
+    fabricated wait, or a half-present block accepted as valid.
+    """
+    state = tmp_path / "state"
+    monkeypatch.setenv(verify_lock.ADMISSION_ID_ENV, "start-env")
+    monkeypatch.setenv(verify_lock.ADMISSION_WAIT_ENV, "7.5")
+
+    # An old record: the completion carries no admission fields, the start's
+    # context decides, and the reader shows it exactly as before.
+    code, out, _ = _run(capsys, "start")
+    old_id = out.strip()
+    code, out, _ = _run(capsys, "end", "--run", old_id, "--start", "10.0", "--end", "13.5", "--verdict", "green")
+    assert code == 0
+    assert out.strip() == "execution 3.500s · admission wait 7.500s", out
+    ends = [event for event in _history(state) if event["event"] == "run_end"]
+    assert len(ends) == 1 and "admission_requested" not in ends[0]
+    code, out, _ = _run(capsys, "report", "--run", old_id)
+    assert code == 0
+    assert "admission: start-env · wait: 7.5 · reused: no" in out, out
+    assert "admission (final)" not in out and "final revision" not in out
+
+    # The additive block: the final admission context wins over the stale
+    # start context, and the final revision is named after a changed wait.
+    code, out, _ = _run(capsys, "start")
+    full_id = out.strip()
+    summary = verify_duration.record_end(
+        full_id,
+        "green",
+        segments=[(0.0, 1.0)],
+        context=verify_lock.AdmissionContext("final-slot", 12.0, False),
+        admission_requested=True,
+        final_commit="cafe123",
+        final_config="b" * 64,
+    )
+    assert summary == "execution 1.000s · admission wait 12.000s", summary
+    code, out, _ = _run(capsys, "report", "--run", full_id)
+    assert code == 0
+    assert "admission (final): final-slot · wait: 12.0 · reused: no" in out, out
+    assert "final revision: cafe123" in out and "b" * 64 in out
+    assert "start-env" not in out, "the stale start context must not speak for the run"
+
+    # A cheap-only completion says explicitly that no admission was requested.
+    code, out, _ = _run(capsys, "start")
+    cheap_id = out.strip()
+    summary = verify_duration.record_end(cheap_id, "green", segments=[(0.0, 2.0)], admission_requested=False)
+    assert summary == "execution 2.000s · admission wait none (no admission was requested)", summary
+    code, out, _ = _run(capsys, "report", "--run", cheap_id)
+    assert code == 0
+    assert "admission: none (no admission was requested)" in out, out
+    assert "admission (final)" not in out and "final revision" not in out
+    assert "start-env" not in out
+
+    # Half-present blocks are refused wholesale: the run keeps its start but
+    # reads as incomplete, with every invalid field named.
+    path = verify_duration.history_path()
+    template = [event for event in _history(state) if event["event"] == "run_end"][-1]
+    code, out, _ = _run(capsys, "start")
+    broken_id = out.strip()
+    missing = dict(template, run_id=broken_id)
+    del missing["admission_reused"]
+    typed = dict(template, run_id=broken_id)
+    typed["admission_requested"] = "yes"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(missing) + "\n")
+        stream.write(json.dumps(typed) + "\n")
+    code, out, _ = _run(capsys, "report")
+    assert code == 1
+    assert f"invalid run_end fields: admission_reused for run {broken_id}" in out, out
+    assert f"invalid run_end fields: admission_requested for run {broken_id}" in out, out
+    assert "incomplete (no completion recorded)" in out

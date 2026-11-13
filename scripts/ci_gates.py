@@ -245,9 +245,14 @@ OHNE_AUFRUFER: dict[str, str] = {
     ),
     "verify_lock.py": (
         "Helper of the runner, never a gate of its own: the machine-wide verification admission "
-        "(flock queue, free-memory check) that verify_all.sh execs as `-m scripts.verify_lock` and "
-        "scripts.stage2 holds around its timed local checks; tests/test_verify_lock.py runs it "
-        "against isolated state roots (bead coding-harness-p6mu)"
+        "(flock queue, free-memory check) that scripts.verify_run holds in-process around the "
+        "protected gates and scripts.stage2 reaches through the same scheduler; tests/test_verify_lock.py "
+        "runs it against isolated state roots (bead coding-harness-p6mu)"
+    ),
+    "verify_duration.py": (
+        "Helper of the runner, never a gate of its own: the run history the shared scheduler "
+        "scripts.verify_run writes through (one run identity, per-gate active seconds, completion "
+        "context); tests/test_verify_duration.py runs it (bead coding-harness-bxxt.6)"
     ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
@@ -399,6 +404,8 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
         if "needs_history" in g and not isinstance(g.get("needs_history"), bool):
             fehler.append(f"{gid}: needs_history muss ein Boolean sein")
+        if "needs_admission" in g and not isinstance(g.get("needs_admission"), bool):
+            fehler.append(f"{gid}: needs_admission muss ein Boolean sein")
         if g.get("needs_tracker") and bool(g.get("action")):
             # Seit bead 1jg.3 liest auch der drift-Job den Tracker (plans-registry-strict):
             # ohne committete Kopie braucht jeder Job mit einem Tracker-Leser die Hydratation.
@@ -437,12 +444,19 @@ def in_job(gate: dict[str, Any], job: str) -> bool:
     return gate["job"] == job
 
 
-def gates() -> list[dict[str, Any]]:
-    """Alle Gates der einen Liste, in ihrer Reihenfolge."""
-    fehler = validate_schema()
+def _gatedatei(root: Path | str) -> Path:
+    """Die eine Gate-Datei eines Checkouts — der Wurzel-Parameter, nie der des Importeurs."""
+    return Path(root) / "decisions" / "gates.yaml"
+
+
+def _gates_aus(datei: Path) -> list[dict[str, Any]]:
+    """Alle Gates einer Gate-Datei, in ihrer Reihenfolge, mit den abgeleiteten Feldern."""
+    if not datei.is_file():
+        raise FileNotFoundError(f"Gate-Datei fehlt: {datei}")
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    fehler = validate_schema(doc)
     if fehler:
         raise ValueError("Gate-Datei verletzt das Schema: " + "; ".join(fehler))
-    doc = yaml.safe_load(GATE_FILE.read_text(encoding="utf-8"))
     out: list[dict[str, Any]] = []
     for g in doc["gates"]:
         aktion = g.get("action")
@@ -462,6 +476,8 @@ def gates() -> list[dict[str, Any]]:
                 "cost": g["cost"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
+                "needs_admission": bool(g.get("needs_admission")),
+                "admission": g["cost"] == "minutes" or bool(g.get("needs_admission")),
                 "subsets": list(g.get("subsets") or []),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
@@ -469,6 +485,42 @@ def gates() -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def gates() -> list[dict[str, Any]]:
+    """Alle Gates der einen Liste, in ihrer Reihenfolge."""
+    return _gates_aus(GATE_FILE)
+
+
+def gates_at(root: Path | str) -> list[dict[str, Any]]:
+    """Alle Gates der einen Liste EINES Checkouts — fuer den Scheduler (bead coding-harness-bxxt.6).
+
+    Der lokale Lauf misst den Checkout, in dem er steht. `gates()` folgt dem
+    Modul-Pfad dieses Moduls; ein Importeur in einem anderen Checkout liesse
+    damit versehentlich seine eigene Liste messen. `gates_at` bindet dieselbe
+    Ableitung an eine Wurzel, damit der Scheduler und seine Pruefen den
+    Checkout benennen, den sie meinen.
+    """
+    return _gates_aus(_gatedatei(root))
+
+
+def selection_at(root: Path | str, job: str, ci: bool = False) -> list[dict[str, Any]]:
+    """Die Gate-Auswahl eines Laufs in einem Checkout — dieselbe Kette wie `--commands --tsv`.
+
+    lokal: `--placement lokal` und die billig-zuerst-Ordnung. ci:
+    `--placement ci` ohne die Action-Entsprechungen (`--skip-equivalents`,
+    die CI faehrt die Actions selbst), in Deklarationsordnung. Der Scheduler
+    und seine Pruefen ziehen dieselben Gates hierher, statt das CLI zu
+    umgehen oder eine zweite Liste zu pflegen.
+    """
+    alle = gates_at(root)
+    umfeld = "ci" if ci else "lokal"
+    auswahl = [
+        g
+        for g in alle
+        if in_job(g, job) and g["local_runnable"] and misst_in(g, umfeld) and not (ci and g["via_local_equivalent"])
+    ]
+    return auswahl if ci else kostenordnung(auswahl)
 
 
 def kostenordnung(alle: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -507,17 +559,20 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
 
     Deterministic and unfiltered: every declared gate, in list order, with the
     fields the catalog promises (id, title, command or action, job,
-    enforcement, cost, floor, placement, reason — the cost column since
-    schema 3, bead coding-harness-bxxt.1). A command gate and a hosted action
-    are rendered distinctly, and an action with a local equivalent names it —
-    the reader must see what runs where. `tests/test_gate_catalog.py` holds
-    the committed inventory to this rendering.
+    enforcement, cost, admission, floor, placement, reason — the cost column
+    since schema 3, bead coding-harness-bxxt.1; the admission column since
+    the cheap-before-admission order, bead coding-harness-bxxt.6, naming the
+    gates that wait for the machine's slot). A command gate and a hosted
+    action are rendered distinctly, and an action with a local equivalent
+    names it — the reader must see what runs where.
+    `tests/test_gate_catalog.py` holds the committed inventory to this
+    rendering.
     """
     if alle is None:
         alle = gates()
     zeilen = [
-        "| id | title | command / action | job | enforcement | cost | floor | placement | reason |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| id | title | command / action | job | enforcement | cost | admission | floor | placement | reason |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for g in alle:
         if g["action"]:
@@ -527,34 +582,41 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
         else:
             einsatz = f"`{g['command']}`"
         kosten_zelle = f"{_zelle(g['cost'])} | "
+        admission_zelle = "yes" if g["admission"] else "no"
         zeilen.append(
             f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
-            f"{_zelle(g['enforcement'])} | {kosten_zelle}{'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
-            f"{_zelle(g['reason'])} |"
+            f"{_zelle(g['enforcement'])} | {kosten_zelle}{admission_zelle} | {'yes' if g['floor'] else 'no'} | "
+            f"{_zelle(g['placement'])} | {_zelle(g['reason'])} |"
         )
     return "\n".join(zeilen)
 
 
-def _git(*args: str) -> str | None:
+def _git(*args: str, cwd: Path = REPO_ROOT) -> str | None:
     try:
-        erg = subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+        erg = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
     return erg.stdout.strip() or None
 
 
-def report(job: str) -> dict[str, Any]:
-    """Bindet den Lauf an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
-    konfig = GATE_FILE.read_bytes()
-    alle = gates()
+def report_at(root: Path | str, job: str) -> dict[str, Any]:
+    """Bindet einen Lauf in einem Checkout an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
+    wurzel = Path(root)
+    konfig = _gatedatei(wurzel).read_bytes()
+    alle = gates_at(wurzel)
     return {
         "job": job,
-        "candidate": _git("rev-parse", "HEAD"),
-        "base": _git("merge-base", "origin/main", "HEAD"),
+        "candidate": _git("rev-parse", "HEAD", cwd=wurzel),
+        "base": _git("merge-base", "origin/main", "HEAD", cwd=wurzel),
         "config_sha256": hashlib.sha256(konfig).hexdigest(),
         "gates_total": len(alle),
         "gates_job": sum(1 for g in alle if in_job(g, job)),
     }
+
+
+def report(job: str) -> dict[str, Any]:
+    """Bindet den Lauf an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
+    return report_at(REPO_ROOT, job)
 
 
 def _schritt(g: dict[str, Any]) -> list[str]:

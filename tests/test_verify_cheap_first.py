@@ -3,13 +3,16 @@
 The one gate list (decisions/gates.yaml) classifies every gate by declared
 cost — `seconds` or `minutes`. The reader (scripts/ci_gates.py) validates that
 classification under schema 3 and derives a stable cheap-first order for the
-local run only; the runner (scripts/verify_all.sh) stops at the first local
-blocking failure, names every selected gate it did not reach, and still ends
-with timing and a red verdict. Hosted CI and `--ci` stay exhaustive.
+local run only; the shared two-phase scheduler behind scripts/verify_all.sh
+runs the cheap class first — collecting every cheap diagnostic even past a
+blocking red — and stops the protected phase at its first blocking failure,
+naming every selected gate it did not reach, still ending with timing and a
+red verdict. Hosted CI and `--ci` stay exhaustive.
 
-These tests exercise the real reader and runner on synthetic version-3 gate
-lists in copied trees — marker commands instead of pytest, no network — and
-the transferred kit in a recipient tree built strictly from the manifest's
+These tests exercise the real reader and scheduler on synthetic version-3 gate
+lists in copied, git-initialized trees — marker commands instead of pytest,
+writing outside the tree so the tree measurement stays stable — and the
+transferred kit in a recipient tree built strictly from the manifest's
 mechanism files, running without importing a single source-tree module.
 """
 
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -35,22 +39,50 @@ import verify_lock  # noqa: E402
 from stage2 import GATE_END, GATE_START, red_sections  # noqa: E402
 
 # The runner mechanism the kit transfers (scripts/kit/manifest.yaml classifies
-# all four as `mechanismus`); the transfer proof copies exactly these and runs
+# all five as `mechanismus`); the transfer proof copies exactly these and runs
 # them in a recipient tree of their own.
 MECHANISM_FILES = (
     "scripts/ci_gates.py",
+    "scripts/verify_run.py",
     "scripts/verify_all.sh",
     "scripts/verify_lock.py",
     "scripts/verify_duration.py",
 )
 
+# The scheduler measures the tree with git; a copied tree needs a resolvable git.
+_GIT_DIR = Path(shutil.which("git") or "/usr/bin/git").parent
+
+
+def _git_in(root: Path, *args: str) -> None:
+    env = dict(os.environ)
+    env.update(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.com",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.com",
+        }
+    )
+    subprocess.run(["git", *args], cwd=root, env=env, check=True, capture_output=True, text=True)
+
 
 def _tree_files(tree: Path) -> Path:
-    """The copied runner, its gate reader, its admission module and its duration helper — no gates yet."""
+    """The copied scheduler, its gate reader, its admission module and its duration helper — one commit, no gates yet.
+
+    The tree is a real git checkout with a commit: the scheduler's tree
+    measurement needs a named HEAD, and its marker commands write outside the
+    tree so the measured contents stay what the commit named.
+    """
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
-    for name in ("verify_all.sh", "ci_gates.py", "verify_lock.py", "verify_duration.py"):
+    for name in ("verify_all.sh", "ci_gates.py", "verify_run.py", "verify_lock.py", "verify_duration.py"):
         shutil.copy(REPO_ROOT / "scripts" / name, tree / "scripts" / name)
+    _git_in(tree, "init")
+    _git_in(tree, "add", ".")
+    _git_in(tree, "commit", "--quiet", "-m", "mechanism")
     return tree
 
 
@@ -101,7 +133,7 @@ def _run_runner(tree: Path, *args: str) -> subprocess.CompletedProcess:
     """The copied runner in its own tree: own state root, floor zero, the pinned interpreter."""
     env = {
         "HOME": str(tree.parent / "home"),
-        "PATH": "/usr/bin:/bin:/sbin:/usr/sbin",
+        "PATH": f"{_GIT_DIR}:/usr/bin:/bin:/sbin:/usr/sbin",
         "XDG_STATE_HOME": str(tree.parent / "state"),
         verify_lock.FLOOR_ENV: "0",
         "PYTHON": sys.executable,
@@ -368,6 +400,8 @@ def test_catalog_exposes_declared_costs(tmp_path: Path, monkeypatch: pytest.Monk
         "cost": "minutes",
         "needs_tracker": False,
         "needs_history": False,
+        "needs_admission": False,
+        "admission": True,
         "subsets": [],
         "reason": "the minutes class of the duration baseline",
         "local_runnable": True,
@@ -379,15 +413,20 @@ def test_catalog_exposes_declared_costs(tmp_path: Path, monkeypatch: pytest.Monk
         "name": "The lint gate",
         "command": "ruff check .",
         "cost": "seconds",
+        "admission": False,
         "reason": "seconds",
     }
     records = [suite, lint]
 
     zeilen = [z for z in ci_gates.catalog_rows(records).splitlines() if z.strip()]
-    assert zeilen[0] == "| id | title | command / action | job | enforcement | cost | floor | placement | reason |"
-    assert zeilen[1] == "|---|---|---|---|---|---|---|---|---|"
-    costen = {parts[0].strip(): parts[5].strip() for parts in (z.split("|")[1:-1] for z in zeilen[2:])}
-    assert costen == {"suite": "minutes", "lint": "seconds"}, costen
+    assert (
+        zeilen[0]
+        == "| id | title | command / action | job | enforcement | cost | admission | floor | placement | reason |"
+    )
+    assert zeilen[1] == "|---|---|---|---|---|---|---|---|---|---|"
+    cells = {parts[0].strip(): parts for parts in (z.split("|")[1:-1] for z in zeilen[2:])}
+    assert {gid: parts[5].strip() for gid, parts in cells.items()} == {"suite": "minutes", "lint": "seconds"}
+    assert {gid: parts[6].strip() for gid, parts in cells.items()} == {"suite": "yes", "lint": "no"}
 
     # And the CLI renders the declared list with its costs.
     list_file = tmp_path / "gates.yaml"
@@ -667,6 +706,44 @@ def test_early_stop_preserves_repair_diagnostics(tmp_path: Path) -> None:
     assert "not run" not in red, red
 
 
+def test_multiple_cheap_failures_keep_parser_frames(tmp_path: Path) -> None:
+    """Ledger 9: both cheap failures survive the repair parser; the summary invents no gate section.
+
+    Two seconds gates fail back to back — the run collects every cheap
+    diagnostic before it suppresses the protected work — and `red_sections`
+    must keep both sections whole: start frame, command, diagnostic and RED
+    line each, while the not-run summary stays outside the parsed evidence.
+    """
+    base = tmp_path / "twice-red"
+    gates = [
+        _gate(base, "suite-minutes", "minutes"),
+        _gate(base, "red-one", "seconds", ending="echo 'E   first-cheap-diagnostic'; exit 1"),
+        _gate(base, "red-two", "seconds", ending="echo 'E   second-cheap-diagnostic'; exit 1"),
+        _gate(base, "after-minutes", "minutes"),
+    ]
+    tree = _tree_files(base / "tree")
+    _write_gate_file(tree, gates)
+    done = _run_runner(tree)
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    # The first red did not suppress the second cheap gate: both diagnostics exist.
+    assert (base / "red-one.ran").exists() and (base / "red-two.ran").exists(), done.stdout
+    assert (base / "order.txt").read_text(encoding="utf-8") == "red-one\nred-two\n"
+    assert not (base / "suite-minutes.ran").exists() and not (base / "after-minutes.ran").exists()
+    assert _not_run_gates(done.stdout) == ["suite-minutes", "after-minutes"], done.stdout
+    red = red_sections(done.stdout)
+    assert red is not None, done.stdout
+    for gid, marker in (("red-one", "E   first-cheap-diagnostic"), ("red-two", "E   second-cheap-diagnostic")):
+        assert f"── [{gid}] $ touch" in red, (gid, red)
+        assert marker in red, (gid, red)
+        assert f"── [{gid}] RED (block)" in red, (gid, red)
+    summary_lines = [line for line in done.stdout.splitlines() if line.endswith("] not run")]
+    for line in summary_lines:
+        assert GATE_START.match(line) is None, f"not-run summary matched a gate start: {line}"
+        assert GATE_END.match(line) is None, f"not-run summary matched a gate end: {line}"
+    assert "suite-minutes" not in red and "after-minutes" not in red, red
+    assert "not run" not in red, red
+
+
 def test_early_stop_history_records_only_executed_gates(tmp_path: Path) -> None:
     """Criterion 9: the history of an early-stopped run measures only executed gates and ends red.
 
@@ -724,7 +801,8 @@ def test_transferred_kit_stops_before_expensive_gate(tmp_path: Path) -> None:
         return {
             "id": gid,
             "title": f"The recipient's {gid}",
-            "command": f"touch {empfaenger / f'{gid}.ran'}; echo {gid} >> {empfaenger / 'order.txt'}; {ending}",
+            # The markers stay outside the recipient: the scheduler measures the tree.
+            "command": f"touch {empfaenger.parent / f'{gid}.ran'}; echo {gid} >> {empfaenger.parent / 'order.txt'}; {ending}",
             "job": "verify",
             "enforcement": "block",
             "floor": True,
@@ -748,9 +826,12 @@ def test_transferred_kit_stops_before_expensive_gate(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    _git_in(empfaenger, "init")
+    _git_in(empfaenger, "add", ".")
+    _git_in(empfaenger, "commit", "--quiet", "-m", "recipient base")
     env = {
         "HOME": str(tmp_path / "home"),
-        "PATH": "/usr/bin:/bin:/sbin:/usr/sbin",
+        "PATH": f"{_GIT_DIR}:/usr/bin:/bin:/sbin:/usr/sbin",
         "XDG_STATE_HOME": str(tmp_path / "state"),
         verify_lock.FLOOR_ENV: "0",
         "PYTHON": sys.executable,
@@ -765,25 +846,28 @@ def test_transferred_kit_stops_before_expensive_gate(tmp_path: Path) -> None:
     )
     assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "VERIFY RED" in done.stdout, done.stdout
-    assert (empfaenger / "aa-red.ran").exists()
-    assert not (empfaenger / "zz-suite.ran").exists(), "the adopter executed a minutes gate after a cheap failure"
-    assert not (empfaenger / "mm-after.ran").exists()
-    assert (empfaenger / "order.txt").read_text(encoding="utf-8") == "aa-red\n"
+    assert (empfaenger.parent / "aa-red.ran").exists()
+    assert not (empfaenger.parent / "zz-suite.ran").exists(), (
+        "the adopter executed a minutes gate after a cheap failure"
+    )
+    assert not (empfaenger.parent / "mm-after.ran").exists()
+    assert (empfaenger.parent / "order.txt").read_text(encoding="utf-8") == "aa-red\n"
     assert _not_run_gates(done.stdout) == ["zz-suite", "mm-after"], done.stdout
 
 
 def test_gate_frame_uses_declared_interpreter_without_absolute_path(tmp_path: Path) -> None:
     """Repair evidence uses the bare command while execution keeps the pinned interpreter."""
     tree = _tree_files(tmp_path / "frame")
+    outside = tmp_path / "interpreter.txt"
     command = (
         'python3 -c "import pathlib, sys; '
-        "pathlib.Path('interpreter.txt').write_text(sys.executable); "
+        f"pathlib.Path({str(outside)!r}).write_text(sys.executable); "
         "print('E   pinned-interpreter-diagnostic'); sys.exit(1)\""
     )
     _write_gate_file(tree, [_gate(tree, "python-red", "seconds", command=command)])
     done = _run_runner(tree)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert (tree / "interpreter.txt").read_text() == sys.executable
+    assert outside.read_text() == sys.executable
     evidence = red_sections(done.stdout)
     assert evidence is not None, "the blocking gate must remain available as repair evidence"
     assert f"── [python-red] $ {command}" in evidence, "the frame must show the declared bare interpreter"
@@ -795,13 +879,15 @@ def test_gate_frame_uses_declared_interpreter_without_absolute_path(tmp_path: Pa
 def test_last_blocking_failure_has_no_empty_not_run_summary(tmp_path: Path) -> None:
     """A last-gate failure is red but cannot claim that any gate was skipped."""
     tree = _tree_files(tmp_path / "last-red")
+    base = tmp_path / "last-red-markers"  # outside the measured tree, like every other marker here
+    base.mkdir()
     _write_gate_file(
         tree,
-        [_gate(tree, "first", "seconds"), _gate(tree, "last", "minutes", ending="exit 1")],
+        [_gate(base, "first", "seconds"), _gate(base, "last", "minutes", ending="exit 1")],
     )
     done = _run_runner(tree)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert (tree / "order.txt").read_text() == "first\nlast\n"
+    assert (base / "order.txt").read_text() == "first\nlast\n"
     assert "── [last] RED (block)" in done.stdout
     assert "not run" not in done.stdout, "no not-run header belongs to a run that executed every selected gate"
 
@@ -814,7 +900,7 @@ def test_gate_record_requires_cost_even_without_schema_validation(
     gate = _gate(tree, "seed", "seconds")
     _write_gate_file(tree, [gate])
     monkeypatch.setattr(ci_gates, "GATE_FILE", tree / "decisions" / "gates.yaml")
-    monkeypatch.setattr(ci_gates, "validate_schema", lambda: [])
+    monkeypatch.setattr(ci_gates, "validate_schema", lambda _doc: [])
     assert ci_gates.gates()[0]["cost"] == "seconds"
     del gate["cost"]
     _write_gate_file(tree, [gate])

@@ -724,6 +724,52 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         monkeypatch.setenv(name, value)
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
 
+    # The one gate list of the test world (bead coding-harness-bxxt.6): the runner's checks run
+    # through the shared two-phase scheduler, so the world declares its own gates. The full check
+    # stands as a protected `minutes` gate whose command is the scripted `make verify` stand-in,
+    # the document subset as an unprotected `seconds` gate that matches the stand-in's document
+    # vector — a test that needs another shape rewrites this file and commits the rewrite.
+    (root / "decisions").mkdir()
+    (root / "decisions" / "gates.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "tools": {"python": ["3.12"]},
+                "gates": [
+                    {
+                        "id": "verify-all",
+                        "title": "The full check",
+                        "job": "verify",
+                        "command": "make verify",
+                        "enforcement": "block",
+                        "cost": "minutes",
+                        "floor": True,
+                        "needs_tracker": False,
+                        "needs_history": False,
+                        "placement": "both",
+                        "reason": "The world's stand-in for the repository's whole full check.",
+                    },
+                    {
+                        "id": "docs-all",
+                        "title": "The document subset",
+                        "job": "verify",
+                        "subsets": ["docs"],
+                        "command": "bash scripts/verify_all.sh --job docs",
+                        "enforcement": "block",
+                        "cost": "seconds",
+                        "floor": True,
+                        "needs_tracker": False,
+                        "needs_history": False,
+                        "placement": "both",
+                        "reason": "The world's stand-in for the document subset check.",
+                    },
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
     git(root, "init", "--quiet", "--initial-branch=main")
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "base")
@@ -2293,7 +2339,10 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
-    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    # The allowance is shared with the cheap document gate that runs before the queue (two process
+    # starts of the stand-in chain), so it holds the executing seconds with room to spare; a queue
+    # wait of 2.5 s charged against it would still push the check over.
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 3.5)
     ready = world.state / "holder-ready"
     holder = _real_holder(ready)
     try:
@@ -2306,7 +2355,14 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
         world.script(make=[{"stdout": "green", "sleep": 1.5}])
         queued = threading.Thread(target=attempt)
         queued.start()
-        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
+        # Release only once the check has registered in the queue, then keep it there for 2.5 real seconds:
+        # charged to the allowance, that wait plus the 1.5-second check would exceed the 3.5-second limit.
+        queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+        limit = time.monotonic() + 60
+        while time.monotonic() < limit and not (queue.is_dir() and any(queue.iterdir())):
+            time.sleep(0.02)
+        assert queue.is_dir() and any(queue.iterdir()), "the check never queued for the admission"
+        time.sleep(2.5)
         holder.terminate()
         holder.wait(timeout=30)
         queued.join(timeout=90)
@@ -2365,6 +2421,185 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         if holder.poll() is None:
             holder.terminate()
             holder.wait(timeout=10)
+
+
+def test_full_and_draft_checks_share_before_admission_scheduler(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 10 of the cheap-before-admission change. Planted fault: one of the three consumers —
+    # the full attempt check, the repair's full fallback, the draft's document check — keeps an outer
+    # whole-run admission, wraps the whole check in one launch instead of the per-gate callback, or
+    # loses its job's gate selection.
+    marker = world.state / "quick.ran"
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].insert(
+        0,
+        {
+            "id": "quick-check",
+            "title": "The cheap gate",
+            "job": "verify",
+            "command": f"echo quick > {marker}",
+            "enforcement": "block",
+            "cost": "seconds",
+            "floor": True,
+            "needs_tracker": False,
+            "needs_history": False,
+            "placement": "both",
+            "reason": "The cheap gate a consumer must run before it asks for the machine slot.",
+        },
+    )
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a cheap gate joins the verify job")
+
+    order: list[str] = []
+    admissions: list[list[str]] = []
+    real_hold = stage2.verify_lock.hold_admission
+    real_launch = stage2.launch
+
+    def hold_admission(command):
+        admissions.append(list(command))
+        order.append("admission")
+        return real_hold(command)
+
+    def launch(command, root, env, *rest, **kwargs):
+        if command[1:2] == ["-c"]:
+            order.append(f"gate: {command[2]}")
+        return real_launch(command, root, env, *rest, **kwargs)
+
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+    monkeypatch.setattr(stage2, "launch", launch)
+    cheap_order = [
+        f"gate: echo quick > {marker}",
+        "gate: bash scripts/verify_all.sh --job docs",
+        "admission",
+        "gate: make verify",
+    ]
+
+    # 1. The full attempt: every cheap gate first, then one admission for the protected set.
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert order == cheap_order, order
+    assert admissions == [["verify-run", "verify"]], "the scheduler, not the caller, names its admission"
+    assert marker.read_text(encoding="utf-8").strip() == "quick"
+
+    # 2. The repair's full fallback runs the same scheduler with the same verify selection.
+    order.clear()
+    admissions.clear()
+    marker.unlink(missing_ok=True)
+    (world.root / "verification-scope.txt").write_text("requires full verification\n", encoding="utf-8")
+    env = stage2.runner_env(
+        stage2.foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+            }
+        ),
+        world.root,
+    )
+    problems = stage2._targeted_body(world.root, world.plan, env, None, None, None, None, [], "HEAD", [])
+    assert problems == [], problems
+    assert order == cheap_order, order
+    assert admissions == [["verify-run", "verify"]], "the fallback took an admission of its own"
+    assert marker.exists(), "the fallback lost the verify selection's cheap gate"
+    (world.root / "verification-scope.txt").unlink()
+
+    # 3. The draft's document check: the docs subset only — cheap, no admission, no full check.
+    order.clear()
+    admissions.clear()
+    marker.unlink(missing_ok=True)
+    forget_the_run(world)
+    draft_world(world)
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert order == ["gate: bash scripts/verify_all.sh --job docs"], order
+    assert admissions == [], "the document subset queued for a slot it does not need"
+    assert not marker.exists(), "the draft ran the verify selection instead of the docs subset"
+
+
+def test_before_admission_execution_budget_is_shared_and_wait_free(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 10 of the cheap-before-admission change. Planted fault: the per-gate callback resets
+    # the runner's step allowance for every gate, or the queue wait is charged to it — a slow cheap
+    # gate plus a real queue wait would starve the protected check either way.
+    marker = world.state / "cheap-done"
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].insert(
+        0,
+        {
+            "id": "slow-check",
+            "title": "The slow cheap gate",
+            "job": "verify",
+            # The world's PATH holds only the stand-ins and git, so `sleep` is named by its path.
+            "command": f"/bin/sleep 1.5 && echo done > {marker}",
+            "enforcement": "block",
+            "cost": "seconds",
+            "floor": True,
+            "needs_tracker": False,
+            "needs_history": False,
+            "placement": "both",
+            "reason": "The cheap gate whose active seconds the shared allowance must survive.",
+        },
+    )
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a slow cheap gate joins the verify job")
+
+    ready = world.state / "holder-ready-budget"
+    holder = _real_holder(ready, seconds=30.0)
+    deadlines: list[float] = []
+    waits: list[float] = []
+    real_launch = stage2.launch
+    real_hold = stage2.verify_lock.hold_admission
+
+    def launch(command, root, env, *rest, **kwargs):
+        if command[1:2] == ["-c"]:
+            deadlines.append(kwargs.get("deadline"))
+        return real_launch(command, root, env, *rest, **kwargs)
+
+    def hold_admission(command):
+        entered = time.monotonic()
+        try:
+            return real_hold(command)
+        finally:
+            waits.append(time.monotonic() - entered)
+
+    def release_when_queued() -> None:
+        # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
+        # for a real second before the holder lets go.
+        queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not (queue.is_dir() and any(queue.iterdir())):
+            time.sleep(0.02)
+        time.sleep(1.0)
+        holder.terminate()
+
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+    releaser = threading.Thread(target=release_when_queued)
+    releaser.start()
+    try:
+        _holder_acquired(ready)
+        successful_implementation(world)
+        assert world.run("implement") == 0, "the queue wait starved the shared allowance"
+        assert marker.read_text(encoding="utf-8").strip() == "done"
+    finally:
+        releaser.join(timeout=90)
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait(timeout=10)
+
+    # Three gate launches: the slow cheap gate, the document subset, then the protected full check.
+    assert len(deadlines) == 3, deadlines
+    assert len(waits) == 1 and waits[0] > 0.8, waits
+    # One allowance: the cheap gates share one deadline, and it moves once, by exactly the measured
+    # admission wait. A per-gate reset would move it by the slow gate's seconds too; a charged wait
+    # would not move it at all.
+    assert deadlines[0] == deadlines[1], deadlines
+    assert abs((deadlines[2] - deadlines[1]) - waits[0]) < 0.5, (deadlines, waits)
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -4045,8 +4280,9 @@ def test_draft_runs_the_existing_docs_subset(world: World) -> None:
 
 
 def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Criterion 2 (draft-gates-only). Planted fault: the document check launches before the machine
-    # admission, loses the inherited admission, or runs under a timeout other than VERIFY_SECONDS.
+    # Criterion 2 (draft-gates-only) and criterion 10 of the cheap-before-admission change. Planted
+    # fault: the document subset queues for a machine slot its seconds gates never need, loses the
+    # shared VERIFY_SECONDS deadline, or runs under a per-gate reset of the runner's allowance.
     draft_world(world)
     passing_draft(world)
     order: list[str] = []
@@ -4056,15 +4292,14 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
 
     def hold_admission(command):
         order.append("admission")
-        seen["admission_command"] = list(command)
         return real_hold(command)
 
     def launch(command, root, env, *rest, **kwargs):
-        if command[0] == "bash":
+        if command[1:2] == ["-c"]:
             order.append("launch")
             seen["command"] = list(command)
             seen["env"] = dict(env)
-            seen["timeout"] = kwargs.get("timeout")
+            seen["deadline"] = kwargs.get("deadline")
             seen["limit"] = kwargs.get("limit")
             seen["pass_fds"] = kwargs.get("pass_fds", ())
         return real_launch(command, root, env, *rest, **kwargs)
@@ -4072,13 +4307,18 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
     monkeypatch.setattr(stage2, "VERIFY_SECONDS", 7 * 60)
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     monkeypatch.setattr(stage2, "launch", launch)
+    started = time.monotonic()
     assert world.run("draft") == 0
-    assert order == ["admission", "launch"], "the document check ran outside the machine admission"
-    assert seen["admission_command"] == seen["command"] == ["bash", *DOCS_ARGV], "one vector for admission and launch"
-    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
+    # A seconds-only subset takes no admission of its own — the one launch is the scheduler's gate
+    # callback's, under the deadline the shared allowance set once before the gates.
+    assert order == ["launch"], "the document subset queued for a machine slot it does not need"
+    assert seen["command"] == ["bash", "-c", "bash scripts/verify_all.sh --job docs"], "one vector per gate"
+    deadline_age = seen["deadline"] - started
+    assert 7 * 60 <= deadline_age < 7 * 60 + 30, "the shared step limit was swapped, reset or hard-coded"
     assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
-    assert seen["pass_fds"] != (), "the document check lost the admission's descriptor"
-    assert seen["env"][verify_lock.LOCK_ENV], "the document check lost the inherited admission marker"
+    assert seen["pass_fds"] == (), "an unprotected gate inherited a lock descriptor"
+    assert verify_lock.LOCK_ENV not in seen["env"], "an unprotected gate claimed an admission it never took"
+    assert verify_lock.TOKEN_ENV not in seen["env"], "an unprotected gate claimed an admission token"
     assert seen["env"]["XDG_STATE_HOME"] == str(world.state), "the document check lost the shared state root"
 
 
@@ -4124,11 +4364,12 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
 
     # a timeout through the real launch: the shared step limit ends the hung check
     reset()
-    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 0.5)
+    # The limit leaves the two process starts of the stand-in chain room to record their call.
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[{"stdout": "slow", "sleep": 5}] * 3,
+        docs=[{"stdout": "slow", "sleep": 30}] * 3,
     )
     assert world.run("draft") == 1
     assert len(world.calls("bash")) == 3, "a timed-out document check was not retried"
@@ -4136,8 +4377,18 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
     block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
     assert "could not run" in block and "stopped by" in block
 
-    # an admission refusal is a failed check, never a started one
+    # an admission refusal is a failed check, never a started one. The subset must wait for the
+    # slot for the refusal to be reachable, so the world's document gate takes the shared-state
+    # mark (`needs_admission`), and the rewrite is committed — the draft starts from a clean tree.
     reset()
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    for gate in doc["gates"]:
+        if gate["id"] == "docs-all":
+            gate["needs_admission"] = True
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "the document gate waits for the slot")
 
     def refused(command):
         raise verify_lock.VerifyLockRefused(f"the admission refused {command}")
@@ -4213,7 +4464,9 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
     successful_implementation(world)
     assert world.run("implement") == 0
     assert [call["argv"] for call in world.calls("make")] == [["verify"]], "implement left the full suite"
-    assert world.calls("bash") == [], "implement ran the document subset"
+    # The only bash call is the verify selection's own subset gate (the document subset is part of
+    # the one list, so the full check runs it itself); a separate document check would be a second.
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV], "implement ran the subset on its own"
     # The repair route gets its own scenario: `test_other` reads `src/other.py`, so the file joins
     # the baseline at its unfixed value, and the stand-in's call log starts over (its step index
     # counts a program's calls across runs).
@@ -4234,7 +4487,8 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
     assert world.run("repair") == 0
     assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair skipped required full fallback"
     assert "verification-scope.txt" in world.text(), "the fallback must report its unsupported input"
-    assert world.calls("bash") == [], "repair ran the document subset"
+    # As above: the fallback's subset gate is part of the full check, never a check of its own.
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV], "repair ran the subset on its own"
 
 
 FEATURE_SPEC = (

@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-12
+updated: 2026-11-13
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -128,7 +128,7 @@ handover.
 | Rule | Today | Planned |
 | --- | --- | --- |
 | Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
-| One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
+| One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284); only protected work enters it — cheap gates all run first, so a lane's red lint appears before any wait (bead coding-harness-bxxt.6) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |

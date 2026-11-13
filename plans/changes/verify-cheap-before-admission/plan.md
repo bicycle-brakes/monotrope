@@ -225,4 +225,11 @@ the two held files assigned in step 9, including during repair. The
 orchestrating session presents the card unchanged; this drafting call only
 writes artifacts, never starts phase 4 or commits.
 
+## Runner route — 2026-11-13
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-13 19:41:09–21:38:56 UTC, 7067 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-13 21:39:03–22:13:03 UTC, 2040 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner

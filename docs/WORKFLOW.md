@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-12
+updated: 2026-11-13
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -540,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # local gates, cheap first; stop at the first blocking failure
+make verify     # local gates; every cheap gate first, admission only for protected work
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -552,18 +552,31 @@ make index      # regenerate plans/INDEX.md
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
 
-Local verification orders selected gates by declared cost (`seconds` before
-`minutes`) and stops at the first blocking failure. It names every remaining
-selected gate as not run because of that failure; a red run is therefore not
-a complete check. Hosted CI and `--ci` continue through all selected gates.
-See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
+Local verification runs in two phases (`scripts/verify_run.py`, the one
+scheduler behind `verify_all.sh` and the Stage-2 checks). The **unprotected**
+gates — every selected `seconds` gate without the explicit shared-state mark —
+execute first, all of them, and every one's diagnostic is collected even past
+a blocking red, so a lint failure never hides behind a queue wait again. Only
+when the cheap phase holds no blocking red does the run take **one admission**
+for the protected work — the `minutes` gates and the `seconds` gates marked
+`needs_admission` — where a local run stops at its first blocking failure and
+names the remaining selected gates as not run. A selection with no protected
+gate, such as the `docs` job, never waits for the slot at all. When admission
+follows a green cheap phase and the tree is unchanged in the meantime, the
+cheap results are reused instead of executed twice; a changed tree reloads
+the gate list, reselects and reruns the complete cheap pass inside the held
+admission, so stale results cannot survive a reclassification. Hosted CI and
+`--ci` continue through all selected gates of both phases whatever failed
+before. See the [gate catalog](governance/gate-catalog.md) for costs,
+admission marks and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Before its
-gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+**One admission per user and machine** (bead coding-harness-p6mu). Only
+protected work enters it: before its protected gates, the shared scheduler
+hands the run to `scripts.verify_lock` — protected work
 of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
 — shared across repositories and worktrees, so the three-lane trial's
 concurrent full checks cannot happen again. Waiters are admitted in
@@ -589,14 +602,17 @@ executing check. Hosted CI is untouched: its gate steps never enter the
 runner's shell path, and nothing disables admission because CI is set.
 
 Verification durations are appended locally to `verify-duration.jsonl` in
-that shared state directory. Each run records gate and execution durations,
-outcomes, revision, configuration and machine context; admission wait is
-reported separately, with inherited waits marked as reused. Read summaries
-with `python3 -m scripts.verify_duration report`, or inspect one run with
-`python3 -m scripts.verify_duration report --run <run-id>`. Interrupted runs
-remain incomplete, and malformed rows are diagnosed. Unusable measurement
-storage warns without changing gate execution or verdicts; raw history stays
-outside Git.
+that shared state directory. One invocation is one run identity spanning the
+cheap and the protected phase: every executed gate is recorded, including a
+cheap gate run twice after a changed-tree recheck, and a gate's seconds sum
+its active segments before and after admission — queue and memory waits are
+reported separately, never as execution time, with inherited waits marked as
+reused. A run that finished on the cheap phase alone states explicitly that
+no admission was requested; interrupted runs remain incomplete, and malformed
+rows are diagnosed. Read summaries with `python3 -m scripts.verify_duration
+report`, or inspect one run with `python3 -m scripts.verify_duration report
+--run <run-id>`. Unusable measurement storage warns without changing gate
+execution or verdicts; raw history stays outside Git.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
