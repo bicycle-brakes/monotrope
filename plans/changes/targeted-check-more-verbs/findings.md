@@ -952,3 +952,16 @@ Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-
 Runner note, 2026-11-14: repair · attempt 1 · route codex — full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
 
 Runner restoration, 2026-11-14: repair · attempt 1 · route codex — lifecycle fields: plans/changes/targeted-check-more-verbs/plan.md, plans/changes/targeted-check-more-verbs/spec.md — unchanged
+
+Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4168 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-14
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+
+Phase 6 verdict: codex 01a1d74b-2b94-79f0-87aa-d41ee2a6153c, 2026-11-14
+Reviewer session: codex 01a1d74b-2b94-79f0-87aa-d41ee2a6153c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
