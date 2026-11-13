@@ -3077,8 +3077,25 @@ def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopt
         f"from pathlib import Path\ndef test_probe(tmp_path):\n    Path({str(test_ran)!r}).touch()\n",
         encoding="utf-8",
     )
+    # A test-free gate before the pytest gate measures the moment of refusal (decision Q-7):
+    # the guard lives in pytest's own configuration, so a gate that starts no pytest runs,
+    # and pytest is refused before any test runs or any temporary test folder is created.
+    test_free_ran = base / "test-free.ran"
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "test-free", "verify", "block", subsets=["docs"]),
+            _report_gate(base, "pytest", "verify", "block", command="python3 -m pytest -q test_probe.py"),
+        ],
+    )
     options = addopts.format(outside=outside, args_file=args_file)
+    docs = _tmp_run(tree, temproot, tmp_path, "--job", "docs", extra_env={"PYTEST_ADDOPTS": options})
+    assert docs.returncode == 0, f"a run that starts no pytest was refused: {docs.stdout}\n{docs.stderr}"
+    assert test_free_ran.exists(), "the test-free gate did not run"
+    assert not test_ran.exists(), "the docs selection started pytest"
+    test_free_ran.unlink()
     done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": options})
+    assert test_free_ran.exists(), "the options were refused before the test-free gate ran"
     if reason == "ordinary run":
         assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
         assert test_ran.exists(), "an ordinary pytest run was blocked"
@@ -3087,6 +3104,7 @@ def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopt
         assert not test_ran.exists(), f"{reason}: tests ran despite the conflicting option"
         assert any(text in done.stderr for text in ("basetemp", "quotation", "unrecognized arguments")), done.stderr
         assert sentinel.read_text(encoding="utf-8") == "untouched", "pytest touched the escaped root"
+        assert list(outside.iterdir()) == [sentinel], f"{reason}: pytest created a temporary test folder"
     parent = _managed_parent(temproot)
     assert not parent.exists() or not list(parent.iterdir()), "the run left its area behind"
 

@@ -94,10 +94,13 @@ exists; this is a process-id check, not descendant tracking.
     *Refuted by:* A command pin changes, nested work queues behind its own
     ancestor, duration ownership/worker overrides change, or `--list`
     allocates an area or enters admission.
-11. If inherited pytest options select an explicit basetemp, the runner
-    refuses before gates with an explanation.
-    *Refuted by:* An accepted basetemp spelling escapes management,
-    malformed quoting proceeds silently, or unrelated pytest options are discarded.
+11. If inherited pytest options select an explicit basetemp outside the run
+    area, it is refused with an explanation before any test runs or any
+    temporary test folder is created; a run that starts no pytest has nothing
+    to guard (`decisions.md#Q-6`, `decisions.md#Q-7`).
+    *Refuted by:* An accepted basetemp spelling escapes management, a test
+    runs or a temporary test folder appears before the refusal, malformed
+    quoting proceeds silently, or unrelated pytest options are discarded.
 12. When a git command of the runner fails, its diagnostic keeps git's whole
     error output (every non-empty line) however long the temporary path in it
     is (`decisions.md#Q-2`, `decisions.md#Q-3`, `decisions.md#Q-4`).
