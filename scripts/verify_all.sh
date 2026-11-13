@@ -6,6 +6,11 @@
 # exact drift this runner was written against. Marketplace actions without a
 # local equivalent are reported, never silently skipped.
 #
+# Under schema 3 the local run is cheap-first (bead coding-harness-bxxt.1):
+# the selected gates are ordered by their declared cost class (seconds before
+# minutes), and the first blocking failure stops the run — it names every
+# selected gate it did not reach. `--ci` keeps running every selected gate.
+#
 # Usage:
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
@@ -252,8 +257,19 @@ echo "── gates: job=$JOB ─────────────────
 # The runner respects the vocabulary: only `block` turns the run red,
 # `report`/`advisory` speak up without blocking.
 fehler=0
+stop_gate=""
+verbleibend=""
 while IFS="$(printf '\t')" read -r gid enf cmd; do
     [ -z "$cmd" ] && continue
+    # Cheap-first stop (bead coding-harness-bxxt.1): after the first blocking
+    # failure no further selected gate runs. The remaining ids are collected
+    # from the already obtained TSV and named in one summary below the loop;
+    # `--ci` never sets stop_gate and keeps running every selected gate.
+    if [ "$CI_MODE" -ne 1 ] && [ -n "$stop_gate" ]; then
+        verbleibend="${verbleibend}${gid}
+"
+        continue
+    fi
     # Werkzeuge aus dem Pin aufloesen (gates.md G-12): `python3` in der Liste
     # heisst "der gepinnte Interpreter", nicht "was der PATH gerade hergibt".
     # Die CI macht dasselbe ueber setup-python mit derselben Version.
@@ -261,7 +277,8 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
     python_word="'$(printf %s "$PYTHON" | sed "s/'/'\\\\''/g")'"
     lauf_cmd=${cmd/python3/"$python_word"}
     echo ""
-    echo "── [$gid] $ lauf_cmd"
+    # Keep machine-local interpreter paths out of logs and repair evidence.
+    echo "── [$gid] $ $cmd"
     # Monotonic readings immediately around the unchanged gate command; the
     # raw status is captured before any timing operation, so it is the gate
     # command's own and not a helper's (bead coding-harness-1um6).
@@ -277,6 +294,10 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
         echo "── [$gid] gruen"
     elif [ "$enf" = "block" ]; then
         fehler=1
+        # `--ci` stays exhaustive (criterion 7 of bead coding-harness-bxxt.1):
+        # it reports the blocking failure but stops nothing, so the not-run
+        # summary below stays silent and every later selected gate executes.
+        [ "$CI_MODE" -eq 1 ] || stop_gate="$gid"
         echo "── [$gid] RED (block) — der Lauf ist rot."
     else
         echo "── [$gid] rot, aber nur $enf — er meldet, er blockiert nicht."
@@ -286,6 +307,21 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
 done <<GATES
 $gate_tsv
 GATES
+
+# The not-run summary (bead coding-harness-bxxt.1): every selected gate the
+# run did not execute because of the blocking failure, and only those —
+# executed and filtered gates are never named. The lines stay outside the
+# gate-frame format the evidence parser reads: summary entries have three
+# spaces after `──`, while gate frames require exactly one (`^── \[`). Thus
+# no skipped gate becomes a gate section, and skipped gates get no timing events: the
+# history describes executed commands only.
+if [ -n "$verbleibend" ]; then
+    echo ""
+    echo "── not run — the run stopped at the blocking failure in [$stop_gate]:"
+    printf '%s' "$verbleibend" | while IFS= read -r gid; do
+        [ -n "$gid" ] && echo "──   [$gid] not run"
+    done
+fi
 
 # Execution seconds from the admitted runner's measurement start to its final
 # verdict; the admission wait is reported beside it, never inside it.

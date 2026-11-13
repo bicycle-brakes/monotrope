@@ -42,9 +42,17 @@
 #               (`verify_all.sh --job docs`) instead of the whole verify job;
 #               it adds no CI job and drops no gate from `verify` (bead
 #               coding-harness-77qj).
+#   cost        closed vocabulary, required (bead coding-harness-bxxt.1):
+#               seconds / minutes — the cost class of one run of the gate.
+#               The local runner orders a run by it, every seconds gate
+#               before the first minutes gate, declaration order kept within
+#               a class, and stops at the first red blocking gate, naming
+#               the gates it did not run. Hosted CI runs every gate whatever
+#               failed before. A gate that takes minutes and is declared
+#               seconds delays every cheap failure behind it.
 #   reason      why this gate exists, in one sentence.
 
-schema_version: 2
+schema_version: 3
 
 # The interpreters this repository is checked under, oldest first (bead
 # coding-harness-ei0). The verify job runs once per entry, as one leg each; the
@@ -58,15 +66,17 @@ gates:
     title: The test suite passes
     command: python3 -m pytest tests/ -q -n auto
     job: verify
+    cost: minutes
     enforcement: block
     floor: true
     placement: both
-    reason: The suite is the base verdict of every change; make verify runs it first.
+    reason: The suite is the base verdict of every change; as a minutes gate a local run reaches it after every seconds gate.
 
   - id: ruff-check
     title: The linter finds nothing
     command: python3 -m ruff check scripts/ tests/
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -76,6 +86,7 @@ gates:
     title: Every file is already formatted
     command: python3 -m ruff format --check scripts/ tests/
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -85,6 +96,7 @@ gates:
     title: The kit probe holds over the tracked tree
     command: python3 scripts/kit/probe.py --strict
     job: verify
+    cost: minutes
     enforcement: block
     floor: true
     placement: both
@@ -94,6 +106,7 @@ gates:
     title: Plans hygiene holds (built means archived, no one-sided handover)
     command: python3 scripts/plans_registry.py --check
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -105,6 +118,7 @@ gates:
     title: Documentation frontmatter, links and anchors resolve
     command: python3 scripts/check_docs.py
     job: verify
+    cost: seconds
     enforcement: report
     floor: false
     placement: both
@@ -115,6 +129,7 @@ gates:
     title: Every held document's updated date is current
     command: python3 scripts/check_frontmatter_current.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -126,6 +141,7 @@ gates:
     title: The rendered bead export parses line by line
     command: python3 scripts/check_bead_export.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -136,6 +152,7 @@ gates:
     title: Every cited bead id resolves in the export
     command: python3 scripts/check_dangling_bead_ids.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -147,6 +164,7 @@ gates:
     title: Every interview decision stays mapped; every amendment has its ADR
     command: python3 scripts/check_decision_continuity.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -157,6 +175,7 @@ gates:
     title: Every feature has the maintainer's answer to the ADR question
     command: python3 scripts/check_adr_answers.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -167,6 +186,7 @@ gates:
     title: The phase-1a interview is owed where the class minimums stand
     command: python3 scripts/check_interview_minimums.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -177,6 +197,7 @@ gates:
     title: Every new answered interview record keeps its context
     command: python3 scripts/check_question_context.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -187,6 +208,7 @@ gates:
     title: Every test a plan names for an acceptance criterion still exists
     command: python3 scripts/check_criterion_ledger.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -197,6 +219,7 @@ gates:
     title: What a research run hands to the interview and the spec stays measured
     command: python3 scripts/check_research_handoff.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -207,6 +230,7 @@ gates:
     title: Verification never runs with a guard test's planting switch present
     command: python3 scripts/check_guard_test_environment.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -216,6 +240,7 @@ gates:
     title: This gate file satisfies its own schema
     command: python3 scripts/ci_gates.py --check-schema
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -225,6 +250,7 @@ gates:
     title: ci.yml is exactly what the gate file generates
     command: python3 scripts/ci_gates.py --check-ci
     job: verify
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -234,6 +260,7 @@ gates:
     title: ramp valves — dated transitions turn loud on their date
     command: python3 scripts/ramp_valves.py
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: both
@@ -243,6 +270,7 @@ gates:
     title: The branch ruleset asks for what rule RB-M6 asks
     command: RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs
     job: verify
+    cost: seconds
     enforcement: block
     floor: false
     placement: writer
@@ -257,6 +285,7 @@ gates:
         !docs/journal/**
         !tools/pi/node_modules/**
     job: verify
+    cost: seconds
     enforcement: report
     floor: false
     placement: both
@@ -269,6 +298,7 @@ gates:
     with:
       args: --no-progress README.md docs/
     job: verify
+    cost: seconds
     enforcement: advisory
     floor: false
     placement: hosted
@@ -278,6 +308,7 @@ gates:
     title: Plans hygiene holds strictly against the outside world
     command: python3 scripts/plans_registry.py --check --strict
     job: drift
+    cost: seconds
     enforcement: block
     floor: true
     placement: both
@@ -288,6 +319,7 @@ gates:
     title: Research notes not reviewed for more than 90 days are listed
     command: python3 scripts/check_research_currency.py
     job: drift
+    cost: seconds
     enforcement: report
     floor: false
     placement: both

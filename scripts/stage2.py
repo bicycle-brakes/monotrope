@@ -25,6 +25,9 @@ between the rule and the call.
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
+    python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
+    # Triage refuses ordinary taken for test-only locations; use taken — not a test — <reason>.
+    # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -171,7 +174,7 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -181,6 +184,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -2285,10 +2289,10 @@ def _exception_problem(kind: str, record) -> str | None:
     """
     if not isinstance(record, dict):
         return f"an entry of the free rule's {kind} list must be a record with id, date and reason"
-    for field in ("id", "date", "reason"):
-        value = record.get(field)
+    for name in ("id", "date", "reason"):
+        value = record.get(name)
         if not isinstance(value, str) or not value.strip():
-            return f"an entry of the free rule's {kind} list has no {field}"
+            return f"an entry of the free rule's {kind} list has no {name}"
     if not DATE_ONLY.fullmatch(record["date"]) or not _valid_date(record["date"]):
         return f"the free rule's {kind} entry for {record['id']} has no ISO date (YYYY-MM-DD)"
     return None
@@ -3765,7 +3769,10 @@ def holding_record(change: str, root: Path) -> Iterator[None]:
 def read_record(change: str, root: Path) -> str | None:
     path = record_dir(change, root) / "loop.md"
     try:
-        return path.read_text(encoding="utf-8") if path.exists() else None
+        if not path.exists():
+            return None
+        with path.open(encoding="utf-8", newline="") as stream:
+            return stream.read()
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(f"the loop record {path} cannot be read.") from error
 
@@ -3804,7 +3811,7 @@ def marks_a_test(cell: str) -> bool:
     return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
 
 
-def record_rows(record: str) -> list[list[str]]:
+def record_rows(record: str, *, strict: bool = False) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
     Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
@@ -3813,14 +3820,35 @@ def record_rows(record: str) -> list[list[str]]:
     Nine cells are known. A `|` the orchestrator typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
     than a row has is not skipped, which would let the release delete it with the record: it is refused,
-    by its id.
+    by its id. Triage uses `strict` to refuse any non-nine-cell row before editing;
+    the compatibility reader for other verbs still accepts typed Status pipes.
     """
     rows = []
+    in_table = False
     for line, reviewer in _record_lines(record):
-        cells = None if reviewer else split_row(line)
+        if reviewer:
+            in_table = False
+            continue
+        cells = split_row(line)
+        if strict:
+            # Check table syntax before filtering loop IDs: split_row deliberately returns None
+            # for missing boundary pipes, which must never hide a damaged runner-owned row.
+            first = _PIPE.split(line.strip().lstrip("|"), maxsplit=1)[0].strip()
+            table_line = (
+                line.lstrip().startswith("|")
+                or (in_table and bool(line.strip()))
+                or ("|" in line and (LOOP_ID.fullmatch(first) or first == ROW_COLUMNS[0]))
+            )
+            in_table = bool(table_line)
+            if table_line and (cells is None or len(cells) != len(ROW_COLUMNS)):
+                count = "missing boundary pipe" if cells is None else f"{len(cells)} cells"
+                raise Refused(
+                    f"the loop record has a malformed loop row/table line ({count}; "
+                    f"{len(ROW_COLUMNS)} cells are needed); mend it, nothing has been written."
+                )
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
-        if len(cells) < len(ROW_COLUMNS):
+        if len(cells) < len(ROW_COLUMNS) or (strict and len(cells) != len(ROW_COLUMNS)):
             raise Refused(
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
@@ -4633,7 +4661,10 @@ def refuse_repository_git(root: Path) -> None:
 
 
 TOOL_SECONDS = 5 * 60
-VERIFY_SECONDS = 30 * 60
+VERIFY_SECONDS = 45 * 60
+# The targeted pytest step of a repair or implement attempt is a slice of the full check, so it shares that limit:
+# the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
+TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
 
 
@@ -5412,6 +5443,234 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     if len(entries) > ATTEMPT_FILES:
         entries = entries[:ATTEMPT_FILES] + [f"… and {len(entries) - ATTEMPT_FILES} more files"]
     return entries
+
+
+NO_WORK = "no work done"
+
+
+def _minus_time_body(data: bytes) -> str:
+    """A plan's text without the body of its `## Time used` section: the one part the runner restores."""
+    text = data.decode("utf-8", "surrogateescape")
+    match = time_records.TIME_HEADING.search(text)
+    if match is None:
+        return text
+    following = time_records.FOLLOWING_HEADING.search(text[match.end() :])
+    end = match.end() + following.start() if following else len(text)
+    return text[: match.end()] + text[end:]
+
+
+@dataclass(frozen=True)
+class LedgerClearing:
+    """One ledger entry the runner's clearing rewrote, with its place in the plan.
+
+    `section` is the position of the entry's `## Criterion ledger` section among the plan's
+    sections when the clearing ran, `position` the entry line's position within that section;
+    positions, not criterion numbers, identify the entry, because several tests can hold one
+    criterion. `before` is the marked entry line as the clearing found it - the model call's
+    own bytes, the formatting already applied - and `after` the cleared line it wrote.
+    """
+
+    section: int
+    position: int
+    before: str
+    after: str
+
+
+@dataclass
+class ClearingEvidence:
+    """What one attempt's verification actually removed from its plan's criterion ledger.
+
+    A fresh container stands around every model call and travels with the verification
+    result to the work check. `records` are the clearing discount's exact shape; `problem`
+    set means the clearing could not be captured reliably, and the work check refuses
+    instead of measuring - never permissive (spec, criterion 5).
+    """
+
+    records: list[LedgerClearing] = field(default_factory=list)
+    problem: str | None = None
+
+
+def capture_ledger_clearing(root: Path, plan: Path, evidence: ClearingEvidence | None) -> None:
+    """The runner's ledger clearing, with the entries it rewrote recorded in `evidence`.
+
+    The plan bytes stand read immediately before and after the actual clearing - after the
+    formatting step and the cheap checks, before stamping and verification. Without a
+    container the clearing runs exactly as it always did. A diff the ledger entries cannot
+    explain - a line-count change, a line outside a criterion-ledger section, a fenced line,
+    a change that is not one marked entry going to its cleared form - is recorded as a
+    problem, not discounted. Read errors propagate to the caller's existing ledger
+    diagnostic, which fails the attempt.
+    """
+    if evidence is None:
+        check_criterion_ledger.clear_written(root, plan)
+        return
+    before = plan.read_bytes()
+    if not check_criterion_ledger.clear_written(root, plan):
+        return
+    after = plan.read_bytes()
+    records = _clearing_records(before, after)
+    if records is None:
+        evidence.problem = (
+            "the runner's ledger clearing wrote bytes its ledger entries cannot explain; "
+            "the work check refuses instead of discounting them"
+        )
+        return
+    evidence.records = records
+
+
+def _clearing_records(before: bytes, after: bytes) -> list[LedgerClearing] | None:
+    """The clearing's changed lines as entries with their section positions, or None.
+
+    `None` says the diff holds something the clearing cannot have written, so no discount
+    may be built from it.
+    """
+    before_lines = before.decode("utf-8", "surrogateescape").split("\n")
+    after_lines = after.decode("utf-8", "surrogateescape").split("\n")
+    if len(before_lines) != len(after_lines):
+        return None
+    lines = check_criterion_ledger._lines(before.decode("utf-8", "surrogateescape"))
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    places = {
+        number: (side, place) for side, section in enumerate(sections) for place, (number, _text) in enumerate(section)
+    }
+    records: list[LedgerClearing] = []
+    for number, (old, new) in enumerate(zip(before_lines, after_lines, strict=True), start=1):
+        if old == new:
+            continue
+        entry = check_criterion_ledger.parse_entry(old, number)
+        cleared = check_criterion_ledger.parse_entry(new, number)
+        if (
+            entry is None
+            or entry.kind != "not yet written"
+            or cleared is None
+            or cleared.kind == "not yet written"
+            or fenced[number - 1]
+            or number not in places
+        ):
+            return None
+        side, place = places[number]
+        records.append(LedgerClearing(section=side, position=place, before=old, after=new))
+    return records
+
+
+def _undo_ledger_clearing(final: bytes, records: Sequence[LedgerClearing]) -> bytes:
+    """The final plan bytes with this attempt's captured marker removals put back, in memory only.
+
+    Every recorded entry is matched within its recorded ledger section by position, and the
+    line there must still hold exactly the bytes the clearing wrote; anything else refuses
+    (fail closed). Every other byte stands as verification left it, so the comparison after
+    this undo still sees the model's own prose, ledger edits and marker removals.
+    """
+    text = final.decode("utf-8", "surrogateescape")
+    raw = text.split("\n")
+    lines = check_criterion_ledger._lines(text)
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    touched: set[int] = set()
+    for record in records:
+        if record.section >= len(sections):
+            raise Refused(
+                f"clearing evidence names criterion-ledger section {record.section + 1}; "
+                f"the plan to measure holds {len(sections)}"
+            )
+        section = sections[record.section]
+        if record.position >= len(section):
+            raise Refused(
+                f"clearing evidence names ledger line {record.position + 1} of section "
+                f"{record.section + 1}; that section holds {len(section)} lines"
+            )
+        number, _text = section[record.position]
+        if fenced[number - 1]:
+            raise Refused(f"clearing evidence names fenced ledger line {number}")
+        if number in touched:
+            raise Refused(f"two clearing records name ledger line {number}")
+        if raw[number - 1] != record.after:
+            raise Refused(f"ledger line {number} no longer holds the bytes the runner's clearing wrote")
+        raw[number - 1] = record.before
+        touched.add(number)
+    return "\n".join(raw).encode("utf-8", "surrogateescape")
+
+
+def attempt_has_work(
+    root: Path,
+    before: str,
+    after: str,
+    findings: Path,
+    plan: Path,
+    *,
+    model_after: str | None = None,
+    clearing: ClearingEvidence | None = None,
+) -> bool:
+    """Measure surviving model work after verification, excluding writes the runner owns.
+
+    Only paths changed by this call qualify. The final tree includes formatting and derived
+    preparation; the generated index and stamp-only changes in any document are excluded
+    from work, whether or not checkpoint preparation restores them. The unbounded raw
+    comparison also preserves binary and mode-only work. The plan comparison alone puts this
+    attempt's captured ledger clearing back in memory: the runner's removal of a
+    pending-test marker cannot qualify the attempt, while every model edit beside it -
+    prose, a changed ledger reference, a marker the model removed itself - stays visible
+    against the pre-call plan. Unreliable clearing evidence refuses the measurement.
+    """
+    if clearing is not None and clearing.problem:
+        raise Refused(clearing.problem)
+    candidates = None
+    if model_after is not None:
+        candidates = set(
+            _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, model_after)
+            .rstrip(b"\0")
+            .split(b"\0")
+        )
+    done = _git_bytes(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
+    fields = done.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2:
+        raise Refused("git diff-tree --raw returned a record without its path")
+    findings_path = findings.relative_to(root).as_posix()
+    plan_path = plan.relative_to(root).as_posix()
+    discounted_plan = None
+    if clearing is not None and clearing.records:
+        # Validate every captured entry before any path can qualify as work, even when
+        # the plan is not a model candidate or another changed path sorts before it.
+        discounted_plan = _undo_ledger_clearing(
+            _git_bytes(root, "cat-file", "blob", f"{after}:{plan_path}"), clearing.records
+        )
+    for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
+        parts = header.decode("ascii").lstrip(":").split(" ")
+        if len(parts) != 5:
+            raise Refused(f"git diff-tree --raw returned a malformed record: {header!r}")
+        old_mode, new_mode, old_id, new_id, status = parts
+        path = os.fsdecode(raw_path)
+        if candidates is not None and raw_path not in candidates:
+            continue
+        if path in (findings_path, "plans/INDEX.md"):
+            continue
+        if status == "M" and old_mode == new_mode and old_mode in ("100644", "100755"):
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            # Ignore stamp-only edits on every document, including malformed replacement
+            # values and stamps outside held paths that the checkpoint does not restore.
+            old_text = old.decode("utf-8", "surrogateescape")
+            new_text = new.decode("utf-8", "surrogateescape")
+            masked = _mask_stamp(old_text, dated=False)
+            if masked is not None and _mask_stamp(new_text, dated=False) == masked:
+                continue
+        if path == plan_path and status == "M" and old_mode == new_mode:
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            # In memory only: this attempt's own captured clearing cannot qualify the attempt.
+            if discounted_plan is not None:
+                new = discounted_plan
+            old_body, new_body = _minus_time_body(old), _minus_time_body(new)
+            if old_body == new_body:
+                continue
+            masked = _mask_stamp(old_body, dated=False)
+            if masked is not None and _mask_stamp(new_body, dated=False) == masked:
+                continue
+        return True
+    return False
 
 
 def put_back_lines(paths: list[str]) -> list[str]:
@@ -6363,7 +6622,7 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
 
     Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    gate-list order through the locked interpreter, as `verify_all.sh` runs them. The first blocking
+    declaration order through the locked interpreter. The first blocking
     red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
     reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
     """
@@ -6381,7 +6640,12 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
         identity = "`" + " ".join(PYTEST) + "`"
         try:
             done = launch(
-                [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
+                [*PYTEST, *chosen.tests],
+                root,
+                targeted_pytest_env(root, env),
+                key,
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
             )
         except (StepTimedOut, CallFailed) as error:
             return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
@@ -6459,13 +6723,16 @@ def _targeted_body(
     previous_failures: Sequence[str],
     against: str,
     scope: list[str] | None,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
 
     Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
     `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
-    admitted full check instead. A passing result is never worded as full verification.
+    admitted full check instead. A passing result is never worded as full verification. The clearing
+    capture covers the fallback too: the clearing happened in the shared preparation, before the
+    selection chose the admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6488,7 +6755,7 @@ def _targeted_body(
     if cheap:
         return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
     try:
-        check_criterion_ledger.clear_written(root, plan)
+        capture_ledger_clearing(root, plan, clearing)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
     preparation = prepare_derived(root, env, key)
@@ -6539,6 +6806,7 @@ def verify_attempt(
     mode: str = "full",
     against: str = "HEAD",
     scope: list[str] | None = None,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -6551,6 +6819,8 @@ def verify_attempt(
     Return bounded diagnostics for failed preparation or postconditions, naming the gates that
     blocked. The time section must still be readable; the entry itself is the runner's
     (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
+    When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
+    for the work check's discount; without one, clearing stands unchanged for direct callers.
 
     `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
     preparation run outside the verify admission, and the repair's delta against `against` selects the
@@ -6592,7 +6862,7 @@ def verify_attempt(
         # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
         # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
         targeted = _targeted_body(
-            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope
+            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope, clearing
         )
         try:
             time_log(plan)
@@ -6630,7 +6900,7 @@ def verify_attempt(
             if cheap:
                 return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
             try:
-                check_criterion_ledger.clear_written(root, plan)
+                capture_ledger_clearing(root, plan, clearing)
             except (OSError, RuntimeError, ValueError) as error:
                 return [
                     f"the criterion ledger of {plan.name} could not be updated: "
@@ -7823,6 +8093,153 @@ def _mark_record_rows(
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
+# ---------------------------------------------------------------------------
+# Triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+TRIAGE_STATUSES = ("taken", "rejected", "taken — not a test", "taken — guard test")
+
+# A Where cell splits on whitespace, commas and semicolons, and on the escaped pipe a cell carries.
+_WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
+
+
+def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
+    """Recognise only exact indexed paths and the Boundary's enumerated line suffixes.
+
+    Markdown links contribute their target, external URLs and prose contribute nothing. Other
+    path-like tokens refuse rather than guessing a tracked prefix or normalising another spelling.
+    """
+    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
+    locations = []
+    cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
+    for token in _WHERE_TOKEN_SPLIT.split(cell):
+        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
+        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
+            continue
+        # Check the whole name first: punctuation may itself belong to an indexed filename.
+        path = token if token in tracked else re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if path in tracked:
+            locations.append(path)
+        elif "/" in token or re.search(r"\.[\w-]+", token):
+            raise Refused(
+                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been written. "
+                "Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or #L<line>-L<line> suffix. "
+                "For test-only work, record `taken — not a test — <reason>` after correcting the location."
+            )
+    return locations
+
+
+def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
+    """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
+
+    A mechanical trigger on paths, not on words: prose that only says "test", a mixture with a
+    production location and a cell without any location stay the orchestrator's judgment - the command
+    cannot establish what a later repair will touch.
+    """
+    locations = where_locations(cell, root)
+    return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
+
+
+def triage_status(decision: str, reason: str) -> str:
+    """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
+    escaped = reason.replace("\\|", "|").replace("|", "\\|")
+    return f"{decision} — {escaped}"
+
+
+def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
+    """Splice one row's Status cell in its own physical line and publish the record whole.
+
+    The caller has validated the physical cells against ROW_COLUMNS with the strict reader under its lock.
+    Preserve the other cells, line spacing and line endings verbatim.
+    """
+    lines: list[str] = []
+    written = False
+    status_column = ROW_COLUMNS.index("Status")
+    for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
+        cells = None if reviewer else split_row(line)
+        if cells and len(cells) == len(ROW_COLUMNS) and cells[0] == ident:
+            separators = list(_PIPE.finditer(line))
+            start, end = separators[status_column].end(), separators[status_column + 1].start()
+            original = original[:start] + " " + status + " " + original[end:]
+            written = True
+        lines.append(original)
+    if not written:
+        raise Refused(f"loop row `{ident}` has no editable line; mend the record first, nothing has been written.")
+    replace_record(record_dir(change, root) / "loop.md", "".join(lines))
+
+
+def triage(root: Path, change: str, row_status: str | None, reason: str | None) -> None:
+    """Record one already-made loop-row decision in this worktree's own loop record, and nothing else.
+
+    The orchestrator has decided; this local command writes the decision down. It starts no model and
+    reads no credential, works on a dirty tree, and changes no repository file and no git state. Only
+    the named row's `Status` cell changes; every proof mark stays where it is, so a row marked `taken`
+    still waits for its `Broke a test` mark before the next round or the release. Invalid input, a
+    damaged record and a held lock refuse with exit 2; a failed replacement reports exit 1 and leaves
+    the prior record whole.
+    """
+    if not row_status:
+        raise Refused("triage needs a first operand '<row>=<status>' and a second operand <reason>.")
+    if not reason or not reason.strip():
+        raise Refused("triage needs a nonempty reason; an empty decision says nothing a later round can read.")
+    if reason.splitlines() != [reason]:
+        raise Refused("triage takes a single-line reason; a line break would break the record's table shape.")
+    reason = reason.strip()
+    row, equals, given = row_status.partition("=")
+    row = row.strip()
+    if not equals or not LOOP_ID.fullmatch(row):
+        raise Refused(f"`{row_status}` is no '<row>=<status>' operand: name a loop id like `L1-1`.")
+    decision = given.strip()
+    if decision not in TRIAGE_STATUSES:
+        raise Refused(
+            f"unsupported status `{decision}`; triage takes: "
+            + ", ".join(f"`{item}`" for item in TRIAGE_STATUSES)
+            + "."
+        )
+    folder_of(root, change)
+    status = triage_status(decision, reason)
+    if decision != "taken — guard test" and guard_authorised(status):
+        raise Refused("the reason would grant guard authority; supply `taken — guard test` explicitly as the decision.")
+    if decision == "taken — guard test" and not guard_authorised(status):
+        raise Refused("`taken — guard test` needs a nonempty unquoted reason; a quoted reason opens no guard proof.")
+    try:
+        with holding_record(change, root):
+            record = read_record(change, root)
+            if record is None:
+                raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
+            targets = [item for item in record_rows(record, strict=True) if item[0] == row]
+            if not targets:
+                raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
+            if len(targets) > 1:
+                raise Refused(
+                    f"two loop rows carry `{row}`; mend the record first, triage would not know which to decide."
+                )
+            existing_status = targets[0][ROW_COLUMNS.index("Status")]
+            existing_mark = targets[0][ROW_COLUMNS.index("Broke a test")]
+            if existing_status.lower().startswith("fixed"):
+                raise Refused(
+                    f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
+                )
+            if marks_a_test(existing_mark):
+                raise Refused(
+                    f"loop row `{row}` already pairs Status `{existing_status}` with Broke a test `{existing_mark}`; "
+                    "triage cannot re-decide a row carrying repair evidence."
+                )
+            test_only = where_is_test_only(targets[0][4], root)
+            if decision == "taken" and test_only:
+                raise Refused(
+                    f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
+                    "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
+                )
+            _write_triage_row(change, row, status, record, root)
+    except OSError as error:
+        raise CallFailed(f"the loop record could not be replaced ({error}); the prior record stands.") from error
+    print(f"triage: {row} recorded as {status}")
+
+
 # The explorer's role, stated by the runner in every exploration prompt (bead coding-harness-e7m): on
 # 2026-10-20 a `--stage2-off` model took itself for the orchestrator, said its Bash tool was disabled and
 # asked to be rerun, and wrote no research.
@@ -8593,6 +9010,9 @@ def run_attempts(
                 restore_findings(kept)
 
         unmeasured: str | None = None
+        # This call's own ledger-clearing evidence, fresh per attempt: what verification actually
+        # removed from the plan, for the work check's discount (bead coding-harness-twbl).
+        clearing = ClearingEvidence()
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
@@ -8791,15 +9211,25 @@ def run_attempts(
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
                     raise error
+            files: list[str] | str
+            work_unmeasured: str | None = None
+            worked = False
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
                 try:
-                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    after = worktree_tree(root)
                 except (Refused, OSError) as error:
                     files = str(error)
+                    work_unmeasured = str(error)
+                else:
+                    try:
+                        files = attempt_files(root, before, after)
+                    except (Refused, OSError) as error:
+                        files = str(error)
             else:
                 files = unmeasured
+                work_unmeasured = unmeasured
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -8830,7 +9260,14 @@ def run_attempts(
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
-                        root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures
+                        root,
+                        ctx.plan,
+                        key,
+                        formatted,
+                        tools,
+                        inputs[ctx.plan],
+                        previous_failures,
+                        clearing=clearing,
                     )
                 else:
                     problems = verify_attempt(
@@ -8844,6 +9281,7 @@ def run_attempts(
                         mode=verify_mode,
                         against=baseline,
                         scope=scope_lines,
+                        clearing=clearing,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -8861,9 +9299,47 @@ def run_attempts(
                 # back through the batch restore below, and the verdict stays rejected (F-5).
                 put_findings_back()
                 problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            # Verification executes edited code. Scrub before the final tree can store its
+            # output as Git objects, just as before the immediate post-call snapshot.
+            verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
+            # Judge the tree verification leaves, using only this call's changed paths.
+            # This discounts formatter reversions, derived rendering and checkpoint stamp restores.
+            if not verified_exposed and work_unmeasured is None:
+                try:
+                    worked = attempt_has_work(
+                        root,
+                        before,
+                        worktree_tree(root),
+                        ctx.findings,
+                        ctx.plan,
+                        model_after=after,
+                        clearing=clearing,
+                    )
+                except (Refused, OSError, ValueError) as error:
+                    work_unmeasured = str(error)
+            if verified_exposed:
+                # A safety refusal is not a failed work measurement. Record its real
+                # diagnostic before the audit is written, without taking another snapshot.
+                work_problems = [credential_message(verified_exposed)]
+            elif work_unmeasured is not None:
+                work_problems = [
+                    f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
+                ]
+            elif not worked:
+                expected_work = (
+                    "repair the taken rows of the loop record" if verb == "repair" else "make the change the plan names"
+                )
+                work_problems = [
+                    f"{NO_WORK}: the attempt left no model work after runner bookkeeping, "
+                    f"derived preparation and formatting; {expected_work}"
+                ]
+            else:
+                work_problems = []
+            # An attempt without work is rejected whatever verification said; the reason leads the list,
+            # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
-            problems = [*lifecycle_problems, *problems]
+            problems = [*work_problems, *lifecycle_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -8941,14 +9417,15 @@ def run_attempts(
                 scope_record += [
                     protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
                 ]
-            exposed = []
-            if key is not None:
+            exposed = verified_exposed
+            if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
                 # diagnostic block, before finalizing either the verdict or its measured endpoint.
                 exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
-                if exposed:
-                    if not problems:
-                        put_findings_back(original=Refused(credential_message(exposed)))
+            if exposed:
+                if not problems:
+                    put_findings_back(original=Refused(credential_message(exposed)))
+                if not verified_exposed:
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
@@ -9255,6 +9732,34 @@ def answer_is_owed(root: Path, change: str) -> bool:
         return False
 
 
+def refuse_unreadable_statements(root: Path, change: str) -> None:
+    """The draft's early statement check (bead coding-harness-nr6h): no model call starts on an
+    interview whose answered records the question-context gate cannot read.
+
+    The document job finds a missing statement only after a model call, and a retry cannot repair
+    the answers — the drafter may not edit `decisions.md`. This reads this change's own file
+    through the gate's statement reader; other changes' records stay the repository-wide gate's
+    business, which still runs later. A read failure refuses too: the interview owns its records,
+    and the runner neither repairs nor replaces them.
+    """
+    path = folder_of(root, change) / "decisions.md"
+    rel = path.relative_to(root).as_posix()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(
+            f"{rel} cannot be read ({getattr(error, 'strerror', None) or error}); complete the interview first — "
+            "the runner neither repairs nor replaces decisions.md."
+        ) from error
+    problems = check_question_context.statement_problems(text, rel)
+    if problems:
+        raise Refused(
+            f"{rel} holds answered records whose decision statement cannot be read; complete the "
+            "interview first — the runner does not edit decisions.md:\n"
+            + "\n".join(f"- {problem}" for problem in problems)
+        )
+
+
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
 
 
@@ -9366,14 +9871,18 @@ def verify_draft(
 def draft(root: Path, change: str) -> None:
     """Phases 2, 2b and 3: Codex drafts the change; GLM 5.3 after two failed Codex attempts (ADR 0016).
 
-    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the leak check
-    before each call, the credential scans, the one commit - plus what a writing Codex call needs:
+    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the early
+    statement check on this change's `decisions.md`, the leak check before each call, the
+    credential scans, the one commit - plus what a writing Codex call needs:
     each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
     its own missing ADR answer, which only the maintainer can record.
     """
-    ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
+    # `decisions.md` is read by the early statement check below, which refuses an unreadable file
+    # with the remedy; the preflight does not read it a second time with a bare message.
+    ctx = preflight(root, change, CODEX, bead_file="research.md")
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
+    refuse_unreadable_statements(root, change)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
     started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
@@ -10227,6 +10736,7 @@ VERBS = {
     "draft": draft,
     "implement": implement,
     "repair": repair,
+    "triage": triage,
     "spec-review": spec_review,
     "review-loop": review_loop,
     "release-loop": release_loop,
@@ -10244,6 +10754,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument(
+        "row_status",
+        nargs="?",
+        default=None,
+        metavar="ROW=STATUS",
+        help=(
+            "triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'; "
+            "refuses ordinary taken for test-only locations: use taken — not a test — <reason>"
+        ),
+    )
+    parser.add_argument(
+        "reason_text",
+        nargs="?",
+        default=None,
+        metavar="REASON",
+        help=(
+            "triage only: the decision's own single-line reason; "
+            "the Broke a test proof mark stays the runner's; triage supplies no repair evidence"
+        ),
+    )
     parser.add_argument(
         "--stage2-off",
         nargs="?",
@@ -10354,12 +10884,14 @@ def _run(args: argparse.Namespace) -> int:
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+        if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
+            raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair"}:
+        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
             # The name is checked before the lock: the lock's path is built from it, and a name that
             # escapes the state directory must create nothing there (DL-A-9 of the deep review).
             folder_of(Path(args.root), args.change)
@@ -10368,6 +10900,10 @@ def _run(args: argparse.Namespace) -> int:
             # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
             with holding_record(args.change, Path(args.root)):
                 repair(Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "triage":
+            # A local record write, dispatched before any preflight or model call: no endpoint, no leak
+            # check, no credential - the record lock is triage's only shared resource.
+            triage(Path(args.root), args.change, args.row_status, args.reason_text)
         elif args.verb == "prepare-explore":
             prepare_explore(Path(args.root), args.change, args.klass, args.seats)
         elif args.verb == "explore":
