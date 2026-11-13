@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-15
 last_reviewed: 2026-10-18
-updated: 2026-11-10
+updated: 2026-11-13
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
@@ -321,7 +321,8 @@ checkable.
     validates, from the latest stored run only. Reuse needs equal input
     digests, ignoring that run's own research append and HEAD, and the same
     stage, topic, seat, endpoint, model and prompt hash. The run launches
-    the rest within `39 + 3N` and marks reused and interrupted slots. A
+    the rest within the ceiling of point 9 (`39 + 3N`, or `72 + 6N` with
+    corrections) and marks reused and interrupted slots. A
     stored run with a security refusal is never resumed; a complete
     publication clears the store; a failed store write stops the run with
     exit 1.
@@ -339,7 +340,7 @@ checkable.
   explicit includes remain hard requirements and exit 1 if ineligible.
 * Each run gains a preparation step and a report the orchestrator relays
   before the run; the selected models are reported, not fixed in the spec.
-  Probes cost a few small calls outside `39 + 3N`, a Claude Code seat's
+  Probes cost a few small calls outside the run's ceiling (point 9), a Claude Code seat's
   probe included. No Go seat names a model, so a vanished
   Flash model blocks nothing; a new model needs only an admitted terms
   record, so the pool follows the Go catalog by itself. Every research run

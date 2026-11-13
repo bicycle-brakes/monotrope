@@ -120,7 +120,10 @@ Do not edit `scripts/stage2_research_report.py`,
 `scripts/stage2_research_store.py`, `scripts/stage2_research_dispatch.py`,
 `scripts/check_research_handoff.py`, `research-swarm-limits.yaml`, model
 selection/declarations, review-loop parsing, historical artifacts or other
-change folders. Held paths, including `prompts/`, `templates/`, `decisions/`,
+change folders. The orchestrator's bootstrap edits of the held texts are
+`docs/WORKFLOW.md`, `prompts/01-explore.md` (the explore prompt's call
+ceiling, after the maintainer's decision of 2026-11-12, Q-6) and the ADR 0020
+amendment. Held paths, including `prompts/`, `templates/`, `decisions/`,
 `.github/` and `AGENTS.md`, are never assigned to the attempt. The existing
 ADR amendment and the workflow edit belong to the orchestrator.
 

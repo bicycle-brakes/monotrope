@@ -130,7 +130,17 @@ violations, not material to discard until a report passes.
 
 The validator in `scripts/stage2_research_report.py`, selection and availability
 policy, public/repository isolation, gate definitions and model endpoints
-remain unchanged. An implementation attempt does not edit held paths.
+remain unchanged. One delivery detail changes for every Pi seat call, first
+calls included: the seat's data part (private brief, finder map, read request)
+travels as a user-turn file instead of inside the system prompt or on the
+command line, so repository content never appears in the process table
+(loop row L3-2, 2026-11-13); what a seat may read is unchanged.
+
+Boundary: the time limits stay as they are. Corrections start only after every
+first topic call has ended and run inside the seat's remaining topic
+allowance and the run deadline minus the judge reserve; in a run where many
+reports are rejected, corrections that no longer fit are not started and their
+topics stay without a valid report (loop row L5-4, accepted limit). An implementation attempt does not edit held paths.
 The orchestrator owns the already prepared ADR 0020 amendment and the matching
 wording in `docs/WORKFLOW.md`; their policy change takes effect on merge.
 
