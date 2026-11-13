@@ -136,11 +136,10 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   OpenTelemetry GenAI field names, bead coding-harness-oebl) is allowed; a service that
   shows it is not. Reason: everything is built for an ADHD reader, no feature creep.
 - **P1 means planned for the next two weeks, at most 10 beads** (maintainer, 2026-11-12).
-  Epics do not count; a bead whose pull request is already queued for merge counts until
-  it closes. A bead enters P1 only when another leaves it, and the morning handover states
-  the count with its cut-off. Reason: on 2026-11-12, 67 of 242 open beads were P1, so P1
-  no longer told what comes next; lowering them once without a cap would let them pile up
-  again.
+  Epics do not count; a bead whose pull request is queued for merge counts until it
+  closes. A bead enters P1 only when another leaves it; the morning handover states the
+  count with its cut-off. Reason: on 2026-11-12, 67 of 242 open beads were P1, so P1 no
+  longer told what comes next; lowering them once without a cap lets them pile up again.
 
 ## Tracker quick reference
 
