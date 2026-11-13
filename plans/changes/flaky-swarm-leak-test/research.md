@@ -9,20 +9,16 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-13"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # flaky swarm leak test — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 exploration follows; the repository inspection addendum below resolves
+the append inventory without changing the maintainer's recorded answers.
 
 Stage-2 call, 2026-11-13: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1042 files, 4091 commits, 12 rules.
 
@@ -88,3 +84,37 @@ neighbours:
 - `tests/test_stage2_swarm.py` — the flaky test, the spy, `SwarmWorld.calls`, and the `STAND_IN` template (its unlocked append at 270-271 and its own pre-read at 203 are the two concurrent readers/writers of `calls.jsonl`).
 - `scripts/stage2_research_dispatch.py` and `scripts/stage2_research_run.py` — only if the production side of the refusal rule or the gate's print call site were to move; both files are named protected areas of the active swarm-test-speed change.
 - No change to `scripts/leakcheck.py`, `scripts/stage2.py` or `tests/terms_fixtures.py` is implied by any fact found; those paths were ruled out above.
+
+## Draft inspection addendum — 2026-11-13
+
+At `3950c853`, the 17 append-mode opens counted in the interview comprise:
+
+| File | Data appends | Lock-only opens |
+|---|---|---|
+| `tests/test_stage2.py` | lines 190, 196, 242, 298, 319 | 137 (`calls.lock` acquisition), 484 (`holds_record_lock`, a production-lock probe) |
+| `tests/test_stage2_swarm.py` | lines 206, 270, 275, 282 | none |
+| `tests/test_pi_install.py` | lines 101, 158, 183 | none |
+| `tests/test_stage2_session.py` | lines 82, 87 | none |
+| `tests/test_stage2_research_availability.py` | line 72 | none |
+
+Thus 15 sites append data; three already take the local `locked(False)`
+lock in `test_stage2.py`. The two lock-only opens do not append log records.
+The scenario-driven arbitrary-text appends in stage2 and swarm are included;
+they must preserve their exact text. Top-level document mutations elsewhere
+in `test_stage2.py` are not concurrent stand-in logs. This is a repository
+fact resolving an inventory gap, not a replacement interview answer.
+
+Readers also require migration: `World.calls`, `World.script`, `World.versions`,
+`SwarmWorld.calls`, the session fixture's `World.calls`, the Pi fixture's three log readers,
+the stand-ins' startup reads, and direct reads of these logs in the five files.
+The existing `test_a_stand_in_contacts_nothing` parses the rendered stand-in's
+imports; a shared helper must keep that transitive standard-library-only
+boundary. Embedded source is feasible without changing the runner's scrubbed
+environment or exposing helper files inside its scanned fixture repository.
+
+The torn-read explanation remains a hypothesis: this draft ran no reproduction
+and read no CI logs. The interview answers settle the repair boundary and the
+guard; no remaining intent decision is needed. No complete `research-swarm/v2`
+record is present. `templates/plan.md` and
+`scripts/validate_change_artefacts.py` do not exist at this commit; the plan uses
+the phase-3 prompt's form and the available individual gates.
