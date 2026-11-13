@@ -3048,35 +3048,79 @@ def test_verify_runner_preserves_entry_contracts(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("addopts", "reason"),
     [
-        ("--basetemp=/elsewhere", "value form"),
-        ("--basetemp /elsewhere", "separate value"),
-        ("--basetem /elsewhere", "abbreviated option"),
-        ("--base=/elsewhere", "short prefix"),
-        ("-o addopts=--basetemp=/elsewhere", "ini override"),
-        ("-oaddopts=--basetemp=/elsewhere", "attached ini override"),
-        ("--override-ini='addopts=--basetemp /elsewhere'", "long ini override"),
+        ("--basetemp={outside}", "value form"),
+        ("--basetemp {outside}", "separate value"),
+        ("--basetem {outside}", "abbreviated option"),
+        ("--base={outside}", "short prefix"),
+        ("-o addopts=--basetemp={outside}", "ini override"),
+        ("-oaddopts=--basetemp={outside}", "attached ini override"),
+        ("-o=addopts=--basetemp={outside}", "equals ini override"),
+        ("--override-ini='addopts=--basetemp {outside}'", "long ini override"),
+        ("@{args_file}", "argument file"),
         ("'unbalanced", "malformed quoting"),
+        ("-q -x", "ordinary run"),
     ],
 )
 def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopts: str, reason: str) -> None:
-    """Criterion 11: an inherited PYTEST_ADDOPTS that would select its own basetemp — in either
-    value form or a pytest-accepted abbreviation — refuses before any gate, malformed quoting
-    refuses instead of guessing, and unrelated options pass through verbatim."""
+    """Ask real pytest to resolve all option sources, refusing an escape before tests run."""
     base = tmp_path / "addopts"
     temproot = base / "temproot"
-    gate_ran = base / "gate-ran"
-    tree, _ = _tmp_runner_tree(base / "tree", f"touch {gate_ran}")
-    done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": addopts})
-    assert done.returncode == 2, f"{reason}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-    assert not gate_ran.exists(), f"{reason}: gates started despite the conflicting option"
-    assert "basetemp" in done.stderr or "quoting" in done.stderr, done.stderr
-    assert not _managed_parent(temproot).exists(), f"{reason}: the refusal still built temporary infrastructure"
+    test_ran = base / "test-ran"
+    outside = base / "outside"
+    outside.mkdir(parents=True)
+    sentinel = outside / "sentinel"
+    sentinel.write_text("untouched", encoding="utf-8")
+    args_file = base / "args.txt"
+    args_file.write_text(f"--basetemp={outside}\n", encoding="utf-8")
+    tree, _ = _tmp_runner_tree(base / "tree", "python3 -m pytest -q test_probe.py")
+    (tree / "test_probe.py").write_text(
+        f"from pathlib import Path\ndef test_probe(tmp_path):\n    Path({str(test_ran)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    options = addopts.format(outside=outside, args_file=args_file)
+    done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": options})
+    if reason == "ordinary run":
+        assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+        assert test_ran.exists(), "an ordinary pytest run was blocked"
+    else:
+        assert done.returncode != 0, f"{reason}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        assert not test_ran.exists(), f"{reason}: tests ran despite the conflicting option"
+        assert any(text in done.stderr for text in ("basetemp", "quotation", "unrecognized arguments")), done.stderr
+        assert sentinel.read_text(encoding="utf-8") == "untouched", "pytest touched the escaped root"
+    parent = _managed_parent(temproot)
+    assert not parent.exists() or not list(parent.iterdir()), "the run left its area behind"
 
-    # Unrelated options reach the gate verbatim.
-    ok_tree, ok_temproot = _tmp_runner_tree(base / "unrelated", f'printf %s "$PYTEST_ADDOPTS" > "{base / "seen.txt"}"')
-    done = _tmp_run(ok_tree, ok_temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": "-q -x"})
-    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-    assert (base / "seen.txt").read_text(encoding="utf-8") == "-q -x", "unrelated options were rewritten"
+
+@pytest.mark.parametrize("ending", ["true", "kill -TERM $$"])
+@pytest.mark.parametrize("replacement", ["symlink", "directory"])
+def test_verify_runner_refuses_substituted_cleanup_parent(tmp_path: Path, ending: str, replacement: str) -> None:
+    """Both cleanup handlers must leave a substituted parent's unrelated child intact."""
+    base = tmp_path / "substitution"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    moved = base / "original-parent"
+    victim = base / "victim"
+    victim.mkdir(parents=True)
+    record = base / "area-name"
+    gate = (
+        f'area_name=$(basename "$PYTEST_DEBUG_TEMPROOT"); printf %s "$area_name" > "{record}"; '
+        f'mv "{parent}" "{moved}"; '
+        + (f'ln -s "{victim}" "{parent}"; ' if replacement == "symlink" else f'mkdir "{parent}"; ')
+        + f'mkdir "{parent}/$area_name"; echo untouched > "{parent}/$area_name/sentinel"; '
+        + ending
+    )
+    tree, _ = _tmp_runner_tree(base / "tree", gate)
+    # $$ in a gate names the gate shell: signal the runner itself via the PID area name.
+    if ending != "true":
+        gate = gate.replace("kill -TERM $$", 'kill -TERM "$area_name"')
+        _write_gate_file(tree, [_report_gate(base, "swap", "verify", "block", command=gate)])
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode != 0, f"unsafe cleanup reported success: {done.stdout}\n{done.stderr}"
+    name = record.read_text(encoding="utf-8")
+    assert (parent / name / "sentinel").is_file(), "cleanup followed the substituted parent"
+    assert (moved / name).is_dir(), "cleanup changed the original area after substitution"
+    assert str(parent) in done.stderr and "parent" in done.stderr, done.stderr
+    assert "changed" in done.stderr or "symlink" in done.stderr, done.stderr
 
 
 def test_no_second_verification_workflow() -> None:

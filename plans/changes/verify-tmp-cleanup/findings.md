@@ -1154,8 +1154,8 @@ Stage-2 call, 2026-11-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | scripts/verify_all.sh | `PYTEST_ADDOPTS='-o=addopts=--basetemp=/elsewhere'` passes preflight because the extracted override starts with `=addopts`. The installed pytest parser accepts it and selects `/elsewhere`, escaping run ownership and cleanup. An `@args.txt` containing `--basetemp=/elsewhere` also bypasses preflight. Both paths were reproduced using the runner's validation and installed pytest parser; neither has regression coverage. [Criteria 2, 11] | Codex | taken — decisions.md#Q-6 (2026-11-13): a small pytest plugin the runner loads into every pytest run (-p) checks in pytest_configure the basetemp pytest resolved (config.option.basetemp or the default under PYTEST_DEBUG_TEMPROOT) and stops the run before any test when it lies outside this run's area; the PYTEST_ADDOPTS parser in scripts/verify_all.sh goes; tests for -o=addopts=--basetemp=…, @args.txt and an ordinary run | — |
-| F6-2 | MAJOR | SPEC | base | scripts/verify_all.sh | If the managed parent is renamed during a gate and replaced with a symlink to an unrelated directory containing a child named after this run's PID, both cleanup handlers execute `rm -rf` through that symlink and delete the unrelated child. The parent is validated only at startup; cleanup neither preserves its directory identity nor detects substitution. [Criterion 8] | Codex | taken — before either cleanup handler removes the area, it checks that the parent is still the directory validated at start (same device and inode, not a symlink) and refuses with path and reason otherwise; a test that swaps the parent for a symlink during a gate | — |
+| F6-1 | MAJOR | SPEC | base | scripts/verify_all.sh | `PYTEST_ADDOPTS='-o=addopts=--basetemp=/elsewhere'` passes preflight because the extracted override starts with `=addopts`. The installed pytest parser accepts it and selects `/elsewhere`, escaping run ownership and cleanup. An `@args.txt` containing `--basetemp=/elsewhere` also bypasses preflight. Both paths were reproduced using the runner's validation and installed pytest parser; neither has regression coverage. [Criteria 2, 11] | Codex | fixed — tests/test_ci.py::test_verify_runner_refuses_conflicting_pytest_options | — |
+| F6-2 | MAJOR | SPEC | base | scripts/verify_all.sh | If the managed parent is renamed during a gate and replaced with a symlink to an unrelated directory containing a child named after this run's PID, both cleanup handlers execute `rm -rf` through that symlink and delete the unrelated child. The parent is validated only at startup; cleanup neither preserves its directory identity nor detects substitution. [Criterion 8] | Codex | fixed — tests/test_ci.py::test_verify_runner_refuses_substituted_cleanup_parent | — |
 
 Phase 6 verdict: codex 01a1d545-73b1-7323-aecb-35bb4748dc53, 2026-11-13
 Reviewer session: codex 01a1d545-73b1-7323-aecb-35bb4748dc53 — a fresh session reviewed: no phase-2a session was recorded
@@ -1279,3 +1279,10 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-13: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4078 commits, 12 rules.
+
+Stage-2 call, 2026-11-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4080 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_all.sh` is shared execution infrastructure
+
+Runner restoration, 2026-11-13: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged

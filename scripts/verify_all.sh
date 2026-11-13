@@ -228,47 +228,6 @@ fi
 # or the platform temporary parent, and travels to nested runs through
 # HARNESS_VERIFY_TMP_PARENT so they find the same siblings; TMPDIR stays
 # unchanged.
-if [ -n "${PYTEST_ADDOPTS:-}" ] && ! "$PYTHON" - <<'PYEOF'
-import os
-import shlex
-import sys
-
-try:
-    words = shlex.split(os.environ.get("PYTEST_ADDOPTS", ""))
-except ValueError as exc:
-    print(f"verify-tmp: PYTEST_ADDOPTS is not valid shell quoting ({exc}); refusing to start gates", file=sys.stderr)
-    raise SystemExit(2)
-# pytest prepends ini addopts supplied by -o/--override-ini as well.
-overrides = []
-for index, word in enumerate(words):
-    if word in ("-o", "--override-ini") and index + 1 < len(words):
-        overrides.append(words[index + 1])
-    elif word.startswith("-o") and not word.startswith("--"):
-        overrides.append(word[2:])
-    elif word.startswith("--override-ini="):
-        overrides.append(word.partition("=")[2])
-try:
-    for override in overrides:
-        key, sep, value = override.partition("=")
-        if sep and key.strip() == "addopts":
-            words.extend(shlex.split(value))
-except ValueError as exc:
-    print(f"verify-tmp: PYTEST_ADDOPTS addopts is not valid shell quoting ({exc}); refusing to start gates", file=sys.stderr)
-    raise SystemExit(2)
-for word in words:
-    if word.startswith("--"):
-        name = word.partition("=")[0]
-        if name == "--basetemp" or (len(name) > 2 and "--basetemp".startswith(name)):
-            print(
-                f"verify-tmp: PYTEST_ADDOPTS selects an explicit basetemp ({word!r}); "
-                "this runner owns the temporary root, so it refuses the option instead",
-                file=sys.stderr,
-            )
-            raise SystemExit(2)
-PYEOF
-then
-    exit 2
-fi
 verify_tmp_parent="${HARNESS_VERIFY_TMP_PARENT:-}"
 if [ -z "$verify_tmp_parent" ]; then
     verify_tmp_base="${PYTEST_DEBUG_TEMPROOT:-${TMPDIR:-/tmp}}"
@@ -288,7 +247,7 @@ if ! verify_tmp_error=$(mkdir -p -m 700 -- "$verify_tmp_parent" 2>&1); then
 fi
 # Validate the parent and reclaim dead siblings; the interpreter below decides
 # each entry and performs the removal itself, and never follows a symlink.
-if ! "$PYTHON" - "$verify_tmp_parent" <<'PYEOF'
+if ! verify_tmp_identity=$("$PYTHON" - "$verify_tmp_parent" <<'PYEOF'
 import ctypes
 import os
 import shutil
@@ -316,6 +275,7 @@ if stat.S_IMODE(info.st_mode) != 0o700:
         os.chmod(parent, 0o700)
     except OSError as exc:
         refuse(parent, f"cannot make the managed parent private ({exc})")
+identity = f"{info.st_dev}:{info.st_ino}"
 try:
     with os.scandir(parent) as scan:
         entries = sorted(scan, key=lambda entry: entry.name)
@@ -356,7 +316,9 @@ for entry in entries:
         pass
     except OSError as exc:
         refuse(entry.path, f"cannot remove it ({exc})")
+print(identity)
 PYEOF
+)
 then
     exit 2
 fi
@@ -382,11 +344,31 @@ fi
 # first handler disarms every trap. A failed removal keeps an existing nonzero
 # status; after otherwise successful work it turns the run's status into 2, so
 # a storage failure never reads as a green verdict.
+verify_tmp_remove() {
+    "$PYTHON" - "$verify_tmp_parent" "$verify_tmp_identity" "$verify_tmp_area" <<'PYEOF'
+import os
+import shutil
+import stat
+import sys
+
+parent, identity, area = sys.argv[1:]
+try:
+    info = os.lstat(parent)
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise OSError(f"managed parent {parent} changed: symlink or not a directory")
+    if f"{info.st_dev}:{info.st_ino}" != identity:
+        raise OSError(f"managed parent {parent} changed: device or inode differs")
+    shutil.rmtree(area)
+except OSError as exc:
+    print(exc, file=sys.stderr)
+    raise SystemExit(2)
+PYEOF
+}
 verify_tmp_cleanup() {
     verify_tmp_status=$?
     trap - EXIT INT TERM HUP QUIT
     if [ "$verify_tmp_status" -eq 0 ] || [ "$verify_tmp_keep" -ne 1 ]; then
-        if ! verify_tmp_error=$(rm -rf -- "$verify_tmp_area" 2>&1); then
+        if ! verify_tmp_error=$(verify_tmp_remove 2>&1); then
             echo "verify-tmp: could not remove the run area $verify_tmp_area: $verify_tmp_error — remove it by hand" >&2
             [ "$verify_tmp_status" -eq 0 ] && verify_tmp_status=2
         fi
@@ -398,7 +380,7 @@ verify_tmp_cleanup() {
 verify_tmp_signal() {
     trap - EXIT INT TERM HUP QUIT
     if [ "$verify_tmp_keep" -ne 1 ]; then
-        if ! verify_tmp_error=$(rm -rf -- "$verify_tmp_area" 2>&1); then
+        if ! verify_tmp_error=$(verify_tmp_remove 2>&1); then
             echo "verify-tmp: could not remove the run area $verify_tmp_area: $verify_tmp_error — remove it by hand" >&2
         fi
     else
@@ -411,6 +393,34 @@ trap 'verify_tmp_signal 2' INT
 trap 'verify_tmp_signal 15' TERM
 trap 'verify_tmp_signal 1' HUP
 trap 'verify_tmp_signal 3' QUIT
+
+# Let pytest resolve its own option sources, including ini overrides and @files.
+# The module lives in this run's area, so nested runs load their own guard and
+# no extra repository module or independent option parser is needed.
+if ! cat > "$verify_tmp_area/harness_verify_tmp.py" <<'PYEOF'
+import os
+from pathlib import Path
+
+import pytest
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    area = Path(os.environ["HARNESS_VERIFY_TMP_AREA"]).resolve()
+    selected = config.option.basetemp or os.environ["PYTEST_DEBUG_TEMPROOT"]
+    root = Path(selected).resolve()
+    if not root.is_relative_to(area):
+        raise pytest.UsageError(
+            f"verify-tmp: basetemp {root} lies outside this run's area {area}"
+        )
+PYEOF
+then
+    echo "verify-tmp: cannot write pytest guard in $verify_tmp_area" >&2
+    exit 2
+fi
+export HARNESS_VERIFY_TMP_AREA="$verify_tmp_area"
+export PYTHONPATH="$verify_tmp_area${PYTHONPATH:+:$PYTHONPATH}"
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -p harness_verify_tmp"
 
 # ── Measured durations (bead coding-harness-1um6) ──────────────────────────
 #
