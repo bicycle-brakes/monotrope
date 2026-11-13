@@ -7608,6 +7608,8 @@ def mark_repaired_findings(
     for item in resolved:
         cells = item.cells.copy()
         if item.place != "record" and cells == by_key.get((item.place, cells[0])):
+            if item.line >= len(lines) or split_row(lines[item.line]) != cells:
+                raise Refused(f"{cells[0]} in findings.md changed since resolution; no fixed statuses were written.")
             cells[7] = fixes[cells[0]]
             lines[item.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")

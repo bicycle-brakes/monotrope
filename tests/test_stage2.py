@@ -10279,6 +10279,36 @@ def test_repair_marks_only_the_resolved_finding_row(world: World, identical: boo
     assert rows_now[1][7] == "fixed — tests/test_fix.py::test_fix"
 
 
+@pytest.mark.parametrize("mutation", ["replace", "insert", "truncate"])
+def test_repair_refuses_to_mark_a_changed_findings_line(world: World, mutation: str) -> None:
+    """A stale resolved index must refuse rather than overwrite a concurrent edit."""
+    rows = [phase6_cells(ident, "taken — fix", ident) for ident in ("F-1", "F-2")]
+    world.write_findings(phase6_block(rows))
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    resolved = stage2.resolve_finding_rows(None, world.text())
+    taken, _ = stage2.repair_targets(ctx, None, resolved=resolved)
+    lines = world.text().split("\n")
+    index = resolved[-1].line
+    if mutation == "replace":
+        lines[index] = "Unrelated text added after resolution."
+    elif mutation == "insert":
+        lines.insert(index, "Unrelated text added after resolution.")
+    else:
+        lines = lines[:index]
+    changed = "\n".join(lines)
+    world.findings.write_text(changed, encoding="utf-8")
+    fixes = {row[0]: "fixed — tests/test_fix.py::test_fix" for row in rows}
+    try:
+        stage2.mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+    except stage2.Refused as error:
+        assert "F-2" in str(error) and "findings.md" in str(error)
+    except IndexError:
+        pytest.fail("a vanished resolved line must refuse with its finding ID and file")
+    else:
+        pytest.fail("a changed resolved line must refuse before writing any fixed status")
+    assert world.text() == changed, "refusal must preserve the concurrent edit and every other row"
+
+
 def test_repair_marks_only_the_resolved_record_row(world: World) -> None:
     """The same resolver also limits record status writes to the latest table's row."""
     world.write_record([("L1-1", "taken — fix", "no")])
