@@ -1394,6 +1394,32 @@ def test_topic_correction_keeps_security_and_time_boundaries(
     assert run.remaining_topic_allowance(fresh) == 360.0
 
 
+def test_topic_correction_audit_names_the_corrected_attempt(sworld: SwarmWorld) -> None:
+    # Planted fault: the published audit describes both attempts as the same ordinary call.
+    sworld.complete(
+        **{
+            "repository:4:mimo-v2.6-pro": [
+                {"stdout": with_extra_field(repository_report(4))},
+                {"stdout": repository_report(4)},
+            ]
+        }
+    )
+    assert sworld.run() == 0
+    audit = [
+        line
+        for line in sworld.research.read_text(encoding="utf-8").splitlines()
+        if line.startswith("- Stage-2 call")
+        and "swarm repository · topic 4" in line
+        and " · model mimo-v2.6-pro · " in line
+    ]
+    assert len(audit) == 2, "both launches remain in the published audit"
+    assert "topic 4 · run " in audit[0], "the initial call retains its ordinary description"
+    assert "topic 4 correction of attempt 1 · run " in audit[1], (
+        "the audit text alone must identify the correction and its rejected attempt"
+    )
+    assert all("leak check clean over " in line for line in audit), "both calls retain their leak-check evidence"
+
+
 def test_topic_correction_persists_attempts_and_resumes_final_report(sworld: SwarmWorld) -> None:
     # Criterion 7. Planted fault: a lost attempt, an unvalidated reuse, a scored-twice correction or a
     # repeated successful contribution passes.

@@ -531,7 +531,10 @@ class Run:
             self.lines.append(text)
 
     def what(self, entry: dict) -> str:
-        return f"swarm {entry['role']}" + (f" · topic {entry['topic']}" if entry["topic"] else "")
+        description = f"swarm {entry['role']}" + (f" · topic {entry['topic']}" if entry["topic"] else "")
+        if entry.get("corrects") is not None:
+            description += f" correction of attempt {entry['attempt'] - 1}"
+        return description
 
     def gate(self, slot: Slot) -> GateVerdict:
         entry = self.entries[slot.slot_id]
