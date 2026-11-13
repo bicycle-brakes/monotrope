@@ -161,29 +161,11 @@ def payload_text(stdout: str) -> str:
 CORRECTION_SUFFIX = "-correction"
 
 
-def _object_spans(text: str) -> list[str]:
-    """Detect competing objects outside a fence; never select report content here."""
-    spans = []
-    decoder = json.JSONDecoder()
-    index = 0
-    while (start := text.find("{", index)) != -1:
-        try:
-            _, end = decoder.raw_decode(text, start)
-        except (ValueError, RecursionError):
-            # A prose brace is not a competing JSON object. Keep looking for
-            # complete candidates without repairing or selecting this fragment.
-            index = start + 1
-            continue
-        spans.append(text[start:end])
-        index = end
-    return spans
-
-
 def topic_report_payload(stdout: str) -> str:
     """Accept a whole JSON object or one JSON/unlabelled fence, never a nested candidate.
 
-    Wrapping may carry prose or tool residue, but no competing object. The unchanged
-    strict validator still checks duplicate keys, finite values and the report schema.
+    With one fence, only its content is parsed; surrounding prose is ignored.
+    The unchanged strict validator checks duplicate keys, finite values and the report schema.
     """
     text = (stdout or "").strip()
     try:
@@ -206,10 +188,6 @@ def topic_report_payload(stdout: str) -> str:
     ):
         raise ResearchReportError("unclosed quote or object: expected a whole object or one JSON fence")
     opening, closing = markers
-    # Never join prose across the report: disconnected fragments must not
-    # manufacture a competing object that was absent from the answer.
-    if _object_spans(text[: opening.start()]) or _object_spans(text[closing.end() :]):
-        raise ResearchReportError("a competing object outside the fence refuses extraction")
     selected = text[opening.end() : closing.start()].strip()
     try:
         value = json.loads(selected)
@@ -979,11 +957,12 @@ class Run:
             and bool(self.records[record["slot_id"]].get("reused_from"))
             or validate(self.entries[record["slot_id"]], record),
         )
-        # A second batch supersedes the same stage's audit, rather than calling its other
-        # planned contributions "not planned". Adopted invalid first attempts remain evidence.
-        self.not_reused = [(key, why) for key, why in self.not_reused if not (key == stage or key.startswith(prefix))]
+        # Each batch appends its reuse decisions: a correction must not erase the
+        # initial batch's audit. Keep distinct reasons while avoiding repeated entries.
         self.not_reused.extend(
-            (key, why) for key, why in reuse.not_reused if not self.records.get(key, {}).get("reused_from")
+            (key, why)
+            for key, why in reuse.not_reused
+            if not self.records.get(key, {}).get("reused_from") and (key, why) not in self.not_reused
         )
         batch_ids = {e["slot_id"] for e in entries}
         for slot_id, record in reuse.reused.items():

@@ -1196,6 +1196,8 @@ def test_topic_report_accepts_single_wrapped_object(sworld: SwarmWorld, name: st
     ("before", "after"),
     [
         ("A prose fragment {x}.\n", ""),
+        ("See {}.\n", ""),
+        ("", '\nExample: {"note": "incidental JSON"}.'),
         ("", "\nA prose fragment {x}."),
         ('Draft fragment {"note": \n', '\n"prose only"}'),
     ],
@@ -1215,7 +1217,6 @@ def test_topic_report_ignores_brace_fragments_around_one_fence(before: str, afte
     ("name", "answer"),
     [
         ("two-fences", lambda body: f"Draft:\n{fenced(body)}\nFinal:\n{fenced(body)}"),
-        ("bare-beside-fence", lambda body: f"{body}\n{fenced(body)}"),
         (
             "duplicate-keys",
             lambda _body: fenced(
@@ -1269,14 +1270,14 @@ def test_topic_report_never_selects_an_object_nested_in_a_truncated_one(answer: 
         stage2_research_run.topic_report_payload(answer)
 
 
-def test_topic_report_refuses_competing_objects_hidden_by_prose_quotes() -> None:
-    # Two prose quotes must not hide the first object and select the fenced second one.
+def test_topic_report_ignores_objects_in_prose_around_one_fence() -> None:
+    # Fence-only extraction ignores surrounding prose, including JSON and quotes.
     answer = 'He wrote 6" then: {"a": 1} and 7" later:\n```json\n{"b": 2}\n```'
     try:
-        stage2_research_run.topic_report_payload(answer)
-    except stage2_research_run.ResearchReportError:
-        return
-    pytest.fail("both complete objects must count despite prose quotes; neither may be selected")
+        selected = stage2_research_run.topic_report_payload(answer)
+    except stage2_research_run.ResearchReportError as error:
+        pytest.fail(f"surrounding prose must not compete with the single fence: {error}")
+    assert selected == '{"b": 2}'
 
 
 @pytest.mark.parametrize("field", ["started_at", "ended_at"])
@@ -1478,6 +1479,21 @@ def test_topic_correction_persists_attempts_and_resumes_final_report(sworld: Swa
     assert not any(item[0] in reused_ids for item in final["resume"]["not_reused"]), (
         "dispatching a correction must not call the reused initial batch unplanned"
     )
+
+
+def test_topic_correction_appends_first_batch_reuse_audit(sworld: SwarmWorld) -> None:
+    # Planted fault: the correction batch replaces the first batch's discard audit.
+    bad = with_extra_field(repository_report(4))
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": bad}]})
+    assert sworld.run() == 1
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": bad}, {"stdout": repository_report(4)}]})
+    assert sworld.run() == 0
+    audit = manifest_of(sworld)["resume"]["not_reused"]
+    assert ["topics-4-2-correction", "not planned"] in audit, (
+        "the initial batch's discard entry must survive dispatching the correction batch"
+    )
+    assert ["topics-4-2-correction", "outcome"] in audit, "the correction batch appends its own discard reason"
 
 
 def test_topic_corrections_account_for_every_invocation(sworld: SwarmWorld) -> None:
