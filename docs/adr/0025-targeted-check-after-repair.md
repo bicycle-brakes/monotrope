@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-11-08
 last_reviewed: 2026-11-08
-updated: 2026-11-12
+updated: 2026-11-13
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-11-08"}
@@ -116,20 +116,16 @@ carries it, and until then the decisions above stand as written.
    tolerated missing ADR answer stay as they were (Q-2).
 5. Decision 3 stands unchanged: a fresh green full `make verify` of the head
    under review precedes phase 6, and CI keeps running the complete suite.
-6. Decision 4's measurement of misses becomes automatic. A slip is a
+6. Deferred to a later change (bead coding-harness-bxxt.7, decisions.md Q-9):
+   decision 4's measurement of misses becomes automatic there. A slip is a
    completed red full check before phase 6 on the same repository content
-   and gate configuration as an accepted targeted green. The runner appends
-   one slip per full run to the local duration history; `python -m
-   scripts.verify_duration slips --repository <path> --since <UTC> --until
-   <UTC>` counts the distinct slipped full runs of one repository in a
-   half-open UTC interval and reports missing or incomplete evidence as
-   unavailable, never as zero. Admission refusals, launch failures,
-   timeouts, unreadable identities and CI-only failures are not counted.
-   A night run's morning handover reports that count with its repository
-   and interval (Q-5).
+   and gate configuration as an accepted targeted green; that change derives
+   the count from the local run history and reports incomplete evidence
+   beside the count, never as a bare zero. Until it merges, the orchestrator
+   measures misses by hand as decision 4 says.
 
 Cost consequence: an implement attempt with safe coverage no longer waits
 for the verify admission or the whole suite, and a draft no longer waits for
 the admission at all; a targeted miss surfaces at the full check before
-phase 6 and is then counted. The amendment adds no new ADR and supersedes
-none.
+phase 6; counting it automatically is deferred to the later change named in
+point 6. The amendment adds no new ADR and supersedes none.
