@@ -23,9 +23,11 @@ gates, neighbouring specs. An Opus map merge keeps the exact union of those
 lists. Then eleven topics follow: the repository seats work eight (1-8) on that
 map and the online seats three public ones (9-11), each model on the same brief
 and the same perspectives; a fresh Opus 5.5 context judges. The online topics see one
-filtered public sentence and no repository content. That makes at most
-`39 + 3N` calls for `N` selected free models; the free models work the online
-topics only and are best-effort. The judge holds evidence authority only: it
+filtered public sentence and no repository content. That makes `39 + 3N`
+calls for `N` selected free models; a topic report that fails its format gets
+at most one correction call from the same seat, so a run makes at most
+`72 + 6N` calls. The free models work the online topics only and are
+best-effort. The judge holds evidence authority only: it
 exposes support, dissent, gaps and human questions, and decides no design and
 no workflow question. Only the runner writes `research.md`.
 
