@@ -371,6 +371,7 @@ def test_the_opencode_go_entry_is_declared() -> None:
     # Each exclusion is a dated decision; its record shape is validated below
     # through the runner's own `free_rule_problems`.
     assert [record["id"] for record in free["exclude"]] == [
+        "longcat-2.5-free",
         "step-5-preview-free",
         "iceman-contributor-free",
         "cat-jam-free",

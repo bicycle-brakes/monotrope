@@ -173,7 +173,7 @@ endpunkte:
     # column, requests per 5 hours; more is cheaper), descending, ties by id.
     modelle:
       - deepseek-v4.1-flash
-      - longcat-2.0
+      # longcat-2.0 left the ladder on 2026-11-13 (maintainer: too slow; bead coding-harness-363r.2)
       - glm-5.3-flash
       - qwen3.8-flash
       - gpt-6-luna
@@ -467,15 +467,25 @@ endpunkte:
     # review loop stopped after round 1. `mimo-v2.6-pro` takes the third place.
     # The maintainer reports it answering again on 2026-10-22; it returns to the
     # `modelle` set, and the availability preparation probes it before every run.
+    # `longcat-2.0` left the Flash swarm on 2026-11-13: it timed out on all three
+    # online topics of a research swarm run that day (maintainer: too slow, bead
+    # coding-harness-363r.2); `glm-5.3-flash` takes its place.
     flash_swarm:
       - deepseek-v4.1-flash
-      - longcat-2.0
+      - glm-5.3-flash
       - mimo-v2.6-pro
     free_stage:
       provider: opencode-go
       id_suffix: "-free"
       include: []
       exclude:
+        - id: longcat-2.5-free
+          date: "2026-11-13"
+          reason: >-
+            The maintainer took the longcat models out for good on 2026-11-13
+            ("das scheint ein sehr langsames modell zu sein"): longcat-2.0 timed
+            out on all three online topics of that day's research swarm run;
+            the free longcat id goes with it (bead coding-harness-363r.2).
         - id: step-5-preview-free
           date: "2026-10-17"
           reason: >-
