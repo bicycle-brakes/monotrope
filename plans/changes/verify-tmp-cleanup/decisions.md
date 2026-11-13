@@ -102,6 +102,25 @@ we decided that the runner keeps git's whole error output without blank lines,
 to achieve a reason that cannot be lost,
 accepting messages that are sometimes a few lines longer — 2026-11-13
 
+## Q-5 · After the repair brake
+
+asked: 2026-11-13
+answer: "A: Phase 6 (Recommended)" — the loop ends at the repair brake and the change goes straight to the phase-6 review.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3).
+  Intention: the review loop's repair brake stopped it: rounds 5 and 6 accepted only findings caused by earlier repairs.
+  Today: every taken row of six rounds is repaired; the runner's last full make verify was green (2026-11-13); about 9 of 6 hours are used.
+  Repository change: none from the decision itself.
+  Architecture change: none.
+
+In the context of a loop whose last two rounds only found the effects of its own repairs,
+facing the repair brake,
+we decided to end the loop and go to the phase-6 review,
+to achieve a final review without more rounds of polish,
+accepting that no further loop round reads the last repair — 2026-11-13
+
 ## Decided by the agent
 
 [DETAIL] **The gate command line stays as it is.** The folder is set through
