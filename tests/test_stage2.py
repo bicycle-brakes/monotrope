@@ -794,15 +794,22 @@ def test_the_runner_finds_only_stand_ins(world: World) -> None:
     assert Path(shutil.which("codex") or "").parent == world.bin
 
 
+def _top_level_imports(source: str) -> set[str]:
+    tree = ast.parse(source)
+    return {
+        alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
+    } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+
+
 def test_a_stand_in_contacts_nothing() -> None:
     rendered = STAND_IN.replace("@PYTHON@", "python3").replace("@PI@", "1.1.0")
     rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
-    tree = ast.parse(rendered)
-    imported = {
-        alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
-    } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-    # The embedded log protocol (`fcntl`) locks the stand-in's own call log; it opens no connection.
-    assert imported <= {"fcntl", "json", "os", "sys", "time", "pathlib"}
+    # The embedded log protocol brings its own imports; they are held to the
+    # standard library without a contact module by
+    # tests/test_atomic_test_log.py::test_stand_ins_stay_visible_and_contact_free,
+    # so a new helper import does not turn this test red (loop row L2-5).
+    allowed = {"json", "os", "sys", "time", "pathlib"} | _top_level_imports(ATOMIC_LOG_SOURCE)
+    assert _top_level_imports(rendered) <= allowed
 
 
 @pytest.mark.usefixtures("world")
