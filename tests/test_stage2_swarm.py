@@ -2813,8 +2813,9 @@ def test_amended_doctrine_and_research_roles_agree() -> None:
     assert stage2_swarm.seat_problems(data) == [], "the declared seats and rule must resolve"
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
     # After the main sync (#157, ADR 0021) `modelle` is a set the runner orders by `anfragen_5h`, no longer a
-    # three-id list: the original three stay in it, and the swarm block adds nothing to it.
-    assert {"deepseek-v4.1-flash", "longcat-2.0", "mimo-v2.6-pro"} <= set(go["modelle"]), (
+    # three-id list: the original three stay in it, and the swarm block adds nothing to it. `longcat-2.0` left the
+    # set on the maintainer's word of 2026-11-13 (too slow, bead coding-harness-363r.2), not through the swarm block.
+    assert {"deepseek-v4.1-flash", "mimo-v2.6-pro"} <= set(go["modelle"]), (
         "the review ladder lost a member; the swarm block changes it in no way"
     )
     block = data["research_swarm"]
