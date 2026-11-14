@@ -191,6 +191,27 @@ def test_report_online_claim_requires_all_own_successful_page_receipts():
         validate(value, topic=9, receipts=[fetched])
 
 
+def test_online_brief_unread_field_is_the_validated_report_field():
+    # Criterion 6 (loop rows L1-6, L1-11). Planted fault: the public brief sends a seat to record
+    # unfetched pages in a field the report contract does not declare, so following the brief turns
+    # into a template rejection; or the contract stops carrying the recorded pages.
+    root = Path(__file__).resolve().parents[1] / "prompts" / "research-swarm"
+    brief = (root / "public.md").read_text()
+    budget = next(part for part in brief.split("\n- ") if "public_fetch" in part and "three" in part)
+    named = re.findall(r"`([a-z_]+)`", budget)
+    fields = [name for name in named if name != "public_fetch"]
+    assert fields == ["not_read"], "the budget bullet names exactly one report field for unread pages"
+    template = json.loads((root / "report.md").read_text().split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert fields[0] in template, "the documented base object carries the field the brief names"
+    fetched = receipt()
+    value = report(topic=9, evidence=[fetched["url"]])
+    unread = ["https://example.org/second — not fetched: the three-fetch budget was spent"]
+    value[fields[0]] = unread
+    result = validate(value, topic=9, receipts=[fetched])
+    assert result["claims"][0]["evidence_status"] == "valid"
+    assert result["not_read"] == unread, "the validated report keeps the recorded unread pages"
+
+
 def test_report_public_citations_cannot_attach_private_sources_or_neighbour_identities():
     with pytest.raises(module().ResearchReportError, match="evidence"):
         validate(report(topic=9), topic=9)
