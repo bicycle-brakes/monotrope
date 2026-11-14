@@ -229,7 +229,14 @@ writes artifacts, never starts phase 4 or commits.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-14
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-13 19:41:09–21:38:56 UTC, 7067 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-13 21:39:03–22:13:03 UTC, 2040 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 16:43:52–17:05:49 UTC, 1317 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-14 17:06:08–17:45:23 UTC, 2355 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-14 17:45:31–18:11:07 UTC, 1536 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
