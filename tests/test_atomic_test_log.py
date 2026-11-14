@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import atomic_test_log
 import pytest
@@ -64,6 +64,8 @@ ENV_ROUTED = (
     "STAND_IN = '''\nimport os\n"
     "with open(os.environ[\"CHILD_LOG\"], \"a\") as handle:\n    handle.write('{}')\n'''\n"
 )
+# A file whose name only ends in a declared one is not a declared log: the helper refuses it, so the guard ignores it.
+NEAR_MISS = 'from pathlib import Path\nrecords = Path("bin/old-@LOG@").read_text()\nother = Path("bin") / "my@LOG@"\nother.write_text("")\n'
 SAFE_OPERATIONS = (
     "from pathlib import Path\n"
     "from atomic_test_log import append_record, read_records\n"
@@ -194,7 +196,11 @@ def _python_sources(text: str) -> list[tuple[int, ast.Module]]:
 
 
 def _names_a_log(node: ast.AST, names: set[str], keys: set[str]) -> bool:
-    """Whether this expression carries a declared log's path: its name, a variable or key bound to it."""
+    """Whether this expression carries a declared log's path: its name, a variable or key bound to it.
+
+    A string names a log when its last path part equals a declared name - the
+    helper's own rule (`atomic_test_log._declared`), not a suffix match.
+    """
     declared = atomic_test_log.STAND_IN_LOGS
     pending = [node]
     while pending:
@@ -204,7 +210,7 @@ def _names_a_log(node: ast.AST, names: set[str], keys: set[str]) -> bool:
         if (
             isinstance(sub, ast.Constant)
             and isinstance(sub.value, str)
-            and (sub.value.endswith(declared) or sub.value in keys)
+            and (PurePath(sub.value).name in declared or sub.value in keys)
         ):
             return True
         if isinstance(sub, ast.Name) and sub.id in names:
@@ -495,7 +501,8 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
     A direct read, an append through a variable, an embedded stand-in append
     and an append through an environment key that carries a log path are
     each detected with their source location; helper calls, a log's removal,
-    a document append and a lock probe stay unflagged without any exemption.
+    a document append, a lock probe and a file whose name merely ends in a
+    declared one (loop row L2-3) stay unflagged without any exemption.
     """
     cases = {
         "top_read": (TOP_READ, [":2: raw read_text"]),
@@ -503,6 +510,7 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
         "embedded_append": (EMBEDDED_APPEND, [":4: raw open"]),
         "env_routed": (ENV_ROUTED, [":5: raw open"]),
         "safe_operations": (SAFE_OPERATIONS, []),
+        "near_miss": (NEAR_MISS, []),
     }
     for name, (sample, expected) in cases.items():
         folder = tmp_path / name
