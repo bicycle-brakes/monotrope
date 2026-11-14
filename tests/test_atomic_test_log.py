@@ -94,7 +94,7 @@ from pathlib import Path
 data = Path(sys.argv[1])
 gap = Path(sys.argv[2])
 payload = json.dumps({"seq": 1, "payload": sys.argv[3]}) + "\\n"
-with data.open("a") as out:
+with data.open("a", encoding="utf-8") as out:
     fcntl.flock(out, fcntl.LOCK_EX)
     try:
         out.write(payload[: len(payload) // 2])
@@ -414,11 +414,13 @@ def test_concurrent_writers_preserve_every_record(tmp_path: Path) -> None:
         assert record["payload"] == f"{record['writer']}-{record['seq']}-{PAYLOAD}", "a payload was torn or truncated"
 
 
-def test_corrupt_log_is_not_hidden(tmp_path: Path) -> None:
+def test_corrupt_log_is_not_hidden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 3 (flaky-swarm-leak-test). Planted fault: a malformed record becomes a successful observation."""
     log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
     append_record(log, {"seq": 1})
-    text_append(log, "{ not json\n")
+    with monkeypatch.context() as patch:
+        patch.setattr(atomic_test_log.json, "dumps", lambda _record: "{ not json")
+        append_record(log, {"seq": "corrupt"})
     append_record(log, {"seq": 2})
     with pytest.raises(json.JSONDecodeError):
         read_records(log)
@@ -467,6 +469,19 @@ def test_only_declared_logs_take_records(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not a declared stand-in log"):
         read_records(tmp_path / "undeclared.jsonl")
     assert not (tmp_path / "undeclared.jsonl").exists()
+
+
+def test_text_append_refuses_declared_logs(tmp_path: Path) -> None:
+    """A text append cannot bypass the declared logs' JSON-record API."""
+    for name in atomic_test_log.STAND_IN_LOGS:
+        log = tmp_path / name
+        with pytest.raises(ValueError, match="use append_record"):
+            text_append(log, json.dumps({"seq": 1}) + "\n")
+        assert not log.exists(), "a refused text append created the log"
+        append_record(log, {"seq": 1})
+        with pytest.raises(ValueError, match="use append_record"):
+            text_append(log, "malformed\n")
+        assert read_records(log) == [{"seq": 1}], "a refused text append altered the log"
 
 
 def test_text_appends_preserve_bytes(tmp_path: Path) -> None:

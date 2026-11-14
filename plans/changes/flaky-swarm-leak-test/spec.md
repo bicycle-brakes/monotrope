@@ -85,7 +85,7 @@ that read it while a stand-in may still write would reopen the gap.
 3. If a test log already contains malformed JSON, the shared JSON reader reports the parse failure rather than hiding it.
    *Refuted by:* a malformed stored record is skipped, truncated, retried indefinitely or returned as an empty successful observation.
    *Basis:* decisions.md#Q-1.
-4. When any inventoried stand-in data append or corresponding concurrent log read executes, it uses the shared helper while preserving the existing record contents and missing-log-as-empty behavior.
+4. When any inventoried stand-in data append or corresponding concurrent log read executes, it uses the shared helper while preserving the existing record contents and missing-log-as-empty behavior: only `FileNotFoundError` for a missing file or directory yields an empty snapshot. Other I/O errors propagate, including `NotADirectoryError` when a parent component is a regular file.
    *Refuted by:* any of the 15 data appends of the five-file stand-in inventory bypasses the helper, a reader can race an append, a missing log or its missing directory fails, or a scenario text append gains or loses bytes.
    *Basis:* decisions.md#Q-1.
 5. When a test reads, writes or opens a declared stand-in log without the shared helper anywhere under `tests/`, including executable stand-in source strings, the guard test fails and identifies its source location.

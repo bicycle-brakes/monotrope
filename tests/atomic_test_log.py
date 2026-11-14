@@ -11,16 +11,19 @@ writers and readers meet on the file's own identity across threads and
 processes, however a caller spells its path.
 
 This module is the one place a stand-in log is declared: `STAND_IN_LOGS`
-names every log file, the JSON functions refuse any other name, and the guard
-in `tests/test_atomic_test_log.py` fails on any read or append of a declared
-log that does not go through these functions.
+names every log file, the JSON functions refuse any other name, and
+`text_append` refuses these declared names so JSON logs must use
+`append_record`. The guard in `tests/test_atomic_test_log.py` fails on any
+read or append of a declared log that does not go through these functions.
 
 Standard library only: the stand-in templates embed this module's source
 verbatim at their `@ATOMIC_LOG@` render marker, because the sandboxed children
 get no import path. Host-side test code imports this module directly. A
-missing data file - or a missing directory - reads as an empty snapshot; a
-malformed stored line raises; a lock not obtained within `LOCK_TIMEOUT`
-seconds raises `TimeoutError` instead of hanging. Nothing is retried or
+missing data file - or a missing directory - reads as an empty snapshot
+(only `FileNotFoundError`). Other I/O errors, including `NotADirectoryError`
+when a parent component is a regular file, propagate. A malformed stored
+line raises; a lock not obtained within `LOCK_TIMEOUT` seconds raises
+`TimeoutError` instead of hanging. Nothing is retried or
 suppressed, and no durability beyond a flushed buffered write is promised.
 """
 
@@ -70,10 +73,18 @@ def _declared(data_path: str | Path) -> Path:
 def text_append(data_path: str | Path, text: str, timeout: float | None = None) -> None:
     """Append exactly this text under the exclusive lock; no newline is added.
 
-    Also serves the stand-ins' scenario text appends to fixture documents,
-    which need not be declared logs.
+    Serves scenario text appends to fixture documents and receipts, which
+    are not declared logs. Declared stand-in logs require `append_record`.
     """
-    with Path(data_path).open("a", encoding="utf-8") as handle:
+    path = Path(data_path)
+    if path.name in STAND_IN_LOGS:
+        raise ValueError(f"{path.name} is a declared stand-in log; use append_record")
+    _append_text(path, text, timeout)
+
+
+def _append_text(data_path: Path, text: str, timeout: float | None) -> None:
+    """Shared locked write after the public API has checked the destination."""
+    with data_path.open("a", encoding="utf-8") as handle:
         _lock(handle, fcntl.LOCK_EX, timeout)
         try:
             handle.write(text)
@@ -84,14 +95,17 @@ def text_append(data_path: str | Path, text: str, timeout: float | None = None) 
 
 def append_record(data_path: str | Path, record, timeout: float | None = None) -> None:
     """Append one JSON record as one line of a declared log under the exclusive lock."""
-    text_append(_declared(data_path), json.dumps(record) + "\n", timeout)
+    _append_text(_declared(data_path), json.dumps(record) + "\n", timeout)
 
 
 def read_records(data_path: str | Path, timeout: float | None = None) -> list:
     """A snapshot of complete records of a declared log: an in-progress append waits, a missing file is empty.
 
     The shared lock is held through the read, so no reader observes a
-    fragment. A malformed stored line raises; nothing is skipped or retried.
+    fragment. Only `FileNotFoundError` (a missing file or directory) means
+    empty; other I/O errors propagate, including `NotADirectoryError` for a
+    regular-file parent. A malformed stored line raises; nothing is skipped
+    or retried.
     """
     try:
         handle = _declared(data_path).open(encoding="utf-8")

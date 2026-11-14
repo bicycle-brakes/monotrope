@@ -365,3 +365,64 @@ Notice: the data terms of qwen3.7-plus expire on 2026-11-21 (7 days left).
 Notice: the data terms of qwen3.8-max expire on 2026-11-21 (7 days left).
 
 Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1065 files, 4182 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1065 files, 4183 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1065 files, 4200 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1065 files, 4211 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1065 files, 4213 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1065 files, 4213 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): targeted verification, not the full `make verify`; result: green; test files `tests/test_atomic_test_log.py`, `tests/test_pi_install.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+
+Runner restoration, 2026-11-14: repair · attempt 1 · route codex — lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
