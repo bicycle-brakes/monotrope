@@ -1638,7 +1638,7 @@ Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MAJOR | SPEC | base | scripts/stage2.py:5345–5359 | `trusted_registry()` bypasses the diagnostic helper: when `git archive` fails, it discards stderr and reports only the exit code. A read-only source probe supplied exit 128 with `fatal: unable to read tree HEAD` and a subsequent hint; neither line survived. The invocation also passes through `LC_ALL=de_DE.UTF-8` instead of forcing `C`. Preserve every non-empty diagnostic line and apply the required locale on this path. [Criterion 12; Protected areas] | Codex | open | — |
+| F6-5 | MAJOR | SPEC | base | scripts/stage2.py:5345–5359 | `trusted_registry()` bypasses the diagnostic helper: when `git archive` fails, it discards stderr and reports only the exit code. A read-only source probe supplied exit 128 with `fatal: unable to read tree HEAD` and a subsequent hint; neither line survived. The invocation also passes through `LC_ALL=de_DE.UTF-8` instead of forcing `C`. Preserve every non-empty diagnostic line and apply the required locale on this path. [Criterion 12; Protected areas] | Codex | fixed — orchestrator hand edit 0823320f (Opus subagent, maintainer's answer of 2026-11-14, decisions.md Q-8) — tests/test_stage2.py::test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale, tests/test_stage2.py::test_every_git_launch_of_the_runner_goes_through_run_git | — |
 
 Phase 6 verdict: codex 01a1d759-24ed-7372-9942-5d7807392834, 2026-11-14
 Reviewer session: codex 01a1d759-24ed-7372-9942-5d7807392834 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
