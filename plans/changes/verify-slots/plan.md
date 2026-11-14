@@ -1,10 +1,10 @@
 ---
 title: "Plan — verify-slots"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-12
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -207,6 +207,27 @@ holder record per slot, nested admission, accepted after two repair rounds
 (`bb1c93ca`) with a green full check. What evidence is missing: the two
 measured trials (one slot against two) and the boundary of 2026-11-11 (spec,
 "Boundary"), which the next repair implements.
+
+### Addendum — 2026-11-14
+
+This addendum corrects the report above without rewriting it (review round 4,
+rows L4-3, L4-4 and L4-9).
+
+- **The boundary is built.** The repair of 2026-11-12 (`3b36a0e7`, rows L3-2
+  and L3-3) implemented the spec's one-admission-per-process boundary: a
+  second admission in a process that already holds one is refused at once,
+  naming the held slot (`scripts/verify_lock.py`, `hold_admission`), pinned by
+  `tests/test_verify_lock.py::test_overlapping_admissions_preserve_remaining_context`.
+  The sentence above that the next repair implements it describes the state
+  of 2026-11-11.
+- **"Accepted" above names the runner's verdict on a repair attempt**, not the
+  plan's status. The plan and the spec stay `status: draft` until the change
+  closes; their `implementation_status` is now `partial`, because the code
+  stands and the measured trials of criterion 11 are still missing.
+- **New appetite.** On 2026-11-14 the maintainer resumed the lane with a new
+  appetite of three hours for the rest of the change. The paired trial runs
+  first; if it shows no throughput gain over one slot, the lane stops and
+  reports what stands.
 
 ## Runner route — 2026-11-11
 

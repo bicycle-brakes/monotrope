@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-13
+updated: 2026-11-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -594,7 +594,11 @@ a check descended from a live admission — carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>`, `HARNESS_VERIFY_LOCK_TOKEN` and
 `HARNESS_VERIFY_LOCK_SLOT=<n>`, and reuses exactly that ancestor's admission,
 slot and measured wait instead of deadlocking on it; a stale, malformed or
-unrelated marker uses ordinary admission. Unusable state — a substituted or
+unrelated marker uses ordinary admission. The admission's context travels
+beside these three markers as `HARNESS_VERIFY_ADMISSION_ID` and
+`HARNESS_VERIFY_ADMISSION_WAIT` (its identity and measured wait, read by the
+duration records); a run that must take an admission of its own, such as a
+measurement trial, clears all five. Unusable state — a substituted or
 unwritable lock, holder or queue file — refuses the entry before any
 protected work instead of running unlocked. Ownership ends only when the
 protected work and its children stop, including on failure, cancellation and
