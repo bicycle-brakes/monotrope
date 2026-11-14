@@ -1631,3 +1631,14 @@ Stage-2 call, 2026-11-13: repair · attempt 2 · route codex-repair · endpoint 
 Stage-2 call, 2026-11-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1040 files, 4154 commits, 12 rules.
 
 Runner restoration, 2026-11-13: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
+
+Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1040 files, 4172 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-14
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-5 | MAJOR | SPEC | base | scripts/stage2.py:5345–5359 | `trusted_registry()` bypasses the diagnostic helper: when `git archive` fails, it discards stderr and reports only the exit code. A read-only source probe supplied exit 128 with `fatal: unable to read tree HEAD` and a subsequent hint; neither line survived. The invocation also passes through `LC_ALL=de_DE.UTF-8` instead of forcing `C`. Preserve every non-empty diagnostic line and apply the required locale on this path. [Criterion 12; Protected areas] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1d759-24ed-7372-9942-5d7807392834, 2026-11-14
+Reviewer session: codex 01a1d759-24ed-7372-9942-5d7807392834 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
