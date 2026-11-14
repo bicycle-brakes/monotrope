@@ -1905,6 +1905,118 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     assert "model claude-haiku-5-5" in text
 
 
+def research_skeleton(klass: str = "bounded") -> str:
+    """The research skeleton exactly as `scripts/new_change.py` writes it, plus the change's `class:` line."""
+    import new_change
+
+    header = new_change._frontmatter_template("demo", "demo-1", "framework-architect", dt.date.today().isoformat())
+    header = header.replace("owner: framework-architect\n", f"owner: framework-architect\nclass: {klass}\n")
+    return header + new_change.BODY_TEMPLATE.format(titel="demo")
+
+
+@pytest.mark.parametrize("off", [False, True])
+def test_explore_publishes_truthful_research_provenance(world: World, off: bool) -> None:
+    # Bead coding-harness-g19n. Planted fault: explore appends the model answer and leaves the skeleton's
+    # `human-written` declaration, so published model research carries false provenance (spec, criteria 1-2).
+    world.research.write_text(research_skeleton(), encoding="utf-8")
+    answer = "Fact from `src/app.py` and its symbol `value`."
+    world.script(claude=[{"stdout": answer}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    text = world.research.read_text(encoding="utf-8")
+    header = text.split("---", 2)[1]
+    assert "provenance: ai-drafted-reviewed" in header
+    assert "human-written" not in text, "the false declaration survives the publication"
+    assert text.count("provenance:") == 1 and text.count("produced_by:") == 1 and text.count("review:") == 1
+    import yaml
+
+    producer = yaml.safe_load(header)["produced_by"]
+    assert producer == {
+        "kind": "llm-session",
+        "name": "claude-code",
+        "version": str(dt.date.today()),
+        "model": "claude-haiku-5-5" if off else "glm-5.3-flash",
+    }
+    assert "review: {status: pending, approved_by: null, approved_at: null}" in header
+    assert "class: bounded" in header and "bead: demo-1" in header, "unrelated header fields were touched"
+    assert "# demo — Research" in text and "## Runner exploration" in text and answer in text
+
+
+def test_explore_resets_review_without_changing_lifecycle(world: World) -> None:
+    # Bead coding-harness-g19n. Planted fault: publication keeps an earlier human approval of the shorter
+    # document, or rewrites lifecycle fields along with the provenance (spec, criterion 3).
+    inline = research_skeleton().replace(
+        "tags: [research]\n",
+        'review: {status: approved, approved_by: "A. Reviewer", approved_at: "2026-11-01"}\ntags: [research]\n',
+    )
+    block = research_skeleton().replace(
+        "tags: [research]\n",
+        'review:\n  status: approved\n  approved_by: "A. Reviewer"\n  approved_at: "2026-11-01"\ntags: [research]\n',
+    )
+    for research in (inline, block):
+        world.research.write_text(research, encoding="utf-8")
+        world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+        assert world.run("explore") == 0
+        text = world.research.read_text(encoding="utf-8")
+        header = text.split("---", 2)[1]
+        assert text.count("review:") == 1 and "A. Reviewer" not in text, "the old approval survives"
+        assert header.count("review: {status: pending, approved_by: null, approved_at: null}") == 1
+        for line in (
+            'title: "Research — demo"',
+            "status: draft",
+            "implementation_status: none",
+            f"date: {dt.date.today()}",
+            f"last_reviewed: {dt.date.today()}",
+            "supersedes: null",
+            "superseded_by: null",
+            "bead: demo-1",
+            "class: bounded",
+            "owner: framework-architect",
+            "tags: [research]",
+        ):
+            assert line in header, f"lifecycle field changed: {line}"
+
+
+def test_explore_removes_only_opening_skeleton_text(world: World) -> None:
+    # Bead coding-harness-g19n. Planted fault: the publication keeps a generated notice, or strips authored
+    # prose that quotes the skeleton below the first section heading (spec, criterion 4).
+    quoted = (
+        "We keep this note. The skeleton once said: Phase 1 per "
+        "[`prompts/01-explore.md`](../../../prompts/01-explore.md); this\n"
+        "file is empty until it has run.\n"
+        "\n> **Bring the provenance up to date.** The frontmatter says\n"
+        "> `provenance: human-written` — quoted here on purpose.\n"
+    )
+    world.research.write_text(research_skeleton() + f"\n## Human notes\n\n{quoted}", encoding="utf-8")
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    assert text.count("Phase 1 per") == 1 and text.count("Bring the provenance") == 1, (
+        "a notice survived, or prose went"
+    )
+    opening, rest = text.split("## Human notes", 1)
+    assert "# demo — Research" in opening and "Phase 1 per" not in opening and "Bring the provenance" not in opening
+    assert quoted in rest, "the authored section lost its own quote of the skeleton"
+    assert "provenance: ai-drafted-reviewed" in text.split("---", 2)[1]
+    before_second = world.research.read_bytes()
+    world.script(claude=[{"stdout": "Second fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    second = world.research.read_bytes()
+    assert second.startswith(before_second), "the second publication changed the first publication's bytes"
+    again = second.decode("utf-8")
+    opening, rest = again.split("## Human notes", 1)
+    assert "Phase 1 per" not in opening and "Second fact" in again, "a second publication reintroduced a notice"
+    assert text.count("Phase 1 per") == 1 and quoted in rest
+    before_refusal = world.research.read_bytes()
+    world.script(claude=[{"stdout": "I cannot run the tests, please rerun me"}])
+    assert world.run("explore") == 1
+    after = world.research.read_bytes()
+    assert after.startswith(before_refusal), "a rejected answer touched the published bytes"
+    added = after[len(before_refusal) :].strip()
+    assert added.startswith(b"Stage-2 call,"), "more than the audit line landed"
+    assert b"Runner exploration" not in added, "a rejected answer landed as research"
+
+
 def anthropic_haiku_problems(declaration: dict) -> list[str]:
     """Both Anthropic endpoints replace the old Haiku id, independently of model resolution."""
     entries = {entry["name"]: entry for entry in declaration["endpunkte"]}
@@ -25145,6 +25257,35 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+@pytest.mark.parametrize("shape", ["inline", "block-list", "duplicate-field"])
+def test_research_publication_preserves_all_producers(shape):
+    import yaml
+
+    source = (
+        b'---\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n'
+        b"date: 2026-11-04\nupdated: 2026-11-04\n---\n# Research\n\nEarlier work.\n"
+    )
+    if shape == "block-list":
+        source = source.replace(
+            b'produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}',
+            b'produced_by:\n- kind: llm-session\n  name: codex\n  version: "gpt-6.1-sol, 2026-11-04"',
+        )
+    elif shape == "duplicate-field":
+        source = source.replace(
+            b"date: 2026-11-04",
+            b'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\ndate: 2026-11-04',
+            1,
+        )
+    corrected = stage2.research_publication(source, producer="pi", day="2026-11-05")
+    records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    assert records == [
+        {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05"},
+    ], "a new publication must extend earlier producer/model attribution"
+    assert stage2.research_publication(corrected, producer="pi", day="2026-11-05") == corrected
+    assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
 
 
 # ---------------------------------------------------------------------------
