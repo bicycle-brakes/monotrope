@@ -141,8 +141,8 @@ Saved, unaccepted runner attempts lie on `refs/stage2/attempts/<change>/…`
 (pushed). No other Claude session ran in the repository; the Codex desktop
 application was open, its activity in this repository was not read. The
 research swarm needs its state store outside the home directory: on this
-machine `XDG_STATE_HOME=/Users/Shared/coding-harness-state`, set for swarm
-calls only. The night run's wake and keep-awake handles are in the state
+machine `XDG_STATE_HOME` points to a folder under `/Users/Shared`, set for
+swarm calls only. The night run's wake and keep-awake handles are in the state
 directory's `handles` file; both were stopped at the run's end.
 
 ## Validation
