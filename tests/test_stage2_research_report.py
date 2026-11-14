@@ -403,8 +403,11 @@ def test_report_prompt_markdown_example_resolves():
     import stage2_research_refs as refs
 
     sources = {source_path: (shown.group(1) + "\nbody line\n").encode()}
-    copied = refs.resolve_research_reference(sources, source_path, reference)
-    bare = refs.resolve_research_reference(sources, source_path, title)
+    # The bare citation as the contract writes it, and the shown heading copied with its opening marks
+    # as the contract says is tolerated (loop row L2-2: both sides once resolved the same string).
+    assert reference == title
+    copied = refs.resolve_research_reference(sources, source_path, shown.group(1))
+    bare = refs.resolve_research_reference(sources, source_path, reference)
     assert copied["supported"] and bare["supported"], f"the illustrated citation resolves: {copied}"
     assert copied["start_line"] == bare["start_line"] == 1
     assert copied["end_line"] == bare["end_line"] and copied["excerpt"] == bare["excerpt"]

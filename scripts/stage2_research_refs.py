@@ -68,6 +68,14 @@ def _atx_title(rest):
     return re.sub(r"(?:^|[ \t]+)#+[ \t]*$", "", rest or "").strip()
 
 
+def _atx_heading(text):
+    # The one reading of an ATX heading line, shared by the scan and by a copied citation so the
+    # two can never disagree (loop rows L1-1, L2-3): up to three spaces of indentation, an opening
+    # run of one to six marks, then the title with its optional closing run. Returns (level, title).
+    match = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)", text)
+    return (len(match.group(1)), _atx_title(match.group(2))) if match else None
+
+
 def _markdown_scan(lines):
     active = []
     headings = []
@@ -89,9 +97,9 @@ def _markdown_scan(lines):
             fence = (run[0], len(run))
             continue
         active.append(index)
-        match = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)", text)
-        if match:
-            headings.append((index, len(match.group(1)), _atx_title(match.group(2))))
+        heading = _atx_heading(text)
+        if heading:
+            headings.append((index, *heading))
     return active, headings
 
 
@@ -110,12 +118,12 @@ def _markdown_extent(lines, reference):
         # keep their meaning and duplicates stay ambiguous without a fallback. The copy is read as
         # the scan reads a heading line (opening run, optional closing run), and its opening run
         # must be the cited heading's own: marks of another level name another heading.
-        copied = re.fullmatch(r"(#{1,6})[ \t]+(.*)", target)
-        if copied:
-            matches = _heading_matches(headings, _atx_title(copied.group(2)), bool(criterion))
-            if len(matches) == 1 and matches[0][1] != len(copied.group(1)):
+        copied = _atx_heading(target)
+        if copied and copied[1]:
+            matches = _heading_matches(headings, copied[1], bool(criterion))
+            if len(matches) == 1 and matches[0][1] != copied[0]:
                 raise UnsupportedReference(
-                    f"heading is level {matches[0][1]}, but the citation copies {len(copied.group(1))} opening marks"
+                    f"heading is level {matches[0][1]}, but the citation copies {copied[0]} opening marks"
                 )
     if len(matches) != 1:
         raise UnsupportedReference("heading is absent or ambiguous")

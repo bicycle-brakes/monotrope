@@ -98,6 +98,18 @@ def test_reference_markdown_accepts_a_copied_closing_run(closing):
     )
 
 
+@pytest.mark.parametrize("indent", [" ", "  ", "   "])
+def test_reference_markdown_accepts_a_copied_indented_heading_line(indent):
+    # Criterion 1 (loop row L2-3). Planted fault: the copied citation is read by a rule other than the
+    # heading scan's, so a heading line indented by one to three spaces is a heading to the scan but
+    # its verbatim copy is refused as absent.
+    text = indent + "## Retry policy\nbody\n\n## Next\nend\n"
+    bare = resolve("a.md", text, "Retry policy")
+    copied = resolve("a.md", text, indent + "## Retry policy")
+    assert bare["supported"] and copied["supported"], copied
+    assert (copied["start_line"], copied["end_line"]) == (bare["start_line"], bare["end_line"])
+
+
 @pytest.mark.parametrize("cited,actual", [("######", "#"), ("#", "##"), ("###", "##")])
 def test_reference_markdown_copied_marks_must_match_the_heading_level(cited, actual):
     # Criterion 1 (loop rows L1-1, L1-9). Planted fault: the fallback strips any opening run, so
