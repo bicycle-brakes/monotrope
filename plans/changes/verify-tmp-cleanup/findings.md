@@ -1642,3 +1642,14 @@ Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1d759-24ed-7372-9942-5d7807392834, 2026-11-14
 Reviewer session: codex 01a1d759-24ed-7372-9942-5d7807392834 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1063 files, 4222 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-14
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MAJOR | SPEC | base | scripts/stage2.py:6903–6907 | When checkpoint ancestry verification fails with exit 128, `checkpoint()` discards `ancestor.diagnostic` and reports only “the runner checkpoint is not exactly one descendant commit”. A read-only source probe supplied `fatal: could not read baseline object` and a subsequent hint; neither survived. The shared launch helper preserves stderr internally, but this caller still hides the actual Git failure. Include every non-empty diagnostic line in the reported error. [Criterion 12] | Codex | taken — structural, within Q-8: run_git fails closed - a non-zero exit raises one error that carries every non-empty diagnostic line unless the caller names the exit codes it handles, and a source test holds that no caller builds a git failure message without the diagnostic; covers checkpoint() and every other caller (third case of the mechanism after F6-4 and F6-5) | — |
+
+Phase 6 verdict: codex 01a1db50-18ac-7f92-8bd2-2eace14cfa5e, 2026-11-14
+Reviewer session: codex 01a1db50-18ac-7f92-8bd2-2eace14cfa5e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
