@@ -60,10 +60,11 @@
 #   needs_admission  optional boolean (bead coding-harness-bxxt.6): true
 #               puts a seconds gate inside the admission all the same - for
 #               a gate that writes state other runs share. No gate needs it
-#               today: an audit on 2026-11-14 found the seconds gates
-#               read-only towards shared state (the tracker readers each
-#               render into a temporary folder of their own; six at once
-#               ran green).
+#               today: the audit of 2026-11-14 read every seconds gate and
+#               ran six lanes of them at once with the serial verdicts
+#               (plans/changes/verify-cheap-before-admission/
+#               seconds-gate-audit.md: what each gate writes, how it was
+#               measured, and its limits).
 #   reason      why this gate exists, in one sentence.
 
 schema_version: 3

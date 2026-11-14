@@ -594,6 +594,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-before-admission/findings.md`](changes/verify-cheap-before-admission/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/plan.md`](changes/verify-cheap-before-admission/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/research.md`](changes/verify-cheap-before-admission/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/seconds-gate-audit.md`](changes/verify-cheap-before-admission/seconds-gate-audit.md) | draft | none | 2026-11-14 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/spec.md`](changes/verify-cheap-before-admission/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-first/decisions.md`](changes/verify-cheap-first/decisions.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-cheap-first/findings.md`](changes/verify-cheap-first/findings.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |

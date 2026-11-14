@@ -565,10 +565,13 @@ gate, such as the `docs` job, never waits for the slot at all. When admission
 follows a green cheap phase and the tree is unchanged in the meantime, the
 cheap results are reused instead of executed twice; a changed tree reloads
 the gate list, reselects and reruns the complete cheap pass inside the held
-admission, so stale results cannot survive a reclassification. A tree that
-cannot be measured (no named HEAD, an unreadable entry) or that changes while
-the cheap gates run refuses the run with a request to rerun; unmeasured cheap
-results are never relied on. Hosted CI and
+admission, so stale results cannot survive a reclassification. A run with
+protected work measures the tree around its cheap pass: a tree that cannot be
+measured (no named HEAD, an unreadable entry) or that changes while the cheap
+gates run refuses the run with a request to rerun, names what moved and the
+gates not run; unmeasured cheap results are never relied on. A selection
+without protected work, and a cheap pass that ended blocking red, rely on no
+baseline and measure none. Hosted CI and
 `--ci` continue through all selected gates of both phases whatever failed
 before. See the [gate catalog](governance/gate-catalog.md) for costs,
 admission marks and enforcement.
@@ -581,8 +584,13 @@ and the schedule runs only the drift gates.
 protected work enters it: before its protected gates, the shared scheduler
 hands the run to `scripts.verify_lock` — protected work
 of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the three-lane trial's
-concurrent full checks cannot happen again. Waiters are admitted in
+— shared across repositories and worktrees, so the protected gates of
+concurrent full checks never run together again, as they did in the three-lane
+trial. The admission does not serialise the rest: the seconds gates and the
+runner's full-mode preparation (formatting, its cheap checks) run in every
+lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+records why that is safe today and what it did not measure; free disk space
+is not checked (bead coding-harness-87b0). Waiters are admitted in
 registration order; while waiting, an entry logs its wait immediately and
 every five minutes, naming the holder's process id, command and start time.
 A nested protected entry — a check descended from a live admission — carries

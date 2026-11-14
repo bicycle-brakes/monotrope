@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -138,6 +138,18 @@ different contents of an already dirty file (research, â€œDraft gap resolutionâ€
   preventing concurrent repository edits throughout protected execution.
 - Migrating kit recipients. Phase 2b and an ADR are not due for this bounded
   change; no architecture decision is introduced.
+
+## Boundaries
+
+- The tree comparison hashes the content of every tracked and non-ignored
+  untracked path, because "same tree" is defined by content; its cost grows
+  with the checkout and has no bound of its own. Only a run with protected
+  work measures it, at most five times (before and after each cheap pass and
+  at the admission boundary); a seconds-only job and a cheap pass that ended
+  blocking red measure no baseline at all. Measured at `36b4b356`
+  (2026-11-14): 0.07 to 0.19 s per snapshot over 1,066 paths. A recipient
+  with a large non-ignored untracked tree ignores it or pays that cost (loop
+  row L2-8).
 
 ## Protected areas
 
