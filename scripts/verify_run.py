@@ -358,6 +358,15 @@ def worker_default() -> int | None:
     return worker_bound(_usable_count(cores), _usable_count(nbytes))
 
 
+def shell_argv(resolved: str) -> list[str]:
+    """The one shell every scheduler consumer runs a non-plain gate command under.
+
+    The shell entry point and Stage 2 share it, so a gate command reads alike on
+    both paths (loop row L3-4); `sh` is the shell both ran before the scheduler.
+    """
+    return ["sh", "-c", resolved]
+
+
 # The process groups of gates the default executor is currently running; a
 # trapped signal ends them all before the interrupt propagates.
 _LIVE_GROUPS: set[int] = set()
@@ -394,7 +403,7 @@ def gate_process(
     if env.get(verify_lock.LOCK_ENV) and descriptor is not None:
         pass_fds = (descriptor,)
     proc = subprocess.Popen(
-        ["sh", "-c", resolved],
+        shell_argv(resolved),
         cwd=str(root),
         env=env,
         stdin=subprocess.DEVNULL,

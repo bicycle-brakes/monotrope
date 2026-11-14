@@ -5757,7 +5757,8 @@ def verify_evidence_text(out_text: str, err_text: str, key: str | None) -> str:
 
 # A gate command made only of these characters is a plain argument vector: it starts as that vector,
 # so the runner's own launch resolves its program exactly as it resolved `make verify` before. Any
-# other command — quoting, expansion, an environment assignment, a pipe — runs through `bash -c`.
+# other command — quoting, expansion, an environment assignment, a pipe — runs through the shell
+# entry point's own shell (`verify_run.shell_argv`, loop row L3-4).
 PLAIN_GATE_COMMAND = re.compile(r"[A-Za-z0-9_./:,@%+ -]+")
 
 
@@ -5769,7 +5770,7 @@ def _gate_argv(command: str, pinned: str) -> list[str]:
     resolved = command.replace("python3", shlex.quote(pinned), 1)
     if PLAIN_GATE_COMMAND.fullmatch(command):
         return shlex.split(resolved)
-    return ["bash", "-c", resolved]
+    return verify_run.shell_argv(resolved)
 
 
 def gate_env_path(root: Path, env: dict[str, str]) -> str:

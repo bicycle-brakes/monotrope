@@ -26545,3 +26545,14 @@ def test_malformed_gate_list_fails_the_runner_check_with_a_diagnostic(world: Wor
     assert "`make verify` exited 2" in text, text
     assert "liess sich nicht erzeugen" in text, text
     assert world.calls("make") == [], "a gate ran from a malformed list"
+
+
+def test_scheduled_gate_shell_is_the_shell_entry_points():
+    # Criterion 10 (loop row L3-4). Planted fault: Stage 2 runs a non-plain gate command under another
+    # shell than `make verify`'s executor, so a shell-specific command reads differently on the two paths.
+    import verify_run
+
+    command = 'FOO=1 python3 -c "print(1)" | cat'
+    argv = stage2._gate_argv(command, "/pinned/python")
+    assert argv == verify_run.shell_argv('FOO=1 /pinned/python -c "print(1)" | cat')
+    assert argv[0] == "sh"
