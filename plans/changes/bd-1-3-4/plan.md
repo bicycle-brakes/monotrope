@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-tr84
@@ -56,13 +56,40 @@ The orchestrator supplies the release-verification evidence before completion. `
 ## Criterion ledger
 
 - 1: tests/test_beads_install.py::test_wrapper_selects_pinned_versioned_binary — selecting PATH bd, changing arguments or swallowing the child exit code fails.
+- 1: tests/test_beads_install.py::test_wrapper_falls_back_to_a_matching_path_binary — with no versioned binary, a pin-matching bd on PATH not dispatched, or its arguments or exit code changed, fails (loop row L1-11).
 - 2: tests/test_beads_install.py::test_install_routes_request_canonical_release — either route requesting the old owner or another release fails.
 - 3: tests/test_beads_install.py::test_install_routes_install_verified_archive — a valid platform archive failing to produce the versioned binary or overwriting unversioned bd fails.
 - 3: tests/test_beads_install.py::test_install_routes_refuse_unverified_archive — missing or wrong expected checksum reaching extraction or install fails.
+- 3: tests/test_beads_install.py::test_committed_checksums_cover_both_platforms — a missing or malformed committed 1.3.4 checksum file for Darwin arm64 or Linux amd64 fails (loop row L1-2).
 - 4: tests/test_beads_install.py::test_cloud_pin_and_checksum_match_repository — cloud version or digest diverging from the committed pin and Linux checksum fails.
 - 5: tests/test_beads_install.py::test_wrapper_refuses_version_mismatch — mismatched version dispatch, even with the verb bypass set, fails.
 - 6: tests/test_beads_install.py::test_wrapper_blocks_schema_verbs — init, migrate or upgrade reaching the binary without the bypass fails.
 - 7: tests/test_beads_install.py::test_wrapper_missing_binary_exits_127 — a different status or accepting the repository shim fails.
+
+## Release verification — 2026-11-15
+
+Step 1's evidence, recorded by the orchestrator (Opus subagent) for the pull
+request to cite (loop rows L1-1, L1-6 and L1-10; spec, Definition of Done).
+
+- Source: the `gastownhall/beads` release `v1.3.4`; the tag `refs/tags/v1.3.4`
+  points at commit `7ef2fd05eb0cd3bdbde051f93cfc14ccf270cdde` (annotated tag
+  object `a60c4c3a`), read with `git ls-remote` on 2026-11-15.
+- Downloaded on 2026-11-14 23:55 UTC into disposable storage, from
+  `https://github.com/gastownhall/beads/releases/download/v1.3.4/`:
+  `checksums.txt`, `beads_1.3.4_darwin_arm64.tar.gz` (48,577,082 bytes) and
+  `beads_1.3.4_linux_amd64.tar.gz` (53,448,333 bytes).
+- Independently computed with `shasum -a 256`, and equal to the release's
+  `checksums.txt` line for the same file:
+  - Darwin arm64: `b08a9c15bff80c42235f32946f94a6566a7d90944fe8afe45f3fd2f350596cdb`
+  - Linux amd64: `175c26904bde3ff9168d2282ff6b56f17b17f60c22fa5acb3dacc9fb3465303a`
+- Both equal the committed files
+  `tools/beads/checksums/beads_1.3.4_darwin_arm64.tar.gz.sha256` and
+  `tools/beads/checksums/beads_1.3.4_linux_amd64.tar.gz.sha256` and the
+  `BD_SHA256` of `tools/cloud-env/setup.sh`, as committed in `78d6f738`
+  (the verification commit).
+- Not checked: a signature or attestation of the release beyond GitHub's
+  release download over HTTPS; the release notes' migration statement was not
+  re-read here.
 
 ## Route and draft checks
 

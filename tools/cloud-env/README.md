@@ -45,3 +45,6 @@ runs is skipped without an error; Python and bd are installed regardless.
   not been observed in a fresh environment.
 - Tested 2026-10-09 in a running cloud session (bd removed first to force the
   download and checksum path): exit 0, all three working trees unchanged.
+  That test ran the earlier script, bd 1.3.0 from `steveyegge/beads`; the
+  1.3.4 script, with its new release owner and digest, has not yet run in a
+  cloud session (2026-11-15).

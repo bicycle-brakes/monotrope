@@ -46,7 +46,6 @@ TOOLS = (
     "grep",
     "awk",
     "find",
-    "tar",
     "mktemp",
     "rm",
     "mkdir",
@@ -123,6 +122,13 @@ for path in paths:
     print(digest.hexdigest() + "  " + path)' "$@"
 """
 
+TAR_STUB = """#!/bin/bash
+# Recording stand-in for tar (test fixture): logs every invocation, then runs
+# the host's real tar, so extraction itself stays real and observable.
+printf '%s\\n' "$*" >>"${TAR_LOG:?}"
+exec "@TAR@" "$@"
+"""
+
 NEUTRAL_STUB = """#!/bin/bash
 # Neutral stand-in for an unrelated cloud command, uv and git alike (test
 # fixture): logs its arguments and succeeds, so a broken /home/user redirect
@@ -151,6 +157,7 @@ STRIPPED_ENV = (
     "UNAME_S",
     "UNAME_M",
     "NEUTRAL_LOG",
+    "TAR_LOG",
 )
 
 ROUTES = [
@@ -159,10 +166,9 @@ ROUTES = [
     ("cloud", "Linux", "amd64"),
 ]
 
-pytestmark = pytest.mark.skipif(
-    not (WRAPPER.is_file() and INSTALLER.is_file() and SETUP.is_file() and SHIM.is_file() and VERSION_FILE.is_file()),
-    reason="wrapper, installer, shim, pin and cloud setup live in this repository and do not travel with the kit",
-)
+# No skip: neither this file nor tools/ travels with the kit (scripts/kit/manifest.yaml, both
+# `bestand`), so a missing wrapper, installer, shim, pin or cloud setup fails these tests loudly
+# instead of silently skipping the guards (loop row L1-3 of change bd-1-3-4).
 
 
 def _pin() -> str:
@@ -213,7 +219,10 @@ def _path_bin(tmp_path: Path, *, name: str = "pathbin") -> Path:
         stub = bin_dir / tool
         stub.write_text(NEUTRAL_STUB, encoding="utf-8")
         stub.chmod(0o755)
-    for tool, stub_text in (("curl", CURL_STUB), ("uname", UNAME_STUB)):
+    real_tar = shutil.which("tar")
+    assert real_tar, "tar is missing — a controlled PATH cannot be built here"
+    tar_stub = TAR_STUB.replace("@TAR@", real_tar)
+    for tool, stub_text in (("curl", CURL_STUB), ("uname", UNAME_STUB), ("tar", tar_stub)):
         stub = bin_dir / tool
         stub.write_text(stub_text, encoding="utf-8")
         stub.chmod(0o755)
@@ -299,6 +308,7 @@ def _run(
     env = {key: value for key, value in os.environ.items() if key not in STRIPPED_ENV}
     env["HOME"] = str(home)
     env["PATH"] = path
+    env["TAR_LOG"] = str(home.parent / f"tar-{home.name}.log")
     if env_extra:
         env.update(env_extra)
     # The host bash by absolute path: the controlled PATH of a run must not
@@ -311,6 +321,11 @@ def _run(
         timeout=120,
         check=False,
     )
+
+
+def _extractions(home: Path) -> list[str]:
+    """The tar invocations a run under this HOME made (the recording tar stand-in's log)."""
+    return _log_lines(home.parent / f"tar-{home.name}.log")
 
 
 def _assert_installed(home: Path, pin: str, sentinel: Path) -> None:
@@ -351,17 +366,20 @@ def test_wrapper_selects_pinned_versioned_binary(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("installed", "bypass"),
+    ("installed", "bypass", "command"),
     [
-        ("versioned-binary", False),
-        ("path-binary", False),
-        ("versioned-binary", True),
+        ("versioned-binary", False, ["ready"]),
+        ("path-binary", False, ["ready"]),
+        ("versioned-binary", True, ["ready"]),
+        ("path-binary", True, ["ready"]),
+        ("versioned-binary", True, ["migrate"]),
     ],
 )
-def test_wrapper_refuses_version_mismatch(tmp_path: Path, installed: str, bypass: bool) -> None:
+def test_wrapper_refuses_version_mismatch(tmp_path: Path, installed: str, bypass: bool, command: list[str]) -> None:
     """Criterion 5: a binary reporting any version other than the pin is never
     dispatched — not the versioned one, not the one on PATH, and not even when
-    BD_PIN_BYPASS=1 asks for the blocked verbs' escape hatch."""
+    BD_PIN_BYPASS=1 is set, for a normal command (the criterion's refuting
+    case, loop row L1-7) as for the blocked verbs' escape hatch."""
     ns = _sandbox(tmp_path)
     log = tmp_path / "mismatching-bd.log"
     extra: dict[str, str] = {}
@@ -374,11 +392,34 @@ def test_wrapper_refuses_version_mismatch(tmp_path: Path, installed: str, bypass
         path = _path(bd_dir, _path_bin(tmp_path))
     if bypass:
         extra["BD_PIN_BYPASS"] = "1"
-    command = ["migrate"] if bypass else ["ready"]
     result = _run(ns.repo / "tools" / "bd", home=ns.home, path=path, env_extra=extra, args=command)
     assert result.returncode != 0, f"a mismatching bd was dispatched: {command}"
     assert "version mismatch" in result.stderr, result.stderr
     assert _calls(log) == [["version"]], "only the version probe may reach a mismatching binary, never the command"
+
+
+def test_wrapper_falls_back_to_a_matching_path_binary(tmp_path: Path) -> None:
+    """Criterion 1, fallback side (loop row L1-11): with no versioned binary
+    installed, a bd on PATH that reports the pin is dispatched — the path a
+    machine without `~/.local/bin/bd-<pin>` takes — with its arguments and
+    exit status intact."""
+    pin = _pin()
+    ns = _sandbox(tmp_path)
+    path_log = tmp_path / "path-bd.log"
+    bd_dir = tmp_path / "bd-on-path"
+    _fake_bd(bd_dir / "bd", version=pin, log=path_log)
+    assert not ns.versioned.exists()
+    result = _run(
+        ns.repo / "tools" / "bd",
+        home=ns.home,
+        path=_path(bd_dir, _path_bin(tmp_path)),
+        env_extra={"BD_RC": "5"},
+        args=["show", "id with space"],
+    )
+    assert result.returncode == 5, (result.stdout, result.stderr)
+    assert _calls(path_log) == [["version"], ["show", "id with space"]], (
+        "the pin-matching bd on PATH must probe its version and then receive the command, arguments intact"
+    )
 
 
 @pytest.mark.parametrize("verb", ["init", "migrate", "upgrade"])
@@ -496,6 +537,7 @@ def test_install_routes_install_verified_archive(tmp_path: Path, route: str, os_
         result = _run(copy, home=home, path=_path(_path_bin(tmp_path)), env_extra=env)
     assert result.returncode == 0, result.stderr
     assert "mismatch" not in result.stderr.lower(), result.stderr
+    assert len(_extractions(home)) == 1, "the verified archive was not extracted exactly once"
     _assert_installed(home, pin, sentinel)
 
 
@@ -541,6 +583,7 @@ def test_install_routes_refuse_unverified_archive(tmp_path: Path, route: str, fa
         result = _run(copy, home=home, path=_path(_path_bin(tmp_path)), env_extra=serve)
         assert result.returncode == 0, "cloud's overall exit-0 convention changed"
         assert "checksum mismatch" in result.stderr, result.stderr
+    assert _extractions(home) == [], "an unverified archive reached extraction"
     assert not (home / ".local" / "bin" / f"bd-{pin}").exists(), "an unverified archive produced an installed binary"
     assert sentinel.read_text(encoding="utf-8").startswith("sentinel:"), "the unversioned bd path was overwritten"
 
@@ -567,3 +610,20 @@ def test_cloud_pin_and_checksum_match_repository() -> None:
     parts = sums.read_text(encoding="utf-8").split()
     assert parts, f"{name} is empty"
     assert line.group(1) == parts[0], f"the cloud setup's digest diverges from the committed {name}"
+
+
+@pytest.mark.parametrize("platform", ["darwin_arm64", "linux_amd64"])
+def test_committed_checksums_cover_both_platforms(platform: str) -> None:
+    """Criterion 3, committed side (loop row L1-2): the repository installer
+    reads one checksum file per supported platform, so each pinned file must
+    exist and hold exactly one 64-hex SHA-256 digest. Whether that digest is
+    the release's own is established by the recorded release verification
+    (plan.md, "Release verification"), not by a synthetic test."""
+    pin = _pin()
+    sums = REPO_ROOT / "tools" / "beads" / "checksums" / f"beads_{pin}_{platform}.tar.gz.sha256"
+    assert sums.is_file(), f"{sums.relative_to(REPO_ROOT)} is missing — the {platform} install would fail closed"
+    lines = sums.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1, f"{sums.name} holds {len(lines)} lines, not one digest"
+    assert re.fullmatch(r"[0-9a-f]{64}", lines[0].split()[0] if lines[0].split() else ""), (
+        f"{sums.name} holds no 64-hex SHA-256 digest: {lines[0]!r}"
+    )
