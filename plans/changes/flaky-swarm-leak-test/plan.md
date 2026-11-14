@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
@@ -253,9 +253,16 @@ failure stays unreproduced, as stated above).
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-14
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-13 19:17:30–20:17:30 UTC, 3600 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-13 20:17:37–21:01:10 UTC, 2613 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-13 21:01:17–21:38:55 UTC, 2258 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-14 18:02:06–18:08:27 UTC, 381 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-11-14 21:32:03–22:56:35 UTC, 5071 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-14 22:56:42–22:58:12 UTC, 90 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-14 22:58:19–23:00:06 UTC, 107 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
