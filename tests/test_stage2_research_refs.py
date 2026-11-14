@@ -63,6 +63,48 @@ def test_reference_heading_keeps_inline_formatting_and_case():
     assert not resolve("a.md", text, "the `criterion` ledger")["supported"]
 
 
+@pytest.mark.parametrize("space", [" ", "  ", "\t"])
+@pytest.mark.parametrize("marks", ["#", "##", "###", "####", "#####", "######"])
+def test_reference_markdown_accepts_opening_heading_marks(marks, space):
+    # Criterion 1. Planted fault: a heading cited with its opening ATX marks fails the exact-title
+    # comparison, or resolves to a different frozen extent than its bare title.
+    text = "## Heading\nbody\n\n## Next\nend\n"
+    bare = resolve("a.md", text, "Heading")
+    copied = resolve("a.md", text, marks + space + "Heading")
+    assert bare["supported"] and copied["supported"]
+    assert (copied["start_line"], copied["end_line"], copied["excerpt"]) == (
+        bare["start_line"],
+        bare["end_line"],
+        bare["excerpt"],
+    )
+    assert copied["reference"] == marks + space + "Heading", "the recorded reference keeps the seat's spelling"
+
+
+def test_reference_markdown_prefix_tolerance_keeps_exact_boundaries():
+    # Criterion 2. Planted fault: prefix tolerance overrides an exact title, disambiguates duplicate
+    # titles, accepts a prose, fenced or space-indented non-heading, or compares inexactly.
+    text = "## # Radix\nhash title\n\n## Later\n\n#### Radix\nplain\n"
+    exact = resolve("a.md", text, "# Radix")
+    assert exact["supported"] and exact["start_line"] == 1, "a literal hash title keeps its exact meaning"
+    copied = resolve("a.md", text, "#### Radix")
+    assert copied["supported"] and copied["start_line"] == 6, "a copied opening run resolves like its bare title"
+    double = "## Radix\none\n\n### Radix\ntwo\n"
+    assert not resolve("a.md", double, "# Radix")["supported"], "a copy must not disambiguate duplicate titles"
+    assert not resolve("a.md", double, "Radix")["supported"], "an exact ambiguity never falls back to a copy"
+    assert not resolve("a.md", "```md\n## Heading\n```\n", "## Heading")["supported"]
+    assert not resolve("a.md", "The heading is prose. ## Heading\n", "## Heading")["supported"]
+    assert not resolve("a.md", "    ## Heading\n", "## Heading")["supported"]
+    assert not resolve("a.md", "## Heading\nbody\n", "##Heading")["supported"], (
+        "marks without following whitespace are no opening ATX run"
+    )
+    assert not resolve("a.md", "## Heading\nbody\n", "####### Heading")["supported"], (
+        "seven marks are no ATX heading run"
+    )
+    assert not resolve("a.md", "## The `criterion` ledger ###\nbody\n", "## the `criterion` ledger")["supported"], (
+        "a copy compares exactly, so case and inline formatting still matter"
+    )
+
+
 @pytest.mark.parametrize(
     "reference,excerpt",
     [

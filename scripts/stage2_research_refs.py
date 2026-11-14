@@ -91,11 +91,22 @@ def _markdown_scan(lines):
     return active, headings
 
 
+def _heading_matches(headings, target, level_two):
+    return [(line, level) for line, level, title in headings if title == target and (not level_two or level == 2)]
+
+
 def _markdown_extent(lines, reference):
     active, headings = _markdown_scan(lines)
     criterion = re.fullmatch(r"criterion ([1-9][0-9]*)", reference)
     target = "Acceptance criteria" if criterion else reference
-    matches = [(line, level) for line, level, title in headings if title == target and (not criterion or level == 2)]
+    matches = _heading_matches(headings, target, bool(criterion))
+    if not matches:
+        # A seat may copy a heading with its opening ATX marks. Exact titles keep priority: the
+        # second comparison runs only after a titleless exact pass, on the same frozen scan, so
+        # literal hash titles keep their meaning and duplicates stay ambiguous without a fallback.
+        stripped = re.sub(r"^#{1,6}[ \t]+", "", target)
+        if stripped != target:
+            matches = _heading_matches(headings, stripped, bool(criterion))
     if len(matches) != 1:
         raise UnsupportedReference("heading is absent or ambiguous")
     start, level = matches[0]

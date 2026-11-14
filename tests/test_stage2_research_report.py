@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -95,6 +96,30 @@ def test_report_without_any_supported_claim_fails_except_empty_neighbours():
     empty["not_read"] = []
     with pytest.raises(module().ResearchReportError, match="neighbour"):
         validate(empty, topic=5)
+
+
+def test_report_evidence_floor_retains_each_failed_citation_reason():
+    # Criterion 3. Planted fault: the failure diagnostics drop or rewrite a failed citation, keep a
+    # supported one, or leave the correcting seat only the generic evidence-floor message.
+    value = report(evidence=["a.py::absent"])
+    second = copy.deepcopy(value["claims"][0])
+    second.update(id="C2", evidence=["a.py::existing", "a.py:1"])
+    value["claims"].append(second)
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(value)
+    assert str(raised.value) == "report has no runner-backed evidence claim", "the generic message is unchanged"
+    assert raised.value.citation_failures == [
+        {"claim": "C1", "citation": "a.py::absent", "reason": "definition is absent or ambiguous"},
+        {"claim": "C2", "citation": "a.py:1", "reason": "no runner evidence"},
+    ], "each failed citation keeps its claim, original text and the runner's reason; supported ones stay out"
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(report(evidence=[]))
+    assert raised.value.citation_failures == [], "an empty evidence list invents no reference"
+    schema = report()
+    schema["claims"] *= 2
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(schema)
+    assert not hasattr(raised.value, "citation_failures"), "an earlier failure keeps its generic error alone"
 
 
 def test_report_one_shared_unicode_excerpt_cap_in_citation_order():
@@ -328,6 +353,34 @@ def test_report_documented_base_object_matches_the_validated_contract():
     )
     assert result["claims"][0]["evidence_status"] == "valid"
     assert result["questions"][0]["claims"] == [result["claims"][0]["id"]]
+
+
+def test_report_prompt_markdown_example_resolves():
+    # Criterion 5. Planted fault: the common contract's Markdown example loses the shown heading or
+    # its bare-title citation, the pair cannot resolve against the illustrated frozen source, a line
+    # number replaces the heading, or the invented example is written as a repository fact.
+    text = (Path(__file__).resolve().parents[1] / "prompts" / "research-swarm" / "report.md").read_text()
+    shown = re.search(r"`(#{1,6}[ \t][^`\n]+)`", text)
+    assert shown, "the contract illustrates one fictional Markdown heading with its opening marks, in backticks"
+    title = re.sub(r"^#{1,6}[ \t]+", "", shown.group(1))
+    cited = re.search(r"`([^`\n]+::" + re.escape(title) + r")`", text)
+    assert cited, "the shown heading carries the corresponding bare-title path::heading citation, in backticks"
+    assert re.search(r"example", text[shown.start() : cited.end()], re.I), (
+        "the illustrated pair names itself an example, not a repository fact"
+    )
+    source_path, reference = cited.group(1).split("::", 1)
+    assert not re.fullmatch(r"[0-9]+", reference), "the example cites a heading, never a line number"
+    assert not (Path(__file__).resolve().parents[1] / source_path).exists(), (
+        "the example's source stays fictional instead of being a real repository file"
+    )
+    import stage2_research_refs as refs
+
+    sources = {source_path: (shown.group(1) + "\nbody line\n").encode()}
+    copied = refs.resolve_research_reference(sources, source_path, reference)
+    bare = refs.resolve_research_reference(sources, source_path, title)
+    assert copied["supported"] and bare["supported"], f"the illustrated citation resolves: {copied}"
+    assert copied["start_line"] == bare["start_line"] == 1
+    assert copied["end_line"] == bare["end_line"] and copied["excerpt"] == bare["excerpt"]
 
 
 @pytest.mark.parametrize("seat", ["unqualified", ":model", "endpoint:", "endpoint:model:ambiguous"])
