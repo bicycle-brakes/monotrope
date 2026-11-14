@@ -251,3 +251,5 @@ so that attribution is wrong and this record corrects it. Details and the
 list of hand commits: `plan.md`, "Implementation record — 2026-11-14".
 
 Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1076 files, 4241 commits, 12 rules.
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1076 files, 4250 commits, 12 rules.
