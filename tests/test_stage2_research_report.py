@@ -365,9 +365,15 @@ def test_report_prompt_markdown_example_resolves():
     title = re.sub(r"^#{1,6}[ \t]+", "", shown.group(1))
     cited = re.search(r"`([^`\n]+::" + re.escape(title) + r")`", text)
     assert cited, "the shown heading carries the corresponding bare-title path::heading citation, in backticks"
-    assert re.search(r"example", text[shown.start() : cited.end()], re.I), (
-        "the illustrated pair names itself an example, not a repository fact"
+    # The disclaimer is read from the pair's own paragraph outside its code spans, so a fictional path
+    # such as `docs/example/...` or a passing "this example's" cannot stand in for it (loop row L1-2).
+    paragraph = next(
+        part for part in re.split(r"\n[ \t]*\n", text) if shown.group(0) in part and cited.group(0) in part
     )
+    prose = " ".join(re.sub(r"`[^`\n]*`", "", paragraph).split())
+    assert re.search(r"\billustrative example\b", prose, re.I) and re.search(
+        r"\bnot a fact about this repository\b", prose, re.I
+    ), "the illustrated pair names itself an example, not a repository fact"
     source_path, reference = cited.group(1).split("::", 1)
     assert not re.fullmatch(r"[0-9]+", reference), "the example cites a heading, never a line number"
     assert not (Path(__file__).resolve().parents[1] / source_path).exists(), (
