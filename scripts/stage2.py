@@ -2578,7 +2578,7 @@ def free_diff(root: Path) -> tuple[str, str | None]:
     total = 0
     for index, rel in enumerate(names):
         if rel in untracked_set:
-            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
+            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow={1: r""})
         else:
             piece = _git_output(root, "diff", *flags, base, "--", rel)
         bounded = _bound_hunks(rel, piece)
@@ -4299,7 +4299,7 @@ def git_error_text(text: str) -> str:
 def _git_output(
     root: Path,
     *args: str,
-    allow: tuple[int, ...] = (0,),
+    allow: dict[int, str] | None = None,
     env: dict[str, str] | None = None,
     stdin: str | None = None,
     preserve_newlines: bool = False,
@@ -4326,7 +4326,7 @@ def change_diff(root: Path) -> str:
     parts = [_git_output(root, "diff", *flags, base)]
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
     for path in filter(None, untracked):
-        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow=(0, 1)))
+        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow={1: r""}))
     return "".join(parts)
 
 
@@ -4470,14 +4470,16 @@ def run_git(
     text: bool = False,
     errors: str | None = None,
     timeout: float | None = GIT_SECONDS,
-    allow: tuple[int, ...] = (0,),
+    allow: dict[int, str] | None = None,
 ) -> GitRun:
     """The one launch of git in the runner (decisions.md#Q-8): the resolved `GIT`, run in `root`.
 
     It forces the C locale over the inherited or supplied environment, so git's reason is English
     and recognisable, and keeps every non-empty line of git's diagnostic in `diagnostic`. The
-    command fails closed unless its exit code is explicitly handled through `allow`: one Refused
-    error carries every non-empty diagnostic line. A timeout raises
+    command fails closed unless both its nonzero exit code and its whole normalised diagnostic
+    match an explicit `allow` entry (a code mapped to a full-match regular expression). An empty
+    pattern handles only a silent status, such as diff's 1. One Refused error carries every
+    non-empty diagnostic line. A timeout raises
     `subprocess.TimeoutExpired` for the caller to name; `timeout=None` waits as before.
     """
     done = subprocess.run(
@@ -4492,7 +4494,9 @@ def run_git(
     )
     stderr = done.stderr if done.stderr is not None else ("" if text else b"")
     diagnostic = git_error_text(stderr if isinstance(stderr, str) else os.fsdecode(stderr))
-    if done.returncode not in allow:
+    if done.returncode != 0 and (
+        allow is None or done.returncode not in allow or re.fullmatch(allow[done.returncode], diagnostic) is None
+    ):
         raise Refused(f"git {args[0]} failed (exit {done.returncode}): {diagnostic}")
     return GitRun(done.returncode, done.stdout, stderr, diagnostic)
 
@@ -6927,7 +6931,7 @@ def _ref_targets(root: Path) -> dict[str, str]:
     listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
     refs = {name: target.rstrip() for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
     head = _git_output(root, "rev-parse", "HEAD").strip()
-    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
+    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow={1: r""}).strip()
     refs["HEAD"] = f"{head} {symbolic or '(detached)'}"
     return refs
 
@@ -7167,7 +7171,7 @@ def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
             names.add(name)
     snapshot = {}
     for name in sorted(names):
-        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow=(0, 1)).strip()
+        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow={1: r""}).strip()
         if symbolic:
             snapshot[name] = ("symbolic", symbolic)
         else:
@@ -9534,7 +9538,13 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
         if not NEW_ADR.fullmatch(posix):
             continue
         try:
-            held = run_git(root, "cat-file", "-e", f"{base}:{posix}", allow=(0, 1, 128))
+            # Exit 128 also means an unreadable tree. Only the exact missing-path
+            # diagnostic establishes absence; added warnings/fatal lines must refuse.
+            missing = (
+                rf"fatal: path '{re.escape(posix)}' "
+                rf"(?:does not exist in|exists on disk, but not in) '{re.escape(base)}'"
+            )
+            held = run_git(root, "cat-file", "-e", f"{base}:{posix}", allow={128: missing})
             present = held.returncode == 0
         except subprocess.TimeoutExpired:
             present = True  # unmeasured reads as present: the path stays a keep

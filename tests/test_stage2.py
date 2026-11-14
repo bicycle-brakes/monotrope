@@ -23814,6 +23814,27 @@ def test_every_git_launch_of_the_runner_goes_through_run_git() -> None:
     # Seven launch sites at 00d83c67: show, merge-base, archive, merge-base --is-ancestor, cat-file -e,
     # and the two wrappers `_git_output` and `_git_bytes`.
     assert len(calls) >= 7, f"fewer run_git calls than the seven launch sites this check was written against: {calls}"
+    # Handled failures must name both a nonzero code and its expected diagnostic,
+    # at direct launches and at wrapper calls; a bare tuple of codes cannot establish absence.
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
+        if not (isinstance(call.func, ast.Name) and call.func.id in {"run_git", "_git_output", "_git_bytes"}):
+            continue
+        for keyword in call.keywords:
+            if keyword.arg != "allow":
+                continue
+            value = keyword.value
+            if isinstance(value, ast.Name):
+                assert value.id == "allow", f"line {call.lineno} forwards an unknown handled-failure declaration"
+                continue
+            assert isinstance(value, ast.Dict) and value.keys, (
+                f"line {call.lineno} handles Git failure with bare exit codes instead of diagnostic patterns"
+            )
+            for code, pattern in zip(value.keys, value.values, strict=True):
+                assert isinstance(code, ast.Constant) and type(code.value) is int and code.value != 0
+                assert not isinstance(pattern, ast.Constant) or isinstance(pattern.value, str), (
+                    f"line {call.lineno} needs an expected diagnostic pattern for each handled Git failure"
+                )
+
     for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
         if function.name == "run_git":
             continue
@@ -23887,31 +23908,40 @@ def test_run_git_forces_c_locale_and_keeps_every_diagnostic_line(
     assert "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line" in str(failure.value)
 
 
-@pytest.mark.parametrize("allow", [(0,), (0, 1)])
+@pytest.mark.parametrize("allow", [None, {1: r""}, {128: r"fatal: expected absence"}])
 @pytest.mark.parametrize("exit_code", [0, 1, 128])
+@pytest.mark.parametrize("diagnostic", ["", "fatal: expected absence", "fatal: expected absence\nhint: recover\n"])
 def test_run_git_accepts_only_explicit_exit_codes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, allow: tuple[int, ...], exit_code: int
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allow: dict[int, str] | None,
+    exit_code: int,
+    diagnostic: str,
 ) -> None:
-    """A handled diff status is returned; every other failure raises with all diagnostic lines."""
-    diagnostic = b"warning: prelude\n\nfatal: failed operation\nhint: recover objects\n"
+    """A handled status needs both its code and its complete expected diagnostic."""
     monkeypatch.setattr(
         stage2.subprocess,
         "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"payload", diagnostic),
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"payload", diagnostic.encode()),
     )
-    if exit_code in allow:
+    accepted = exit_code == 0 or (
+        allow is not None
+        and exit_code in allow
+        and re.fullmatch(allow[exit_code], stage2.git_error_text(diagnostic)) is not None
+    )
+    if accepted:
         done = stage2.run_git(tmp_path, "diff", allow=allow)
         assert done.returncode == exit_code and done.stdout == b"payload"
-        assert done.diagnostic == "warning: prelude fatal: failed operation hint: recover objects"
+        assert done.diagnostic == stage2.git_error_text(diagnostic)
     else:
         try:
             stage2.run_git(tmp_path, "diff", allow=allow)
         except stage2.Refused as error:
             message = str(error)
         else:
-            pytest.fail(f"Git exit {exit_code} must fail closed unless explicitly allowed")
+            pytest.fail(f"Git exit {exit_code} must fail closed unless its whole diagnostic is expected")
         assert str(exit_code) in message
-        for line in diagnostic.decode().splitlines():
+        for line in diagnostic.splitlines():
             if line:
                 assert line in message, f"Git failure discarded a diagnostic line: {line}"
 
@@ -26342,3 +26372,64 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
     assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
     assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        "fatal: unable to read tree baseline\n\nhint: recover the baseline objects\n",
+        "fatal: path 'docs/adr/0007-existing-record.md' does not exist in 'baseline'\nfatal: corrupt tree\n",
+    ],
+)
+def test_draft_keep_refuses_unreadable_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostic: str
+) -> None:
+    """F6-7: an unreadable tree must never authorise an existing ADR as new."""
+    adr = Path("docs/adr/0007-existing-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# Existing ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 128, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.draft_keep(tmp_path, ctx, "baseline")
+    except stage2.Refused as error:
+        message = str(error)
+    else:
+        pytest.fail("An unreadable baseline must refuse the ADR lookup, never classify the ADR as new")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"The baseline lookup lost Git's diagnostic: {line}"
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "diagnostic", "is_new"),
+    [
+        (0, "", False),
+        (128, "fatal: path 'docs/adr/0007-record.md' does not exist in 'baseline'\n", True),
+        (128, "fatal: path 'docs/adr/0007-record.md' exists on disk, but not in 'baseline'\n", True),
+    ],
+)
+def test_draft_keep_accepts_only_established_adr_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_code: int, diagnostic: str, is_new: bool
+) -> None:
+    """A present ADR stays protected; Git's two missing-path diagnostics establish a new one."""
+    adr = Path("docs/adr/0007-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
+    assert (adr in keep) is is_new
+    assert new_adrs == ([adr.as_posix()] if is_new else [])

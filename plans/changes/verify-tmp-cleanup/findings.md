@@ -1667,7 +1667,14 @@ Stage-2 call, 2026-11-14: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-7 | MAJOR | SPEC | base | scripts/stage2.py:9537 | When `git cat-file -e` fails because the baseline tree cannot be read, `draft_keep()` accepts exit 128, discards every diagnostic line and classifies the ADR as new. A read-only source probe returned `fatal: unable to read tree baseline` followed by a recovery hint; neither was reported, and an existing ADR entered the draft’s permitted edit set. An unreadable baseline must refuse the lookup with Git’s complete diagnostic rather than establish that the file is absent. [Criterion 12] | Codex | taken — structural, within Q-8, fourth case of the mechanism (F6-4..F6-7): naming a handled exit code is not enough, because git uses one code (128) for both the expected absence and a real failure; run_git's handled-failure declaration names the exit code AND the expected diagnostic pattern (e.g. a missing object or path), any other diagnostic under that code still raises with every line; draft_keep() and every caller that names handled codes move to that form, and the source test rejects a bare handled exit code | — |
+| F6-7 | MAJOR | SPEC | base | scripts/stage2.py:9537 | When `git cat-file -e` fails because the baseline tree cannot be read, `draft_keep()` accepts exit 128, discards every diagnostic line and classifies the ADR as new. A read-only source probe returned `fatal: unable to read tree baseline` followed by a recovery hint; neither was reported, and an existing ADR entered the draft’s permitted edit set. An unreadable baseline must refuse the lookup with Git’s complete diagnostic rather than establish that the file is absent. [Criterion 12] | Codex | fixed — tests/test_stage2.py::test_draft_keep_refuses_unreadable_baseline | — |
 
 Phase 6 verdict: codex 01a1dc05-058e-7502-bfbd-2800fe0ddf8b, 2026-11-14
 Reviewer session: codex 01a1dc05-058e-7502-bfbd-2800fe0ddf8b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-14: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1063 files, 4254 commits, 12 rules.
+
+> Runner verification scope:
+> - Attempt 1 (codex): full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+
+Runner restoration, 2026-11-14: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-tmp-cleanup/plan.md, plans/changes/verify-tmp-cleanup/spec.md — unchanged
