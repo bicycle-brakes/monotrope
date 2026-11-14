@@ -472,3 +472,5 @@ Stage-2 call, 2026-11-14: repair · attempt 3 · route stage-1 · endpoint claud
 > - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-3-20261114T164345619628Z-08d6aa35.md
 > ```
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1065 files, 4223 commits, 12 rules.
