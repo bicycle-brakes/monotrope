@@ -82,7 +82,7 @@ change.
    *Basis:* decisions.md#Q-1.
 5. When a test reads, writes or opens a declared stand-in log without the shared helper anywhere under `tests/`, including executable stand-in source strings, the guard test fails and identifies its source location.
    *Refuted by:* a planted raw read or append of a declared log passes the guard, the guard flags a helper call or an operation on a file that is not a declared log, or it needs an exemption list to pass the repository.
-   *Basis:* decisions.md#Q-2; decisions.md, "Guard design after the review loop".
+   *Basis:* decisions.md#Q-2; decisions.md#Q-3; decisions.md, "Guard design after the review loop".
 6. When a leak refuses a swarm run and its inputs are then restored, the refused run is announced before any model call in the next successful run.
    *Refuted by:* the leaking run starts a model call or returns success, the clean run returns 2, or its first refused-run notice is absent or observes a nonzero call count.
    *Basis:* decisions.md#Q-1.
@@ -100,6 +100,20 @@ change.
 - A claim that the historical CI failures are conclusively explained without
   their diagnostics; local reproduction proves the mechanism it exercises.
 - Design phase 2b and an ADR draft: this bounded test-only repair requires neither.
+
+## Boundary
+
+The guard knows stand-in logs by declaration only (decisions.md#Q-3, loop
+row L2-1). It fails on a raw read, write or open of a file whose name is one
+of the helper's declared names (`STAND_IN_LOGS`); a test that introduces a
+log under a new name and appends to it concurrently without the helper is
+not seen, and the torn-read flake could return through that name. The
+helper refuses an undeclared name in its JSON functions, so a log that uses
+the helper is always one the guard watches; the gap is the log that never
+uses it. The maintainer chose to ship with this boundary stated; the
+contract that closes it is tracked separately (bead coding-harness-6zpj).
+Paths that never carry a declared name, arbitrary obfuscation and raw OS
+calls stay outside the guard as well ([DETAIL] under Open decisions).
 
 ## Protected areas
 
@@ -121,7 +135,8 @@ swarm-test-speed change's protected production call and scan paths stay intact.
 
 ## Open decisions
 
-None open. The two maintainer answers remain unchanged.
+None open. The two answers of 2026-11-13 remain unchanged; the maintainer's
+third answer (decisions.md#Q-3, 2026-11-14) states the guard's name boundary.
 
 - [DETAIL] The appetite is three hours of phase 4 including repairs, a stop
   chosen because neither answer states a budget and this is a bounded repair.
