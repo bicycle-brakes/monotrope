@@ -6132,6 +6132,32 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
         stage2.checkpoint(tmp_path, "demo", "base")
 
 
+@pytest.mark.parametrize("exit_code", [1, 128])
+def test_checkpoint_git_failure_keeps_every_diagnostic_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, exit_code: int
+) -> None:
+    """F6-6: ancestry failures must carry the complete Git reason through checkpoint's error."""
+    monkeypatch.setattr(stage2, "_held_prefixes", lambda _root: ())
+    monkeypatch.setattr(stage2, "changed_paths", lambda _root: set())
+    monkeypatch.setattr(stage2, "uncommittable", lambda *_args: [])
+    monkeypatch.setattr(stage2, "_git_output", lambda _root, *args: "1" if args[0] == "rev-list" else "")
+    diagnostic = "fatal: could not read baseline object\n\nhint: restore the missing object\n"
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.checkpoint(tmp_path, "demo", "base")
+    except stage2.CallFailed as error:
+        message = str(error)
+    else:
+        pytest.fail("a failed ancestry command must refuse the checkpoint")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"checkpoint discarded Git's diagnostic: {line}"
+
+
 @pytest.mark.parametrize("verb", ["explore", "implement"])
 def test_a_change_name_after_the_stage2_off_flag_is_named_as_eaten(
     world: World, verb: str, capsys: pytest.CaptureFixture[str]
@@ -23788,6 +23814,49 @@ def test_every_git_launch_of_the_runner_goes_through_run_git() -> None:
     # Seven launch sites at 00d83c67: show, merge-base, archive, merge-base --is-ancestor, cat-file -e,
     # and the two wrappers `_git_output` and `_git_bytes`.
     assert len(calls) >= 7, f"fewer run_git calls than the seven launch sites this check was written against: {calls}"
+    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+        if function.name == "run_git":
+            continue
+        for assignment in (node for node in ast.walk(function) if isinstance(node, ast.Assign)):
+            call = assignment.value
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "run_git"):
+                continue
+            names = {target.id for target in assignment.targets if isinstance(target, ast.Name)}
+            reads_status = any(
+                isinstance(node, ast.Attribute)
+                and node.attr == "returncode"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in names
+                for node in ast.walk(function)
+            )
+            if reads_status:
+                assert any(keyword.arg == "allow" for keyword in call.keywords), (
+                    f"{function.name}:{call.lineno} handles Git status without explicit allowed exit codes"
+                )
+                for raised in (node for node in ast.walk(function) if isinstance(node, ast.Raise) and node.exc):
+                    assert any(
+                        isinstance(node, ast.Attribute)
+                        and node.attr == "diagnostic"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id in names
+                        for node in ast.walk(raised.exc)
+                    ), f"{function.name}:{raised.lineno} builds a Git failure without its diagnostic"
+
+    for guarded in (node for node in ast.walk(tree) if isinstance(node, ast.Try)):
+        calls_git = any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+            for statement in guarded.body
+            for node in ast.walk(statement)
+        )
+        if not calls_git:
+            continue
+        for handler in guarded.handlers:
+            if not (isinstance(handler.type, ast.Name) and handler.type.id == "Refused"):
+                continue
+            for raised in (node for node in ast.walk(handler) if isinstance(node, ast.Raise) and node.exc):
+                assert handler.name and any(
+                    isinstance(node, ast.Name) and node.id == handler.name for node in ast.walk(raised.exc)
+                ), f"line {raised.lineno} replaces a Git failure without carrying its diagnostic"
 
 
 @pytest.mark.parametrize("text", [False, True])
@@ -23808,13 +23877,43 @@ def test_run_git_forces_c_locale_and_keeps_every_diagnostic_line(
         )
 
     monkeypatch.setattr(stage2.subprocess, "run", fail_git)
-    done = stage2.run_git(tmp_path, "archive", "HEAD", env=supplied, text=text)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.run_git(tmp_path, "archive", "HEAD", env=supplied, text=text)
     assert observed["command"] == [stage2.GIT, "-C", str(tmp_path), "archive", "HEAD"]
     assert observed["env"]["LC_ALL"] == "C" and observed["env"]["GIT_INDEX_FILE"] == "private-index"
     assert supplied["LC_ALL"] == "de_DE.UTF-8", "run_git must not mutate the caller's environment"
     assert observed["timeout"] == stage2.GIT_SECONDS and observed["check"] is False
-    assert done.returncode == 128
-    assert done.diagnostic == "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line"
+    assert "128" in str(failure.value)
+    assert "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line" in str(failure.value)
+
+
+@pytest.mark.parametrize("allow", [(0,), (0, 1)])
+@pytest.mark.parametrize("exit_code", [0, 1, 128])
+def test_run_git_accepts_only_explicit_exit_codes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, allow: tuple[int, ...], exit_code: int
+) -> None:
+    """A handled diff status is returned; every other failure raises with all diagnostic lines."""
+    diagnostic = b"warning: prelude\n\nfatal: failed operation\nhint: recover objects\n"
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"payload", diagnostic),
+    )
+    if exit_code in allow:
+        done = stage2.run_git(tmp_path, "diff", allow=allow)
+        assert done.returncode == exit_code and done.stdout == b"payload"
+        assert done.diagnostic == "warning: prelude fatal: failed operation hint: recover objects"
+    else:
+        try:
+            stage2.run_git(tmp_path, "diff", allow=allow)
+        except stage2.Refused as error:
+            message = str(error)
+        else:
+            pytest.fail(f"Git exit {exit_code} must fail closed unless explicitly allowed")
+        assert str(exit_code) in message
+        for line in diagnostic.decode().splitlines():
+            if line:
+                assert line in message, f"Git failure discarded a diagnostic line: {line}"
 
 
 def test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale(
