@@ -249,3 +249,5 @@ prompt edits and the review-loop round-1 repairs were written by hand on
 fc1b5749 names attempt 3 as the code's source; attempt 3 changed no file,
 so that attribution is wrong and this record corrects it. Details and the
 list of hand commits: `plan.md`, "Implementation record — 2026-11-14".
+
+Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1076 files, 4241 commits, 12 rules.
