@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-04
 created: 2026-11-04
 last_reviewed: 2026-11-04
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -136,3 +136,18 @@ context: |
   Architecture change: none; from this change's merge the census catches such files itself.
 
 In the context of a census that is red on two files merged after its adoption day, facing a choice between correcting them here and a bead of their own, we decided to correct them here, to achieve a green check and a pull request today, accepting that the exception of Q-6 grows from two files to four. — 2026-11-13
+
+## Q-8 · The header-only correction as a rule until this change merges
+
+asked: 2026-11-14
+answer: As the maintainer stated it on 2026-11-14 — the header-only correction holds as a rule for every research file the census flags until this change merges, not as a list of files. Header-only means provenance, producer and review fields and the skeleton notice; never content.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: pull request 388 fell out of the merge queue twice; merged with main, the census flags a fifth research file, origin-check-across-blocks/research.md (opening skeleton notice over published research), which reached main through pull request 387.
+  Intention: every change that merges before this one can add another such file, and a list of files in the spec needs a new decision for each one.
+  Today: the spec's exception under Q-6 and Q-7 names four files.
+  Repository change: the spec's exception becomes the rule; the fifth file's header is corrected the same way as the four.
+  Architecture change: none; from this change's merge the census catches such files itself.
+
+In the context of a census that each merge of main can turn red on one more research file, facing a new decision per file under a list-shaped exception, we decided that the header-only correction holds as a rule for every file the census flags until this change merges, to achieve a pull request that can leave the merge queue green, accepting header-only edits in research files of other changes that are not named in advance. — 2026-11-14
