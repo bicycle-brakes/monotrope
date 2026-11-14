@@ -49,6 +49,7 @@ one gate list stays the only place that names them (decisions Q-5).
 from __future__ import annotations
 
 import argparse
+import codecs
 import contextlib
 import dataclasses
 import hashlib
@@ -60,6 +61,7 @@ import stat
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -68,13 +70,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_gates  # noqa: E402
 import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
-import yaml  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Every git call of the snapshot is bounded: a wedged git must fail the
 # measurement, never hang the run it was supposed to protect.
 GIT_TIMEOUT_SECONDS = 10.0
+
+# How long a gate's output is still drained after its process group was ended.
+# A descendant that left the group (its own session) can keep the gate's pipes
+# open; the run never waits on it longer than this (review row L1-1).
+OUTPUT_DRAIN_SECONDS = 5.0
 
 # The exact frames the previous runner printed (the tests and the
 # repair-evidence parser read them): gate frames with one space after `──`,
@@ -314,7 +320,14 @@ _LIVE_GROUPS: set[int] = set()
 
 
 def gate_process(
-    root: Path, python: str, lock_slot: dict[str, int | None], _gate: dict[str, Any], command: str, env: dict[str, str]
+    root: Path,
+    python: str,
+    lock_slot: dict[str, int | None],
+    _gate: dict[str, Any],
+    command: str,
+    env: dict[str, str],
+    out: Any = None,
+    err: Any = None,
 ) -> GateProcess:
     """The default executor's one gate: `sh -c` with the pinned interpreter substituted.
 
@@ -323,6 +336,13 @@ def gate_process(
     like the shell's `${cmd/python3/...}` did. A protected gate's environment
     carries the admission marker, and the lock descriptor travels with it, so
     ownership outlives this process for exactly the gate's own descendants.
+
+    The gate's output is relayed to `out`/`err` while it runs, so an
+    interrupted gate keeps what it already printed. The run waits for the gate
+    leader, never for end-of-file: a child still holding the pipes is ended
+    with the leader's group, and one that left the group is not waited for
+    beyond `OUTPUT_DRAIN_SECONDS` — its later output is dropped, never written
+    after the gate's verdict (review row L1-1).
     """
     resolved = command.replace("python3", shlex.quote(python), 1)
     pass_fds: tuple[int, ...] = ()
@@ -339,19 +359,53 @@ def gate_process(
         start_new_session=True,
         pass_fds=pass_fds,
     )
+
+    complaints = sys.stderr if err is None else err
+    closed = threading.Event()
+    writing = threading.Lock()
+
+    def relay(source: Any, destination: Any) -> None:
+        decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        try:
+            # Reading goes on after the frame closed, so a writer never blocks on a full pipe.
+            while data := source.read1(65536):
+                with writing:
+                    if not closed.is_set():
+                        destination.write(decoder.decode(data))
+                        destination.flush()
+            with writing:
+                if not closed.is_set():
+                    destination.write(decoder.decode(b"", final=True))
+                    destination.flush()
+        finally:
+            source.close()
+
+    readers = [
+        threading.Thread(target=relay, args=(proc.stdout, sys.stdout if out is None else out), daemon=True),
+        threading.Thread(target=relay, args=(proc.stderr, complaints), daemon=True),
+    ]
     _LIVE_GROUPS.add(proc.pid)
+    for reader in readers:
+        reader.start()
     try:
-        stdout_raw, stderr_raw = proc.communicate()
+        # Wait for the gate leader, not EOF: descendants may still own its pipes.
+        proc.wait()
     finally:
+        verify_lock.end_lingering_group(proc.pid)
+        proc.wait()
+        drained = time.monotonic() + OUTPUT_DRAIN_SECONDS
+        for reader in readers:
+            reader.join(timeout=max(0.0, drained - time.monotonic()))
+        with writing:
+            closed.set()
+            if any(reader.is_alive() for reader in readers):
+                complaints.write(
+                    "verify-run: a process that left the gate's group still holds its output; "
+                    f"the rest is dropped after {OUTPUT_DRAIN_SECONDS:g}s\n"
+                )
+                complaints.flush()
         _LIVE_GROUPS.discard(proc.pid)
-    # A grandchild that outlived the gate script is ended before the next gate
-    # starts — admission never returns over a live group (review row F6-5).
-    verify_lock.end_lingering_group(proc.pid)
-    return GateProcess(
-        returncode=proc.returncode if proc.returncode is not None else -1,
-        stdout=stdout_raw.decode("utf-8", "replace"),
-        stderr=stderr_raw.decode("utf-8", "replace"),
-    )
+    return GateProcess(returncode=proc.returncode, stdout="", stderr="")
 
 
 def _install_run_handlers() -> dict[int, object]:
@@ -437,6 +491,7 @@ def run_verification(
 
     def emit(text: str) -> None:
         destination.write(text + "\n")
+        destination.flush()
 
     def complain(text: str) -> None:
         complaints.write(text + "\n")
@@ -469,7 +524,7 @@ def run_verification(
         def executor(  # noqa: W0201 - one binding, before any use
             gate: dict[str, Any], command: str, run_env: dict[str, str]
         ) -> GateProcess:
-            return gate_process(wurzel, pinned, slot, gate, command, run_env)
+            return gate_process(wurzel, pinned, slot, gate, command, run_env, destination, complaints)
 
     executed: dict[str, GateOutcome] = {}
     reds: list[str] = []
@@ -477,8 +532,15 @@ def run_verification(
     admission_requested = False
     admission_wait: float | None = None
     context = verify_lock.AdmissionContext(admission_id=None, wait_seconds=None, reused=None)
+    base_env = dict(os.environ if env is None else env)
+    if not str(base_env.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")).strip():
+        workers = worker_default()
+        if workers is None:
+            base_env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
+        else:
+            base_env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(workers)
     run_id_holder: dict[str, str | None] = {
-        "id": record(verify_duration.record_start, job, "ci" if ci else "local", root=wurzel)
+        "id": record(verify_duration.record_start, job, "ci" if ci else "local", root=wurzel, env=base_env)
     }
     selection_holder: dict[str, list[dict[str, Any]]] = {"selection": []}
 
@@ -564,16 +626,20 @@ def run_verification(
         )
 
     try:
+        # The shell ran the gate-list reader as a process of its own, so any failure in it was a
+        # red run with a diagnostic. In-process, a malformed list can raise more than the reader
+        # names (a non-mapping gate entry reaches `.get` as a string), so every reader failure is
+        # caught here, at the one place the scheduler loads the list (review row L1-12).
         try:
             bericht = ci_gates.report_at(wurzel, job)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
+        except Exception as exc:  # noqa: BLE001 - the reader's process boundary, kept in-process
             complain(f"FEHLER: {exc}")
             complain("die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates")
             return RunResult(2, [], [], None, False, None, False)
         emit(json.dumps(bericht, indent=2))
         try:
             selection = ci_gates.selection_at(wurzel, job, ci=ci)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
+        except Exception as exc:  # noqa: BLE001 - the reader's process boundary, kept in-process
             complain(f"FEHLER: {exc}")
             complain("die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates")
             return RunResult(2, [], [], None, False, None, False)
@@ -582,13 +648,6 @@ def run_verification(
             return RunResult(2, [], [], None, False, None, False)
         selection_holder["selection"] = selection
 
-        base_env = dict(os.environ if env is None else env)
-        if not str(base_env.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")).strip():
-            workers = worker_default()
-            if workers is None:
-                base_env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
-            else:
-                base_env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(workers)
         # Both phases inherit the admission state a nested run must reuse: the
         # cheap gates are not protected, but their children resolve a valid
         # ancestor's admission the same way the protected ones do.
@@ -640,7 +699,7 @@ def run_verification(
                 if current.fingerprint != after.fingerprint:
                     try:
                         refreshed = ci_gates.selection_at(wurzel, job, ci=ci)
-                    except (OSError, ValueError, yaml.YAMLError) as exc:
+                    except Exception as exc:  # noqa: BLE001 - the reader's process boundary
                         complain(f"FEHLER: {exc}")
                         raise VerifyRunRefused(
                             "the gate list cannot be reloaded after the tree changed; protected work stops"

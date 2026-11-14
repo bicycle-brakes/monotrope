@@ -15,7 +15,10 @@ import fcntl
 import io
 import json
 import os
+import selectors
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -854,3 +857,138 @@ def test_transferred_kit_keeps_before_admission_behavior(checkout: SimpleNamespa
     assert code == 0, (code, out, err)
     assert "── [lint-quick] gruen" in out and "── [suite-full] gruen" in out, out
     assert "VERIFY GREEN" in out, out
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_gate_leader_exit_closes_inherited_streams(tmp_path: Path, interrupted: bool) -> None:
+    """A child retaining the gate's pipes must be killed before waiting for EOF."""
+    group_file = tmp_path / "gate-group"
+    body = (
+        "import os, subprocess, sys, time; from pathlib import Path; "
+        f"Path({str(group_file)!r}).write_text(str(os.getpgrp())); "
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+        "print('before-child', flush=True); " + ("time.sleep(30)" if interrupted else "sys.exit(0)")
+    )
+    command = f"python3 -c {shlex.quote(body)}"
+    script = f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(REPO_ROOT / "scripts")!r})
+import verify_run
+verify_run._install_run_handlers()
+try:
+    verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fd': None}}, {{}},
+        {command!r}, dict(__import__('os').environ))
+except verify_run.GateInterrupted as error:
+    sys.exit(128 + error.signum)
+"""
+    proc = subprocess.Popen([sys.executable, "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        prefix = b""
+        if interrupted:
+            # Output must arrive while the leader is still running; a later
+            # interruption must not discard what the gate already printed.
+            with selectors.DefaultSelector() as selector:
+                selector.register(proc.stdout, selectors.EVENT_READ)
+                assert selector.select(timeout=5), "gate output must stream before its leader exits"
+                prefix = proc.stdout.readline()
+            assert prefix == b"before-child\n" and proc.poll() is None
+            proc.send_signal(signal.SIGTERM)
+        stdout, stderr = proc.communicate(timeout=18)
+    except subprocess.TimeoutExpired:
+        pytest.fail("the gate leader exited but its child's inherited pipes prevented cleanup")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        if group_file.exists():
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(int(group_file.read_text()), signal.SIGKILL)
+        proc.communicate(timeout=8)
+    assert proc.returncode == (128 + signal.SIGTERM if interrupted else 0), stderr
+    assert b"before-child" in prefix + stdout
+
+
+def test_history_records_effective_worker_default(checkout: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The start record and gate receive the same derived setting, without mutating the caller."""
+    monkeypatch.delenv("PYTEST_XDIST_AUTO_NUM_WORKERS", raising=False)
+    monkeypatch.setattr(verify_run, "worker_default", lambda: 3)
+    write_gates(checkout.root, [_gate("cheap", "true")])
+    seen = []
+    real_append = verify_duration.append_event
+
+    def append(event, **kwargs):
+        seen.append(event)
+        return real_append(event, **kwargs)
+
+    def execute(_gate, _command, env):
+        assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3"
+        return verify_run.GateProcess(0, "", "")
+
+    monkeypatch.setattr(verify_duration, "append_event", append)
+    result, out, err = run_scheduler(checkout.root, executor=execute)
+    assert result.exit_code == 0, (out, err)
+    assert next(event for event in seen if event["event"] == "run_start")["workers"] == "3"
+    assert "PYTEST_XDIST_AUTO_NUM_WORKERS" not in os.environ
+
+
+def test_gate_descendant_outside_its_group_cannot_hold_the_run(tmp_path: Path) -> None:
+    """A descendant in a session of its own keeps the gate's pipes; the gate still ends (row L1-1).
+
+    Planted fault: the run waits for end-of-file on the gate's pipes, so a child that left the
+    gate's process group — and so survives the group's cleanup — blocks the run for as long as it
+    lives, and its late output lands after the gate's verdict.
+    """
+    child_file = tmp_path / "escaped-child"
+    child = "import time; print('late', flush=True); time.sleep(30); print('later', flush=True)"
+    body = (
+        "import subprocess, sys; from pathlib import Path; "
+        f"escaped = subprocess.Popen([sys.executable, '-c', {child!r}], start_new_session=True); "
+        f"Path({str(child_file)!r}).write_text(str(escaped.pid)); "
+        "print('gate-done', flush=True)"
+    )
+    command = f"python3 -c {shlex.quote(body)}"
+    script = f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(REPO_ROOT / "scripts")!r})
+import verify_run
+verify_run.OUTPUT_DRAIN_SECONDS = 1.0
+done = verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fd': None}}, {{}},
+    {command!r}, dict(__import__('os').environ))
+print('returned', done.returncode, flush=True)
+"""
+    proc = subprocess.Popen([sys.executable, "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        stdout, stderr = proc.communicate(timeout=15)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate(timeout=8)
+        pytest.fail("a descendant outside the gate's group held the run on the gate's pipes")
+    finally:
+        if child_file.exists():
+            with contextlib.suppress(ProcessLookupError, PermissionError, ValueError):
+                os.kill(int(child_file.read_text()), signal.SIGKILL)
+    assert proc.returncode == 0, stderr
+    assert b"gate-done" in stdout and b"returned 0" in stdout, stdout
+    assert b"later" not in stdout, "output after the gate's frame closed was written"
+    assert b"left the gate's group" in stderr, stderr
+
+
+@pytest.mark.parametrize(
+    "gates",
+    [["not a mapping"], {"not": "a list"}],
+)
+def test_malformed_gate_list_is_a_red_run_with_a_diagnostic(checkout: SimpleNamespace, gates: object) -> None:
+    """Whatever the reader raises on a malformed list, the run is red with a diagnostic (row L1-12).
+
+    Planted fault: a gate-list shape the reader does not name as its own error (a non-mapping entry)
+    escapes the scheduler as an exception instead of the red run the shell's reader process gave.
+    """
+    folder = checkout.root / "decisions"
+    folder.mkdir(exist_ok=True)
+    doc = {"schema_version": 3, "tools": {"python": ["3.12"]}, "gates": gates}
+    (folder / "gates.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 2 and not result.executed, (result, out, err)
+    assert "liess sich nicht erzeugen" in err, err
+    assert "VERIFY GREEN" not in out, out

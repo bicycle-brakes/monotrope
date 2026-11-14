@@ -34,6 +34,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -2493,7 +2494,7 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
     successful_implementation(world)
     assert world.run("implement") == 0
     assert order == cheap_order, order
-    assert admissions == [["make", "verify"]], "one admission, held by the scheduler, naming the full check"
+    assert admissions == [[sys.executable, *sys.argv]], "one admission, held by the scheduler, naming the full check"
     assert marker.read_text(encoding="utf-8").strip() == "quick"
 
     # 2. The repair's full fallback runs the same scheduler with the same verify selection.
@@ -2514,7 +2515,7 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
     problems = stage2._targeted_body(world.root, world.plan, env, None, None, None, None, [], "HEAD", [])
     assert problems == [], problems
     assert order == cheap_order, order
-    assert admissions == [["make", "verify"]], "the fallback took an admission of its own"
+    assert admissions == [[sys.executable, *sys.argv]], "the fallback took an admission of its own"
     assert marker.exists(), "the fallback lost the verify selection's cheap gate"
     (world.root / "verification-scope.txt").unlink()
 
@@ -4370,7 +4371,7 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
     # callback's, under the deadline the shared allowance set once before the gates.
     assert order == ["launch"], "the document subset queued for a machine slot it does not need"
     assert seen["command"] == ["bash", *DOCS_ARGV], "the document gate's own vector"
-    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
+    assert 0 < seen["timeout"] <= stage2.VERIFY_SECONDS == 7 * 60, "the remaining shared step limit was lost"
     deadline_age = seen["deadline"] - started
     assert 7 * 60 <= deadline_age < 7 * 60 + 30, "the shared step limit was swapped, reset or hard-coded"
     assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
@@ -4458,7 +4459,8 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
     assert world.calls("bash") == [], "a refused document check was started"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
     block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
-    assert "`bash scripts/verify_all.sh --job docs` could not run" in block and "make verify" not in block
+    assert "`bash scripts/verify_all.sh --job docs` exited 2" in block and "make verify" not in block
+    assert "admission refused" in block
 
 
 def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
@@ -6903,7 +6905,12 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
     assert ("renderer", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
     assert ("ruff", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
-    assert ("make", 7 * 60, "the runner's step limit after 7 minutes") in seen
+    gate_limits = [
+        timeout
+        for name, timeout, limit in seen
+        if name == "make" and limit == "the runner's step limit after 7 minutes"
+    ]
+    assert gate_limits and all(0 < timeout <= 7 * 60 for timeout in gate_limits), seen
     assert all(timeout is not None for _, timeout, _ in seen), seen
 
 
@@ -25780,7 +25787,7 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     commands.records.clear()
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     assert stage2.full_verify(world.root, env, None) == []
-    assert entered == [["make", "verify"]], "the full check did not acquire its admission"
+    assert entered == [[sys.executable, *sys.argv]], "the full check did not acquire its admission"
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
 
@@ -25810,7 +25817,7 @@ def test_targeted_stage2_test_file_requires_full_verification(
     assert bool(problems) == bool(full_result), problems
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the shared step limit"
+    assert 0 < make["timeout"] <= stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the remaining limit"
     assert make["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert commands.of("gate") == []
     assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
@@ -26412,3 +26419,99 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
     assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
     assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+
+
+def test_scheduled_refusal_retains_cheap_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused protected phase retains output from cheap work already executed."""
+
+    def schedule(_root, **kwargs):
+        kwargs["out"].write("── [cheap] $ echo diagnostic\ncheap diagnostic\n")
+        kwargs["err"].write("cheap report-level diagnostic\n")
+        raise stage2.verify_lock.VerifyLockError("protected admission refused")
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    # The full-check handler must receive a normal red result, not an exception
+    # which would throw the captured streams away.
+    try:
+        problems = stage2.full_verify(world.root, dict(os.environ), None)
+    except stage2.verify_lock.VerifyLockError:
+        pytest.fail("an admission refusal must retain cheap diagnostics as a failed verification")
+    text = "\n".join(problems)
+    assert "cheap diagnostic" in text and "cheap report-level diagnostic" in text, text
+    assert "protected admission refused" in text
+    assert "was not started" not in text
+
+
+def test_scheduled_holder_identifies_runner_process(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Holder metadata identifies the running orchestrator, regardless of selected job."""
+    monkeypatch.setattr(sys, "argv", ["scripts/stage2.py", "repair", "example"])
+    seen = []
+
+    def schedule(_root, **kwargs):
+        seen.append(kwargs["admission_command"])
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    for job in ("verify", "docs", "drift"):
+        stage2._scheduled_verify(world.root, dict(os.environ), job)
+    assert seen == [[sys.executable, *sys.argv]] * 3
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("gate list missing"), ValueError("gate schema invalid")])
+def test_scheduled_selection_errors_are_red(world: World, monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
+    """Loader failures are failed checks with diagnostics, never unhandled verb failures."""
+
+    def schedule(_root, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, dict(os.environ), "docs")
+    except (FileNotFoundError, ValueError) as caught:
+        pytest.fail(f"a gate-list loader error must become an ordinary red check: {caught}")
+    assert code != 0 and str(error) in out + err
+
+
+def test_scheduled_gate_timeout_is_remaining_allowance(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The launch contract bounds each gate by the remaining shared execution allowance."""
+    now = [100.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 60)
+    timeouts = []
+
+    def launch(command, _root, _env, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def schedule(_root, **kwargs):
+        now[0] += 17
+        kwargs["executor"]({}, "/bin/true", dict(os.environ))
+        now[0] += 11
+        kwargs["executor"]({}, "/bin/true", dict(os.environ))
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+    assert timeouts == [43, 32], "the callback must clamp without relying on launch's private implementation"
+
+
+def test_malformed_gate_list_fails_the_runner_check_with_a_diagnostic(world: World) -> None:
+    """A malformed gate list in the measured checkout is a failed check, not a crashed verb (row L1-12).
+
+    Planted fault: the gate-list reader raises an error it does not name as its own (a non-mapping
+    gate entry), the scheduler lets it escape, and `full_verify` aborts the verb with it.
+    """
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].append("not a mapping")
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        problems = stage2.full_verify(world.root, env, None)
+    except Exception as error:  # noqa: BLE001 - the planted fault is exactly an escaping error
+        pytest.fail(f"a malformed gate list aborted the runner check: {error!r}")
+    text = "\n".join(problems)
+    assert "`make verify` exited 2" in text, text
+    assert "liess sich nicht erzeugen" in text, text
+    assert world.calls("make") == [], "a gate ran from a malformed list"

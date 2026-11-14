@@ -5793,8 +5793,8 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     the budget counts from before the first gate and the scheduler extends it by the measured
     admission wait, so a queue or memory wait consumes none of it (bead coding-harness-bxxt.6). A
     protected gate's environment carries the admission marker, and the held lock descriptor travels
-    with it through `lock_slot`. Admission refusals and a stopped gate raise to the caller's
-    handlers; the captured streams and the exit code are the scheduler's own output.
+    with it through `lock_slot`. Admission refusals and selection errors return a red
+    result with the captured diagnostics; a stopped gate raises to the caller's handlers.
     """
     budget: dict[str, float] = {"deadline": time.monotonic() + VERIFY_SECONDS}
     slot: dict[str, int | None] = {"fd": None}
@@ -5826,7 +5826,7 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
             root,
             gate_env,
             # The step limit, cut to what is left of the shared allowance when the gate starts.
-            timeout=VERIFY_SECONDS,
+            timeout=max(0.0, min(VERIFY_SECONDS, budget["deadline"] - time.monotonic())),
             limit=limit,
             deadline=budget["deadline"],
             pass_fds=pass_fds,
@@ -5835,19 +5835,24 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
 
     captured_out = io.StringIO()
     captured_err = io.StringIO()
-    result = verify_run.run_verification(
-        root,
-        job=job,
-        env=env,
-        out=captured_out,
-        err=captured_err,
-        executor=run_gate,
-        clock=time.monotonic,
-        budget=budget,
-        lock_slot=slot,
-        # The holder record names the check the runner's admission is for, as it did before.
-        admission_command=["make", "verify"] if job == "verify" else DOCS_VERIFY,
-    )
+    try:
+        result = verify_run.run_verification(
+            root,
+            job=job,
+            env=env,
+            out=captured_out,
+            err=captured_err,
+            executor=run_gate,
+            clock=time.monotonic,
+            budget=budget,
+            lock_slot=slot,
+            admission_command=[sys.executable, *sys.argv],
+        )
+    except (verify_lock.VerifyLockError, OSError, ValueError, yaml.YAMLError) as error:
+        # Cheap work may already have executed. Keep its frames and diagnostics
+        # alongside the refusal/selection error as an ordinary failed check.
+        captured_err.write(f"verification could not complete: {error}\n")
+        return captured_out.getvalue(), captured_err.getvalue(), 2
     return captured_out.getvalue(), captured_err.getvalue(), result.exit_code
 
 
@@ -6478,7 +6483,14 @@ def fallback_text(reason: str, result: str) -> str:
 
 
 def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
-    """Apply verify_all.sh's CPU/memory worker default without entering its admission."""
+    """Size the targeted check's test workers without entering admission.
+
+    The rule matches the full check's `verify_run.worker_default()` — the smaller of half the
+    logical cores and the memory in 2-GiB steps — but this is a second copy that reads the machine
+    differently (CPU affinity and `/proc/meminfo` directly on Linux, `sys.platform` instead of
+    `uname`), so the targeted and the full check can size differently on one machine. Unifying them
+    would change the targeted check's worker policy, which bead coding-harness-bxxt.6 leaves alone.
+    """
     env = dict(env)
     if env.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
         return env
@@ -6590,7 +6602,7 @@ def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
         if code != 0:
             problems.append(f"`make verify` exited {code}\n{verify_evidence_text(out_text, err_text, key)}".rstrip())
     except verify_lock.VerifyLockError as error:
-        problems.append(scrub(f"`make verify` was not started: {error}", key))
+        problems.append(scrub(f"`make verify` could not complete: {error}", key))
     except StepTimedOut as error:
         problems.append(f"`make verify` did not finish: {error}")
     finally:
@@ -6801,7 +6813,7 @@ def verify_attempt(
         if code != 0:
             problems.append(f"`make verify` exited {code}\n{verify_evidence_text(out_text, err_text, key)}".rstrip())
     except verify_lock.VerifyLockError as error:
-        problems.append(scrub(f"`make verify` was not started: {error}", key))
+        problems.append(scrub(f"`make verify` could not complete: {error}", key))
     except StepTimedOut as error:
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
@@ -9732,7 +9744,7 @@ def verify_draft(
         # The document check is the same two-phase scheduler as the full check, on the docs
         # subset (bead coding-harness-bxxt.6): the scheduler selects through the shared script's
         # own derivation, holds the admission itself, and the queue and memory waits consume no
-        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
+        # step limit; a refusal fails the check while retaining any cheap diagnostics.
         out_text, err_text, code = _scheduled_verify(root, env, "docs")
     except (CallFailed, verify_lock.VerifyLockError) as error:
         # A document check that cannot start is as failed a post-run check as a red one: its

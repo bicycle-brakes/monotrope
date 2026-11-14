@@ -136,9 +136,9 @@ def _gate_file_digest(root: Path | None = None) -> str | None:
         return None
 
 
-def _worker_setting() -> str | None:
+def _worker_setting(env: dict[str, str] | None = None) -> str | None:
     """The effective worker setting passed to the gates; unset means xdist decides."""
-    value = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")
+    value = (os.environ if env is None else env).get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")
     return value if value else None
 
 
@@ -227,7 +227,14 @@ def cmd_clock(_args: argparse.Namespace) -> int:
     return 0
 
 
-def record_start(job: str, placement: str, *, root: Path | None = None, state_root: Path | None = None) -> str:
+def record_start(
+    job: str,
+    placement: str,
+    *,
+    root: Path | None = None,
+    state_root: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> str:
     """Create one run identity and append its start record with the machine context.
 
     `root` binds the machine context to one checkout — the repository, the
@@ -250,7 +257,7 @@ def record_start(job: str, placement: str, *, root: Path | None = None, state_ro
         "job": job,
         "placement": placement,
         "memory_pct": memory,
-        "workers": _worker_setting(),
+        "workers": _worker_setting(env),
         **_context_fields(),
     }
     append_event(event, state_root=state_root)
