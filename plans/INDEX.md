@@ -432,6 +432,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive-closed-changes/plan.md`](changes/archive-closed-changes/plan.md) | draft | none | 2026-11-06 | coding-harness-cqun |
 | [`changes/archive-closed-changes/research.md`](changes/archive-closed-changes/research.md) | draft | none | 2026-11-06 | coding-harness-cqun |
 | [`changes/archive-closed-changes/spec.md`](changes/archive-closed-changes/spec.md) | draft | none | 2026-11-06 | coding-harness-cqun |
+| [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/decision-statement-skeleton/decisions.md`](changes/decision-statement-skeleton/decisions.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
 | [`changes/decision-statement-skeleton/findings.md`](changes/decision-statement-skeleton/findings.md) | draft | none | 2026-11-10 | coding-harness-nr6h |
