@@ -64,10 +64,11 @@ protection therefore rests on each writer appending one small receipt line (a
 bounded title and excerpt) in a single `O_APPEND` write and on that late read,
 not on the helper's lock; the helper's lock only orders the stand-in's own
 appends. Changing the production writer or reader is a non-goal of this
-change. Within the suite the stand-in's append of `receipts.jsonl` therefore
-stays on the unlocked path, outside both the helper's lock and the guard
-(2026-11-14, loop row L3-3). A torn read there is not expected: each seat has
-its own scratch directory with one stand-in writing its receipts, no test
+change. Within the suite the stand-in appends `receipts.jsonl` through
+`text_append`, under the helper's lock (2026-11-14, loop rows L2-6 and L3-3;
+phase-6 row F6-3); the file is not a declared stand-in log, so the guard does
+not watch it, and the production writer stays outside the lock. A torn read
+there is not expected: each seat has its own scratch directory with one stand-in writing its receipts, no test
 under `tests/` reads that file itself (read 2026-11-14 at `88e28114`; the one
 test that writes a `receipts.jsonl` by hand, in `tests/test_research_capture.py`,
 does so after its child process has returned), and the only reader is the

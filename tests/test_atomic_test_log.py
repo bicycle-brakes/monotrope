@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 from pathlib import Path, PurePath
+from types import SimpleNamespace
 
 import atomic_test_log
 import pytest
@@ -301,14 +302,18 @@ def find_raw_log_access(root: Path) -> list[str]:
                     continue
                 receiver = func.value if isinstance(func, ast.Attribute) else None
                 first = node.args[0] if node.args else None
-                if any(part is not None and _names_a_log(part, names, keys) for part in (receiver, first)):
+                # open()'s file comes positionally or as file=; every open of a
+                # declared log is access whatever its mode (positional, mode=,
+                # or the implicit read default), so no mode grants an exemption.
+                file_arg = next((keyword.value for keyword in node.keywords if keyword.arg == "file"), None)
+                if any(part is not None and _names_a_log(part, names, keys) for part in (receiver, first, file_arg)):
                     number = offset + node.lineno - 1
                     source_line = lines[number - 1].strip() if number <= len(lines) else ""
                     found.append(f"{path}:{number}: raw {method} of a stand-in log: {source_line}")
     return sorted(set(found), key=lambda line: (line.split(":")[0], int(line.split(":")[1])))
 
 
-def test_concurrent_log_snapshots_are_complete(tmp_path: Path) -> None:
+def test_concurrent_log_snapshots_are_complete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 1 (flaky-swarm-leak-test). Planted fault: the fixture observer reads a forced mid-append fragment.
 
     The child holds the shared lock and appends half of one large record
@@ -321,6 +326,20 @@ def test_concurrent_log_snapshots_are_complete(tmp_path: Path) -> None:
     append_record(log, {"seq": 0, "payload": "seed"})
     world = SwarmWorld(root=tmp_path, bin=tmp_path, home=tmp_path)
     observed: dict = {}
+    attempted = threading.Event()
+    flock = atomic_test_log.fcntl.flock
+
+    def observed_flock(handle, operation: int) -> None:
+        try:
+            flock(handle, operation)
+        except BlockingIOError:
+            # The reader has actually met the split writer's lock. Merely
+            # starting its thread does not establish this ordering.
+            if operation & atomic_test_log.fcntl.LOCK_SH:
+                attempted.set()
+            raise
+
+    monkeypatch.setattr(atomic_test_log.fcntl, "flock", observed_flock)
     child, gap = _start_split_writer(tmp_path, log)
     try:
         assert (gap / "started.marker").read_text() == "torn", "the unlocked control read no fragment"
@@ -330,9 +349,14 @@ def test_concurrent_log_snapshots_are_complete(tmp_path: Path) -> None:
                 observed["calls"] = world.calls()
             except Exception as error:  # the fault shows here: a torn read raises
                 observed["error"] = error
+            finally:
+                # An unlocked observer completes (or parses the fragment)
+                # before the writer is released as well.
+                attempted.set()
 
         reader = threading.Thread(target=observe)
         reader.start()
+        assert attempted.wait(timeout=30), "the observer never attempted its read"
     finally:
         _finish(child, gap)
     reader.join(timeout=120)
@@ -343,6 +367,54 @@ def test_concurrent_log_snapshots_are_complete(tmp_path: Path) -> None:
         {"seq": 0, "payload": "seed"},
         {"seq": 1, "payload": PAYLOAD},
     ]
+
+
+def test_race_rejects_a_delayed_unlocked_observer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The race must expose an unlocked observer even when its thread starts late.
+
+    Without the read-attempt handshake this schedule runs the observer only
+    after the writer finishes, so the old race test silently passes.
+    """
+    permit_read = threading.Event()
+    real_thread = threading.Thread
+    real_event = threading.Event
+    finish = _finish
+
+    class AttemptEvent:
+        def __init__(self) -> None:
+            self.event = real_event()
+
+        def set(self) -> None:
+            self.event.set()
+
+        def wait(self, timeout: float) -> bool:
+            permit_read.set()
+            return self.event.wait(timeout)
+
+    def delayed_thread(*, target):
+        def delayed() -> None:
+            assert permit_read.wait(timeout=30), "the observer was never released"
+            target()
+
+        return real_thread(target=delayed)
+
+    def finish_then_read(child, gap) -> None:
+        try:
+            finish(child, gap)
+        finally:
+            permit_read.set()
+
+    def unlocked_calls(world):
+        # Render the planted access like the guard's other unsafe samples.
+        log = world.bin / _render("@LOG@")
+        return [json.loads(line) for line in log.read_text().splitlines()]
+
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "threading", SimpleNamespace(Thread=delayed_thread, Event=AttemptEvent))
+    monkeypatch.setattr(module, "_finish", finish_then_read)
+    monkeypatch.setattr(SwarmWorld, "calls", unlocked_calls)
+    with pytest.raises(AssertionError, match="JSONDecodeError"):
+        test_concurrent_log_snapshots_are_complete(tmp_path, monkeypatch)
 
 
 def test_a_held_lock_times_out_instead_of_hanging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -547,6 +619,12 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
         "env_routed": (ENV_ROUTED, [":5: raw open"]),
         "safe_operations": (SAFE_OPERATIONS, []),
         "near_miss": (NEAR_MISS, []),
+        "positional_append": ('open("@LOG@", "a")\n', [":1: raw open"]),
+        "keyword_append": ('open(file="@LOG@", mode="a")\n', [":1: raw open"]),
+        "positional_read": ('open("@LOG@")\n', [":1: raw open"]),
+        "keyword_read": ('open(file="@LOG@")\n', [":1: raw open"]),
+        "mixed_append": ('open("@LOG@", mode="a")\n', [":1: raw open"]),
+        "keyword_document": ('open(file="notes.md", mode="a")\n', []),
     }
     for name, (sample, expected) in cases.items():
         folder = tmp_path / name
