@@ -671,8 +671,42 @@ class MalformedAnswer(CallFailed):
         self.answer = answer
 
 
+@dataclass(frozen=True)
+class ClockReading:
+    """One instant of the runner's time, in its three domains.
+
+    `monotonic` is the seconds value every duration is measured in, `utc` the
+    wall clock of UTC boundaries (terms expiry, audit and token stamps), and
+    `local_date` the local calendar date of document stamps. A consumer reads
+    the whole reading at once and never touches the machine clocks itself, so
+    a wall-clock step cannot bend a duration and a timezone boundary cannot
+    swap a terms date for a stamp date.
+    """
+
+    monotonic: float
+    utc: dt.datetime
+    local_date: dt.date
+
+
+def clock_now() -> ClockReading:
+    """The one time boundary of this module (a seam for tests).
+
+    Every current monotonic reading, wall clock and calendar date the runner
+    obtains flows through here, and the source guard admits raw acquisition in
+    this body alone - no caller or line is exempt. Keeping the three domains in
+    one reading is what preserves their meanings: durations stay monotonic
+    differences, terms stay UTC dates and stamps stay local dates.
+    """
+    return ClockReading(
+        monotonic=time.monotonic(),
+        utc=dt.datetime.now(dt.UTC),
+        local_date=dt.date.today(),
+    )
+
+
 def today() -> str:
-    return dt.date.today().isoformat()
+    """The local calendar date of this run, as an ISO string."""
+    return clock_now().local_date.isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -1206,7 +1240,7 @@ def append(path: Path, text: str) -> None:
     except UnicodeDecodeError:
         stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
     else:
-        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+        stamped = check_frontmatter_current.stamped(decoded, clock_now().local_date).encode("utf-8")
     write_atomic(path, stamped)
 
 
@@ -1575,7 +1609,7 @@ def stamp_updated(path: Path) -> None:
 
     The stamp edits that one line. A file without a header, like the loop record, is left as it is.
     """
-    check_frontmatter_current.stamp(path, dt.date.today())
+    check_frontmatter_current.stamp(path, clock_now().local_date)
 
 
 def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) -> list[str]:
@@ -1978,7 +2012,7 @@ def terms_today() -> dt.date:
     decides admission, so tests pin this seam alone and leave the runner's
     accounting clocks live.
     """
-    return dt.datetime.now(dt.UTC).date()
+    return clock_now().utc.date()
 
 
 def _valid_until(record: dict) -> tuple[dt.date | None, str]:
@@ -2782,7 +2816,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     if not selected and not allow_empty:
         raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
     return {
-        "checked_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "checked_at": utc_now().isoformat(timespec="seconds"),
         "source": "pi.dev",
         "pi_version": PI_VERSION,
         "rule": json.loads(json.dumps(rule)),
@@ -3097,7 +3131,7 @@ def remaining(deadline: float | None) -> float:
     """
     if deadline is None:
         return REVIEWER_MINUTES * 60
-    seconds = deadline - time.monotonic()
+    seconds = deadline - monotonic_now()
     if seconds <= 0:
         raise NotStarted("the round time limit expired; no further reviewer starts")
     return seconds
@@ -3243,7 +3277,7 @@ def run_swarm(
     an answer with neither raises `MalformedAnswer`, which carries the answer
     for the round's asked-again call and its record.
 
-    `deadline` is the round's one deadline (`time.monotonic()` seconds): members and every
+    `deadline` is the round's one deadline (`monotonic_now()` seconds): members and every
     replacement share it, so a round cannot outlast `REVIEWER_MINUTES` by summing its members'
     limits (R-8 of the review-swarm review).
     """
@@ -3624,7 +3658,9 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     if clean_before == clean_after:
         return True
     try:
-        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), dt.date.today()).encode("utf-8")
+        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), clock_now().local_date).encode(
+            "utf-8"
+        )
     except UnicodeDecodeError:
         return False
     return stamped == clean_after
@@ -5174,7 +5210,7 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     The commit carries the runner's own identity, so a machine without a configured git user (a CI
     runner) saves as well, and the ref says who wrote it.
     """
-    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    stamp = utc_now().strftime("%Y%m%dT%H%M%S%fZ")
     ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
     with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
@@ -5355,12 +5391,12 @@ def time_log(path: Path) -> str:
 
 def utc_now() -> dt.datetime:
     """The wall clock of a measured span, in UTC (a seam for tests)."""
-    return dt.datetime.now(dt.UTC)
+    return clock_now().utc
 
 
 def monotonic_now() -> float:
     """The monotonic clock whose difference is a measured span (a seam for tests)."""
-    return time.monotonic()
+    return clock_now().monotonic
 
 
 def time_entry(
@@ -6026,7 +6062,7 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
                 if path.is_file():
                     if path.stat().st_nlink > 1:
                         raise OSError("refusing a hard-linked document path")
-                    check_frontmatter_current.stamp(path, dt.date.today())
+                    check_frontmatter_current.stamp(path, clock_now().local_date)
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
         if not errors:
@@ -9272,7 +9308,7 @@ def run_attempts(
     aliases = alias_baseline(root, baseline, ignored_before)
     # One token per invocation: every attempt's evidence file carries it beside its attempt number,
     # so a rerun of the verb never overwrites an earlier run's evidence (spec, criterion 6).
-    token = f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
+    token = f"{utc_now().strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -10807,7 +10843,7 @@ def _review_round(
             audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
-        deadline = time.monotonic() + REVIEWER_MINUTES * 60
+        deadline = monotonic_now() + REVIEWER_MINUTES * 60
         answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
         replaced: list[str] = []
 
@@ -10819,7 +10855,7 @@ def _review_round(
                 return
 
             def expired() -> bool:
-                if time.monotonic() < deadline:
+                if monotonic_now() < deadline:
                     return False
                 notes.append(f"{member} failed: {first}; the round time limit expired; no second call starts")
                 print(f"review-loop: {notes[-1]}", file=sys.stderr)
@@ -10862,7 +10898,7 @@ def _review_round(
                 current = member
                 while isinstance(answers[current], BaseException):
                     reasons[current] = str(answers[current])
-                    if time.monotonic() >= deadline:
+                    if monotonic_now() >= deadline:
                         notes.append(
                             f"{current} failed: {reasons[current]}; the round time limit expired; no replacement starts"
                         )
@@ -10885,7 +10921,7 @@ def _review_round(
                         notes.append(f"{nxt} not admitted: {refusal}")
                         print(f"review-loop: {notes[-1]}", file=sys.stderr)
                         continue
-                    if time.monotonic() >= deadline:
+                    if monotonic_now() >= deadline:
                         # The leak check can outlast the round: a replacement that cannot start writes no
                         # call line and is not consumed (DL-B-10).
                         notes.append(

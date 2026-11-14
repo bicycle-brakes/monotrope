@@ -1157,12 +1157,16 @@ def test_the_answer_format_names_the_severity_as_free_text() -> None:
     assert "severity cell is free text" in stage2.ANSWER_FORMAT
 
 
-def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
+def test_the_remaining_time_never_outlives_the_round_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
     """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
+    # Planted fault: the exact fake-clock remaining budget or expiry is wrong.
+    clock = FakeClock(monkeypatch, UTC_START)
     assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
-    assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
+    deadline = clock.mono() + 30
+    assert 0 < stage2.remaining(deadline) <= 30, "the budget left overpaid or underpaid the deadline"
+    clock.run_past(deadline)
     with pytest.raises(stage2.CallFailed, match="round time limit"):
-        stage2.remaining(time.monotonic() - 10)
+        stage2.remaining(deadline)
 
 
 def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
@@ -2362,41 +2366,107 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert world.calls("make") == []
 
 
-def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
-    """A genuine admission holder on the world's state root: a supervised probe child.
+FAKE_PID_BASE = 9_000_000  # above every operating-system pid range the suite meets
 
-    The world fixture pins the shared state root and a floor of zero, so the
-    holder queues exactly where the runner's own checks queue — never on this
-    machine's real lock.
+
+class ScriptedProcess:
+    """One doubled program: a scripted duration and output, a fake pid, each recorded timeout.
+
+    The process exists only between the runner and the double: its pid belongs
+    to no operating-system group, so a group operation on it raises
+    `ProcessLookupError` (the interception lives in `ScriptedPrograms`). The
+    first `communicate(timeout)` advances the fake clock by the scripted
+    duration when the duration fits the handed allowance and raises
+    `subprocess.TimeoutExpired` when it does not; a stopped process drains at
+    once, so the bounded drain's argument is recorded without simulating a hang.
     """
-    return subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "scripts.verify_lock",
-            "--",
-            sys.executable,
-            "-c",
-            "import os, pathlib, time; "
-            "pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); "
-            f"time.sleep({seconds})",
-        ],
-        cwd=REPO_ROOT,
-        env={**os.environ, "HOLDER_READY": str(ready)},
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+
+    def __init__(self, double: ScriptedPrograms, command: list[str], plan: dict) -> None:
+        self.double = double
+        self.command = list(command)
+        self.args = list(command)
+        self.plan = plan
+        self.pid = FAKE_PID_BASE + len(double.launched)
+        self.stdout = None
+        self.stderr = None
+        self.returncode = None
+        self.stopped = False  # per instance: two doubled programs may share one plan
+        double.launched.append({"command": self.command, "pid": self.pid})
+        gate, gate_at = plan.get("gate"), plan.get("gate_at")
+        if gate is not None and gate_at is not None and len(double.launched) >= gate_at:
+            gate.set()  # the partner this gate waits for has now launched
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def communicate(self, timeout=None):
+        row = {"command": self.command, "pid": self.pid, "timeout": timeout, "outcome": "drained"}
+        gate = self.plan.get("gate")
+        if gate is not None and not gate.wait(30.0):
+            # Watchdog only: bounds a wedged round where the partner never launched.
+            raise AssertionError(f"the doubled program {self.command[0]} never met its launch gate")
+        self.double.communications.append(row)
+        if self.returncode is not None or self.stopped:
+            # The bounded cleanup drain: it ends at once and its timeout is still on record.
+            return self.plan.get("stdout", ""), self.plan.get("stderr", "")
+        duration = self.plan.get("duration", 0.0)
+        if timeout is not None and duration > timeout:
+            self.double.clock.advance(timeout)  # the wait that happened before the stop
+            self.stopped = True
+            row["outcome"] = "timeout"
+            raise subprocess.TimeoutExpired(self.args, timeout)
+        self.double.clock.advance(duration)
+        self.returncode = self.plan.get("exit", 0)
+        row["outcome"] = "completed"
+        return self.plan.get("stdout", ""), self.plan.get("stderr", "")
 
 
-def _holder_acquired(ready: Path, seconds: float = 10.0) -> int:
-    """Wait until the holder owns its admission and answer the holder pid it published."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if ready.exists():
-            return int(ready.read_text(encoding="utf-8"))
-        time.sleep(0.05)
-    raise AssertionError("the holder never acquired its admission")
+class ScriptedPrograms:
+    """A process double at the runner's `Popen` boundary, moved by one fake clock.
+
+    A test lists the commands to double as `(matcher, plan)` pairs; every other
+    command runs for real through the genuine `Popen`, so git and the stand-in
+    programs keep working. While the double stands, the fake pids exist nowhere
+    in the operating system and group operations on them never reach
+    `os.killpg` — fake pids and intercepted group operations are used together.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, plans: list[tuple]) -> None:
+        self.clock = clock
+        self.plans = plans
+        self.launched: list[dict] = []
+        self.communications: list[dict] = []
+        real_popen, real_killpg = subprocess.Popen, os.killpg
+        double = self
+
+        class Popen:
+            def __new__(cls, command, *args, **kwargs):
+                for matcher, plan in double.plans:
+                    if matcher(command):
+                        return ScriptedProcess(double, command, plan)
+                return real_popen(command, *args, **kwargs)
+
+        def killpg(group, signum):
+            if group >= FAKE_PID_BASE:
+                raise ProcessLookupError(f"no such process group: the doubled pid {group} exists nowhere")
+            return real_killpg(group, signum)
+
+        monkeypatch.setattr(subprocess, "Popen", Popen)
+        monkeypatch.setattr(os, "killpg", killpg)
+
+    def of(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled communications, optionally only those of one command."""
+        return [row for row in self.communications if command is None or row["command"] == command]
+
+    def waits(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled programs' own waits: every first `communicate`, the cleanup drain left out.
+
+        A stopped program is drained a second time at the kill, and that
+        bounded cleanup has a communication row of its own (`outcome:
+        "drained"`, the `KILL_DRAIN_SECONDS` argument on record); the policy
+        verdicts read the wait rows alone.
+        """
+        return [row for row in self.of(command) if row["outcome"] != "drained"]
 
 
 def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2404,80 +2474,84 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
     monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
-    ready = world.state / "holder-ready"
-    holder = _real_holder(ready)
-    try:
-        _holder_acquired(ready)
-        problems: list[str] = []
+    clock = FakeClock(monkeypatch, UTC_START)
+    admissions: list[str] = []
 
-        def attempt() -> None:
-            problems.extend(stage2.verify_attempt(world.root, world.plan))
+    def queueing_admission(_command):
+        # The queueing is simulated at the clock, never waited out: no holder process, no thread.
+        admissions.append("queued")
+        clock.advance(10 * 60.0)
+        return contextlib.nullcontext(None)
 
-        world.script(make=[{"stdout": "green", "sleep": 1.5}])
-        queued = threading.Thread(target=attempt)
-        queued.start()
-        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
-        holder.terminate()
-        holder.wait(timeout=30)
-        queued.join(timeout=90)
-        assert problems == [], f"the admission wait consumed the step limit: {problems}"
-        assert len(world.calls("make")) == 1
-    finally:
-        if holder.poll() is None:
-            holder.kill()
-            holder.wait(timeout=10)
+    monkeypatch.setattr(verify_lock, "hold_admission", queueing_admission)
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 1.0, "stdout": "green\n"})],
+    )
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert admissions == ["queued"], "the verification ran without its admission"
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "the admission wait consumed the step limit"
+    assert make["outcome"] == "completed", "a timely check failed because it queued"
 
-    # and the limit still binds the executing check: a hung make ends inside it
-    world.script(make=[{"stdout": "too late", "sleep": 30}])
+    # and the limit still binds the executing check: an over-budget make ends in a repairable diagnostic
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 30.0, "stdout": "too late"})],
+    )
     problems = stage2.verify_attempt(world.root, world.plan)
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
+    assert make["outcome"] == "timeout"
+    (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
+    assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
+    assert make["outcome"] == "timeout"
 
 
 def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
     # the selected pytest path loses the inherited marker or the shared state root, so the local
     # check queues for its own admission instead of reusing its ancestor's.
-    ready = world.state / "holder-ready-nested"
-    holder = _real_holder(ready)
+    # The holder record and the environment stand in for the ancestor's admission: the marker is
+    # honoured only for a descendant of the published holder (review row F6-2), and this process
+    # names itself the way an ancestor's supervisor would. A real child keeps its inheritance end
+    # to end in test_a_runner_check_hands_its_child_the_admission_token.
+    holder_pid = os.getpid()
+    record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+    record.parent.mkdir(parents=True, exist_ok=True)
+    held = {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+    record.write_text(json.dumps(held), encoding="utf-8")
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+    # The admission is genuinely held by an open descriptor of this process: no thread, no sleep.
+    lock_fd = os.open(record.parent / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        _holder_acquired(ready)
-        # The marker is honoured only for a descendant of the published holder (review row F6-2),
-        # and this test process is not the sibling supervisor's descendant: the record is
-        # republished naming this process, the way an ancestor's supervisor names itself, while
-        # the sibling keeps the work lock genuinely held.
-        holder_pid = os.getpid()
-        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
-        record.write_text(
-            json.dumps(
-                {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
-            ),
-            encoding="utf-8",
-        )
-        monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
-        monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
         assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
-        make_env = world.calls("make")[0]["env"]
-        assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
-        assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
-        assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
-        assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
-        # and the draft's document gates keep the shared state root, while carrying none of the
-        # admission's ownership: a document check queues for no admission of its own (0swp).
-        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-        world.plan.write_text(PLAN_CARD, encoding="utf-8")
-        commands = LocalCommands(monkeypatch)
-        problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
-        assert problems == [], problems
-        gate_env = commands.of("gate")[0]["env"]
-        assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
-        assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
-        assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
     finally:
-        if holder.poll() is None:
-            holder.terminate()
-            holder.wait(timeout=10)
+        os.close(lock_fd)
+    make_env = world.calls("make")[0]["env"]
+    assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+    assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
+    assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+    assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+    # and the draft's document gates keep the shared state root, while carrying none of the
+    # admission's ownership: a document check queues for no admission of its own (0swp).
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    commands = LocalCommands(monkeypatch)
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems == [], problems
+    gate_env = commands.of("gate")[0]["env"]
+    assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
+    assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
+    assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -6549,7 +6623,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
         {"pi_version": f"{stage2.PI_VERSION} (dev)"},
         {"pi_version": ""},
         {"pi_version": stage2.PI_VERSION, "pi_version_exit": 1},
-        {"pi_version": stage2.PI_VERSION, "pi_version_sleep": 30},
+        "too-slow",
         "absent",
     ],
     ids=["newer", "suffix", "silent", "non-zero", "too-slow", "absent"],
@@ -6563,13 +6637,25 @@ def test_a_pi_off_the_pin_is_refused(
         "the runner's pin must be the manifest's, not a literal of its own"
     )
     monkeypatch.setattr(stage2, "PI_VERSION_SECONDS", 0.5)
+    programs = None
     steps = {"pi": [{"stdout": rows(1)}] * 3}
     if fault == "absent":
         (world.bin / "pin-pi").unlink()
         world.script(**steps)
+    elif fault == "too-slow":
+        # A probe past the pin limit is stopped at the injected expiry, never waited out on the
+        # machine: the doubled communicate raises what a hung wrapper would have caused.
+        clock = FakeClock(monkeypatch, UTC_START)
+        version_argv = [str(stage2.PI_WRAPPER), "--version"]
+        plans = [(lambda command: command == version_argv, {"duration": 30.0})]
+        programs = ScriptedPrograms(monkeypatch, clock, plans)
+        world.script(**steps)
     else:
         world.script(**steps, **fault)
     assert world.run(verb) == 2, "a Pi off the pin must refuse with exit 2"
+    if programs is not None:
+        (handed,) = programs.waits([str(stage2.PI_WRAPPER), "--version"])
+        assert handed["timeout"] == 0.5 and handed["outcome"] == "timeout", handed
     assert world.calls() == [], "a call started"
     assert not world.record().exists()
     assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
@@ -6753,17 +6839,26 @@ def test_verify_step_limit_is_45_minutes() -> None:
     assert stage2.VERIFY_SECONDS == 45 * 60
 
 
-def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
+def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """R-20: the runner's own steps are bounded, and the abort names the limit."""
+    # Planted fault: the timeout translation loses the execution-limit diagnostic, or the
+    # bounded kill drain after the stop lost its bound.
+    clock = FakeClock(monkeypatch, UTC_START)
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda seen: seen == command, {"duration": 30.0})])
     minutes = stage2.VERIFY_SECONDS // 60
     with pytest.raises(stage2.CallFailed, match=f"after {minutes} minutes"):
         stage2.launch(
-            [sys.executable, "-c", "import time; time.sleep(30)"],
+            command,
             tmp_path,
             {**os.environ},
             timeout=0.2,
             limit=f"the runner's step limit after {minutes} minutes",
         )
+    handed = programs.of(command)
+    assert handed[0]["timeout"] == 0.2, "the step was handed more than its allowance"
+    assert handed[0]["outcome"] == "timeout", "the overstay was not simulated at the allowance"
+    assert handed[1]["timeout"] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
 
 
 def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
@@ -6848,10 +6943,33 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
-def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """O188-4: a grandchild of the stopped step does not survive."""
+    # Planted fault: a timed-out group's descendant survives, or the post-kill drain is unbounded.
     pidfile = tmp_path / "grandchild.pid"
-    started = time.monotonic()
+    handed: list[float | None] = []  # every timeout a communicate was given, the drain's included
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the grandchild is registered before the expiry is injected.
+                for _ in range(200):  # watchdog only: bounds a wedged start, never a verdict
+                    if pidfile.exists():
+                        break
+                    time.sleep(0.02)
+                assert pidfile.exists(), "the timed step never wrote its grandchild's pid"
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
     with pytest.raises(stage2.CallFailed, match="stopped by"):
         stage2.launch(
             ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
@@ -6860,9 +6978,10 @@ def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
             timeout=1,
             limit="the test limit",
         )
-    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
+    assert handed[0] == 1, "the step was handed more than its allowance"
+    assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
     pid = int(pidfile.read_text())
-    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
+    for _ in range(100):  # watchdog only: the kill is delivered at once, the exit is reaped a moment later
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
@@ -8300,10 +8419,27 @@ def test_a_call_over_the_time_limit_is_stopped(
     """Criterion 4/15: a member that outlasts the limit is stopped; stopping every member fails the attempt."""
     assert stage2.REVIEWER_MINUTES == 45
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
-    world.script(pi=[{"stdout": "too late", "sleep": 30}, {"stdout": "too late", "sleep": 30}])
-    started = time.monotonic()
+    # Planted fault: simulated expiry fails to stop a reviewer, or a stop consumes the round.
+    clock = FakeClock(monkeypatch, UTC_START)
+    launched_both = threading.Event()  # no member's clock advance runs before both have launched
+
+    def reviewer_plan(plan: dict) -> tuple:
+        # Only the reviewer calls are doubled (`--print`); the discovery refresh and listing keep
+        # running on the stand-in so the round reaches its members with a real refreshed store.
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and "--print" in command, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            reviewer_plan({"duration": 30.0, "stdout": "too late", "gate": launched_both, "gate_at": 2}),
+        ],
+    )
     assert world.run("review-loop") == 1
-    assert time.monotonic() - started < 15
+    handed = programs.waits()
+    assert len(handed) == 2, "a stopped member was replaced past the shared expiry"
+    assert all(row["outcome"] == "timeout" for row in handed), handed
+    assert all(abs(row["timeout"] - stage2.REVIEWER_MINUTES * 60) < 1e-9 for row in handed), handed
     assert not world.record().exists()
     # Since DL-B-14 the stop names the round's one deadline, which a single member's call shares.
     assert "stopped by the round time limit of" in capsys.readouterr().err
@@ -8420,30 +8556,36 @@ def test_a_restart_reason_cannot_create_rounds_or_state(world: World) -> None:
     assert stage2.restarted_fresh(None, text)
 
 
-def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
+def test_both_swarms_run_in_parallel_as_one_round(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 2: each swarm's members start together and merge into one round with one id series."""
-    barrier = str(world.root / ".barrier")
-    world.script(
-        pi=[
-            {
-                "model": "acme-v1-free",
-                "stdout": rows(1, "A"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "beacon-2-free",
-                "stdout": rows(1, "B"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    # Planted fault: one member waits for another to finish before entering - sequential swarm.
+    # Concurrency is proven with a launch gate inside run_reviewer itself: every member blocks
+    # until all members are inside, so only truly concurrent members answer within the watchdog.
+    free = ["acme-v1-free", "beacon-2-free"]
+    flash = ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+
+    def gate_answers(members: list[str], answers: dict[str, str]) -> dict:
+        inside: list[str] = []
+        all_inside = threading.Event()
+        record: dict = {}
+
+        def probe(_ctx, member, _prompt, _key, **_kwargs):
+            inside.append(member)
+            if len(inside) == len(members):
+                all_inside.set()
+            together = all_inside.wait(30.0)  # watchdog only: bounds a wedged round, never a verdict
+            if together:
+                record.setdefault("seen_together", sorted(inside))
+            else:
+                inside.remove(member)  # a stale entry must not complete a later member's snapshot
+            return answers[member]
+
+        monkeypatch.setattr(stage2, "run_reviewer", probe)
+        return record
+
+    seen = gate_answers(free, {free[0]: rows(1, "A"), free[1]: rows(1, "B")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the free swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(free), "the free swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 1") == 1, "the swarm round got more than one heading"
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
@@ -8451,29 +8593,9 @@ def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
     assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the id series collided or skipped a member"
     assert [cells[6] for cells in rows_] == list(TEST_FREE), "a row carries the wrong member"
     decide_record(world, status=FIXED)
-    shutil.rmtree(world.root / ".barrier")
-    (world.bin / "calls.jsonl").unlink()
-    world.script(
-        pi=[
-            {
-                "model": "deepseek-v4.1-flash",
-                "stdout": rows(1, "D"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "mimo-v2.6-flash",
-                "stdout": rows(1, "M"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    seen = gate_answers(flash, {flash[0]: rows(1, "D"), flash[1]: rows(1, "M")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the Flash swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(flash), "the Flash swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 2") == 1, "the Flash swarm ran as sequential rounds"
     assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
@@ -8642,15 +8764,14 @@ def test_no_second_call_after_the_round_deadline(world: World, monkeypatch, caps
     """Criterion 5. Planted fault: a second call starts after the deadline."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def malformed_at_the_deadline(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", malformed_at_the_deadline)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the expired deadline still started an asked-again call"
@@ -8728,15 +8849,14 @@ def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, mon
 
 def test_a_round_failed_past_the_deadline_names_the_skipped_retry(world: World, monkeypatch) -> None:
     """Plant expiry after the first answers: the no-round audit must retain the reason."""
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls = []
 
     def expire(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expire)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FREE)]
@@ -8811,14 +8931,27 @@ def test_free_discovery_forces_live_refresh_before_listing(
     assert "not filled" in capsys.readouterr().err
     assert [call.get("kind") for call in world.calls("pi")] == ["refresh"], "the listing ran after a failed refresh"
     assert world.reviews("pi") == [] and not world.record().exists()
+    # The refresh that never ends is stopped at the discovery limit by the injected expiry, not by
+    # a real second of waiting: the clock moves only at the doubled communicate.
+    real_discovery_seconds = stage2.PI_DISCOVERY_SECONDS
     monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", 0.4)
-    (world.bin / "calls.jsonl").unlink()
-    world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_sleep=30)
+    clock = FakeClock(monkeypatch, UTC_START)
+    refresh_argv = [str(stage2.PI_WRAPPER), "update", "--models"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == refresh_argv, {"duration": 30.0})])
+    world.script(pi=[{"stdout": rows(1)}] * 2)
     capsys.readouterr()
     assert world.run("review-loop") == 2
     assert "no stale cache is listed" in capsys.readouterr().err
-    assert [call.get("kind") for call in world.calls("pi")] == ["refresh"]
-    assert world.reviews("pi") == []
+    handed = programs.waits(refresh_argv)
+    assert len(handed) == 1, "the listing ran after a simulated refresh timeout"
+    assert handed[0]["timeout"] == 0.4 and handed[0]["outcome"] == "timeout", handed
+    (drain,) = [row for row in programs.of(refresh_argv) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
+    assert len(programs.launched) == 1, "a second discovery command ran after the simulated timeout"
+    assert world.reviews("pi") == [] and not world.record().exists()
+    # The double ends here: the scenarios below run the genuine stand-in programs at the real limit.
+    programs.plans.clear()
+    monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", real_discovery_seconds)
     # The listing's own agent directory: an invalid catalog id forces the separate agent whose
     # settings are the refresh file's byte copy, and the copy must parse to the same JSON
     # (pi-no-compaction, criterion 1).
@@ -11763,12 +11896,24 @@ def runner_entries(plan: Path) -> list[str]:
 
 
 class FakeClock:
-    """Wall and monotonic readings that move only when a test moves them; no sleep, no machine speed."""
+    """Wall, monotonic and local-date readings that move only when a test moves them; no sleep, no machine speed.
+
+    The fake replaces the runner's one clock boundary, `stage2.clock_now`, so
+    the adapters (`utc_now`, `monotonic_now`, `today`, `terms_today`) and every
+    read behind them follow it: measured spans, `remaining`, the round
+    deadlines and the document stamps. The three domains are separate values.
+    The local date stays the machine's real calendar unless a test sets
+    `local_date`, because the gates that compare a stamp against today keep
+    their own clock.
+    """
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, start: dt.datetime, wall_drift: float = 0.0) -> None:
         self.start, self.now, self.wall_drift = start, 0.0, wall_drift
-        monkeypatch.setattr(stage2, "utc_now", self.wall)
-        monkeypatch.setattr(stage2, "monotonic_now", self.mono)
+        self.local_date: dt.date | None = None
+        monkeypatch.setattr(stage2, "clock_now", self.reading)
+
+    def reading(self) -> stage2.ClockReading:
+        return stage2.ClockReading(monotonic=self.mono(), utc=self.wall(), local_date=self.local())
 
     def wall(self) -> dt.datetime:
         # The drift appears once time has passed: a wall clock stepped by the system, which a span must ignore.
@@ -11777,6 +11922,18 @@ class FakeClock:
 
     def mono(self) -> float:
         return 1000.0 + self.now
+
+    def local(self) -> dt.date:
+        return self.local_date if self.local_date is not None else dt.date.today()
+
+    def advance(self, seconds: float) -> None:
+        """Move every domain of the fake on by `seconds`, at the boundary the test names."""
+        self.now += seconds
+
+    def run_past(self, deadline: float) -> None:
+        """Move the fake just past a deadline the runner computed from this same fake."""
+        if self.mono() <= deadline:
+            self.now += deadline - self.mono() + 1.0
 
     def after(self, seconds: float, real):
         """`real` wrapped so that calling it moves the clock by `seconds`."""
@@ -11789,6 +11946,236 @@ class FakeClock:
 
 
 UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
+
+
+# ---------------------------------------------------------------------------
+# The runner's one clock boundary (spec runner-clock, criteria 1, 2 and 5)
+# ---------------------------------------------------------------------------
+
+# The `time` attributes that read or wait on the machine's clocks. `ctime`,
+# `localtime` and `gmtime` count only when called without an argument: with one
+# they convert a given instant, and `strftime`/`strptime` never read a clock.
+TIME_CLOCK_ATTRS = {
+    "time",
+    "time_ns",
+    "monotonic",
+    "monotonic_ns",
+    "perf_counter",
+    "perf_counter_ns",
+    "process_time",
+    "process_time_ns",
+    "thread_time",
+    "thread_time_ns",
+    "sleep",
+}
+TIME_CONVERSION_ATTRS = {"ctime", "localtime", "gmtime"}
+# The `datetime`/`date` class methods that answer the current wall time or date.
+DATETIME_CLOCK_ATTRS = {"now", "utcnow", "today"}
+
+
+def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
+    """The raw clock acquisitions `source` makes outside the boundary function's body.
+
+    The visitor resolves `import time`, `import datetime as dt`,
+    `from time import monotonic as tick` and assignments of such chains
+    (`clock = time`, `tick = time.monotonic`), so an alias reads exactly like
+    the call it hides. Pure construction, parsing and formatting
+    (`datetime.fromisoformat`, `strptime`, `strftime`, `timedelta`, the `UTC`
+    constant, an explicit `gmtime(0)`) are not acquisitions. No caller or line
+    may be exempted: the only tolerated site is the module-level boundary
+    function's own body, nested functions included.
+    """
+    tree = ast.parse(source)
+    roots: dict[str, str] = {}
+    exempt: set[int] = set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == boundary:
+            exempt.update(id(inner) for inner in ast.walk(node))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import | ast.ImportFrom | ast.Assign | ast.AnnAssign):
+            _bind_clock_roots(node, roots)
+    call_funcs = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    violations: list[str] = []
+
+    def chain_of(node: ast.AST) -> str | None:
+        """The dotted chain a name or attribute resolves to, when rooted in a tracked name."""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return None
+        root = roots.get(node.id)
+        return None if root is None else ".".join([root, *reversed(parts)])
+
+    def banned_tail(chain: str, node: ast.AST) -> bool:
+        head, tail = chain.split(".", 1)[0], chain.rsplit(".", 1)[-1]
+        if head == "time" and tail in TIME_CLOCK_ATTRS:
+            return True
+        if head == "time" and tail in TIME_CONVERSION_ATTRS:
+            # A conversion reads no clock; only the argument-free call answers now.
+            return isinstance(node, ast.Call) and not node.args and not node.keywords
+        return (head == "datetime") and tail in DATETIME_CLOCK_ATTRS
+
+    for node in ast.walk(tree):
+        if id(node) in exempt:
+            continue
+        chain: str | None = None
+        if isinstance(node, ast.Call):
+            chain = chain_of(node.func)
+        elif isinstance(node, ast.Attribute) and id(node) not in call_funcs:
+            # A bare reference hands the accessor on; the call it would feed is judged on its own.
+            chain = chain_of(node)
+        if chain is not None and banned_tail(chain, node):
+            violations.append(f"{chain} at line {getattr(node, 'lineno', '?')}")
+    return violations
+
+
+def _bind_clock_roots(node: ast.AST, roots: dict[str, str]) -> None:
+    """Track the local names that stand for `time`, `datetime` or a chain rooted in them."""
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            if alias.name in ("time", "datetime"):
+                roots[alias.asname or alias.name] = alias.name
+    elif isinstance(node, ast.ImportFrom) and node.module in ("time", "datetime"):
+        for alias in node.names:
+            roots[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    elif isinstance(node, ast.Assign):
+        resolved = None
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            value = node.value
+            parts: list[str] = []
+            while isinstance(value, ast.Attribute):
+                parts.append(value.attr)
+                value = value.value
+            if isinstance(value, ast.Name):
+                resolved = ".".join([roots[value.id], *reversed(parts)]) if value.id in roots else None
+            name = node.targets[0].id
+            if resolved is not None:
+                roots[name] = resolved
+            else:
+                roots.pop(name, None)  # a rebinding must not keep laundering through the old chain
+
+
+def test_runner_clock_is_the_only_time_source() -> None:
+    """Spec criterion 1. Planted fault: a runner time/date read sits outside the clock boundary.
+
+    The guard reads the runner module as source, so it sees what an alias
+    hides; the boundary exemption is proven necessary, not vacuous, by
+    running the same guard once without it.
+    """
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^def clock_now\(", source), "the module defines no clock boundary"
+    assert clock_guard_violations(source) == [], "a raw clock read bypasses stage2.clock_now"
+    without_boundary = clock_guard_violations(source, boundary="")
+    assert len(without_boundary) == 3, without_boundary
+    assert all("line" in finding for finding in without_boundary), without_boundary
+
+
+@pytest.mark.parametrize(
+    ("planted", "snippet"),
+    [
+        ("plain-read", "def later():\n    return time.monotonic()\n"),
+        ("wall-clock", "def later():\n    return time.time()\n"),
+        ("sleep", "def wait():\n    time.sleep(0.1)\n"),
+        ("aliased-module", "import time as t\ndef later():\n    return t.monotonic()\n"),
+        ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n"),
+        ("assigned-module", "import time\nclock = time\ndef later():\n    return clock.monotonic()\n"),
+        ("assigned-function", "import time\ntick = time.monotonic\ndef later():\n    return tick()\n"),
+        ("nanosecond", "def later():\n    return time.monotonic_ns()\n"),
+        ("cpu-clock", "def later():\n    return time.process_time()\n"),
+        ("localtime-no-argument", "def later():\n    return time.localtime()\n"),
+        ("gmtime-no-argument", "def later():\n    return time.gmtime()\n"),
+        ("ctime-no-argument", "def later():\n    return time.ctime()\n"),
+        ("datetime-now", "import datetime as dt\ndef later():\n    return dt.datetime.now(dt.UTC)\n"),
+        ("datetime-utcnow", "import datetime as dt\ndef later():\n    return dt.datetime.utcnow()\n"),
+        ("datetime-today", "import datetime as dt\ndef later():\n    return dt.datetime.today()\n"),
+        ("date-today", "import datetime as dt\ndef later():\n    return dt.date.today()\n"),
+        ("from-datetime-import", "from datetime import datetime\ndef later():\n    return datetime.now()\n"),
+        ("nested-bypass", "def outer():\n    def inner():\n        return time.time()\n    return inner\n"),
+        ("module-level-read", "import time\nSTARTED = time.time()\n"),
+        (
+            "class-method-boundary",
+            "import time\nclass S:\n    @staticmethod\n    def clock_now():\n        return time.time()\n",
+        ),
+        (
+            "nested-boundary-redefinition",
+            "def outer():\n    def clock_now():\n        return time.time()\n    return clock_now\n",
+        ),
+    ],
+)
+def test_runner_clock_guard_rejects_bypasses(planted: str, snippet: str) -> None:
+    """Spec criterion 2. Planted fault: a direct or aliased acquisition outside the boundary is accepted.
+
+    Every snippet imports `time` or `datetime` in the way the real module
+    would and hides the read in the shape a bypass would take; the guard must
+    name each one, with no caller or line exemption to add.
+    """
+    source = "import time\n" + snippet
+    violations = clock_guard_violations(source)
+    assert violations, f"the guard accepted the {planted} bypass"
+    assert all("line" in finding for finding in violations), violations
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet"),
+    [
+        (
+            "boundary-body",
+            "def clock_now():\n    return R(time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        ),
+        (
+            "boundary-nested-body",
+            "def clock_now():\n    def read():\n        return time.monotonic()\n    return read()\n",
+        ),
+        ("boundary-caller", "def adapter():\n    return clock_now().utc.date()\n"),
+        ("pure-parse", "def read(value: str):\n    return dt.date.fromisoformat(value)\n"),
+        (
+            "pure-construction",
+            "def made():\n    return dt.datetime(2026, 1, 1, tzinfo=dt.UTC) + dt.timedelta(seconds=1)\n",
+        ),
+        ("pure-format", "def shown(value):\n    return value.isoformat(timespec='seconds')\n"),
+        (
+            "explicit-conversion",
+            "def shown(struct):\n    return time.strftime('%H', struct) and time.gmtime(0)\n",
+        ),
+        ("other-module", "def section(path):\n    return time_records.section_text(path)\n"),
+        ("untracked-name", "def kept(today):\n    return today\n"),
+    ],
+)
+def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the guard rejects the designated backend or a pure date operation.
+
+    The boundary body may acquire, its callers may consume the reading, and
+    parsing, construction, formatting and explicit-argument conversions stay
+    free; a module whose name merely begins like `time` is not the clock.
+    """
+    source = "import datetime as dt\nimport time\nimport time_records\nR = tuple\n" + snippet
+    assert clock_guard_violations(source) == [], f"the guard rejected {tolerated}"
+
+
+def test_runner_clock_preserves_time_domains(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 5. Planted fault: a wall jump changes a measured duration, or local and UTC dates swap.
+
+    One fake boundary carries three separate values. A duration follows the
+    monotonic value alone, the wall may step meanwhile, terms read the UTC
+    date, and a document stamp reads the local one.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    clock.local_date = dt.date(2026, 11, 13)
+    assert stage2.today() == "2026-11-13"
+    assert stage2.utc_now() == UTC_START and stage2.monotonic_now() == 1000.0
+    assert stage2.terms_today() == UTC_START.date(), "terms must read the UTC date, not the local one"
+    clock.advance(45)
+    clock.wall_drift = 30.0  # a wall-clock step mid-span, the thing a duration must ignore
+    assert stage2.monotonic_now() == 1045.0, "a wall jump bent the measured duration"
+    assert stage2.utc_now() == UTC_START + dt.timedelta(seconds=75), "the wall clock did not step"
+    assert stage2.terms_today() == UTC_START.date(), "the stepped wall changed the terms date"
+    target = world.plan
+    stage2.stamp_updated(target)
+    assert updated_of(target) == dt.date(2026, 11, 13), "a stamp took the UTC date instead of the local one"
+    clock.advance(1)
+    assert stage2.today() == "2026-11-13", "the local date followed the UTC field"
 
 
 def test_runner_accepts_attempt_without_model_time_entry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -20218,15 +20605,14 @@ def test_an_expired_round_starts_no_replacement_and_consumes_no_stage(world: Wor
     """O196-1: a failed swarm at the deadline cannot buy a fresh second for every remaining rung."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def expired(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.CallFailed("the round time limit expired") for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expired)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the exhausted deadline still launched a replacement"
@@ -22045,7 +22431,11 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
 
     def terminate() -> None:
         os.kill(os.getpid(), signal_.SIGTERM)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, terminate)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -22070,7 +22460,11 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 
     def hang_up() -> None:
         os.kill(os.getpid(), signum)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, hang_up)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -22085,11 +22479,47 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
     """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
     monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
-    escape = "import subprocess, time; subprocess.Popen(['sleep', '8'], start_new_session=True); time.sleep(100)"
-    start = time.monotonic()
-    with pytest.raises(stage2.StepTimedOut):
-        stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
-    assert time.monotonic() - start < 5
+    pidfile = tmp_path / "escapee.pid"
+    escape = (
+        "import pathlib, subprocess, time; "
+        "child = subprocess.Popen(['sleep', '30'], start_new_session=True); "
+        f"pathlib.Path({str(pidfile)!r}).write_text(str(child.pid)); time.sleep(100)"
+    )
+    handed: list[float | None] = []
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the escapee is registered before the expiry is injected.
+                for _ in range(500):  # watchdog only: bounds a wedged start, never a verdict
+                    if pidfile.exists():
+                        break
+                    time.sleep(0.02)
+                assert pidfile.exists(), "the stopped step never registered its escapee"
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    escapee: int | None = None
+    try:
+        with pytest.raises(stage2.StepTimedOut):
+            stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
+        escapee = int(pidfile.read_text())
+        assert _child_alive(escapee), "the drain waited for the escaped descendant to die"
+        assert handed[0] == 1, "the step was stopped before its allowance ran out"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the drain after the kill is unbounded"
+    finally:
+        if escapee is not None:  # cleanup: the escapee outlives its step by design
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(escapee, signal.SIGKILL)
 
 
 def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
@@ -22159,18 +22589,23 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
     """Criterion 9 (DL-B-10): a rung whose launch the deadline prevented writes no call line and is not consumed."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 3 / 60)
+    clock = FakeClock(monkeypatch, UTC_START)
     original = stage2.checked_prompt
+    burned: list[str] = []
 
     def slow(ctx, endpoint, prompt, admission=None):
-        if endpoint[1] == "mimo-v2.6-pro":
-            time.sleep(2.5)
+        # Once: only the replacement attempt's prompt check burns the shared round budget; a
+        # later round starts a fresh one and its call must not inherit the planted overspend.
+        if endpoint[1] == "mimo-v2.6-pro" and not burned:
+            burned.append(endpoint[1])
+            clock.advance(stage2.REVIEWER_MINUTES * 60)
         return original(ctx, endpoint, prompt, admission)
 
     monkeypatch.setattr(stage2, "checked_prompt", slow)
     world.script(
         pi=[
             {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M"), "sleep": 1},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
         ]
     )
     assert world.run("review-loop") == 0
@@ -22187,11 +22622,8 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
 
 def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, monkeypatch) -> None:
     """Criterion 9: the final admission read can exhaust the deadline without consuming a rung."""
-    from types import SimpleNamespace
-
     _flash_next(world)
-    clock = [time.monotonic()]
-    monkeypatch.setattr(stage2, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    clock = FakeClock(monkeypatch, UTC_START)
     original_dispatch = stage2.dispatch_go
     original_problem = stage2.terms_problem
     in_dispatch = threading.local()
@@ -22207,7 +22639,7 @@ def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, 
     def admission(entry, model):
         problem = original_problem(entry, model)
         if model == "mimo-v2.6-pro" and getattr(in_dispatch, "active", False):
-            clock[0] += stage2.REVIEWER_MINUTES * 60 + 1
+            clock.advance(stage2.REVIEWER_MINUTES * 60 + 1)
             admission_finished.append(model)
         return problem
 
@@ -22259,18 +22691,32 @@ def test_a_deadline_stop_names_the_round_limit(world: World, monkeypatch) -> Non
     """Criterion 12 (DL-B-14): a call stopped by the round deadline names that limit, not 45 minutes."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 2 / 60)
-    world.script(
-        pi=[
-            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited", "sleep": 0.5},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
-            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P"), "sleep": 10},
-        ]
+    # Planted fault: the simulated expiry reports the reviewer limit, or no limit at all.
+    clock = FakeClock(monkeypatch, UTC_START)
+
+    def model_of(command: list[str]) -> str | None:
+        # None for the discovery commands: they carry no `--model` and stay on the stand-in.
+        return command[command.index("--model") + 1].split("/", 1)[1] if "--model" in command else None
+
+    def plan_for(model: str, plan: dict) -> tuple:
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and model_of(command) == model, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            plan_for("deepseek-v4.1-flash", {"exit": 1, "stderr": "Rate limited"}),
+            plan_for("mimo-v2.6-flash", {"stdout": rows(1, "M")}),
+            plan_for("mimo-v2.6-pro", {"duration": 30.0, "stdout": rows(1, "P")}),
+        ],
     )
     assert world.run("review-loop") == 0
     text = world.record().read_text(encoding="utf-8")
     stop = next(line for line in text.splitlines() if line.startswith("mimo-v2.6-pro failed:"))
     assert "was stopped by the round time limit of" in stop and "seconds were left for this call" in stop
     assert "reviewer time limit" not in stop
+    (mimo_pro,) = [row for row in programs.waits() if model_of(row["command"]) == "mimo-v2.6-pro"]
+    assert mimo_pro["outcome"] == "timeout" and mimo_pro["timeout"] > 0, "the overstay was not simulated"
 
 
 def test_activation_copies_only_the_allowed_definition_fields(tmp_path: Path) -> None:
@@ -24769,36 +25215,43 @@ def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     def interrupt(process, *args, **kwargs):
         if not processes:
             processes.append(process)
-            end = time.monotonic() + 2
-            while not heartbeat.exists() and time.monotonic() < end:
-                time.sleep(0.01)
+            # Readiness, not a race: the descendant is running before the interruption is injected.
+            for _ in range(1500):  # watchdog only: bounds a wedged start, never a verdict
+                if heartbeat.exists() and pidfile.exists():
+                    break
+                time.sleep(0.02)
+            assert heartbeat.exists() and pidfile.exists(), "the launched group never started its descendant"
             raise interruption()
         return original(process, *args, **kwargs)
 
     def verb(*_args):
+        # The descendant's natural lifetime (30 s of heartbeats) and the leader's sleep far
+        # outlast the watchdog below, so a pass can never come from natural completion.
         child = (
             "import os, time; from pathlib import Path; "
             f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
-            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(150)]"
+            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(1500)]"
         )
-        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(3)"
+        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(30)"
         stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
 
     monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
     monkeypatch.setattr(stage2, "explore", verb)
-    start = time.monotonic()
     try:
         if interruption is KeyboardInterrupt:
             with pytest.raises(KeyboardInterrupt):
                 world.run("explore")
         else:
             assert world.run("explore") == 143
-        time.sleep(0.1)
-        first = heartbeat.read_text()
-        time.sleep(0.15)
-        assert heartbeat.read_text() == first, "descendant survived main's interrupt handler"
+        # Liveness evidence, not elapsed time: the descendant's pid must disappear. The poll is a
+        # watchdog that bounds the reap; the descendant's own 30 s lifetime outlasts it.
+        descendant = int(pidfile.read_text())
+        for _ in range(300):
+            if not _child_alive(descendant):
+                break
+            time.sleep(0.02)
+        assert not _child_alive(descendant), "descendant survived main's interrupt handler"
         assert processes[0].poll() is not None, "group leader survived the interrupt"
-        assert time.monotonic() - start < 2, "Popen cleanup waited for natural child completion"
     finally:
         for process in processes:
             with contextlib.suppress(ProcessLookupError):
@@ -25151,7 +25604,7 @@ def test_a_signal_during_process_creation_leaves_no_child(
         else:
             assert world.run("explore") == 143
         assert children
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 5  # watchdog only: bounds a wedged reap, never a verdict
         while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
             time.sleep(0.01)
         assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
@@ -25220,7 +25673,7 @@ def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: P
     assert done.returncode == 0, done.stderr
     grandchild = int(out.read_text())
     try:
-        deadline = time.monotonic() + 2.0
+        deadline = time.monotonic() + 10.0  # watchdog only: bounds a wedged reap, never a verdict
         alive = True
         while alive and time.monotonic() < deadline:
             try:

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-pph3
@@ -161,9 +161,9 @@ registry gates, followed by the runner's full verification.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_runner_clock_is_the_only_time_source — a runner time/date read bypasses the clock boundary
-- 2: not yet written tests/test_stage2.py::test_runner_clock_guard_rejects_bypasses — a planted direct or aliased acquisition outside the boundary is accepted
-- 2: not yet written tests/test_stage2.py::test_runner_clock_guard_accepts_the_boundary — the guard rejects the designated backend or pure date operations
+- 1: tests/test_stage2.py::test_runner_clock_is_the_only_time_source — a runner time/date read bypasses the clock boundary
+- 2: tests/test_stage2.py::test_runner_clock_guard_rejects_bypasses — a planted direct or aliased acquisition outside the boundary is accepted
+- 2: tests/test_stage2.py::test_runner_clock_guard_accepts_the_boundary — the guard rejects the designated backend or pure date operations
 - 3: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — queueing reduces execution allowance or an over-budget check succeeds
 - 4: tests/test_stage2.py::test_the_remaining_time_never_outlives_the_round_deadline — the exact fake-clock remaining budget or expiry is wrong
 - 4: tests/test_stage2.py::test_local_checks_preserve_nested_admission — inherited admission is lost or the test still needs a real holder
@@ -173,7 +173,7 @@ registry gates, followed by the runner's full verification.
 - 4: tests/test_stage2.py::test_a_deadline_stop_names_the_round_limit — simulated expiry reports the wrong limit
 - 4: tests/test_stage2.py::test_both_swarms_run_in_parallel_as_one_round — one member waits for another to finish before entering
 - 4: not a test — phase-6 review censuses all timing cases against the definition in the spec, including newly merged cases; any remaining real-time policy verdict fails criterion 4
-- 5: not yet written tests/test_stage2.py::test_runner_clock_preserves_time_domains — a wall jump changes elapsed time or local/UTC dates are interchanged
+- 5: tests/test_stage2.py::test_runner_clock_preserves_time_domains — a wall jump changes elapsed time or local/UTC dates are interchanged
 - 5: tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — accounting changes its span or formatting semantics
 - 5: tests/test_stage2.py::test_every_write_to_findings_keeps_its_updated_stamp_current — a clock refactor breaks the existing local-date pin
 - 6: tests/test_stage2.py::test_verify_step_limit_is_45_minutes — the default verification limit changes
@@ -183,6 +183,14 @@ registry gates, followed by the runner's full verification.
 - 6: tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group — cancellation leaves a live child
 - 6: tests/test_stage2.py::test_a_runner_check_hands_its_child_the_admission_token — a real child loses its inherited admission
 
+## Runner route — 2026-11-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 
 2026-11-14 18:40:12–18:45:22 UTC, 310 s — draft · attempt 1 · route codex · model gpt-6.1-sol · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-14 21:32:03–22:16:27 UTC, 2664 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 22:16:35–22:29:59 UTC, 805 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 22:30:13–22:56:04 UTC, 1552 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-14 23:49–23:59 UTC — implement · orchestrator hand finishing (Opus subagent, maintainer's word for night run 2026-11-14-a) on the last stage-1 attempt: the research-publication stamp keeps the `today()` seam, the interrupt test proves readiness and descendant death · measured by hand
