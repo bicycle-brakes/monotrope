@@ -23756,6 +23756,102 @@ def test_git_errors_use_c_locale_and_keep_reason_after_warning(
         assert supplied["LC_ALL"] == "de_DE.UTF-8", "Do not mutate the caller's environment"
 
 
+def test_every_git_launch_of_the_runner_goes_through_run_git() -> None:
+    """Decision Q-8: one helper starts git, so no launch can lose git's diagnostic or the C locale (F6-4, F6-5).
+
+    Modelled on the source check that counts launches naming GIT: a command list whose first element
+    is GIT may stand only inside `run_git`, and there is no exemption.
+    """
+    tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
+    helpers = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_git"]
+    assert len(helpers) == 1, "scripts/stage2.py must define exactly one module-level run_git"
+    inside = {id(node) for node in ast.walk(helpers[0])}
+
+    def names_git(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.List | ast.Tuple)
+            and bool(node.elts)
+            and isinstance(node.elts[0], ast.Name)
+            and node.elts[0].id == "GIT"
+        )
+
+    bypass = sorted(node.lineno for node in ast.walk(tree) if names_git(node) and id(node) not in inside)
+    assert bypass == [], f"a git launch bypasses run_git at line(s) {bypass}"
+    own = [node for node in ast.walk(helpers[0]) if names_git(node)]
+    assert len(own) == 1, "run_git must build exactly one git command"
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+    ]
+    # Seven launch sites at 00d83c67: show, merge-base, archive, merge-base --is-ancestor, cat-file -e,
+    # and the two wrappers `_git_output` and `_git_bytes`.
+    assert len(calls) >= 7, f"fewer run_git calls than the seven launch sites this check was written against: {calls}"
+
+
+@pytest.mark.parametrize("text", [False, True])
+def test_run_git_forces_c_locale_and_keeps_every_diagnostic_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: bool
+) -> None:
+    """The one launch helper forces LC_ALL=C and keeps every non-empty line of git's diagnostic (Q-8)."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"}
+    observed: dict[str, object] = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: unable to read tree HEAD\nhint: a later line\n"
+
+    def fail_git(command, **kwargs):
+        observed.update(kwargs)
+        observed["command"] = command
+        return subprocess.CompletedProcess(
+            command, 128, "" if text else b"", diagnostic if text else diagnostic.encode()
+        )
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    done = stage2.run_git(tmp_path, "archive", "HEAD", env=supplied, text=text)
+    assert observed["command"] == [stage2.GIT, "-C", str(tmp_path), "archive", "HEAD"]
+    assert observed["env"]["LC_ALL"] == "C" and observed["env"]["GIT_INDEX_FILE"] == "private-index"
+    assert supplied["LC_ALL"] == "de_DE.UTF-8", "run_git must not mutate the caller's environment"
+    assert observed["timeout"] == stage2.GIT_SECONDS and observed["check"] is False
+    assert done.returncode == 128
+    assert done.diagnostic == "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line"
+
+
+def test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6-5: a failing `git archive` names git's whole reason, and git runs in the C locale."""
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    (root / "README.md").write_text("x\n")
+    env = {"PATH": os.environ.get("PATH", ""), "LC_ALL": "de_DE.UTF-8", "GIT_TEST_SENTINEL": "supplied"}
+    observed: dict[str, str] = {}
+    mirrors: list[Path] = []
+    real_mkdtemp = stage2.tempfile.mkdtemp
+
+    def mkdtemp(*args, **kwargs):
+        made = real_mkdtemp(*args, dir=tmp_path, **{k: v for k, v in kwargs.items() if k != "dir"})
+        mirrors.append(Path(made))
+        return made
+
+    def fail_git(command, **kwargs):
+        assert command[:4] == [stage2.GIT, "-C", str(root), "archive"]
+        observed.update(kwargs["env"])
+        stderr = b"fatal: unable to read tree HEAD\n\nhint: run git fsck\n"
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.tempfile, "mkdtemp", mkdtemp)
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.trusted_registry(root, env)
+    message = str(failure.value)
+    assert "fatal: unable to read tree HEAD hint: run git fsck" in message, "git archive lost git's explanation"
+    assert "128" in message, "the exit code stays in the diagnostic"
+    assert observed.get("LC_ALL") == "C", "git archive must run in the C locale"
+    assert observed.get("GIT_TEST_SENTINEL") == "supplied", "git archive lost the supplied environment"
+    assert env["LC_ALL"] == "de_DE.UTF-8", "the caller's environment is not mutated"
+    assert mirrors and not any(path.exists() for path in mirrors), "the mirror is removed on failure"
+
+
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
