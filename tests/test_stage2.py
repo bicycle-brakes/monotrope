@@ -25971,6 +25971,36 @@ def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, mo
     assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
 
 
+def test_targeted_and_full_check_size_workers_by_one_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L2-6. Planted fault: the targeted check keeps its own copy of the worker rule.
+
+    Both readers hand their readings to `verify_run.worker_bound`; a rule changed there reaches both.
+    """
+    seen: list[tuple[int | None, int | None]] = []
+
+    def rule(cores: int | None, memory: int | None) -> int:
+        seen.append((cores, memory))
+        return 5
+
+    readings = {"hw.logicalcpu": "16\n", "hw.memsize": str(8 * 2147483648) + "\n"}
+
+    def fake_launch(command, *_args, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=readings[command[-1]], stderr="")
+
+    monkeypatch.setattr(stage2.verify_run, "worker_bound", rule)
+    monkeypatch.setattr(stage2, "launch", fake_launch)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "5"
+    monkeypatch.setattr(
+        stage2.verify_run,
+        "_reading",
+        lambda command: "Darwin" if command[0] == "uname" else readings[command[-1]].strip(),
+    )
+    assert stage2.verify_run.worker_default() == 5
+    assert seen == [(16, 8 * 2147483648), (16, 8 * 2147483648)], seen
+    assert stage2.verify_run.worker_bound is rule
+
+
 @pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])
 def test_targeted_failure_never_checkpoints_or_marks_fixed(
     world: World, monkeypatch: pytest.MonkeyPatch, failure: str

@@ -6485,16 +6485,16 @@ def fallback_text(reason: str, result: str) -> str:
 def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
     """Size the targeted check's test workers without entering admission.
 
-    The rule matches the full check's `verify_run.worker_default()` — the smaller of half the
-    logical cores and the memory in 2-GiB steps — but this is a second copy that reads the machine
-    differently (CPU affinity and `/proc/meminfo` directly on Linux, `sys.platform` instead of
-    `uname`), so the targeted and the full check can size differently on one machine. Unifying them
-    would change the targeted check's worker policy, which bead coding-harness-bxxt.6 leaves alone.
+    The rule is the full check's own: `verify_run.worker_bound`, the smaller of half the logical
+    cores and the memory in 2-GiB steps, so a change to the rule reaches both checks (review row
+    L2-6). Only the readings stay this function's own (CPU affinity and `/proc/meminfo` directly on
+    Linux, `sys.platform` instead of `uname`), so on a machine where the two readers see different
+    cores the counts can still differ; unifying the readings would change the targeted check's
+    worker policy, which bead coding-harness-bxxt.6 leaves alone.
     """
     env = dict(env)
     if env.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
         return env
-    readings: list[int] = []
     cores: int | None = None
     memory: int | None = None
     try:
@@ -6515,12 +6515,9 @@ def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
                     break
     except (OSError, ValueError, CallFailed):
         pass  # Unavailable readings are ignored, as in the full runner.
-    if cores and cores > 0:
-        readings.append(max(1, cores // 2))
-    if memory and memory > 0:
-        readings.append(max(1, memory // 2147483648))
-    if readings:
-        env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(min(readings))
+    workers = verify_run.worker_bound(cores, memory)
+    if workers is not None:
+        env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(workers)
     else:
         env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
     return env

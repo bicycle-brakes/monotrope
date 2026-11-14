@@ -41,9 +41,19 @@ phases; the admission wait is recorded beside the execution seconds, never
 inside them.
 
 The tree comparison leaves out what git ignores among the untracked files —
-the caches the gates create (ruff and pytest ignore their own directories)
-are machine state, not the tree — and names no tool or path of its own: the
-one gate list stays the only place that names them (decisions Q-5).
+the caches the gates create are machine state, not the tree: ruff and pytest
+write a `.gitignore` of `*` into `.ruff_cache/` and `.pytest_cache/`
+themselves, and Python's `__pycache__/` is ignored by the checkout's own
+ignore file. The comparison names no tool or path of its own: the one gate
+list stays the only place that names them (decisions Q-5). A gate that writes
+a file git does not ignore changes the tree, and the run refuses and names the
+paths that moved.
+
+The tree is measured only for a run with protected work, the one case that
+reuses cheap results across the admission: a seconds-only job (`docs`,
+`drift`) and a run whose cheap pass ended blocking red rely on no baseline
+and never refuse over one (review rows L2-3 and L2-8, bead
+coding-harness-bxxt.6).
 """
 
 from __future__ import annotations
@@ -89,8 +99,14 @@ VERDICT_GREEN = "gruen"
 VERDICT_RED = "RED (block) — der Lauf ist rot."
 VERDICT_NONBLOCK = "rot, aber nur {enforcement} — er meldet, er blockiert nicht."
 NOT_RUN_HEADER = "── not run — the run stopped at the blocking failure in [{stop}]:"
+# The cheap pass runs every unprotected gate to the end, so it never "stops at"
+# one: its header names every blocking red gate it saw (review row L2-7).
+NOT_RUN_HEADER_CHEAP = "── not run — every seconds gate ran; blocking red in {reds}, so no protected gate started:"
+# A refused run ends with the same account as a red one (review row L2-2).
+NOT_RUN_HEADER_REFUSED = "── not run — the run was refused before these gates:"
 NOT_RUN_ENTRY = "──   [{gate}] not run"
 BANNER_RED = "VERIFY RED — at least one gate failed; the report above names it."
+BANNER_REFUSED = "VERIFY RED — the run was refused before it finished; the refusal is on the error stream."
 BANNER_GREEN = "VERIFY GREEN — every local gate of the '{job}' job passed."
 STORAGE_WARNING = (
     "verify-duration: measurement storage unusable — this run is not recorded; gates and verdicts continue unchanged"
@@ -152,9 +168,18 @@ class TreeSnapshot:
     modes and contents, plus the non-ignored untracked paths and contents.
     Index stat-cache churn and the gates' own cache directories change
     nothing here; a content or path change changes the fingerprint.
+    `entries` keeps each path's reading so a refusal can name what moved.
     """
 
     fingerprint: str
+    entries: dict[tuple[str, str], str] = dataclasses.field(default_factory=dict, compare=False)
+
+    def moved(self, other: TreeSnapshot) -> list[str]:
+        """What differs between two snapshots, sorted: `HEAD`, a tracked path, or `<path> (untracked)`."""
+        keys = sorted(
+            key for key in set(self.entries) | set(other.entries) if self.entries.get(key) != other.entries.get(key)
+        )
+        return [name if kind != "untracked" else f"{name} (untracked)" for kind, name in keys]
 
 
 def _git_bytes(root: Path, *args: str) -> bytes:
@@ -251,16 +276,21 @@ def tree_snapshot(root: Path | str) -> TreeSnapshot:
     if not head:
         raise SnapshotUnusable("HEAD cannot be named; a checkout without a commit has no measurable tree")
     digest.update(b"head\0" + head.encode("utf-8") + b"\0")
+    readings: dict[tuple[str, str], str] = {("head", "HEAD"): head}
     entries = sorted(_index_entries(wurzel))
     digest.update(b"index\0")
     for path, mode in entries:
-        digest.update(f"{path}\0{mode:o}\0{_measure(wurzel / path, allow_missing=True)}\0".encode())
+        reading = f"{mode:o}\0{_measure(wurzel / path, allow_missing=True)}"
+        readings[("tracked", path)] = reading
+        digest.update(f"{path}\0{reading}\0".encode())
     others = _git_bytes(wurzel, "ls-files", "-z", "--others", "--exclude-standard")
     names = sorted(os.fsdecode(piece) for piece in others.split(b"\0") if piece)
     digest.update(b"untracked\0")
     for name in names:
-        digest.update(f"{_safe(name)}\0{_measure(wurzel / name, allow_missing=False)}\0".encode())
-    return TreeSnapshot(digest.hexdigest())
+        reading = _measure(wurzel / name, allow_missing=False)
+        readings[("untracked", _safe(name))] = reading
+        digest.update(f"{name}\0{reading}\0".encode())
+    return TreeSnapshot(digest.hexdigest(), readings)
 
 
 def _reading(command: list[str]) -> str:
@@ -282,6 +312,24 @@ def _usable_count(text: str) -> int | None:
         return None
     value = int(text)
     return value if value > 0 else None
+
+
+def worker_bound(cores: int | None, memory_bytes: int | None) -> int | None:
+    """The one worker rule (bead coding-harness-l7sc): half the cores, memory in 2-GiB steps.
+
+    The smaller of half the logical cores (floored, at least one) and the
+    memory in 2-GiB steps (at least one); a missing reading drops its bound,
+    and with neither there is no default. Both the full check
+    (`worker_default`) and the runner's targeted check
+    (`stage2.targeted_pytest_env`) size through this function, so the rule
+    lives once; each still reads the machine its own way (review row L2-6).
+    """
+    bounds = [
+        cores // 2 if cores is not None and cores > 0 else None,
+        memory_bytes // (2**31) if memory_bytes is not None and memory_bytes > 0 else None,
+    ]
+    usable = [max(bound, 1) for bound in bounds if bound is not None]
+    return min(usable) if usable else None
 
 
 def worker_default() -> int | None:
@@ -307,11 +355,7 @@ def worker_default() -> int | None:
         count = _usable_count(kib)
         if count is not None and len(kib) <= 15:
             nbytes = str(count * 1024)
-    cpu = _usable_count(cores)
-    mem = _usable_count(nbytes)
-    bounds = [cpu // 2 if cpu is not None else None, mem // (2**31) if mem is not None else None]
-    usable = [max(bound, 1) for bound in bounds if bound is not None]
-    return min(usable) if usable else None
+    return worker_bound(_usable_count(cores), _usable_count(nbytes))
 
 
 # The process groups of gates the default executor is currently running; a
@@ -484,9 +528,14 @@ def run_verification(
     wurzel = Path(root)
     destination = sys.stdout if out is None else out
     complaints = sys.stderr if err is None else err
+    # The run's environment is the `env` argument wherever the run reads one for its gates
+    # (review row L2-9). The admission, its memory floor and the duration history are the
+    # calling process's own: they read the process environment by design, because the lock
+    # belongs to this process (`scripts/verify_lock.py`).
+    base_env = dict(os.environ if env is None else env)
     # The shell exports the interpreter it chose as `PYTHON`; gates run under that one,
     # exactly as the shell runner substituted it (a wrapper in the checkout stays the pinned one).
-    pinned = python if python is not None else (os.environ.get("PYTHON") or sys.executable)
+    pinned = python if python is not None else (base_env.get("PYTHON") or sys.executable)
     slot = lock_slot if lock_slot is not None else {"fd": None}
 
     def emit(text: str) -> None:
@@ -532,7 +581,8 @@ def run_verification(
     admission_requested = False
     admission_wait: float | None = None
     context = verify_lock.AdmissionContext(admission_id=None, wait_seconds=None, reused=None)
-    base_env = dict(os.environ if env is None else env)
+    # Whether the protected phase has started: a not-run summary before it names the cheap reds.
+    protected_started = False
     if not str(base_env.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")).strip():
         workers = worker_default()
         if workers is None:
@@ -585,14 +635,23 @@ def run_verification(
         if identifier not in reds:
             reds.append(identifier)
 
-    def finish() -> RunResult:
-        """The one ending: not-run summary, completion record, banner, exit code."""
-        red = bool(reds)
+    def finish(refused: bool = False) -> RunResult:
+        """The one ending — red, green or refused: not-run summary, completion record, banner, exit code.
+
+        A refused run (unstable tree, failed refresh, refused admission) ends here too, so it
+        names the gates it did not run and closes its history record as red (review row L2-2).
+        """
+        red = bool(reds) or refused
         final = selection_holder["selection"]
         not_run = [str(g["id"]) for g in final if str(g["id"]) not in executed]
-        if red and not ci and not_run:
+        if not_run and (refused or (red and not ci)):
             emit("")
-            emit(NOT_RUN_HEADER.format(stop=reds[0]))
+            if refused:
+                emit(NOT_RUN_HEADER_REFUSED)
+            elif protected_started:
+                emit(NOT_RUN_HEADER.format(stop=reds[0]))
+            else:
+                emit(NOT_RUN_HEADER_CHEAP.format(reds=", ".join(f"[{name}]" for name in reds)))
             for identifier in not_run:
                 emit(NOT_RUN_ENTRY.format(gate=identifier))
         verdict = "red" if red else "green"
@@ -611,12 +670,14 @@ def run_verification(
         if summary is not None:
             emit(summary)
         emit("")
-        if red:
+        if refused:
+            emit(BANNER_REFUSED)
+        elif red:
             emit(BANNER_RED)
         else:
             emit(BANNER_GREEN.format(job=job))
         return RunResult(
-            exit_code=1 if red else 0,
+            exit_code=2 if refused else 1 if red else 0,
             executed=list(executed),
             not_run=not_run,
             stop_gate=reds[0] if reds else None,
@@ -664,26 +725,40 @@ def run_verification(
                 complain("rerun the check — unmeasured cheap results are never trusted as a baseline")
                 raise VerifyRunRefused(str(exc)) from exc
 
+        def unstable(before: TreeSnapshot, after: TreeSnapshot, reason: str) -> None:
+            """Refuse a baseline that moved, naming what moved (at most ten paths)."""
+            if before.fingerprint == after.fingerprint:
+                return
+            moved = before.moved(after)
+            complain("the checkout changed while the cheap gates ran — the baseline is not stable")
+            if moved:
+                shown = ", ".join(moved[:10]) + (f" and {len(moved) - 10} more" if len(moved) > 10 else "")
+                complain(f"changed: {shown}")
+                complain("a gate that writes a file git does not ignore moves the tree; ignore that file")
+            complain("rerun the check — a changing tree is never accepted as a stable baseline")
+            raise VerifyRunRefused(reason)
+
         # 1. Every unprotected gate executes before any admission, red or not:
-        # all cheap diagnostics together, in the selection's order.
-        before = measure("before the cheap pass")
+        # all cheap diagnostics together, in the selection's order. Only a run
+        # with protected work reuses the cheap results, so only such a run
+        # measures the tree: nothing relies on a baseline otherwise (L2-3).
+        before = measure("before the cheap pass") if protected else None
         for gate in cheap:
             if run_gate(gate, gate_env):
                 note_blocking(gate)
-        after = measure("after the cheap pass")
-        if before.fingerprint != after.fingerprint:
-            complain("the checkout changed while the cheap gates ran — the baseline is not stable")
-            complain("rerun the check — a changing tree is never accepted as a stable baseline")
-            raise VerifyRunRefused("the tree changed during the cheap pass")
 
-        # 2. A cheap blocking failure ends the run before any protected work.
-        if reds and not ci:
+        # 2. A cheap blocking failure ends the run before any protected work,
+        # and an empty protected set ends it here; neither relies on a baseline.
+        if (reds and not ci) or not protected or before is None:
             return finish()
 
+        after = measure("after the cheap pass")
+        unstable(before, after, "the tree changed during the cheap pass")
+
         # 3. One admission for the whole protected set; an empty set never queues.
-        if protected:
-            admission_requested = True
-            entered = clock()
+        admission_requested = True
+        entered = clock()
+        try:
             with verify_lock.hold_admission(admission_command or ["verify-run", job]) as lock_fd:
                 waited = clock() - entered
                 admission_wait = waited
@@ -716,31 +791,28 @@ def run_verification(
                     for gate in cheap:
                         if run_gate(gate, gate_env):
                             note_blocking(gate)
-                    recheck_after = measure("after the refreshed cheap pass")
-                    if recheck_before.fingerprint != recheck_after.fingerprint:
-                        raise VerifyRunRefused("the tree changed again during the refreshed cheap pass")
                     if reds and not ci:
                         context = verify_lock.admission_context()
                         return finish()
+                    recheck_after = measure("after the refreshed cheap pass")
+                    unstable(recheck_before, recheck_after, "the tree changed again during the refreshed cheap pass")
                 # 5. The protected set under the held admission; locally the
                 # first blocking failure stops it, `--ci` stays exhaustive.
+                protected_started = True
                 for gate in protected:
                     if not ci and reds:
                         break
                     if run_gate(gate, held):
                         note_blocking(gate)
                 context = verify_lock.admission_context()
+        except verify_lock.VerifyLockError:
+            # The cheap gates already ran: end with their account, then let the
+            # caller report the refusal as before, its exit code included.
+            finish(refused=True)
+            raise
     except VerifyRunRefused as refused:
         complain(f"verify-run: {refused}")
-        return RunResult(
-            exit_code=2,
-            executed=list(executed),
-            not_run=[str(g["id"]) for g in selection_holder["selection"] if str(g["id"]) not in executed],
-            stop_gate=reds[0] if reds else None,
-            admission_requested=admission_requested,
-            admission_wait_seconds=admission_wait,
-            red=bool(reds),
-        )
+        return finish(refused=True)
 
     return finish()
 

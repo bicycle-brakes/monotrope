@@ -519,7 +519,7 @@ def test_skip_summary_names_only_unexecuted_selected_gates(tmp_path: Path) -> No
     done = _run_runner(tree)
     assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     out = done.stdout
-    assert "the run stopped at the blocking failure in [red-seconds]" in out, out
+    assert "every seconds gate ran; blocking red in [red-seconds], so no protected gate started" in out, out
     assert _not_run_gates(out) == ["never-minutes", "after-minutes"], out
     assert not (base / "never-minutes.ran").exists() and not (base / "after-minutes.ran").exists()
     # An executed gate is never labelled skipped by the failure, and no

@@ -635,8 +635,12 @@ def test_unmeasurable_inputs_refuse_reuse(checkout: SimpleNamespace, gate_script
     result, out, err = run_scheduler(checkout.root)
     assert result.exit_code == 2, (result, out, err)
     assert "changed while the cheap gates ran" in err, err
-    assert "──   [heavy] not run" not in out, out
-    assert "VERIFY GREEN" not in out and "VERIFY RED" not in out, out
+    # The refusal names what moved and ends with the run's account (review rows L2-1, L2-2).
+    assert "changed: side-file (untracked)" in err, err
+    assert "── not run — the run was refused before these gates:" in out, out
+    assert "──   [heavy] not run" in out, out
+    assert verify_run.BANNER_REFUSED in out and "VERIFY GREEN" not in out, out
+    assert result.not_run == ["heavy"] and result.exit_code == 2, result
 
 
 def test_enforcement_and_ci_exhaustiveness_survive_partitioning(checkout: SimpleNamespace, gate_script: Path) -> None:
@@ -992,3 +996,139 @@ def test_malformed_gate_list_is_a_red_run_with_a_diagnostic(checkout: SimpleName
     assert result.exit_code == 2 and not result.executed, (result, out, err)
     assert "liess sich nicht erzeugen" in err, err
     assert "VERIFY GREEN" not in out, out
+
+
+def test_cheap_red_on_a_moving_tree_ends_red_with_its_account(checkout: SimpleNamespace, gate_script: Path) -> None:
+    """A cheap blocking red that also moved the tree is an ordinary red run (rows L2-2, L2-7).
+
+    Planted fault: the tree comparison runs after a cheap blocking red and refuses, so the run
+    exits 2 with no banner, no not-run summary and no completion record; or the cheap phase's
+    summary says the run "stopped at" the first red gate although every cheap gate ran.
+    """
+    writer = f"python3 {gate_script} first 1 0 {checkout.root}/side-file"
+    write_gates(
+        checkout.root,
+        [
+            _gate("first", writer),
+            _gate("second", f"python3 {gate_script} second 1"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 1, (result, out, err)
+    assert "changed while the cheap gates ran" not in err, err
+    assert "── not run — every seconds gate ran; blocking red in [first], [second], so no protected" in out, out
+    assert "stopped at the blocking failure" not in out, out
+    assert "──   [heavy] not run" in out and verify_run.BANNER_RED in out, out
+    end = [event for event in _history(checkout.tmp_path / "state") if event["event"] == "run_end"][-1]
+    assert end["verdict"] == "red", end
+
+
+def test_refused_admission_ends_with_the_runs_account(
+    checkout: SimpleNamespace, gate_script: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused admission still names the gates it did not run and closes the record (row L2-2).
+
+    Planted fault: the refusal propagates past the scheduler's ending, so the executed cheap gates
+    sit in the history as an incomplete run and the not-run list and banner are missing.
+    """
+    write_gates(
+        checkout.root,
+        [_gate("cheap", f"python3 {gate_script} cheap 0"), _gate("heavy", "echo heavy", cost="minutes")],
+    )
+
+    @contextlib.contextmanager
+    def refusing(_command: list[str]):
+        raise verify_lock.MemoryFloorRefused("planted: too little free memory")
+        yield None  # pragma: no cover - never reached
+
+    monkeypatch.setattr(verify_lock, "hold_admission", refusing)
+    out, err = io.StringIO(), io.StringIO()
+    with pytest.raises(verify_lock.MemoryFloorRefused):
+        verify_run.run_verification(checkout.root, out=out, err=err, python=sys.executable)
+    text = out.getvalue()
+    assert "── [cheap] gruen" in text, text
+    assert "── not run — the run was refused before these gates:" in text and "──   [heavy] not run" in text, text
+    assert verify_run.BANNER_REFUSED in text, text
+    end = [event for event in _history(checkout.tmp_path / "state") if event["event"] == "run_end"][-1]
+    assert end["verdict"] == "red" and end["admission_requested"] is True, end
+
+
+def test_seconds_only_job_runs_on_an_unmeasurable_tree(checkout: SimpleNamespace, gate_script: Path) -> None:
+    """A seconds-only job reuses nothing, so it measures no tree and never refuses over one (row L2-3).
+
+    Planted fault: the baseline is measured for every job, so a docs run on a tree the comparison
+    cannot read (here a tracked FIFO) refuses with zero gates executed.
+    """
+    write_gates(
+        checkout.root,
+        [
+            _gate("docs-a", f"python3 {gate_script} docs-a 0", subsets=["docs"]),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    victim = checkout.root / "tracked.txt"
+    victim.write_text("readable\n", encoding="utf-8")
+    _git(checkout.root, "add", ".")
+    _git(checkout.root, "commit", "--quiet", "-m", "tracked")
+    victim.unlink()
+    os.mkfifo(victim)
+    result, out, err = run_scheduler(checkout.root, job="docs")
+    assert result.exit_code == 0, (result, out, err)
+    assert result.executed == ["docs-a"], result
+    assert "cannot be measured" not in err, err
+    # The full job still refuses that tree before its protected work.
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 2 and "cannot be measured" in err, (result, out, err)
+
+
+def test_interpreter_default_comes_from_the_env_argument(checkout: SimpleNamespace, tmp_path: Path) -> None:
+    """The run's `env` argument names the gates' interpreter, not the process environment (row L2-9).
+
+    Planted fault: the default interpreter is read from `os.environ["PYTHON"]`, so an in-process
+    caller's own environment is ignored for it.
+    """
+    marker = tmp_path / "wrapper-used"
+    wrapper = tmp_path / "bin-wrapper" / "python-wrapper"
+    wrapper.parent.mkdir()
+    wrapper.write_text(f'#!/bin/sh\necho used > {shlex.quote(str(marker))}\nexec {shlex.quote(sys.executable)} "$@"\n')
+    wrapper.chmod(0o755)
+    write_gates(checkout.root, [_gate("cheap", "python3 -c 'pass'", subsets=["docs"])])
+    env = dict(os.environ)
+    env["PYTHON"] = str(wrapper)
+    checkout.monkeypatch.delenv("PYTHON", raising=False)
+    out, err = io.StringIO(), io.StringIO()
+    result = verify_run.run_verification(checkout.root, job="docs", env=env, out=out, err=err)
+    assert result.exit_code == 0, (result, out.getvalue(), err.getvalue())
+    assert marker.exists(), "the gate ran under the process's interpreter, not the one `env` names"
+
+
+def test_real_tool_caches_keep_the_baseline_stable(checkout: SimpleNamespace) -> None:
+    """Real ruff and pytest gates inside the checkout leave the tree unchanged (row L2-1, rejected).
+
+    Both tools write a `.gitignore` of `*` into their cache directories, so the comparison sees no
+    new path even without a user-level ignore file; `__pycache__/` is ignored by the checkout's own
+    `.gitignore`, as in this repository. Planted fault: the comparison counts the caches.
+    """
+    root = checkout.root
+    (root / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_one.py").write_text("def test_one():\n    assert True\n", encoding="utf-8")
+    _git(root, "add", ".")
+    _git(root, "commit", "--quiet", "-m", "a test")
+    empty = checkout.tmp_path / "no-excludes"
+    empty.write_text("", encoding="utf-8")
+    checkout.monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(empty))
+    checkout.monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    write_gates(
+        root,
+        [
+            _gate("lint", "python3 -m ruff check tests/"),
+            _gate("suite", "python3 -m pytest -q tests/"),
+            _gate("heavy", "echo heavy", cost="minutes"),
+        ],
+    )
+    result, out, err = run_scheduler(root)
+    assert result.exit_code == 0, (result, out, err)
+    assert (root / ".ruff_cache").is_dir() and (root / ".pytest_cache").is_dir(), "the caches were not written"
+    assert result.executed == ["lint", "suite", "heavy"], result
