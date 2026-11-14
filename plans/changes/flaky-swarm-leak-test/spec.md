@@ -1,10 +1,10 @@
 ---
 title: "Spec — flaky-swarm-leak-test"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l

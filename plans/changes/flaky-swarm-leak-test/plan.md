@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
@@ -127,6 +127,54 @@ The derived index differs and is left to the runner as required. Full
 `plans_registry.py --check` was not run because its tracker read can leave the
 permitted worktree boundary. `make verify` and implementation tests were not
 run in this drafting phase; the runner owns full verification.
+
+## Red/green evidence — 2026-11-14
+
+Orchestrator hand work, measured 2026-11-14 00:05–00:22 UTC on one macOS
+machine (12 cores) with the worktree's interpreter `.venv/bin/python`.
+Pre-fix = a throwaway detached checkout of `079e0aac` (draft spec and plan, no
+implementation); post-fix = head `a4359af9`. The throwaway checkout was
+removed afterwards.
+
+**Forced race (criterion 1).** Command, ten separate invocations each:
+
+```sh
+.venv/bin/python -m pytest tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete -q -p no:cacheprovider
+```
+
+- Red, pre-fix: `tests/atomic_test_log.py` and `tests/test_atomic_test_log.py`
+  from `a4359af9` copied into the `079e0aac` checkout, so the test drives the
+  pre-fix, unlocked `SwarmWorld.calls` observer. 10 of 10 failed, each with
+  `AssertionError: JSONDecodeError('Unterminated string starting at: line 1
+  column 23 (char 22)')` at the observer assertion: the old observer parsed
+  the half-written record.
+- Green, `a4359af9`: 10 of 10 passed. The unlocked-reader red control inside
+  the test (`pytest.raises(json.JSONDecodeError)` on a plain read at the same
+  moment) holds in every green run, so the unsafe variant stays detectable.
+
+**Natural failure under load (criterion 6).** Sixty repetitions in one shell
+loop, each a separate invocation:
+
+```sh
+for i in $(seq 1 60); do
+  .venv/bin/python -m pytest tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call -q -n 4 -p no:cacheprovider
+done
+```
+
+started together with one background load run in the same checkout,
+`.venv/bin/python -m pytest tests/test_stage2_swarm.py -q -n 6 -p no:cacheprovider`.
+
+- Pre-fix `079e0aac`: 60 passed, 0 failed (00:11:32–00:16:17 UTC). The load
+  run (224 passed in 120 s, 00:11:32–00:13:33) overlapped repetitions 1–19
+  only; repetitions 20–60 ran without the extra load.
+- Post-fix `a4359af9`: 60 passed, 0 failed (00:16:32–00:21:12 UTC). The load
+  run (224 passed in 120 s, 00:16:32–00:18:32) overlapped repetitions 1–19.
+
+**The natural failure was not reproduced.** Only the forced race was red; the
+two main-CI failures named in the spec stay an inferred cause, not a measured
+one. The ten-run loop of the section "Verification" (the refused-run test
+beside the race test on two workers) was not run separately; the 60-run loop
+above stands in for it and is named here as such.
 
 ## Criterion ledger
 
