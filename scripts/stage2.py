@@ -25,6 +25,9 @@ between the rule and the call.
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
+    python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
+    # Triage refuses ordinary taken for test-only locations; use taken — not a test — <reason>.
+    # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -39,20 +42,29 @@ failed or timed-out refresh refuses instead of listing a stale cache.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
-Implement lets the model edit but not run commands; before `make verify` the
+Implement lets the model edit but not run commands; before its post-run check the
 runner applies ruff's safe fixes and its formatter to the changed Python files
-under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
-makes the one checkpoint commit. A
+under `scripts/` and `tests/`, runs the selected verification - the targeted
+check for implement and repair, the admitted full `make verify` where a targeted
+coverage is unsafe - checks the time log and
+makes the one checkpoint commit. New production code without a reachable test
+refuses an implement attempt before any test runs (bead coding-harness-0swp). A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to Codex in one
 call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
 stops), proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines. A repair's post-run check is targeted when
-its coverage can be determined safely - the whole touched and linked test files, ruff
-over the touched Python files and the local gates its file kinds need, outside the
-verify admission - and the admitted full `make verify` otherwise; `review` (phase 6)
-runs a fresh full `make verify` of the current head before it calls the reviewer.
+rows `fixed` from the answer's fixed lines. The implement and repair post-run
+checks are targeted when
+their coverage can be determined safely - the whole touched and import-linked
+test files, ruff
+over the touched Python files and the local gates the file kinds need, outside the
+verify admission - and the admitted full `make verify` otherwise; a targeted red
+fails the attempt and never calls the full check to override it. The draft's
+document check runs only the locally runnable document gates, outside the
+admission. `review` (phase 6)
+runs a fresh full `make verify` of the current head before it calls the reviewer,
+and refuses a red, unstartable or timed-out check.
 Codex runs in its configured `workspace-write` sandbox; the tests do not measure that
 confinement.
 
@@ -171,7 +183,7 @@ import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -181,6 +193,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -1228,6 +1241,340 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(directory)
 
 
+RESEARCH_TITLE = re.compile(r"(?m)^#[ \t][^\n]*\n")
+RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
+
+
+def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
+    """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
+    node = yaml.compose(block)
+    spans = []
+    for key_node, value in node.value:
+        if key_node.value == key:
+            start = block.rfind("\n", 0, key_node.start_mark.index) + 1
+            end = value.end_mark.index
+            # A block mapping's end mark includes its final line ending; keep that separator.
+            while end > start and block[end - 1] in "\r\n":
+                end -= 1
+            spans.append((start, end))
+    return spans
+
+
+def research_visible_text(text: str) -> str:
+    """Mask Markdown fenced code (including unclosed fences) without moving source offsets.
+
+    CommonMark permits up to three leading spaces and a closing fence at least as long
+    as the opener. Keeping line endings makes this useful for both evidence and edits.
+    """
+    marker = None
+    width = 0
+    visible = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if marker is None:
+            opening = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", content)
+            if opening and not (opening[1][0] == "`" and "`" in opening[2]):
+                marker, width = opening[1][0], len(opening[1])
+            else:
+                visible.append(line)
+                continue
+        else:
+            closing = re.fullmatch(r" {0,3}([`~]+)[ \t]*", content)
+            if closing and set(closing[1]) == {marker} and len(closing[1]) >= width:
+                marker = None
+        visible.append("".join(char if char in "\r\n" else " " for char in line))
+    return "".join(visible)
+
+
+def skeleton_notices() -> list[str]:
+    """The two generated opening notices of a research skeleton, derived from the template itself.
+
+    They are read from `scripts/new_change.py` at call time, so the removal patterns cannot drift from
+    what the skeleton actually writes. The template's first line is the title heading and stays.
+    """
+    import new_change
+
+    body = new_change.BODY_TEMPLATE.split("\n", 1)[1].strip("\n")
+    return [part.strip("\n") for part in re.split(r"\n[ \t]*\n+", body) if part.strip()]
+
+
+def _notice_pattern(notice: str) -> re.Pattern[str]:
+    """An exact opening notice at line start, including its own trailing line endings."""
+    lines = [re.escape(line) for line in notice.split("\n")]
+    return re.compile(r"(?m)^" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
+
+
+def research_opening_notices(text: str, body_start: int) -> list[str]:
+    """Generated notices still present before the research's first section or runner audit.
+
+    The active-file census shares the publisher's exact notice patterns, so authored mentions
+    below the opening cannot be mistaken for an unfilled skeleton.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    start = title.end() if title else body_start
+    visible = research_visible_text(text[body_start:])
+    visible = text[:body_start] + visible
+    boundary = RESEARCH_OPENING_END.search(visible, start)
+    opening = visible[start : boundary.start() if boundary else len(text)]
+    return [notice for notice in skeleton_notices() if _notice_pattern(notice).search(opening)]
+
+
+def _without_skeleton_opening(text: str, body_start: int) -> str:
+    """The body's opening region without its generated notices; everything below the first section stays.
+
+    The region reaches from the title heading to the first section boundary (a `##` heading, the audit
+    call line or a swarm envelope); only notices inside it are removed, and only when one matched does
+    an all-blank leftover collapse.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    if title is None or text[body_start : title.start()].strip():
+        raise Refused("research publication requires an opening title heading after the frontmatter")
+    region_start = title.end()
+    visible = text[:body_start] + research_visible_text(text[body_start:])
+    boundary = RESEARCH_OPENING_END.search(visible, region_start)
+    region_end = boundary.start() if boundary else len(text)
+    region = text[region_start:region_end]
+    spans = []
+    for notice in skeleton_notices():
+        match = _notice_pattern(notice).search(visible[region_start:region_end])
+        if match:
+            spans.append(match.span())
+    for start, end in sorted(spans, reverse=True):
+        region = region[:start] + region[end:]
+    removed = bool(spans)
+    if removed and not region.strip():
+        # Nothing authored is left: keep the one blank line between the title and what follows.
+        region = ("\r\n" if "\r\n" in text[region_start:region_end] else "\n") if boundary else ""
+    return text[:region_start] + region + text[region_end:]
+
+
+RESEARCH_PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+
+
+def research_producers(value, *, program_hint=None) -> list[dict]:
+    """Retain evidence-backed contributors, separating legacy model/date spellings.
+
+    A model name alone never establishes a program: only publication evidence may
+    supply that program. Unknown or ambiguous historical attribution is refused.
+    """
+    if value is None:
+        return []
+    records = value if isinstance(value, list) else [value]
+    if not records:
+        raise ValueError("empty producer list")
+    result = []
+    for record in records:
+        if not isinstance(record, dict) or record.get("kind") != "llm-session":
+            raise ValueError("invalid historical producer")
+        name = record.get("name")
+        name = "claude-code" if name == "Claude Code" else name
+        version = str(record.get("version", ""))
+        days = re.findall(r"\d{4}-\d{2}-\d{2}", version)
+        if len(days) != 1:
+            raise ValueError("no unique historical producer date")
+        try:
+            dt.date.fromisoformat(days[0])
+        except ValueError as error:
+            raise ValueError("invalid historical producer date") from error
+        legacy = version.replace(days[0], "").strip(" ,")
+        models = record.get("model")
+        if not isinstance(name, str) or name not in RESEARCH_PROGRAMS:
+            if name == "glm-5.3-flash" and program_hint in RESEARCH_PROGRAMS:
+                models, name = name, program_hint
+            else:
+                raise ValueError("no program evidence for historical producer")
+        if legacy and not legacy.startswith("stage-2 explore"):
+            if models and models != legacy:
+                raise ValueError("conflicting historical model evidence")
+            models = legacy
+        if models is not None and (not isinstance(models, str) or not models.strip()):
+            raise ValueError("invalid historical model evidence")
+        for model in re.split(r" and ", models) if models else [None]:
+            entry = dict(record, name=name, version=days[0])
+            if model:
+                entry["model"] = model
+            if entry not in result:
+                result.append(entry)
+    return result
+
+
+def research_header_producers(raw_header: str, *, body="") -> list[dict]:
+    """Read every owned producer span without silently losing duplicate-key evidence."""
+    node = yaml.compose(raw_header)
+    if not isinstance(node, yaml.MappingNode):
+        raise ValueError("research header is not a mapping")
+
+    def unique(value):
+        if isinstance(value, yaml.MappingNode):
+            keys = [key.value for key, _ in value.value]
+            if len(keys) != len(set(keys)):
+                raise ValueError("duplicate historical producer keys")
+            for _, child in value.value:
+                unique(child)
+        elif isinstance(value, yaml.SequenceNode):
+            for child in value.value:
+                unique(child)
+
+    # Only historical accepted publications can establish a legacy model-only producer's
+    # program. The program making this new publication says nothing about earlier work.
+    visible = research_visible_text(body)
+    programs: dict[str, set[str]] = {}
+    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
+        calls = list(
+            re.finditer(
+                r"(?m)^Stage-2 call, (\d{4}-\d{2}-\d{2}): explore ·[^\r\n]*?endpoint ([\w-]+)",
+                visible[: answer.start()],
+            )
+        )
+        if calls and calls[-1][1] == answer[1]:
+            programs.setdefault(answer[1], set()).add(producer_for((calls[-1][2], "", None)))
+
+    records = []
+    for key, value in node.value:
+        if key.value == "produced_by":
+            unique(value)
+            loaded = yaml.safe_load(yaml.serialize(value))
+            if loaded == []:
+                raise ValueError("empty producer list")
+            for entry in loaded if isinstance(loaded, list) else [loaded]:
+                days = (
+                    re.findall(r"\d{4}-\d{2}-\d{2}", str(entry.get("version", ""))) if isinstance(entry, dict) else []
+                )
+                evidence = programs.get(days[0], set()) if len(days) == 1 else set()
+                hint = next(iter(evidence)) if len(evidence) == 1 else None
+                for record in research_producers(entry, program_hint=hint):
+                    if record not in records:
+                        records.append(record)
+    return records
+
+
+def research_producer_field(records: list[dict]) -> str:
+    """Render only the owned field; unrelated header bytes never pass through YAML."""
+
+    def inline(record):
+        # Quoting dates keeps them scalar strings, as the publication contract requires.
+        return (
+            "{"
+            + ", ".join(
+                f"{key}: {json.dumps(value) if key in {'version', 'model'} else value}" for key, value in record.items()
+            )
+            + "}"
+        )
+
+    if len(records) == 1:
+        return "produced_by: " + inline(records[0])
+    return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
+
+
+def research_publication(existing: bytes, *, producer: str, day: str, model: str | None = None) -> bytes:
+    """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
+
+    The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
+    a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
+    missing field is inserted before `tags:` or at the header's end — and the generated opening
+    paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
+    prose, audit lines, envelopes and the file's line-ending style. Undecodable bytes, missing
+    frontmatter and a missing title heading are refused before publication.
+    """
+    try:
+        text = existing.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused("research publication refused: research is not UTF-8") from error
+    header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    if header is None:
+        raise Refused("research publication requires frontmatter")
+    start, end = header.span(1)
+    block = text[start:end]
+    eol = "\r\n" if "\r\n" in block else "\n"
+    try:
+        # Alias nodes reuse the anchor's source marks, even for mapping keys.
+        # Refuse the mechanism throughout the header before deriving any edit span.
+        # YAML tokens distinguish real anchors/aliases from quoted text and comments.
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                kind = "anchor" if isinstance(token, yaml.tokens.AnchorToken) else "alias"
+                raise Refused(f"research publication refused: YAML {kind} {token.value!r} in header")
+        metadata = yaml.safe_load(block)
+        if not isinstance(metadata, dict):
+            raise ValueError("header is not a mapping")
+        records = research_header_producers(block, body=text[header.end() :])
+    except (ValueError, yaml.YAMLError) as error:
+        raise Refused(f"research publication refused: {error}") from error
+    contribution = {"kind": "llm-session", "name": producer, "version": day}
+    if model:
+        contribution["model"] = model
+    if contribution not in records:
+        records.append(contribution)
+    fields = {
+        "provenance": "provenance: ai-drafted-reviewed",
+        "produced_by": research_producer_field(records),
+        "review": "review: {status: pending, approved_by: null, approved_at: null}",
+        "updated": f"updated: {day}",
+    }
+    edits: list[tuple[int, int, str]] = []
+    inserted: list[str] = []
+    for key, replacement in fields.items():
+        matches = _header_field_spans(block, key)
+        if not matches:
+            inserted.append(replacement)
+            continue
+        first = matches[0]
+        edits.append((*first, replacement))
+        for extra in matches[1:]:
+            drop_end = extra[1]
+            follow = block[drop_end : drop_end + 2]
+            if follow == "\r\n":
+                drop_end += 2
+            elif follow[:1] in ("\n", "\r"):
+                drop_end += 1
+            edits.append((extra[0], drop_end, ""))
+    edits.sort(key=lambda edit: edit[0])
+    pieces: list[str] = []
+    position = 0
+    for edit_start, edit_end, replacement in edits:
+        pieces.append(block[position:edit_start])
+        pieces.append(replacement)
+        position = edit_end
+    pieces.append(block[position:])
+    corrected = "".join(pieces)
+    if inserted:
+        tags = re.search(r"(?m)^tags:[^\r\n]*", corrected)
+        if tags is not None:
+            tags_at = tags.start()
+            corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
+        else:
+            corrected = eol.join([corrected, *inserted])
+    # Validate the complete prepared header before it can reach the atomic writer.
+    try:
+        # Compose checks YAML syntax/aliases without constructing the private brief's
+        # deliberate 0000-00-00 date sentinel as a Python calendar date.
+        yaml.compose(corrected)
+    except yaml.YAMLError as error:
+        raise Refused(f"research publication refused: corrected header is invalid YAML: {error}") from error
+    shifted = text[:start] + corrected + text[end:]
+    return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
+
+
+def publish_research(path: Path, prepared: bytes, text: str) -> None:
+    """Write the prepared research bytes with the publication's record appended, in one atomic replacement.
+
+    The prepared bytes already carry the corrected header and the removed skeleton notices; this adds the
+    runner's own record after them, stamps `updated:` like any research append and replaces the file once
+    through `write_atomic`. A resumed swarm retains its stored producer day while `updated:` records
+    this publication's day. A failure before or during the replacement leaves the previous bytes intact.
+    """
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
+    joined = prepared + separator + addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.fromisoformat(today())).encode("utf-8")
+    write_atomic(path, stamped)
+
+
 def stamp_updated(path: Path) -> None:
     """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
 
@@ -1956,10 +2303,10 @@ def _exception_problem(kind: str, record) -> str | None:
     """
     if not isinstance(record, dict):
         return f"an entry of the free rule's {kind} list must be a record with id, date and reason"
-    for field in ("id", "date", "reason"):
-        value = record.get(field)
+    for name in ("id", "date", "reason"):
+        value = record.get(name)
         if not isinstance(value, str) or not value.strip():
-            return f"an entry of the free rule's {kind} list has no {field}"
+            return f"an entry of the free rule's {kind} list has no {name}"
     if not DATE_ONLY.fullmatch(record["date"]) or not _valid_date(record["date"]):
         return f"the free rule's {kind} entry for {record['id']} has no ISO date (YYYY-MM-DD)"
     return None
@@ -2969,10 +3316,13 @@ def released_digest(text: str) -> str | None:
     return match.group(1) if match else None
 
 
-def record_identity(record: str) -> str:
-    """Identify completed rounds independently of repair marks and the mutable stage snapshot."""
+def record_identity(record: str, *, include_origin: bool = False, origins: dict[str, str] | None = None) -> str:
+    """Identify rounds without mutable cells; include Origin only to match older releases."""
     rounds = [line for line in record.splitlines() if ROUND_HEADING.match(line)]
-    rows = [row[:7] for row in record_rows(record)]
+    rows = [row[:7] if include_origin else row[:3] + row[4:7] for row in record_rows(record)]
+    if include_origin and origins is not None:
+        for row in rows:
+            row[3] = origins.get(row[0], row[3])
     return record_digest(json.dumps([rounds, rows], sort_keys=True))
 
 
@@ -2984,6 +3334,24 @@ def released_identity(text: str) -> str | None:
     cut = KEPT_FROM.search(block)
     match = re.search(r"^Record identity: (sha256:[0-9a-f]{64})[ \t]*$", block[: cut.start()] if cut else block, re.M)
     return match.group(1) if match else None
+
+
+def matches_released_identity(record: str, text: str) -> bool:
+    """Match a crash leftover, allowing corrected Origins under the earlier identity formula.
+
+    Older blocks hashed Origin. Reconstruct that formula with the Origins retained in the last
+    released block; all immutable cells and round headings must still match its recorded identity.
+    """
+    identity = released_identity(text)
+    if identity is None:
+        return False
+    released, _ = findings_rows(text[_last_release(text) :])
+    origins = {row[0]: row[3] for row in released}
+    return identity in (
+        record_identity(record),
+        record_identity(record, include_origin=True),
+        record_identity(record, include_origin=True, origins=origins),
+    )
 
 
 def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
@@ -3061,31 +3429,112 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
     return released, phase6
 
 
-def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """Every taken row with its place (record, released block, phase-6 table), and the IDs that hold the repair.
+@dataclass
+class ResolvedFindingRow:
+    """A current finding and its source line, retained by the one resolver for status writes."""
 
-    A record row whose Status begins none of `taken`, `rejected` and `fixed` waits, and so does a
-    phase-6 row whose Status is blank or begins `open`: one call should carry every taken row, so the
-    verb refuses while a row stands undecided.
+    place: str
+    cells: list[str]
+    line: int
+
+
+def resolve_finding_rows(record: str | None, findings_text: str) -> list[ResolvedFindingRow]:
+    """Current rows by ID: the last table wins; the active record follows findings history.
+
+    Repeated IDs across tables are history. Duplicates within a table refuse when
+    either row is taken; decided duplicates in passive history produce a notice.
+    Both repair selection and its Origin check use this resolver;
+    the shared parsers retain their other callers' historical scopes.
+    """
+    current: dict[str, ResolvedFindingRow] = {}
+    for source, text in (("findings", findings_text), ("record", record or "")):
+        heading = ""
+        seen: dict[str, list[str]] = {}
+        lines = _record_lines(text) if source == "record" else [(line, False) for line in text.split("\n")]
+        for index, (line, reviewer) in enumerate(lines):
+            if line.startswith("## "):
+                heading = line
+            if source == "findings" and KEPT_FROM.match(line):
+                heading = ""
+            cells = split_row(line) if not reviewer else None
+            if not cells:
+                seen.clear()
+                continue
+            if _furniture(cells):
+                if not all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                    seen.clear()  # a new table header, even without a blank line
+                continue
+            if source == "record":
+                rows = [("record", row) for row in record_rows(line)]
+            else:
+                # The row is already split on physical newlines. Reviewer prose may contain
+                # Unicode separators that splitlines() would mistake for additional source lines.
+                wide = len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0])
+                rows = []
+                if heading.startswith(RELEASE_HEADING) and wide:
+                    rows = [("released", cells)]
+                elif heading.startswith("## Phase 6") and len(cells) == len(ROW_COLUMNS):
+                    rows = [("phase-6", cells)]
+            if not rows:
+                seen.clear()  # a non-finding row ends the preceding finding table
+            for place, row in rows:
+                file = "loop.md" if source == "record" else "findings.md"
+                if row[0] in seen:
+                    if any(item[7].lower().startswith("taken") for item in (seen[row[0]], row)):
+                        raise Refused(
+                            f"several rows in one table carry the same id ({row[0]}, {file}); mend the rows first."
+                        )
+                    status = (
+                        "decided"
+                        if all(item[7].lower().startswith(("fixed", "rejected")) for item in (seen[row[0]], row))
+                        else "undecided"
+                    )
+                    scope = "record" if source == "record" else "history"
+                    print(
+                        f"notice: duplicate {status} id {row[0]} in one table ({file}); "
+                        f"latest row in {scope} used for resolution.",
+                        file=sys.stderr,
+                    )
+                seen[row[0]] = row
+                previous = current.pop(row[0], None)
+                if source == "record" and previous is not None and previous.place != "record":
+                    print(
+                        f"notice: {row[0]} in findings.md is shadowed by the live row in loop.md; "
+                        "findings copy left unchanged; any outstanding released copy stays outstanding "
+                        "until the next release-loop rewrites the block from the record.",
+                        file=sys.stderr,
+                    )
+                current[row[0]] = ResolvedFindingRow(place, row, index)
+    return sorted(current.values(), key=lambda item: item.place != "record")
+
+
+def repair_targets(
+    ctx: Context,
+    record: str | None,
+    findings_text: str | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
+) -> tuple[list[tuple[str, list[str]]], list[str]]:
+    """Taken current rows with their places, and the current undecided IDs that hold repair.
+
+    The resolver chooses one current row per finding ID across findings tables and the active
+    record. Only those rows enter the batch or hold the verb: a current record or phase-6 row whose
+    Status begins none of `taken`, `rejected` and `fixed` waits. Superseded rows stay history.
     """
     taken: list[tuple[str, list[str]]] = []
     waiting: list[str] = []
-    if record is not None:
-        for row in record_rows(record):
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append(("record", row))
-            elif not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
-    text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    released, phase6 = findings_rows(text)
-    for place, rows in (("released", released), ("phase-6", phase6)):
-        for row in rows:
-            status = row[7].lower()
-            if status.startswith("taken"):
-                taken.append((place, row))
-            elif place == "phase-6" and not (status.startswith("rejected") or status.startswith("fixed")):
-                waiting.append(row[0])
+    if resolved is None:
+        text = findings_text
+        if text is None:
+            text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        resolved = resolve_finding_rows(record, text)
+    for item in resolved:
+        place, row = item.place, item.cells
+        status = row[7].lower()
+        if status.startswith("taken"):
+            taken.append((place, row))
+        elif place in {"record", "phase-6"} and not status.startswith(("rejected", "fixed")):
+            waiting.append(row[0])
     return taken, waiting
 
 
@@ -3236,10 +3685,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "them back, then run review again. No reviewer was called."
         )
     problems = full_verify(root, env, None)
-    if problems:
-        raise CallFailed(
-            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
-        )
     try:
         after = standing()
     except (Refused, OSError) as error:
@@ -3248,6 +3693,10 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         raise CallFailed(
             f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
             "no reviewer was called. Run review again."
+        )
+    if problems:
+        raise CallFailed(
+            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
 
@@ -3267,6 +3716,9 @@ def review(root: Path, change: str) -> None:
         if refusal:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
@@ -3412,7 +3864,10 @@ def holding_record(change: str, root: Path) -> Iterator[None]:
 def read_record(change: str, root: Path) -> str | None:
     path = record_dir(change, root) / "loop.md"
     try:
-        return path.read_text(encoding="utf-8") if path.exists() else None
+        if not path.exists():
+            return None
+        with path.open(encoding="utf-8", newline="") as stream:
+            return stream.read()
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(f"the loop record {path} cannot be read.") from error
 
@@ -3451,7 +3906,7 @@ def marks_a_test(cell: str) -> bool:
     return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
 
 
-def record_rows(record: str) -> list[list[str]]:
+def record_rows(record: str, *, strict: bool = False) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
     Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
@@ -3460,14 +3915,35 @@ def record_rows(record: str) -> list[list[str]]:
     Nine cells are known. A `|` the orchestrator typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
     than a row has is not skipped, which would let the release delete it with the record: it is refused,
-    by its id.
+    by its id. Triage uses `strict` to refuse any non-nine-cell row before editing;
+    the compatibility reader for other verbs still accepts typed Status pipes.
     """
     rows = []
+    in_table = False
     for line, reviewer in _record_lines(record):
-        cells = None if reviewer else split_row(line)
+        if reviewer:
+            in_table = False
+            continue
+        cells = split_row(line)
+        if strict:
+            # Check table syntax before filtering loop IDs: split_row deliberately returns None
+            # for missing boundary pipes, which must never hide a damaged runner-owned row.
+            first = _PIPE.split(line.strip().lstrip("|"), maxsplit=1)[0].strip()
+            table_line = (
+                line.lstrip().startswith("|")
+                or (in_table and bool(line.strip()))
+                or ("|" in line and (LOOP_ID.fullmatch(first) or first == ROW_COLUMNS[0]))
+            )
+            in_table = bool(table_line)
+            if table_line and (cells is None or len(cells) != len(ROW_COLUMNS)):
+                count = "missing boundary pipe" if cells is None else f"{len(cells)} cells"
+                raise Refused(
+                    f"the loop record has a malformed loop row/table line ({count}; "
+                    f"{len(ROW_COLUMNS)} cells are needed); mend it, nothing has been written."
+                )
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
-        if len(cells) < len(ROW_COLUMNS):
+        if len(cells) < len(ROW_COLUMNS) or (strict and len(cells) != len(ROW_COLUMNS)):
             raise Refused(
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
@@ -3557,6 +4033,86 @@ def accepted_row(row: list[str]) -> bool:
     decision 7; ADR 0015's three-round reading is superseded).
     """
     return row[7].lower().startswith(("taken", "fixed"))
+
+
+# The orchestrator, not a reviewer, sets a decided finding's provenance (bead coding-harness-ywbh): `base`
+# for a finding no repair caused, `fix-r<N>` for one that repair round N caused. The repair brake reads it.
+ORIGIN_VALUE = re.compile(r"base|fix-r[1-9][0-9]*")
+
+
+def origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
+    """The refusal that holds a verb while an accepted row carries no valid Origin, or None.
+
+    Accepted (`taken` or `fixed`) rows in the loop record and phase-6 table are checked. Released
+    history was checked before release and is never re-checked; legacy rows need no backfill.
+    A rejected or undecided row needs no provenance.
+    Repair supplies its resolved rows, so superseded rows in either source remain exempt.
+    The vocabulary is checked, never the causality; the diagnostic names each row, its place and the
+    values the orchestrator may write.
+    """
+    # A re-check supersedes earlier phase-6 blocks, even when the newest block has no rows.
+    # Do not change findings_rows: repair targeting and the brake still read their full history.
+    heads = list(re.finditer(r"^## Phase 6[^\n]*$", findings_text, re.M))
+    if resolved is None:
+        _released, phase6 = findings_rows(findings_text[heads[-1].start() :] if heads else "")
+        places = (
+            ("loop record", record_rows(record) if record is not None else []),
+            ("phase-6 table", phase6),
+        )
+    else:
+        # Repair admits only current rows. Retain the shared check's newest-block scope,
+        # but never let a superseded row in that block or in the record hold repair.
+        newest_line = findings_text.count("\n", 0, heads[-1].start()) if heads else None
+        places = (
+            ("loop record", [item.cells for item in resolved if item.place == "record"]),
+            (
+                "phase-6 table",
+                [
+                    item.cells
+                    for item in resolved
+                    if item.place == "phase-6" and newest_line is not None and item.line > newest_line
+                ],
+            ),
+        )
+    found = [
+        f"{row[0]} ({place}, Origin `{row[3]}`)"
+        for place, rows in places
+        for row in rows
+        if accepted_row(row) and not ORIGIN_VALUE.fullmatch(row[3])
+    ]
+    if not found:
+        return None
+    return (
+        f"accepted rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it decides "
+        "a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without a "
+        "leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
+        "answer. Nothing is called, released, repaired or removed."
+    )
+
+
+def target_origin_refusal(
+    record: str | None, findings_text: str, *, resolved: list[ResolvedFindingRow] | None = None
+) -> str | None:
+    """Check only current taken rows, naming their ID and file without back-computing locations."""
+    found: list[str] = []
+    for item in resolved if resolved is not None else resolve_finding_rows(record, findings_text):
+        place, row = item.place, item.cells
+        if not row[7].lower().startswith("taken"):
+            continue
+        origin = row[3].strip()
+        if not ORIGIN_VALUE.fullmatch(origin):
+            file = "loop.md" if place == "record" else "findings.md"
+            found.append(f"{row[0]} ({file}, Origin `{origin}`)")
+    if not found:
+        return None
+    return (
+        f"selected repair rows carry an invalid Origin: {'; '.join(found)}. The orchestrator sets it when it "
+        "decides a row: `base` for a finding no repair caused, or `fix-r<N>` (N a positive whole number without "
+        "a leading zero) for a finding that repair round N caused; correct the cell, not the reviewer's "
+        "answer. Nothing is called or repaired."
+    )
 
 
 CUT_LINE = "The diff was cut:"
@@ -3906,8 +4462,12 @@ def release(root: Path, change: str) -> list[list[str]]:
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = read_record(change, root)
+    # Before the reconciliation branch too: it rewrites findings.md and removes the record.
+    refusal = origin_refusal(record, text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None and (
-        released_digest(text) == record_digest(record) or released_identity(text) == record_identity(record)
+        released_digest(text) == record_digest(record) or matches_released_identity(record, text)
     ):
         # The block stands already: a run stopped between the append and the removal (DL-A-3 of the
         # deep review). Appending it again would count its rounds twice and double its ids.
@@ -4159,15 +4719,19 @@ RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
 PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
 CHEAP_LABEL = "Runner cheap checks before post-run verification"
 
-# A repair's post-run verification is targeted when its coverage can be determined safely (bead
-# coding-harness-gxwg): the whole touched and linked test files, ruff over the touched Python files
-# and the existing local gates its file kinds need, all outside the machine-wide verify admission.
-# Anything the selector cannot cover - a prompt, an unclassified input, code without a linked test,
-# an unreadable inventory - falls back to the admitted full `make verify`. Targeted green is never
-# reported as full green; phase 6 owes its own fresh full check (`review`).
+# An implement or repair attempt's post-run verification is targeted when its coverage can be
+# determined safely (bead coding-harness-gxwg, coding-harness-0swp): the whole touched and
+# import-linked test files, ruff over the touched Python files and the existing local gates the
+# file kinds need, all outside the machine-wide verify admission. Implement refuses new production
+# code without a reachable test before any test runs or a fallback is admitted. Anything the
+# selector cannot cover - a prompt, an unclassified input, code without a linked test, shared
+# infrastructure, an unreadable inventory - falls back to the admitted full `make verify`. A
+# targeted red, launch failure or timeout fails the attempt; it is never an invitation to the full
+# check. Targeted green is never reported as full green; phase 6 owes its own fresh full check
+# (`review`).
 TARGETED_LABEL = "Runner targeted checks"
 SCOPE_LABEL = "Runner verification scope"
-SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
+SCOPE_COMMIT_HEADING = "Runner verification scope (the runner's post-run check):"
 # Inputs whose change makes the full check necessary, whatever else the repair touched.
 SHARED_INFRASTRUCTURE = (
     "scripts/ci_gates.py",
@@ -4238,7 +4802,10 @@ def refuse_repository_git(root: Path) -> None:
 
 
 TOOL_SECONDS = 5 * 60
-VERIFY_SECONDS = 30 * 60
+VERIFY_SECONDS = 45 * 60
+# The targeted pytest step of a repair or implement attempt is a slice of the full check, so it shares that limit:
+# the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
+TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
 
 
@@ -4810,8 +5377,12 @@ def time_entry(
     started: dt.datetime,
     ended: dt.datetime,
     seconds: int,
+    scope: Sequence[str] = (),
 ) -> str:
     """The line the runner writes under `## Time used` for one completed attempt.
+
+    `scope` is a passing attempt's verification evidence: it stands after the verdict word, in one
+    line without the field separator, so the passing attempt leaves nothing else in findings.md.
 
     The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
     its date when that differs from the start's, so a span across midnight reads unambiguously.
@@ -4826,7 +5397,15 @@ def time_entry(
         route,
         model,
         time_records.ACCEPTED if accepted else time_records.REJECTED,
+        scope_in_time_line(scope),
     )
+
+
+def scope_in_time_line(scope: Sequence[str]) -> str | None:
+    """A scope record as the time line's single field: one line, no `·`, never blank - or None."""
+    plain = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in " ".join(scope))
+    text = " ".join(plain.split()).replace("·", "-").strip()
+    return text or None
 
 
 def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
@@ -5017,6 +5596,234 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     if len(entries) > ATTEMPT_FILES:
         entries = entries[:ATTEMPT_FILES] + [f"… and {len(entries) - ATTEMPT_FILES} more files"]
     return entries
+
+
+NO_WORK = "no work done"
+
+
+def _minus_time_body(data: bytes) -> str:
+    """A plan's text without the body of its `## Time used` section: the one part the runner restores."""
+    text = data.decode("utf-8", "surrogateescape")
+    match = time_records.TIME_HEADING.search(text)
+    if match is None:
+        return text
+    following = time_records.FOLLOWING_HEADING.search(text[match.end() :])
+    end = match.end() + following.start() if following else len(text)
+    return text[: match.end()] + text[end:]
+
+
+@dataclass(frozen=True)
+class LedgerClearing:
+    """One ledger entry the runner's clearing rewrote, with its place in the plan.
+
+    `section` is the position of the entry's `## Criterion ledger` section among the plan's
+    sections when the clearing ran, `position` the entry line's position within that section;
+    positions, not criterion numbers, identify the entry, because several tests can hold one
+    criterion. `before` is the marked entry line as the clearing found it - the model call's
+    own bytes, the formatting already applied - and `after` the cleared line it wrote.
+    """
+
+    section: int
+    position: int
+    before: str
+    after: str
+
+
+@dataclass
+class ClearingEvidence:
+    """What one attempt's verification actually removed from its plan's criterion ledger.
+
+    A fresh container stands around every model call and travels with the verification
+    result to the work check. `records` are the clearing discount's exact shape; `problem`
+    set means the clearing could not be captured reliably, and the work check refuses
+    instead of measuring - never permissive (spec, criterion 5).
+    """
+
+    records: list[LedgerClearing] = field(default_factory=list)
+    problem: str | None = None
+
+
+def capture_ledger_clearing(root: Path, plan: Path, evidence: ClearingEvidence | None) -> None:
+    """The runner's ledger clearing, with the entries it rewrote recorded in `evidence`.
+
+    The plan bytes stand read immediately before and after the actual clearing - after the
+    formatting step and the cheap checks, before stamping and verification. Without a
+    container the clearing runs exactly as it always did. A diff the ledger entries cannot
+    explain - a line-count change, a line outside a criterion-ledger section, a fenced line,
+    a change that is not one marked entry going to its cleared form - is recorded as a
+    problem, not discounted. Read errors propagate to the caller's existing ledger
+    diagnostic, which fails the attempt.
+    """
+    if evidence is None:
+        check_criterion_ledger.clear_written(root, plan)
+        return
+    before = plan.read_bytes()
+    if not check_criterion_ledger.clear_written(root, plan):
+        return
+    after = plan.read_bytes()
+    records = _clearing_records(before, after)
+    if records is None:
+        evidence.problem = (
+            "the runner's ledger clearing wrote bytes its ledger entries cannot explain; "
+            "the work check refuses instead of discounting them"
+        )
+        return
+    evidence.records = records
+
+
+def _clearing_records(before: bytes, after: bytes) -> list[LedgerClearing] | None:
+    """The clearing's changed lines as entries with their section positions, or None.
+
+    `None` says the diff holds something the clearing cannot have written, so no discount
+    may be built from it.
+    """
+    before_lines = before.decode("utf-8", "surrogateescape").split("\n")
+    after_lines = after.decode("utf-8", "surrogateescape").split("\n")
+    if len(before_lines) != len(after_lines):
+        return None
+    lines = check_criterion_ledger._lines(before.decode("utf-8", "surrogateescape"))
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    places = {
+        number: (side, place) for side, section in enumerate(sections) for place, (number, _text) in enumerate(section)
+    }
+    records: list[LedgerClearing] = []
+    for number, (old, new) in enumerate(zip(before_lines, after_lines, strict=True), start=1):
+        if old == new:
+            continue
+        entry = check_criterion_ledger.parse_entry(old, number)
+        cleared = check_criterion_ledger.parse_entry(new, number)
+        if (
+            entry is None
+            or entry.kind != "not yet written"
+            or cleared is None
+            or cleared.kind == "not yet written"
+            or fenced[number - 1]
+            or number not in places
+        ):
+            return None
+        side, place = places[number]
+        records.append(LedgerClearing(section=side, position=place, before=old, after=new))
+    return records
+
+
+def _undo_ledger_clearing(final: bytes, records: Sequence[LedgerClearing]) -> bytes:
+    """The final plan bytes with this attempt's captured marker removals put back, in memory only.
+
+    Every recorded entry is matched within its recorded ledger section by position, and the
+    line there must still hold exactly the bytes the clearing wrote; anything else refuses
+    (fail closed). Every other byte stands as verification left it, so the comparison after
+    this undo still sees the model's own prose, ledger edits and marker removals.
+    """
+    text = final.decode("utf-8", "surrogateescape")
+    raw = text.split("\n")
+    lines = check_criterion_ledger._lines(text)
+    fenced = check_criterion_ledger._fenced(lines)
+    sections = check_criterion_ledger.ledger_sections(lines)
+    touched: set[int] = set()
+    for record in records:
+        if record.section >= len(sections):
+            raise Refused(
+                f"clearing evidence names criterion-ledger section {record.section + 1}; "
+                f"the plan to measure holds {len(sections)}"
+            )
+        section = sections[record.section]
+        if record.position >= len(section):
+            raise Refused(
+                f"clearing evidence names ledger line {record.position + 1} of section "
+                f"{record.section + 1}; that section holds {len(section)} lines"
+            )
+        number, _text = section[record.position]
+        if fenced[number - 1]:
+            raise Refused(f"clearing evidence names fenced ledger line {number}")
+        if number in touched:
+            raise Refused(f"two clearing records name ledger line {number}")
+        if raw[number - 1] != record.after:
+            raise Refused(f"ledger line {number} no longer holds the bytes the runner's clearing wrote")
+        raw[number - 1] = record.before
+        touched.add(number)
+    return "\n".join(raw).encode("utf-8", "surrogateescape")
+
+
+def attempt_has_work(
+    root: Path,
+    before: str,
+    after: str,
+    findings: Path,
+    plan: Path,
+    *,
+    model_after: str | None = None,
+    clearing: ClearingEvidence | None = None,
+) -> bool:
+    """Measure surviving model work after verification, excluding writes the runner owns.
+
+    Only paths changed by this call qualify. The final tree includes formatting and derived
+    preparation; the generated index and stamp-only changes in any document are excluded
+    from work, whether or not checkpoint preparation restores them. The unbounded raw
+    comparison also preserves binary and mode-only work. The plan comparison alone puts this
+    attempt's captured ledger clearing back in memory: the runner's removal of a
+    pending-test marker cannot qualify the attempt, while every model edit beside it -
+    prose, a changed ledger reference, a marker the model removed itself - stays visible
+    against the pre-call plan. Unreliable clearing evidence refuses the measurement.
+    """
+    if clearing is not None and clearing.problem:
+        raise Refused(clearing.problem)
+    candidates = None
+    if model_after is not None:
+        candidates = set(
+            _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, model_after)
+            .rstrip(b"\0")
+            .split(b"\0")
+        )
+    done = _git_bytes(root, "diff-tree", "-r", "-z", "--raw", "--no-renames", "--no-abbrev", before, after)
+    fields = done.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2:
+        raise Refused("git diff-tree --raw returned a record without its path")
+    findings_path = findings.relative_to(root).as_posix()
+    plan_path = plan.relative_to(root).as_posix()
+    discounted_plan = None
+    if clearing is not None and clearing.records:
+        # Validate every captured entry before any path can qualify as work, even when
+        # the plan is not a model candidate or another changed path sorts before it.
+        discounted_plan = _undo_ledger_clearing(
+            _git_bytes(root, "cat-file", "blob", f"{after}:{plan_path}"), clearing.records
+        )
+    for header, raw_path in zip(fields[0::2], fields[1::2], strict=True):
+        parts = header.decode("ascii").lstrip(":").split(" ")
+        if len(parts) != 5:
+            raise Refused(f"git diff-tree --raw returned a malformed record: {header!r}")
+        old_mode, new_mode, old_id, new_id, status = parts
+        path = os.fsdecode(raw_path)
+        if candidates is not None and raw_path not in candidates:
+            continue
+        if path in (findings_path, "plans/INDEX.md"):
+            continue
+        if status == "M" and old_mode == new_mode and old_mode in ("100644", "100755"):
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            # Ignore stamp-only edits on every document, including malformed replacement
+            # values and stamps outside held paths that the checkpoint does not restore.
+            old_text = old.decode("utf-8", "surrogateescape")
+            new_text = new.decode("utf-8", "surrogateescape")
+            masked = _mask_stamp(old_text, dated=False)
+            if masked is not None and _mask_stamp(new_text, dated=False) == masked:
+                continue
+        if path == plan_path and status == "M" and old_mode == new_mode:
+            old = _git_bytes(root, "cat-file", "blob", old_id)
+            new = _git_bytes(root, "cat-file", "blob", new_id)
+            # In memory only: this attempt's own captured clearing cannot qualify the attempt.
+            if discounted_plan is not None:
+                new = discounted_plan
+            old_body, new_body = _minus_time_body(old), _minus_time_body(new)
+            if old_body == new_body:
+                continue
+            masked = _mask_stamp(old_body, dated=False)
+            if masked is not None and _mask_stamp(new_body, dated=False) == masked:
+                continue
+        return True
+    return False
 
 
 def put_back_lines(paths: list[str]) -> list[str]:
@@ -5727,26 +6534,32 @@ MUST_RUN_DELEGATED = (
     "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
-    "ledger test fails the attempt before post-run verification. The runner then runs the targeted check for repair "
-    "or full `make verify` for implement; repair uses full fallback when targeted coverage is unsafe, "
-    "and a fresh full `make verify` runs before phase 6. Execute nothing yourself - delegation to the "
-    "runner is the contract, and no extra tool is yours."
+    "ledger test fails the attempt before post-run verification. The runner then runs the post-run "
+    "targeted check for implement and repair - the whole touched and linked test files, ruff and the "
+    "existing local gates, outside the verify admission. Implement refuses new production code without "
+    "a reachable test before any test runs: add its test. When the targeted coverage cannot be "
+    "established safely, the same route takes the admitted full `make verify`; a targeted red never "
+    "falls back to override it, and a fresh full `make verify` runs before phase 6. Execute nothing "
+    "yourself - delegation to the runner is the contract, and no extra tool is yours."
 )
 MUST_RUN_COMMANDS = (
     "Before you hand back, run the must-run checks yourself and leave them green: "
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
     "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
-    "checks after the call, then the targeted check for repair or full `make verify` for implement; "
-    "repair uses full fallback when targeted coverage is unsafe, and a fresh full `make verify` runs "
-    "before phase 6. Findings.md is the runner's audit file: an edit "
+    "checks after the call, then the post-run targeted check for implement and repair - the whole "
+    "touched and linked test files, ruff and the existing local gates, outside the verify admission. "
+    "Implement refuses new production code without a reachable test before any test runs: add its "
+    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "full `make verify`; a targeted red never falls back to override it, and a fresh full "
+    "`make verify` runs before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )
 
 
 @dataclass
 class Targeted:
-    """The coverage of one targeted repair check - or the reason it must be the full check."""
+    """The coverage of one implement or repair targeted check - or the reason it must be the full check."""
 
     tests: list[str]  # whole test files to run, sorted
     ruff: list[str]  # touched Python files the cheap checks' ruff did not already cover
@@ -5758,6 +6571,39 @@ def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[st
     """Every path the baseline commit holds, as the repository's own posix names."""
     names = _git_bytes(root, "ls-tree", "-r", "-z", "--name-only", against, env=env).split(b"\0")
     return {touch_map.inventory_path(name) for name in names if name}
+
+
+def new_code_without_test(root: Path, env: dict[str, str], against: str) -> list[str] | None:
+    """Added production `.py`/`.sh` files the current inventory proves uncovered, or None when it cannot.
+
+    An implement attempt with new production code and no reachable test is refused before any test
+    runs or a fallback is admitted (bead coding-harness-0swp): a baseline-only, a deleted or an
+    unreachable test never licenses the new file, while a test untracked in the working tree may.
+    `None` means the delta or the link inventory could not be read: absence is then unproven, and
+    the attempt keeps its existing fallbacks instead of a refusal. Existing uncovered code stays
+    the selector's own fallback, and prompts or shared infrastructure the selector's refusals.
+    """
+    try:
+        touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
+        if any(0xDC80 <= ord(char) <= 0xDCFF for path in touched for char in path):
+            return None
+        before = _baseline_inventory(root, env, against)
+        links = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
+        )
+    except (Refused, OSError, touch_map.CannotMeasure, ValueError, RecursionError):
+        return None
+    return sorted(
+        posix
+        for posix in touched
+        if posix not in before
+        and posix.endswith((".py", ".sh"))
+        and not posix.startswith("prompts/")
+        and posix not in SHARED_INFRASTRUCTURE
+        and not _is_test_module(posix)
+        and posix.rsplit("/", 1)[-1] != "conftest.py"
+        and not links.get(posix)
+    )
 
 
 @dataclass
@@ -5805,15 +6651,50 @@ def _parse_gate_command(command: list[str]) -> GateCommand:
     return GateCommand(assignments, words, entrypoints)
 
 
-def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
-    """What a targeted check of a repair covers, or why only the full check may stand in (bead coding-harness-gxwg).
+def _linked_tests(edges: set[tuple[str, str, str]], root: Path) -> dict[str, set[str]]:
+    """Per file, the surviving test modules that reach it directly or through import chains.
 
-    The touched paths are the repair's whole delta against `against` - index, working tree, untracked
-    files, both names of a rename, edits an earlier attempt left. Linked tests are the test files the
-    touch map links to a touched path, in the working tree and, for a path the repair removed, at the
-    baseline; every surviving touched or linked test file runs whole. A prompt, shared test or
-    execution configuration, an input kind outside Python and the documents, production code with no
-    linked test, an aliased file or an unreadable inventory makes the check full instead.
+    Two edge kinds count, never `runs` or `reads` (bead coding-harness-0swp): a `tests` edge names
+    the file a surviving `tests/**/test_*.py` module covers, and an `imports` edge names the file a
+    Python source imports. The walk goes from a file to its importers and collects the `tests` edges
+    of everything reached - static links only, never a claim of runtime coverage - and the visited
+    set ends cycles. One graph, one closure: the caller computes this per snapshot and unions the
+    results, so a chain is never fabricated across the current and the baseline graph.
+    """
+    importers: dict[str, set[str]] = {}
+    direct: dict[str, set[str]] = {}
+    for source, target, kind in edges:
+        if kind == "imports":
+            importers.setdefault(target, set()).add(source)
+        elif kind == "tests" and _is_test_module(source) and (root / source).is_file():
+            direct.setdefault(target, set()).add(source)
+
+    def reach(node: str) -> set[str]:
+        found: set[str] = set()
+        seen = {node}
+        waiting = [node]
+        while waiting:
+            for importer in sorted(importers.get(waiting.pop(), ())):
+                if importer not in seen:
+                    seen.add(importer)
+                    waiting.append(importer)
+                    found |= direct.get(importer, set())
+        return found | direct.get(node, set())
+
+    return {node: reach(node) for node in set(direct) | set(importers)}
+
+
+def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
+    """What a targeted check covers, or why only the full check may stand in (bead coding-harness-gxwg, coding-harness-0swp).
+
+    The touched paths are the attempt's whole delta against `against` - index, working tree, untracked
+    files, both names of a rename, edits an earlier attempt left. Linked tests are the surviving test
+    modules the touch map links to a touched path directly or through reverse `imports` chains; the
+    working tree and the baseline each keep their own closure and their union covers the whole delta,
+    so a chain is never fabricated across the two snapshots. Every surviving touched or linked test
+    file runs whole. A prompt, shared test or execution configuration, an input kind outside Python
+    and the documents, production code with no linked test in either graph, an aliased file or an
+    unreadable inventory makes the check full instead.
     """
 
     def full(reason: str) -> Targeted:
@@ -5861,21 +6742,31 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
             code.append(posix)
         if present[posix]:
             python.append(posix)
+    # Two independent closures, one per snapshot: the current graph sees the attempt's own new
+    # links, the baseline graph the chains a removed or renamed file sat in. Their union covers
+    # the whole delta; a chain neither graph holds on its own is not coverage.
     try:
-        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)) | touch_map.links(
-            touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)
+        current = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
         )
     except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
         return full(f"the link inventory could not be read ({error})")
+    try:
+        baseline = _linked_tests(
+            touch_map.links(touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)), root
+        )
+    except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
+        return full(f"the link inventory could not be read ({error})")
+
+    def linked(posix: str) -> set[str]:
+        """The surviving test modules either snapshot's own closure reaches this file through."""
+        return current.get(posix, set()) | baseline.get(posix, set())
+
     touched_set = set(touched)
-    linked: dict[str, set[str]] = {}
-    for source, target, _kind in edges:
-        if target in touched_set and _is_test_module(source) and (root / source).is_file():
-            linked.setdefault(target, set()).add(source)
     for posix in code:
-        if not linked.get(posix):
+        if not linked(posix):
             return full(f"`{posix}` has no linked test")
-    tests = sorted(set(touched_tests).union(*(linked.get(posix, set()) for posix in touched)))
+    tests = sorted(set(touched_tests).union(*(linked(posix) for posix in touched)))
     # Maintainer's option A (2026-11-04): until bead coding-harness-vg9 splits this
     # file, its whole-file run needs the admitted full check's budget. Select that
     # route before execution; a targeted timeout must still reject the attempt.
@@ -5964,37 +6855,32 @@ def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
-    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+def run_gates(root: Path, env: dict[str, str], key: str | None, gates: Sequence[dict]) -> tuple[list[str], list[str]]:
+    """Run the selected gates outside the verify admission: (blocking problems, reported notes).
 
-    Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    gate-list order through the locked interpreter, as `verify_all.sh` runs them. The first blocking
-    red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
-    reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
+    Gate-list order, through the locked interpreter, as `verify_all.sh` runs them - the one gate
+    executor of the targeted check and of the draft's document check alike (bead
+    coding-harness-0swp). The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a gate that only reports or advises is noted and never blocks,
+    as in the local runner. A missing locked interpreter or tool is red.
     """
-    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
-    if chosen.ruff:
-        problem = _cheap_ruff(root, env, key, chosen.ruff)
-        if problem:
-            return [f"{TARGETED_LABEL}: {problem}"], []
     python = root / PYTEST[0]
-    if (chosen.tests or chosen.gates) and not python.is_file():
+    if gates and not python.is_file():
         return [
             protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
         ], []
-    if chosen.tests:
-        identity = "`" + " ".join(PYTEST) + "`"
-        try:
-            done = launch(
-                [*PYTEST, *chosen.tests], root, targeted_pytest_env(root, env), key, timeout=TOOL_SECONDS, limit=limit
-            )
-        except (StepTimedOut, CallFailed) as error:
-            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
-        if done.returncode:
-            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
     notes: list[str] = []
-    gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
-    for gate in chosen.gates:
+    # The shared state root travels to every gate child, the way the admitted run's
+    # `inherit_env` hands it to a local child: the base, never the root itself, so a gate
+    # resolves the same shared root without carrying any admission ownership marker.
+    gate_env = {
+        **env,
+        "PYTHON": str(python),
+        "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")]),
+        "XDG_STATE_HOME": str(verify_lock.state_base()),
+    }
+    for gate in gates:
         command = str(gate["command"])
         command = _parse_gate_command(shlex.split(command)).locked_command(python, command)
         identity = f"gate `{gate['id']}` ({gate['enforcement']})"
@@ -6015,10 +6901,44 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     return [], notes
 
 
+def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
+    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+
+    Order: ruff over the touched files, pytest over the whole test files, then the selected gates
+    through `run_gates`. The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a missing tool is red.
+    """
+    if chosen.ruff:
+        problem = _cheap_ruff(root, env, key, chosen.ruff)
+        if problem:
+            return [f"{TARGETED_LABEL}: {problem}"], []
+    python = root / PYTEST[0]
+    if chosen.tests and not python.is_file():
+        return [
+            protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
+        ], []
+    if chosen.tests:
+        identity = "`" + " ".join(PYTEST) + "`"
+        try:
+            done = launch(
+                [*PYTEST, *chosen.tests],
+                root,
+                targeted_pytest_env(root, env),
+                key,
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
+            )
+        except (StepTimedOut, CallFailed) as error:
+            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
+        if done.returncode:
+            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    return run_gates(root, env, key, chosen.gates)
+
+
 def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
-    The full check of a repair whose targeted coverage was not safe, and of phase 6's boundary. New
+    The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
     files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
     a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
     """
@@ -6030,10 +6950,11 @@ def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
                 intended = intend_new_files(root, env)
             except (Refused, OSError) as error:
                 return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+            child_env = verify_lock.inherit_env(env)
             done = launch(
                 ["make", "verify"],
                 root,
-                verify_lock.inherit_env(env),
+                child_env,
                 timeout=VERIFY_SECONDS,
                 limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
                 pass_fds=_lock_fds(owned),
@@ -6064,13 +6985,19 @@ def _targeted_body(
     previous_failures: Sequence[str],
     against: str,
     scope: list[str] | None,
+    new_file_guard: bool = False,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
-    """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
+    """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
     Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
     `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
-    admitted full check instead. A passing result is never worded as full verification.
+    admitted full check instead. A passing result is never worded as full verification. Implement adds
+    the `new_file_guard`: new production code without a reachable test refuses the attempt before any
+    test runs or a fallback is admitted (bead coding-harness-0swp). The clearing capture covers the
+    fallback too: the clearing happened in the shared preparation, before the selection chose the
+    admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     admission_names = (
@@ -6093,6 +7020,14 @@ def _targeted_body(
             formatted.append(line)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
+    if new_file_guard:
+        uncovered = new_code_without_test(root, env, against)
+        if uncovered:
+            listing = ", ".join(f"`{_one_line(path)}`" for path in uncovered)
+            return [
+                f"{TARGETED_LABEL}: new production code without a reachable test: {listing} — "
+                "add a test that reaches this file before the attempt can run"
+            ]
     try:
         cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
     except (OSError, RuntimeError, ValueError) as error:
@@ -6100,7 +7035,7 @@ def _targeted_body(
     if cheap:
         return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
     try:
-        check_criterion_ledger.clear_written(root, plan)
+        capture_ledger_clearing(root, plan, clearing)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
     preparation = prepare_derived(root, env, key)
@@ -6151,6 +7086,8 @@ def verify_attempt(
     mode: str = "full",
     against: str = "HEAD",
     scope: list[str] | None = None,
+    new_file_guard: bool = False,
+    clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -6163,13 +7100,19 @@ def verify_attempt(
     Return bounded diagnostics for failed preparation or postconditions, naming the gates that
     blocked. The time section must still be readable; the entry itself is the runner's
     (`run_attempts`), so the model adds none and nothing is compared with the pre-call plan.
+    When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
+    for the work check's discount; without one, clearing stands unchanged for direct callers.
 
-    `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
-    preparation run outside the verify admission, and the repair's delta against `against` selects the
-    whole touched and linked test files, ruff over the touched Python files and the existing local
-    gates its file kinds need (`targeted_selection`). A coverage that cannot be determined safely runs
-    the admitted full `make verify` instead. `scope` receives the runner-owned evidence line that names
-    the mode, the selected checks and the result. Implement and draft keep the default `full`.
+    `mode="targeted"` is the implement and repair post-run check (bead coding-harness-0swp): the same
+    format, cheap checks, ledger clearing and derived preparation run outside the verify admission,
+    and the attempt's delta against `against` selects the whole touched and import-linked test files,
+    ruff over the touched Python files and the existing local gates its file kinds need
+    (`targeted_selection`). A coverage that cannot be determined safely runs the admitted full
+    `make verify` instead, and a targeted red, launch failure or timeout fails the attempt - it never
+    falls back to the full check to override it. `new_file_guard` adds the implement-only refusal of
+    new production code without a reachable test. `scope` receives the runner-owned evidence line
+    that names the mode, the selected checks and the result; `evidence` receives the selected
+    coverage for the targeted-scope record. Draft keeps its own document-only path (`verify_draft`).
     """
     env = runner_env(
         foreign_env(
@@ -6201,10 +7144,22 @@ def verify_attempt(
             f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
         ]
     if mode == "targeted":
-        # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
-        # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
+        # Implement and repair ask for this (bead coding-harness-gxwg, coding-harness-0swp): the same
+        # preparation outside the admission, then the targeted checks - or the admitted full check
+        # when the coverage is unsafe. A targeted red is a failed attempt, never a fallback trigger.
         targeted = _targeted_body(
-            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope
+            root,
+            plan,
+            env,
+            key,
+            formatted,
+            tools,
+            accepted_plan,
+            previous_failures,
+            against,
+            scope,
+            clearing=clearing,
+            new_file_guard=new_file_guard,
         )
         try:
             time_log(plan)
@@ -6242,7 +7197,7 @@ def verify_attempt(
             if cheap:
                 return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
             try:
-                check_criterion_ledger.clear_written(root, plan)
+                capture_ledger_clearing(root, plan, clearing)
             except (OSError, RuntimeError, ValueError) as error:
                 return [
                     f"the criterion ledger of {plan.name} could not be updated: "
@@ -7342,7 +8297,27 @@ def _read_quietly(path: Path) -> str:
         return ""
 
 
-def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fixes: dict[str, str]) -> None:
+def _require_unchanged_resolved_row(lines: list[str], item: ResolvedFindingRow) -> None:
+    """Refuse a stale row location before either status writer replaces it."""
+    rows = []
+    if item.line < len(lines):
+        if item.place == "record":
+            rows = record_rows(lines[item.line])
+        else:
+            cells = split_row(lines[item.line])
+            rows = [cells] if cells else []
+    if rows != [item.cells]:
+        source = "loop.md" if item.place == "record" else "findings.md"
+        raise Refused(f"{item.cells[0]} in {source} changed since resolution; no fixed statuses were written.")
+
+
+def mark_repaired_findings(
+    ctx: Context,
+    taken: list[tuple[str, list[str]]],
+    fixes: dict[str, str],
+    *,
+    resolved: list[ResolvedFindingRow],
+) -> None:
     """Write each taken findings row's fixed Status in its place, before the checkpoint commit.
 
     Only the Status cell (index 7) of a taken row changes; a `|` of a reason stands escaped, as the
@@ -7350,25 +8325,34 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     file's final newline included: the lines are split on `\\n`, so the ending empty line survives.
     """
     by_key = {(place, row[0]): row for place, row in taken}
-    lines: list[str] = []
-    kind = ""
-    for line in ctx.findings.read_text(encoding="utf-8").split("\n"):
-        if line.startswith("## "):
-            kind = ""
-            if line.startswith(RELEASE_HEADING):
-                kind = "released"
-            elif line.startswith("## Phase 6"):
-                kind = "phase-6"
-        elif kind == "released" and KEPT_FROM.match(line):
-            kind = ""
-        else:
-            cells = split_row(line) if kind else None
-            if cells and (kind, cells[0]) in by_key and cells == by_key[(kind, cells[0])]:
-                cells[7] = fixes[cells[0]]
-                line = "| " + " | ".join(cells) + " |"
-        lines.append(line)
+    text = ctx.findings.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    for item in resolved:
+        cells = item.cells.copy()
+        if item.place != "record" and cells == by_key.get((item.place, cells[0])):
+            _require_unchanged_resolved_row(lines, item)
+            cells[7] = fixes[cells[0]]
+            lines[item.line] = "| " + " | ".join(cells) + " |"
     ctx.findings.write_text("\n".join(lines), encoding="utf-8")
     stamp_updated(ctx.findings)
+
+
+def require_unchanged_repair_rows(
+    ctx: Context, taken: list[tuple[str, list[str]]], resolved: list[ResolvedFindingRow]
+) -> None:
+    """Check both sources before writing findings statuses or making the checkpoint.
+
+    Repair holds the record lock throughout; its record marks still follow the commit.
+    """
+    selected = {(place, row[0]): row for place, row in taken}
+    record = read_record(ctx.change, ctx.root)
+    sources = {
+        "record": record.splitlines() if record is not None else [],
+        "findings": ctx.findings.read_text(encoding="utf-8").split("\n"),
+    }
+    for item in resolved:
+        if item.cells == selected.get((item.place, item.cells[0])):
+            _require_unchanged_resolved_row(sources["record" if item.place == "record" else "findings"], item)
 
 
 def mark_repaired_record(
@@ -7379,6 +8363,7 @@ def mark_repaired_record(
     marks: dict[str, str] | None = None,
     *,
     lock_held: bool = False,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
@@ -7390,20 +8375,26 @@ def mark_repaired_record(
     if not by_key:
         return
     if lock_held:
-        _mark_record_rows(change, by_key, fixes, root, marks)
+        _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
         return
     # The record is read and rewritten whole: a round appended in between, or a release that removes
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
     try:
         with holding_record(change, root):
-            _mark_record_rows(change, by_key, fixes, root, marks)
+            _mark_record_rows(change, by_key, fixes, root, marks, resolved=resolved)
     except Refused as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
 def _mark_record_rows(
-    change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path, marks: dict[str, str] | None = None
+    change: str,
+    by_key: dict[str, list[str]],
+    fixes: dict[str, str],
+    root: Path,
+    marks: dict[str, str] | None = None,
+    *,
+    resolved: list[ResolvedFindingRow] | None = None,
 ) -> None:
     record = read_record(change, root)
     if record is None:
@@ -7414,25 +8405,165 @@ def _mark_record_rows(
             "no record was marked. Check these rows in findings.md; the maintainer must decide how to recover the record."
         )
     ending = "\n" if record.endswith("\n") else ""
-    lines: list[str] = []
-    for line, reviewer in _record_lines(record):
-        if not reviewer:
-            cells = split_row(line)
-            if (
-                cells
-                and len(cells) >= len(ROW_COLUMNS)
-                and LOOP_ID.fullmatch(cells[0])
-                and cells[0] in by_key
-                and [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]] == by_key[cells[0]]
-            ):
-                mark = (marks or {}).get(cells[0], cells[-1])
-                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
-        lines.append(line)
+    lines = record.splitlines()
+    for item in resolved if resolved is not None else resolve_finding_rows(record, ""):
+        cells = item.cells
+        if item.place == "record" and cells == by_key.get(cells[0]):
+            _require_unchanged_resolved_row(lines, item)
+            mark = (marks or {}).get(cells[0], cells[-1])
+            lines[item.line] = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
     try:
         replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
     except OSError as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
+
+
+# ---------------------------------------------------------------------------
+# Triage: the orchestrator records an already-made loop-row decision (bead coding-harness-o2s1)
+# ---------------------------------------------------------------------------
+
+
+TRIAGE_STATUSES = ("taken", "rejected", "taken — not a test", "taken — guard test")
+
+# A Where cell splits on whitespace, commas and semicolons, and on the escaped pipe a cell carries.
+_WHERE_TOKEN_SPLIT = re.compile(r"[\s,;]+|\\\|")
+
+
+def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
+    """Recognise only exact indexed paths and the Boundary's enumerated line suffixes.
+
+    Markdown links contribute their target, external URLs and prose contribute nothing. Other
+    path-like tokens refuse rather than guessing a tracked prefix or normalising another spelling.
+    """
+    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
+    locations = []
+    cell = re.sub(r"\[[^\]]*\]\(([^)]+)\)", r" \1 ", cell)
+    for token in _WHERE_TOKEN_SPLIT.split(cell):
+        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
+        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
+            continue
+        # Check the whole name first: punctuation may itself belong to an indexed filename.
+        path = token if token in tracked else re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if path in tracked:
+            locations.append(path)
+        elif "/" in token or re.search(r"\.[\w-]+", token):
+            raise Refused(
+                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been written. "
+                "Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or #L<line>-L<line> suffix. "
+                "For test-only work, record `taken — not a test — <reason>` after correcting the location."
+            )
+    return locations
+
+
+def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
+    """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
+
+    A mechanical trigger on paths, not on words: prose that only says "test", a mixture with a
+    production location and a cell without any location stay the orchestrator's judgment - the command
+    cannot establish what a later repair will touch.
+    """
+    locations = where_locations(cell, root)
+    return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
+
+
+def triage_status(decision: str, reason: str) -> str:
+    """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
+    escaped = reason.replace("\\|", "|").replace("|", "\\|")
+    return f"{decision} — {escaped}"
+
+
+def _write_triage_row(change: str, ident: str, status: str, record: str, root: Path) -> None:
+    """Splice one row's Status cell in its own physical line and publish the record whole.
+
+    The caller has validated the physical cells against ROW_COLUMNS with the strict reader under its lock.
+    Preserve the other cells, line spacing and line endings verbatim.
+    """
+    lines: list[str] = []
+    written = False
+    status_column = ROW_COLUMNS.index("Status")
+    for original, (line, reviewer) in zip(record.splitlines(keepends=True), _record_lines(record), strict=True):
+        cells = None if reviewer else split_row(line)
+        if cells and len(cells) == len(ROW_COLUMNS) and cells[0] == ident:
+            separators = list(_PIPE.finditer(line))
+            start, end = separators[status_column].end(), separators[status_column + 1].start()
+            original = original[:start] + " " + status + " " + original[end:]
+            written = True
+        lines.append(original)
+    if not written:
+        raise Refused(f"loop row `{ident}` has no editable line; mend the record first, nothing has been written.")
+    replace_record(record_dir(change, root) / "loop.md", "".join(lines))
+
+
+def triage(root: Path, change: str, row_status: str | None, reason: str | None) -> None:
+    """Record one already-made loop-row decision in this worktree's own loop record, and nothing else.
+
+    The orchestrator has decided; this local command writes the decision down. It starts no model and
+    reads no credential, works on a dirty tree, and changes no repository file and no git state. Only
+    the named row's `Status` cell changes; every proof mark stays where it is, so a row marked `taken`
+    still waits for its `Broke a test` mark before the next round or the release. Invalid input, a
+    damaged record and a held lock refuse with exit 2; a failed replacement reports exit 1 and leaves
+    the prior record whole.
+    """
+    if not row_status:
+        raise Refused("triage needs a first operand '<row>=<status>' and a second operand <reason>.")
+    if not reason or not reason.strip():
+        raise Refused("triage needs a nonempty reason; an empty decision says nothing a later round can read.")
+    if reason.splitlines() != [reason]:
+        raise Refused("triage takes a single-line reason; a line break would break the record's table shape.")
+    reason = reason.strip()
+    row, equals, given = row_status.partition("=")
+    row = row.strip()
+    if not equals or not LOOP_ID.fullmatch(row):
+        raise Refused(f"`{row_status}` is no '<row>=<status>' operand: name a loop id like `L1-1`.")
+    decision = given.strip()
+    if decision not in TRIAGE_STATUSES:
+        raise Refused(
+            f"unsupported status `{decision}`; triage takes: "
+            + ", ".join(f"`{item}`" for item in TRIAGE_STATUSES)
+            + "."
+        )
+    folder_of(root, change)
+    status = triage_status(decision, reason)
+    if decision != "taken — guard test" and guard_authorised(status):
+        raise Refused("the reason would grant guard authority; supply `taken — guard test` explicitly as the decision.")
+    if decision == "taken — guard test" and not guard_authorised(status):
+        raise Refused("`taken — guard test` needs a nonempty unquoted reason; a quoted reason opens no guard proof.")
+    try:
+        with holding_record(change, root):
+            record = read_record(change, root)
+            if record is None:
+                raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
+            targets = [item for item in record_rows(record, strict=True) if item[0] == row]
+            if not targets:
+                raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
+            if len(targets) > 1:
+                raise Refused(
+                    f"two loop rows carry `{row}`; mend the record first, triage would not know which to decide."
+                )
+            existing_status = targets[0][ROW_COLUMNS.index("Status")]
+            existing_mark = targets[0][ROW_COLUMNS.index("Broke a test")]
+            if existing_status.lower().startswith("fixed"):
+                raise Refused(
+                    f"loop row `{row}` is already `fixed`; triage records intent and never corrects finished repair evidence."
+                )
+            if marks_a_test(existing_mark):
+                raise Refused(
+                    f"loop row `{row}` already pairs Status `{existing_status}` with Broke a test `{existing_mark}`; "
+                    "triage cannot re-decide a row carrying repair evidence."
+                )
+            test_only = where_is_test_only(targets[0][4], root)
+            if decision == "taken" and test_only:
+                raise Refused(
+                    f"loop row `{row}` names only test locations (`{targets[0][4]}`); an ordinary `taken` would send "
+                    "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
+                )
+            _write_triage_row(change, row, status, record, root)
+    except OSError as error:
+        raise CallFailed(f"the loop record could not be replaced ({error}); the prior record stands.") from error
+    print(f"triage: {row} recorded as {status}")
 
 
 # The explorer's role, stated by the runner in every exploration prompt (bead coding-harness-e7m): on
@@ -7639,7 +8770,16 @@ def explore(
         tail = "\n".join(answer.strip().splitlines()[-40:])
         print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
+    # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
+    # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
+    prepared = research_publication(
+        ctx.research.read_bytes(), producer=producer_for(endpoint), day=today(), model=endpoint[1]
+    )
+    publish_research(
+        ctx.research,
+        prepared,
+        f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}",
+    )
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 
@@ -8068,7 +9208,8 @@ def run_attempts(
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
     retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
-    verify_mode: str = "full",  # repair: "targeted"; implement keeps the full check
+    verify_mode: str = "full",  # implement and repair: "targeted" (bead coding-harness-0swp); draft keeps its own path
+    new_file_guard: bool = False,  # implement: new production code without a reachable test refuses the attempt
     protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
@@ -8196,6 +9337,9 @@ def run_attempts(
                 restore_findings(kept)
 
         unmeasured: str | None = None
+        # This call's own ledger-clearing evidence, fresh per attempt: what verification actually
+        # removed from the plan, for the work check's discount (bead coding-harness-twbl).
+        clearing = ClearingEvidence()
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
@@ -8394,15 +9538,25 @@ def run_attempts(
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
                     raise error
+            files: list[str] | str
+            work_unmeasured: str | None = None
+            worked = False
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
                 try:
-                    files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    after = worktree_tree(root)
                 except (Refused, OSError) as error:
                     files = str(error)
+                    work_unmeasured = str(error)
+                else:
+                    try:
+                        files = attempt_files(root, before, after)
+                    except (Refused, OSError) as error:
+                        files = str(error)
             else:
                 files = unmeasured
+                work_unmeasured = unmeasured
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -8433,7 +9587,14 @@ def run_attempts(
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
-                        root, ctx.plan, key, formatted, tools, inputs[ctx.plan], previous_failures
+                        root,
+                        ctx.plan,
+                        key,
+                        formatted,
+                        tools,
+                        inputs[ctx.plan],
+                        previous_failures,
+                        clearing=clearing,
                     )
                 else:
                     problems = verify_attempt(
@@ -8447,6 +9608,8 @@ def run_attempts(
                         mode=verify_mode,
                         against=baseline,
                         scope=scope_lines,
+                        new_file_guard=new_file_guard,
+                        clearing=clearing,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -8464,9 +9627,47 @@ def run_attempts(
                 # back through the batch restore below, and the verdict stays rejected (F-5).
                 put_findings_back()
                 problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            # Verification executes edited code. Scrub before the final tree can store its
+            # output as Git objects, just as before the immediate post-call snapshot.
+            verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
+            # Judge the tree verification leaves, using only this call's changed paths.
+            # This discounts formatter reversions, derived rendering and checkpoint stamp restores.
+            if not verified_exposed and work_unmeasured is None:
+                try:
+                    worked = attempt_has_work(
+                        root,
+                        before,
+                        worktree_tree(root),
+                        ctx.findings,
+                        ctx.plan,
+                        model_after=after,
+                        clearing=clearing,
+                    )
+                except (Refused, OSError, ValueError) as error:
+                    work_unmeasured = str(error)
+            if verified_exposed:
+                # A safety refusal is not a failed work measurement. Record its real
+                # diagnostic before the audit is written, without taking another snapshot.
+                work_problems = [credential_message(verified_exposed)]
+            elif work_unmeasured is not None:
+                work_problems = [
+                    f"{NO_WORK}: the runner could not measure whether the attempt produced work ({work_unmeasured})"
+                ]
+            elif not worked:
+                expected_work = (
+                    "repair the taken rows of the loop record" if verb == "repair" else "make the change the plan names"
+                )
+                work_problems = [
+                    f"{NO_WORK}: the attempt left no model work after runner bookkeeping, "
+                    f"derived preparation and formatting; {expected_work}"
+                ]
+            else:
+                work_problems = []
+            # An attempt without work is rejected whatever verification said; the reason leads the list,
+            # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
-            problems = [*lifecycle_problems, *problems]
+            problems = [*work_problems, *lifecycle_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -8544,14 +9745,15 @@ def run_attempts(
                 scope_record += [
                     protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
                 ]
-            exposed = []
-            if key is not None:
+            exposed = verified_exposed
+            if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
                 # diagnostic block, before finalizing either the verdict or its measured endpoint.
                 exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
-                if exposed:
-                    if not problems:
-                        put_findings_back(original=Refused(credential_message(exposed)))
+            if exposed:
+                if not problems:
+                    put_findings_back(original=Refused(credential_message(exposed)))
+                if not verified_exposed:
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
@@ -8581,6 +9783,9 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
+                    # A passing attempt's verification scope stands in its time line, after the
+                    # verdict word; a failed attempt's stays in its one diagnostics block.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
                 ),
                 baseline_time,
                 inputs_before,
@@ -8596,16 +9801,6 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
-                if scope_record:
-                    # The runner's own evidence of how this repair was verified: never a model's claim.
-                    append(
-                        ctx.findings,
-                        quote_block(
-                            f"{SCOPE_LABEL}:\n" + "\n".join(scope_record),
-                            key,
-                            whole=scope_record,
-                        ),
-                    )
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
@@ -8769,6 +9964,11 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         answer_check=check,
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
+        # Every model route's post-run check is targeted when the coverage is safe (bead
+        # coding-harness-0swp): the covered initial, retry and stage-1 routes alike. New production
+        # code without a reachable test refuses before any test runs or a fallback is admitted.
+        verify_mode="targeted",
+        new_file_guard=True,
     )
 
 
@@ -8858,6 +10058,34 @@ def answer_is_owed(root: Path, change: str) -> bool:
         return False
 
 
+def refuse_unreadable_statements(root: Path, change: str) -> None:
+    """The draft's early statement check (bead coding-harness-nr6h): no model call starts on an
+    interview whose answered records the question-context gate cannot read.
+
+    The document job finds a missing statement only after a model call, and a retry cannot repair
+    the answers — the drafter may not edit `decisions.md`. This reads this change's own file
+    through the gate's statement reader; other changes' records stay the repository-wide gate's
+    business, which still runs later. A read failure refuses too: the interview owns its records,
+    and the runner neither repairs nor replaces them.
+    """
+    path = folder_of(root, change) / "decisions.md"
+    rel = path.relative_to(root).as_posix()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(
+            f"{rel} cannot be read ({getattr(error, 'strerror', None) or error}); complete the interview first — "
+            "the runner neither repairs nor replaces decisions.md."
+        ) from error
+    problems = check_question_context.statement_problems(text, rel)
+    if problems:
+        raise Refused(
+            f"{rel} holds answered records whose decision statement cannot be read; complete the "
+            "interview first — the runner does not edit decisions.md:\n"
+            + "\n".join(f"- {problem}" for problem in problems)
+        )
+
+
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
 
 
@@ -8887,32 +10115,62 @@ def card_problem(text: str) -> str | None:
     return None
 
 
-# The draft's post-run check is the verify job's existing document subset, selected through the
-# shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
-# bead coding-harness-77qj). Implement keeps full `make verify`; repair takes the targeted check,
-# with the full suite as its fallback and before phase 6.
-DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
-DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
+# The draft's post-run check is the verify job's locally runnable document subset, selected through
+# the one gate list CI uses - never a gate list of this caller's own (decisions/gates.yaml, bead
+# coding-harness-77qj), and since coding-harness-0swp run through the shared gate executor without
+# the machine-wide verify admission: a draft rewrites documents, so it starts no pytest, no admitted
+# shell runner and no kit probe. Implement and repair take the targeted check
+# (`verify_attempt`, mode "targeted"), with the admitted full `make verify` as the fallback and the
+# fresh full check before phase 6.
+def document_gates() -> list[dict]:
+    """The locally runnable document subset of the one gate list, in registry order.
+
+    Selected through `ci_gates`, never a list of this caller's own: the verify job's local gates
+    whose subsets name the documents. A draft rewrites plan, findings and index text, so it runs
+    these and nothing else - no pytest, no code or kit gate (bead coding-harness-0swp).
+    """
+    return [
+        gate
+        for gate in ci_gates.gates()
+        if gate["job"] == "verify"
+        and gate["local_runnable"]
+        and ci_gates.misst_in(gate, "lokal")
+        and "docs" in gate["subsets"]
+    ]
+
+
+def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
+    """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
+    named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
+    line = (
+        f"document checks only, no tests ran; result: {result}; gates {named}; not the full `make verify`; "
+        "a fresh full `make verify` is still required before phase 6"
+    )
+    if notes:
+        line += "; reported without blocking: " + ", ".join(notes)
+    return line
 
 
 def verify_draft(
     root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
-) -> tuple[list[str], bool]:
-    """A draft attempt's post-run checks: the problems, and whether the answer is owed.
+) -> tuple[list[str], bool, str]:
+    """A draft attempt's post-run checks: the problems, whether the answer is owed, and the scope evidence.
 
-    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
-    `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
-    is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
-    the two artefacts, the plan card and the `## Time used` heading. Implement keeps full `make verify`;
-    repair takes the targeted check, with the full suite as its fallback and before phase 6.
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document gates
+    through `run_gates` - each gate's exit code decides, never its prose - the two artefacts, the plan
+    card and the `## Time used` heading. The gates run outside the machine-wide verify admission: the
+    child environment carries none of its ownership, token or context variables (bead
+    coding-harness-0swp). The one missing answer a document gate tolerates is the gate's own, asked
+    for through `check_adr_answers.TOLERATE_ENV`, never read from its output.
     """
     owed = False
+    not_completed = document_scope_text([], "not completed")
     if len(new_adrs) > 1:
         problems = ["the attempt left more than one new ADR file: " + ", ".join(f"`{path}`" for path in new_adrs)]
-        return problems, owed
+        return problems, owed, not_completed
     tampered = tool_problem(root, tools)
     if tampered:
-        return [tampered], owed
+        return [tampered], owed, not_completed
     env = runner_env(
         foreign_env(
             {
@@ -8927,29 +10185,30 @@ def verify_draft(
         ),
         root,
     )
+    # Nothing a document check starts carries or claims the verify admission: its ownership,
+    # token and context variables are stripped here, and `run_gates` enters no admission.
+    env = {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
     preparation = prepare_derived(root, env, key)
     if preparation:
-        return preparation, owed
+        return preparation, owed, not_completed
     try:
-        # One machine-wide admission before the timed check: queue and memory waits consume no
-        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        with verify_lock.hold_admission(DOCS_VERIFY) as owned:
-            done = launch(
-                DOCS_VERIFY,
-                root,
-                verify_lock.inherit_env(env),
-                timeout=VERIFY_SECONDS,
-                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-                pass_fds=_lock_fds(owned),
-            )
-    except (CallFailed, verify_lock.VerifyLockError) as error:
-        # A document check that cannot start is as failed a post-run check as a red one: its
-        # diagnostics reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
-        return [f"`{DOCS_VERIFY_NAME}` could not run: {error}"], owed
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`{DOCS_VERIFY_NAME}` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
-    else:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], owed, not_completed
+    if not gates:
+        return ["no locally runnable document gates were selected; the draft check cannot run"], owed, not_completed
+    problems, notes = run_gates(root, env, key, gates)
+    if not problems:
         owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()
     for name in ("spec.md", "plan.md"):
@@ -8963,20 +10222,28 @@ def verify_draft(
             problems.append(CARD_PROBLEM)
         if not TIME_HEADING.search(plan_text):
             problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
-    return problems, owed
+    # The scope line is the check's own record of its outcome, so it stands only once the
+    # artefact guards have spoken: a draft they refuse is never reported as green (bead
+    # coding-harness-0swp, criterion 8).
+    scope = document_scope_text(gates, "red" if problems else "green", notes)
+    return problems, owed, scope
 
 
 def draft(root: Path, change: str) -> None:
     """Phases 2, 2b and 3: Codex drafts the change; GLM 5.3 after two failed Codex attempts (ADR 0016).
 
-    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the leak check
-    before each call, the credential scans, the one commit - plus what a writing Codex call needs:
+    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the early
+    statement check on this change's `decisions.md`, the leak check before each call, the
+    credential scans, the one commit - plus what a writing Codex call needs:
     each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
     its own missing ADR answer, which only the maintainer can record.
     """
-    ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
+    # `decisions.md` is read by the early statement check below, which refuses an unreadable file
+    # with the remedy; the preflight does not read it a second time with a bare message.
+    ctx = preflight(root, change, CODEX, bead_file="research.md")
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
+    refuse_unreadable_statements(root, change)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
     started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
@@ -8995,6 +10262,9 @@ def draft(root: Path, change: str) -> None:
             key = read_secret("GLM_KEY")
             if key is None:
                 raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        prior_plan = ctx.plan.read_text(encoding="utf-8") if ctx.plan.exists() else ""
+        prior_time = prior_plan if TIME_HEADING.search(prior_plan) else "## Time used\n"
+        started_wall, started_mono = utc_now(), monotonic_now()
         prompt = draft_prompt(ctx, diagnostics)
         begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
         unmeasured: str | None = None
@@ -9063,11 +10333,13 @@ def draft(root: Path, change: str) -> None:
                     restored,
                 ),
             )
-        problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
+        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
-            # The next attempt starts on the tree this one left; the block quotes its files and
-            # diagnostics below its audit line (spec, criterion 21).
-            listing = protect_diagnostics("\n".join(f"- {problem}" for problem in problems), key)
+            # The scope evidence stands first, as in every verb's block; the next attempt starts on
+            # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
+            listing = protect_diagnostics(
+                "\n".join([f"- {SCOPE_LABEL}: {scope}", *(f"- {problem}" for problem in problems)]), key
+            )
             files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
@@ -9084,13 +10356,42 @@ def draft(root: Path, change: str) -> None:
                     f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
                     "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
+            ended_wall, ended_mono = utc_now(), monotonic_now()
+            persist_time_entry(
+                root,
+                ctx.plan,
+                time_entry(
+                    "draft",
+                    attempt,
+                    route,
+                    endpoint[1],
+                    True,
+                    started_wall,
+                    ended_wall,
+                    max(0, round(ended_mono - started_mono)),
+                    [protect_diagnostics(scope, key)],
+                ),
+                prior_time,
+                {ctx.plan: prior_plan.encode("utf-8")},
+                accepted=True,
+                retry=False,
+            )
+            # The runner's own evidence of what the draft's check ran: never a model's claim, and
+            # never worded as tests or as the full verification (bead coding-harness-0swp). A passing
+            # attempt leaves it in the time line and checkpoint message, nothing after its audit line.
+            scope_line = f"- Attempt {attempt} ({route}): {scope}"
             checkpoint(
                 root,
                 ctx.change,
                 baseline,
                 key,
                 ignored_before,
-                message=f"docs({change}): draft spec and plan — route {route}",
+                message=(
+                    f"docs({change}): draft spec and plan — route {route}\n\n"
+                    + SCOPE_COMMIT_HEADING
+                    + "\n"
+                    + scope_line
+                ),
                 keep=keep,
             )
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
@@ -9139,22 +10440,32 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
-    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
+    `Broke a test` and starts no review. Every selected row's `Origin` is checked before any call
+    or write, an older block's selected row included (bead coding-harness-3h96). A taken Status that
+    already names a fix in the old hand-written form (`; fixed by`, `; fixed:`, `; repaired by`)
+    refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
     refuse_preexisting(root, allowed)
-    taken, waiting = repair_targets(ctx, read_record(change, root))
+    record = read_record(change, root)
+    current = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    resolved = resolve_finding_rows(record, current)
+    taken, waiting = repair_targets(ctx, record, current, resolved=resolved)
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
+    # Both checks share the resolver's current rows. The target check covers older selected
+    # rows too; the shared check retains its scope without re-admitting superseded history.
+    target_refusal = target_origin_refusal(record, current, resolved=resolved)
+    if target_refusal:
+        raise Refused(target_refusal)
+    refusal = origin_refusal(record, current, resolved=resolved)
+    if refusal:
+        raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
     ids = [row[0] for _, row in taken]
-    doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
-    if doubled:
-        raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
@@ -9181,7 +10492,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
-    rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
+    rows_before = findings_rows(current)
     standing: dict[str, str] = {}
     tools = tool_state(root)  # before any model runs; the answer check and the attempts share it (R-21)
 
@@ -9203,6 +10514,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             marks.update(proven)
         return problems
 
+    def before_commit() -> None:
+        require_unchanged_repair_rows(ctx, taken, resolved)
+        mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+
     run_attempts(
         ctx,
         "repair",
@@ -9217,8 +10532,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
-        before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True),
+        before_commit=before_commit,
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
@@ -9278,6 +10593,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
+    refusal = origin_refusal(record, findings_text)
+    if refusal:
+        raise Refused(refusal)
     if record is not None:
         refusal = released_overlap_refusal(record, findings_text)
         if refusal:
@@ -9823,6 +11141,7 @@ VERBS = {
     "draft": draft,
     "implement": implement,
     "repair": repair,
+    "triage": triage,
     "spec-review": spec_review,
     "review-loop": review_loop,
     "release-loop": release_loop,
@@ -9840,6 +11159,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument(
+        "row_status",
+        nargs="?",
+        default=None,
+        metavar="ROW=STATUS",
+        help=(
+            "triage only: the loop row and its new status, e.g. 'L1-1=taken — not a test'; "
+            "refuses ordinary taken for test-only locations: use taken — not a test — <reason>"
+        ),
+    )
+    parser.add_argument(
+        "reason_text",
+        nargs="?",
+        default=None,
+        metavar="REASON",
+        help=(
+            "triage only: the decision's own single-line reason; "
+            "the Broke a test proof mark stays the runner's; triage supplies no repair evidence"
+        ),
+    )
     parser.add_argument(
         "--stage2-off",
         nargs="?",
@@ -9950,12 +11289,14 @@ def _run(args: argparse.Namespace) -> int:
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+        if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
+            raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair"}:
+        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
             # The name is checked before the lock: the lock's path is built from it, and a name that
             # escapes the state directory must create nothing there (DL-A-9 of the deep review).
             folder_of(Path(args.root), args.change)
@@ -9964,6 +11305,10 @@ def _run(args: argparse.Namespace) -> int:
             # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
             with holding_record(args.change, Path(args.root)):
                 repair(Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "triage":
+            # A local record write, dispatched before any preflight or model call: no endpoint, no leak
+            # check, no credential - the record lock is triage's only shared resource.
+            triage(Path(args.root), args.change, args.row_status, args.reason_text)
         elif args.verb == "prepare-explore":
             prepare_explore(Path(args.root), args.change, args.klass, args.seats)
         elif args.verb == "explore":

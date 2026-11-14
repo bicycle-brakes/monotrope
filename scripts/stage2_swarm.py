@@ -8,7 +8,8 @@ The runner module (`scripts/stage2.py`) is passed in as `runner` and is never im
 runs as `__main__`, so importing it would execute the module a second time.
 
 Eleven topics (1-8 repository, 9-11 online), a finder trio, an Opus map merge, an Opus public sentence and
-an Opus judge: `39 + 3N` calls for `N` selected free models. Every seat is named by the run's frozen
+an Opus judge: `39 + 3N` calls for `N` selected free models, and at most `72 + 6N` when every
+topic report takes its one correction (ADR 0020 point 9). Every seat is named by the run's frozen
 selection, never by a hardcoded roster (ADR 0020 draft, Q-12 to Q-14).
 """
 
@@ -96,7 +97,7 @@ def select_research_catalog(
     fixed_ids,
     *,
     expected_version,
-    measured_wire_apis=("openai-completions",),
+    measured_wire_apis,
     address,
     paid,
     exclusion,

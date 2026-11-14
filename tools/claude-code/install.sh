@@ -20,6 +20,8 @@ dst="$HOME/.claude"
 stamp=$(date +%Y%m%d-%H%M%S)
 files=(
   statusline.sh
+  night.py
+  night-settings.json
   hooks/recap.sh
   hooks/handover.sh
   hooks/parallel-sessions.sh

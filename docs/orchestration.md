@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-10
+updated: 2026-11-12
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -45,8 +45,9 @@ stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
 then:
 
 1. **Verify-bearing steps fill the configured admission capacity, across all
-   lanes.** Such a step runs `make verify`: an implement or repair attempt, or
-   the orchestrator's own full run, which runs at lower priority
+   lanes.** Such a step runs `make verify`: an implement or repair attempt
+   whose targeted check falls back to the full run, the final review's own
+   check, or the orchestrator's own full run, which runs at lower priority
    (`nice -n 10`). The machine-wide admission admits two independent checks at
    once by default, and its count is the `verify.slots` file in the shared
    state root (see `docs/WORKFLOW.md`, "One admission per user and machine");

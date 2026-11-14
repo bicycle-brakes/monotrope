@@ -1,0 +1,113 @@
+---
+title: "Research — night-stall-guard"
+status: draft
+implementation_status: none
+date: 2026-11-09
+last_reviewed: 2026-11-09
+updated: 2026-11-09
+supersedes: null
+superseded_by: null
+bead: coding-harness-ibde
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: stage2, version: "GLM 5.3 Flash exploration; gpt-6.1-sol gap closure, 2026-11-09"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [research]
+---
+
+# night stall guard — Research
+
+Phase 1 exploration and the dated drafting gap closure below are model-written;
+human review remains pending.
+
+Stage-2 call, 2026-11-09: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 959 files, 3718 commits, 12 rules.
+
+## Runner exploration — 2026-11-09
+
+The exploration is complete. Here is the research, in German framed, in English as repository prose, ready to append below the stage-2 call line in `plans/changes/night-stall-guard/research.md`.
+
+---
+
+## What exists today
+
+**The change folder and its bead.** `plans/changes/night-stall-guard/` holds only the research skeleton; it was opened with commit `69e197a0` ("chore(night-stall-guard): open the change folder", bead coding-harness-ibde) and `plans/INDEX.md:280` lists the research file as `draft | none | 2026-11-09 | coding-harness-ibde`. The bead's title, description and class were **not read**: the tracker is the Dolt database under `.beads/`, and this phase's read-only tools cannot open it. The explore ran on the Flash route (stated in this file's stage-2 call line); per `AGENTS.md` and ADR 0020 that route serves the `bounded`/`spike` classes, but the class declaration itself is not read here and must be stated consistently at `prepare-explore --class` and in the headers.
+
+**The night-run doctrine is the core existing mechanism.** `docs/WORKFLOW.md` §"Night runs" (heading at line 1744 in this worktree) holds, in order: night rules 1–2 (maintainer, 2026-10-26, bead coding-harness-yuw.4) — Codex at capacity: wait four minutes, retry once, then Sonnet 5.5 takes the step, with the note "The runner automates this once bead coding-harness-m98e lands"; a same-mechanism phase-6 re-check finding parks that pull request, the run continues. The **30-minute wake** (standing since 2026-11-05/06, bead coding-harness-7x3c, lines 1761–1835) defines: a *wake* is a scheduled return of control — elapsed time or a printed message alone does not establish delivery; a *lane* is one worktree with the change it serves; active lanes form the watch list. The run's state lives in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/night/<run-id>/` (`lanes.txt`, `busy/`, append-only `lane-watch.log`; run id = UTC start date plus a letter), recorded in the run's handover file so a successor resumes from files without chat memory. Setup verifies wake delivery through a session scheduler wake or a background `sleep 1800` job with completion delivery — never `&` or `nohup` — starts keep-awake bounded to the run period (`caffeinate -i -t <remaining-run-seconds>` on macOS) as a separately owned background job, and must **report** a missing delivery facility or missing keep-awake instead of declaring the run ready; no scheduler adapter is introduced. Crucially for this change's name: "The wake is **time-based**: it returns even when every lane looks busy, and **lane idleness alone triggers nothing**" (lines 1803–1804). At each wake the session works one fixed order (lines 1806–1823): rearm once before any lane work; read the lane file; check each lane's *actual* job completion and activity and each busy marker's ownership; serve an idle lane's eligible next step in the same wake; park maintainer questions; take finished lanes off the list; append exactly one UTC summary line to `lane-watch.log`, logging a lane it could not check as `unknown` rather than healthy. A **busy marker** `busy/<lane-id>` records orchestrator work outside a runner call, names owner and activity, and an apparent leftover is checked against its owner's actual activity before anything is dispatched — never launch a duplicate on a marker's strength, never treat a marker as permanent proof of work, never kill by broad pattern. If a usage limit, stopped session or missed wake interrupts supervision, the resuming session rearms first, refreshes lane state from files and actual job activity, and records the unobserved interval as a **gap** in its first summary line; missed wakes are never backfilled as successful checks (lines 1825–1831). Teardown cancels the run's own wake and keep-awake handles, clears its own busy markers via the ownership record, records the end reason in the run's handover file, and leaves another run's resources untouched (lines 1831–1835).
+
+**AGENTS.md carries the standing night rules** (lines 132–136): night runs stay plain — no Kanban board, canvas or dashboard until the maintainer says the plain form has carried; collecting data is allowed (JSONL event log with OpenTelemetry GenAI field names, bead coding-harness-oebl), a service that shows it is not. Lines 179–181: a long runner job starts in the harness's background mode, one job per call — never `&`/`nohup`, "which ends without a notice and leaves a lane idle unseen" (maintainer, 2026-11-04); every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes per `docs/WORKFLOW.md` "Night runs".
+
+**The closest sibling change is `night-heartbeat` (bead coding-harness-7x3c) — drafted, not implemented.** Its folder holds research, decisions, spec, plan, findings and the trial evidence (`plans/INDEX.md:270–274`, all `draft | none`; its `spec.md` frontmatter says `class: bounded`, `appetite: 1`). Its spec makes the wake routine a documented operating procedure (nine acceptance criteria: mandatory wake, keep-awake, durable lane file, busy markers, one summary line per wake, rearm-before-work, serve eligible idle work, gap recording, resource retirement). Its **non-goals** (spec.md lines 96–109) explicitly exclude: a new scheduler, daemon, model call, notification service or automatic restart of an unavailable session; the broader lane diary/planner and status-line integration (beads coding-harness-4emv and coding-harness-5q2p); **runner process supervision**; and promoting the trial watchdog's 120-second polling and ten-minute idle threshold to standing requirements. Its decisions.md is a `SKIP · interview` recording the maintainer's scope statements of 2026-11-05/06 ("the wake becomes a fixed part of every night run"). The trial evidence `plans/changes/night-heartbeat/trial-lane-watchdog.sh.txt` is marked historical: a token-free shell loop that polled every 120 s, tracked per-lane idle-since files beside a flat `lanes.txt`, detected "no `stage2.py` job for 10 minutes" via `ps -eo args` grep (busy markers excepted), wrote one `lane-watch.log` line and exited to wake the chat. It was the only idle-triggered guard that ever ran, and only within one session.
+
+**Per-call supervision exists in the runner; cross-call liveness does not.** `scripts/stage2.py` `launch()` (line 970) takes `timeout`/`limit`/`deadline`, leads a process group on timeout and kills the whole group ("a hung `make verify` leaves no shell, pytest or worker behind", O188-4), registers live groups so an interrupted runner kills them (`kill_live`), and drains for `KILL_DRAIN_SECONDS = 5` (line 913). Stage constants: `TOOL_SECONDS = 5 * 60`, `VERIFY_SECONDS = 30 * 60`, `GIT_SECONDS = 2 * 60` (lines 4234–4236); the step-limit message "make was stopped by the runner's step limit after 30 minutes" is raised at lines 6032, 6250 and 8929 and is pinned by `tests/test_stage2.py` (e.g. lines 3850, 5949, 6012). The descendant-kill proof uses a `heartbeat` file as its liveness probe (`tests/test_stage2.py:21653–21687`). This is per-call only: a search over `scripts/` for `heartbeat|pulse|lifesign`-style cross-call signals found none, and the night-heartbeat research records the same "not there" finding for 2026-11-06. A search over `scripts/` for `lane-watch.log|lanes.txt|caffeinate|wake|busy/` returns **no files**: none of the night-run state-directory machinery has any script — it exists only as doctrine and as session practice.
+
+**What the runner stops at, and what it does not.** `docs/orchestration.md` (§"The resource rule", lines 39–60) records why: three parallel `make verify` runs drove load above 100 and lost two repair attempts to the runner's 30-minute step limit (2026-10-27/28); since then one verify-bearing step at a time across lanes, with a memory floor (bead coding-harness-l7sc, #305) and the verify admission lock (bead coding-harness-p6mu, #284). The verify-slot order puts runner attempts first "because its step limit can kill it" (line 55). The "Stated, enforced, planned" table (lines 125–135) marks "Runner step limit, leak check, red first" as *enforced by the runner*, while "The appetite stops the next attempt" is *kept by hand* with the runner self-stop planned (bead coding-harness-uxa9) — not built. The verify lock itself (bead p6mu, `plans/changes/verify-machine-lock/`) holds `${XDG_STATE_HOME:-~/.local/state}/coding-harness/verify.lock` with an owner token published at admission; its research leaves a `[DECISION]` on lock failure mode, noting a blocking lock interacts with the runner's 30-minute step limit. `scripts/verify_lock.py` (docstring line 49) names the runner's step limits as its boundary context; a `Boundary` section in specs is the accepted form for a mechanism no choke point closes (`docs/WORKFLOW.md` lines 1691–1699).
+
+**Observation sources that exist today.** `scripts/machine_facts.py` (bead yql7, change night-machine-facts — implemented, phase-6 reviewed 2026-11-07, merged via the #340 wave per the heartbeat-night handover) prints the night-start block: free disk, swap, registered worktrees, and `jobs_field` (line 211) recognizing runner and verification invocations from one `ps` snapshot with process id, elapsed time, verb and change attribution. `docs/orchestration.md` lines 62–95 pin its contract: an **observation, not an admission verdict** — nothing compared, refused, started or stopped; unreadable fields say `not read`, never a zero. `scripts/time_records.py` writes the fixed "Time used" lines; `scripts/stage2_research_dispatch.py` owns queueing, deadlines, timeout, cancellation and reaping for the research swarm (`PER_PROVIDER_LIMIT = 4`, outcomes include `timed-out` and `not-started-deadline`), bounded by `research-swarm-limits.yaml` (worktree root, exists) loaded by `scripts/stage2_research_limits.py` (merged 2026-11-05 as PR #336 per the seven-lanes handover). The only scheduled mechanism in the repository is the CI `schedule` cron for the drift job — reported by the night-heartbeat research from `.github/workflows/ci.yml`; `scripts/pr_sync.py` is explicitly on-request only (its module docstring).
+
+**Recorded stall incidents (the evidence base).** (1) 2026-11-01, five-lane night: "between about 11:00 and 12:38 UTC all lanes sat idle because the combined waiter fired once only" — the case bead coding-harness-5q2p (lane watch) exists for (`docs/journal/handover/2026-11-01-five-lane-night.md:183–186`); the lane heartbeat was a session-only timer and was stopped at handover (lines 233–235); the maintainer's rule "every lane is always served" with lane watch as bead 5q2p (line 63); the folded design builds lane watch (5q2p) with lane planning (4emv): the runner writes a lane diary per lane at every verb's start and end, checked at every runner end, in the status line and by a 20-minute heartbeat, an idle lane starting its next backlog bead itself (lines 271–278); five interview answers were prepared (lines 117–119). Neither 4emv nor 5q2p has a change folder today (no `plans/changes/lane-*` exists; no INDEX rows), so their tracker state after 2026-11-01 is not read. (2) The night plan of 2026-10-21 lists "Known stall points for the whole night": a runner repair call that exited 1 with unexplained cause; no merge overnight; one verify ≈ ten minutes; budget remaining not read (`docs/research/2026-10-21-night-run-plan.md:189–198`). (3) The night of 2026-11-01/02 ran out of disk; about 60 worktrees stood in `.claude/worktrees/` (`docs/journal/handover/2026-11-06-heartbeat-night.md:145–146`). (4) Bug coding-harness-te7q, found the morning after the heartbeat night: the runner accepted implement attempts that changed only their own bookkeeping as "verified and committed" — detected by morning hand-inspection, by no runtime guard (same handover, lines 83–86). (5) The seven-lanes hand-over (2026-11-05) left six lanes with runner jobs still running whose results were not read, and the job logs lived in the session scratchpad and are gone with the session (`docs/journal/handover/2026-11-05-seven-lanes.md:30–38`).
+
+**Research-corpus patterns a guard sits beside.** The arc42 corpus defines the **Heartbeat-Modell**: a task writes a periodic life sign; the supervisor terminates the whole process group on its absence and quarantines the task for log inspection (`docs/research/arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md:475`; risk row "Unbeaufsichtigte Läufe erzeugen PR-Flut" → stop conditions, iteration limits, heartbeat + process-group kill, line 434). The migration plan schedules a "Nachtmodus-Probe" with heartbeat monitoring and a deliberate heart-beat-withdrawal test of the kill (`docs/research/Migrationsplan_Omnigent_Referenzarchitektur.md:82,105`). The corpus comparison marks **adopt** for "stop conditions (max iterations, time, idle) belong into the Stage-2 runner spec" (`docs/research/2026-09-16-review-corpus-vs-running-workflow.md:124`). A related open thread: the recap-lock finding A.3 (`docs/research/2026-09-26-agent-sdk-and-formal-models.md`, Seam 4 at line 201) shows "a lock only grows old once its holder is dead" fails when a child call outlives five minutes; its fix options — a heartbeat touching the lock while the child runs, an owner token, a child-call bound — are recorded "for a bead, not applied", and its diagram names the beads without ids (line 400); `tools/claude-code/hooks/recap.sh` is unchanged in this respect per the night-heartbeat research. Precedent for the word "guard" in scripts is unrelated to stalls: `scripts/merge_guard.py` (merge ask rules), `scripts/ramp_valves.py` ("guards fail closed"), the Pi network guard (`scripts/research_capture.py`, `tests/pi_network_guard.mjs`).
+
+## Where it lives
+
+Doctrine: `docs/WORKFLOW.md` §"Night runs" (lines 1744–1835); `AGENTS.md` night-run bullets (lines 132–136, 179–181); `docs/orchestration.md` (lanes, resource rule, machine facts, "Stated, enforced, planned"). Runner supervision: `scripts/stage2.py` (`launch` line 970, `KILL_DRAIN_SECONDS` line 913, `TOOL_SECONDS`/`VERIFY_SECONDS`/`GIT_SECONDS` lines 4234–4236, step-limit raises lines 6032/6250/8929), `scripts/verify_lock.py`, `tests/test_stage2.py` (21653–21687 and the step-limit pins). Observation: `scripts/machine_facts.py` (`jobs_field` line 211), `docs/orchestration.md` lines 62–95. Swarm bounds: `scripts/stage2_research_dispatch.py`, `scripts/stage2_research_limits.py`, `research-swarm-limits.yaml`. Sibling change: `plans/changes/night-heartbeat/` (spec, decisions, plan, research, findings, `trial-lane-watchdog.sh.txt`). Session display hooks: `tools/claude-code/hooks/` (`beads-start.sh`, `handover.sh`, `parallel-sessions.sh`, `recap.sh`, `session-scan.sh`). Run state at runtime (not read, machine-local): `${XDG_STATE_HOME:-~/.local/state}/coding-harness/` — `verify.lock`, `stage2/<change>@<digest>/loop.md`, and the night state directory `night/<run-id>/` the doctrine defines. Evidence records: the handovers and night plans cited above.
+
+## What is unclear about it
+
+- **The bead is not read.** coding-harness-ibde's description — which per `AGENTS.md` names the change's class — and any maintainer statement of scope are in the Dolt tracker, unreachable with this phase's tools. Everything below about intent is therefore inference from names and neighbours, not fact.
+- **What "stall" means for this change is not stated anywhere in the tree (not found).** The doctrine makes lane idleness a deliberate non-trigger ("lane idleness alone triggers nothing"), the heartbeat change excluded runner process supervision, idle-polling thresholds, automatic restarts and notifications, and lane watch (5q2p) / lane planning (4emv) have no change folders. What remains for a "stall guard" — and whether it is a documentation routine like night-heartbeat, a runner-side mechanism, or a hook — is an open question for the maintainer unless the bead answers it.
+- Whether the runner-side automation of the Codex-capacity fallback announced for bead coding-harness-m98e (`docs/WORKFLOW.md` night rule 1) has begun — no change folder under a matching name was found in my searches, and its tracker state is not read.
+- Whether the recap-lock heartbeat/owner-token bead from finding A.3 was ever opened (the note records no id).
+- The current interview state of beads 5q2p and 4emv (no INDEX rows, no folders; the 2026-11-01 answers stand prepared).
+- Not read (not "none"): `scripts/stage2.py` in full (~9,000 lines; only cited sections), `research-swarm-limits.yaml` contents, `scripts/machine_facts.py` bodies beyond the function map, `.github/workflows/ci.yml`, any machine-local state directory, and the Dolt tracker.
+
+## Which files a change would have to touch
+
+Depends on the unresolved scope, by today's layout: a doctrine/practice change touches `docs/WORKFLOW.md` §"Night runs" and the `AGENTS.md` night-run bullets (a held path — only the orchestrator edits it), with `plans/INDEX.md` regenerated via `scripts/plans_registry.py --index` after header edits; a runner-side change touches `scripts/stage2.py` (its constants, `launch()`, step messages) and `tests/test_stage2.py`, possibly `scripts/verify_lock.py`; an observation-side change would build on `scripts/machine_facts.py`'s `jobs_field` contract ("observation, not admission verdict"); a swarm-side change touches `scripts/stage2_research_dispatch.py` and `research-swarm-limits.yaml`. Whatever the scope, the "night runs stay plain" standing rule bounds the output form: data collection (JSONL, bead coding-harness-oebl) is allowed, a display service is not. The night-heartbeat spec's protected areas (`scripts/stage2.py`, runtime hooks, status line, tracker storage, model/gate configuration, ADRs) describe that change's boundaries, not this one's — this change must state its own.
+
+**Candidate neighbours for the header:** `plans/changes/night-heartbeat/spec.md` · `plans/changes/night-machine-facts/spec.md` · `plans/changes/verify-machine-lock/spec.md` · `plans/changes/swarm-time-limits/spec.md` · `plans/specs/implementation-verification/spec.md`.
+
+---
+
+*Exploration report ends here. Prepared by the phase-1 explorer (glm-5.3-flash, 2026-11-09); all paths verified in this worktree at branch `fix/night-stall-guard`.*
+
+## Drafting gap closure — 2026-11-09
+
+The answered interview now supplies the scope that the explorer could not
+read: `decisions.md#Q-1` explicitly declares a bounded change, immediate
+night refusal and precise merge matching first, with the phone alert later.
+It records the permission-prompt incident and excludes moving heartbeats
+into headless calls. This supersedes the exploration's inference from the
+change's name; runner process supervision is not the selected work.
+
+At `e6ce9677`, read during drafting on 2026-11-09:
+
+- `.claude/settings.json` holds the broad API patterns
+  `Bash(gh api *merge*)` and `Bash(gh api *Merge*)`, alongside direct merge,
+  alias-definition, main-push, MCP, Codex and Omnigent rules.
+- `scripts/merge_guard.py` is the single merge-rule list and a limited
+  text matcher. `tests/test_merge_guard.py` compares the project settings
+  with it and tests rule preservation by `scripts/omnigent_policy.py`.
+  Existing tests cover repository-flag reads but no inline GraphQL read
+  with `mergedAt` and `isInMergeQueue`; the rule-count assertion pins eight
+  rules. Its current mutation samples omit `enqueuePullRequest`.
+- `tools/claude-code/install.sh` copies six user-level assets and merges
+  only the status line and hooks; its `--check` is read-only and changed
+  installed files receive timestamped backups. `tools/claude-code/settings.json`
+  has no permission profile. No night launcher is present in that directory.
+- Historical permission documentation is already retained in
+  `plans/changes/harness-decide-adr/research.md`, gap closure item 10, and
+  `docs/research/2026-09-30-decision-pull-requests.md`: deny precedes ask,
+  scope lists combine, and `dontAsk` refuses unapproved calls. This is a
+  record of documentation read on 2026-09-30, not a fresh runtime check.
+  Current Claude Code behavior and installed user/managed settings were
+  not read in this worktree-only drafting call.
+- `templates/spec.md` exists; no `templates/plan.md` exists. The prompt's
+  `scripts/validate_change_artefacts.py` is absent, so that named gate cannot
+  be reported green. Interview and criterion-ledger checkers are present.
+- The latest handover available here is
+  `docs/journal/handover/2026-11-06-heartbeat-night.md`; its historical lane
+  ownership does not measure current sessions. The supplied runner context
+  owns this drafting attempt; no tracker or external session-state write is
+  part of it. Current pull-request state was not read: `gh pr view` failed
+  to connect to GitHub on 2026-11-09.

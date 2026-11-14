@@ -52,6 +52,14 @@ this happens, should the system do A or B — A means …, B means …". Options
 named after what they do to users, operations or risk, never after their
 mechanism.
 
+**Every question asks which downside the maintainer accepts.** Each option
+names the downside that comes with it, and the question asks the maintainer
+to accept one with the choice. The downside is part of the question, never a
+later step and never the agent's to supply: an answer accepts only a downside
+that was shown with the option or that the maintainer stated. Where the
+accepted downside is not settled, the record stays `open` and you ask —
+you never invent it.
+
 **Every question brings its context, written for a reader with ADHD** — and
 this holds for every question to the maintainer, in every phase and in
 conversation, not only here (maintainer, 2026-10-14, ADR 0018).
@@ -123,6 +131,14 @@ context: |
 In the context of <situation>, facing <constraint>, we decided <option>,
 to achieve <goal>, accepting <consequence>. — 2026-10-09
 ```
+
+**Write the record at once, statement included.** As soon as an answer
+settles the choice and its accepted downside, write the whole record — the
+fields and the complete decision statement with all six parts (`In the context
+of`, `facing`, `we decided`, `to achieve`, `accepting`, and the date of the
+day you record the answer) — before the next question. The statement is never
+left for drafting: `draft` refuses a change whose answered record has no
+readable statement, before its first model call.
 
 `status` is `answered` or `open`. Only records with `status: answered` and
 `answered_by: maintainer` count toward a minimum, distinct ids, first
