@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -253,3 +253,12 @@ The orchestrator corrects the headers of
 `plans/changes/decision-statement-skeleton/research.md` and
 `plans/changes/verify-step-limit/research.md` (provenance, producer, review,
 the leftover skeleton notice); no other folder is touched.
+
+## Header-only correction as a rule — 2026-11-14 (decisions.md#Q-8)
+
+Until this change merges, the orchestrator corrects the header of every
+research file of another change that the census flags — provenance, producer,
+review, the leftover skeleton notice and the `updated:` stamp; never content.
+After the merge of main on 2026-11-14 the census flagged
+`plans/changes/origin-check-across-blocks/research.md` (opening skeleton
+notice only); its notice was removed and its `updated:` stamped.
