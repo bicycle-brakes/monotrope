@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-04
 last_reviewed: 2026-11-09
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-g19n
@@ -173,14 +173,15 @@ remain. Criteria 7 and 9 below reflect that explicit scope reduction.
 
 - Other changes' checked-in research and all their other artifacts — the former
   cross-folder correction authorisation is superseded by Q-4, with exactly one
-  exception approved by the maintainer in [decisions.md#Q-6](decisions.md#q-6--two-research-files-that-the-git-dated-census-finds)
-  on 2026-11-13 and widened in [decisions.md#Q-7](decisions.md#q-7--two-more-research-files-after-the-merge-of-main)
-  the same day: `plans/changes/decision-statement-skeleton/research.md`,
-  `plans/changes/verify-step-limit/research.md`,
-  `plans/changes/omnigent-test-not-blocking/research.md` and
-  `plans/changes/swarm-report-format/research.md`. Only their provenance, producer
-  and review fields and leftover skeleton notice may be corrected; research
-  content and every other change's artifacts remain protected.
+  exception, a rule rather than a list of files: until this change merges, every
+  active research file the census flags may have its header corrected
+  ([decisions.md#Q-8](decisions.md#q-8--the-header-only-correction-as-a-rule-until-this-change-merges),
+  2026-11-14, which generalises the files of
+  [decisions.md#Q-6](decisions.md#q-6--two-research-files-that-the-git-dated-census-finds)
+  and [decisions.md#Q-7](decisions.md#q-7--two-more-research-files-after-the-merge-of-main),
+  2026-11-13). Header-only means its provenance, producer and review fields and
+  its leftover skeleton notice; research content and every other change's
+  artifacts remain protected.
 - `plans/changes/archive/` and `plans/specs/` — historical evidence and unrelated
   capability contracts are outside this correction.
 - `provenance.yaml`, `decisions/`, `docs/adr/`, `AGENTS.md`, `prompts/`,
@@ -214,13 +215,10 @@ separate work.
 - The same pull request includes the runner fix, read-only census library and
   tests; no normaliser or bulk research edits remain. No model or ADR edits.
 - The pull request's file list respects protected areas and the deferred scope,
-  including only the four-file exception approved in decisions.md#Q-6 and
-  decisions.md#Q-7 (2026-11-13): provenance, producer and review fields, the
-  leftover skeleton notice and the `updated:` stamp in
-  `plans/changes/decision-statement-skeleton/research.md`,
-  `plans/changes/verify-step-limit/research.md`,
-  `plans/changes/omnigent-test-not-blocking/research.md` and
-  `plans/changes/swarm-report-format/research.md`, without research content changes.
+  including only the header-only exception of decisions.md#Q-8 (2026-11-14):
+  in research files of other changes that the census flags before this change
+  merges, only provenance, producer and review fields, the leftover skeleton
+  notice and the `updated:` stamp change, without research content changes.
 - The pull request closes the truthful-Explore-provenance task and its final
   commit carries `Closes-Bead: coding-harness-g19n`.
 - Special runs: none requiring live model calls; tests use local stand-ins.
