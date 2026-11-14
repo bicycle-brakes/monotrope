@@ -1236,6 +1236,340 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(directory)
 
 
+RESEARCH_TITLE = re.compile(r"(?m)^#[ \t][^\n]*\n")
+RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
+
+
+def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
+    """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
+    node = yaml.compose(block)
+    spans = []
+    for key_node, value in node.value:
+        if key_node.value == key:
+            start = block.rfind("\n", 0, key_node.start_mark.index) + 1
+            end = value.end_mark.index
+            # A block mapping's end mark includes its final line ending; keep that separator.
+            while end > start and block[end - 1] in "\r\n":
+                end -= 1
+            spans.append((start, end))
+    return spans
+
+
+def research_visible_text(text: str) -> str:
+    """Mask Markdown fenced code (including unclosed fences) without moving source offsets.
+
+    CommonMark permits up to three leading spaces and a closing fence at least as long
+    as the opener. Keeping line endings makes this useful for both evidence and edits.
+    """
+    marker = None
+    width = 0
+    visible = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if marker is None:
+            opening = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", content)
+            if opening and not (opening[1][0] == "`" and "`" in opening[2]):
+                marker, width = opening[1][0], len(opening[1])
+            else:
+                visible.append(line)
+                continue
+        else:
+            closing = re.fullmatch(r" {0,3}([`~]+)[ \t]*", content)
+            if closing and set(closing[1]) == {marker} and len(closing[1]) >= width:
+                marker = None
+        visible.append("".join(char if char in "\r\n" else " " for char in line))
+    return "".join(visible)
+
+
+def skeleton_notices() -> list[str]:
+    """The two generated opening notices of a research skeleton, derived from the template itself.
+
+    They are read from `scripts/new_change.py` at call time, so the removal patterns cannot drift from
+    what the skeleton actually writes. The template's first line is the title heading and stays.
+    """
+    import new_change
+
+    body = new_change.BODY_TEMPLATE.split("\n", 1)[1].strip("\n")
+    return [part.strip("\n") for part in re.split(r"\n[ \t]*\n+", body) if part.strip()]
+
+
+def _notice_pattern(notice: str) -> re.Pattern[str]:
+    """An exact opening notice at line start, including its own trailing line endings."""
+    lines = [re.escape(line) for line in notice.split("\n")]
+    return re.compile(r"(?m)^" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
+
+
+def research_opening_notices(text: str, body_start: int) -> list[str]:
+    """Generated notices still present before the research's first section or runner audit.
+
+    The active-file census shares the publisher's exact notice patterns, so authored mentions
+    below the opening cannot be mistaken for an unfilled skeleton.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    start = title.end() if title else body_start
+    visible = research_visible_text(text[body_start:])
+    visible = text[:body_start] + visible
+    boundary = RESEARCH_OPENING_END.search(visible, start)
+    opening = visible[start : boundary.start() if boundary else len(text)]
+    return [notice for notice in skeleton_notices() if _notice_pattern(notice).search(opening)]
+
+
+def _without_skeleton_opening(text: str, body_start: int) -> str:
+    """The body's opening region without its generated notices; everything below the first section stays.
+
+    The region reaches from the title heading to the first section boundary (a `##` heading, the audit
+    call line or a swarm envelope); only notices inside it are removed, and only when one matched does
+    an all-blank leftover collapse.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    if title is None or text[body_start : title.start()].strip():
+        raise Refused("research publication requires an opening title heading after the frontmatter")
+    region_start = title.end()
+    visible = text[:body_start] + research_visible_text(text[body_start:])
+    boundary = RESEARCH_OPENING_END.search(visible, region_start)
+    region_end = boundary.start() if boundary else len(text)
+    region = text[region_start:region_end]
+    spans = []
+    for notice in skeleton_notices():
+        match = _notice_pattern(notice).search(visible[region_start:region_end])
+        if match:
+            spans.append(match.span())
+    for start, end in sorted(spans, reverse=True):
+        region = region[:start] + region[end:]
+    removed = bool(spans)
+    if removed and not region.strip():
+        # Nothing authored is left: keep the one blank line between the title and what follows.
+        region = ("\r\n" if "\r\n" in text[region_start:region_end] else "\n") if boundary else ""
+    return text[:region_start] + region + text[region_end:]
+
+
+RESEARCH_PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+
+
+def research_producers(value, *, program_hint=None) -> list[dict]:
+    """Retain evidence-backed contributors, separating legacy model/date spellings.
+
+    A model name alone never establishes a program: only publication evidence may
+    supply that program. Unknown or ambiguous historical attribution is refused.
+    """
+    if value is None:
+        return []
+    records = value if isinstance(value, list) else [value]
+    if not records:
+        raise ValueError("empty producer list")
+    result = []
+    for record in records:
+        if not isinstance(record, dict) or record.get("kind") != "llm-session":
+            raise ValueError("invalid historical producer")
+        name = record.get("name")
+        name = "claude-code" if name == "Claude Code" else name
+        version = str(record.get("version", ""))
+        days = re.findall(r"\d{4}-\d{2}-\d{2}", version)
+        if len(days) != 1:
+            raise ValueError("no unique historical producer date")
+        try:
+            dt.date.fromisoformat(days[0])
+        except ValueError as error:
+            raise ValueError("invalid historical producer date") from error
+        legacy = version.replace(days[0], "").strip(" ,")
+        models = record.get("model")
+        if not isinstance(name, str) or name not in RESEARCH_PROGRAMS:
+            if name == "glm-5.3-flash" and program_hint in RESEARCH_PROGRAMS:
+                models, name = name, program_hint
+            else:
+                raise ValueError("no program evidence for historical producer")
+        if legacy and not legacy.startswith("stage-2 explore"):
+            if models and models != legacy:
+                raise ValueError("conflicting historical model evidence")
+            models = legacy
+        if models is not None and (not isinstance(models, str) or not models.strip()):
+            raise ValueError("invalid historical model evidence")
+        for model in re.split(r" and ", models) if models else [None]:
+            entry = dict(record, name=name, version=days[0])
+            if model:
+                entry["model"] = model
+            if entry not in result:
+                result.append(entry)
+    return result
+
+
+def research_header_producers(raw_header: str, *, body="") -> list[dict]:
+    """Read every owned producer span without silently losing duplicate-key evidence."""
+    node = yaml.compose(raw_header)
+    if not isinstance(node, yaml.MappingNode):
+        raise ValueError("research header is not a mapping")
+
+    def unique(value):
+        if isinstance(value, yaml.MappingNode):
+            keys = [key.value for key, _ in value.value]
+            if len(keys) != len(set(keys)):
+                raise ValueError("duplicate historical producer keys")
+            for _, child in value.value:
+                unique(child)
+        elif isinstance(value, yaml.SequenceNode):
+            for child in value.value:
+                unique(child)
+
+    # Only historical accepted publications can establish a legacy model-only producer's
+    # program. The program making this new publication says nothing about earlier work.
+    visible = research_visible_text(body)
+    programs: dict[str, set[str]] = {}
+    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
+        calls = list(
+            re.finditer(
+                r"(?m)^Stage-2 call, (\d{4}-\d{2}-\d{2}): explore ·[^\r\n]*?endpoint ([\w-]+)",
+                visible[: answer.start()],
+            )
+        )
+        if calls and calls[-1][1] == answer[1]:
+            programs.setdefault(answer[1], set()).add(producer_for((calls[-1][2], "", None)))
+
+    records = []
+    for key, value in node.value:
+        if key.value == "produced_by":
+            unique(value)
+            loaded = yaml.safe_load(yaml.serialize(value))
+            if loaded == []:
+                raise ValueError("empty producer list")
+            for entry in loaded if isinstance(loaded, list) else [loaded]:
+                days = (
+                    re.findall(r"\d{4}-\d{2}-\d{2}", str(entry.get("version", ""))) if isinstance(entry, dict) else []
+                )
+                evidence = programs.get(days[0], set()) if len(days) == 1 else set()
+                hint = next(iter(evidence)) if len(evidence) == 1 else None
+                for record in research_producers(entry, program_hint=hint):
+                    if record not in records:
+                        records.append(record)
+    return records
+
+
+def research_producer_field(records: list[dict]) -> str:
+    """Render only the owned field; unrelated header bytes never pass through YAML."""
+
+    def inline(record):
+        # Quoting dates keeps them scalar strings, as the publication contract requires.
+        return (
+            "{"
+            + ", ".join(
+                f"{key}: {json.dumps(value) if key in {'version', 'model'} else value}" for key, value in record.items()
+            )
+            + "}"
+        )
+
+    if len(records) == 1:
+        return "produced_by: " + inline(records[0])
+    return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
+
+
+def research_publication(existing: bytes, *, producer: str, day: str, model: str | None = None) -> bytes:
+    """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
+
+    The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
+    a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
+    missing field is inserted before `tags:` or at the header's end — and the generated opening
+    paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
+    prose, audit lines, envelopes and the file's line-ending style. Undecodable bytes, missing
+    frontmatter and a missing title heading are refused before publication.
+    """
+    try:
+        text = existing.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused("research publication refused: research is not UTF-8") from error
+    header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    if header is None:
+        raise Refused("research publication requires frontmatter")
+    start, end = header.span(1)
+    block = text[start:end]
+    eol = "\r\n" if "\r\n" in block else "\n"
+    try:
+        # Alias nodes reuse the anchor's source marks, even for mapping keys.
+        # Refuse the mechanism throughout the header before deriving any edit span.
+        # YAML tokens distinguish real anchors/aliases from quoted text and comments.
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                kind = "anchor" if isinstance(token, yaml.tokens.AnchorToken) else "alias"
+                raise Refused(f"research publication refused: YAML {kind} {token.value!r} in header")
+        metadata = yaml.safe_load(block)
+        if not isinstance(metadata, dict):
+            raise ValueError("header is not a mapping")
+        records = research_header_producers(block, body=text[header.end() :])
+    except (ValueError, yaml.YAMLError) as error:
+        raise Refused(f"research publication refused: {error}") from error
+    contribution = {"kind": "llm-session", "name": producer, "version": day}
+    if model:
+        contribution["model"] = model
+    if contribution not in records:
+        records.append(contribution)
+    fields = {
+        "provenance": "provenance: ai-drafted-reviewed",
+        "produced_by": research_producer_field(records),
+        "review": "review: {status: pending, approved_by: null, approved_at: null}",
+        "updated": f"updated: {day}",
+    }
+    edits: list[tuple[int, int, str]] = []
+    inserted: list[str] = []
+    for key, replacement in fields.items():
+        matches = _header_field_spans(block, key)
+        if not matches:
+            inserted.append(replacement)
+            continue
+        first = matches[0]
+        edits.append((*first, replacement))
+        for extra in matches[1:]:
+            drop_end = extra[1]
+            follow = block[drop_end : drop_end + 2]
+            if follow == "\r\n":
+                drop_end += 2
+            elif follow[:1] in ("\n", "\r"):
+                drop_end += 1
+            edits.append((extra[0], drop_end, ""))
+    edits.sort(key=lambda edit: edit[0])
+    pieces: list[str] = []
+    position = 0
+    for edit_start, edit_end, replacement in edits:
+        pieces.append(block[position:edit_start])
+        pieces.append(replacement)
+        position = edit_end
+    pieces.append(block[position:])
+    corrected = "".join(pieces)
+    if inserted:
+        tags = re.search(r"(?m)^tags:[^\r\n]*", corrected)
+        if tags is not None:
+            tags_at = tags.start()
+            corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
+        else:
+            corrected = eol.join([corrected, *inserted])
+    # Validate the complete prepared header before it can reach the atomic writer.
+    try:
+        # Compose checks YAML syntax/aliases without constructing the private brief's
+        # deliberate 0000-00-00 date sentinel as a Python calendar date.
+        yaml.compose(corrected)
+    except yaml.YAMLError as error:
+        raise Refused(f"research publication refused: corrected header is invalid YAML: {error}") from error
+    shifted = text[:start] + corrected + text[end:]
+    return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
+
+
+def publish_research(path: Path, prepared: bytes, text: str) -> None:
+    """Write the prepared research bytes with the publication's record appended, in one atomic replacement.
+
+    The prepared bytes already carry the corrected header and the removed skeleton notices; this adds the
+    runner's own record after them, stamps `updated:` like any research append and replaces the file once
+    through `write_atomic`. A resumed swarm retains its stored producer day while `updated:` records
+    this publication's day. A failure before or during the replacement leaves the previous bytes intact.
+    """
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
+    joined = prepared + separator + addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.fromisoformat(today())).encode("utf-8")
+    write_atomic(path, stamped)
+
+
 def stamp_updated(path: Path) -> None:
     """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
 
@@ -8424,7 +8758,16 @@ def explore(
         tail = "\n".join(answer.strip().splitlines()[-40:])
         print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
+    # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
+    # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
+    prepared = research_publication(
+        ctx.research.read_bytes(), producer=producer_for(endpoint), day=today(), model=endpoint[1]
+    )
+    publish_research(
+        ctx.research,
+        prepared,
+        f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}",
+    )
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 

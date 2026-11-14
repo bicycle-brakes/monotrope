@@ -143,6 +143,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
         "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
     ),
+    "research_census.py": (
+        "Library - the research metadata census (explore-provenance); tests/test_explore_provenance.py "
+        "imports it, and the pytest gate runs it there. It only reads research files, never rewrites them"
+    ),
     "machine_facts.py": (
         "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
         "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "
