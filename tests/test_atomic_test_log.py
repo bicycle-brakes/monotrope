@@ -435,6 +435,27 @@ def test_missing_log_is_empty(tmp_path: Path) -> None:
     assert read_records(tmp_path / "absent" / atomic_test_log.STAND_IN_LOGS[0]) == []
 
 
+def test_a_cleared_log_starts_fresh_under_a_late_writer(tmp_path: Path) -> None:
+    """Criterion 2 (flaky-swarm-leak-test, loop row L2-2). Planted fault: a clear lets a writer of the cleared run reach the next run's log.
+
+    The suites clear a declared log by removing the file. A writer of the
+    cleared run that still holds the old file's lock completes its record on
+    the removed file: the next run's log is neither blocked by that lock nor
+    given the late record. A clear that empties the file in place instead
+    would wait on the old writer and then hand its record to the next run.
+    """
+    log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
+    child, gap = _start_split_writer(tmp_path, log)
+    try:
+        log.unlink()  # the suites' clear between runs
+        append_record(log, {"seq": 2}, timeout=2)
+        assert read_records(log, timeout=2) == [{"seq": 2}]
+    finally:
+        _finish(child, gap)
+    assert child.returncode == 0, child.stderr.read() if child.stderr else ""
+    assert read_records(log) == [{"seq": 2}], "the cleared run's late record reached the next run's log"
+
+
 def test_only_declared_logs_take_records(tmp_path: Path) -> None:
     """Criterion 5 (flaky-swarm-leak-test). Planted fault: a JSON log the guard does not know about is written or read.
 

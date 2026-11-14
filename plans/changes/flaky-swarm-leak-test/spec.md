@@ -131,5 +131,18 @@ None open. The two maintainer answers remain unchanged.
   at most 60 s before `TimeoutError`: one identity for every spelling of a
   file, no lock file in a fixture repository, and a wedged writer fails a
   reader loudly instead of hanging it.
+- [DETAIL] (2026-11-14, loop row L2-2.) The suites clear a declared log by
+  removing the file, and the helper offers no locked clear. Because the lock
+  is the file's own, a removal splits it: a writer of the cleared run still
+  holding the old file's lock finishes its record on the removed file, while
+  the next run's writers and readers lock the new file. That split is the
+  clear's purpose: the late record must not reach the next run, and the next
+  run must not wait on the old writer. A clear that empties the file in place
+  under the lock would do both wrong (it waits for the old writer, which then
+  appends into the next run's log); a lock taken only around the removal adds
+  no guarantee, since the removed file's content is discarded anyway. So
+  removal stays the clear, and the guard does not count it as raw access
+  (`test_a_cleared_log_starts_fresh_under_a_late_writer`, red on an in-place
+  clear with a `TimeoutError`, green on removal).
 - [DETAIL] Deterministic handshakes plus repeated concurrent runs establish
   the regression evidence; sleep-only timing would recreate the same flake.
