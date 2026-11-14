@@ -54,9 +54,13 @@ Research of 2026-11-14 identifies three gaps in the current citation path:
 
 ## Acceptance criteria
 
-1. When a unique structural Markdown heading is cited with its opening ATX
-   marks (`#` through `######`, followed by spaces or tabs), it resolves to
-   the same frozen extent as its exact title without those opening marks.
+1. When a unique structural Markdown heading is cited as a copy of its own
+   heading line — its opening ATX marks at the heading's own level (`#`
+   through `######`, followed by spaces or tabs), with the line's optional
+   indentation of up to three spaces and its optional closing run of marks,
+   read exactly as the heading scan reads that line — it resolves to the same
+   frozen extent as its exact title. Opening marks of another level are
+   refused with a reason naming both levels.
    *Refuted by:* `a.md::## Heading` fails against `## Heading`, or returns
    different source bytes or line bounds from `a.md::Heading`.
    *Basis:* `decisions.md#Q-1` and its four-repair detail.
@@ -146,8 +150,10 @@ None open. The maintainer chose the small repair and accepted continuing
 free-text spelling risk in `decisions.md#Q-1` (2026-11-14).
 
 [DETAIL] Preserve exact-title lookup first; only when it finds no heading,
-remove an opening ATX run followed by whitespace for a second title comparison
-within the same frozen scan. This preserves literal hash titles and ambiguity
+read the citation as a heading line, with the one reading the heading scan uses
+(indentation, opening run, optional closing run), for a second title comparison
+within the same frozen scan, and require the copied level to equal the
+heading's own (loop rows L1-1, L1-9, L2-1, L2-3). This preserves literal hash titles and ambiguity
 rejection while accepting copied heading prefixes; it is not another evidence
 resolution pass.
 

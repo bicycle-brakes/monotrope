@@ -72,8 +72,9 @@ example only, not a fact about this repository: if a frozen file
 `## Retry policy`
 then this example's evidence string would be
 `docs/example/service-guide.md::Retry policy`.
-Copying the heading's opening `#` marks with the space after them is
-tolerated and resolves to the same section; the title itself stays exact,
+Copying the whole heading line — its opening `#` marks, exactly as many as the
+heading has, with the space after them — is tolerated and resolves to the same
+section; marks of another level are refused; the title itself stays exact,
 including case and inline formatting. Never cite a line number in place of
 the heading.
 
