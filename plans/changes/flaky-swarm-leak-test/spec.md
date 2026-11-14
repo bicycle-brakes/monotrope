@@ -54,6 +54,17 @@ declares (`STAND_IN_LOGS`); the helper's JSON functions serve no other name.
 Append-mode opens elsewhere under `tests/` — production-lock probes, document
 mutations, the admission-order probe of the verify lock (whose writers the
 lock under test admits one at a time) — are not stand-in logs.
+**Receipt log (`receipts.jsonl`):** a test log with a production writer, so
+not a declared stand-in log (2026-11-14, loop row L2-6). The swarm stand-in
+appends receipts through the helper's `text_append`, but the production tool
+wrapper (`scripts/stage2_research_tools.mjs`, `appendFileSync`) writes the same
+file and cannot take Python's `flock`; production reads it without the helper,
+once the seat's process has ended (`scripts/stage2_research_run.py`). Its
+protection therefore rests on each writer appending one small receipt line (a
+bounded title and excerpt) in a single `O_APPEND` write and on that late read,
+not on the helper's lock; the helper's lock only orders the stand-in's own
+appends. Changing the production writer or reader is a non-goal of this
+change.
 
 ## Acceptance criteria
 
