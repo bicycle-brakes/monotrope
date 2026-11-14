@@ -1628,22 +1628,23 @@ def _inherited(tmp_path: Path, name: str) -> tuple[str, str]:
 @pytest.mark.parametrize(
     ("system", "cores", "memory", "expected"),
     [
-        pytest.param("Darwin", "8", "8589934592", "4", id="macos-half-the-cores"),
-        pytest.param("Darwin", "16", "4294967296", "2", id="macos-memory-binds-first"),
-        pytest.param("Darwin", "7", "8589934592", "3", id="macos-odd-cores-floored"),
+        pytest.param("Darwin", "16", "68719476736", "4", id="macos-cores-over-default-slots"),
+        pytest.param("Darwin", "16", "17179869184", "2", id="macos-memory-binds-first"),
+        pytest.param("Darwin", "15", "68719476736", "3", id="macos-odd-cores-floored"),
         pytest.param("Darwin", "1", "8589934592", "1", id="macos-one-core-still-one"),
         pytest.param("Darwin", "8", "1073741824", "1", id="macos-under-2-gib-still-one"),
-        pytest.param("Linux", "8", "8388608", "4", id="linux-half-the-cores"),
-        pytest.param("Linux", "16", "4194304", "2", id="linux-memory-binds-first"),
+        pytest.param("Linux", "16", "67108864", "4", id="linux-cores-over-default-slots"),
+        pytest.param("Linux", "16", "16777216", "2", id="linux-memory-binds-first"),
         pytest.param("Linux", "3", "2097152", "1", id="linux-small-machine-still-one"),
     ],
 )
 def test_runner_derives_worker_default_from_machine_size(
     tmp_path: Path, system: str, cores: str, memory: str, expected: str
 ) -> None:
-    """Criterion 1: without a caller value the default is the smaller of half
-    the logical cores (floored, at least one) and the 2-GiB memory bound —
-    derived on either platform from controlled readings, not from the host."""
+    """Criterion 1: without a caller value or settings file the default is the
+    smaller of the logical cores over the repository's default slots (floored,
+    at least one) and the 2-GiB memory bound across all slots — derived on
+    either platform from controlled readings, not from the host."""
     done = _run_with_resources(tmp_path, "run", system=system, cores=cores, memory=memory)
     assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert _inherited(tmp_path, "run") == (expected, "declared")
@@ -1653,10 +1654,10 @@ def test_runner_derives_worker_default_from_machine_size(
 def test_runner_preserves_explicit_worker_value(tmp_path: Path, caller_value: str) -> None:
     """Criterion 2: a non-empty caller value reaches the gate verbatim — never
     rewritten to the machine's default, never validated, whatever the machine."""
-    # The control: this machine (8 cores, 8 GiB) derives 4 on its own, which
+    # The control: this machine (16 cores, 64 GiB) derives 4 at four slots on its own, which
     # differs from the caller's 8 — so the run below can tell pass-through
     # from an overwrite.
-    control = _run_with_resources(tmp_path, "control", system="Darwin", cores="8", memory="8589934592")
+    control = _run_with_resources(tmp_path, "control", system="Darwin", cores="16", memory="68719476736")
     assert control.returncode == 0, f"exit {control.returncode}\n{control.stdout}\n{control.stderr}"
     assert _inherited(tmp_path, "control") == ("4", "declared")
     done = _run_with_resources(
@@ -1674,13 +1675,13 @@ def test_runner_preserves_explicit_worker_value(tmp_path: Path, caller_value: st
 def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
     """Criterion 3: an exported empty value is treated exactly like an unset
     one — the same readable machine derives the same default for both."""
-    unset_run = _run_with_resources(tmp_path, "unset", system="Darwin", cores="8", memory="8589934592")
+    unset_run = _run_with_resources(tmp_path, "unset", system="Darwin", cores="16", memory="68719476736")
     empty_run = _run_with_resources(
         tmp_path,
         "empty",
         system="Darwin",
-        cores="8",
-        memory="8589934592",
+        cores="16",
+        memory="68719476736",
         worker_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": ""},
     )
     for run in (unset_run, empty_run):
@@ -1689,27 +1690,67 @@ def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
     assert _inherited(tmp_path, "empty") == ("4", "declared")
 
 
+def test_runner_takes_workers_from_the_machine_settings_file(tmp_path: Path) -> None:
+    """Criterion 12: without any caller value — the way the Stage-2 runner starts `make verify`, whose
+    allow-list drops PYTEST_XDIST_AUTO_NUM_WORKERS — the runner derives the workers itself through the one
+    settings reader: a machine file's `workers_per_run`, or cores over its `slots`; it logs the values in
+    force with their sources and records them, the end's load average and the pytest peak in the history."""
+
+    def run(name: str, document: str) -> tuple[subprocess.CompletedProcess, Path]:
+        settings = tmp_path / name / "state" / "coding-harness" / verify_lock.SETTINGS_NAME
+        settings.parent.mkdir(parents=True)
+        settings.write_text(document, encoding="utf-8")
+        done = _run_with_resources(tmp_path, name, system="Darwin", cores="16", memory="68719476736")
+        return done, settings
+
+    done, settings = run("both", "[verify]\nslots = 3\nworkers_per_run = 5\n")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert _inherited(tmp_path, "both") == ("5", "declared")
+    assert f"slots 3 (machine file {settings})" in done.stderr, done.stderr
+    assert f"pytest workers per run 5 (machine file {settings})" in done.stderr, done.stderr
+    history = [
+        json.loads(line)
+        for line in (settings.parent / "verify-duration.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    start = next(event for event in history if event["event"] == "run_start")
+    end = next(event for event in history if event["event"] == "run_end")
+    assert (start["workers"], start["slots"]) == ("5", 3), start
+    assert start["slots_source"] == f"machine file {settings}" and start["workers_source"] == start["slots_source"]
+    assert "load_avg_end" in end and "pytest_peak_rss_bytes" in end, end
+
+    # slots alone: the workers follow them — 16 cores / 4 default slots would give 4, 3 slots give 5
+    again, _ = run("slots", "[verify]\nslots = 3\n")
+    assert again.returncode == 0, again.stderr
+    assert _inherited(tmp_path, "slots") == ("5", "declared")
+
+    # an unusable settings file refuses before any gate
+    refused, _ = run("refused", "[verify]\nslots = 0\n")
+    assert refused.returncode == 2 and "refusing admission" in refused.stderr, refused.stderr
+    assert "[probe]" not in refused.stdout
+
+
 @pytest.mark.parametrize(
     ("system", "cores", "memory", "expected"),
     [
-        pytest.param("Darwin", "8", None, "4", id="macos-cpu-reading-only"),
-        pytest.param("Darwin", None, "8589934592", "4", id="macos-memory-reading-only"),
-        pytest.param("Linux", "8", None, "4", id="linux-cpu-reading-only"),
-        pytest.param("Linux", None, "8388608", "4", id="linux-memory-reading-only"),
+        pytest.param("Darwin", "16", None, "4", id="macos-cpu-reading-only"),
+        pytest.param("Darwin", None, "34359738368", "4", id="macos-memory-reading-only"),
+        pytest.param("Linux", "16", None, "4", id="linux-cpu-reading-only"),
+        pytest.param("Linux", None, "33554432", "4", id="linux-memory-reading-only"),
         pytest.param("Darwin", None, None, "", id="macos-nothing-readable"),
         pytest.param("Linux", None, None, "", id="linux-nothing-readable"),
-        pytest.param("SunOS", "8", "8589934592", "", id="unknown-platform-has-no-commands"),
+        pytest.param("SunOS", "8", "34359738368", "", id="unknown-platform-has-no-commands"),
         pytest.param("Darwin", "abc", "-3", "", id="macos-malformed-and-negative"),
         pytest.param("Darwin", "0", "0", "", id="macos-zero-readings"),
         pytest.param("Darwin", "00", "0000", "", id="macos-multi-digit-zero-readings"),
         pytest.param("Linux", "0000", "00", "", id="linux-multi-digit-zero-readings"),
-        pytest.param("Darwin", "00", "8589934592", "4", id="macos-zero-cpu-memory-only"),
-        pytest.param("Linux", "00", "8388608", "4", id="linux-zero-cpu-memory-only"),
+        pytest.param("Darwin", "00", "34359738368", "4", id="macos-zero-cpu-memory-only"),
+        pytest.param("Linux", "00", "33554432", "4", id="linux-zero-cpu-memory-only"),
         pytest.param("Linux", "abc", "12.5", "", id="linux-malformed-readings"),
-        pytest.param("Darwin", "9223372036854775808", "8589934592", "4", id="macos-oversized-cpu"),
-        pytest.param("Linux", "9" * 100, "8388608", "4", id="linux-oversized-cpu"),
-        pytest.param("Darwin", "8", "9223372036854775808", "4", id="macos-oversized-bytes"),
-        pytest.param("Linux", "8", "18014398509481985", "4", id="linux-kib-conversion-overflows"),
+        pytest.param("Darwin", "9223372036854775808", "34359738368", "4", id="macos-oversized-cpu"),
+        pytest.param("Linux", "9" * 100, "33554432", "4", id="linux-oversized-cpu"),
+        pytest.param("Darwin", "16", "9223372036854775808", "4", id="macos-oversized-bytes"),
+        pytest.param("Linux", "16", "18014398509481985", "4", id="linux-kib-conversion-overflows"),
         pytest.param("Linux", None, "9" * 100, "", id="linux-oversized-memory-only"),
         pytest.param("Darwin", "9" * 100, "9" * 100, "", id="macos-both-readings-oversized"),
     ],
@@ -1731,7 +1772,7 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
     gate inherits it, an advisory failure reports without blocking, and a
     blocking failure turns the run red and stops before the later gates
     (cheap-first, bead coding-harness-bxxt.1)."""
-    tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="8", memory="8589934592")
+    tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="16", memory="68719476736")
     order = tmp_path / "order.txt"
     gelaufen: list[str] = []
 
@@ -2426,7 +2467,7 @@ def _write_runner_capacity(state: Path, content: str) -> None:
     """Publish the shared state root's capacity setting before any run reads it."""
     root = state / "coding-harness"
     root.mkdir(parents=True, exist_ok=True)
-    (root / verify_lock.SLOTS_NAME).write_text(content, encoding="utf-8")
+    (root / verify_lock.SETTINGS_NAME).write_text(f"[verify]\nslots = {content}\n", encoding="utf-8")
 
 
 def _slot_tree(base: Path, gid: str, seconds: str, *, ending: str = "true", probe: bool = False) -> Path:

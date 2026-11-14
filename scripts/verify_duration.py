@@ -122,6 +122,122 @@ def _worker_setting() -> str | None:
     return value if value else None
 
 
+def _settings_fields() -> dict:
+    """The verify settings in force for this run and their sources (layered settings, bead coding-harness-u1ha).
+
+    The values come from the one reader, `verify_lock.read_settings`, with this
+    run's environment: the runner exported the worker count and its source
+    before admission. An unusable settings file never fails the record — the
+    admission refuses on its own — it is recorded as unknown with its reason.
+    """
+    try:
+        settings = verify_lock.read_settings(env=dict(os.environ))
+    except verify_lock.VerifyLockRefused as refused:
+        return {"slots": None, "slots_source": f"unreadable: {refused}", "workers_source": None}
+    return {"slots": settings.slots, "slots_source": settings.slots_source, "workers_source": settings.workers_source}
+
+
+def _load_average() -> list[float] | None:
+    """The 1-, 5- and 15-minute load averages now, or None where the platform has none."""
+    try:
+        return [round(value, 2) for value in os.getloadavg()]
+    except (OSError, AttributeError):
+        return None
+
+
+def pytest_tree_rss(rows: list[tuple[int, int, int, str]], root: int) -> int:
+    """The summed resident set, in bytes, of every pytest process tree below `root`.
+
+    `rows` are `(pid, ppid, rss_kib, command)` as `ps` lists them. A pytest
+    process is a descendant of `root` whose command names pytest; its own
+    descendants (the xdist workers, whose command does not) count with it,
+    each process once.
+    """
+    children: dict[int, list[int]] = {}
+    info: dict[int, tuple[int, str]] = {}
+    for pid, ppid, rss, command in rows:
+        children.setdefault(ppid, []).append(pid)
+        info[pid] = (rss, command)
+
+    def below(pid: int) -> list[int]:
+        found, stack = [], list(children.get(pid, []))
+        while stack:
+            current = stack.pop()
+            if current in found or current == root:
+                continue
+            found.append(current)
+            stack.extend(children.get(current, []))
+        return found
+
+    counted: set[int] = set()
+    for pid in below(root):
+        if "pytest" in info.get(pid, (0, ""))[1] and pid not in counted:
+            counted.add(pid)
+            counted.update(below(pid))
+    return sum(info[pid][0] for pid in counted if pid in info) * 1024
+
+
+def _process_rows() -> list[tuple[int, int, int, str]] | None:
+    """Every process's pid, parent, resident KiB and command, or None when `ps` cannot answer."""
+    try:
+        done = subprocess.run(
+            ["ps", "-A", "-o", "pid=,ppid=,rss=,command="],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    rows = []
+    for line in done.stdout.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) >= 3 and all(part.isdecimal() for part in parts[:3]):
+            rows.append((int(parts[0]), int(parts[1]), int(parts[2]), parts[3] if len(parts) == 4 else ""))
+    return rows
+
+
+def cmd_sample(args: argparse.Namespace) -> int:
+    """Sample the pytest trees below `--pid` until it ends; keep the peak bytes in `--out`.
+
+    The runner starts this in the background beside its gates and stops it
+    before its end record; the peak is replaced atomically, so the reader sees
+    a whole number or no file. A sampler that cannot read `ps` writes nothing,
+    and the end record names the peak as unknown.
+    """
+    out = Path(args.out)
+    peak = -1
+    while True:
+        try:
+            os.kill(args.pid, 0)
+        except ProcessLookupError:
+            return 0
+        except PermissionError:
+            pass
+        rows = _process_rows()
+        if rows is not None:
+            current = pytest_tree_rss(rows, args.pid)
+            if current > peak:
+                peak = current
+                fresh = out.with_name(f".{out.name}.{os.getpid()}")
+                fresh.write_text(str(peak), encoding="utf-8")
+                fresh.replace(out)
+        time.sleep(args.every)
+
+
+def _peak_rss(path: str | None) -> int | None:
+    """The sampler's peak in bytes, or None when no sample was taken or the file is unusable."""
+    if not path:
+        return None
+    try:
+        raw = Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return int(raw) if raw.isascii() and raw.isdecimal() else None
+
+
 def _open_history() -> int:
     """A private regular history file for appending; an aliased or nonregular destination refuses.
 
@@ -225,6 +341,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "placement": args.placement,
         "memory_pct": memory,
         "workers": _worker_setting(),
+        **_settings_fields(),
         **_context_fields(),
     }
     append_event(event)
@@ -260,6 +377,8 @@ def cmd_end(args: argparse.Namespace) -> int:
         "utc": _utc_now(),
         "seconds": seconds,
         "verdict": args.verdict,
+        "load_avg_end": _load_average(),
+        "pytest_peak_rss_bytes": _peak_rss(args.peak_rss_file),
     }
     append_event(event)
     context = verify_lock.admission_context()
@@ -465,6 +584,9 @@ def _detail(run: dict) -> str:
         f"  job: {_shown(start.get('job'))} · placement: {_shown(start.get('placement'))}",
         f"  free memory at start: {_shown(start.get('memory_pct'))}",
         f"  workers: {_shown(start.get('workers'), 'unset (xdist decides)')}",
+        # Records written before the layered settings carry none of these; "not recorded" says so.
+        f"  slots: {_shown(start.get('slots'), 'not recorded')} ({_shown(start.get('slots_source'), 'not recorded')})"
+        f" · workers from: {_shown(start.get('workers_source'), 'not recorded')}",
         f"  admission: {_shown(start.get('admission_id'))} · wait:"
         f" {_shown(start.get('admission_wait_seconds'))} · reused: {_shown(start.get('admission_reused'))}",
         "  gates:",
@@ -478,6 +600,11 @@ def _detail(run: dict) -> str:
         lines.append("  execution: unknown · verdict: incomplete (no completion recorded)")
     else:
         lines.append(f"  execution: {_fmt_seconds(run['end'].get('seconds'))} · verdict: {_verdict_of(run)}")
+        peak = run["end"].get("pytest_peak_rss_bytes")
+        load = run["end"].get("load_avg_end")
+        peak_text = f"{peak / 1024**3:.2f} GiB" if type(peak) is int else "not recorded"
+        load_text = " / ".join(str(value) for value in load) if isinstance(load, list) else "not recorded"
+        lines.append(f"  pytest peak RSS: {peak_text} · load average at end (1/5/15 min): {load_text}")
     return "\n".join(lines)
 
 
@@ -507,7 +634,14 @@ def main(argv: list[str] | None = None) -> int:
     end.add_argument("--start", required=True, help="the monotonic reading taken before the report")
     end.add_argument("--end", required=True, help="the monotonic reading taken at the final verdict")
     end.add_argument("--verdict", required=True, choices=("green", "red"), help="the run's final verdict")
+    end.add_argument("--peak-rss-file", default=None, help="the sampler's peak file; absent or empty means unknown")
     end.set_defaults(handler=cmd_end)
+
+    sample = operations.add_parser("sample", help="sample the pytest trees below one pid; keep the peak RSS")
+    sample.add_argument("--pid", required=True, type=int, help="the runner whose pytest descendants are sampled")
+    sample.add_argument("--out", required=True, help="the file that holds the peak in bytes")
+    sample.add_argument("--every", type=float, default=5.0, help="seconds between samples")
+    sample.set_defaults(handler=cmd_sample)
 
     report = operations.add_parser("report", help="list recorded runs, or show one with --run")
     report.add_argument("--run", help="show this run's machine context and per-gate durations")

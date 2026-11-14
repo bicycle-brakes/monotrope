@@ -91,19 +91,22 @@ if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
 fi
 
-# The local worker default (bead coding-harness-l7sc): the pytest gate's `-n
-# auto` would otherwise take every logical core, and a probe under that died in
-# memory pressure once. So a run without a caller's own choice sizes the
-# workers from the machine: the smaller of half the logical cores (floored, at
-# least one) and detected memory in 2-GiB steps (at least one). An exported
-# PYTEST_XDIST_AUTO_NUM_WORKERS passes through verbatim — an empty value counts
-# as unset — and a failed or malformed reading is ignored, never an error: with
-# no usable reading the variable stays unset and xdist's own auto applies.
-if [ -n "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
-    :
-else
-    worker_cores=""
-    worker_bytes=""
+# The pytest workers per run (bead coding-harness-l7sc; layered verify
+# settings, bead coding-harness-u1ha): the pytest gate's `-n auto` would
+# otherwise take every logical core, and a probe under that died in memory
+# pressure once. The count comes from the one settings reader
+# (`scripts.verify_lock --settings`): the machine-local `verify.toml` in the
+# shared state root, or derived from the slot count — logical cores / slots
+# (floored, at least one), bounded by 2 GiB of memory per worker across all
+# slots. This block only takes the machine readings and hands them over; a
+# failed or malformed reading is passed as empty, never an error, and with no
+# usable reading the variable stays unset so xdist's own auto applies. An
+# exported PYTEST_XDIST_AUTO_NUM_WORKERS passes through verbatim — an empty
+# value counts as unset. The reader logs the values in force and where they
+# came from; an unusable settings file refuses here, before any gate.
+worker_cores=""
+worker_bytes=""
+if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
     case "$(uname -s 2>/dev/null)" in
         Darwin)
             worker_cores=$(sysctl -n hw.logicalcpu 2>/dev/null) || worker_cores=""
@@ -112,7 +115,7 @@ else
         Linux)
             worker_cores=$(nproc 2>/dev/null) || worker_cores=""
             worker_kib=$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null) || worker_kib=""
-            # MemTotal is reported in KiB; the bound below counts bytes.
+            # MemTotal is reported in KiB; the bound counts bytes.
             case "$worker_kib" in
                 "" | *[!0-9]* | 0) worker_bytes="" ;;
                 *)
@@ -127,40 +130,30 @@ else
     esac
     # Only a positive decimal integer is a reading: empty, non-numeric, zero
     # and negative output are all as good as no reading. Limit raw CPU/byte
-    # readings to 18 digits before arithmetic: every such decimal fits in a
-    # signed 64-bit integer, independent of its value or leading zeroes.
+    # readings to 18 digits: every such decimal fits in a signed 64-bit
+    # integer, independent of its value or leading zeroes.
     [ "${#worker_cores}" -le 18 ] || worker_cores=""
     [ "${#worker_bytes}" -le 18 ] || worker_bytes=""
     case "$worker_cores" in
         "" | *[!0-9]*) worker_cores="" ;;
-        *[1-9]*) ;;
+        *[1-9]*) worker_cores=$((10#$worker_cores)) ;;
         *) worker_cores="" ;;
     esac
     case "$worker_bytes" in
         "" | *[!0-9]*) worker_bytes="" ;;
-        *[1-9]*) ;;
+        *[1-9]*) worker_bytes=$((10#$worker_bytes)) ;;
         *) worker_bytes="" ;;
     esac
-    worker_cpu_bound=""
-    worker_mem_bound=""
-    if [ -n "$worker_cores" ]; then
-        worker_cpu_bound=$((10#$worker_cores / 2))
-        [ "$worker_cpu_bound" -ge 1 ] || worker_cpu_bound=1
-    fi
-    if [ -n "$worker_bytes" ]; then
-        worker_mem_bound=$((10#$worker_bytes / 2147483648))
-        [ "$worker_mem_bound" -ge 1 ] || worker_mem_bound=1
-    fi
-    # Each usable bound alone decides; with both, the smaller one does.
-    if [ -n "$worker_cpu_bound" ]; then
-        PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_cpu_bound
-        if [ -n "$worker_mem_bound" ] && [ "$worker_mem_bound" -lt "$worker_cpu_bound" ]; then
-            PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_mem_bound
-        fi
-        export PYTEST_XDIST_AUTO_NUM_WORKERS
-    elif [ -n "$worker_mem_bound" ]; then
-        PYTEST_XDIST_AUTO_NUM_WORKERS=$worker_mem_bound
-        export PYTEST_XDIST_AUTO_NUM_WORKERS
+fi
+settings_out=$("$PYTHON" -m scripts.verify_lock --settings --cores "$worker_cores" --memory-bytes "$worker_bytes") || exit 2
+{ IFS= read -r settings_workers; IFS= read -r settings_workers_source; } <<SETTINGS
+$settings_out
+SETTINGS
+if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
+    if [ -n "$settings_workers" ]; then
+        PYTEST_XDIST_AUTO_NUM_WORKERS=$settings_workers
+        HARNESS_VERIFY_WORKERS_SOURCE=$settings_workers_source
+        export PYTEST_XDIST_AUTO_NUM_WORKERS HARNESS_VERIFY_WORKERS_SOURCE
     else
         unset PYTEST_XDIST_AUTO_NUM_WORKERS
     fi
@@ -169,8 +162,8 @@ fi
 # One machine-wide admission for this user (queue for a free slot, free-memory
 # check) before any protected work: concurrent full checks across repositories
 # and worktrees exhausted the machine (bead coding-harness-p6mu). The capacity
-# defaults to two slots and is set machine-wide by the `verify.slots` file in
-# the shared state root. A valid inherited marker
+# comes from the same settings reader: the repository default, or `slots` in
+# the machine-local `verify.toml` in the shared state root. A valid inherited marker
 # (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
 # ancestor already holds — re-enter the unchanged gate loop directly; the
 # module is invoked as `-m scripts.verify_lock`, and the supervisor below
@@ -231,6 +224,17 @@ duration_placement=local
 [ "$CI_MODE" -eq 1 ] && duration_placement=ci
 dur_call exec_t0 clock
 dur_call RUN_ID start --job "$JOB" --placement "$duration_placement"
+# The peak resident memory of this run's pytest processes, sampled every five
+# seconds beside the gates and recorded with the end event (layered verify
+# settings, bead coding-harness-u1ha). The sampler ends on its own when this
+# shell does; it is stopped before the end record. No sampler, no figure: the
+# record then names the peak as unknown, and gates and verdicts are untouched.
+rss_dir=""
+rss_sampler=""
+if [ -n "$RUN_ID" ] && rss_dir=$(mktemp -d "${TMPDIR:-/tmp}/verify-rss.XXXXXX" 2>/dev/null); then
+    "$PYTHON" -m scripts.verify_duration sample --pid "$$" --out "$rss_dir/peak" </dev/null >/dev/null 2>&1 &
+    rss_sampler=$!
+fi
 
 # The report binds the verdict to a state of the world: which commit ran,
 # against which base, with which gate configuration.
@@ -331,7 +335,13 @@ if [ -n "$RUN_ID" ]; then
     duration_verdict=red
     [ "$fehler" -ne 0 ] || duration_verdict=green
     dur_call exec_t1 clock
-    dur_call duration_summary end --run "$RUN_ID" --start "$exec_t0" --end "$exec_t1" --verdict "$duration_verdict"
+    if [ -n "$rss_sampler" ]; then
+        kill "$rss_sampler" 2>/dev/null
+        wait "$rss_sampler" 2>/dev/null
+    fi
+    dur_call duration_summary end --run "$RUN_ID" --start "$exec_t0" --end "$exec_t1" --verdict "$duration_verdict" \
+        --peak-rss-file "${rss_dir:+$rss_dir/peak}"
+    [ -n "$rss_dir" ] && rm -rf "$rss_dir"
     [ -n "$duration_summary" ] && echo "$duration_summary"
 fi
 

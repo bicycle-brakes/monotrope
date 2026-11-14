@@ -180,13 +180,18 @@ def _interval(out: Path) -> tuple[float, float]:
     return (record["start"], record["end"])
 
 
-def _write_capacity(state: Path, content: str) -> None:
-    """Publish the machine-wide capacity setting by atomic replacement, the way an operator would."""
+def _write_settings(state: Path, document: str) -> None:
+    """Publish the machine-local verify settings file by atomic replacement, the way an operator would."""
     root = state / "coding-harness"
     root.mkdir(parents=True, exist_ok=True)
-    fresh = root / f".{verify_lock.SLOTS_NAME}.{os.getpid()}"
-    fresh.write_text(content, encoding="utf-8")
-    fresh.replace(root / verify_lock.SLOTS_NAME)
+    fresh = root / f".{verify_lock.SETTINGS_NAME}.{os.getpid()}"
+    fresh.write_text(document, encoding="utf-8")
+    fresh.replace(root / verify_lock.SETTINGS_NAME)
+
+
+def _write_capacity(state: Path, value: str) -> None:
+    """Set only the slot count in the machine-local settings file; `value` is the raw TOML value."""
+    _write_settings(state, f"[verify]\nslots = {value}\n")
 
 
 def _log_lines(log: Path) -> list[str]:
@@ -1329,50 +1334,59 @@ def test_admission_measurement_survives_cli_and_inherited_context(
 # ---------------------------------------------------------------------------
 
 
-def test_default_two_slots_share_capacity_across_trees(tmp_path: Path) -> None:
-    """Criterion 1. With no capacity setting, two independent checks overlap and a third queues.
+def test_default_slots_share_capacity_across_trees(tmp_path: Path) -> None:
+    """Criterion 1. With no settings file, the repository default of slots overlap and one more queues.
 
-    Fault this pins: an eligible second check that cannot reserve the idle
-    second slot, or a third reservation granted while two are occupied. The
-    entries run from separate working directories and share one state root,
-    the way two worktrees of one machine share it.
+    Fault this pins: an eligible check that cannot reserve an idle slot below
+    the repository default, or one more reservation granted while every
+    default slot is occupied. The entries run from separate working
+    directories and share one state root, the way worktrees of one machine
+    share it.
     """
     state = tmp_path / "state"
-    trees = [tmp_path / f"tree-{index}" for index in range(3)]
+    capacity = verify_lock.DEFAULT_SLOTS
+    trees = [tmp_path / f"tree-{index}" for index in range(capacity + 1)]
     for tree in trees:
         tree.mkdir()
-    outs = [tmp_path / f"slot-{index}.json" for index in range(3)]
-    marks = [tmp_path / f"started-{index}.flag" for index in range(3)]
-    first = _supervised(
+    outs = [tmp_path / f"slot-{index}.json" for index in range(capacity + 1)]
+    marks = [tmp_path / f"started-{index}.flag" for index in range(capacity + 1)]
+    holders = []
+    for index in range(capacity):
+        holders.append(
+            _supervised(
+                state,
+                RECORD_BODY,
+                {
+                    "PROBE_OUT": str(outs[index]),
+                    "PROBE_STARTED": str(marks[index]),
+                    "PROBE_SLEEP": "3.0",
+                    "PYTHONPATH": str(REPO_ROOT),
+                },
+                cwd=trees[index],
+            )
+        )
+        assert _wait_until(marks[index].is_file), f"idle slot {index} was not granted while the others still ran"
+    extra = _supervised(
         state,
         RECORD_BODY,
-        {"PROBE_OUT": str(outs[0]), "PROBE_STARTED": str(marks[0]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
-        cwd=trees[0],
+        {
+            "PROBE_OUT": str(outs[capacity]),
+            "PROBE_STARTED": str(marks[capacity]),
+            "PROBE_SLEEP": "0.2",
+            "PYTHONPATH": str(REPO_ROOT),
+        },
+        cwd=trees[capacity],
     )
-    assert _wait_until(marks[0].is_file), "the first entry never started"
-    second = _supervised(
-        state,
-        RECORD_BODY,
-        {"PROBE_OUT": str(outs[1]), "PROBE_STARTED": str(marks[1]), "PROBE_SLEEP": "3.0", "PYTHONPATH": str(REPO_ROOT)},
-        cwd=trees[1],
-    )
-    assert _wait_until(marks[1].is_file), "the idle second slot was not granted while the first still ran"
-    third = _supervised(
-        state,
-        RECORD_BODY,
-        {"PROBE_OUT": str(outs[2]), "PROBE_STARTED": str(marks[2]), "PROBE_SLEEP": "0.2", "PYTHONPATH": str(REPO_ROOT)},
-        cwd=trees[2],
-    )
-    assert not _wait_until(marks[2].is_file, 1.5), "a third check ran while two slots were occupied"
-    for entry in (first, second, third):
+    assert not _wait_until(marks[capacity].is_file, 1.5), "one more check ran while every default slot was occupied"
+    for entry in (*holders, extra):
         assert entry.wait(timeout=60) == 0
-    first_span, second_span = _interval(outs[0]), _interval(outs[1])
-    assert first_span[0] < second_span[1] and second_span[0] < first_span[1], (
-        f"the two slots did not overlap: {first_span} vs {second_span}"
-    )
-    third_span = _interval(outs[2])
-    assert third_span[0] >= min(first_span[1], second_span[1]) - 0.05, (
-        f"the third check started before a slot freed: {third_span} after {first_span} and {second_span}"
+    spans = [_interval(out) for out in outs[:capacity]]
+    latest_start = max(span[0] for span in spans)
+    earliest_end = min(span[1] for span in spans)
+    assert latest_start < earliest_end, f"the default slots did not all overlap: {spans}"
+    extra_span = _interval(outs[capacity])
+    assert extra_span[0] >= earliest_end - 0.05, (
+        f"the extra check started before a slot freed: {extra_span} after {spans}"
     )
 
 
@@ -1481,11 +1495,34 @@ def test_invalid_or_unsafe_capacity_refuses_before_work(tmp_path: Path) -> None:
             check=False,
         )
 
-    for index, content in enumerate(("", " ", "\n", " \n ", "0", "-1", "2.5", "abc", "1 2", "0x10", "١٢")):
+    documents = (
+        "",
+        " \n",
+        "slots = 2\n",
+        "[verify]\n",
+        "[verify]\nslots = 0\n",
+        "[verify]\nslots = -1\n",
+        "[verify]\nslots = 2.5\n",
+        '[verify]\nslots = "2"\n',
+        "[verify]\nslots = true\n",
+        "[verify]\nslots = abc\n",
+        "[verify]\nslots = 1 2\n",
+        "[verify]\nslots = 257\n",
+        "[verify]\nworkers_per_run = 0\n",
+        "[verify]\nslots = 2\nworkerz = 3\n",
+        "[verify]\nslots = 2\n[other]\nkey = 1\n",
+        "[verify]\nslots = ١٢\n",
+        "\udcff",
+    )
+    for index, content in enumerate(documents):
         state = tmp_path / f"state-invalid-{index}"
-        _write_capacity(state, content)
+        if content == "\udcff":
+            (state / "coding-harness").mkdir(parents=True)
+            (state / "coding-harness" / verify_lock.SETTINGS_NAME).write_bytes(b"[verify]\nslots = \xff\n")
+        else:
+            _write_settings(state, content)
         done = entry(state)
-        setting = str(state / "coding-harness" / verify_lock.SLOTS_NAME)
+        setting = str(state / "coding-harness" / verify_lock.SETTINGS_NAME)
         assert done.returncode == 2, f"content {content!r} was not refused: {done.stdout} {done.stderr}"
         assert "refusing" in done.stderr, f"content {content!r} carries no diagnostic: {done.stderr}"
         assert setting in done.stderr, f"the diagnostic does not name the setting: {done.stderr}"
@@ -1497,7 +1534,7 @@ def test_invalid_or_unsafe_capacity_refuses_before_work(tmp_path: Path) -> None:
         root.mkdir(parents=True)
         victim = tmp_path / f"victim-{kind}.txt"
         victim.write_text("2", encoding="utf-8")
-        setting_path = root / verify_lock.SLOTS_NAME
+        setting_path = root / verify_lock.SETTINGS_NAME
         if kind == "symlink":
             setting_path.symlink_to(victim)
         elif kind == "directory":
@@ -1511,9 +1548,17 @@ def test_invalid_or_unsafe_capacity_refuses_before_work(tmp_path: Path) -> None:
         assert not marker.exists(), f"the {kind} setting let the protected command run"
         assert victim.read_text(encoding="utf-8") == "2", f"the {kind} setting's target was modified"
 
-    # the accepted shape: a whitespace-trimmed positive decimal integer, nothing else
+    # a leftover bare capacity file of the first implementation refuses, naming the new home
+    state = tmp_path / "state-legacy"
+    (state / "coding-harness").mkdir(parents=True)
+    (state / "coding-harness" / verify_lock.LEGACY_SLOTS_NAME).write_text("2", encoding="utf-8")
+    done = entry(state)
+    assert done.returncode == 2 and verify_lock.SETTINGS_NAME in done.stderr, done.stderr
+    assert not marker.exists(), "a leftover bare capacity file let the protected command run"
+
+    # the accepted shape: one [verify] table with positive integers
     state = tmp_path / "state-trimmed"
-    _write_capacity(state, " 2\n")
+    _write_settings(state, "# machine-local\n[verify]\n  slots = 2   \n")
     done = subprocess.run(
         [
             sys.executable,
@@ -1542,6 +1587,7 @@ def test_slot_waiters_reserve_in_fifo_order(tmp_path: Path) -> None:
     or a free slot kept idle until every other holder has finished.
     """
     state = tmp_path / "state"
+    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is four
     log = tmp_path / "order.log"
     extra = lambda name, seconds: {"PROBE_LOG": str(log), "PROBE_NAME": name, "PROBE_SLEEP": seconds}  # noqa: E731
     holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "30"))
@@ -1616,10 +1662,10 @@ def test_malformed_slot_marker_falls_back_to_admission(monkeypatch: pytest.Monke
 
 def test_overlong_capacity_refuses_with_diagnostic(tmp_path: Path) -> None:
     """An integer conversion limit must produce the documented refusal, not ValueError."""
-    setting = tmp_path / verify_lock.SLOTS_NAME
-    setting.write_text("9" * 5000, encoding="utf-8")
+    setting = tmp_path / verify_lock.SETTINGS_NAME
+    setting.write_text("[verify]\nslots = " + "9" * 5000 + "\n", encoding="utf-8")
     try:
-        with pytest.raises(verify_lock.VerifyLockRefused, match="positive decimal.*refusing admission") as refused:
+        with pytest.raises(verify_lock.VerifyLockRefused, match="refusing admission") as refused:
             verify_lock.read_capacity(tmp_path)
     except ValueError as error:
         pytest.fail(f"an overlong capacity must refuse admission with a diagnostic: {error}")
@@ -1659,6 +1705,7 @@ def test_nested_entries_use_their_own_slot_and_context(tmp_path: Path, monkeypat
     monkeypatch.delenv(verify_lock.SLOT_ENV)
 
     # multi-process: both slots occupied, and each nested child resolves its own ancestor's context
+    _write_capacity(state, "2")
     go = tmp_path / "go.flag"
     outs = [tmp_path / f"nested-{index}.json" for index in range(2)]
     marks = [tmp_path / f"holder-{index}.flag" for index in range(2)]
@@ -1888,6 +1935,7 @@ def test_wait_logs_name_all_occupied_slots_without_tokens(tmp_path: Path) -> Non
     process id, command and start time belong.
     """
     state = tmp_path / "state"
+    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is four
     template = (
         "import os, time\nfrom pathlib import Path\n"
         "Path(os.environ['PROBE_STARTED']).write_text({name!r})\ntime.sleep({seconds})\n"
@@ -1987,3 +2035,124 @@ def test_legacy_exclusion_survives_new_holder_supervisor_death(tmp_path: Path) -
     assert not _wait_until(mark.is_file, 1.5), "the new check ran while the legacy child still held the exclusion"
     assert _wait_until(mark.is_file, 15.0), "the new check never ran after the legacy child's exclusion ended"
     assert follower.wait(timeout=60) == 0 and out.is_file(), "the follower did not finish after the legacy drain"
+
+
+# ---------------------------------------------------------------------------
+# Criterion 12 — the layered verify settings: one reader, values and sources
+# ---------------------------------------------------------------------------
+
+GIB = 1024**3
+
+
+def test_layered_settings_default_override_and_sources(tmp_path: Path) -> None:
+    """Criterion 12. The repository default holds without a file; the machine file overrides either value.
+
+    Fault this pins: a missing file not falling back to the validated
+    repository default, an override of one value dropping the other's layer,
+    a derived worker count not following an overriding slot count, a
+    caller's value rewritten, or a source naming the wrong layer.
+    """
+    assert type(verify_lock.DEFAULT_SLOTS) is int and verify_lock.DEFAULT_SLOTS == 4, "the default of this change"
+    plain = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
+    assert (plain.slots, plain.workers) == (4, 3), plain
+    assert plain.slots_source == verify_lock.REPOSITORY_DEFAULT
+    assert plain.workers_source.startswith(verify_lock.REPOSITORY_DEFAULT) and "12 logical cores / 4 slots" in (
+        plain.workers_source
+    )
+
+    setting = tmp_path / verify_lock.SETTINGS_NAME
+    setting.write_text("[verify]\nslots = 3\n", encoding="utf-8")
+    slots_only = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
+    assert (slots_only.slots, slots_only.workers) == (3, 4), "workers must follow the overriding slot count"
+    assert str(setting) in slots_only.slots_source and str(setting) in slots_only.workers_source
+
+    setting.write_text("[verify]\nworkers_per_run = 5\n", encoding="utf-8")
+    workers_only = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
+    assert (workers_only.slots, workers_only.workers) == (4, 5)
+    assert workers_only.slots_source == verify_lock.REPOSITORY_DEFAULT
+    assert workers_only.workers_source == f"machine file {setting}"
+    assert verify_lock.read_capacity(tmp_path) == 4
+
+    setting.write_text("[verify]\nslots = 2\nworkers_per_run = 6\n", encoding="utf-8")
+    both = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
+    assert (both.slots, both.workers) == (2, 6)
+    assert verify_lock.read_capacity(tmp_path) == 2
+
+    caller = verify_lock.read_settings(tmp_path, cores=12, env={verify_lock.WORKERS_ENV: "not-a-number"})
+    assert caller.workers is None and caller.workers_source == verify_lock.CALLER_WORKERS
+    inherited = verify_lock.read_settings(
+        tmp_path, env={verify_lock.WORKERS_ENV: "6", verify_lock.WORKERS_SOURCE_ENV: f"machine file {setting}"}
+    )
+    assert inherited.workers == 6 and inherited.workers_source == f"machine file {setting}"
+    assert "slots 2" in both.describe() and "pytest workers per run 6" in both.describe()
+
+
+@pytest.mark.parametrize(
+    ("slots", "cores", "memory", "expected"),
+    [
+        pytest.param(4, 12, 24 * GIB, 3, id="cores-over-slots"),
+        pytest.param(3, 12, 24 * GIB, 4, id="three-slots"),
+        pytest.param(2, 12, 24 * GIB, 6, id="two-slots"),
+        pytest.param(4, 15, 64 * GIB, 3, id="floored"),
+        pytest.param(4, 16, 16 * GIB, 2, id="memory-binds-across-all-slots"),
+        pytest.param(4, 2, 64 * GIB, 1, id="at-least-one-by-cores"),
+        pytest.param(4, 8, GIB, 1, id="at-least-one-by-memory"),
+        pytest.param(4, 12, None, 3, id="cores-only"),
+        pytest.param(4, None, 32 * GIB, 4, id="memory-only"),
+        pytest.param(4, None, None, None, id="nothing-readable"),
+    ],
+)
+def test_workers_follow_slots_and_memory_bound(
+    slots: int, cores: int | None, memory: int | None, expected: int | None
+) -> None:
+    """Criterion 12. Workers per run are cores / slots, floored, at least one, bounded by 2 GiB per worker.
+
+    Fault this pins: the old half-the-cores rule, a memory bound per run
+    instead of across all slots, a zero worker count, or a guessed count
+    where nothing is readable.
+    """
+    assert verify_lock.derived_workers(slots, cores, memory)[0] == expected
+
+
+def test_settings_command_logs_values_and_sources(tmp_path: Path) -> None:
+    """Criterion 12. The shell's entry prints the workers and their source and logs every value in force.
+
+    Fault this pins: a run whose log does not say which slots and workers
+    are in force and where they came from, or an empty reading treated as
+    a number.
+    """
+    state = tmp_path / "state"
+    done = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_lock", "--settings", "--cores", "12", "--memory-bytes", str(24 * GIB)],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    workers, source = done.stdout.splitlines()
+    assert workers == "3" and "12 logical cores / 4 slots" in source
+    assert "slots 4 (repository default)" in done.stderr and "pytest workers per run 3" in done.stderr
+    unreadable = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_lock", "--settings", "--cores", "", "--memory-bytes", ""],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert unreadable.returncode == 0 and unreadable.stdout.splitlines()[0] == "", unreadable.stdout
+    _write_settings(state, "[verify]\nslots = 0\n")
+    refused = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_lock", "--settings"],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert refused.returncode == 2 and "refusing admission" in refused.stderr

@@ -694,3 +694,78 @@ def test_slip_counter_is_deferred(capsys) -> None:
     assert verify_duration.EVENTS == ("run_start", "gate", "run_end")
     for writer in ("append_targeted", "append_slip", "record_local_slip"):
         assert not hasattr(verify_duration, writer), f"deferred writer {writer} is still callable"
+
+
+# ---------------------------------------------------------------------------
+# verify-slots criterion 12 — the settings in force, end load and pytest peak RSS
+# ---------------------------------------------------------------------------
+
+
+def test_history_records_settings_load_and_peak_rss(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The start record names the slots and workers in force with their sources; the end record the load
+    average and the pytest peak; a missing sample is unknown, and the reader shows both.
+
+    Fault this pins: a run whose record cannot say which slots and workers ran or where they came from,
+    a missing sampler file recorded as zero, or old records without the fields becoming unreadable.
+    """
+    state = tmp_path / "state"
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "3")
+    monkeypatch.setenv(verify_lock.WORKERS_SOURCE_ENV, "repository default: 12 logical cores / 4 slots")
+    code, run_id, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    started = _history(state)[-1]
+    assert (started["workers"], started["slots"], started["slots_source"]) == ("3", 4, "repository default")
+    assert started["workers_source"] == "repository default: 12 logical cores / 4 slots"
+
+    peak = tmp_path / "peak"
+    peak.write_text(str(5 * 1024**3), encoding="utf-8")
+    monkeypatch.setattr(os, "getloadavg", lambda: (10.123, 9.0, 8.5))
+    code, _, _ = _run(
+        capsys,
+        "end",
+        "--run",
+        run_id.strip(),
+        "--start",
+        "1",
+        "--end",
+        "2",
+        "--verdict",
+        "green",
+        "--peak-rss-file",
+        str(peak),
+    )
+    assert code == 0
+    ended = _history(state)[-1]
+    assert ended["pytest_peak_rss_bytes"] == 5 * 1024**3 and ended["load_avg_end"] == [10.12, 9.0, 8.5]
+    code, out, _ = _run(capsys, "report", "--run", run_id.strip())
+    assert code == 0 and "pytest peak RSS: 5.00 GiB" in out and "10.12 / 9.0 / 8.5" in out, out
+    assert "slots: 4 (repository default)" in out
+
+    code, other, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    code, _, _ = _run(capsys, "end", "--run", other.strip(), "--start", "1", "--end", "2", "--verdict", "green")
+    assert _history(state)[-1]["pytest_peak_rss_bytes"] is None, "no sampler file must stay unknown"
+
+    # a record written before these fields still reads, and says so
+    old = _valid_records("0" * 32)
+    history = state / "coding-harness" / verify_duration.HISTORY_NAME
+    history.write_text("".join(json.dumps(record) + "\n" for record in old), encoding="utf-8")
+    code, out, _ = _run(capsys, "report", "--run", "0" * 32)
+    assert code == 0 and "slots: not recorded" in out and "pytest peak RSS: not recorded" in out, out
+
+
+def test_pytest_tree_rss_sums_pytest_trees_below_the_runner() -> None:
+    """Fault this pins: xdist workers (whose command does not say pytest) left out, a process counted
+    twice, or a pytest outside the runner's descendants counted."""
+    rows = [
+        (100, 1, 10, "bash verify_all.sh"),
+        (101, 100, 20, "sh -c ruff check"),
+        (102, 100, 30, "sh -c python3 -m pytest -n 3"),
+        (103, 102, 1000, "/venv/bin/python3 -m pytest -n 3"),
+        (104, 103, 2000, "/venv/bin/python3 -c import sys;exec(eval(sys.stdin.readline()))"),
+        (105, 103, 3000, "/venv/bin/python3 -c import sys;exec(eval(sys.stdin.readline()))"),
+        (200, 1, 9999, "python3 -m pytest elsewhere"),
+    ]
+    assert verify_duration.pytest_tree_rss(rows, 100) == (30 + 1000 + 2000 + 3000) * 1024
+    assert verify_duration.pytest_tree_rss(rows, 999) == 0

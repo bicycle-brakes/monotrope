@@ -16,11 +16,15 @@ checkout's exclusive holder still excludes every new entry, while new entries
 do not exclude each other. Each admission reserves one slot — an exclusive
 `verify.slot-<n>.lock` — up to the machine's capacity, and
 `verify.slot-<n>.holder.json` publishes that slot's ownership (pid, command,
-start time). The capacity comes from `verify.slots` in the same root — a
-whitespace-trimmed positive decimal integer, re-read under the registry lock
-for every reservation decision, with two as the declared default when the
-file is absent; any other present content, or a substituted or unreadable
-file, refuses admission. `verify.holder.json` is the older single-holder
+start time). The capacity comes from `read_settings`, the one reader of the
+layered verify settings: the repository default (`DEFAULT_SLOTS`, four), which
+an optional machine-local `verify.toml` in the same root may override
+(`[verify]` with `slots` and `workers_per_run`, positive integers); the same
+reader derives the pytest workers per run (logical cores / slots, floored, at
+least one, bounded by 2 GiB of memory per worker across all slots). The file
+is re-read under the registry lock for every reservation decision; any
+unusable present content, a substituted or unreadable file, or a leftover bare
+`verify.slots` refuses admission. `verify.holder.json` is the older single-holder
 record, kept only for legacy markers. `verify.queue/` holds one record per
 waiter, held open under its owner's liveness flock so a dead waiter's record
 is recognisable and pruned. A short-held `verify.registry.lock` serialises
@@ -113,6 +117,7 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -139,12 +144,29 @@ LOCK_NAME = "verify.lock"
 HOLDER_NAME = "verify.holder.json"
 QUEUE_DIR = "verify.queue"
 REGISTRY_NAME = "verify.registry.lock"
-# The configurable capacity (bead coding-harness-u1ha): one file, one value,
-# no per-checkout copy. The per-slot locks and records hang beside it.
-SLOTS_NAME = "verify.slots"
-DEFAULT_SLOTS = 2
+# The layered verify settings (bead coding-harness-u1ha; maintainer, 2026-11-15,
+# decisions Q-6): the repository declares the default slot count, and the
+# pytest workers per run follow from it; one machine-local file in the shared
+# state root may override either value. `read_settings` is the one reader —
+# the admission, `scripts/verify_all.sh` and `scripts/stage2.py` all ask it.
+# The keys keep their names when they move into the central harness
+# configuration (bead coding-harness-twvx). The per-slot locks and records
+# hang beside the file.
+SETTINGS_NAME = "verify.toml"
+SETTINGS_TABLE = "verify"
+SLOTS_KEY = "slots"
+WORKERS_KEY = "workers_per_run"
+# The bare capacity file of the first implementation; a present one refuses, never silently ignored.
+LEGACY_SLOTS_NAME = "verify.slots"
+DEFAULT_SLOTS = 4
+WORKER_MEMORY_BYTES = 2 * 1024**3
+MAX_SLOTS = 256
+MAX_WORKERS = 1024
+REPOSITORY_DEFAULT = "repository default"
+CALLER_WORKERS = "caller environment (PYTEST_XDIST_AUTO_NUM_WORKERS)"
+WORKERS_ENV = "PYTEST_XDIST_AUTO_NUM_WORKERS"
+WORKERS_SOURCE_ENV = "HARNESS_VERIFY_WORKERS_SOURCE"
 SLOT_LOCK_FILE = re.compile(r"verify\.slot-(\d+)\.lock")
-CAPACITY_VALUE = re.compile(r"[0-9]+")
 MEMINFO_PATH = Path("/proc/meminfo")
 RECORD_NAME = re.compile(r"(\d{20})-(\d+)\.json")
 MEMORY_FREE = re.compile(r"System[- ]wide memory free percentage:\s*(\d+(?:\.\d+)?)\s*%")
@@ -274,30 +296,50 @@ def slot_holder_name(index: int) -> str:
     return f"verify.slot-{index}.holder.json"
 
 
-def read_capacity(root: Path | None = None) -> int:
-    """The declared machine-wide slot capacity: `DEFAULT_SLOTS` unless `verify.slots` says otherwise.
+@dataclasses.dataclass(frozen=True)
+class VerifySettings:
+    """The values in force for one verification run and where each came from."""
 
-    A missing file means the default. Present content must be a
-    whitespace-trimmed positive decimal integer and nothing else; a
-    substituted (symlinked or nonregular) or unreadable file, and any other
-    present content, refuse admission with a diagnostic before any protected
-    work. The file is read without following symlinks and never written here;
-    every reservation decision re-reads it, so a lowered capacity drains
-    before new reservations are granted (bead coding-harness-u1ha).
+    slots: int
+    slots_source: str
+    workers: int | None
+    workers_source: str
+
+    def describe(self) -> str:
+        """The one log line every run prints: values and sources, no machine-private path beyond the state root."""
+        workers = "xdist auto (no machine reading)" if self.workers is None else str(self.workers)
+        return f"slots {self.slots} ({self.slots_source}) · pytest workers per run {workers} ({self.workers_source})"
+
+
+def _settings_refused(path: Path, why: str) -> VerifyLockRefused:
+    return VerifyLockRefused(f"the verify setting {path} {why}; refusing admission")
+
+
+def _read_settings_file(base: Path) -> tuple[dict[str, int], Path]:
+    """The machine-local overrides, `{}` when the file is absent; anything unusable refuses.
+
+    The file is read without following symlinks and never written here. It
+    must be TOML with exactly one `[verify]` table naming at least one of
+    `slots` and `workers_per_run`, each a positive integer within its bound;
+    any other present content — empty, unparsable, another table or key, a
+    boolean, float or string — refuses before any protected work.
     """
-    base = state_root() if root is None else root
-    path = base / SLOTS_NAME
+    legacy = base / LEGACY_SLOTS_NAME
+    if os.path.lexists(legacy):
+        raise VerifyLockRefused(
+            f"the bare capacity file {legacy} is no longer read; put its value into {base / SETTINGS_NAME} "
+            f"as `[{SETTINGS_TABLE}]` `{SLOTS_KEY} = <n>` and remove it; refusing admission"
+        )
+    path = base / SETTINGS_NAME
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
-        return DEFAULT_SLOTS
+        return {}, path
     except OSError as error:
-        raise VerifyLockRefused(
-            f"the capacity setting {path} cannot be read ({error.strerror or error}); refusing admission"
-        ) from error
+        raise _settings_refused(path, f"cannot be read ({error.strerror or error})") from error
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise VerifyLockRefused(f"the capacity setting {path} is not a regular file; refusing substituted state")
+            raise _settings_refused(path, "is not a regular file (substituted state)")
         payload = b""
         while len(payload) < 65536:
             block = os.read(fd, 65536)
@@ -305,26 +347,141 @@ def read_capacity(root: Path | None = None) -> int:
                 break
             payload += block
     except OSError as error:
-        raise VerifyLockRefused(
-            f"the capacity setting {path} cannot be read ({error.strerror or error}); refusing admission"
-        ) from error
+        raise _settings_refused(path, f"cannot be read ({error.strerror or error})") from error
     finally:
         os.close(fd)
     try:
-        text = payload.decode("utf-8")
-    except UnicodeDecodeError:
-        raise VerifyLockRefused(f"the capacity setting {path} is not valid UTF-8; refusing substituted state") from None
-    raw = text.strip()
+        document = tomllib.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError) as error:
+        raise _settings_refused(path, f"is not valid UTF-8 TOML ({error})") from None
+    table = document.get(SETTINGS_TABLE)
+    if set(document) != {SETTINGS_TABLE} or not isinstance(table, dict) or not table:
+        raise _settings_refused(path, f"must hold exactly one non-empty `[{SETTINGS_TABLE}]` table")
+    unknown = sorted(set(table) - {SLOTS_KEY, WORKERS_KEY})
+    if unknown:
+        raise _settings_refused(path, f"names unknown keys {unknown}; only `{SLOTS_KEY}` and `{WORKERS_KEY}` exist")
+    values: dict[str, int] = {}
+    for key, bound in ((SLOTS_KEY, MAX_SLOTS), (WORKERS_KEY, MAX_WORKERS)):
+        if key not in table:
+            continue
+        value = table[key]
+        if type(value) is not int or not 1 <= value <= bound:
+            raise _settings_refused(path, f"holds {key} = {value!r}; a positive integer up to {bound} is required")
+        values[key] = value
+    return values, path
+
+
+def machine_size() -> tuple[int | None, int | None]:
+    """Logical cores and physical memory in bytes of this machine; an unreadable value is None."""
+    cores = os.cpu_count()
     try:
-        capacity = int(raw) if CAPACITY_VALUE.fullmatch(raw) is not None else 0
-    except ValueError:
-        capacity = 0
-    if capacity <= 0:
-        raise VerifyLockRefused(
-            f"the capacity setting {path} holds {text!r}; a whitespace-trimmed positive decimal "
-            "integer is the only accepted content; refusing admission"
-        )
-    return capacity
+        memory = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        memory = None
+    return (cores if cores and cores > 0 else None), (memory if memory and memory > 0 else None)
+
+
+def derived_workers(slots: int, cores: int | None, memory_bytes: int | None) -> tuple[int | None, str]:
+    """Workers per run from the slot count: cores / slots, floored, at least one, bounded by memory.
+
+    The memory bound gives every worker of every slot 2 GiB: at most
+    `memory // 2 GiB // slots` per run, at least one. Each usable reading
+    alone decides; with both the smaller one does; with none the value is
+    None and xdist's own `auto` applies, as before (bead coding-harness-l7sc).
+    """
+    bounds: list[tuple[int, str]] = []
+    if cores:
+        bounds.append((max(1, cores // slots), f"{cores} logical cores / {slots} slots"))
+    if memory_bytes:
+        total = memory_bytes // WORKER_MEMORY_BYTES
+        bounds.append((max(1, total // slots), f"{total} workers' memory at 2 GiB / {slots} slots"))
+    if not bounds:
+        return None, f"{REPOSITORY_DEFAULT}, no machine reading"
+    value, why = min(bounds)
+    return value, f"{REPOSITORY_DEFAULT}: {why}"
+
+
+def read_settings(
+    root: Path | None = None,
+    *,
+    cores: int | None = None,
+    memory_bytes: int | None = None,
+    env: dict[str, str] | None = None,
+) -> VerifySettings:
+    """The one reader of the verify settings: slots, pytest workers per run, and their sources.
+
+    Layers, last wins: the repository default (`DEFAULT_SLOTS`; workers
+    derived by `derived_workers`), the machine-local `verify.toml` in the
+    shared state root, and for the workers only a caller's non-empty
+    `PYTEST_XDIST_AUTO_NUM_WORKERS` in `env`, passed through verbatim (an
+    inherited `HARNESS_VERIFY_WORKERS_SOURCE` keeps naming where an
+    ancestor's value came from). A derived worker count is recomputed from
+    an overriding slot count. Every reservation decision re-reads the file,
+    so a lowered capacity drains before new reservations are granted.
+    """
+    if type(DEFAULT_SLOTS) is not int or not 1 <= DEFAULT_SLOTS <= MAX_SLOTS:
+        raise VerifyLockRefused(f"the repository default of {DEFAULT_SLOTS!r} slots is invalid; refusing admission")
+    base = state_root() if root is None else root
+    overrides, path = _read_settings_file(base)
+    machine = f"machine file {path}"
+    slots = overrides.get(SLOTS_KEY, DEFAULT_SLOTS)
+    slots_source = machine if SLOTS_KEY in overrides else REPOSITORY_DEFAULT
+    environment = os.environ if env is None else env
+    caller = environment.get(WORKERS_ENV, "")
+    if caller:
+        source = environment.get(WORKERS_SOURCE_ENV) or CALLER_WORKERS
+        return VerifySettings(slots, slots_source, _caller_workers(caller), source)
+    if WORKERS_KEY in overrides:
+        workers, workers_source = overrides[WORKERS_KEY], machine
+    else:
+        workers, workers_source = derived_workers(slots, cores, memory_bytes)
+        if slots_source != REPOSITORY_DEFAULT:
+            workers_source += f" (slots from {machine})"
+    return VerifySettings(slots, slots_source, workers, workers_source)
+
+
+def _caller_workers(value: str) -> int | None:
+    """A caller's worker value is passed through verbatim; only a decimal one is also known as a number."""
+    return int(value) if value.isascii() and value.isdecimal() and len(value) <= 6 else None
+
+
+def read_capacity(root: Path | None = None) -> int:
+    """The machine-wide slot capacity in force, through `read_settings`."""
+    return read_settings(root, env={}).slots
+
+
+def _settings_main(arguments: list[str]) -> int:
+    """`--settings [--cores N] [--memory-bytes N]`: print the values in force, log them on stderr.
+
+    Standard output is two lines: the workers per run (empty when xdist's own
+    `auto` applies; a caller's value verbatim) and the workers' source.
+
+    The shell runner hands its own validated machine readings (an empty value
+    means unreadable), so the reading rules of bead coding-harness-l7sc stay
+    where they are tested; without them the Python readings apply.
+    """
+    parser = argparse.ArgumentParser(prog="verify_lock --settings")
+    parser.add_argument("--cores", default=None)
+    parser.add_argument("--memory-bytes", default=None)
+    args = parser.parse_args(arguments)
+
+    def reading(raw: str | None, fallback: int | None) -> int | None:
+        if raw is None:
+            return fallback
+        return int(raw) if raw.isascii() and raw.isdecimal() and int(raw) > 0 else None
+
+    cores, memory = machine_size() if args.cores is None or args.memory_bytes is None else (None, None)
+    try:
+        settings = read_settings(cores=reading(args.cores, cores), memory_bytes=reading(args.memory_bytes, memory))
+    except VerifyLockRefused as refused:
+        print(f"[verify-settings] refused: {refused}", file=sys.stderr, flush=True)
+        return 2
+    print(f"[verify-settings] {settings.describe()}", file=sys.stderr, flush=True)
+    caller = os.environ.get(WORKERS_ENV, "")
+    workers = caller or ("" if settings.workers is None else str(settings.workers))
+    print(workers)
+    print(settings.workers_source)
+    return 0
 
 
 def _read_record(path: Path) -> dict | None:
@@ -698,6 +855,11 @@ class _Admission:
             global _ACTIVE
             _ACTIVE = self
         self._queue_wait()
+        try:
+            in_force = read_settings(self.state.root, env={})
+            _log(f"slot {self.slot_index} reserved; capacity {in_force.slots} ({in_force.slots_source})")
+        except VerifyLockRefused:
+            pass  # The reservation decision itself already read the setting; a log line never refuses.
         self._publish()
         self._memory_gate()
         self.wait_seconds = _now() - self.entered
@@ -1246,8 +1408,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="exit 0 when the environment names a valid inherited admission, 1 otherwise",
     )
+    parser.add_argument(
+        "--settings",
+        action="store_true",
+        help="print the verify settings in force (workers, slots, sources) and log them; see _settings_main",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER, metavar="COMMAND", help="the protected command, after --")
-    args = parser.parse_args(argv)
+    arguments = sys.argv[1:] if argv is None else list(argv)
+    if arguments[:1] == ["--settings"]:
+        return _settings_main(arguments[1:])
+    args = parser.parse_args(arguments)
     if args.held:
         return 0 if nested_holder_pid() is not None else 1
     command = args.command[1:] if args.command[:1] == ["--"] else list(args.command)

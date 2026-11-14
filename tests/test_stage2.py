@@ -2412,7 +2412,7 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # (3 s) plus the execution (1.5 s) exceeds the limit (4 s), while the execution alone keeps
     # a wide margin for a loaded machine's process start.
     (world.state / "coding-harness").mkdir(parents=True, exist_ok=True)
-    (world.state / "coding-harness" / verify_lock.SLOTS_NAME).write_text("1", encoding="utf-8")
+    (world.state / "coding-harness" / verify_lock.SETTINGS_NAME).write_text("[verify]\nslots = 1\n", encoding="utf-8")
     ready = world.state / "holder-ready"
     holder = _real_holder(ready)
     try:
@@ -26076,20 +26076,31 @@ def test_targeted_gate_selection_matches_command_entrypoint(world: World, path: 
 
 
 def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Row L1-3. Planted fault: the targeted pytest keeps xdist's raw `auto` of every core."""
-    readings = {"hw.logicalcpu": "16\n", "hw.memsize": str(8 * 2147483648) + "\n"}
-
-    def fake_launch(command, *_args, **_kwargs):
-        return subprocess.CompletedProcess(command, 0, stdout=readings[command[-1]], stderr="")
-
-    monkeypatch.setattr(stage2, "launch", fake_launch)
-    monkeypatch.setattr(sys, "platform", "darwin")
+    """Row L1-3 and criterion 12 of verify-slots. Planted fault: the targeted pytest keeps xdist's raw
+    `auto` of every core, or derives its own count instead of asking the one settings reader."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    readings = {"size": (16, 8 * 2147483648)}
+    monkeypatch.setattr(verify_lock, "machine_size", lambda: readings["size"])
     env = stage2.targeted_pytest_env(tmp_path, {"PATH": "/usr/bin"})
-    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "8", "the smaller of half the cores and the memory bound"
-    readings["hw.memsize"] = str(3 * 2147483648) + "\n"
-    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3"
+    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "16 GiB hold eight workers across the four default slots"
+    readings["size"] = (12, 24 * 2147483648)
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3", "12 cores / 4 slots"
     chosen = stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
     assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
+    settings = tmp_path / "state" / "coding-harness" / verify_lock.SETTINGS_NAME
+    settings.parent.mkdir(parents=True)
+    settings.write_text("[verify]\nworkers_per_run = 5\n", encoding="utf-8")
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "5", "the machine file"
+    expected = verify_lock.read_settings(cores=12, memory_bytes=24 * 2147483648, env={}).workers
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == str(expected)
+    readings["size"] = (None, None)
+    settings.unlink()
+    assert "PYTEST_XDIST_AUTO_NUM_WORKERS" not in stage2.targeted_pytest_env(
+        tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": ""}
+    ), "with nothing readable xdist's own auto applies"
+    settings.write_text("[verify]\nslots = 0\n", encoding="utf-8")
+    with pytest.raises(stage2.CallFailed, match="refusing admission"):
+        stage2.targeted_pytest_env(tmp_path, {})
 
 
 @pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])

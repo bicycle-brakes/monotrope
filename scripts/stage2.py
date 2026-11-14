@@ -6818,40 +6818,26 @@ def fallback_text(reason: str, result: str) -> str:
     return f"full `make verify` {action} (result: {result}) because the targeted coverage was not safe: {reason}"
 
 
-def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
-    """Apply verify_all.sh's CPU/memory worker default without entering its admission."""
+def targeted_pytest_env(_root: Path, env: dict[str, str]) -> dict[str, str]:
+    """The targeted pytest's worker count from the one settings reader, without entering the admission.
+
+    `verify_lock.read_settings` is the reader `verify_all.sh` asks too, so a targeted run and a full
+    check use the same workers per run (layered verify settings, bead coding-harness-u1ha). A caller's
+    own non-empty value passes through; with no machine reading the variable is dropped and xdist's own
+    auto applies. An unusable settings file fails the launch with the reader's diagnostic.
+    """
     env = dict(env)
-    if env.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
+    if env.get(verify_lock.WORKERS_ENV):
         return env
-    readings: list[int] = []
-    cores: int | None = None
-    memory: int | None = None
+    cores, memory = verify_lock.machine_size()
     try:
-        if sys.platform == "darwin":
-            values = []
-            for name in ("hw.logicalcpu", "hw.memsize"):
-                done = launch(["/usr/sbin/sysctl", "-n", name], root, env, timeout=TOOL_SECONDS)
-                raw = done.stdout.strip() if done.returncode == 0 else ""
-                values.append(int(raw) if raw.isascii() and raw.isdecimal() and len(raw) <= 18 else None)
-            cores, memory = values
-        elif sys.platform.startswith("linux"):
-            cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
-            for line in Path("/proc/meminfo").read_text().splitlines():
-                if line.startswith("MemTotal:"):
-                    raw = line.split()[1]
-                    if raw.isascii() and raw.isdecimal() and len(raw) <= 15:
-                        memory = int(raw) * 1024
-                    break
-    except (OSError, ValueError, CallFailed):
-        pass  # Unavailable readings are ignored, as in the full runner.
-    if cores and cores > 0:
-        readings.append(max(1, cores // 2))
-    if memory and memory > 0:
-        readings.append(max(1, memory // 2147483648))
-    if readings:
-        env["PYTEST_XDIST_AUTO_NUM_WORKERS"] = str(min(readings))
+        settings = verify_lock.read_settings(cores=cores, memory_bytes=memory, env={})
+    except verify_lock.VerifyLockRefused as refused:
+        raise CallFailed(str(refused)) from refused
+    if settings.workers is None:
+        env.pop(verify_lock.WORKERS_ENV, None)
     else:
-        env.pop("PYTEST_XDIST_AUTO_NUM_WORKERS", None)
+        env[verify_lock.WORKERS_ENV] = str(settings.workers)
     return env
 
 
