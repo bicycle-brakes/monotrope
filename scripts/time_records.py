@@ -38,7 +38,8 @@ RECORD = re.compile(
     r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}:\d{2}) UTC, "
     r"(?P<seconds>\d+) s — "
     r"(?P<verb>[^·]+?) · attempt (?P<attempt>\d+) · route (?P<route>[^·]+?)"
-    r" · model (?P<model>[^·]+?) · (?P<result>accepted|rejected) · measured by the runner"
+    r" · model (?P<model>[^·]+?) · (?P<result>accepted|rejected)"
+    r"(?: · (?P<scope>[^·]+?))? · measured by the runner"
 )
 
 PUBLISH_CALLBACK = Callable[[Path, bytes], None]
@@ -95,12 +96,15 @@ def format_entry(
     route: str,
     model: str,
     result: str,
+    scope: str | None = None,
 ) -> str:
     """The fixed record line; a malformed field raises `ValueError` before any bytes exist.
 
     `seconds` is the explicitly measured duration and is never checked against
     the endpoints: they only name the span, and the end carries its date when
     that differs from the start's, so a span across midnight reads unambiguously.
+    `scope` is the runner's optional evidence of how the attempt was verified; it stands after
+    the verdict word and before the closing marker.
     """
     if not isinstance(start, datetime) or not isinstance(end, datetime):
         raise ValueError("start and end must be datetimes")
@@ -115,10 +119,13 @@ def format_entry(
     _check_word("verb", verb)
     _check_word("route", route)
     _check_word("model", model)
+    if scope is not None:
+        _check_word("scope", scope)
     end_date = f"{end:%Y-%m-%d} " if end.date() != start.date() else ""
+    shown = f" · {scope}" if scope is not None else ""
     return (
         f"{start:%Y-%m-%d} {start:%H:%M:%S}–{end_date}{end:%H:%M:%S} UTC, {seconds} s — "
-        f"{verb} · attempt {attempt} · route {route} · model {model} · {result} · {MARKER}"
+        f"{verb} · attempt {attempt} · route {route} · model {model} · {result}{shown} · {MARKER}"
     )
 
 

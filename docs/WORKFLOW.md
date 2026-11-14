@@ -1024,7 +1024,8 @@ amendments; the table above carries the live setting.
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
-model, runs `make verify`, measures each completed attempt itself — a line
+model, runs the post-run check (the targeted check, or the admitted full
+`make verify` as its fallback; "The draft (phases 2, 2b and 3)" below), measures each completed attempt itself — a line
 below `## Time used`, marked "measured by the runner", written for a rejected
 attempt as well as an accepted one — and makes the local checkpoint commit.
 The runner's line and every span an interactive session logs itself
@@ -1064,14 +1065,14 @@ If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
-Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
+Before the post-run check, the runner runs the worktree's own `.venv/bin/ruff` —
 `check --fix` with safe fixes only, then `format` — on the change's Python
 files under `scripts/` and `tests/`; what that changed stands in a failed
 attempt's diagnostics (after the findings-restore note, when there is one) and in
 the checkpoint commit's message. This format step itself never decides the
 verdict: a ruff that cannot run or leaves findings fails the attempt in the cheap
 checks below.
-After that format step and still before `make verify`, the runner runs an
+After that format step and still before the post-run check, the runner runs an
 implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
 `.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
@@ -1089,11 +1090,11 @@ bytes, before the runner stamps documents and renders derived files: a selected
 test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
 line) sees it unprepared, and such a test belongs to `make verify`, not to the
 cheap run (review row L9-1). A command with no target is skipped; a red,
-unstartable or over-bound command fails the attempt before `make verify`
-starts, and its identified command, exit and protected output stand in that
+unstartable or over-bound command fails the attempt before the post-run
+check starts, and its identified command, exit and protected output stand in that
 attempt's diagnostics and the next attempt's prompt. Cheap green replaces
-nothing: full `make verify` and the existing answer checks still decide every
-attempt. An implement or repair attempt's edit of the change's `findings.md`
+nothing: the post-run check that follows (targeted, or the full `make verify`
+on fallback) and the existing answer checks still decide every attempt. An implement or repair attempt's edit of the change's `findings.md`
 is not a failure: the runner restores its own pre-call snapshot before any
 check reads model-written state — through the recovery preflight, never
 through a linked parent — and records the restoration in the attempt's
@@ -1343,8 +1344,8 @@ retries off, and a fresh home and agent directory per call. Explore and
 implement start Claude Code against Z.ai with `--restricted` and the project's
 settings, hooks and MCP servers skipped; implement also gets
 `Edit` and `Write`, never Bash or another command tool. On a successful
-implementation answer the runner runs exactly
-`make verify`; a failed post-check gets one fresh Flash repair, then one
+implementation answer the runner runs its post-run check (targeted, or the
+admitted full `make verify` on fallback); a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
 not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
@@ -1428,16 +1429,22 @@ see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
 If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
-the verify job's existing document subset,
-`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
-check fails the attempt — with
+its document check: after the put-back the runner runs exactly the locally
+runnable gates of the verify job that the gate registry assigns to the
+document subset (`document_gates` in `scripts/stage2.py`), no pytest and no
+code or kit gate, outside the machine-wide verify admission (bead
+coding-harness-0swp). The check carries none of the admission's ownership,
+token or context variables, so it neither waits for nor claims the lock. Its
+evidence names the gates it ran and says that no tests ran and that it is not
+the full `make verify`. A red check fails the attempt — with
 one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file
 and every other gate still do), so the check's exit code decides and the
-runner reads no gate output. `implement` keeps the full `make verify`;
-`repair` takes the targeted check, with the full suite as its fallback and before phase 6.
-Only the draft drops to the document subset. Only the
+runner reads no gate output. `implement` and `repair` take the targeted
+check, with the admitted full `make verify` as their fallback; a fresh full
+`make verify` still runs before phase 6. Only the draft drops to the
+document subset. Only the
 maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
@@ -1949,8 +1956,16 @@ each learned on the night of 2026-10-29/30:
   message. A targeted green is never worded as full verification: `review`
   (phase 6) runs a fresh full `make verify` of the current head under the lock
   before it calls the reviewer, on every invocation, a re-check included, and
-  refuses a dirty tree or a head that moved during the check. `implement` and
-  the draft keep their own post-run checks.
+  refuses a dirty tree or a head that moved during the check. `implement`
+  takes the same targeted check on every route (bead coding-harness-0swp),
+  with the same full fallback; a `scripts/stage2.py` edit or a selection of
+  the whole `tests/test_stage2.py` still falls back. One refusal is its own:
+  when the current link inventory proves that new production code (an added
+  Python or shell file) has no reachable test, the attempt fails before any
+  test runs and before a full fallback is admitted, and its diagnostics name
+  the file and ask for its test. A targeted red fails the attempt; the full
+  check never runs to override it. The draft runs its document check only
+  ("The draft (phases 2, 2b and 3)").
 
 ### Night runs
 

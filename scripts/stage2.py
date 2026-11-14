@@ -42,20 +42,29 @@ failed or timed-out refresh refuses instead of listing a stale cache.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
-Implement lets the model edit but not run commands; before `make verify` the
+Implement lets the model edit but not run commands; before its post-run check the
 runner applies ruff's safe fixes and its formatter to the changed Python files
-under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
-makes the one checkpoint commit. A
+under `scripts/` and `tests/`, runs the selected verification - the targeted
+check for implement and repair, the admitted full `make verify` where a targeted
+coverage is unsafe - checks the time log and
+makes the one checkpoint commit. New production code without a reachable test
+refuses an implement attempt before any test runs (bead coding-harness-0swp). A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to Codex in one
 call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
 stops), proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines. A repair's post-run check is targeted when
-its coverage can be determined safely - the whole touched and linked test files, ruff
-over the touched Python files and the local gates its file kinds need, outside the
-verify admission - and the admitted full `make verify` otherwise; `review` (phase 6)
-runs a fresh full `make verify` of the current head before it calls the reviewer.
+rows `fixed` from the answer's fixed lines. The implement and repair post-run
+checks are targeted when
+their coverage can be determined safely - the whole touched and import-linked
+test files, ruff
+over the touched Python files and the local gates the file kinds need, outside the
+verify admission - and the admitted full `make verify` otherwise; a targeted red
+fails the attempt and never calls the full check to override it. The draft's
+document check runs only the locally runnable document gates, outside the
+admission. `review` (phase 6)
+runs a fresh full `make verify` of the current head before it calls the reviewer,
+and refuses a red, unstartable or timed-out check.
 Codex runs in its configured `workspace-write` sandbox; the tests do not measure that
 confinement.
 
@@ -3337,10 +3346,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "them back, then run review again. No reviewer was called."
         )
     problems = full_verify(root, env, None)
-    if problems:
-        raise CallFailed(
-            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
-        )
     try:
         after = standing()
     except (Refused, OSError) as error:
@@ -3349,6 +3354,10 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         raise CallFailed(
             f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
             "no reviewer was called. Run review again."
+        )
+    if problems:
+        raise CallFailed(
+            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
 
@@ -4371,15 +4380,19 @@ RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
 PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
 CHEAP_LABEL = "Runner cheap checks before post-run verification"
 
-# A repair's post-run verification is targeted when its coverage can be determined safely (bead
-# coding-harness-gxwg): the whole touched and linked test files, ruff over the touched Python files
-# and the existing local gates its file kinds need, all outside the machine-wide verify admission.
-# Anything the selector cannot cover - a prompt, an unclassified input, code without a linked test,
-# an unreadable inventory - falls back to the admitted full `make verify`. Targeted green is never
-# reported as full green; phase 6 owes its own fresh full check (`review`).
+# An implement or repair attempt's post-run verification is targeted when its coverage can be
+# determined safely (bead coding-harness-gxwg, coding-harness-0swp): the whole touched and
+# import-linked test files, ruff over the touched Python files and the existing local gates the
+# file kinds need, all outside the machine-wide verify admission. Implement refuses new production
+# code without a reachable test before any test runs or a fallback is admitted. Anything the
+# selector cannot cover - a prompt, an unclassified input, code without a linked test, shared
+# infrastructure, an unreadable inventory - falls back to the admitted full `make verify`. A
+# targeted red, launch failure or timeout fails the attempt; it is never an invitation to the full
+# check. Targeted green is never reported as full green; phase 6 owes its own fresh full check
+# (`review`).
 TARGETED_LABEL = "Runner targeted checks"
 SCOPE_LABEL = "Runner verification scope"
-SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
+SCOPE_COMMIT_HEADING = "Runner verification scope (the runner's post-run check):"
 # Inputs whose change makes the full check necessary, whatever else the repair touched.
 SHARED_INFRASTRUCTURE = (
     "scripts/ci_gates.py",
@@ -5025,8 +5038,12 @@ def time_entry(
     started: dt.datetime,
     ended: dt.datetime,
     seconds: int,
+    scope: Sequence[str] = (),
 ) -> str:
     """The line the runner writes under `## Time used` for one completed attempt.
+
+    `scope` is a passing attempt's verification evidence: it stands after the verdict word, in one
+    line without the field separator, so the passing attempt leaves nothing else in findings.md.
 
     The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
     its date when that differs from the start's, so a span across midnight reads unambiguously.
@@ -5041,7 +5058,15 @@ def time_entry(
         route,
         model,
         time_records.ACCEPTED if accepted else time_records.REJECTED,
+        scope_in_time_line(scope),
     )
+
+
+def scope_in_time_line(scope: Sequence[str]) -> str | None:
+    """A scope record as the time line's single field: one line, no `·`, never blank - or None."""
+    plain = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in " ".join(scope))
+    text = " ".join(plain.split()).replace("·", "-").strip()
+    return text or None
 
 
 def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
@@ -6170,26 +6195,32 @@ MUST_RUN_DELEGATED = (
     "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
-    "ledger test fails the attempt before post-run verification. The runner then runs the targeted check for repair "
-    "or full `make verify` for implement; repair uses full fallback when targeted coverage is unsafe, "
-    "and a fresh full `make verify` runs before phase 6. Execute nothing yourself - delegation to the "
-    "runner is the contract, and no extra tool is yours."
+    "ledger test fails the attempt before post-run verification. The runner then runs the post-run "
+    "targeted check for implement and repair - the whole touched and linked test files, ruff and the "
+    "existing local gates, outside the verify admission. Implement refuses new production code without "
+    "a reachable test before any test runs: add its test. When the targeted coverage cannot be "
+    "established safely, the same route takes the admitted full `make verify`; a targeted red never "
+    "falls back to override it, and a fresh full `make verify` runs before phase 6. Execute nothing "
+    "yourself - delegation to the runner is the contract, and no extra tool is yours."
 )
 MUST_RUN_COMMANDS = (
     "Before you hand back, run the must-run checks yourself and leave them green: "
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
     "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
-    "checks after the call, then the targeted check for repair or full `make verify` for implement; "
-    "repair uses full fallback when targeted coverage is unsafe, and a fresh full `make verify` runs "
-    "before phase 6. Findings.md is the runner's audit file: an edit "
+    "checks after the call, then the post-run targeted check for implement and repair - the whole "
+    "touched and linked test files, ruff and the existing local gates, outside the verify admission. "
+    "Implement refuses new production code without a reachable test before any test runs: add its "
+    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "full `make verify`; a targeted red never falls back to override it, and a fresh full "
+    "`make verify` runs before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )
 
 
 @dataclass
 class Targeted:
-    """The coverage of one targeted repair check - or the reason it must be the full check."""
+    """The coverage of one implement or repair targeted check - or the reason it must be the full check."""
 
     tests: list[str]  # whole test files to run, sorted
     ruff: list[str]  # touched Python files the cheap checks' ruff did not already cover
@@ -6201,6 +6232,39 @@ def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[st
     """Every path the baseline commit holds, as the repository's own posix names."""
     names = _git_bytes(root, "ls-tree", "-r", "-z", "--name-only", against, env=env).split(b"\0")
     return {touch_map.inventory_path(name) for name in names if name}
+
+
+def new_code_without_test(root: Path, env: dict[str, str], against: str) -> list[str] | None:
+    """Added production `.py`/`.sh` files the current inventory proves uncovered, or None when it cannot.
+
+    An implement attempt with new production code and no reachable test is refused before any test
+    runs or a fallback is admitted (bead coding-harness-0swp): a baseline-only, a deleted or an
+    unreachable test never licenses the new file, while a test untracked in the working tree may.
+    `None` means the delta or the link inventory could not be read: absence is then unproven, and
+    the attempt keeps its existing fallbacks instead of a refusal. Existing uncovered code stays
+    the selector's own fallback, and prompts or shared infrastructure the selector's refusals.
+    """
+    try:
+        touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
+        if any(0xDC80 <= ord(char) <= 0xDCFF for path in touched for char in path):
+            return None
+        before = _baseline_inventory(root, env, against)
+        links = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
+        )
+    except (Refused, OSError, touch_map.CannotMeasure, ValueError, RecursionError):
+        return None
+    return sorted(
+        posix
+        for posix in touched
+        if posix not in before
+        and posix.endswith((".py", ".sh"))
+        and not posix.startswith("prompts/")
+        and posix not in SHARED_INFRASTRUCTURE
+        and not _is_test_module(posix)
+        and posix.rsplit("/", 1)[-1] != "conftest.py"
+        and not links.get(posix)
+    )
 
 
 @dataclass
@@ -6248,15 +6312,50 @@ def _parse_gate_command(command: list[str]) -> GateCommand:
     return GateCommand(assignments, words, entrypoints)
 
 
-def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
-    """What a targeted check of a repair covers, or why only the full check may stand in (bead coding-harness-gxwg).
+def _linked_tests(edges: set[tuple[str, str, str]], root: Path) -> dict[str, set[str]]:
+    """Per file, the surviving test modules that reach it directly or through import chains.
 
-    The touched paths are the repair's whole delta against `against` - index, working tree, untracked
-    files, both names of a rename, edits an earlier attempt left. Linked tests are the test files the
-    touch map links to a touched path, in the working tree and, for a path the repair removed, at the
-    baseline; every surviving touched or linked test file runs whole. A prompt, shared test or
-    execution configuration, an input kind outside Python and the documents, production code with no
-    linked test, an aliased file or an unreadable inventory makes the check full instead.
+    Two edge kinds count, never `runs` or `reads` (bead coding-harness-0swp): a `tests` edge names
+    the file a surviving `tests/**/test_*.py` module covers, and an `imports` edge names the file a
+    Python source imports. The walk goes from a file to its importers and collects the `tests` edges
+    of everything reached - static links only, never a claim of runtime coverage - and the visited
+    set ends cycles. One graph, one closure: the caller computes this per snapshot and unions the
+    results, so a chain is never fabricated across the current and the baseline graph.
+    """
+    importers: dict[str, set[str]] = {}
+    direct: dict[str, set[str]] = {}
+    for source, target, kind in edges:
+        if kind == "imports":
+            importers.setdefault(target, set()).add(source)
+        elif kind == "tests" and _is_test_module(source) and (root / source).is_file():
+            direct.setdefault(target, set()).add(source)
+
+    def reach(node: str) -> set[str]:
+        found: set[str] = set()
+        seen = {node}
+        waiting = [node]
+        while waiting:
+            for importer in sorted(importers.get(waiting.pop(), ())):
+                if importer not in seen:
+                    seen.add(importer)
+                    waiting.append(importer)
+                    found |= direct.get(importer, set())
+        return found | direct.get(node, set())
+
+    return {node: reach(node) for node in set(direct) | set(importers)}
+
+
+def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
+    """What a targeted check covers, or why only the full check may stand in (bead coding-harness-gxwg, coding-harness-0swp).
+
+    The touched paths are the attempt's whole delta against `against` - index, working tree, untracked
+    files, both names of a rename, edits an earlier attempt left. Linked tests are the surviving test
+    modules the touch map links to a touched path directly or through reverse `imports` chains; the
+    working tree and the baseline each keep their own closure and their union covers the whole delta,
+    so a chain is never fabricated across the two snapshots. Every surviving touched or linked test
+    file runs whole. A prompt, shared test or execution configuration, an input kind outside Python
+    and the documents, production code with no linked test in either graph, an aliased file or an
+    unreadable inventory makes the check full instead.
     """
 
     def full(reason: str) -> Targeted:
@@ -6304,21 +6403,31 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
             code.append(posix)
         if present[posix]:
             python.append(posix)
+    # Two independent closures, one per snapshot: the current graph sees the attempt's own new
+    # links, the baseline graph the chains a removed or renamed file sat in. Their union covers
+    # the whole delta; a chain neither graph holds on its own is not coverage.
     try:
-        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)) | touch_map.links(
-            touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)
+        current = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
         )
     except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
         return full(f"the link inventory could not be read ({error})")
+    try:
+        baseline = _linked_tests(
+            touch_map.links(touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)), root
+        )
+    except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
+        return full(f"the link inventory could not be read ({error})")
+
+    def linked(posix: str) -> set[str]:
+        """The surviving test modules either snapshot's own closure reaches this file through."""
+        return current.get(posix, set()) | baseline.get(posix, set())
+
     touched_set = set(touched)
-    linked: dict[str, set[str]] = {}
-    for source, target, _kind in edges:
-        if target in touched_set and _is_test_module(source) and (root / source).is_file():
-            linked.setdefault(target, set()).add(source)
     for posix in code:
-        if not linked.get(posix):
+        if not linked(posix):
             return full(f"`{posix}` has no linked test")
-    tests = sorted(set(touched_tests).union(*(linked.get(posix, set()) for posix in touched)))
+    tests = sorted(set(touched_tests).union(*(linked(posix) for posix in touched)))
     # Maintainer's option A (2026-11-04): until bead coding-harness-vg9 splits this
     # file, its whole-file run needs the admitted full check's budget. Select that
     # route before execution; a targeted timeout must still reject the attempt.
@@ -6407,42 +6516,32 @@ def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
-    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+def run_gates(root: Path, env: dict[str, str], key: str | None, gates: Sequence[dict]) -> tuple[list[str], list[str]]:
+    """Run the selected gates outside the verify admission: (blocking problems, reported notes).
 
-    Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    declaration order through the locked interpreter. The first blocking
-    red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
-    reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
+    Gate-list order, through the locked interpreter, as `verify_all.sh` runs them - the one gate
+    executor of the targeted check and of the draft's document check alike (bead
+    coding-harness-0swp). The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a gate that only reports or advises is noted and never blocks,
+    as in the local runner. A missing locked interpreter or tool is red.
     """
-    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
-    if chosen.ruff:
-        problem = _cheap_ruff(root, env, key, chosen.ruff)
-        if problem:
-            return [f"{TARGETED_LABEL}: {problem}"], []
     python = root / PYTEST[0]
-    if (chosen.tests or chosen.gates) and not python.is_file():
+    if gates and not python.is_file():
         return [
             protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
         ], []
-    if chosen.tests:
-        identity = "`" + " ".join(PYTEST) + "`"
-        try:
-            done = launch(
-                [*PYTEST, *chosen.tests],
-                root,
-                targeted_pytest_env(root, env),
-                key,
-                timeout=TARGETED_PYTEST_SECONDS,
-                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
-            )
-        except (StepTimedOut, CallFailed) as error:
-            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
-        if done.returncode:
-            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
     notes: list[str] = []
-    gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
-    for gate in chosen.gates:
+    # The shared state root travels to every gate child, the way the admitted run's
+    # `inherit_env` hands it to a local child: the base, never the root itself, so a gate
+    # resolves the same shared root without carrying any admission ownership marker.
+    gate_env = {
+        **env,
+        "PYTHON": str(python),
+        "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")]),
+        "XDG_STATE_HOME": str(verify_lock.state_base()),
+    }
+    for gate in gates:
         command = str(gate["command"])
         command = _parse_gate_command(shlex.split(command)).locked_command(python, command)
         identity = f"gate `{gate['id']}` ({gate['enforcement']})"
@@ -6463,10 +6562,44 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     return [], notes
 
 
+def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
+    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+
+    Order: ruff over the touched files, pytest over the whole test files, then the selected gates
+    through `run_gates`. The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a missing tool is red.
+    """
+    if chosen.ruff:
+        problem = _cheap_ruff(root, env, key, chosen.ruff)
+        if problem:
+            return [f"{TARGETED_LABEL}: {problem}"], []
+    python = root / PYTEST[0]
+    if chosen.tests and not python.is_file():
+        return [
+            protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
+        ], []
+    if chosen.tests:
+        identity = "`" + " ".join(PYTEST) + "`"
+        try:
+            done = launch(
+                [*PYTEST, *chosen.tests],
+                root,
+                targeted_pytest_env(root, env),
+                key,
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
+            )
+        except (StepTimedOut, CallFailed) as error:
+            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
+        if done.returncode:
+            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    return run_gates(root, env, key, chosen.gates)
+
+
 def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
-    The full check of a repair whose targeted coverage was not safe, and of phase 6's boundary. New
+    The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
     files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
     a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
     """
@@ -6478,10 +6611,11 @@ def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
                 intended = intend_new_files(root, env)
             except (Refused, OSError) as error:
                 return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+            child_env = verify_lock.inherit_env(env)
             done = launch(
                 ["make", "verify"],
                 root,
-                verify_lock.inherit_env(env),
+                child_env,
                 timeout=VERIFY_SECONDS,
                 limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
                 pass_fds=_lock_fds(owned),
@@ -6512,16 +6646,19 @@ def _targeted_body(
     previous_failures: Sequence[str],
     against: str,
     scope: list[str] | None,
+    new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
 ) -> list[str]:
-    """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
+    """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
     Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
     `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
-    admitted full check instead. A passing result is never worded as full verification. The clearing
-    capture covers the fallback too: the clearing happened in the shared preparation, before the
-    selection chose the admitted full check.
+    admitted full check instead. A passing result is never worded as full verification. Implement adds
+    the `new_file_guard`: new production code without a reachable test refuses the attempt before any
+    test runs or a fallback is admitted (bead coding-harness-0swp). The clearing capture covers the
+    fallback too: the clearing happened in the shared preparation, before the selection chose the
+    admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6537,6 +6674,14 @@ def _targeted_body(
             formatted.append(line)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
+    if new_file_guard:
+        uncovered = new_code_without_test(root, env, against)
+        if uncovered:
+            listing = ", ".join(f"`{_one_line(path)}`" for path in uncovered)
+            return [
+                f"{TARGETED_LABEL}: new production code without a reachable test: {listing} — "
+                "add a test that reaches this file before the attempt can run"
+            ]
     try:
         cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
     except (OSError, RuntimeError, ValueError) as error:
@@ -6595,6 +6740,7 @@ def verify_attempt(
     mode: str = "full",
     against: str = "HEAD",
     scope: list[str] | None = None,
+    new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
@@ -6611,12 +6757,16 @@ def verify_attempt(
     When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
     for the work check's discount; without one, clearing stands unchanged for direct callers.
 
-    `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
-    preparation run outside the verify admission, and the repair's delta against `against` selects the
-    whole touched and linked test files, ruff over the touched Python files and the existing local
-    gates its file kinds need (`targeted_selection`). A coverage that cannot be determined safely runs
-    the admitted full `make verify` instead. `scope` receives the runner-owned evidence line that names
-    the mode, the selected checks and the result. Implement and draft keep the default `full`.
+    `mode="targeted"` is the implement and repair post-run check (bead coding-harness-0swp): the same
+    format, cheap checks, ledger clearing and derived preparation run outside the verify admission,
+    and the attempt's delta against `against` selects the whole touched and import-linked test files,
+    ruff over the touched Python files and the existing local gates its file kinds need
+    (`targeted_selection`). A coverage that cannot be determined safely runs the admitted full
+    `make verify` instead, and a targeted red, launch failure or timeout fails the attempt - it never
+    falls back to the full check to override it. `new_file_guard` adds the implement-only refusal of
+    new production code without a reachable test. `scope` receives the runner-owned evidence line
+    that names the mode, the selected checks and the result; `evidence` receives the selected
+    coverage for the targeted-scope record. Draft keeps its own document-only path (`verify_draft`).
     """
     env = runner_env(
         foreign_env(
@@ -6648,10 +6798,22 @@ def verify_attempt(
             f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
         ]
     if mode == "targeted":
-        # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
-        # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
+        # Implement and repair ask for this (bead coding-harness-gxwg, coding-harness-0swp): the same
+        # preparation outside the admission, then the targeted checks - or the admitted full check
+        # when the coverage is unsafe. A targeted red is a failed attempt, never a fallback trigger.
         targeted = _targeted_body(
-            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope, clearing
+            root,
+            plan,
+            env,
+            key,
+            formatted,
+            tools,
+            accepted_plan,
+            previous_failures,
+            against,
+            scope,
+            clearing=clearing,
+            new_file_guard=new_file_guard,
         )
         try:
             time_log(plan)
@@ -8691,7 +8853,8 @@ def run_attempts(
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
     retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
-    verify_mode: str = "full",  # repair: "targeted"; implement keeps the full check
+    verify_mode: str = "full",  # implement and repair: "targeted" (bead coding-harness-0swp); draft keeps its own path
+    new_file_guard: bool = False,  # implement: new production code without a reachable test refuses the attempt
     protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
@@ -9090,6 +9253,7 @@ def run_attempts(
                         mode=verify_mode,
                         against=baseline,
                         scope=scope_lines,
+                        new_file_guard=new_file_guard,
                         clearing=clearing,
                     )
             except Refused as error:
@@ -9264,6 +9428,9 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
+                    # A passing attempt's verification scope stands in its time line, after the
+                    # verdict word; a failed attempt's stays in its one diagnostics block.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
                 ),
                 baseline_time,
                 inputs_before,
@@ -9279,16 +9446,6 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
-                if scope_record:
-                    # The runner's own evidence of how this repair was verified: never a model's claim.
-                    append(
-                        ctx.findings,
-                        quote_block(
-                            f"{SCOPE_LABEL}:\n" + "\n".join(scope_record),
-                            key,
-                            whole=scope_record,
-                        ),
-                    )
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
@@ -9452,6 +9609,11 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         answer_check=check,
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
+        # Every model route's post-run check is targeted when the coverage is safe (bead
+        # coding-harness-0swp): the covered initial, retry and stage-1 routes alike. New production
+        # code without a reachable test refuses before any test runs or a fallback is admitted.
+        verify_mode="targeted",
+        new_file_guard=True,
     )
 
 
@@ -9598,32 +9760,62 @@ def card_problem(text: str) -> str | None:
     return None
 
 
-# The draft's post-run check is the verify job's existing document subset, selected through the
-# shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
-# bead coding-harness-77qj). Implement keeps full `make verify`; repair takes the targeted check,
-# with the full suite as its fallback and before phase 6.
-DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
-DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
+# The draft's post-run check is the verify job's locally runnable document subset, selected through
+# the one gate list CI uses - never a gate list of this caller's own (decisions/gates.yaml, bead
+# coding-harness-77qj), and since coding-harness-0swp run through the shared gate executor without
+# the machine-wide verify admission: a draft rewrites documents, so it starts no pytest, no admitted
+# shell runner and no kit probe. Implement and repair take the targeted check
+# (`verify_attempt`, mode "targeted"), with the admitted full `make verify` as the fallback and the
+# fresh full check before phase 6.
+def document_gates() -> list[dict]:
+    """The locally runnable document subset of the one gate list, in registry order.
+
+    Selected through `ci_gates`, never a list of this caller's own: the verify job's local gates
+    whose subsets name the documents. A draft rewrites plan, findings and index text, so it runs
+    these and nothing else - no pytest, no code or kit gate (bead coding-harness-0swp).
+    """
+    return [
+        gate
+        for gate in ci_gates.gates()
+        if gate["job"] == "verify"
+        and gate["local_runnable"]
+        and ci_gates.misst_in(gate, "lokal")
+        and "docs" in gate["subsets"]
+    ]
+
+
+def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
+    """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
+    named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
+    line = (
+        f"document checks only, no tests ran; result: {result}; gates {named}; not the full `make verify`; "
+        "a fresh full `make verify` is still required before phase 6"
+    )
+    if notes:
+        line += "; reported without blocking: " + ", ".join(notes)
+    return line
 
 
 def verify_draft(
     root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
-) -> tuple[list[str], bool]:
-    """A draft attempt's post-run checks: the problems, and whether the answer is owed.
+) -> tuple[list[str], bool, str]:
+    """A draft attempt's post-run checks: the problems, whether the answer is owed, and the scope evidence.
 
-    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
-    `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
-    is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
-    the two artefacts, the plan card and the `## Time used` heading. Implement keeps full `make verify`;
-    repair takes the targeted check, with the full suite as its fallback and before phase 6.
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document gates
+    through `run_gates` - each gate's exit code decides, never its prose - the two artefacts, the plan
+    card and the `## Time used` heading. The gates run outside the machine-wide verify admission: the
+    child environment carries none of its ownership, token or context variables (bead
+    coding-harness-0swp). The one missing answer a document gate tolerates is the gate's own, asked
+    for through `check_adr_answers.TOLERATE_ENV`, never read from its output.
     """
     owed = False
+    not_completed = document_scope_text([], "not completed")
     if len(new_adrs) > 1:
         problems = ["the attempt left more than one new ADR file: " + ", ".join(f"`{path}`" for path in new_adrs)]
-        return problems, owed
+        return problems, owed, not_completed
     tampered = tool_problem(root, tools)
     if tampered:
-        return [tampered], owed
+        return [tampered], owed, not_completed
     env = runner_env(
         foreign_env(
             {
@@ -9638,29 +9830,30 @@ def verify_draft(
         ),
         root,
     )
+    # Nothing a document check starts carries or claims the verify admission: its ownership,
+    # token and context variables are stripped here, and `run_gates` enters no admission.
+    env = {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
     preparation = prepare_derived(root, env, key)
     if preparation:
-        return preparation, owed
+        return preparation, owed, not_completed
     try:
-        # One machine-wide admission before the timed check: queue and memory waits consume no
-        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        with verify_lock.hold_admission(DOCS_VERIFY) as owned:
-            done = launch(
-                DOCS_VERIFY,
-                root,
-                verify_lock.inherit_env(env),
-                timeout=VERIFY_SECONDS,
-                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-                pass_fds=_lock_fds(owned),
-            )
-    except (CallFailed, verify_lock.VerifyLockError) as error:
-        # A document check that cannot start is as failed a post-run check as a red one: its
-        # diagnostics reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
-        return [f"`{DOCS_VERIFY_NAME}` could not run: {error}"], owed
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`{DOCS_VERIFY_NAME}` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
-    else:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], owed, not_completed
+    if not gates:
+        return ["no locally runnable document gates were selected; the draft check cannot run"], owed, not_completed
+    problems, notes = run_gates(root, env, key, gates)
+    if not problems:
         owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()
     for name in ("spec.md", "plan.md"):
@@ -9674,7 +9867,11 @@ def verify_draft(
             problems.append(CARD_PROBLEM)
         if not TIME_HEADING.search(plan_text):
             problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
-    return problems, owed
+    # The scope line is the check's own record of its outcome, so it stands only once the
+    # artefact guards have spoken: a draft they refuse is never reported as green (bead
+    # coding-harness-0swp, criterion 8).
+    scope = document_scope_text(gates, "red" if problems else "green", notes)
+    return problems, owed, scope
 
 
 def draft(root: Path, change: str) -> None:
@@ -9710,6 +9907,9 @@ def draft(root: Path, change: str) -> None:
             key = read_secret("GLM_KEY")
             if key is None:
                 raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        prior_plan = ctx.plan.read_text(encoding="utf-8") if ctx.plan.exists() else ""
+        prior_time = prior_plan if TIME_HEADING.search(prior_plan) else "## Time used\n"
+        started_wall, started_mono = utc_now(), monotonic_now()
         prompt = draft_prompt(ctx, diagnostics)
         begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
         unmeasured: str | None = None
@@ -9778,11 +9978,13 @@ def draft(root: Path, change: str) -> None:
                     restored,
                 ),
             )
-        problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
+        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
-            # The next attempt starts on the tree this one left; the block quotes its files and
-            # diagnostics below its audit line (spec, criterion 21).
-            listing = protect_diagnostics("\n".join(f"- {problem}" for problem in problems), key)
+            # The scope evidence stands first, as in every verb's block; the next attempt starts on
+            # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
+            listing = protect_diagnostics(
+                "\n".join([f"- {SCOPE_LABEL}: {scope}", *(f"- {problem}" for problem in problems)]), key
+            )
             files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
@@ -9799,13 +10001,42 @@ def draft(root: Path, change: str) -> None:
                     f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
                     "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
+            ended_wall, ended_mono = utc_now(), monotonic_now()
+            persist_time_entry(
+                root,
+                ctx.plan,
+                time_entry(
+                    "draft",
+                    attempt,
+                    route,
+                    endpoint[1],
+                    True,
+                    started_wall,
+                    ended_wall,
+                    max(0, round(ended_mono - started_mono)),
+                    [protect_diagnostics(scope, key)],
+                ),
+                prior_time,
+                {ctx.plan: prior_plan.encode("utf-8")},
+                accepted=True,
+                retry=False,
+            )
+            # The runner's own evidence of what the draft's check ran: never a model's claim, and
+            # never worded as tests or as the full verification (bead coding-harness-0swp). A passing
+            # attempt leaves it in the time line and checkpoint message, nothing after its audit line.
+            scope_line = f"- Attempt {attempt} ({route}): {scope}"
             checkpoint(
                 root,
                 ctx.change,
                 baseline,
                 key,
                 ignored_before,
-                message=f"docs({change}): draft spec and plan — route {route}",
+                message=(
+                    f"docs({change}): draft spec and plan — route {route}\n\n"
+                    + SCOPE_COMMIT_HEADING
+                    + "\n"
+                    + scope_line
+                ),
                 keep=keep,
             )
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
