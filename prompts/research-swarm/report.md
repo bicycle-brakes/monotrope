@@ -66,6 +66,17 @@ matches and bare file paths are not evidence. Topic 6 may additionally cite
 a full commit hash present in its runner-supplied history packet. A reachable
 hash outside that packet, a PR number or a bead id alone is unsupported.
 
+A Markdown heading is cited by its exact title after `::`. Illustrative
+example only, not a fact about this repository: if a frozen file
+`docs/example/service-guide.md` held the heading line
+`## Retry policy`
+then this example's evidence string would be
+`docs/example/service-guide.md::Retry policy`.
+Copying the heading's opening `#` marks with the space after them is
+tolerated and resolves to the same section; the title itself stays exact,
+including case and inline formatting. Never cite a line number in place of
+the heading.
+
 For online topics 9–11, cite only public HTTPS URLs retrieved by your own
 public_fetch tool, using its request URL or final URL. Search snippets,
 memory and a page fetched only by a peer are not evidence. Set
