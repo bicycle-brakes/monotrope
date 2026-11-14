@@ -64,7 +64,15 @@ protection therefore rests on each writer appending one small receipt line (a
 bounded title and excerpt) in a single `O_APPEND` write and on that late read,
 not on the helper's lock; the helper's lock only orders the stand-in's own
 appends. Changing the production writer or reader is a non-goal of this
-change.
+change. Within the suite the stand-in's append of `receipts.jsonl` therefore
+stays on the unlocked path, outside both the helper's lock and the guard
+(2026-11-14, loop row L3-3). A torn read there is not expected: each seat has
+its own scratch directory with one stand-in writing its receipts, no test
+under `tests/` reads that file itself (read 2026-11-14 at `88e28114`; the one
+test that writes a `receipts.jsonl` by hand, in `tests/test_research_capture.py`,
+does so after its child process has returned), and the only reader is the
+production runner, which reads it after the seat's process has ended. A test
+that read it while a stand-in may still write would reopen the gap.
 
 ## Acceptance criteria
 
@@ -86,9 +94,9 @@ change.
 6. When a leak refuses a swarm run and its inputs are then restored, the refused run is announced before any model call in the next successful run.
    *Refuted by:* the leaking run starts a model call or returns success, the clean run returns 2, or its first refused-run notice is absent or observes a nonzero call count.
    *Basis:* decisions.md#Q-1.
-7. When the repair is submitted for review, its evidence includes a failing torn-read reproduction before the fix and the same workload passing after it, together with repeated refused-run checks under concurrent load.
-   *Refuted by:* only green reruns are shown, workloads differ without explanation, an after-run fails, or commands, commits, repetition counts and diagnostics are missing.
-   *Basis:* decisions.md#Q-1.
+7. When the repair is submitted for review, its proof is the forced mid-append race failing before the fix and passing after it, ten of ten runs on each side with the same workload, and the evidence states openly that the natural CI failure was not reproduced locally (60 of 60 loaded refused-run checks passed on the pre-fix tree `079e0aac`).
+   *Refuted by:* only green reruns are shown, the two sides run different workloads without explanation, an after-run fails, commands, commits, repetition counts or diagnostics are missing, or the evidence presents the loaded refused-run checks as a before/after signal or the natural CI failure as reproduced or explained.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-4.
 
 ## Non-goals
 
@@ -113,7 +121,18 @@ the helper is always one the guard watches; the gap is the log that never
 uses it. The maintainer chose to ship with this boundary stated; the
 contract that closes it is tracked separately (bead coding-harness-6zpj).
 Paths that never carry a declared name, arbitrary obfuscation and raw OS
-calls stay outside the guard as well ([DETAIL] under Open decisions).
+calls stay outside the guard as well ([DETAIL] under Open decisions). So does
+a path produced by a call outside the guard's known path-building set
+(`Path`, `PurePath`, `str`, `join`, `joinpath`, `resolve` and the like): an
+ordinary helper function or string method that returns a declared name hides
+it from the guard just as obfuscation does, and a raw `open`, `read_text` or
+`write_text` on its result passes (2026-11-14, loop row L3-2). The same
+contract (bead coding-harness-6zpj) closes this gap.
+
+Platform: the helper takes its lock with `fcntl.flock` and imports `fcntl`
+unconditionally, so it runs on POSIX systems only — macOS locally and Linux
+on CI. Windows is not supported: there every test module that imports the
+helper fails at import (2026-11-14, loop row L3-4).
 
 ## Protected areas
 
@@ -132,11 +151,16 @@ swarm-test-speed change's protected production call and scan paths stay intact.
   the orchestrator owns tracker and pull-request work.
 - Red/green concurrency evidence and repeated loaded runs name their date,
   measured commit, exact command and outcomes in `plan.md` and the PR body.
+- After the merge (a follow-up, not a merge gate): for two weeks the
+  orchestrator counts failures of the swarm tests (`tests/test_stage2_swarm.py`)
+  on main's CI and reports them to the maintainer (decisions.md#Q-4).
 
 ## Open decisions
 
 None open. The two answers of 2026-11-13 remain unchanged; the maintainer's
-third answer (decisions.md#Q-3, 2026-11-14) states the guard's name boundary.
+third answer (decisions.md#Q-3, 2026-11-14) states the guard's name boundary,
+and the fourth (decisions.md#Q-4, 2026-11-14) restates criterion 7 and adds
+the after-merge measurement.
 
 - [DETAIL] The appetite is three hours of phase 4 including repairs, a stop
   chosen because neither answer states a budget and this is a bounded repair.

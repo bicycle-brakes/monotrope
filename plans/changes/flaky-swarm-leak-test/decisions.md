@@ -83,6 +83,21 @@ context: |
 
 In the context of a guard that knows stand-in logs by declaration only, facing a choice between shipping it with that boundary stated and widening it inside this bounded change, we decided to ship with the name boundary stated and leave the closing contract to bead coding-harness-6zpj, to achieve that the repaired flake and its guard land now, accepting that a log under a new, undeclared name is not seen until that contract exists. — 2026-11-14
 
+## Q-4 · Criterion 7 without a reproduced natural failure
+
+asked: 2026-11-14
+answer: "A" — restate criterion 7 truthfully and measure after the merge (stated as "A: Ehrlich umformulieren + messen"): the proof of the fix is the forced mid-append race (red before, green after, 10 of 10 each); the evidence states openly that the natural CI failure was not reproduced locally; for two weeks after the merge the orchestrator counts failures of the swarm tests on main's CI and reports them to the maintainer.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: review loop row L3-1 (MAJOR) found that criterion 7 of spec.md reads as if the repeated refused-run checks under load showed the fix working, while those checks never failed before the fix (bead coding-harness-yb1l).
+  Intention: an acceptance criterion must not claim more than the evidence shows; the change should ship with a proof it really has and a way to see whether the CI flake is gone.
+  Today: the forced mid-append race failed 10 of 10 on the pre-fix tree 079e0aac and passed 10 of 10 after the fix; the loaded refused-run loop passed 60 of 60 on the pre-fix tree as well, so it carries no before/after signal. CI run 43618903315 of pull request 391 (2026-11-14, pre-fix code) failed tests/test_stage2_swarm.py::test_measured_empty_catalog_keeps_all_required_slots with "a finder failed: finders-0-3 (failed)"; that this is the same torn-read mechanism is not proven.
+  Repository change: A — restate criterion 7 around the forced race, say openly that the natural failure was not reproduced, and add a two-week after-merge count of swarm-test failures on main's CI; or B — keep trying to reproduce the natural failure before the change ships.
+  Architecture change: none.
+
+In the context of a test-only repair whose natural CI failure could not be reproduced locally, facing a choice between restating its evidence criterion truthfully and holding the change until the natural failure is reproduced, we decided to restate criterion 7 around the forced race and to measure main's CI for two weeks after the merge, to achieve that the change claims only what it proves and the real flake is still watched, accepting that the CI failures stay an inferred cause until that measurement says otherwise. — 2026-11-14
+
 ## Guard design after the review loop
 
 - [DETAIL] (2026-11-14, maintainer's decision of the same day: the guard holds

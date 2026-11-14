@@ -179,7 +179,15 @@ started together with one background load run in the same checkout,
 
 **The natural failure was not reproduced.** Only the forced race was red; the
 two main-CI failures named in the spec stay an inferred cause, not a measured
-one. The ten-run loop of the section "Verification" (the refused-run test
+one. The 60-run loop passed on both sides, so it carries no before/after
+signal and is not evidence that the fix addresses the CI flake; criterion 7's
+proof is the forced race alone (decisions.md#Q-4, loop row L3-1). A further
+CI failure on pre-fix code, run 43618903315 of pull request 391 (2026-11-14,
+`tests/test_stage2_swarm.py::test_measured_empty_catalog_keeps_all_required_slots`,
+"a finder failed: finders-0-3 (failed)"), is not proven to be the same
+mechanism. For two weeks after the merge the orchestrator counts failures of
+`tests/test_stage2_swarm.py` on main's CI and reports them to the
+maintainer. The ten-run loop of the section "Verification" (the refused-run test
 beside the race test on two workers) was not run separately; the 60-run loop
 above stands in for it and is named here as such.
 
@@ -239,7 +247,7 @@ failure stays unreproduced, as stated above).
 - 5: tests/test_atomic_test_log.py::test_only_declared_logs_take_records — the helper serves a JSON log the guard does not know about
 - 5: tests/test_atomic_test_log.py::test_stand_ins_stay_visible_and_contact_free — a stand-in hides from the guard or imports a contact module
 - 6: tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call — leak accepted, clean run refused, or notice absent/late
-- 7: not a test — review the dated red/green evidence (forced race ten runs each side; the 60-run loaded loop of 2026-11-14 and the ten-run paired loop of 2026-11-14, addendum) with commands and commit identity in this plan and the PR
+- 7: not a test — review the dated red/green evidence: the forced race, red 10 of 10 at `079e0aac` and green 10 of 10 after the fix, with commands and commit identity in this plan and the PR; the 60-run loaded loop and the ten-run paired loop of 2026-11-14 are green-only checks, and the plan states that the natural CI failure was not reproduced (decisions.md#Q-4)
 
 ## Runner route — 2026-11-13
 
