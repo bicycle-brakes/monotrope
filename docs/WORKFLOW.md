@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-12
+updated: 2026-11-13
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1024,7 +1024,8 @@ amendments; the table above carries the live setting.
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
-model, runs `make verify`, measures each completed attempt itself — a line
+model, runs the post-run check (the targeted check, or the admitted full
+`make verify` as its fallback; "The draft (phases 2, 2b and 3)" below), measures each completed attempt itself — a line
 below `## Time used`, marked "measured by the runner", written for a rejected
 attempt as well as an accepted one — and makes the local checkpoint commit.
 The runner's line and every span an interactive session logs itself
@@ -1064,14 +1065,14 @@ If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
-Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
+Before the post-run check, the runner runs the worktree's own `.venv/bin/ruff` —
 `check --fix` with safe fixes only, then `format` — on the change's Python
 files under `scripts/` and `tests/`; what that changed stands in a failed
 attempt's diagnostics (after the findings-restore note, when there is one) and in
 the checkpoint commit's message. This format step itself never decides the
 verdict: a ruff that cannot run or leaves findings fails the attempt in the cheap
 checks below.
-After that format step and still before `make verify`, the runner runs an
+After that format step and still before the post-run check, the runner runs an
 implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
 `.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
@@ -1089,11 +1090,11 @@ bytes, before the runner stamps documents and renders derived files: a selected
 test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
 line) sees it unprepared, and such a test belongs to `make verify`, not to the
 cheap run (review row L9-1). A command with no target is skipped; a red,
-unstartable or over-bound command fails the attempt before `make verify`
-starts, and its identified command, exit and protected output stand in that
+unstartable or over-bound command fails the attempt before the post-run
+check starts, and its identified command, exit and protected output stand in that
 attempt's diagnostics and the next attempt's prompt. Cheap green replaces
-nothing: full `make verify` and the existing answer checks still decide every
-attempt. An implement or repair attempt's edit of the change's `findings.md`
+nothing: the post-run check that follows (targeted, or the full `make verify`
+on fallback) and the existing answer checks still decide every attempt. An implement or repair attempt's edit of the change's `findings.md`
 is not a failure: the runner restores its own pre-call snapshot before any
 check reads model-written state — through the recovery preflight, never
 through a linked parent — and records the restoration in the attempt's
@@ -1107,11 +1108,18 @@ and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
-is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
-models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
-topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
-for topics 9-11, 3 per free model for the online topics) and one fresh Opus
-5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+has `39 + 3N` logical slots for `N` selected free models: three finders, one
+Opus map merge, one Opus public sentence, `33 + 3N` topic slots (24 on the
+repository seats for topics 1-8, 9 on the online seats for topics 9-11, 3 per
+free model for the online topics) and one fresh Opus 5.5 judge. A topic answer
+that ends process-successful but fails its report format (extraction or
+validation) gets at most one correction call from the same frozen seat, in a
+second batch after every first topic call has ended; the correction carries
+the rejected answer and the rejection reason as data, stays inside the seat's
+remaining original topic allowance, the run deadline and the judge reserve,
+and a second rejection ends the seat. With those calls a run is at most
+`72 + 6N` sequential-by-queue invocations (ADR 0020, point 9, amended
+2026-11-10); a run without a rejected report stays at `39 + 3N`. The Go models ride the pinned Pi, at most four per provider at a
 time, required slots before free ones; the Opus calls ride official Claude
 Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
@@ -1119,7 +1127,8 @@ content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
 the first live free call). Deadlines are monotonic — the judge keeps its
 configured allowance reserved (initially 15 minutes) inside the configured
-whole-run allowance (initially 160 minutes) — with no retry and no debate. The
+whole-run allowance (initially 160 minutes) — with no other retry, no
+extension of a time limit and no debate. The
 allowances live in `research-swarm-limits.yaml` at the worktree root:
 `run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
 `sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
@@ -1335,8 +1344,8 @@ retries off, and a fresh home and agent directory per call. Explore and
 implement start Claude Code against Z.ai with `--restricted` and the project's
 settings, hooks and MCP servers skipped; implement also gets
 `Edit` and `Write`, never Bash or another command tool. On a successful
-implementation answer the runner runs exactly
-`make verify`; a failed post-check gets one fresh Flash repair, then one
+implementation answer the runner runs its post-run check (targeted, or the
+admitted full `make verify` on fallback); a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
 not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
@@ -1420,16 +1429,22 @@ see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
 If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
-the verify job's existing document subset,
-`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
-check fails the attempt — with
+its document check: after the put-back the runner runs exactly the locally
+runnable gates of the verify job that the gate registry assigns to the
+document subset (`document_gates` in `scripts/stage2.py`), no pytest and no
+code or kit gate, outside the machine-wide verify admission (bead
+coding-harness-0swp). The check carries none of the admission's ownership,
+token or context variables, so it neither waits for nor claims the lock. Its
+evidence names the gates it ran and says that no tests ran and that it is not
+the full `make verify`. A red check fails the attempt — with
 one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file
 and every other gate still do), so the check's exit code decides and the
-runner reads no gate output. `implement` keeps the full `make verify`;
-`repair` takes the targeted check, with the full suite as its fallback and before phase 6.
-Only the draft drops to the document subset. Only the
+runner reads no gate output. `implement` and `repair` take the targeted
+check, with the admitted full `make verify` as their fallback; a fresh full
+`make verify` still runs before phase 6. Only the draft drops to the
+document subset. Only the
 maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
@@ -1662,10 +1677,20 @@ positive whole number without a leading zero) for a finding that repair round
 N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
 naming the row and its place, while a taken or fixed row in the loop record
 or a phase-6 table carries any other value; the orchestrator corrects the cell
-and runs the verb again. Ordinary release checks the record before writing
-the released block; already released history is never re-checked, including
-legacy rows released before this check existed. `release-loop --restart` and
-`release-loop --stage-failed` do not check Origin. A round whose
+and runs the verb again. These checks read the loop record and the newest
+phase-6 table. Repair uses one resolver for target selection and the
+target-Origin check: the latest row of each finding ID across tables is current,
+with the active loop record after findings history. Repeated IDs across tables
+are a finding's history; IDs must be unique only within one table: duplicates
+involving a taken row refuse repair; decided duplicates in passive history
+produce a notice. Every selected current
+taken row needs valid Origin before any call or write, including older phase-6
+and released tables. The refusal names each offending resolved row by ID and
+file (`loop.md` or `findings.md`), without back-computing headings or occurrences.
+Ordinary release checks the record before writing the released block; released
+and superseded history that repair does not select needs no backfill.
+`release-loop --restart` and `release-loop --stage-failed` do not check Origin.
+A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
@@ -1719,8 +1744,34 @@ rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
 loop record, of every released block and of every phase-6 table — to Codex
-in one guarded call, and refuses while a row stands undecided or an ID is
-doubled. The model answers one **fixed line** per row, `<ID>: fixed —
+in one guarded call, using the latest row of each ID across tables, with the
+active loop record after findings history. Repeated IDs across tables are history.
+It refuses while a row stands undecided or an ID is doubled within one table
+and either duplicate is taken; decided duplicates in passive history produce a
+notice. Before the first call or write it checks every selected row's
+`Origin`, an older block's selected row included: a selected row of any
+block — the loop record, a released block, any phase-6 table — whose
+complete trimmed cell is not `base` or `fix-r<N>` (N a positive whole
+number without a leading zero) refuses the repair, which names every
+offending row by ID and file (`loop.md` or `findings.md`), and the
+orchestrator corrects the cell and starts the repair again. Released and
+superseded rows that no repair selects keep their exemption: history is
+never swept for provenance, and no other verb gains this check.
+
+When the live record shadows a released copy in `findings.md`, repair fixes
+only the live row and prints a notice. The released copy stays unchanged: an
+outstanding status there remains outstanding after a successful repair until
+the next `release-loop` rewrites the released block from the record.
+
+After the model call, verification and answer check, repair checks every
+selected row against its resolved contents and location on disk. If a selected
+row changed since resolution, repair refuses before the checkpoint commit and
+writes no fixed status to either `findings.md` or `loop.md`. The diagnostic
+names the row ID and file and says that no fixed statuses were written. This
+is a late check: the model call has already run, unlike the Origin refusal
+before the first call or write.
+
+The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the
@@ -1905,8 +1956,16 @@ each learned on the night of 2026-10-29/30:
   message. A targeted green is never worded as full verification: `review`
   (phase 6) runs a fresh full `make verify` of the current head under the lock
   before it calls the reviewer, on every invocation, a re-check included, and
-  refuses a dirty tree or a head that moved during the check. `implement` and
-  the draft keep their own post-run checks.
+  refuses a dirty tree or a head that moved during the check. `implement`
+  takes the same targeted check on every route (bead coding-harness-0swp),
+  with the same full fallback; a `scripts/stage2.py` edit or a selection of
+  the whole `tests/test_stage2.py` still falls back. One refusal is its own:
+  when the current link inventory proves that new production code (an added
+  Python or shell file) has no reachable test, the attempt fails before any
+  test runs and before a full fallback is admitted, and its diagnostics name
+  the file and ask for its test. A targeted red fails the attempt; the full
+  check never runs to override it. The draft runs its document check only
+  ("The draft (phases 2, 2b and 3)").
 
 ### Night runs
 

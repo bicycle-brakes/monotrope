@@ -371,6 +371,7 @@ def test_the_opencode_go_entry_is_declared() -> None:
     # Each exclusion is a dated decision; its record shape is validated below
     # through the runner's own `free_rule_problems`.
     assert [record["id"] for record in free["exclude"]] == [
+        "longcat-2.5-free",
         "step-5-preview-free",
         "iceman-contributor-free",
         "cat-jam-free",
@@ -1013,7 +1014,13 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     assert block["online_seats"] == [{"endpoint": "opencode-go"}] * 3
     rule = block["availability_preflight"]
     assert rule["max_age_seconds"] == 900
-    assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
+    # The research free rule keeps the review loop's exclusions (maintainer, 2026-11-13, bead coding-harness-363r.2).
+    assert block["online_free"] == {
+        "provider": "opencode-go",
+        "suffix": "-free",
+        "include": [],
+        "exclude": ["iceman-contributor-free", "longcat-2.5-free"],
+    }
     # Criterion 4: exactly the three measured APIs, with matching mappings.
     assert _measured_apis_problems(geladen) == []
     # The check's own teeth: each planted fault names its disagreement, on a
