@@ -17,7 +17,7 @@ snapshot expires (about seven days).
 - **Python 3.11 and 3.12** via `uv python install 3.11 3.12`: `lakeswitch-ai`
   requires `>=3.11,<3.12`, `coding-harness` requires `>=3.12`, and the image
   ships 3.13.
-- **bd 1.3.0** to `~/.local/bin/bd-1.3.0`, checksum-verified: `tools/bd`
+- **bd 1.3.4** to `~/.local/bin/bd-1.3.4`, checksum-verified: `tools/bd`
   looks there first; a mismatch skips the install (fail closed).
 - **`lakeswitch-ai/.venv`** from `requirements-ci.txt`, plus an editable
   install of the package: the same pins CI installs.
@@ -36,9 +36,11 @@ runs is skipped without an error; Python and bd are installed regardless.
 ## Known limits
 
 - The bd checksum is a copy of
-  `tools/beads/checksums/beads_1.3.0_linux_amd64.tar.gz.sha256`, because the
-  script runs outside any checkout. A bd version bump has to change both; no
-  check holds them together yet.
+  `tools/beads/checksums/beads_1.3.4_linux_amd64.tar.gz.sha256`, because the
+  script runs outside any checkout.
+  `tests/test_beads_install.py::test_cloud_pin_and_checksum_match_repository`
+  holds the copied version and digest together with the repository's pin and
+  its checksum file, so the two copies can no longer drift apart silently.
 - Whether the repositories are already cloned when the setup script runs has
   not been observed in a fresh environment.
 - Tested 2026-10-09 in a running cloud session (bd removed first to force the

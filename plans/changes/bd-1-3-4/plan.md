@@ -55,14 +55,14 @@ The orchestrator supplies the release-verification evidence before completion. `
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_beads_install.py::test_wrapper_selects_pinned_versioned_binary — selecting PATH bd, changing arguments or swallowing the child exit code fails.
-- 2: not yet written tests/test_beads_install.py::test_install_routes_request_canonical_release — either route requesting the old owner or another release fails.
-- 3: not yet written tests/test_beads_install.py::test_install_routes_install_verified_archive — a valid platform archive failing to produce the versioned binary or overwriting unversioned bd fails.
-- 3: not yet written tests/test_beads_install.py::test_install_routes_refuse_unverified_archive — missing or wrong expected checksum reaching extraction or install fails.
-- 4: not yet written tests/test_beads_install.py::test_cloud_pin_and_checksum_match_repository — cloud version or digest diverging from the committed pin and Linux checksum fails.
-- 5: not yet written tests/test_beads_install.py::test_wrapper_refuses_version_mismatch — mismatched version dispatch, even with the verb bypass set, fails.
-- 6: not yet written tests/test_beads_install.py::test_wrapper_blocks_schema_verbs — init, migrate or upgrade reaching the binary without the bypass fails.
-- 7: not yet written tests/test_beads_install.py::test_wrapper_missing_binary_exits_127 — a different status or accepting the repository shim fails.
+- 1: tests/test_beads_install.py::test_wrapper_selects_pinned_versioned_binary — selecting PATH bd, changing arguments or swallowing the child exit code fails.
+- 2: tests/test_beads_install.py::test_install_routes_request_canonical_release — either route requesting the old owner or another release fails.
+- 3: tests/test_beads_install.py::test_install_routes_install_verified_archive — a valid platform archive failing to produce the versioned binary or overwriting unversioned bd fails.
+- 3: tests/test_beads_install.py::test_install_routes_refuse_unverified_archive — missing or wrong expected checksum reaching extraction or install fails.
+- 4: tests/test_beads_install.py::test_cloud_pin_and_checksum_match_repository — cloud version or digest diverging from the committed pin and Linux checksum fails.
+- 5: tests/test_beads_install.py::test_wrapper_refuses_version_mismatch — mismatched version dispatch, even with the verb bypass set, fails.
+- 6: tests/test_beads_install.py::test_wrapper_blocks_schema_verbs — init, migrate or upgrade reaching the binary without the bypass fails.
+- 7: tests/test_beads_install.py::test_wrapper_missing_binary_exits_127 — a different status or accepting the repository shim fails.
 
 ## Route and draft checks
 
@@ -70,6 +70,13 @@ Explore used Stage 2, route `flash`, endpoint `glm-coding-plan`, model `glm-5.3-
 
 Draft checks on 2026-11-14: `python3 scripts/check_interview_minimums.py --change bd-1-3-4` and `python3 scripts/check_criterion_ledger.py` passed; `python3 scripts/check_research_handoff.py --change bd-1-3-4` passed with the explicit legacy exemption (no research-swarm/v2 evidence). Full `make verify` and the commit remain the runner's work.
 
+## Runner route — 2026-11-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 
 2026-11-14 18:27:47–18:31:32 UTC, 225 s — draft · attempt 1 · route codex · model gpt-6.1-sol · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-14 18:33:47–18:52:29 UTC, 1122 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 18:52:37–18:59:35 UTC, 418 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 18:59:59–19:00:50 UTC, 51 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

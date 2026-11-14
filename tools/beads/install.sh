@@ -41,7 +41,7 @@ if [ -x "$DEST" ] && "$DEST" version 2>/dev/null | grep -q "$VERSION"; then
   exit 0
 fi
 
-URL="https://github.com/steveyegge/beads/releases/download/v${VERSION}/${TARBALL}"
+URL="https://github.com/gastownhall/beads/releases/download/v${VERSION}/${TARBALL}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
