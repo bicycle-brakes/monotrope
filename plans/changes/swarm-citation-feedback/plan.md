@@ -148,6 +148,13 @@ checking was not run because its tracker renderer can read outside this
 worktree. Full `make verify`, index regeneration and the commit remain with
 the runner. This is document validation, not implementation test evidence.
 
+## Runner route — 2026-11-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 
 2026-11-14 17:16:06–17:20:34 UTC, 267 s — draft · attempt 1 · route codex · model gpt-6.1-sol · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-14 17:22:47–17:47:15 UTC, 1468 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 17:47:24–17:54:51 UTC, 446 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 17:54:58–17:55:38 UTC, 40 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
