@@ -1,7 +1,7 @@
 ---
 title: "Spec — swarm-citation-feedback"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-14
 last_reviewed: 2026-11-14
 updated: 2026-11-14

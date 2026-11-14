@@ -105,17 +105,18 @@ three-hour appetite including repair rounds and report unfinished work.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_research_refs.py::test_reference_markdown_accepts_opening_heading_marks — a copied heading fails or returns a different extent
-- 2: not yet written tests/test_stage2_research_refs.py::test_reference_markdown_prefix_tolerance_keeps_exact_boundaries — prefix tolerance overrides exact titles, ambiguity or structural limits
+- 1: tests/test_stage2_research_refs.py::test_reference_markdown_accepts_opening_heading_marks — a copied heading fails or returns a different extent
+- 2: tests/test_stage2_research_refs.py::test_reference_markdown_prefix_tolerance_keeps_exact_boundaries — prefix tolerance overrides exact titles, ambiguity or structural limits
 - 2: tests/test_stage2_research_refs.py::test_reference_heading_keeps_inline_formatting_and_case — case or formatting differences become supported
 - 2: tests/test_stage2_research_refs.py::test_reference_reads_only_frozen_bytes_and_refuses_escape — live files or escaping paths become evidence
-- 3: not yet written tests/test_stage2_research_report.py::test_report_evidence_floor_retains_each_failed_citation_reason — failure diagnostics omit or misattribute a reference or include a good reference
-- 3: not yet written tests/test_stage2_swarm.py::test_citation_failures_reach_same_seat_correction — the correction contains only the generic reason instead of each original citation and reason
-- 4: not yet written tests/test_stage2_swarm.py::test_citation_feedback_is_own_data_and_survives_resume — diagnostics enter instruction authority, cross seats or disappear before deterministic prompt reconstruction and adoption
+- 3: tests/test_stage2_research_report.py::test_report_evidence_floor_retains_each_failed_citation_reason — failure diagnostics omit or misattribute a reference or include a good reference
+- 3: tests/test_stage2_swarm.py::test_citation_failures_reach_same_seat_correction — the correction contains only the generic reason instead of each original citation and reason
+- 4: tests/test_stage2_swarm.py::test_citation_feedback_is_own_data_and_survives_resume — diagnostics enter instruction authority, cross seats or disappear before deterministic prompt reconstruction and adoption
+- 4: tests/test_stage2_swarm.py::test_generic_rejection_keeps_the_earlier_correction_prompt — a non-citation rejection or older record gains an invented citation block or changes the earlier prompt bytes
 - 4: tests/test_stage2_swarm.py::test_topic_correction_keeps_security_and_time_boundaries — a correction bypasses leak, receipt or original time boundaries
-- 5: not yet written tests/test_stage2_research_report.py::test_report_prompt_markdown_example_resolves — the documented heading/citation pair cannot resolve or is missing
-- 6: not yet written tests/test_stage2_swarm.py::test_online_brief_names_fetch_budget — a public topic prompt omits the three-fetch budget or report/unread instructions
-- 7: not yet written tests/test_stage2_swarm.py::test_partly_unsupported_citations_do_not_trigger_correction — a valid mixed report is retried or its unsupported claim/question link is lost
+- 5: tests/test_stage2_research_report.py::test_report_prompt_markdown_example_resolves — the documented heading/citation pair cannot resolve or is missing
+- 6: tests/test_stage2_swarm.py::test_online_brief_names_fetch_budget — a public topic prompt omits the three-fetch budget or report/unread instructions
+- 7: tests/test_stage2_swarm.py::test_partly_unsupported_citations_do_not_trigger_correction — a valid mixed report is retried or its unsupported claim/question link is lost
 - 7: tests/test_stage2_research_report.py::test_report_bad_citation_invalidates_whole_claim_without_dropping_it — partial excerpts survive or the unsupported claim disappears
 - 7: tests/test_stage2_research_report.py::test_report_one_shared_unicode_excerpt_cap_in_citation_order — the existing excerpt cap or order changes
 
