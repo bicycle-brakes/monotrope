@@ -1100,7 +1100,8 @@ class Run:
             record["citation_failures"] = list(citation_failures)
         self.store.write_result(self.run_id, record["slot_id"], record)
 
-    # -- one correction (ADR 0020, point 9; decisions.md Q-1, Q-4, Q-5) --------------------------
+    # -- one correction (ADR 0020, point 9; plans/changes/swarm-report-format/decisions.md
+    # Q-1, Q-4, Q-5) ------------------------------------------------------------------------------
 
     def seat_used_seconds(self, record: dict) -> float:
         """Execution time one recorded attempt spent: this run's monotonic launch, else the stored times."""
@@ -1172,7 +1173,8 @@ class Run:
     def correction_entry(self, entry: dict, first: dict) -> dict | None:
         """The one correction call of a rejected process-successful answer; None when no launch is permitted.
 
-        The same frozen seat, model, effort and tools answer again (decisions.md Q-4) on the prompt
+        The same frozen seat, model, effort and tools answer again
+        (plans/changes/swarm-report-format/decisions.md Q-4) on the prompt
         `correction_prompt` builds. An exhausted topic allowance permits no launch (criterion 6);
         the run deadline and the judge reserve bound the dispatch itself.
         """

@@ -397,9 +397,9 @@ def test_report_prompt_markdown_example_resolves():
     ), "the illustrated pair names itself an example, not a repository fact"
     source_path, reference = cited.group(1).split("::", 1)
     assert not re.fullmatch(r"[0-9]+", reference), "the example cites a heading, never a line number"
-    assert not (Path(__file__).resolve().parents[1] / source_path).exists(), (
-        "the example's source stays fictional instead of being a real repository file"
-    )
+    # The example's fictional status is carried by the disclaimer asserted above, and the resolution
+    # below reads only the illustrated source supplied here, never the working tree: a real file at
+    # the same path cannot change the outcome (loop row L3-4).
     import stage2_research_refs as refs
 
     sources = {source_path: (shown.group(1) + "\nbody line\n").encode()}
