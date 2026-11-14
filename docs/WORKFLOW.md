@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-13
+updated: 2026-11-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -565,7 +565,10 @@ gate, such as the `docs` job, never waits for the slot at all. When admission
 follows a green cheap phase and the tree is unchanged in the meantime, the
 cheap results are reused instead of executed twice; a changed tree reloads
 the gate list, reselects and reruns the complete cheap pass inside the held
-admission, so stale results cannot survive a reclassification. Hosted CI and
+admission, so stale results cannot survive a reclassification. A tree that
+cannot be measured (no named HEAD, an unreadable entry) or that changes while
+the cheap gates run refuses the run with a request to rerun; unmeasured cheap
+results are never relied on. Hosted CI and
 `--ci` continue through all selected gates of both phases whatever failed
 before. See the [gate catalog](governance/gate-catalog.md) for costs,
 admission marks and enforcement.

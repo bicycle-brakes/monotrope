@@ -40,11 +40,10 @@ durations (`scripts.verify_duration`) carry one run identity across both
 phases; the admission wait is recorded beside the execution seconds, never
 inside them.
 
-The tree comparison deliberately ignores the cache directories the gates
-themselves create in the checkout (`.ruff_cache`, `.pytest_cache`,
-`.mypy_cache`, `.hypothesis`): their churn is machine state, not the tree
-(the spec terms put caches outside the comparison), and ignoring them is
-what keeps a fresh clone's first run from refusing itself.
+The tree comparison leaves out what git ignores among the untracked files —
+the caches the gates create (ruff and pytest ignore their own directories)
+are machine state, not the tree — and names no tool or path of its own: the
+one gate list stays the only place that names them (decisions Q-5).
 """
 
 from __future__ import annotations
@@ -76,10 +75,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Every git call of the snapshot is bounded: a wedged git must fail the
 # measurement, never hang the run it was supposed to protect.
 GIT_TIMEOUT_SECONDS = 10.0
-
-# Cache directories this repository's own gates create inside the checkout.
-# Their contents churn on every run; they are machine state, not the tree.
-CACHE_DIR_NAMES = frozenset({".ruff_cache", ".pytest_cache", ".mypy_cache", ".hypothesis"})
 
 # The exact frames the previous runner printed (the tests and the
 # repair-evidence parser read them): gate frames with one space after `──`,
@@ -258,8 +253,6 @@ def tree_snapshot(root: Path | str) -> TreeSnapshot:
     names = sorted(os.fsdecode(piece) for piece in others.split(b"\0") if piece)
     digest.update(b"untracked\0")
     for name in names:
-        if name.split("/", 1)[0] in CACHE_DIR_NAMES:
-            continue
         digest.update(f"{_safe(name)}\0{_measure(wurzel / name, allow_missing=False)}\0".encode())
     return TreeSnapshot(digest.hexdigest())
 
@@ -418,6 +411,7 @@ def run_verification(
     record_history: bool = True,
     python: str | None = None,
     lock_slot: dict[str, int | None] | None = None,
+    admission_command: list[str] | None = None,
 ) -> RunResult:
     """Run the job's local gates in two phases and return the run's account.
 
@@ -429,7 +423,9 @@ def run_verification(
     `lock_slot`, when given, is the holder the held admission's lock
     descriptor is published into while the protected phase runs — a callback
     that starts protected children reads it there to hand the descriptor on,
-    exactly as the built-in executor does.
+    exactly as the built-in executor does. `admission_command` is what the
+    holder record names while waiters queue behind this run (default: this
+    scheduler and its job).
     """
     wurzel = Path(root)
     destination = sys.stdout if out is None else out
@@ -629,7 +625,7 @@ def run_verification(
         if protected:
             admission_requested = True
             entered = clock()
-            with verify_lock.hold_admission(["verify-run", job]) as lock_fd:
+            with verify_lock.hold_admission(admission_command or ["verify-run", job]) as lock_fd:
                 waited = clock() - entered
                 admission_wait = waited
                 if budget is not None and waited > 0:

@@ -713,6 +713,9 @@ def test_multiple_cheap_failures_keep_parser_frames(tmp_path: Path) -> None:
     diagnostic before it suppresses the protected work — and `red_sections`
     must keep both sections whole: start frame, command, diagnostic and RED
     line each, while the not-run summary stays outside the parsed evidence.
+
+    Planted fault: the cheap phase stops at the first red, or the not-run
+    summary is framed as an executed gate section.
     """
     base = tmp_path / "twice-red"
     gates = [

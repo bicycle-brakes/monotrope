@@ -693,7 +693,7 @@ def test_completion_context_is_additive_and_old_history_reads(
 ) -> None:
     """Old records still read; a completion block speaks for the whole run or is refused wholesale.
 
-    Fault this pins: the additive completion fields rejected as an unknown
+    Planted fault: the additive completion fields rejected as an unknown
     version, an old start-only record failing to read, the reader preferring
     the stale start context over the final one, a cheap-only run shown with a
     fabricated wait, or a half-present block accepted as valid.

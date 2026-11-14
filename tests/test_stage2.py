@@ -2423,6 +2423,19 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
             holder.wait(timeout=10)
 
 
+def _gate_launch(command: list[str]) -> str | None:
+    """The gate command a scheduler launch started, or None for any other launch (a tool, git, a model).
+
+    A gate with shell syntax starts as `bash -c <command>`; a plain one starts as its own vector — the
+    world's full check as `make verify`, its document subset as `bash scripts/verify_all.sh --job docs`.
+    """
+    if command[1:2] == ["-c"]:
+        return command[2]
+    if list(command) in (["make", "verify"], ["bash", *DOCS_ARGV]):
+        return " ".join(command)
+    return None
+
+
 def test_full_and_draft_checks_share_before_admission_scheduler(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 10 of the cheap-before-admission change. Planted fault: one of the three consumers —
     # the full attempt check, the repair's full fallback, the draft's document check — keeps an outer
@@ -2462,8 +2475,9 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
         return real_hold(command)
 
     def launch(command, root, env, *rest, **kwargs):
-        if command[1:2] == ["-c"]:
-            order.append(f"gate: {command[2]}")
+        gate = _gate_launch(command)
+        if gate is not None:
+            order.append(f"gate: {gate}")
         return real_launch(command, root, env, *rest, **kwargs)
 
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
@@ -2479,7 +2493,7 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
     successful_implementation(world)
     assert world.run("implement") == 0
     assert order == cheap_order, order
-    assert admissions == [["verify-run", "verify"]], "the scheduler, not the caller, names its admission"
+    assert admissions == [["make", "verify"]], "one admission, held by the scheduler, naming the full check"
     assert marker.read_text(encoding="utf-8").strip() == "quick"
 
     # 2. The repair's full fallback runs the same scheduler with the same verify selection.
@@ -2500,7 +2514,7 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
     problems = stage2._targeted_body(world.root, world.plan, env, None, None, None, None, [], "HEAD", [])
     assert problems == [], problems
     assert order == cheap_order, order
-    assert admissions == [["verify-run", "verify"]], "the fallback took an admission of its own"
+    assert admissions == [["make", "verify"]], "the fallback took an admission of its own"
     assert marker.exists(), "the fallback lost the verify selection's cheap gate"
     (world.root / "verification-scope.txt").unlink()
 
@@ -2555,16 +2569,17 @@ def test_before_admission_execution_budget_is_shared_and_wait_free(
     real_hold = stage2.verify_lock.hold_admission
 
     def launch(command, root, env, *rest, **kwargs):
-        if command[1:2] == ["-c"]:
+        if _gate_launch(command) is not None:
             deadlines.append(kwargs.get("deadline"))
         return real_launch(command, root, env, *rest, **kwargs)
 
+    @contextlib.contextmanager
     def hold_admission(command):
+        # The wait happens when the admission is entered, not when it is requested.
         entered = time.monotonic()
-        try:
-            return real_hold(command)
-        finally:
+        with real_hold(command) as owned:
             waits.append(time.monotonic() - entered)
+            yield owned
 
     def release_when_queued() -> None:
         # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
@@ -2789,8 +2804,11 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
     )
     assert world.run("implement") == 0
     prompt = world.calls("claude")[1]["prompt_file"]
+    # Since the shared scheduler frames every gate it runs (bead coding-harness-bxxt.6), the noisy
+    # output is the full-check gate's own red section, bounded by the per-gate window.
     assert "`make verify` exited 1" in prompt and "line-99" in prompt
-    assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
+    assert "line-0" not in prompt and "line-19" not in prompt and "line-50" in prompt
+    assert "lines of this gate left out" in prompt
 
 
 def _gate(name: str, body: list[str], verdict: str) -> list[str]:
@@ -2828,13 +2846,46 @@ def _red_run(world: World, output: str) -> str:
 
 def test_the_repair_prompt_names_the_gate_that_blocked_not_the_report_tail(world: World) -> None:
     # runner-red-gate criterion 1. Planted fault: the tail instead of the red sections.
-    output = "\n".join(
-        _gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1", "1 failed, 9 passed"], "red")
-        + _gate("ruff-check", ["All checks passed!"], "green")
-        + _gate("markdownlint", [f"README.md:{n} error MD013" for n in range(500)], "report")
-        + ["VERIFY RED — at least one gate failed; the report above names it."]
+    # The shared scheduler frames every gate itself (bead coding-harness-bxxt.6), so the world's gate
+    # list carries the three gates, each a `make` stand-in call: the two seconds gates run first,
+    # before the protected suite.
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    template = next(gate for gate in doc["gates"] if gate["id"] == "verify-all")
+    doc["gates"] = [
+        {**template, "id": "ruff-check", "command": "make ruff-check", "cost": "seconds"},
+        {**template, "id": "markdownlint", "command": "make markdownlint", "cost": "seconds", "enforcement": "report"},
+        {**template, "id": "pytest", "command": "make pytest", "cost": "minutes"},
+    ]
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "three framed gates")
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+                },
+            },
+        ],
+        make=[
+            {"stdout": "All checks passed!\n"},
+            {"stdout": "\n".join(f"README.md:{n} error MD013" for n in range(500)), "exit": 1},
+            {"stdout": "FAILED tests/test_app.py::test_value - assert 2 == 1\n1 failed, 9 passed\n", "exit": 1},
+            {"stdout": "green\n"},
+            {"stdout": "green\n"},
+            {"stdout": "green\n"},
+        ],
     )
-    prompt = _red_run(world, output)
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
     assert "FAILED tests/test_app.py::test_value" in prompt and "── [pytest] RED (block)" in prompt
     assert "MD013" not in prompt and "[ruff-check]" not in prompt, "only blocking sections travel"
 
@@ -2961,15 +3012,20 @@ def test_a_frame_printed_onto_a_gates_last_line_is_still_a_frame() -> None:
 def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
     # runner-red-gate pre-mortem: verify_all.sh renames its frame lines and the parser finds nothing.
     # The printed format, not the shell spelling (loop row L1-3): `── [<gate>] $ ` and `── [<gate>] RED (block)`.
-    script = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
-    assert re.search(r"── \[\$\{?\w+\}?\] \$ ", script) and re.search(r"── \[\$\{?\w+\}?\] RED \(block\)", script)
+    # Since bead coding-harness-bxxt.6 the shared scheduler prints the frames for both callers.
+    script = (REPO_ROOT / "scripts" / "verify_run.py").read_text(encoding="utf-8")
+    assert re.search(r"── \[\{\w+\}\] \$ ", script) and re.search(r"── \[\{\w+\}\] \{VERDICT_RED\}", script)
+    assert stage2.verify_run.VERDICT_RED.startswith("RED (block)")
     assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_END.match("── [pytest] RED (block) — x")
+    assert stage2.GATE_END.match(f"── [pytest] {stage2.verify_run.VERDICT_RED}")
 
 
-def test_without_a_red_frame_the_repair_prompt_keeps_the_tail(world: World) -> None:
+def test_without_a_red_frame_the_repair_prompt_keeps_the_tail() -> None:
     # runner-red-gate criterion 3. Planted fault: empty diagnostics when nothing is framed.
-    prompt = _red_run(world, "\n".join(f"make-{n}" for n in range(100)))
-    assert "make-99" in prompt and "make-20" in prompt and "make-19" not in prompt
+    # The shared scheduler frames every gate it runs (bead coding-harness-bxxt.6); an unframed red
+    # run is one it refused before any gate, so the fallback is proved on the evidence function.
+    evidence = stage2.verify_evidence_text("\n".join(f"make-{n}" for n in range(100)), "", None)
+    assert "make-99" in evidence and "make-20" in evidence and "make-19" not in evidence
 
 
 def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
@@ -4295,10 +4351,11 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
         return real_hold(command)
 
     def launch(command, root, env, *rest, **kwargs):
-        if command[1:2] == ["-c"]:
+        if _gate_launch(command) is not None:
             order.append("launch")
             seen["command"] = list(command)
             seen["env"] = dict(env)
+            seen["timeout"] = kwargs.get("timeout")
             seen["deadline"] = kwargs.get("deadline")
             seen["limit"] = kwargs.get("limit")
             seen["pass_fds"] = kwargs.get("pass_fds", ())
@@ -4312,7 +4369,8 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
     # A seconds-only subset takes no admission of its own — the one launch is the scheduler's gate
     # callback's, under the deadline the shared allowance set once before the gates.
     assert order == ["launch"], "the document subset queued for a machine slot it does not need"
-    assert seen["command"] == ["bash", "-c", "bash scripts/verify_all.sh --job docs"], "one vector per gate"
+    assert seen["command"] == ["bash", *DOCS_ARGV], "the document gate's own vector"
+    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
     deadline_age = seen["deadline"] - started
     assert 7 * 60 <= deadline_age < 7 * 60 + 30, "the shared step limit was swapped, reset or hard-coded"
     assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
@@ -4389,6 +4447,7 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
     datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "the document gate waits for the slot")
+    before = git(world.root, "rev-parse", "HEAD")  # the mark's own commit is the test's, not the draft's
 
     def refused(command):
         raise verify_lock.VerifyLockRefused(f"the admission refused {command}")
@@ -5988,6 +6047,7 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
         "ruff",
         "ruff",
         "python3",
+        "bash",  # the world's docs gate, a seconds member of the verify job, runs before the protected make
         "make",
     ]
     targets = ["scripts/a.py", "scripts/old.py", "tests/test_b.py"]
@@ -6060,8 +6120,24 @@ def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> N
     world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
     assert world.run("implement") == 0
     make_env = world.calls("make")[0]["env"]
+    # Since bead coding-harness-bxxt.6 ruff runs in the preparation outside the admission, and the
+    # scheduler adds only the gate's own settings to the same verify environment: the locked
+    # interpreter, its directory on PATH, the worker default and the admission markers.
+    added = {
+        "PATH",
+        "PYTHON",
+        "PYTEST_XDIST_AUTO_NUM_WORKERS",
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    }
     for call in world.calls("ruff"):
-        assert call["env"] == make_env
+        assert {k: v for k, v in call["env"].items() if k not in added} == {
+            k: v for k, v in make_env.items() if k not in added
+        }
+        assert make_env["PATH"].endswith(call["env"]["PATH"]), "the gate lost the verify environment's PATH"
+        assert verify_lock.LOCK_ENV not in call["env"], "ruff claimed an admission the preparation never takes"
         assert KEY not in call["env"].values()
         for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
             assert name not in call["env"], name
@@ -7889,6 +7965,15 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
     assert len(world.calls("codex")) == 1, "a no-record release asked for marks"
 
 
+def _beside_docs_gate(calls: list[dict]) -> list[dict]:
+    """The calls apart from the world's document gate, which every full check runs as a verify-job member.
+
+    Since bead coding-harness-bxxt.6 the full check runs the gates of the one list itself, the
+    document subset among them, so a full check is a `bash` (docs) and a `make` (suite) call.
+    """
+    return [call for call in calls if not (call["name"] == "bash" and call["argv"] == DOCS_ARGV)]
+
+
 def test_review_releases_record_lock_on_exit(world: World) -> None:
     """Criterion 5. Planted fault: an exit keeps the lock, or the cleanup changes the outcome it reports."""
     world.write_record([("L1-1", "taken — test_a", "no")])
@@ -7896,7 +7981,7 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     commit_review_findings(world)
     assert world.run("review") == 0
-    assert len(world.calls()) == 3 and not world.record().exists()
+    assert len(_beside_docs_gate(world.calls())) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
     world.write_record([("L1-1", "", "")])
@@ -7909,13 +7994,13 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
     commit_review_findings(world)
-    assert world.run("review") == 1 and len(world.calls()) == 2
+    assert world.run("review") == 1 and len(_beside_docs_gate(world.calls())) == 2
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
     commit_review_findings(world)
-    assert world.run("review") == 1 and len(world.calls()) == 3
+    assert world.run("review") == 1 and len(_beside_docs_gate(world.calls())) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
 
@@ -25369,7 +25454,7 @@ def test_targeted_repair_preserves_preparation_and_answer_proofs(
 
 def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 10. Planted fault: implement checkpoints after targeted checks alone, or a draft loses its
-    document check or its admission."""
+    document check (or, since bead coding-harness-bxxt.6, takes an admission its seconds gates never need)."""
     for function in (stage2.run_attempts, stage2.verify_attempt):
         name = "verify_mode" if function is stage2.run_attempts else "mode"
         assert inspect.signature(function).parameters[name].default == "full"
@@ -25381,9 +25466,11 @@ def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPa
     assert commands.of("gate") == [], "implement ran the repair's targeted gates"
     ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
     world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    calls_before = len(world.calls("bash"))  # implement's full check ran the docs gate as part of the verify job
     stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
-    (docs,) = world.calls("bash")
-    assert docs["argv"][-2:] == ["--job", "docs"] and verify_lock.LOCK_ENV in docs["env"]
+    (docs,) = world.calls("bash")[calls_before:]
+    # The document subset is seconds-only, so it runs without an admission (bead coding-harness-bxxt.6).
+    assert docs["argv"][-2:] == ["--job", "docs"] and verify_lock.LOCK_ENV not in docs["env"]
     assert commands.of("gate") == []
     # `repair` alone asks for the targeted mode, and by default it does.
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")

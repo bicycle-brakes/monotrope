@@ -5632,13 +5632,41 @@ def verify_evidence_text(out_text: str, err_text: str, key: str | None) -> str:
     return verify_evidence(subprocess.CompletedProcess([], 1, out_text, err_text), key)
 
 
+# A gate command made only of these characters is a plain argument vector: it starts as that vector,
+# so the runner's own launch resolves its program exactly as it resolved `make verify` before. Any
+# other command — quoting, expansion, an environment assignment, a pipe — runs through `bash -c`.
+PLAIN_GATE_COMMAND = re.compile(r"[A-Za-z0-9_./:,@%+ -]+")
+
+
+def _gate_argv(command: str, pinned: str) -> list[str]:
+    """The launch vector of one gate, with its first `python3` resolved to the pinned interpreter.
+
+    The substitution is the shell runner's `${cmd/python3/$PYTHON}`: the first occurrence, once.
+    """
+    resolved = command.replace("python3", shlex.quote(pinned), 1)
+    if PLAIN_GATE_COMMAND.fullmatch(command):
+        return shlex.split(resolved)
+    return ["bash", "-c", resolved]
+
+
+def gate_env_path(root: Path, env: dict[str, str]) -> str:
+    """A gate's `PATH`: the worktree's locked environment first when it exists, as the shell runner sets it."""
+    path = env.get("PATH", "")
+    venv_bin = root / ".venv" / "bin"
+    if not ((venv_bin / "python3").is_file() and os.access(venv_bin / "python3", os.X_OK)):
+        return path
+    if str(venv_bin) in path.split(os.pathsep):
+        return path
+    return os.pathsep.join([str(venv_bin), path]).rstrip(os.pathsep)
+
+
 def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, str, int]:
     """One run of `job` through the shared two-phase scheduler; returns (stdout, stderr, exit code).
 
     The scheduler selects the gates from the one gate list (`ci_gates.selection_at`), runs every
     cheap gate before any admission and holds the one machine admission itself around the protected
     set — this caller passes only the launch callback, never a whole-run admission of its own. The
-    callback starts each gate as `bash -c` with the shared `VERIFY_SECONDS` allowance as the bound:
+    callback starts each gate (`_gate_argv`) with the shared `VERIFY_SECONDS` allowance as the bound:
     the budget counts from before the first gate and the scheduler extends it by the measured
     admission wait, so a queue or memory wait consumes none of it (bead coding-harness-bxxt.6). A
     protected gate's environment carries the admission marker, and the held lock descriptor travels
@@ -5659,15 +5687,23 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     def run_gate(_gate: dict[str, object], command: str, gate_env: dict[str, str]) -> verify_run.GateProcess:
         descriptor = slot.get("fd")
         pass_fds = (descriptor,) if gate_env.get(verify_lock.LOCK_ENV) and descriptor is not None else ()
-        gate_env = {**gate_env, "PYTHON": pinned}
-        if own_venv:
-            gate_env["PATH"] = os.pathsep.join([str(venv_python.parent), gate_env.get("PATH", "")]).rstrip(os.pathsep)
-        resolved = str(command).replace("python3", shlex.quote(pinned), 1)
+        gate_env = {**gate_env, "PYTHON": pinned, "PATH": gate_env_path(root, gate_env)}
+        argv = _gate_argv(str(command), pinned)
+        # O188-2 at the call site: the program the runner itself starts is resolved without the
+        # worktree's `PATH` entries, as `make verify` was; only the gate's own children see the
+        # locked environment first, as the shell runner gave them.
+        found = shutil.which(argv[0], path=gate_env["PATH"]) if "/" not in argv[0] else None
+        if found is not None and root.resolve() in Path(found).resolve().parents:
+            safe = shutil.which(argv[0], path=runner_env(gate_env, root)["PATH"])
+            if safe is None:
+                raise CallFailed(f"{argv[0]} could not be started: found only inside the worktree")
+            argv = [safe, *argv[1:]]
         done = launch(
-            ["bash", "-c", resolved],
+            argv,
             root,
             gate_env,
-            timeout=None,
+            # The step limit, cut to what is left of the shared allowance when the gate starts.
+            timeout=VERIFY_SECONDS,
             limit=limit,
             deadline=budget["deadline"],
             pass_fds=pass_fds,
@@ -5686,6 +5722,8 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
         clock=time.monotonic,
         budget=budget,
         lock_slot=slot,
+        # The holder record names the check the runner's admission is for, as it did before.
+        admission_command=["make", "verify"] if job == "verify" else DOCS_VERIFY,
     )
     return captured_out.getvalue(), captured_err.getvalue(), result.exit_code
 
@@ -6616,7 +6654,8 @@ def verify_attempt(
         # The attempt's own cheap checks, before anything derived: a planted fault stops here
         # (bead coding-harness-5tyh). Cheap green continues into the clearing below.
         try:
-            cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
+            # The verify environment (state root, memory floor) without an admission: none is held yet.
+            cheap = cheap_checks(root, verify_lock.inherit_env(env), plan, key, accepted_plan, previous_failures)
         except (OSError, RuntimeError, ValueError) as error:
             # Named as the cheap checks' own failure, never as the ledger's (review row L7-2).
             return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]

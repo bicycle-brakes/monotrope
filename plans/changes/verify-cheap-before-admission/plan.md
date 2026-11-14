@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -195,24 +195,24 @@ and `make verify` have not run for this unimplemented change.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_before_admission.py::test_admission_metadata_is_validated_and_cost_derived — invalid booleans pass or false exempts minutes
-- 2: not yet written tests/test_verify_before_admission.py::test_all_cheap_failures_finish_without_queueing — a cheap gate is skipped or red requests the held slot
-- 3: not yet written tests/test_verify_before_admission.py::test_only_protected_work_enters_one_admission — protected work escapes the holder or requests multiple admissions
-- 3: not yet written tests/test_verify_before_admission.py::test_seconds_only_jobs_never_request_admission — docs/drift queues despite no protected gates
-- 4: not yet written tests/test_verify_before_admission.py::test_unchanged_tree_reuses_cheap_results — an unchanged cheap command runs twice
-- 4: not yet written tests/test_verify_before_admission.py::test_changed_tree_refreshes_selection_and_rechecks — content/index/HEAD/config changes reuse stale cheap results
-- 5: not yet written tests/test_verify_before_admission.py::test_unmeasurable_inputs_refuse_reuse — failed selection or unstable/unreadable snapshots produce green
-- 6: not yet written tests/test_verify_before_admission.py::test_enforcement_and_ci_exhaustiveness_survive_partitioning — nonblocking red blocks or CI misses a selected gate
+- 1: tests/test_verify_before_admission.py::test_admission_metadata_is_validated_and_cost_derived — invalid booleans pass or false exempts minutes
+- 2: tests/test_verify_before_admission.py::test_all_cheap_failures_finish_without_queueing — a cheap gate is skipped or red requests the held slot
+- 3: tests/test_verify_before_admission.py::test_only_protected_work_enters_one_admission — protected work escapes the holder or requests multiple admissions
+- 3: tests/test_verify_before_admission.py::test_seconds_only_jobs_never_request_admission — docs/drift queues despite no protected gates
+- 4: tests/test_verify_before_admission.py::test_unchanged_tree_reuses_cheap_results — an unchanged cheap command runs twice
+- 4: tests/test_verify_before_admission.py::test_changed_tree_refreshes_selection_and_rechecks — content/index/HEAD/config changes reuse stale cheap results
+- 5: tests/test_verify_before_admission.py::test_unmeasurable_inputs_refuse_reuse — failed selection or unstable/unreadable snapshots produce green
+- 6: tests/test_verify_before_admission.py::test_enforcement_and_ci_exhaustiveness_survive_partitioning — nonblocking red blocks or CI misses a selected gate
 - 6: tests/test_ci.py::test_every_gate_step_runs_even_after_a_failing_gate — generated hosted steps lose their always-run conditions
-- 7: not yet written tests/test_verify_before_admission.py::test_nested_refused_and_interrupted_protected_work — forged ownership passes, nesting deadlocks or a descendant outlives admission
-- 8: not yet written tests/test_verify_before_admission.py::test_two_phases_share_history_and_exclude_wait — history duplicates the run, loses a real repeat or charges queue time
+- 7: tests/test_verify_before_admission.py::test_nested_refused_and_interrupted_protected_work — forged ownership passes, nesting deadlocks or a descendant outlives admission
+- 8: tests/test_verify_before_admission.py::test_two_phases_share_history_and_exclude_wait — history duplicates the run, loses a real repeat or charges queue time
 - 8: tests/test_ci.py::test_duration_storage_failure_warns_without_changing_verdict — broken measurement storage changes enforcement
-- 8: not yet written tests/test_verify_duration.py::test_completion_context_is_additive_and_old_history_reads — old records fail or final context is misattributed
-- 9: not yet written tests/test_verify_cheap_first.py::test_multiple_cheap_failures_keep_parser_frames — captured output loses either failed section or invents a skipped one
-- 10: not yet written tests/test_stage2.py::test_full_and_draft_checks_share_before_admission_scheduler — one consumer retains an outer admission or loses its gate selection
-- 10: not yet written tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free — each gate resets the allowance or queue time consumes it
+- 8: tests/test_verify_duration.py::test_completion_context_is_additive_and_old_history_reads — old records fail or final context is misattributed
+- 9: tests/test_verify_cheap_first.py::test_multiple_cheap_failures_keep_parser_frames — captured output loses either failed section or invents a skipped one
+- 10: tests/test_stage2.py::test_full_and_draft_checks_share_before_admission_scheduler — one consumer retains an outer admission or loses its gate selection
+- 10: tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free — each gate resets the allowance or queue time consumes it
 - 10: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — a queued timely check times out or a hung gate survives the bound
-- 11: not yet written tests/test_verify_before_admission.py::test_transferred_kit_keeps_before_admission_behavior — renamed recipient gates need a source-tree import or an opt-out
+- 11: tests/test_verify_before_admission.py::test_transferred_kit_keeps_before_admission_behavior — renamed recipient gates need a source-tree import or an opt-out
 
 ## Limits and ownership
 

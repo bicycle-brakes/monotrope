@@ -298,7 +298,11 @@ def _admission_spy(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
 
 
 def test_admission_metadata_is_validated_and_cost_derived(checkout: SimpleNamespace) -> None:
-    """An invalid `needs_admission` is a schema error, and effective protection derives from cost."""
+    """An invalid `needs_admission` is a schema error, and effective protection derives from cost.
+
+    Planted fault: a non-boolean mark is accepted, `needs_admission: false` exempts a minutes gate, or
+    an unmarked seconds gate is classified as protected.
+    """
     base = {
         "id": "g",
         "title": "g",
@@ -337,7 +341,11 @@ def test_admission_metadata_is_validated_and_cost_derived(checkout: SimpleNamesp
 
 
 def test_all_cheap_failures_finish_without_queueing(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """Both cheap gates run to their diagnostics while a holder keeps the slot; the heavy gate waits."""
+    """Both cheap gates run to their diagnostics while a holder keeps the slot; the heavy gate waits.
+
+    Planted fault: the run stops at the first cheap red, registers in the admission queue before the
+    last cheap gate, or runs the protected gate after a cheap blocking failure.
+    """
     write_gates(
         checkout.root,
         [
@@ -366,7 +374,11 @@ def test_all_cheap_failures_finish_without_queueing(checkout: SimpleNamespace, g
 
 
 def test_only_protected_work_enters_one_admission(checkout: SimpleNamespace, gate_script: Path, monkeypatch) -> None:
-    """One admission covers the whole protected set; the cheap gate runs before it, unlocked."""
+    """One admission covers the whole protected set; the cheap gate runs before it, unlocked.
+
+    Planted fault: one admission per protected gate, a protected gate outside the holder, or the cheap
+    gate run under the lock.
+    """
     write_gates(
         checkout.root,
         [
@@ -401,7 +413,11 @@ def test_only_protected_work_enters_one_admission(checkout: SimpleNamespace, gat
 
 
 def test_seconds_only_jobs_never_request_admission(checkout: SimpleNamespace, monkeypatch) -> None:
-    """A docs-only run executes its gates and states, in history and output, that no admission was asked."""
+    """A docs-only run executes its gates and states, in history and output, that no admission was asked.
+
+    Planted fault: an empty protected set still requests admission, or the completion record omits
+    that none was requested.
+    """
     write_gates(
         checkout.root,
         [
@@ -422,7 +438,10 @@ def test_seconds_only_jobs_never_request_admission(checkout: SimpleNamespace, mo
 
 
 def test_unchanged_tree_reuses_cheap_results(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """A stable tree across the wait reuses the cheap pass: the cheap gate runs once, not twice."""
+    """A stable tree across the wait reuses the cheap pass: the cheap gate runs once, not twice.
+
+    Planted fault: the cheap gates rerun inside the admission although the tree is unchanged.
+    """
     write_gates(
         checkout.root,
         [
@@ -448,7 +467,11 @@ def test_unchanged_tree_reuses_cheap_results(checkout: SimpleNamespace, gate_scr
 
 
 def test_changed_tree_refreshes_selection_and_rechecks(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """A tree that moved while queued reruns the complete cheap set from the reloaded list, inside the lock."""
+    """A tree that moved while queued reruns the complete cheap set from the reloaded list, inside the lock.
+
+    Planted fault: an edit to an already dirty file during the wait is missed, or the stale gate list
+    is reused after a reclassification.
+    """
     tracked = checkout.root / "tracked.txt"
     tracked.write_text("first\n", encoding="utf-8")
     write_gates(
@@ -495,7 +518,11 @@ def test_changed_tree_refreshes_selection_and_rechecks(checkout: SimpleNamespace
 
 
 def test_two_phases_share_history_and_exclude_wait(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """One identity spans both phases: every execution is recorded, the queue wait stays out of the seconds."""
+    """One identity spans both phases: every execution is recorded, the queue wait stays out of the seconds.
+
+    Planted fault: a second run identity at admission, a repeated cheap execution left unrecorded, or the
+    queue wait counted as execution time.
+    """
     tracked = checkout.root / "tracked.txt"
     tracked.write_text("first\n", encoding="utf-8")
     write_gates(
@@ -560,7 +587,11 @@ def test_two_phases_share_history_and_exclude_wait(checkout: SimpleNamespace, ga
 
 
 def test_unmeasurable_inputs_refuse_reuse(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """A failed selection, an unreadable tree and an unstable cheap pass all refuse before any green."""
+    """A failed selection, an unreadable tree and an unstable cheap pass all refuse before any green.
+
+    Planted fault: an empty or failed selection reports green, or an unmeasurable or changing tree is
+    accepted as a stable baseline.
+    """
     # An empty gate list is a configuration error, not a green run.
     write_gates(checkout.root, [])
     result, out, err = run_scheduler(checkout.root)
@@ -606,7 +637,11 @@ def test_unmeasurable_inputs_refuse_reuse(checkout: SimpleNamespace, gate_script
 
 
 def test_enforcement_and_ci_exhaustiveness_survive_partitioning(checkout: SimpleNamespace, gate_script: Path) -> None:
-    """Only `block` stops; the local protected phase stops at its first blocking failure; `--ci` exhausts."""
+    """Only `block` stops; the local protected phase stops at its first blocking failure; `--ci` exhausts.
+
+    Planted fault: a report-level red suppresses the protected work, a later protected gate runs after a
+    local blocking red, or `--ci` omits a gate after an earlier failure.
+    """
     # A report gate that fails speaks up without blocking the protected phase.
     write_gates(
         checkout.root,
@@ -661,7 +696,11 @@ def test_enforcement_and_ci_exhaustiveness_survive_partitioning(checkout: Simple
 def test_nested_refused_and_interrupted_protected_work(
     checkout: SimpleNamespace, gate_script: Path, monkeypatch
 ) -> None:
-    """A forged marker queues like anyone; a valid one nests; a lingering grandchild is ended first."""
+    """A forged marker queues like anyone; a valid one nests; a lingering grandchild is ended first.
+
+    Planted fault: a forged marker skips the queue, a valid marker queues behind its own ancestor, or
+    the admission is released while a protected grandchild still runs.
+    """
     calls = _admission_spy(monkeypatch)
     # A forged marker (a pid nobody published with this token) is refused back to ordinary admission.
     monkeypatch.setenv(verify_lock.LOCK_ENV, "999999")
@@ -748,7 +787,10 @@ def test_nested_refused_and_interrupted_protected_work(
 
 
 def test_transferred_kit_keeps_before_admission_behavior(checkout: SimpleNamespace, tmp_path: Path) -> None:
-    """A recipient checkout with renamed gates runs two-phase, with no source-tree import and no opt-out."""
+    """A recipient checkout with renamed gates runs two-phase, with no source-tree import and no opt-out.
+
+    Planted fault: the transferred scheduler classifies by gate id or needs a file the kit does not carry.
+    """
     recipient = tmp_path / "recipient"
     (recipient / "scripts").mkdir(parents=True)
     for relative in KIT_MECHANISM:

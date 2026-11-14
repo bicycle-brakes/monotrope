@@ -87,7 +87,7 @@ rules:
     reason: "der lokale Lauf: haelt keine Kommandos, fragt ci_gates.py (bead bo0)"
   - prefix: scripts/verify_run.py
     rolle: mechanismus
-    reason: "der Zwei-Phasen-Scheduler der einen Gate-Liste: billige Gates vor der Zulassung, eine Zulassung fuer die geschuetzten; verify_all.sh führt ihn aus und scripts.stage2 ruft ihn in-process (bead coding-harness-bxxt.6)"
+    reason: "the two-phase scheduler of the one gate list: cheap gates before admission, one admission for the protected ones; verify_all.sh execs it and scripts.stage2 calls it in-process (bead coding-harness-bxxt.6)"
   - prefix: scripts/verify_lock.py
     rolle: mechanismus
     reason: "die rechnerweite Zulassung des Laufs (Warteschlange, freier Speicher), die scripts.verify_run um die geschuetzten Gates hält; ohne sie ist der exportierte Lauf nicht betretbar (bead coding-harness-p6mu)"
