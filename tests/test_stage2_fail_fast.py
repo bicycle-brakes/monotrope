@@ -22,6 +22,7 @@ import stage2  # noqa: E402
 from test_stage2 import (  # noqa: E402
     KEY,
     World,
+    _beside_docs_gate,
     formatted_attempt,  # noqa: E402
     git,  # noqa: E402
     prompt_entry,  # noqa: E402
@@ -219,7 +220,10 @@ def test_cheap_green_still_requires_full_verification(world: World) -> None:
         make=[red] * 3,
     )
     assert world.run("implement") == 1
-    names = [call["name"] for call in world.calls()]
+    # Since bead coding-harness-bxxt.6 the full check runs the gates of the one list itself, the world's
+    # document gate (a seconds member of the verify job) before the protected `make verify`; it is counted
+    # apart, so the full check's launch order and counts stay exactly as pinned.
+    names = [call["name"] for call in _beside_docs_gate(world.calls())]
     assert names[:7] == ["claude", "ruff", "ruff", "ruff", "ruff", "python3", "make"], names[:7]
     assert len(names) == 21 and names.count("make") == 3, "a checkpoint or a skipped verification appeared"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
