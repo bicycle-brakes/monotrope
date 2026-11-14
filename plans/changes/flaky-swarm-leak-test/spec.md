@@ -49,6 +49,11 @@ append in progress is either absent or complete, never a partial fragment.
 **Test logs:** stand-in call, infrastructure, version, installer and receipt
 logs in the five files inventoried in `research.md`, including their generic
 scenario-driven text appends.
+**Declared stand-in log:** a JSON test log whose file name the shared helper
+declares (`STAND_IN_LOGS`); the helper's JSON functions serve no other name.
+Append-mode opens elsewhere under `tests/` — production-lock probes, document
+mutations, the admission-order probe of the verify lock (whose writers the
+lock under test admits one at a time) — are not stand-in logs.
 
 ## Acceptance criteria
 
@@ -62,11 +67,11 @@ scenario-driven text appends.
    *Refuted by:* a malformed stored record is skipped, truncated, retried indefinitely or returned as an empty successful observation.
    *Basis:* decisions.md#Q-1.
 4. When any inventoried stand-in data append or corresponding concurrent log read executes, it uses the shared helper while preserving the existing record contents and missing-log-as-empty behavior.
-   *Refuted by:* any of the 15 data appends bypasses the helper, a reader can race an append, a missing log fails, or a scenario text append gains or loses bytes.
+   *Refuted by:* any of the 15 data appends of the five-file stand-in inventory bypasses the helper, a reader can race an append, a missing log or its missing directory fails, or a scenario text append gains or loses bytes.
    *Basis:* decisions.md#Q-1.
-5. When a new append-mode log open bypasses the shared helper anywhere under `tests/`, including executable stand-in source strings, the guard test fails and identifies its source location.
-   *Refuted by:* a planted bypass passes the guard, or the guard rejects the helper's own implementation or an explicitly identified non-log lock/document test operation.
-   *Basis:* decisions.md#Q-2.
+5. When a test reads, writes or opens a declared stand-in log without the shared helper anywhere under `tests/`, including executable stand-in source strings, the guard test fails and identifies its source location.
+   *Refuted by:* a planted raw read or append of a declared log passes the guard, the guard flags a helper call or an operation on a file that is not a declared log, or it needs an exemption list to pass the repository.
+   *Basis:* decisions.md#Q-2; decisions.md, "Guard design after the review loop".
 6. When a leak refuses a swarm run and its inputs are then restored, the refused run is announced before any model call in the next successful run.
    *Refuted by:* the leaking run starts a model call or returns success, the clean run returns 2, or its first refused-run notice is absent or observes a nonzero call count.
    *Basis:* decisions.md#Q-1.
@@ -114,10 +119,17 @@ None open. The two maintainer answers remain unchanged.
   follows the inspected operations without calling a lock probe a log write.
 - [DETAIL] Missing logs remain empty snapshots; actual I/O and parsing errors
   propagate. This preserves fixture behavior and keeps the observer honest.
-- [DETAIL] Guard exemptions identify individual non-log operations, never a
-  whole file. The guard covers ordinary append-mode `open`/`Path.open`, with
-  positional or keyword modes beginning with `a`, in Python and embedded
-  Python stand-ins; arbitrary obfuscation, dynamic mode construction and raw
-  OS writes are outside this bounded static guard's claim.
+- [DETAIL] (2026-11-14, replacing the exemption-list guard.) The guard
+  identifies stand-in logs by the helper's declaration and has no exemption
+  list: it fails on `open`, `read_text`, `read_bytes`, `write_text` or
+  `write_bytes` of a path that carries a declared name, directly, through a
+  variable or through an environment key, in Python and embedded Python
+  stand-ins. A path that never carries a declared name, arbitrary
+  obfuscation and raw OS calls are outside this bounded static guard's claim
+  (decisions.md, "Guard design after the review loop").
+- [DETAIL] (2026-11-14.) The lock is the data file's own `flock`, waited for
+  at most 60 s before `TimeoutError`: one identity for every spelling of a
+  file, no lock file in a fixture repository, and a wedged writer fails a
+  reader loudly instead of hanging it.
 - [DETAIL] Deterministic handshakes plus repeated concurrent runs establish
   the regression evidence; sleep-only timing would recreate the same flake.

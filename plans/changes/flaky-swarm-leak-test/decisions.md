@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
@@ -30,7 +30,7 @@ status: answered
 context: |
   Topic: tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call fails now and then on main's CI with "assert 2 == 0" (bead coding-harness-yb1l).
   Intention: a flaky required test can turn any merge-queue run red; the explore (research.md, a0c89b62) traced it to a torn read of a stand-in call log that is appended concurrently without locking.
-  Today: 17 log appends in five test files write without a lock (tests/test_stage2.py 7, tests/test_stage2_swarm.py 4, tests/test_pi_install.py 3, tests/test_stage2_session.py 2, tests/test_stage2_research_availability.py 1); a reader can see half a line, and the dispatcher turns the resulting gate exception into a security refusal (exit 2) by design.
+  Today: 12 log appends in five test files write without a lock (counted 2026-11-14 at 81a98ab4, the parent of the repair commit a4359af9; the figure 17 first stated here counted every append-mode open: tests/test_stage2.py 7, tests/test_stage2_swarm.py 4, tests/test_pi_install.py 3, tests/test_stage2_session.py 2, tests/test_stage2_research_availability.py 1 — of these 17, two are lock-only opens and 15 append data, three of which already took the local lock); a reader can see half a line, and the dispatcher turns the resulting gate exception into a security refusal (exit 2) by design.
   Repository change: one shared helper for atomic test-log appends and reads, used by all 17 sites; a repetition-under-load reproduction before and after.
   Architecture change: none; the production fail-closed rule (scripts/stage2_research_dispatch.py) stays untouched.
 
@@ -50,3 +50,26 @@ context: |
   Architecture change: none.
 
 In the context of a root repair of unlocked test-log appends (Q-1), facing a choice between fixing the 17 known sites only and also guarding against new ones, we decided to add a guard test in this change, to achieve that the same torn-read flake cannot return through a new test, accepting a slightly wider scope for a bounded change. — 2026-11-13
+
+## Guard design after the review loop
+
+- [DETAIL] (2026-11-14, maintainer's decision of the same day: the guard holds
+  reads and appends, identifies stand-in logs by declaration, and carries no
+  exemption list.) The helper `tests/atomic_test_log.py` declares every
+  stand-in log by file name in `STAND_IN_LOGS`, and its JSON functions refuse
+  any other name, so a log the helper serves is always a declared one. The
+  guard parses each module under `tests/` and every Python string inside it
+  (the stand-in templates) and fails on any `open`, `read_text`, `read_bytes`,
+  `write_text` or `write_bytes` whose path carries a declared name — directly,
+  through a variable bound to it in the same function or at module level, or
+  through an environment key a log path is stored under. The helper locks the
+  data file itself instead of a sidecar, so every spelling of one file meets
+  one lock, no lock file appears in a fixture repository, and the helper keeps
+  no `lock_dir` form; a lock not obtained within 60 s raises `TimeoutError`.
+  Reason: this is the smallest design that meets all three points — one
+  declaration replaces both the scan for every append-mode open and the list
+  of non-log exemptions, lock probes and document appends are simply not
+  declared logs, and the read side is covered by the same check. Its
+  boundary: a path that never carries a declared name (one built at run time,
+  or passed in from outside, as the test-local forced-split writer's is) and
+  raw OS calls stay outside this static guard.

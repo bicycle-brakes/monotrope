@@ -445,7 +445,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/docs-job-report-header/spec.md`](changes/docs-job-report-header/spec.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/flaky-swarm-leak-test/decisions.md`](changes/flaky-swarm-leak-test/decisions.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/findings.md`](changes/flaky-swarm-leak-test/findings.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
-| [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
+| [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/go-wire-apis/decisions.md`](changes/go-wire-apis/decisions.md) | draft | none | 2026-11-06 | coding-harness-36za |

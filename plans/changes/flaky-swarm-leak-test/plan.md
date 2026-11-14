@@ -1,7 +1,7 @@
 ---
 title: "Plan — flaky-swarm-leak-test"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-13
 last_reviewed: 2026-11-13
 updated: 2026-11-14
@@ -44,6 +44,10 @@ Starts unless you say stop.
    added. Embed this helper's source at one render marker in generated stand-ins
    so sandboxed children need no import path, environment change or copied
    repository-visible helper. Host-side readers import the same module.
+   *Amended 2026-11-14 after review-loop round 1:* the lock is the data file's
+   own `flock`, not a sidecar, with a 60 s bound that raises `TimeoutError`;
+   the helper declares the stand-in log names (`STAND_IN_LOGS`) and its JSON
+   functions refuse any other (spec [DETAIL]s of 2026-11-14).
 3. In `tests/test_atomic_test_log.py`, force a write split while the lock is
    held and verify the real fixture observer waits for the completed record; disable reader
    locking as the red control. Exercise several independent writer processes
@@ -79,6 +83,9 @@ Starts unless you say stop.
    it is embedded. Guard test sample strings must be recognisable test data,
    not blanket exemptions for executable source. Dynamic/obfuscated I/O is
    outside this static guard, as the spec states.
+   *Superseded 2026-11-14 by the maintainer's decision of that day:* the guard
+   checks reads, writes and opens of the helper's declared stand-in logs, with
+   no exemption list (decisions.md, "Guard design after the review loop").
 6. Run the commands below. Keep one process-level forced-race test and run the
    original refused-run test ten times as separate pytest invocations, each
    concurrently scheduled with the race test via two xdist workers. Record
@@ -176,18 +183,63 @@ one. The ten-run loop of the section "Verification" (the refused-run test
 beside the race test on two workers) was not run separately; the 60-run loop
 above stands in for it and is named here as such.
 
+## Review-loop repair evidence — 2026-11-14
+
+Orchestrator hand repair (Opus 5.5 sub-agent) of review-loop round 1, on one
+macOS machine with `.venv/bin/python`; measured head `03418923` unless named.
+
+**Red legs on the code before the repair.**
+
+- Guard over the pre-fix tree (`tests/` of `81a98ab4`, the parent of
+  `a4359af9`), `find_raw_log_access`: 24 findings — 12 raw appends and 12
+  raw reads of declared stand-in logs, every pre-fix writer and observer;
+  0 findings on `03418923`.
+- Helper at `a2749799`, ad-hoc script outside the tree: a log in a missing
+  directory raised `FileNotFoundError` (loop rows L1-4, L1-16); a reader
+  still blocked after 5 s on a held lock (L1-5); a `lock_dir` writer appended
+  while the reader's sidecar lock was held, the two locks being different
+  files (L1-6, L1-11).
+
+**Targeted suites, green.**
+
+```sh
+.venv/bin/python -m pytest tests/test_atomic_test_log.py tests/test_pi_install.py tests/test_stage2_session.py tests/test_stage2_research_availability.py tests/test_stage2_swarm.py tests/test_stage2.py tests/test_stage2_research_deep_review.py -q -n 6 -p no:cacheprovider
+```
+
+2432 passed, 1 skipped in 665 s (16:53–17:04 UTC, the tree committed as
+`03418923`). `make verify` on this head is the orchestrator's and is not
+recorded here (loop row L1-9: the earlier red attempts 2 and 3 are superseded
+by this run; the full gate still has to be measured).
+
+**The ten-run paired loop of the section "Verification"** (loop rows L1-12,
+L1-13), run 17:04:50–17:07:25 UTC on `03418923`:
+
+```sh
+for run in $(seq 1 10); do
+  .venv/bin/python -m pytest tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete -q -n 2 -p no:cacheprovider
+done
+```
+
+10 of 10 invocations ended `2 passed` (3.4–8.8 s each). The pre-fix leg of
+this pairing is the forced race above, red 10 of 10 at `079e0aac`; the
+refused-run test alone was not reproduced red before the fix (the natural
+failure stays unreproduced, as stated above).
+
 ## Criterion ledger
 
 - 1: tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete — a reader observes a forced partial append
 - 2: tests/test_atomic_test_log.py::test_concurrent_writers_preserve_every_record — missing, duplicate or damaged large records after writers join
 - 3: tests/test_atomic_test_log.py::test_corrupt_log_is_not_hidden — malformed JSON silently becomes a successful observation
-- 4: tests/test_atomic_test_log.py::test_missing_log_is_empty — an absent log raises instead of yielding no records
+- 1: tests/test_atomic_test_log.py::test_a_held_lock_times_out_instead_of_hanging — a reader hangs on a held lock or misses it under another spelling of the path
+- 4: tests/test_atomic_test_log.py::test_missing_log_is_empty — an absent log or directory raises instead of yielding no records
 - 4: tests/test_atomic_test_log.py::test_text_appends_preserve_bytes — helper adds a newline or alters scenario text
 - 4: not a test — review the 17-site inventory and all corresponding readers/renderings; the five migrated suites verify existing fixture behavior
-- 5: tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a bypass remains in the repository inventory
-- 5: tests/test_atomic_test_log.py::test_guard_detects_new_unlocked_log_appends — planted direct or embedded bypasses pass, or exact non-log controls fail
+- 5: tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a raw read or append of a stand-in log remains under tests/
+- 5: tests/test_atomic_test_log.py::test_guard_detects_raw_log_access — planted raw reads or appends pass, or helper calls and non-log operations are flagged
+- 5: tests/test_atomic_test_log.py::test_only_declared_logs_take_records — the helper serves a JSON log the guard does not know about
+- 5: tests/test_atomic_test_log.py::test_stand_ins_stay_visible_and_contact_free — a stand-in hides from the guard or imports a contact module
 - 6: tests/test_stage2_swarm.py::test_a_refused_run_is_printed_before_any_model_call — leak accepted, clean run refused, or notice absent/late
-- 7: not a test — review dated red/green and ten-run loaded evidence with commands and commit/patch identity in this plan and the PR
+- 7: not a test — review the dated red/green evidence (forced race ten runs each side; the 60-run loaded loop of 2026-11-14 and the ten-run paired loop of 2026-11-14, addendum) with commands and commit identity in this plan and the PR
 
 ## Runner route — 2026-11-13
 
