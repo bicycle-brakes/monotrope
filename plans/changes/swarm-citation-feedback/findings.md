@@ -2,7 +2,7 @@
 title: "Findings — swarm-citation-feedback"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-14
 created: 2026-11-14
 last_reviewed: 2026-11-14
@@ -238,3 +238,14 @@ Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1068 files, 4218 commits, 12 rules.
 
 Stage-2 call, 2026-11-14: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1068 files, 4218 commits, 12 rules.
+
+## Orchestrator record — hand finishing, 2026-11-14
+
+All three implement attempts above were rejected; none was accepted. The
+code and tests in this change are attempt 1's (glm-5.3-flash), kept after a
+line-by-line review against the spec, plus one hand-added test; the held
+prompt edits and the review-loop round-1 repairs were written by hand on
+2026-11-14 with the maintainer's approval (night run 2026-11-14-a). Commit
+fc1b5749 names attempt 3 as the code's source; attempt 3 changed no file,
+so that attribution is wrong and this record corrects it. Details and the
+list of hand commits: `plan.md`, "Implementation record — 2026-11-14".

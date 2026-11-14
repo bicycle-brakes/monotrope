@@ -1,7 +1,7 @@
 ---
 title: "Plan — swarm-citation-feedback"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-14
 last_reviewed: 2026-11-14
 updated: 2026-11-14
@@ -32,6 +32,9 @@ Implement the seven criteria of `spec.md`; the small-repair choice and residual
 spelling risk are settled in `decisions.md#Q-1`. Class remains `bounded`, so no
 `design.md` or ADR draft is due. The attempt owns code and tests below;
 only the orchestrator edits the held `prompts/` paths after acceptance.
+What happened instead — no attempt was accepted, and the work was finished
+by hand with the maintainer's approval — is recorded under "Implementation
+record" below.
 
 ## Build sequence and files
 
@@ -151,6 +154,39 @@ section were checked. The general artifact validator is absent; registry
 checking was not run because its tracker renderer can read outside this
 worktree. Full `make verify`, index regeneration and the commit remain with
 the runner. This is document validation, not implementation test evidence.
+
+## Implementation record — 2026-11-14
+
+No implement attempt was accepted. The runner rejected all three (see
+"Time used" and the attempt records in `findings.md`):
+
+1. Attempt 1 (route flash, glm-5.3-flash) wrote all the code and tests of
+   steps 1–4 and 6 and failed its post-run checks only on the two
+   prompt-criterion tests (criteria 5 and 6), whose texts this plan holds
+   for the orchestrator.
+2. Attempt 2 (route flash-repair, glm-5.3-flash) changed only this plan and
+   the spec header and failed on the same two tests.
+3. Attempt 3 (stage-1, claude-sonnet-5-5) changed no file and failed the
+   same way.
+
+The sequence above could not end in an accepted attempt: the attempt-owned
+prompt tests stay red until the held prompt edits exist, and those edits
+were to follow acceptance. With the maintainer's approval (night run
+2026-11-14-a), the orchestrator finished the change by hand on 2026-11-14:
+
+- It kept attempt 1's code and tests after a line-by-line review against
+  the spec (commit fc1b5749; its message names attempt 3 as the source, but
+  attempt 3 changed no file — the kept code is attempt 1's, as the file
+  counts in `findings.md` show) and added one test,
+  `test_generic_rejection_keeps_the_earlier_correction_prompt`.
+- It wrote the held prompt edits of step 5 (commit 1e5f8022).
+- It repaired the review-loop round-1 rows L1-1 to L1-11 by hand (resolver
+  heading copies, two test pins, a dead reason fallback, the research header
+  and this record).
+
+Evidence so far: the touched test files and the criterion subset of
+`tests/test_stage2_swarm.py` pass; the full `make verify` and the phase-6
+review are still due, so the spec stays `implementation_status: partial`.
 
 ## Runner route — 2026-11-14
 

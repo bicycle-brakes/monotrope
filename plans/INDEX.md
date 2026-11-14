@@ -576,8 +576,8 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/swarm-citation-feedback/decisions.md`](changes/swarm-citation-feedback/decisions.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
-| [`changes/swarm-citation-feedback/findings.md`](changes/swarm-citation-feedback/findings.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
-| [`changes/swarm-citation-feedback/plan.md`](changes/swarm-citation-feedback/plan.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/findings.md`](changes/swarm-citation-feedback/findings.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/plan.md`](changes/swarm-citation-feedback/plan.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-citation-feedback/research.md`](changes/swarm-citation-feedback/research.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-citation-feedback/spec.md`](changes/swarm-citation-feedback/spec.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-report-format/decisions.md`](changes/swarm-report-format/decisions.md) | draft | none | 2026-11-10 | coding-harness-4q9y |
