@@ -103,10 +103,12 @@ exists; this is a process-id check, not descendant tracking.
     quoting proceeds silently, or unrelated pytest options are discarded.
 12. When a git command of the runner fails, its diagnostic keeps git's whole
     error output (every non-empty line) however long the temporary path in it
-    is (`decisions.md#Q-2`, `decisions.md#Q-3`, `decisions.md#Q-4`).
+    is; every git command the runner starts goes through one launch helper
+    that forces the C locale (`decisions.md#Q-2`, `decisions.md#Q-3`,
+    `decisions.md#Q-4`, `decisions.md#Q-8`).
     *Refuted by:* A long path pushes the reason (for a held lock,
-    `index.lock`) out of the diagnostic, or a line of git's output, the reason
-    included, is dropped.
+    `index.lock`) out of the diagnostic, a line of git's output, the reason
+    included, is dropped, or a git command is started outside the helper.
 
 ## Non-goals
 
@@ -132,7 +134,8 @@ ownership do not need edits. No held harness/governance path is edited.
 the one helper that shortens a git error and its test (`decisions.md#Q-2`,
 `decisions.md#Q-3`), and the C locale (`LC_ALL=C`) for every git command the
 runner starts, so git's reason line is English and recognisable (loop row
-L3-1 of 2026-11-13).
+L3-1 of 2026-11-13); since `decisions.md#Q-8` one launch helper starts every
+such command and a source test holds that none bypasses it.
 
 ## Boundary
 

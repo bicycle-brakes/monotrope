@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-12
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -103,6 +103,9 @@ and its tests are unchanged and the only lifecycle owner is the shell runner.
 - 10: tests/test_ci.py::test_verify_runner_preserves_entry_contracts — list allocates/admit work, job/CI selection changes, nested admission requeues or worker/duration ownership changes.
 - 11: tests/test_ci.py::test_verify_runner_refuses_conflicting_pytest_options — basetemp escapes, malformed quoting passes or unrelated options are lost.
 - 12: tests/test_stage2.py::test_git_error_text_keeps_every_non_empty_line_after_a_long_path — a long path or a leading warning line pushes git's reason out of the diagnostic.
+- 12: tests/test_stage2.py::test_every_git_launch_of_the_runner_goes_through_run_git — a git command is built outside the one launch helper.
+- 12: tests/test_stage2.py::test_run_git_forces_c_locale_and_keeps_every_diagnostic_line — the helper inherits the caller's locale or drops a line of git's diagnostic.
+- 12: tests/test_stage2.py::test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale — a failing git archive loses git's reason or runs in the caller's locale.
 
 ## Correction for the fourth run — 2026-11-12 (decisions.md#Q-2) — superseded
 
@@ -139,6 +142,17 @@ hint. Done by the orchestrator by hand and accepted on the maintainer's answer.
 
 Supersedes the first-line rule above: the runner keeps git's whole error
 output, every non-empty line, in the C locale; only blank lines drop.
+
+## Fourth correction — 2026-11-14 (decisions.md#Q-8)
+
+The phase-6 re-check found the mechanism a second time (F6-4, then F6-5): a
+git launch outside the two wrappers lost git's diagnostic and the C locale.
+One helper in `scripts/stage2.py` now starts every git command of the runner:
+it forces `LC_ALL=C`, keeps every non-empty diagnostic line, and offers the
+options the seven call sites need (stdin, text or bytes, environment,
+timeout). A source test in `tests/test_stage2.py` fails on any git command
+built outside it, with no exemption list. Done by hand by the orchestrator's
+sub-agent.
 
 ## Boundaries and route
 

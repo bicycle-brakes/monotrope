@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-12
-updated: 2026-11-13
+updated: 2026-11-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.3
@@ -180,3 +180,31 @@ context: |
   Architecture change: none; pytest stays the one authority on its resolved temporary folder, and no runner-side parser of pytest options returns.
 
 In the context of a spec criterion and a later decision that disagree on the moment of refusal, facing a choice between an earlier runner-side check and the plugin's moment, we decided that the plugin's moment holds and the criterion follows it, to achieve one authority on the folder pytest resolves, accepting that gates which start no pytest run before the refusal. — 2026-11-13
+
+## Q-8 · One launch helper for every git command of the runner
+
+asked: 2026-11-14
+answer: "every git launch of the runner goes through one helper that forces `LC_ALL=C` and keeps every non-empty diagnostic line, held by a source test that no git launch bypasses it." — stated by the maintainer in the conversation on 2026-11-14; the existing source test that counts the launches naming GIT is the model for the new one.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change verify-tmp-cleanup (bead coding-harness-bxxt.3), phase-6 finding F6-5.
+  Intention: the phase-6 re-check found the same mechanism a second time at a new call site: a failing git launch loses git's diagnostic and inherits the caller's locale. F6-4 was the merge-base lookup, F6-5 is the git archive of the trusted registry mirror. The repository rule ends case repair at the second finding of one mechanism.
+  Today: scripts/stage2.py starts git at seven places (at 00d83c67); two wrappers force the C locale and keep the whole diagnostic, five launches call subprocess themselves, and of those only the merge-base lookup was repaired by hand.
+  Repository change: one helper in scripts/stage2.py that every git launch calls, a source test that fails on any git command built outside it, and a behaviour test for the git archive failure.
+  Architecture change: none; the runner's git launches gain one choke point inside the same file.
+
+In the context of a runner whose git launches each repeat the call to subprocess,
+facing a second finding of one mechanism at a new call site,
+we decided that every git launch goes through one helper that forces the C locale and keeps git's whole diagnostic, held by a source test,
+to achieve a fix no new call site can bypass,
+accepting a helper whose options cover every call site's needs — 2026-11-14
+
+[DETAIL] **"The runner" of Q-8 is `scripts/stage2.py`, the git launches its own code writes.**
+At 00d83c67 the modules it imports that start git themselves — `scripts/leakcheck.py`,
+`scripts/touch_map.py`, `scripts/check_frontmatter_current.py` and `scripts/ci_gates.py` — stay
+outside. Reason: each is a tool of its own with its own command line, gate and contract, and they
+start a bare `git` from `PATH` rather than the runner's resolved one; criterion 12 and the
+protected areas allow edits to `scripts/stage2.py` and `tests/test_stage2.py` only, so widening the
+helper to them would be scope the maintainer has not seen. Their diagnostics are reported to the
+orchestrator as possible follow-up work.
