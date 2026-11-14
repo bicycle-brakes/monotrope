@@ -285,16 +285,12 @@ append_record(log, record)
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 receipts = os.environ.get("STAGE2_PUBLIC_RECEIPTS")
 if receipts and step.get("receipts"):
-    text_append(
-        Path(receipts),
-        "".join(json.dumps(line).replace("@KEY@", key) + "\\n" for line in step["receipts"]),
-        lock_dir=here,
-    )
+    text_append(Path(receipts), "".join(json.dumps(line).replace("@KEY@", key) + "\\n" for line in step["receipts"]))
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
     Path(relative).write_text(text.replace("@KEY@", key))
 for relative, text in step.get("append", {}).items():
-    text_append(Path(relative), text.replace("@KEY@", key), lock_dir=here)
+    text_append(Path(relative), text.replace("@KEY@", key))
 stdout = step.get("stdout", "")
 if stdout == "AUTO" and kind == "merge":
     merged = {category: {} for category in ("code", "rules", "tests", "neighbours")}

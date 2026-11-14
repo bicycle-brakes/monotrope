@@ -6,97 +6,104 @@ observers read it. Without a common lock a reader can see a torn last line and
 its `json.loads` raises; under the swarm runner such an exception inside a
 gate is converted fail-closed into a security refusal, which turned a green
 fixture red on main CI (bead coding-harness-yb1l). Every append and every
-snapshot read of these logs takes an advisory `fcntl.flock` on one stable
-sidecar beside the destination, so writers and readers meet on one lock
-identity across threads and processes.
+snapshot read takes an advisory `fcntl.flock` on the data file itself, so
+writers and readers meet on the file's own identity across threads and
+processes, however a caller spells its path.
+
+This module is the one place a stand-in log is declared: `STAND_IN_LOGS`
+names every log file, the JSON functions refuse any other name, and the guard
+in `tests/test_atomic_test_log.py` fails on any read or append of a declared
+log that does not go through these functions.
 
 Standard library only: the stand-in templates embed this module's source
 verbatim at their `@ATOMIC_LOG@` render marker, because the sandboxed children
 get no import path. Host-side test code imports this module directly. A
-missing data file reads as an empty snapshot; a malformed stored line raises;
-nothing is retried or suppressed, and no durability beyond a flushed buffered
-write is promised.
+missing data file - or a missing directory - reads as an empty snapshot; a
+malformed stored line raises; a lock not obtained within `LOCK_TIMEOUT`
+seconds raises `TimeoutError` instead of hanging. Nothing is retried or
+suppressed, and no durability beyond a flushed buffered write is promised.
 """
 
 import fcntl
 import json
+import time
 from pathlib import Path
 
 MARKER = "@ATOMIC_LOG@"
 
+# The declared stand-in logs: the file names every suite's stand-ins append
+# JSON records to and its observers read.
+STAND_IN_LOGS = (
+    "calls.jsonl",
+    "versions.jsonl",
+    "infrastructure.jsonl",
+    "local-pi.jsonl",
+    "path-pi.jsonl",
+    "npm-calls.jsonl",
+)
 
-def _name_digest(text: str) -> str:
-    """A short, stable FNV-1a digest of a path, for naming a sidecar.
-
-    Computed by hand, not with `hashlib`: this source is embedded in stand-ins
-    whose imports are pinned to a small no-contact set
-    (`test_a_stand_in_contacts_nothing`). It names a file; it secures nothing.
-    """
-    value = 0xCBF29CE484222325
-    for byte in text.encode("utf-8"):
-        value = ((value ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
-    return format(value, "016x")
+# Seconds a reader or writer waits for the lock before it fails loudly.
+LOCK_TIMEOUT = 60.0
 
 
-def lock_path(data_path: str | Path, lock_dir: str | Path | None = None) -> Path:
-    """The stable sidecar whose advisory lock serialises access to this destination.
+def _lock(handle, operation: int, timeout: float | None) -> None:
+    """Take the advisory lock on this open file, or raise `TimeoutError` at the deadline."""
+    timeout = LOCK_TIMEOUT if timeout is None else timeout
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(handle, operation | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"no lock on {handle.name} within {timeout} s") from None
+            time.sleep(0.005)
 
-    By default it sits beside the destination. A caller that appends to a
-    repository document passes `lock_dir`, so no sidecar appears in the tree;
-    the sidecar is then named after the destination's resolved path. The suffix
-    is not `.lock`, which other suites count as a runner lock.
-    """
+
+def _declared(data_path: str | Path) -> Path:
     path = Path(data_path)
-    if lock_dir is None:
-        return path.with_name(path.name + ".guard")
-    return Path(lock_dir) / (_name_digest(str(path.resolve())) + ".guard")
+    if path.name not in STAND_IN_LOGS:
+        raise ValueError(f"{path.name} is not a declared stand-in log (atomic_test_log.STAND_IN_LOGS)")
+    return path
 
 
-class HoldLock:
-    """The sidecar's advisory lock, held for the whole `with` block.
+def text_append(data_path: str | Path, text: str, timeout: float | None = None) -> None:
+    """Append exactly this text under the exclusive lock; no newline is added.
 
-    `flock` excludes by open file description, so independent opens - in
-    threads as in processes - wait for each other; the data file's inode is
-    never locked, because a test may replace the file between appends.
+    Also serves the stand-ins' scenario text appends to fixture documents,
+    which need not be declared logs.
     """
-
-    def __init__(self, data_path: str | Path, shared: bool = False, lock_dir: str | Path | None = None) -> None:
-        self._handle = lock_path(data_path, lock_dir).open("a")
-        self._shared = shared
-
-    def __enter__(self):
-        fcntl.flock(self._handle, fcntl.LOCK_SH if self._shared else fcntl.LOCK_EX)
-        return self._handle
-
-    def __exit__(self, *_exc_info: object) -> bool:
-        fcntl.flock(self._handle, fcntl.LOCK_UN)
-        self._handle.close()
-        return False
+    with Path(data_path).open("a", encoding="utf-8") as handle:
+        _lock(handle, fcntl.LOCK_EX, timeout)
+        try:
+            handle.write(text)
+            handle.flush()
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def text_append(data_path: str | Path, text: str, lock_dir: str | Path | None = None) -> None:
-    """Append exactly this text under the exclusive lock; no newline is added."""
-    with HoldLock(data_path, lock_dir=lock_dir), Path(data_path).open("a", encoding="utf-8") as handle:
-        handle.write(text)
-        handle.flush()
+def append_record(data_path: str | Path, record, timeout: float | None = None) -> None:
+    """Append one JSON record as one line of a declared log under the exclusive lock."""
+    text_append(_declared(data_path), json.dumps(record) + "\n", timeout)
 
 
-def append_record(data_path: str | Path, record) -> None:
-    """Append one JSON record as one line under the exclusive lock."""
-    text_append(data_path, json.dumps(record) + "\n")
+def read_records(data_path: str | Path, timeout: float | None = None) -> list:
+    """A snapshot of complete records of a declared log: an in-progress append waits, a missing file is empty.
 
-
-def read_records(data_path: str | Path) -> list:
-    """A snapshot of complete records: an in-progress append waits, a missing file is empty.
-
-    The shared lock is held through read and parse, so no reader observes a
+    The shared lock is held through the read, so no reader observes a
     fragment. A malformed stored line raises; nothing is skipped or retried.
     """
-    with HoldLock(data_path, shared=True):
-        data = Path(data_path)
-        if not data.exists():
-            return []
-        return [json.loads(line) for line in data.read_text(encoding="utf-8").splitlines()]
+    try:
+        handle = _declared(data_path).open(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    with handle:
+        _lock(handle, fcntl.LOCK_SH, timeout)
+        try:
+            text = handle.read()
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+    return [json.loads(line) for line in text.splitlines()]
 
 
 def embedded_source() -> str:

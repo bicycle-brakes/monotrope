@@ -307,7 +307,7 @@ for relative, text in step.get("plant", {}).items():
 for relative in step.get("delete", []):
     Path(relative).unlink()
 for relative, text in step.get("append", {}).items():
-    text_append(Path(relative), text.replace("@KEY@", key), lock_dir=here)
+    text_append(Path(relative), text.replace("@KEY@", key))
 
 sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
